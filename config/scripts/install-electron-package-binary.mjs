@@ -17,6 +17,7 @@ import { platform as osPlatform, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getElectronPlatformPath } from './electron-platform-path.mjs'
 import { getZipExtractorCommand } from './zip-extractor-command.mjs'
+import { isSharedPackageDir } from './native-build-entry.cjs'
 import {
   shareElectronDistFromCache,
   hasAdoptedSharedElectronDist,
@@ -77,6 +78,8 @@ async function main() {
     return
   }
 
+  assertForeignTargetLeavesSharedElectronAlone()
+
   // Why: PR tests run under system Node after native modules are rebuilt for
   // Node. Install only Electron's npm package binary here; do not run the full
   // Electron native-module rebuild path, which would undo the Node ABI rebuild.
@@ -90,6 +93,25 @@ async function main() {
     console.error('[electron-package] Electron package is still unavailable after install.')
     process.exit(1)
   }
+}
+
+/**
+ * node_modules/electron/dist exists to run Electron on this machine; packaging downloads its own
+ * Electron per target. Under pnpm's global virtual store that dir is shared by every worktree, so a
+ * foreign-target install would hand them all an Electron they cannot run.
+ */
+function assertForeignTargetLeavesSharedElectronAlone() {
+  if (
+    (targetPlatform === osPlatform() && targetArch === process.arch) ||
+    !isSharedPackageDir(electronPackageDir, projectDir)
+  ) {
+    return
+  }
+  throw new Error(
+    `Refusing to install a ${targetPlatform}-${targetArch} Electron into ${electronPackageDir}, ` +
+      'which every worktree shares through the global virtual store. Unset ELECTRON_INSTALL_ARCH ' +
+      '/ npm_config_arch, or install with ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0.'
+  )
 }
 
 function electronPackageIsUsable() {
@@ -179,6 +201,10 @@ async function installElectronPackageBinary(sharedEntry) {
       process.exit(1)
     }
 
+    // Why: a worktree sharing this slot may have installed it during the download; never swap out a dist it runs.
+    if (isSharedPackageDir(electronPackageDir, projectDir) && electronPackageIsUsable()) {
+      return
+    }
     moveExtractedElectronDist(extractDir, electronDistDir)
     if (sharedEntry !== null) {
       publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir)

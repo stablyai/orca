@@ -2,7 +2,7 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))

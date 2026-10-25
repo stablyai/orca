@@ -174,8 +174,7 @@ describe('Codex WSL scan gate', () => {
     ).rejects.toBe(abortReason)
   })
 
-  // The scan layer's own waiter already wins this race; the resolver's post-catch
-  // signal check is the backstop if that ever stops holding.
+  // Scan cancellation normally wins; the resolver’s post-catch check remains a backstop.
   it('reports the abort, not a refusal, when a scanned root is aborted mid-scan', async () => {
     const controller = new AbortController()
     const abortReason = new Error('caller went away')

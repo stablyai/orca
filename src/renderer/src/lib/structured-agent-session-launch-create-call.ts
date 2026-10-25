@@ -13,8 +13,11 @@ import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
@@ -22,6 +25,7 @@ import {
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,
+  StructuredAgentSessionCreateAbandonedError,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
@@ -69,10 +73,37 @@ async function requireHostCreateSupport(
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
-      'structured_agent_session_unsupported'
+      'structured_agent_session_unsupported',
+      undefined,
+      support.kind === 'declined' ? support.reason : undefined
     )
   }
   return support.seedOptions
+}
+
+/** A paired host that would run the chat with more access than asked for gets nothing to start.
+ *  The chat's own permission gate says why, so this refusal carries no words of its own. */
+const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
+
+async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+  const permission =
+    intent.target.kind === 'local'
+      ? { kind: 'allowed' as const }
+      : await readStructuredChatHostPermissionVerdict(intent.target, intent.agent)
+  if (permission.kind === 'allowed') {
+    return
+  }
+  if (permission.kind === 'unverified') {
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The host could not say what access the chat would run with.',
+      'runtime_unavailable'
+    )
+  }
+  abandonStructuredAgentSessionLaunchIntent(intent)
+  throw new StructuredAgentSessionCreateRefusalError(
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL,
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL
+  )
 }
 
 /** Told the seed a paired server says this create will use, which may differ from an earlier
@@ -82,12 +113,15 @@ export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent,
   onHostSeed?: StructuredLaunchHostSeedListener,
-  priorCreateOutcomeUnknown = false
+  priorCreateOutcomeUnknown = false,
+  /** A chat closed while its host was being asked issues no create. */
+  isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
   }
+  await requireHostPermission(intent)
   if (!intent.createPrepared) {
     let supported = false
     try {
@@ -102,11 +136,21 @@ export async function launchStructuredAgentSession(
     }
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
+  // Typed so an async placement fails to compile: a tick here drops an eager joiner's create.
+  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement(intent)
+  // Nothing is created for a chat closed while its host was asked, or whose source retired.
+  if (isCancelled() || intent.beforeCreate?.() === false) {
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateAbandonedError(
+      'Conversation source retired before create.'
+    )
+  }
+  delete intent.beforeCreate
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      intent.params
+      params
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)

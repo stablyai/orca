@@ -4,7 +4,7 @@ import { MobileDiffReviewScreenView } from '../components/MobileDiffReviewScreen
 import { firstReviewParam, normalizeReviewFilterParam } from './mobile-diff-review-screen-model'
 import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'

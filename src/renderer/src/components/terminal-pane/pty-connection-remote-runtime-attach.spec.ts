@@ -141,7 +141,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(2)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(2)
       const deps = createDeps()
 
@@ -262,7 +264,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(1)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(1)
       const deps = createDeps({
         restoredLeafId: LEAF_1,
@@ -451,9 +455,10 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
-    it('uses the focused runtime only for ownerless mixed-version publications', async () => {
+    it('spawns an unstamped local worktree locally while a single server is focused', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -468,7 +473,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
 
-      expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('legacy-hub', expect.any(Object))
+      // Why: the client stamps every server row on arrival, so an unstamped row is this machine's.
+      expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
+      expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
     it('runs an inline setup terminal locally instead of failing its host closed', async () => {

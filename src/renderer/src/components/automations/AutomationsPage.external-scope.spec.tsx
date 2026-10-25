@@ -80,7 +80,7 @@ describe('AutomationsPage external manager probes', () => {
     expect(probedOwners()).toEqual([DESKTOP_SELF_OWNER])
   })
 
-  it('retains only the selected host, so probes elsewhere are cancelled', async () => {
+  it('asks the external-manager client to retain only the selected host', async () => {
     withSshHosts('staging', 'web-01', 'web-02')
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
     openclawOnly()
@@ -91,7 +91,7 @@ describe('AutomationsPage external manager probes', () => {
     expect(lastRetainedOwners()).toEqual([DESKTOP_SELF_OWNER])
   })
 
-  it('cancels the previous host as soon as the filter moves off it', async () => {
+  it('updates the retained external-manager owner when the filter changes', async () => {
     withSshHosts('staging')
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
     openclawOnly()

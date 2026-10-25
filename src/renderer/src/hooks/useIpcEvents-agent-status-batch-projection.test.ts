@@ -282,7 +282,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
           delete next[update.paneKey]
           storeState.agentStatusByPaneKey = next
-        } else {
+        } else if (update.kind !== 'programStatus') {
           applyStatus(update.paneKey, update.payload)
         }
       }

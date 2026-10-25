@@ -21,6 +21,8 @@ import type { GetSelectedCodexHomePath } from '../host-env/types'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
+import { visibleRendererPtys } from '../delivery/visibility-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -30,7 +32,7 @@ export function configureLocalPtyProvider(args: {
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
   trustedTerminalHandleEnv: Set<string>
 }): void {
-  // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
+  // Daemon providers assemble their own environment; configure only the in-process provider.
   if (!(localProvider instanceof LocalPtyProvider)) {
     return
   }
@@ -99,7 +101,7 @@ export function configureLocalPtyProvider(args: {
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
-      // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
+      // Supply terminal identity at process start so agents can address orchestration without another RPC.
       const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
       const preAllocatedHandle =
         requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
@@ -130,10 +132,12 @@ export function configureLocalPtyProvider(args: {
       if (!isCurrentPtyExit({ id, incarnationId })) {
         return
       }
+      const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(id)
       clearProviderPtyState(id)
       ptyOwnership.delete(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,
+        ...(viewShown ? { viewShown } : {}),
         ...(cause ? { cause } : {})
       })
     },

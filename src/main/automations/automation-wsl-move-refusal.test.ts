@@ -1,7 +1,3 @@
-/**
- * A move in flight skips each run with a reason that promises a resume; once the WSL host owns the
- * project, the retained local copy goes quiet instead of writing a skip every tick.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +6,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
@@ -19,6 +15,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { AutomationService } from './service'
 import { WSL_MOVE_IN_PROGRESS, WSL_MOVE_OWNED_BY_HOST } from './dispatch-refusal'
+import type * as PrecheckRunner from './precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 
@@ -33,7 +30,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', () => ({
+vi.mock('./precheck-runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
 
@@ -69,7 +67,6 @@ function attachedService(store: Store, publish = vi.fn()): AutomationService {
   return service
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluateAt(
   store: Store,
   service: AutomationService,
@@ -80,7 +77,7 @@ async function evaluateAt(
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
   vi.setSystemTime(new Date(when))
-  // Re-poked each try: the previous pass may still hold the re-entrancy guard while it flushes.
+  // Retry while the previous scheduler pass finishes flushing.
   await vi.waitFor(() => {
     service.setRendererReady()
     expect(nextRunAt()).toBeGreaterThan(before ?? 0)

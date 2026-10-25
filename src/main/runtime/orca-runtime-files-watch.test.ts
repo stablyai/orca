@@ -4,7 +4,7 @@ import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
-import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import { WatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
 const {
@@ -57,7 +57,11 @@ import {
   awaitRuntimeFileWatcherUnsubscribes
 } from './files/watch/file-watcher-leases'
 import { RuntimeFileCommands } from './orca-runtime-files'
-import { WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS } from './files/watch/windows-file-watch'
+import {
+  WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS,
+  WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS,
+  WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS
+} from './files/watch/windows-file-watch'
 
 function createWindowsWatcher(close: () => void) {
   const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
@@ -146,12 +150,20 @@ describe('RuntimeFileCommands file watching', () => {
 
     emit?.()
     emit?.()
-    await vi.advanceTimersByTimeAsync(149)
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS - 1)
     expect(onEvents).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
     expect(onEvents).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
+
+    // A sustained stream refreshes on the slower cadence, measured from the last refresh.
+    emit?.()
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS - 1)
+    expect(onEvents).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(onEvents).toHaveBeenCalledTimes(2)
 
     await unsubscribe()
     expect(watcher.close).toHaveBeenCalledTimes(1)

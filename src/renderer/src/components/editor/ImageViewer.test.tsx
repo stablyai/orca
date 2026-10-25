@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useMemo<T>(factory: () => T) {
@@ -17,6 +18,9 @@ vi.mock('react', async () => {
     },
     useEffect() {
       return undefined
+    },
+    useContext() {
+      return false
     },
     useRef<T>(initial: T) {
       return { current: initial }

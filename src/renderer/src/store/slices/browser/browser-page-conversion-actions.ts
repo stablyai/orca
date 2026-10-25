@@ -8,12 +8,12 @@ import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import { planBrowserPageConversion } from '../browser-page-conversion'
 import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from '../browser-page-records'
 import { assertManagedBrowserMaterializationAllowed } from '@/lib/client-creation-action-policy'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { isLocalBrowserPageOwner } from './browser-host-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
@@ -37,105 +37,125 @@ export function createBrowserPageConversionActions(
         declaredOwnership !== undefined
           ? declaredOwnership
           : oldPageForOwnership
-            ? (getRuntimeEnvironmentIdForWorktree(get(), oldPageForOwnership.worktreeId) ?? null)
+            ? runtimeEnvironmentIdOrLocalUnlessTwin(get(), oldPageForOwnership.worktreeId)
             : null
       )
-      let converted: BrowserPage | null = null
-      let docPageIdToRelease: string | null = null
-      let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
-      set((s) => {
-        const plan = planBrowserPageConversion(s, pageId, target, options)
-        if (!plan) {
-          return s
-        }
-        converted = plan.newPage
-        // Why collected rather than released inside the reducer: revoking is main-process work, and
-        // it must happen exactly once even if a later set() retries the reducer.
-        if (plan.oldPage.docLocation) {
-          docPageIdToRelease = plan.oldPage.id
-        }
-        const remoteHandle = s.remoteBrowserPageHandlesByPageId[plan.oldPage.id]
-        if (remoteHandle) {
-          remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
-        }
-        const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
-        delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
-        const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
-        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
-        delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
-        delete nextBrowserAnnotationMarkerIdsByPageId[plan.oldPage.id]
-        const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
-        delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
-        return {
-          browserPagesByWorkspace: {
-            ...s.browserPagesByWorkspace,
-            [plan.workspace.id]: plan.nextPages
-          },
-          browserTabsByWorktree: {
-            ...s.browserTabsByWorktree,
-            [plan.workspace.worktreeId]: (
-              s.browserTabsByWorktree[plan.workspace.worktreeId] ?? []
-            ).map((tab) => (tab.id === plan.workspace.id ? plan.nextWorkspace : tab))
-          },
-          pendingAddressBarFocusByPageId: Object.fromEntries(
-            Object.entries(s.pendingAddressBarFocusByPageId).filter(
-              ([pendingPageId]) => pendingPageId !== plan.oldPage.id
-            )
-          ),
-          pendingAddressBarFocusByTabId: Object.fromEntries(
-            Object.entries(s.pendingAddressBarFocusByTabId).filter(
-              ([pendingPageId]) => pendingPageId !== plan.oldPage.id
-            )
-          ),
-          remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
-          browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
-          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
-        }
-      })
-      // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
-      // not track, so the initializers' null narrowing would otherwise read these as never.
-      const newPage = converted as BrowserPage | null
-      const remoteClose = remotePageToClose as {
-        worktreeId: string
-        handle: RemoteBrowserPageHandle
-      } | null
-      if (!newPage) {
-        return null
-      }
-      if (remoteClose) {
-        closeRemoteBrowserPageInOwningEnvironment(
-          remoteClose.worktreeId,
-          remoteClose.handle,
-          get().recordClientHostedBrowserCloseIntents
-        )
-      }
-      // Why after the reducer: a closed document must stop being readable, and the grant is the only
-      // authority the preview scheme honors — but the store row has to stop naming it first.
-      if (docPageIdToRelease) {
-        releaseDocPreviewGrant(docPageIdToRelease)
-      }
-      const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
-      // Switch point: main puts the new page in the old one's place.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && workspaceAfter) {
-        recordLayoutApply(get(), workspaceAfter.worktreeId, {
-          type: 'replaceBrowserPage',
-          browserTabId: workspaceAfter.id,
-          pageId,
-          newPageId: newPage.id
+      const convertHere = (newPageId?: string): BrowserPage | null => {
+        let converted: BrowserPage | null = null
+        let docPageIdToRelease: string | null = null
+        let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
+        set((s) => {
+          const plan = planBrowserPageConversion(s, pageId, target, {
+            ...options,
+            ...(newPageId ? { newPageId } : {})
+          })
+          if (!plan) {
+            return s
+          }
+          converted = plan.newPage
+          // Why collected rather than released inside the reducer: revoking is main-process work, and
+          // it must happen exactly once even if a later set() retries the reducer.
+          if (plan.oldPage.docLocation) {
+            docPageIdToRelease = plan.oldPage.id
+          }
+          const remoteHandle = s.remoteBrowserPageHandlesByPageId[plan.oldPage.id]
+          if (remoteHandle) {
+            remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
+          }
+          const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
+          delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
+          const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+          const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
+          delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
+          delete nextBrowserAnnotationMarkerIdsByPageId[plan.oldPage.id]
+          const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
+          delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
+          return {
+            browserPagesByWorkspace: {
+              ...s.browserPagesByWorkspace,
+              [plan.workspace.id]: plan.nextPages
+            },
+            browserTabsByWorktree: {
+              ...s.browserTabsByWorktree,
+              [plan.workspace.worktreeId]: (
+                s.browserTabsByWorktree[plan.workspace.worktreeId] ?? []
+              ).map((tab) => (tab.id === plan.workspace.id ? plan.nextWorkspace : tab))
+            },
+            pendingAddressBarFocusByPageId: Object.fromEntries(
+              Object.entries(s.pendingAddressBarFocusByPageId).filter(
+                ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+              )
+            ),
+            pendingAddressBarFocusByTabId: Object.fromEntries(
+              Object.entries(s.pendingAddressBarFocusByTabId).filter(
+                ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+              )
+            ),
+            remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+            browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+            browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+            browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
+          }
         })
-      }
-      if (workspaceAfter?.activePageId === newPage.id) {
-        const item = Object.values(get().unifiedTabsByWorktree)
-          .flat()
-          .find(
-            (entry) => entry.contentType === 'browser' && entry.entityId === newPage.workspaceId
-          )
-        if (item) {
-          get().setTabLabel(item.id, newPage.title)
+        // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
+        // not track, so the initializers' null narrowing would otherwise read these as never.
+        const newPage = converted as BrowserPage | null
+        const remoteClose = remotePageToClose as {
+          worktreeId: string
+          handle: RemoteBrowserPageHandle
+        } | null
+        if (!newPage) {
+          return null
         }
+        if (remoteClose) {
+          closeRemoteBrowserPageInOwningEnvironment(
+            remoteClose.worktreeId,
+            remoteClose.handle,
+            get().recordClientHostedBrowserCloseIntents
+          )
+        }
+        // Why after the reducer: a closed document must stop being readable, and the grant is the only
+        // authority the preview scheme honors — but the store row has to stop naming it first.
+        if (docPageIdToRelease) {
+          releaseDocPreviewGrant(docPageIdToRelease)
+        }
+        const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
+        if (workspaceAfter?.activePageId === newPage.id) {
+          const item = Object.values(get().unifiedTabsByWorktree)
+            .flat()
+            .find(
+              (entry) => entry.contentType === 'browser' && entry.entityId === newPage.workspaceId
+            )
+          if (item) {
+            get().setTabLabel(item.id, newPage.title)
+          }
+        }
+        return newPage
       }
-      return newPage
+      // Switch point: main puts the new page in the old one's place; the page shows once it did.
+      const sentPlan = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? planBrowserPageConversion(get(), pageId, target, options)
+        : null
+      if (
+        sentPlan &&
+        sendBrowserLayoutCommand(
+          get,
+          sentPlan.workspace.worktreeId,
+          {
+            type: 'replaceBrowserPage',
+            browserTabId: sentPlan.workspace.id,
+            pageId,
+            newPageId: sentPlan.newPage.id
+          },
+          {
+            here: () => convertHere(sentPlan.newPage.id),
+            shown: () => convertHere(sentPlan.newPage.id)
+          }
+        )
+      ) {
+        return sentPlan.newPage
+      }
+      return convertHere()
     },
 
     reopenClosedBrowserPage: (workspaceId) => {

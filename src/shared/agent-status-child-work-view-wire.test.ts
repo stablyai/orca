@@ -92,7 +92,7 @@ describe('decodeAgentChildWorkViews', () => {
 })
 
 describe('agentChildWorkViewsEqual', () => {
-  it('compares every field, and tolerates only a small evidence-clock advance when asked', () => {
+  it('compares evidence clocks and last messages, and distinguishes absent from empty lists', () => {
     const ticked = {
       ...LIVE,
       observedAt: 30_150,

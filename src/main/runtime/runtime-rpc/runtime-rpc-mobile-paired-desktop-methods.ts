@@ -108,6 +108,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'settings.updateTerminalQuickCommands',
   'terminal.getAutoRestoreFit',
   'terminal.setAutoRestoreFit',
-  // Switch point: the per-section collapse write exists only with ORCA_SIDEBAR_INPUTS=main.
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? (['ui.setCollapsed'] as const) : [])
+  // Switch point: the per-section collapse write, the sidebar feed and its icons exist only with ORCA_SIDEBAR_INPUTS=main.
+  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? (['ui.setCollapsed', 'sidebarInputs.read', 'sidebarInputs.repoIcons'] as const)
+    : [])
 ] as const

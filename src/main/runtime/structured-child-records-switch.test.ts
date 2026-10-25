@@ -18,9 +18,9 @@ import type { AgentChildWorkView } from '../../shared/agent-status-child-work-vi
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -45,6 +45,7 @@ const THREAD = 'thread-switch'
 const REVIEWER = 'thread-reviewer'
 const ROUTES: Record<string, unknown> = {
   'thread/start': { thread: { id: THREAD } },
+  'turn/start': { turn: { id: 'p2', status: 'inProgress' } },
   'model/list': {
     data: [
       {
@@ -133,7 +134,10 @@ describe('the chat strip and the session list read the same host child records',
       ...scriptedCodexTransport(openConnection),
       statusSink
     })
-    const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+    const attachParams = hostTestAttachParams(null, {
+      providerHandle: undefined,
+      options: { model: 'gpt-test' }
+    })
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
     const attached = await host.attach({ callerKey: 'switch-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
@@ -328,6 +332,13 @@ describe('the chat strip and the session list read the same host child records',
         },
         body
       }
+    )
+    await vi.waitFor(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).submissions.find(
+          (entry) => entry.clientMessageId === clientOperationId
+        )?.handedOverAt
+      ).toBeDefined()
     )
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p2', status: 'inProgress' } })
     await notify('item/started', {

@@ -4,9 +4,8 @@ import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 import {
   _resetLayoutOwnerPaneIntentsForTests,
-  expectPaneToAppear,
   expectPaneToClose,
-  takePaneAppearIntent
+  expectPaneToMountUnfocused
 } from '@/runtime/layout-owner-pane-intents'
 import { serializePaneTree } from './layout-serialization'
 
@@ -15,8 +14,6 @@ vi.mock('@/lib/pane-manager/pane-lifecycle', async (importOriginal) => {
   const actual: object = await importOriginal()
   return { ...actual, openTerminal: vi.fn() }
 })
-const recordCreatedTerminalPaneSplit = vi.hoisted(() => vi.fn())
-vi.mock('./terminal-pane-split-completion', () => ({ recordCreatedTerminalPaneSplit }))
 
 const { PaneManager } = await import('@/lib/pane-manager/pane-manager')
 const { reconcileMountedPanesToLayout } = await import('./terminal-pane-frame-reconciliation')
@@ -40,11 +37,20 @@ describe('reconcileMountedPanesToLayout', () => {
   let onPaneCreated: Mock<NonNullable<PaneManagerOptions['onPaneCreated']>>
   const closePane = vi.fn()
 
-  const reconcile = (layout: TerminalPaneLayoutNode, isExpanded = false): boolean =>
+  const reconcile = (
+    layout: TerminalPaneLayoutNode,
+    isExpanded = false,
+    ptyIdsByLeafId?: Record<string, string>
+  ): boolean =>
     reconcileMountedPanesToLayout({
       tabId: TAB,
       manager,
-      layout: { root: layout, activeLeafId: null, expandedLeafId: null },
+      layout: {
+        root: layout,
+        activeLeafId: null,
+        expandedLeafId: null,
+        ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {})
+      },
       closePane,
       isExpanded
     })
@@ -57,7 +63,6 @@ describe('reconcileMountedPanesToLayout', () => {
   beforeEach(() => {
     _resetLayoutOwnerPaneIntentsForTests()
     closePane.mockReset()
-    recordCreatedTerminalPaneSplit.mockReset()
     vi.stubGlobal('requestAnimationFrame', () => 1)
     vi.stubGlobal('cancelAnimationFrame', () => {})
     root = document.createElement('div')
@@ -75,35 +80,58 @@ describe('reconcileMountedPanesToLayout', () => {
     vi.unstubAllGlobals()
   })
 
-  it('mounts the window’s own split where main placed it, with the cwd it asked for', () => {
-    expectPaneToAppear(C, {
-      tabId: TAB,
-      cwd: '/repo',
-      telemetry: { source: 'keyboard', direction: 'horizontal' }
-    })
+  it('mounts a pane main is starting where main placed it, starting nothing of its own', () => {
     const layout = split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C), 0.4), 0.3)
 
     expect(reconcile(layout)).toBe(true)
 
     expect(serialized()).toEqual(layout)
-    expect(onPaneCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ leafId: C }),
-      expect.objectContaining({ cwd: '/repo' })
-    )
-    expect(recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
-      expect.objectContaining({ leafId: C }),
-      { source: 'keyboard', direction: 'horizontal' }
-    )
-    expect(takePaneAppearIntent(TAB, C)).toBeNull()
+    // No spawn input: the pane waits on main's start, then attaches (main-pane-start-wait).
+    const [created, hints] = onPaneCreated.mock.calls[0]!
+    expect(created).toMatchObject({ leafId: C })
+    expect(hints?.cwd).toBeUndefined()
+    expect(hints?.cwdPromise).toBeUndefined()
   })
 
-  it('leaves a pane main added without the window’s ask to main’s notice', () => {
+  it('mounts a pane main added that the window never asked for, attached to main’s terminal', () => {
+    // Main's own split, a CLI split or another client's: the pane sets agree, none pending.
     const layout = split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C)))
 
-    expect(reconcile(layout)).toBe(false)
+    expect(reconcile(layout, false, { [C]: 'pty-main-c' })).toBe(true)
 
-    expect(leaves()).toEqual([A, B])
-    expect(onPaneCreated).not.toHaveBeenCalled()
+    expect(leaves()).toEqual([A, B, C])
+    expect(onPaneCreated).toHaveBeenCalledTimes(1)
+    expect(onPaneCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ leafId: C }),
+      expect.objectContaining({ ptyId: 'pty-main-c' })
+    )
+    // The next frame finds the sets agreeing and mounts nothing again.
+    expect(reconcile(layout, false, { [C]: 'pty-main-c' })).toBe(false)
+    expect(onPaneCreated).toHaveBeenCalledTimes(1)
+  })
+
+  it('focuses a pane main added, as a split does', () => {
+    manager.setActivePane(manager.getNumericIdForLeaf(A)!, { focus: false })
+
+    reconcile(split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C))))
+
+    expect(manager.getActivePane()?.leafId).toBe(C)
+  })
+
+  it('leaves focus on the source pane for the window’s startup split, as switch-off does', () => {
+    manager.setActivePane(manager.getNumericIdForLeaf(A)!, { focus: false })
+    expectPaneToMountUnfocused(TAB, C)
+
+    reconcile(split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C))))
+
+    expect(leaves()).toEqual([A, B, C])
+    expect(manager.getActivePane()?.leafId).toBe(A)
+    // Asked once: a later pane main adds takes focus again.
+    const D = '44444444-4444-4444-8444-444444444444'
+    reconcile(
+      split('vertical', leaf(A), split('horizontal', leaf(B), split('vertical', leaf(C), leaf(D))))
+    )
+    expect(manager.getActivePane()?.leafId).toBe(D)
   })
 
   it('closes a pane main dropped only when the window asked, with the close it asked for', () => {
@@ -126,17 +154,6 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(leaves()).toEqual([A])
   })
 
-  it('ignores an intent for another tab', () => {
-    expectPaneToAppear(C, {
-      tabId: 'tab-2',
-      telemetry: { source: 'keyboard', direction: 'vertical' }
-    })
-
-    reconcile(split('vertical', leaf(A), split('vertical', leaf(B), leaf(C))))
-
-    expect(leaves()).toEqual([A, B])
-  })
-
   it('takes main’s ratios, then another client’s move, without recreating a pane', () => {
     const before = manager.getPanes().map((pane) => pane.container)
 
@@ -150,12 +167,7 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(onPaneCreated).not.toHaveBeenCalled()
   })
 
-  it('leaves a zoomed tab’s shape for later, still mounting its own split', () => {
-    expectPaneToAppear(C, {
-      tabId: TAB,
-      telemetry: { source: 'keyboard', direction: 'vertical' }
-    })
-
+  it('leaves a zoomed tab’s shape for later, still mounting main’s new pane', () => {
     reconcile(split('horizontal', leaf(B), split('vertical', leaf(A), leaf(C))), true)
 
     expect(leaves()).toEqual([A, B, C])

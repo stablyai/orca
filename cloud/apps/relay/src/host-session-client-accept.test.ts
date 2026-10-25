@@ -114,7 +114,9 @@ function harness(options: { random?: () => number; now?: () => number } = {}) {
     recordSql: vi.fn(),
     recordClientAcceptAbandoned: vi.fn(),
     recordClientAcceptCompleted: vi.fn(),
-    recordControlRtt: vi.fn()
+    recordControlRtt: vi.fn(),
+    recordPhoneRejection: vi.fn(),
+    recordPhoneAttachDeadline: vi.fn()
   } satisfies RelayRuntimeObserver
   const registry = new HostSessionRegistry(
     config,
@@ -369,6 +371,51 @@ describe('client accept abandoned mid-DB-phase', () => {
     }
   })
 
+  it('logs and counts an attach deadline with what the cell knew of the control', async () => {
+    let now = 1_700_000_000_000
+    const h = harness({ now: () => now })
+    await activeHost(h)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const client = new FakeSocket()
+      await h.registry.acceptClient(
+        client as unknown as WebSocket,
+        identity.relayHostId,
+        'credential'
+      )
+      now += RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
+      vi.advanceTimersByTime(RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs)
+      // The phone-only reason; relay-hello itself is unchanged for strict old parsers.
+      expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
+      expect(client.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 })
+      )
+      expect(h.observer.recordPhoneAttachDeadline).toHaveBeenCalledOnce()
+      expect(h.observer.recordPhoneRejection).toHaveBeenCalledWith(RELAY_CLOSE_CODE.HOST_OFFLINE)
+      const lines = warn.mock.calls
+        .map(([line]) => String(line))
+        .filter((line) => line.includes('orca_relay_attach_deadline_offline'))
+      expect(lines.map((line) => JSON.parse(line))).toEqual([
+        {
+          event: 'orca_relay_attach_deadline_offline',
+          relayHostIdDigest: expect.any(String),
+          credentialKind: 'resume',
+          msSinceLastPong: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
+          pingOutstanding: false,
+          controlAgeMs: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
+          controlRttMs: null,
+          pong: 'fresh',
+          cellId: config.cellId
+        }
+      ])
+      expect(lines[0]).not.toContain(identity.relayHostId)
+    } finally {
+      warn.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+
   it('still opens the connection when the phone is holding on', async () => {
     const h = harness()
     const control = await activeHost(h)
@@ -424,8 +471,6 @@ describe('successful client accept timing', () => {
       ) as { connId: string; connTicket: string }
       // The desktop's data leg is the attach window this is meant to expose.
       now += 23
-      const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
-      const ownerProbe = vi.spyOn(session.pendingConns, 'has')
       const accepted = await h.registry.acceptHostData(
         hostData as unknown as WebSocket,
         connOpen.connId,
@@ -434,10 +479,10 @@ describe('successful client accept timing', () => {
       )
 
       expect(accepted).toBe(true)
-      expect(ownerProbe).toHaveBeenCalledOnce()
       expect(h.observer.recordClientAcceptCompleted).toHaveBeenCalledWith({
         totalMs: 49,
-        stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 }
+        stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 },
+        phonePath: 'db'
       })
       const line = log.mock.calls
         .map((call) => String(call[0]))
@@ -784,6 +829,8 @@ describe('paced drain and the phones of a host not yet told', () => {
     const { h, untold } = await twoHostCell()
     h.registry.drain(0, { paceWindowMs: 40_000 })
     await vi.advanceTimersByTimeAsync(40_000)
+    // Told by its zero-grace close, a timer nested 1 ms after the send.
+    await vi.advanceTimersByTimeAsync(1)
     expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
 
     const refused = await dial(h, laterHostId)

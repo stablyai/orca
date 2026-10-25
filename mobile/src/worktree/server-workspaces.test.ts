@@ -44,5 +44,12 @@ describe('applyServerWorkspaces', () => {
       rows: [null]
     })
     expect(relabeled.hosts).not.toBe(first.hosts)
+    expect(relabeled.worktrees).toEqual(next.worktrees)
+    expect(
+      applyServerWorkspaces(next, {
+        hosts: [{ ...host }],
+        rows: [[row('a'), row('b')]]
+      })
+    ).toBe(next)
   })
 })

@@ -204,7 +204,7 @@ describe('ExternalAutomationManagers toggle', () => {
     expect(getSwitch().disabled).toBe(true)
   })
 
-  it('shows the sibling spinner only while a pause/resume targets this row', () => {
+  it('shows the sibling spinner for a matching resume key on an enabled row', () => {
     const entry = scoped({ jobs: [makeJob({ id: 'job-1', enabled: true })] })
     // Keyed for the resume action even though the job is enabled — the spinner
     // must match either pause or resume so it does not vanish when enabled flips.

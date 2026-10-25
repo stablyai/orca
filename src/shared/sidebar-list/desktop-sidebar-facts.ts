@@ -20,7 +20,13 @@ export const DesktopSidebarFactsSchema = z.object({
   /** Configured SSH targets by host id; status is null until a connection is attempted. */
   sshHosts: z.record(z.string(), z.object({ label: z.string(), status: z.string().nullable() })),
   /** WSL hosts by host id, where this host can run them. */
-  wslHosts: z.record(z.string(), z.object({ distro: z.string(), state: z.string() }))
+  wslHosts: z.record(z.string(), z.object({ distro: z.string(), state: z.string() })),
+  /** The host the desktop has focused, where its sidebar files rows that name no owner. */
+  focusedHostId: z.string().optional(),
+  /** The user's own names for hosts, by host id. */
+  hostLabels: z.record(z.string(), z.string()).optional(),
+  /** "Also show pinned workspaces in their groups"; absent reads as off. */
+  showPinnedInGroups: z.boolean().optional()
 })
 
 export type DesktopSidebarFacts = z.infer<typeof DesktopSidebarFactsSchema>

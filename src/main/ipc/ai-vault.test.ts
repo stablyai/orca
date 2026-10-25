@@ -33,9 +33,7 @@ vi.mock('../ai-vault/session-delete', () => ({
   deleteAiVaultSessionFile: mocks.deleteAiVaultSessionFile
 }))
 
-// Why: only the invalidation seam is replaced — everything else (cachedList,
-// listAiVaultSessions, ...) keeps its real implementation so the existing
-// host-routing/caching tests below stay exercising real behavior.
+// Mock only invalidation so routing and cache tests retain the real list implementation.
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   const actual = await importOriginal<typeof CachedSessionListModule>()
   return {
@@ -89,12 +87,32 @@ describe('listAiVaultSessions host routing', () => {
       }),
       expect.any(AbortSignal),
       expect.objectContaining({
-        sent: expect.any(Function),
         work: expect.any(Function),
         finish: expect.any(Function),
         fail: expect.any(Function)
       })
     )
+  })
+
+  it('gives servers reached over an SSH tunnel the longer all-hosts scan budget', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [
+        { environmentId: 'lan-server', executionHostId: 'runtime:lan-server' },
+        {
+          environmentId: 'ssh-server',
+          executionHostId: 'runtime:ssh-server',
+          connectionDependency: 'ssh-tunnel'
+        }
+      ],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({ executionHostScope: 'all', force: true })
+
+    const timeoutFor = (environmentId: string): unknown =>
+      mocks.scanRuntimeAiVaultSessions.mock.calls.find(([id]) => id === environmentId)?.[2]
+    expect(timeoutFor('lan-server')).toEqual({ timeoutMs: 3_000 })
+    expect(timeoutFor('ssh-server')).toEqual({ timeoutMs: 15_000 })
   })
 
   it('keeps direct runtime host scans on the normal runtime timeout', async () => {

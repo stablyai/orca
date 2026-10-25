@@ -13,6 +13,8 @@ import { listRotatedFiles } from './local-file-sink'
 import { redactValue } from './redactor'
 
 const DEFAULT_LOOKBACK_MINUTES = 30
+/** The daemon log's reserved share of the bundle; whatever it leaves unused goes to trace spans. */
+const DAEMON_LOG_BUDGET_BYTES = 1024 * 1024
 
 export type CollectBundleOptions = {
   readonly traceFilePath: string
@@ -66,41 +68,22 @@ function* readLinesNewestFirst(text: string): Iterable<string> {
   }
 }
 
-/**
- * Read the last N minutes of NDJSON across the rotated family into a redacted bundle payload.
- * Main keeps the uploadable payload so a compromised renderer can't substitute bytes after preview.
- */
-export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
-  const lookbackMs = (opts.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES) * 60 * 1000
-  const cutoffMs = Date.now() - lookbackMs
-  const cutoffNanos = BigInt(cutoffMs) * 1_000_000n
-  const bundleSubmissionId = generateBundleSubmissionId()
-  const header: BundleHeader = {
-    bundle_submission_id: bundleSubmissionId,
-    app_version: opts.appVersion,
-    platform: opts.platform,
-    arch: opts.arch,
-    os_release: opts.osRelease,
-    orca_channel: opts.orcaChannel,
-    collected_at: new Date().toISOString(),
-    schema_version: 1
-  }
+type RecordWindow = {
+  readonly cutoffMs: number
+  readonly cutoffNanos: bigint
+  readonly maxRecordBytes: number
+}
 
-  const headerLine = JSON.stringify({ type: 'bundle-header', ...header })
-  const lines: string[] = [headerLine]
-  let spanCount = 0
+/** Redacted records newest → oldest across `files`, stopping at `budgetBytes`. */
+function collectNewestRecords(
+  files: readonly string[],
+  budgetBytes: number,
+  recordWindow: RecordWindow
+): { lines: string[]; bytes: number } {
+  const lines: string[] = []
   // Track bytes incrementally to avoid an O(N²) `lines.join('\n').length` per span.
-  let currentBytes = Buffer.byteLength(`${headerLine}\n`)
-  const maxRecordBytes = MAX_BUNDLE_BYTES - currentBytes
-
-  // Trace files then daemon log, each newest → oldest so the byte cap keeps the most recent spans.
-  const files = [
-    ...listRotatedFiles(opts.traceFilePath, opts.maxFiles),
-    ...(opts.daemonLogFilePath
-      ? listRotatedFiles(opts.daemonLogFilePath, opts.daemonLogMaxFiles ?? opts.maxFiles)
-      : [])
-  ]
-  outer: for (const file of files) {
+  let bytes = 0
+  for (const file of files) {
     let text: string
     try {
       // stat first: the sink caps at 10 MB/file, so a tampered oversize file could panic-allocate on read.
@@ -132,7 +115,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
       // Filter by end-time, not start-time, so long-lived spans that ended inside the lookback are still included.
       if (typeof record.endTimeUnixNano === 'string') {
         try {
-          if (BigInt(record.endTimeUnixNano) < cutoffNanos) {
+          if (BigInt(record.endTimeUnixNano) < recordWindow.cutoffNanos) {
             continue
           }
         } catch {
@@ -141,7 +124,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
       } else if (typeof record.ts === 'string') {
         // Daemon lifecycle lines use an ISO `ts`; unparseable timestamps are kept (over-include).
         const tsMs = Date.parse(record.ts)
-        if (Number.isFinite(tsMs) && tsMs < cutoffMs) {
+        if (Number.isFinite(tsMs) && tsMs < recordWindow.cutoffMs) {
           continue
         }
       }
@@ -149,19 +132,89 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
       // Second redaction pass (server mode) catches nested auth fields and strips identity keys before preview.
       const redacted = JSON.stringify(redactValue(parsed, 'server'))
       const redactedBytes = Buffer.byteLength(redacted) + 1
-      if (redactedBytes > maxRecordBytes) {
+      if (redactedBytes > recordWindow.maxRecordBytes) {
         // Skip a single oversized record so it can't suppress every smaller span behind it.
         continue
       }
-      if (currentBytes + redactedBytes > MAX_BUNDLE_BYTES) {
+      if (bytes + redactedBytes > budgetBytes) {
         // Hard ceiling matches the upload endpoint's 4 MiB; check before appending so the preview uploads as-is.
-        break outer
+        return { lines, bytes }
       }
       lines.push(redacted)
-      spanCount += 1
-      currentBytes += redactedBytes
+      bytes += redactedBytes
     }
   }
+  return { lines, bytes }
+}
+
+/** The newest `lines` (already newest → oldest) that fit `budgetBytes`, one newline each. */
+function takeNewestLines(
+  lines: readonly string[],
+  budgetBytes: number
+): { lines: string[]; bytes: number } {
+  const taken: string[] = []
+  let bytes = 0
+  for (const line of lines) {
+    const lineBytes = Buffer.byteLength(line) + 1
+    if (bytes + lineBytes > budgetBytes) {
+      break
+    }
+    taken.push(line)
+    bytes += lineBytes
+  }
+  return { lines: taken, bytes }
+}
+
+/**
+ * Read the last N minutes of NDJSON across the rotated family into a redacted bundle payload.
+ * Main keeps the uploadable payload so a compromised renderer can't substitute bytes after preview.
+ */
+export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
+  const lookbackMs = (opts.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES) * 60 * 1000
+  const cutoffMs = Date.now() - lookbackMs
+  const cutoffNanos = BigInt(cutoffMs) * 1_000_000n
+  const bundleSubmissionId = generateBundleSubmissionId()
+  const header: BundleHeader = {
+    bundle_submission_id: bundleSubmissionId,
+    app_version: opts.appVersion,
+    platform: opts.platform,
+    arch: opts.arch,
+    os_release: opts.osRelease,
+    orca_channel: opts.orcaChannel,
+    collected_at: new Date().toISOString(),
+    schema_version: 1
+  }
+
+  const headerLine = JSON.stringify({ type: 'bundle-header', ...header })
+  const headerBytes = Buffer.byteLength(`${headerLine}\n`)
+  const recordWindow = {
+    cutoffMs,
+    cutoffNanos,
+    maxRecordBytes: MAX_BUNDLE_BYTES - headerBytes
+  }
+
+  // Why the daemon log goes first with its own share: trace spans alone fill the cap on a
+  // busy host, which dropped every daemon line from most field OOM bundles.
+  const available = MAX_BUNDLE_BYTES - headerBytes
+  // Collect the daemon log up to the whole bundle, reserve its newest share before spans,
+  // then hand it back whatever spans leave unused, so a quiet trace never caps it at the share.
+  const daemonAll = opts.daemonLogFilePath
+    ? collectNewestRecords(
+        listRotatedFiles(opts.daemonLogFilePath, opts.daemonLogMaxFiles ?? opts.maxFiles),
+        available,
+        recordWindow
+      )
+    : { lines: [], bytes: 0 }
+  const reserved = takeNewestLines(daemonAll.lines, Math.min(DAEMON_LOG_BUDGET_BYTES, available))
+  const traces = collectNewestRecords(
+    listRotatedFiles(opts.traceFilePath, opts.maxFiles),
+    available - reserved.bytes,
+    recordWindow
+  )
+  const daemon = takeNewestLines(daemonAll.lines, available - traces.bytes)
+  const lines = [headerLine, ...traces.lines, ...daemon.lines]
+  const spanCount = traces.lines.length + daemon.lines.length
+  const currentBytes = headerBytes + traces.bytes + daemon.bytes
 
   const payload = `${lines.join('\n')}\n`
   return {
@@ -186,5 +239,6 @@ export function generateBundleSubmissionId(): string {
 
 // Test-only export.
 export const _internalsForTests = {
-  MAX_BUNDLE_BYTES
+  MAX_BUNDLE_BYTES,
+  DAEMON_LOG_BUDGET_BYTES
 }

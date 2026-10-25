@@ -7,8 +7,14 @@ export type AskQuestion = {
   header?: string
   multiSelect: boolean
   options: AskOption[]
+  /** Claude renders its preview selector: digits only move focus, Enter commits, free text is a note. */
+  hasPreviews?: true
 }
-export type AskPrompt = { questions: AskQuestion[] }
+export type AskPrompt = {
+  questions: AskQuestion[]
+  /** The agent kept working after asking, so the answer goes back as an ordinary message. */
+  replyAsMessage?: true
+}
 
 /** A parser turns one agent's interactive-question tool input into the normalized
  *  AskPrompt the card renders. */

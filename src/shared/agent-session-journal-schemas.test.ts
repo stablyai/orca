@@ -123,7 +123,7 @@ describe('canonical admission', () => {
     const item: AgentJournalRenderItem = {
       itemId: 'codex:t:turn:0',
       revision: 1,
-      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      body: { kind: 'message', role: 'user', blocks: [] },
       sequence: 1,
       observedAt: 1_000,
       recovered: true
@@ -232,7 +232,7 @@ describe('nested corruption is rejected', () => {
     const base = {
       itemId: 'codex:t:turn:0',
       revision: 1,
-      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      body: { kind: 'message', role: 'user', blocks: [] },
       sequence: 1,
       observedAt: 1_000
     }
@@ -411,8 +411,8 @@ describe('optional tool annotations', () => {
     ).toBe(true)
     const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
     expect(padded.success).toBe(true)
-    if (padded.success && padded.data.kind === 'tool-call') {
-      expect(padded.data.callId).toBe(' call-1 ')
+    if (padded.success) {
+      expect(padded.data).toMatchObject({ kind: 'tool-call', callId: ' call-1 ' })
     }
   })
   it('admits explicit MCP identity without constraining the raw name', () => {

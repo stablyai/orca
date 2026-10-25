@@ -33,6 +33,7 @@ function session(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceSessi
         ptyIdsByLeafId: { [LEAF]: 'pty-1' }
       }
     },
+    defaultTerminalTabsAppliedByWorktreeId: { [WORKTREE]: true },
     ...overrides
   }
 }
@@ -48,6 +49,25 @@ describe('evaluatePtyBindingFastLane', () => {
       misses: ['not_durable']
     })
   })
+
+  it.each([undefined, false])(
+    'requires the defaults guard that apply writes, for clean and dirty requests (%s)',
+    (guard) => {
+      const unguarded = session({ defaultTerminalTabsAppliedByWorktreeId: {} })
+      // Loaded data can contain false even though the typed guard only admits true.
+      Object.defineProperty(unguarded.defaultTerminalTabsAppliedByWorktreeId, WORKTREE, {
+        value: guard,
+        enumerable: true
+      })
+      expect(evaluatePtyBindingFastLane(request, unguarded, WORKTREE, true).misses).toEqual([
+        'defaults_not_applied'
+      ])
+      expect(evaluatePtyBindingFastLane(request, unguarded, WORKTREE, false).misses).toEqual([
+        'defaults_not_applied',
+        'not_durable'
+      ])
+    }
+  )
 
   it('names every miss', () => {
     const miss = (
@@ -70,6 +90,7 @@ describe('evaluatePtyBindingFastLane', () => {
         })
       )
     ).toEqual(['layout_missing'])
+    expect(miss({ correctStartupCwd: '/corrected' })).toEqual(['startup_cwd'])
     expect(miss({ incarnationId: 'a' })).toEqual(['incarnation'])
     expect(miss({}, session({ activeWorktreeIdsOnShutdown: [] }))).toEqual(['inactive_worktree'])
     expect(miss({}, session({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'a' } }))).toEqual([

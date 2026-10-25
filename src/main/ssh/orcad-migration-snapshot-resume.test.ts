@@ -7,10 +7,10 @@ import { toSshExecutionHostId } from '../../shared/execution-host'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSnapshotChunkRequest } from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSnapshotChunkRequest } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { transferOrcadMigrationSnapshots } from './orcad-migration-snapshot-coordinator'

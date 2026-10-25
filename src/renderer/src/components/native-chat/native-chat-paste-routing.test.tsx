@@ -163,12 +163,14 @@ function fixture(options: { platform?: NodeJS.Platform } = {}) {
     keybindings: {},
     worktreeId: 'workspace',
     managerRef: { current: { getActivePane: () => pane, getPanes: () => [pane, sibling] } },
+    paneTransportsRef: { current: new Map() },
     setTerminalError: vi.fn()
   } as unknown as TerminalPaneCloseController
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the two execution callbacks read by the listener.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the execution callbacks read by the listener.
   const execution = {
     pasteFromClipboard,
-    executePanePasteText
+    executePanePasteText,
+    resolvePaneProtectedMultilinePasteOptions: () => undefined
   } as unknown as TerminalPanePasteExecution
   dispose = registerTerminalPanePasteListeners({
     container,
@@ -415,6 +417,9 @@ describe('paste inside a chat cover never reaches the terminal', () => {
     expect(f.pasteFromClipboard).toHaveBeenCalledExactlyOnceWith(f.pane, 'paste-event')
     window.dispatchEvent(new Event(APP_MENU_PASTE_EVENT, { cancelable: true }))
     expect(mocks.terminalClipboard).toHaveBeenCalledTimes(1)
+    expect(mocks.terminalClipboard.mock.calls[0][0].protectedMultilineTextPasteOptions).toBe(
+      undefined
+    )
   })
 })
 
@@ -452,5 +457,30 @@ describe('terminal context-menu paste on a covered pane', () => {
     await act(async () => finish('old answer'))
     expect(answer.value).toBe('')
     expect(answerRef.current.value).toBe('')
+  })
+})
+
+describe('pane menu paste opened on a question answer', () => {
+  it('fills that answer rather than the mounted composer', async () => {
+    const root = document.createElement('div')
+    const composer = composerHandle()
+    const answer = document.createElement('input')
+    answer.setAttribute('data-native-chat-answer-field', '')
+    root.append(composer.element, answer)
+    document.body.append(root)
+    let pasteInto: ((origin?: HTMLTextAreaElement | HTMLInputElement) => void) | undefined
+    function Probe(): null {
+      pasteInto = useNativeChatPasteBridge({
+        rootRef: { current: root },
+        composerRef: { current: composer }
+      })
+      return null
+    }
+    render(<Probe />)
+    await act(async () => {
+      pasteInto?.(answer)
+    })
+    expect(answer.value).toBe('menu text')
+    expect(composer.pasteFromClipboard).not.toHaveBeenCalled()
   })
 })

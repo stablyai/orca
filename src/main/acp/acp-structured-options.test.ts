@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { AcpStructuredOptions, restoreAcpSessionOptions } from './acp-structured-options'
+import { AcpStructuredOptions } from './acp-structured-options'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 
 const configOptions = [
@@ -33,7 +33,7 @@ describe('ACP session options', () => {
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions })
     const { models, current } = options.read()
-    // The effort menu belongs to the model running now; nothing is anyone's default.
+    // Current values supply an effort menu, never a catalog default.
     expect(models).toEqual([
       { id: 'model-a', label: 'Model A', isDefault: false, efforts: [] },
       {
@@ -64,7 +64,7 @@ describe('ACP session options', () => {
               reasoningEfforts: [{ value: 'medium', default: true }]
             }
           },
-          // The session's own effort written into the running model's meta is not its default.
+          // Session-selected effort metadata must not become a model default.
           {
             modelId: 'model-b',
             name: 'Model B',
@@ -121,11 +121,6 @@ describe('ACP session options', () => {
 })
 
 describe('what a new session with no pick says about the configured default', () => {
-  const connection = {
-    setConfigOption: async () => ({ configOptions }),
-    setModel: async () => ({})
-  }
-
   it('is the model and effort the agent chose for itself', () => {
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions }, 'new')
@@ -138,17 +133,17 @@ describe('what a new session with no pick says about the configured default', ()
     expect(options.configuredDefault()).toBeUndefined()
   })
 
-  it('says nothing once the chat holds a model pick, even one the session already runs', async () => {
+  it('says nothing once the chat holds a model pick, even one the session already runs', () => {
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions }, 'new')
-    await restoreAcpSessionOptions(connection, options, { model: 'model-b' })
+    options.notePick('model')
     expect(options.configuredDefault()).toBeUndefined()
   })
 
-  it('keeps the model but not an effort the chat picked', async () => {
+  it('keeps the model but not an effort the chat picked', () => {
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions }, 'new')
-    await restoreAcpSessionOptions(connection, options, { effort: 'low' })
+    options.notePick('effort')
     expect(options.configuredDefault()).toEqual({ modelId: 'model-b' })
   })
 

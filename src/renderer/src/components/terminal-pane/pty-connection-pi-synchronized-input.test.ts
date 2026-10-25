@@ -19,6 +19,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -164,7 +165,6 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const synchronizedOutput = { synchronizedOutput: false }
       const renderRows = vi.fn()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture exposes xterm's private render state to observe the DEC 2026 present.
       ;(
         pane.terminal as unknown as {
           _core: {
@@ -185,17 +185,16 @@ describe('connectPanePty', () => {
         }
       }
       pane.terminal.write.mockImplementation((data, callback) => {
-        if (data.includes('\x1b[?2026h')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026h')) {
           synchronizedOutput.synchronizedOutput = true
         }
-        if (data.includes('\x1b[?2026l')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026l')) {
           synchronizedOutput.synchronizedOutput = false
         }
         callback?.()
       })
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks(6)
 
       vi.useFakeTimers()

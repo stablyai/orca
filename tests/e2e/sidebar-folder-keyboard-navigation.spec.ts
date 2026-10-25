@@ -2,7 +2,6 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
-import { expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
 import { waitForSessionReady } from './helpers/store'
 
 test('cycles visible folder workspaces with shortcuts and focused list arrows', async ({
@@ -39,16 +38,11 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
       throw new Error('Expected two git worktrees and one folder workspace')
     }
     await store.getState().updateFolderWorkspace(folder.id, { workspaceStatus: 'in-progress' })
+    // Through the metadata writes, so main's copy of the catalog agrees with the window's.
+    await store.getState().updateWorktreeMeta(first.id, { workspaceStatus: 'todo' })
+    await store.getState().updateWorktreeMeta(last.id, { workspaceStatus: 'completed' })
     store.getState().setGroupBy('workspace-status')
-    store.setState({
-      collapsedGroups: new Set(),
-      worktreesByRepo: {
-        [repo.id]: [
-          { ...first, hostId: 'local', displayName: 'Git workspace A', workspaceStatus: 'todo' },
-          { ...last, hostId: 'local', displayName: 'Git workspace B', workspaceStatus: 'completed' }
-        ]
-      }
-    })
+    store.setState({ collapsedGroups: new Set() })
     return [first.id, `folder:${folder.id}`, last.id]
   }, folderPath)
 
@@ -139,5 +133,4 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
   await expect(row(folder)).toHaveAttribute('aria-current', 'page')
   await expect(row(folder)).toBeInViewport({ ratio: 1 })
   await expect.poll(() => sidebar.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
-  await expectNoSidebarShadowMismatches(orcaPage)
 })

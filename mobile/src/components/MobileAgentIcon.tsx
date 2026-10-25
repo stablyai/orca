@@ -1,12 +1,14 @@
+import { useId } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { ImageSourcePropType } from 'react-native'
 import { Terminal } from 'lucide-react-native'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
+
+const iconAssets: Partial<Record<string, ImageSourcePropType>> = MOBILE_AGENT_ICON_ASSETS
 
 // Why: agent branding should match the desktop/new-worktree picker everywhere
 // mobile lets users choose the agent that will own a workspace.
@@ -27,16 +29,17 @@ function PiIcon({ size = 16 }: { size?: number }) {
 function OmpIcon({ size = 16 }: { size?: number }) {
   // SVG sourced from omp.sh's transparent homepage mark. Why: react-native-svg
   // does not support the homepage's CSS oklch stops, so use its favicon hex stops.
+  const gradientId = `ompMarkGradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
       <Defs>
-        <LinearGradient id="ompMarkGradient" x1="0" y1="0" x2="1" y2="1">
+        <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#ed4abf" />
           <Stop offset="0.5" stopColor="#9b4dff" />
           <Stop offset="1" stopColor="#5ad8e6" />
         </LinearGradient>
       </Defs>
-      <Path fill="url(#ompMarkGradient)" d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
+      <Path fill={`url(#${gradientId})`} d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
     </Svg>
   )
 }
@@ -53,7 +56,13 @@ function AiderIcon({ size = 16 }: { size?: number }) {
 }
 
 function BundledIcon({ source, size = 16 }: { source: ImageSourcePropType; size?: number }) {
-  return <Image source={source} style={{ width: size, height: size, borderRadius: 2 }} />
+  return (
+    <Image
+      source={source}
+      defaultSource={Array.isArray(source) ? undefined : source}
+      style={{ width: size, height: size, borderRadius: 2 }}
+    />
+  )
 }
 
 function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
@@ -107,7 +116,8 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
 
   // Why: prefer the favicon bundled into the app over Google's favicon service,
   // which is unreachable in some regions and offline (#8451).
-  const bundledIcon = MOBILE_AGENT_ICON_ASSETS[agentId as TuiAgent]
+  const iconAgentId = agentId === 'dsb' ? 'dsh' : agentId
+  const bundledIcon = iconAssets[iconAgentId]
   if (bundledIcon) {
     return <BundledIcon source={bundledIcon} size={size} />
   }

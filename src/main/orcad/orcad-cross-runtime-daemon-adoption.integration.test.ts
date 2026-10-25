@@ -4,7 +4,7 @@
  * are installed side by side as `~/.orca-remote/orcad-<version>/`, launched and stopped with
  * the client's own deploy commands, and share one data root.
  */
-import type * as ExecCommandModule from '../ssh/ssh-relay-exec-command'
+import type * as ExecCommandModule from '../ssh/remote-exec/remote-exec-command'
 import { build } from 'esbuild'
 import {
   copyFileSync,
@@ -40,27 +40,35 @@ import {
   getOrcaProfileIndexPath,
   getOrcaProfileStateDatabaseFile
 } from '../orca-profiles/profile-storage-paths'
-import type { SshConnection } from '../ssh/ssh-connection'
-import { emptyOrcadActivationRecord, orcadGcPinnedDirNames } from '../ssh/orcad-activation-record'
-import { gcOldOrcadVersions } from '../ssh/orcad-remote-gc'
+import {
+  emptyOrcadActivationRecord,
+  orcadGcPinnedDirNames
+} from '../managed-server/activation/orcad-activation-record'
+import { gcOldOrcadVersions } from '../managed-server/install/orcad-remote-gc'
 import {
   ORCAD_PID_FILENAME,
-  ORCAD_READINESS_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../managed-server/install/orcad-remote-host-support'
+import {
   orcadLaunchCommand,
   parseOrcadReadinessOutput
-} from '../ssh/orcad-remote-launch'
-import { parseOrcadStopOutcome, stopOrcadCommand } from '../ssh/orcad-remote-process-control'
-import { RELAY_REMOTE_DIR } from '../ssh/relay-protocol'
+} from '../managed-server/install/orcad-remote-launch'
+import {
+  parseOrcadStopOutcome,
+  stopOrcadCommand
+} from '../managed-server/install/orcad-remote-process-control'
+import { RELAY_REMOTE_DIR } from '../ssh/remote-exec/remote-frame-protocol'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   skipForMissingInputs,
   hostServerTarget,
   locatePinnedNodeForTests
 } from './orcad-node-slot-fixture'
+import { unusedSshConnection } from '../ssh/unused-host-transport.test-fixture'
 
 // GC runs its real commands, against this machine instead of an SSH host.
 const { execMock } = vi.hoisted(() => ({ execMock: vi.fn() }))
-vi.mock('../ssh/ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: execMock
 }))
@@ -439,8 +447,7 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         const record = { ...emptyOrcadActivationRecord(), active: incoming.version }
         expect(orcadGcPinnedDirNames(record)).not.toContain(`orcad-${outgoing.version}`)
         await gcOldOrcadVersions({
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is replaced by a local shell for every connection access.
-          conn: {} as SshConnection,
+          conn: unusedSshConnection(),
           host,
           remoteHome: caseRoot,
           currentDirAbsPath: incoming.dir,

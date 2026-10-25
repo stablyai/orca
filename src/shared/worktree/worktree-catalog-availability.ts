@@ -15,27 +15,3 @@ export class WorktreeCatalogUnavailableError extends Error {
     this.name = 'WorktreeCatalogUnavailableError'
   }
 }
-
-export function isWorktreeCatalogUnavailableError(error: unknown): boolean {
-  return (
-    error instanceof WorktreeCatalogUnavailableError ||
-    (typeof error === 'object' &&
-      error !== null &&
-      (error as { worktreeCatalogUnavailable?: unknown }).worktreeCatalogUnavailable === true)
-  )
-}
-
-/**
- * Git always lists at least the repository's own checkout, so a zero-row listing for a Git repo
- * can only mean the scan never produced an answer. Older relays converted worktree-list failures
- * into `[]`, so a mixed-version client must reject that shape rather than publish it.
- */
-export function assertAuthoritativeWorktreeCatalog<T>(worktrees: unknown, repoPath: string): T[] {
-  if (!Array.isArray(worktrees) || worktrees.length === 0) {
-    throw new WorktreeCatalogUnavailableError(
-      `Worktree catalog unavailable for ${repoPath}: the execution host returned no worktree listing. ` +
-        'Treating this as an empty catalog would authorize removing workspaces that still exist.'
-    )
-  }
-  return worktrees as T[]
-}

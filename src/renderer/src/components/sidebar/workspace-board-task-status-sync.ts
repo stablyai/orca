@@ -23,6 +23,7 @@ export type WorkspaceBoardTaskStatusSyncMessage =
   | { kind: 'ambiguous-workflow-state'; statusLabel: string }
   | { kind: 'update-failed'; issueIdentifier: string; detail?: string }
   | { kind: 'provider-error'; issueIdentifier: string; detail?: string }
+  | { kind: 'owner-ambiguous'; issueIdentifier: string }
   | { kind: 'unexpected-error'; detail?: string }
 
 type WorkspaceBoardTaskStatusSyncDependencies = {
@@ -183,7 +184,7 @@ async function syncLinearWorktreeStatus(
     ? args.getSettingsForWorktree(worktreeId)
     : (args.settings ?? { kind: 'local' })
   if (!settings) {
-    return skipped(result, { kind: 'provider-error', issueIdentifier: worktree.linkedLinearIssue })
+    return skipped(result, { kind: 'owner-ambiguous', issueIdentifier: worktree.linkedLinearIssue })
   }
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 

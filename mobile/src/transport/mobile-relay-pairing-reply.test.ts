@@ -11,7 +11,7 @@ import type { RpcResponse } from './types'
 // changed only where the refusal is raised.
 
 function success(result: unknown): RpcResponse {
-  return { ok: true, result }
+  return { id: 'reply-1', ok: true, result }
 }
 
 const installed = {
@@ -62,7 +62,11 @@ describe('the endpoints reader is the endpoints contract', () => {
   })
 
   it('still raises the host code and message on a refusal, ahead of the reader', () => {
-    const refusal: RpcResponse = { ok: false, error: { code: 'forbidden', message: 'no' } }
+    const refusal: RpcResponse = {
+      id: 'reply-1',
+      ok: false,
+      error: { code: 'forbidden', message: 'no' }
+    }
     expect(() => relayPairingEndpointsRead.interpret(refusal)).toThrow('forbidden: no')
   })
 })

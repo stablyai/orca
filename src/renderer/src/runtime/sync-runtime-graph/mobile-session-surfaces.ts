@@ -78,6 +78,10 @@ export function isMobileFileDiffSource(
 }
 
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  // A tab mirrored from a paired host is that host's; republishing it echoes it back to the host.
+  if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
   return !(
     file.diffSource === 'combined-all' ||

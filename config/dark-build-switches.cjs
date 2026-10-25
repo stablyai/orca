@@ -2,8 +2,9 @@ const { existsSync } = require('node:fs')
 const { join } = require('node:path')
 
 // Dark build switches: a build compiles a switch's path in only when its variable is 'main'. Such a
-// main build leaves the switch's marker in out/main, and packaging refuses it; packaging and the
-// orcad template also refuse the variable itself.
+// main build leaves the switch's marker in out/main, the phone page bundle (out/mobile-web), out/orcad
+// and a --dark-test-template orcad template; packaging refuses any of them, and packaging and a
+// release orcad template also refuse the variable itself.
 const DARK_BUILD_SWITCHES = [
   // src/shared/layout-owner-switch.ts
   { variable: 'ORCA_LAYOUT_OWNER', off: 'window' },
@@ -37,7 +38,12 @@ function turnedOnDarkBuildDefines(env = process.env) {
   )
 }
 
-/** The marker each switched-on build leaves in out/main. */
+/** Every marker a switched-on build can leave, so a bundle check accounts for them. */
+function darkBuildMarkerFileNames() {
+  return DARK_BUILD_SWITCHES.map(markerFileName)
+}
+
+/** The marker each switched-on build leaves in its output. */
 function darkBuildMarkers(env = process.env) {
   return turnedOn(env).map((darkSwitch) => ({
     fileName: markerFileName(darkSwitch),
@@ -45,14 +51,8 @@ function darkBuildMarkers(env = process.env) {
   }))
 }
 
-function assertNotDarkBuild(outputDirs, env = process.env) {
-  const [asked] = turnedOn(env)
-  if (asked) {
-    throw new Error(
-      `${asked.variable}=main is for dark test builds; unset it to package a release.`
-    )
-  }
-  for (const darkSwitch of DARK_BUILD_SWITCHES) {
+function assertUnmarked(outputDirs, switches) {
+  for (const darkSwitch of switches) {
     const marked = outputDirs.find((dir) => existsSync(join(dir, markerFileName(darkSwitch))))
     if (marked) {
       throw new Error(
@@ -62,9 +62,30 @@ function assertNotDarkBuild(outputDirs, env = process.env) {
   }
 }
 
+function assertNotDarkBuild(outputDirs, env = process.env) {
+  const [asked] = turnedOn(env)
+  if (asked) {
+    throw new Error(
+      `${asked.variable}=main is for dark test builds; unset it to package a release.`
+    )
+  }
+  assertUnmarked(outputDirs, DARK_BUILD_SWITCHES)
+}
+
+/** For a build that may itself be dark: refuses only outputs marked by a switch this build has off. */
+function assertNoDarkOutputOfOffSwitches(outputDirs, env = process.env) {
+  const on = turnedOn(env)
+  assertUnmarked(
+    outputDirs,
+    DARK_BUILD_SWITCHES.filter((darkSwitch) => !on.includes(darkSwitch))
+  )
+}
+
 module.exports = {
+  assertNoDarkOutputOfOffSwitches,
   assertNotDarkBuild,
   darkBuildDefines,
+  darkBuildMarkerFileNames,
   darkBuildMarkers,
   turnedOnDarkBuildDefines
 }

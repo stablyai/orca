@@ -133,7 +133,6 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         manager.setActivePane(paneId, { focus: true })
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
@@ -166,7 +165,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       tabId,
       updateTabPtyId,
       updateTabTitle,
-      worktreeId
+      worktreeId,
+      setTerminalErrorsByPaneId
     ]
   )
 
@@ -187,16 +187,12 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
       clearPaneProcessExit(processExit.paneId)
-      const leafId = managerRef.current
-        ?.getPanes()
-        .find((candidate) => candidate.id === processExit.paneId)?.leafId
-      // Why Codex: preserves the pre-existing fallback; a null startup has always relaunched Codex here.
-      const startup =
-        resolveTerminalProcessExitRestartStartup(processExit) ??
-        (leafId ? buildAccountRestartStartup('codex', leafId) : null)
-      handleRestartPane(processExit.paneId, startup, { focus: true })
+      // Why no agent fallback: a null startup means a plain shell; account switches restart via their own path.
+      handleRestartPane(processExit.paneId, resolveTerminalProcessExitRestartStartup(processExit), {
+        focus: true
+      })
     },
-    [buildAccountRestartStartup, clearPaneProcessExit, handleRestartPane, managerRef]
+    [clearPaneProcessExit, handleRestartPane]
   )
 
   const handleCloseExitedPane = useCallback(
@@ -259,13 +255,15 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
     panePtyLayoutBindings,
-    readyRestartPtyIds
+    readyRestartPtyIds,
+    managerRef,
+    paneTransportsRef,
+    tabId
   ])
 
   return { handleRestartExitedPane, handleCloseExitedPane }

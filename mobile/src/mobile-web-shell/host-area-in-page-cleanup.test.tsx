@@ -10,9 +10,28 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
+  View: 'View',
+  Keyboard: { dismiss: () => {} },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios' }
 }))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} }),
+  useClipboardReader: () => ({ contents: async () => ({ text: false, image: false }) })
+}))
+vi.mock('../platform/haptics', () => ({
+  triggerSuccess: () => {},
+  triggerError: () => {},
+  triggerSelection: () => {},
+  triggerEdgeBump: () => {}
+}))
+vi.mock('../terminal/terminal-copy-gutter-preference', () => ({
+  useTerminalCopyTrimsGutter: () => ({ current: false })
+}))
+vi.mock('../session/mobile-session-styles', () => ({ styles: { container: {}, kavInner: {} } }))
+vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
+vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
+vi.mock('../session/MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: () => Promise.resolve(),
   deactivateKeepAwake: () => Promise.resolve()
@@ -33,12 +52,16 @@ import { useMobileDictation, type UseMobileDictationResult } from '../hooks/use-
 import { createNativeAudioCapture, type NativeAudioEngine } from '../platform/native-audio'
 import { subscribeMobileTerminalSafely } from '../session/mobile-terminal-stream-subscribe'
 import { useMobileSessionTerminalSubscriptionFoundation } from '../session/use-mobile-session-terminal-subscription-foundation'
+import { useMobileSessionAccessorySelection } from '../session/use-mobile-session-accessory-selection'
+import { MobileSessionSurface } from '../session/MobileSessionSurface'
 import { createFakeRpcClient, type FakeRpcClient } from './bridge-host-test-fakes'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { routeViewOf } from './page-route-policy'
 
 type FoundationScope = Parameters<typeof useMobileSessionTerminalSubscriptionFoundation>[0]
+type AccessoryScope = Parameters<typeof useMobileSessionAccessorySelection>[0]
+type SurfaceController = Parameters<typeof MobileSessionSurface>[0]['controller']
 
 const HOST_AREA_GRANTS = routeViewOf(
   [
@@ -106,8 +129,6 @@ describe('leaving a workspace inside the host-area page', () => {
   it('releases every terminal stream when the session root detaches, so the PTY is restored', async () => {
     const pair = hostAreaPair([])
     await pair.flush()
-    // The real teardown `setMobileSessionRootRef` runs when the session root's ref detaches.
-    const held: { clear: (() => void) | null } = { clear: null }
     const terminalUnsubsRef = { current: new Map<string, () => void>() }
     function SessionTerminals() {
       const scope = {
@@ -127,36 +148,97 @@ describe('leaving a workspace inside the host-area page', () => {
         layoutSeqRef: { current: new Map() },
         nativeChatInputLeaseReadyRef: { current: false },
         clearNativeChatInputLease: () => {},
-        showNativeChatRef: { current: false }
+        showNativeChatRef: { current: false },
+        worktreeId: 'folder:remote',
+        isFloatingWorkspaceRoute: false,
+        client: pair.client,
+        connState: 'connected',
+        setSelectModeActive: () => {},
+        setCanPaste: () => {},
+        toastSeqRef: { current: 0 },
+        ptyModesRef: { current: new Map() },
+        initialModesSeenRef: { current: new Set() },
+        liveInputFocusTimerRef: { current: null },
+        sessionTabActionSheetRequestSeqRef: { current: 0 },
+        clearPendingLiveInputCommit: () => {},
+        clearDelayedActionTimers: () => {},
+        clearToastHideTimer: () => {},
+        showToast: () => {},
+        handleAccessoryKey: () => {},
+        clearSessionTabActionSheetKeyboardListener: () => {}
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the foundation destructures only the fields built above.
       const typed = scope as unknown as FoundationScope
-      held.clear = useMobileSessionTerminalSubscriptionFoundation(typed).clearTerminalCache
-      return null
+      const foundation = useMobileSessionTerminalSubscriptionFoundation(typed)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the accessory hook reads the listed scope and actual foundation callbacks.
+      const accessoryScope = { ...scope, ...foundation } as unknown as AccessoryScope
+      const accessory = useMobileSessionAccessorySelection(accessoryScope)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads this ref callback; its presentation children are stubbed.
+      const controller = accessory as unknown as SurfaceController
+      return <MobileSessionSurface controller={controller} />
     }
-    act(() => {
-      create(<SessionTerminals />)
-    })
-    for (const terminal of ['pty-1', 'pty-2']) {
-      terminalUnsubsRef.current.set(
-        terminal,
-        subscribeMobileTerminalSafely(
-          pair.client,
-          { terminal, client: { id: 'phone' }, viewport: { cols: 60, rows: 30 } },
-          () => {},
-          () => {}
+    const mounted: { tree: ReactTestRenderer | null } = { tree: null }
+    try {
+      act(() => {
+        mounted.tree = create(<SessionTerminals />, { createNodeMock: () => ({}) })
+      })
+      for (const terminal of ['pty-1', 'pty-2']) {
+        terminalUnsubsRef.current.set(
+          terminal,
+          subscribeMobileTerminalSafely(
+            pair.client,
+            { terminal, client: { id: 'phone' }, viewport: { cols: 60, rows: 30 } },
+            () => {},
+            () => {}
+          )
         )
+      }
+      await pair.flush()
+      expect(
+        pair.rpc.streams.map((stream) => [stream.method, stream.params, stream.unsubscribes])
+      ).toEqual([
+        [
+          'terminal.subscribe',
+          { terminal: 'pty-1', client: { id: 'phone' }, viewport: { cols: 60, rows: 30 } },
+          0
+        ],
+        [
+          'terminal.subscribe',
+          { terminal: 'pty-2', client: { id: 'phone' }, viewport: { cols: 60, rows: 30 } },
+          0
+        ]
+      ])
+      act(() => mounted.tree?.unmount())
+      mounted.tree = null
+      await pair.flush()
+      expect(pair.rpc.streams.map((stream) => stream.unsubscribes)).toEqual([1, 1])
+      expect(terminalUnsubsRef.current.size).toBe(0)
+      const params = {
+        terminal: 'pty-after-detach',
+        client: { id: 'phone' },
+        viewport: { cols: 60, rows: 30 }
+      }
+      const unsubscribe = subscribeMobileTerminalSafely(
+        pair.client,
+        params,
+        () => {},
+        () => {}
       )
+      await pair.flush()
+      expect(pair.rpc.streams[2]).toMatchObject({
+        method: 'terminal.subscribe',
+        params,
+        unsubscribes: 0
+      })
+      unsubscribe()
+      await pair.flush()
+      expect(pair.rpc.streams.slice(0, 2).map((stream) => stream.unsubscribes)).toEqual([1, 1])
+      expect(pair.rpc.streams[2]?.unsubscribes).toBe(1)
+    } finally {
+      act(() => mounted.tree?.unmount())
+      pair.client.close()
+      pair.host.dispose()
     }
-    await pair.flush()
-    expect(pair.rpc.streams.map((stream) => stream.method)).toEqual([
-      'terminal.subscribe',
-      'terminal.subscribe'
-    ])
-    act(() => held.clear?.())
-    await pair.flush()
-    // The desktop's mobile subscriber goes with each stream, and with it the phone-size fit.
-    expect(pair.rpc.streams.map((stream) => stream.unsubscribes)).toEqual([1, 1])
   })
 
   it('closes the microphone and lets the screen sleep when the composer unmounts', async () => {

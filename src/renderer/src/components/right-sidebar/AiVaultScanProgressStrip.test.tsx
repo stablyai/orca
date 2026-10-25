@@ -3,11 +3,9 @@ import { act, cleanup, render, renderHook, screen, waitFor, within } from '@test
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AiVaultScanProgress } from '../../../../shared/ai-vault-scan-progress'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import { aiVaultLocalScanKey } from '../../../../shared/ai-vault-local-scan-key'
 import { AiVaultScanProgressStrip } from './AiVaultScanProgressStrip'
 import { resetAiVaultSessionResultCacheForTest } from './ai-vault-session-result-cache'
-import { currentAiVaultScanIssueResult } from './ai-vault-scan-issue-state'
 import {
   resetAiVaultScanProgressStoreForTests,
   useAiVaultScanProgress
@@ -61,15 +59,14 @@ it('keeps a narrower cached panel off the broader key while a late matching pane
       }
     }
   })
-  const local = renderHook(() => useAiVaultScanProgress('local', broader, cachedProgress.scanId))
-  const narrowerPanel = renderHook(() => useAiVaultScanProgress('local', narrower, undefined))
-  const remote = renderHook(() =>
-    useAiVaultScanProgress('runtime:server-1', broader, cachedProgress.scanId)
-  )
-  await waitFor(() => expect(local.result.current).toBe(cachedProgress))
+  const local = renderHook(() => useAiVaultScanProgress('local', broader))
+  const narrowerPanel = renderHook(() => useAiVaultScanProgress('local', narrower))
+  const remote = renderHook(() => useAiVaultScanProgress('runtime:server-1', broader))
+  const allHosts = renderHook(() => useAiVaultScanProgress('all', broader))
+  await waitFor(() => expect(local.result.current?.progress).toBe(cachedProgress))
   act(() => push({ scanKey: broader, progress: cachedProgress }))
 
-  expect(local.result.current).toBe(cachedProgress)
+  expect(local.result.current?.progress).toBe(cachedProgress)
   expect(narrowerPanel.result.current).toBeNull()
   act(() =>
     push({ scanKey: broader, progress: { ...cachedProgress, scanId: 'later', stage: 'finding' } })
@@ -77,62 +74,182 @@ it('keeps a narrower cached panel off the broader key while a late matching pane
   expect(narrowerPanel.result.current).toBeNull()
   // A remote host has no progress stream yet; its panel keeps today's spinner and error line.
   expect(remote.result.current).toBeNull()
+  expect(allHosts.result.current).toBeNull()
 })
 
-it('hides an old issue only while this panel is refreshing', () => {
-  const oldIssue: AiVaultListResult = {
-    sessions: [],
-    issues: [],
-    scannedAt: new Date(1_000).toISOString()
-  }
-  expect(currentAiVaultScanIssueResult(oldIssue, true)).toBeNull()
-  expect(currentAiVaultScanIssueResult(oldIssue)).toBe(oldIssue)
-})
-
-it('shows a running scan at once but a finished one only with the list it produced', () => {
+it('keeps real rows through partial rescans, detached keys and failed retries', async () => {
   let push: (update: { scanKey: string; progress: AiVaultScanProgress | null }) => void = () =>
     undefined
   vi.stubGlobal('api', {
     aiVault: {
-      getScanProgress: () => Promise.resolve(null),
+      getScanProgress: () => new Promise<null>(() => undefined),
       onScanProgress: (callback: typeof push) => {
         push = callback
         return () => undefined
       }
     }
   })
-  const applied = (scanId: string): AiVaultListResult => ({
-    sessions: [],
-    issues: [],
-    scannedAt: new Date(1_000).toISOString(),
-    scanId
-  })
-  function Panel({ scanKey, result }: { scanKey: string; result: AiVaultListResult | null }) {
-    const progress = useAiVaultScanProgress('local', scanKey, result?.scanId)
-    return progress ? <AiVaultScanProgressStrip progress={progress} /> : null
+  function Panel({ scanKey }: { scanKey: string }) {
+    const progress = useAiVaultScanProgress('local', scanKey)
+    return progress ? <AiVaultScanProgressStrip {...progress} /> : null
   }
-  const a = render(<Panel scanKey="scope-a" result={applied('scan-a')} />)
-  const b = render(<Panel scanKey="scope-b" result={null} />)
-  const aView = within(a.container)
-  const bView = within(b.container)
-
-  act(() => push({ scanKey: 'scope-a', progress: FINISHED }))
-  expect(aView.getByText('Scanned', { exact: false })).toBeTruthy()
-  act(() =>
-    push({
-      scanKey: 'scope-b',
-      progress: { ...FINISHED, scanId: 'scan-b', stage: 'finding', settledAt: null }
-    })
-  )
-  expect(bView.getByText('Scanning', { exact: false })).toBeTruthy()
-  expect(aView.getByText('Scanned', { exact: false })).toBeTruthy()
+  const panel = render(<Panel scanKey="worktree-a" />)
+  const view = within(panel.container)
+  const first: AiVaultScanProgress = {
+    ...FINISHED,
+    stage: 'finding',
+    settledAt: null,
+    agents: [FINISHED.agents[0]!]
+  }
+  act(() => push({ scanKey: 'worktree-a', progress: first }))
+  await userEvent.setup().click(view.getByRole('button'))
+  act(() => push({ scanKey: 'worktree-a', progress: { ...first, agents: [], settledAt: 1_000 } }))
+  expect(view.getByText('24,968 files')).toBeTruthy()
+  act(() => push({ scanKey: 'worktree-a', progress: FINISHED }))
+  expect(view.getByText('Scanned', { exact: false })).toBeTruthy()
+  const rowCount = () => view.getAllByRole('listitem').length
+  const assertRoster = () => expect(rowCount()).toBe(3)
 
   const next = { ...FINISHED, scanId: 'scan-a-next' }
-  act(() => push({ scanKey: 'scope-a', progress: { ...next, stage: 'reading', settledAt: null } }))
-  expect(aView.getByText('Reading', { exact: false })).toBeTruthy()
-  // Finished before its list is applied: the strip must not claim a total the list does not show yet.
-  act(() => push({ scanKey: 'scope-a', progress: next }))
-  expect(aView.queryByText('Scanned', { exact: false })).toBeNull()
-  a.rerender(<Panel scanKey="scope-a" result={applied(next.scanId)} />)
-  expect(aView.getByText('Scanned', { exact: false })).toBeTruthy()
+  const partial: AiVaultScanProgress = { ...next, stage: 'reading', settledAt: null, agents: [] }
+  act(() => push({ scanKey: 'worktree-a', progress: partial }))
+  assertRoster()
+  for (const agents of [
+    [{ ...FINISHED.agents[0]!, files: 12, walking: true }],
+    [{ agent: 'cursor' as const, files: 0, databases: 0, walking: true }],
+    []
+  ]) {
+    act(() => push({ scanKey: 'worktree-a', progress: { ...partial, agents } }))
+    assertRoster()
+    expect(view.getByText('77,483 files')).toBeTruthy()
+    expect(panel.container.querySelector('.animate-spin')).toBeTruthy()
+  }
+  expect(view.getByText('12 files')).toBeTruthy()
+  expect(panel.container.querySelectorAll('.animate-spin').length).toBe(1)
+  expect(view.getByText('Checking', { exact: false })).toBeTruthy()
+  // Finished before the list it produced is applied: still one row, now settled.
+  act(() => push({ scanKey: 'worktree-a', progress: next }))
+  expect(view.getByText('Scanned', { exact: false })).toBeTruthy()
+
+  // The old key is a static snapshot: neither pushes nor eviction may change it under B.
+  panel.rerender(<Panel scanKey="worktree-b" />)
+  act(() => push({ scanKey: 'worktree-a', progress: partial }))
+  act(() => push({ scanKey: 'worktree-a', progress: null }))
+  act(() => {
+    for (let i = 0; i < 9; i++) {
+      push({ scanKey: `other-${i}`, progress: partial })
+    }
+  })
+  expect(view.getByText('Scanned', { exact: false })).toBeTruthy()
+  act(() =>
+    push({
+      scanKey: 'worktree-b',
+      progress: { ...partial, scanId: 'scan-b', stage: 'finding' }
+    })
+  )
+  expect(view.getByText('Scanning', { exact: false })).toBeTruthy()
+  assertRoster()
+  panel.rerender(<Panel scanKey="worktree-c" />)
+  expect(view.queryByText('Scanning', { exact: false })).toBeNull()
+  expect(panel.container.querySelector('.animate-spin, .lucide-check')).toBeNull()
+  for (const scanId of ['failed-first', 'failed-retry']) {
+    act(() => push({ scanKey: 'worktree-c', progress: { ...partial, scanId, settledAt: 95_000 } }))
+    assertRoster()
+    expect(view.queryByText('Scanned', { exact: false })).toBeNull()
+    expect(panel.container.querySelector('.animate-spin, .lucide-check')).toBeNull()
+  }
+  act(() => push({ scanKey: 'worktree-c', progress: { ...next, agents: [FINISHED.agents[0]!] } }))
+  expect(rowCount()).toBe(1)
+})
+
+it('shows settled candidate work and keeps older snapshots without skipped compatible', () => {
+  const reading: AiVaultScanProgress = {
+    ...FINISHED,
+    stage: 'reading',
+    settledAt: null,
+    read: { done: 3, total: 10, skipped: 4 }
+  }
+  const panel = render(<AiVaultScanProgressStrip progress={reading} />)
+  expect(screen.getByRole('button').textContent).toContain('Checking 7 / 10')
+  panel.rerender(
+    <AiVaultScanProgressStrip progress={{ ...reading, read: { done: 3, total: 10 } }} />
+  )
+  expect(screen.getByRole('button').textContent).toContain('Checking 3 / 10')
+})
+
+it('shows found counts until reading, then independent checked progress for files and databases', async () => {
+  const finding: AiVaultScanProgress = { ...FINISHED, stage: 'finding', settledAt: null }
+  const panel = render(<AiVaultScanProgressStrip progress={finding} />)
+  await userEvent.setup().click(screen.getByRole('button'))
+  expect(screen.queryAllByRole('progressbar')).toHaveLength(0)
+  expect(panel.container.querySelector('.lucide-check')).toBeNull()
+  expect(panel.container.querySelectorAll('.animate-spin')).toHaveLength(4)
+  panel.rerender(
+    <AiVaultScanProgressStrip
+      progress={{ ...finding, agents: [{ ...finding.agents[0]!, files: 25_000 }] }}
+    />
+  )
+  expect(within(screen.getByRole('list')).getByText('25,000 files')).toBeTruthy()
+  const reading: AiVaultScanProgress = {
+    ...finding,
+    stage: 'reading',
+    agents: [
+      { ...FINISHED.agents[0]!, read: { done: 2, skipped: 1, total: 10 } },
+      { ...FINISHED.agents[2]!, read: { done: 1, total: 4 } }
+    ]
+  }
+  panel.rerender(<AiVaultScanProgressStrip progress={reading} />)
+  const bars = screen.getAllByRole('progressbar')
+  expect(bars.map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['30', '25'])
+  expect(bars[1]?.getAttribute('aria-valuetext')).toBe(
+    'OpenCode: 1 of 4 history candidates checked'
+  )
+  const done = { ...reading.agents[0]!, read: { done: 9, skipped: 1, total: 10 } }
+  const oneComplete = { ...reading, agents: [done, reading.agents[1]!] }
+  panel.rerender(<AiVaultScanProgressStrip progress={oneComplete} />)
+  expect(panel.container.querySelectorAll('.lucide-check')).toHaveLength(1)
+  const finished: AiVaultScanProgress = {
+    ...oneComplete,
+    stage: 'finished',
+    settledAt: 90_000,
+    agents: [done, { ...reading.agents[1]!, read: { done: 4, total: 4 } }]
+  }
+  panel.rerender(<AiVaultScanProgressStrip progress={finished} />)
+  expect(
+    screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-valuenow'))
+  ).toEqual(['100', '100'])
+  expect(panel.container.querySelectorAll('.lucide-check')).toHaveLength(3)
+  expect(panel.container.querySelector('.animate-spin')).toBeNull()
+})
+
+it('does not borrow reading facts from retained rows, absent fields, zero work or failed scans', async () => {
+  const completed = { ...FINISHED.agents[0]!, read: { done: 2, total: 2 } }
+  const success: AiVaultScanProgress = { ...FINISHED, agents: [completed] }
+  const panel = render(<AiVaultScanProgressStrip progress={success} />)
+  await userEvent.setup().click(screen.getByRole('button'))
+  expect(screen.getAllByRole('progressbar')).toHaveLength(1)
+  const reading: AiVaultScanProgress = { ...success, stage: 'reading', settledAt: null, agents: [] }
+  panel.rerender(<AiVaultScanProgressStrip progress={reading} agents={[completed]} />)
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  expect(panel.container.querySelector('.lucide-check')).toBeNull()
+  expect(screen.getByText('24,968 files')).toBeTruthy()
+  const zero = { ...completed, read: { done: 0, total: 0 } }
+  for (const progress of [
+    { ...reading, agents: [FINISHED.agents[0]!] },
+    { ...reading, agents: [zero] },
+    { ...success, agents: [zero] }
+  ]) {
+    panel.rerender(<AiVaultScanProgressStrip progress={progress} />)
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.getByRole('list').querySelector('.lucide-check')).toBeNull()
+  }
+  panel.rerender(
+    <AiVaultScanProgressStrip progress={{ ...reading, agents: [completed], settledAt: 95_000 }} />
+  )
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  expect(panel.container.querySelector('.animate-spin, .lucide-check')).toBeNull()
+  // An older successful snapshot has no per-agent reading facts.
+  panel.rerender(<AiVaultScanProgressStrip progress={FINISHED} />)
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  expect(screen.getByRole('list').querySelector('.lucide-check')).toBeNull()
 })

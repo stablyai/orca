@@ -8,7 +8,7 @@ import {
   type RemoteRuntimeSubscriptionCallbacks
 } from '../../../src/shared/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
-import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime-passthrough-socket'
+import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../src/shared/protocol-version'
 import {
   decodeBrowserScreencastFrame,

@@ -59,7 +59,7 @@ import {
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSessions
 } from '../ai-vault/structured-session-ownership'
-import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
+import { allHostsRuntimeScanTimeoutMs } from './ai-vault-all-host-timeouts'
 import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-broadcast'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
@@ -72,8 +72,7 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
 let scanCoordinator = new AiVaultScanCoordinator()
 let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
-// Shared by the IPC registration and the test internals: a delete must drop
-// the multi-host leg cache, which this module owns the only caller of.
+// Keep IPC and test deletion wired to this module's multi-host cache.
 const aiVaultDeleteDeps = {
   invalidateMultiHostListCache: invalidateAiVaultHostLegCache
 }
@@ -103,9 +102,7 @@ async function listAiVaultSessions(
     parseRoutableExecutionHostId(executionHostScope)?.kind === 'runtime'
       ? args?.afterFingerprint
       : undefined
-  // Why: every renderer request carries its own cancellation signal, so
-  // coalescing has to survive them — the coordinator hands all same-key callers
-  // one scan and only aborts it once every one of them has cancelled.
+  // Coalesced scans abort only after every same-key caller cancels.
   return scanCoordinator.run({
     key: JSON.stringify({ key, depth, afterFingerprint }),
     force: args?.force,
@@ -156,7 +153,7 @@ async function scanAiVaultSessionsByHostScope(
               listArgs: args ? { ...args, afterFingerprint: undefined } : undefined,
               options: {
                 signal,
-                timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan
+                timeoutMs: allHostsRuntimeScanTimeoutMs(hostInfo)
               }
             })
         })
@@ -165,7 +162,8 @@ async function scanAiVaultSessionsByHostScope(
     return mergeAiVaultListResults(
       [...scannedResults, ...runtimeResults],
       args?.limit,
-      args?.unlimited
+      args?.unlimited,
+      scopePaths
     )
   }
 
@@ -196,11 +194,7 @@ export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryRe
   })
 }
 
-// Why: the SSH legs already degrade to an issue row so one bad host can't take
-// the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution, scanner service supervision) and would otherwise discard
-// every host's sessions under 'all', or replace the list with a raw error string
-// under single-host scope.
+// Like remote failures, local scanner/cache/WSL failures must degrade to issues without discarding healthy hosts.
 async function scanLocalAiVaultSessionsAsIssue(
   args: AiVaultListArgs | undefined,
   signal: AbortSignal | undefined
@@ -211,8 +205,7 @@ async function scanLocalAiVaultSessionsAsIssue(
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
-    // Raw supervision text ("restart circuit is open") means nothing to a user,
-    // so the row carries actionable copy and the log keeps the original.
+    // Keep raw supervision details in logs; show an actionable host issue.
     const raw = error instanceof Error ? error.message : 'Local session scan failed.'
     console.error('[ai-vault] local session scan failed:', raw)
     const result = aiVaultScanIssueResult({
@@ -228,18 +221,13 @@ async function scanLocalAiVaultSessions(
   args?: AiVaultListArgs,
   signal?: AbortSignal
 ): Promise<AiVaultListResult> {
-  // Why: the shared cache module owns codex-home/WSL sourcing and the local
-  // scan cache, so the desktop IPC path and the runtime RPC method (mobile)
-  // share one cache instance and one source of managed-Codex homes.
+  // Share runtime/mobile cache and Codex/WSL source injection with desktop IPC.
   return listCachedLocalAiVaultSessions(args, { signal })
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
   handlerOptions = options
-  // Why: configure the SAME shared cache module the runtime RPC method uses so
-  // there is exactly one cache instance and neither caller drops codex-home or
-  // WSL injection. The runtime also configures these sources from its deps
-  // (serve-mode reachable); this desktop path supplies the same source.
+  // Configure the same source/cache instance used by runtime RPC and headless serve.
   configureAiVaultSessionSources(options)
   ipcMain.handle('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
     const requestToken =
@@ -254,8 +242,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       })
       return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
     } catch (error) {
-      // Why: superseding a scan is normal control flow, but Electron logs every
-      // rejected handler — report it as a result so the log stays truthful.
+      // Expected cancellation is a result so Electron does not log rejected IPC as an error.
       if (!isAiVaultScanCancelledError(error)) {
         throw error
       }

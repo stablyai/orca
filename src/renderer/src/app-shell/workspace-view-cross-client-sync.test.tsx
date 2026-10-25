@@ -5,18 +5,16 @@
 //   desktop renderer  = real usePersistedUIWriter + real UI slice (createUIStore)
 //   authority (main)  = real updatePersistedUI/getPersistedUI merge
 //   broadcast         = controlled queue modeling the async ui:stateChanged IPC send
-//   mobile client     = mobile/src/worktree/workspace-view-settings mapping; the ui.set
-//                       payload mirrors the shipping buildWorkspaceViewSettingsUpdate.
+//   other client      = partial ui.set requests delivered directly to the authority.
 //
 // Invariant: when two independently identified clients change DISJOINT workspace-view
-// fields concurrently or across stale-mirror windows, both changes survive and all
-// mirrors converge; no client may restore a stale sibling field.
+// fields concurrently or across stale-mirror windows, both changes survive and the
+// desktop mirror converges; the writer must preserve sibling fields another client changed.
 import { StrictMode, act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import { getDefaultUIState } from '../../../shared/constants'
-import { omitPairingLocalUiFields } from '../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getPersistedUI } from '../../../main/persistence/applying-settings/ui-state-read'
@@ -77,83 +75,6 @@ function createAuthority() {
 }
 
 type Authority = ReturnType<typeof createAuthority>
-
-// Local model of mobile/src/worktree/workspace-view-settings.ts (the desktop test
-// runner cannot transform Expo-configured sources).
-type MobileViewState = {
-  groupMode: 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
-  sortMode: 'smart' | 'name' | 'recent' | 'repo' | 'manual'
-  hideSleeping: boolean
-  hideDefaultBranch: boolean
-  alwaysShowDefaultBranch: boolean
-  filterRepoIds: string[]
-  collapsedGroups: string[]
-}
-
-/** Mirrors buildWorkspaceViewSettingsUpdate (candidate) — only touched fields. */
-function patchOnlyUpdate(
-  patch: Partial<MobileViewState>,
-  next: MobileViewState
-): Partial<PersistedUIState> {
-  const update: Partial<PersistedUIState> = {}
-  if ('groupMode' in patch) {
-    update.groupBy = next.groupMode === 'workspaceStatus' ? 'workspace-status' : 'repo'
-  }
-  if ('sortMode' in patch) {
-    update.sortBy = next.sortMode
-  }
-  if ('hideSleeping' in patch) {
-    update.hideSleepingWorkspaces = next.hideSleeping
-  }
-  if ('hideDefaultBranch' in patch) {
-    update.hideDefaultBranchWorkspace = next.hideDefaultBranch
-  }
-  if ('filterRepoIds' in patch) {
-    update.filterRepoIds = next.filterRepoIds
-  }
-  if ('collapsedGroups' in patch) {
-    update.collapsedGroups = next.collapsedGroups
-  }
-  return update
-}
-
-/** Model of the mobile host screen's view-settings client (persistViewSettings et al.). */
-function createMobileClient(authority: Authority) {
-  let view: MobileViewState = {
-    groupMode: 'repo',
-    sortMode: 'recent',
-    hideSleeping: false,
-    hideDefaultBranch: false,
-    alwaysShowDefaultBranch: true,
-    filterRepoIds: [],
-    collapsedGroups: []
-  }
-  return {
-    get view() {
-      return view
-    },
-    /** ui.get on connect/focus: merge the shared state onto the local mirror
-     *  (mirrors applyDesktopViewSettings' ??-per-field semantics). */
-    sync() {
-      const ui = omitPairingLocalUiFields(authority.get())
-      view = {
-        ...view,
-        hideSleeping: ui.hideSleepingWorkspaces ?? view.hideSleeping,
-        hideDefaultBranch: ui.hideDefaultBranchWorkspace ?? view.hideDefaultBranch,
-        alwaysShowDefaultBranch:
-          ui.alwaysShowDefaultBranchWorkspace ?? view.alwaysShowDefaultBranch,
-        filterRepoIds: ui.filterRepoIds ?? view.filterRepoIds,
-        collapsedGroups: ui.collapsedGroups ?? view.collapsedGroups
-      }
-    },
-    /** A user tap: apply locally, then push through the shipping payload shape. */
-    tap(patch: Partial<MobileViewState>) {
-      view = { ...view, ...patch }
-      const payload = patchOnlyUpdate(patch, view)
-      authority.set(omitPairingLocalUiFields(payload) as Partial<PersistedUIState>)
-    }
-  }
-}
 
 describe('workspace view preferences: cross-client persistence (STA-5781)', () => {
   let authority: Authority
@@ -338,10 +259,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
-  it('a mobile tap must not revert a desktop change the mobile mirror has not seen', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('merges another client’s field without reverting a prior desktop write', async () => {
     // Desktop turns on "hide default branch"; the write lands and broadcasts.
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
@@ -350,9 +268,8 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
     deliverBroadcasts()
 
-    // Mobile (mirror stale since its last ui.get) toggles the DISJOINT
-    // "hide sleeping" filter.
-    mobile.tap({ hideSleeping: true })
+    // Another client sends only its changed field.
+    authority.set({ hideSleepingWorkspaces: true })
 
     // Both changes must survive.
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
@@ -379,21 +296,18 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideSleepingWorkspaces).toBe(false)
   })
 
-  it('the desktop debounced writer must not revert a concurrent mobile change', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('the desktop debounced writer preserves a concurrent client’s field', async () => {
     // t=0: desktop toggles a desktop-only filter (disjoint from mobile fields).
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
 
-    // t<150ms: mobile turns on "hide sleeping". The authority applies it, but the
+    // t<150ms: another client turns on "hide sleeping". The authority applies it, but the
     // ui:stateChanged broadcast is still in flight to the desktop renderer.
     act(() => {
       vi.advanceTimersByTime(100)
     })
-    mobile.tap({ hideSleeping: true })
+    authority.set({ hideSleepingWorkspaces: true })
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
 
     // t=150ms: the desktop debounce fires from its (not yet re-hydrated) mirror.
@@ -403,27 +317,22 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
 
-    // After full delivery and a mobile re-sync, every mirror converges on both.
+    // Full delivery brings the desktop mirror to both persisted values.
     deliverBroadcasts()
-    mobile.sync()
     expect(store.getState().showSleepingWorkspaces).toBe(false)
     expect(store.getState().hideCliCreatedWorkspaces).toBe(true)
-    expect(mobile.view.hideSleeping).toBe(true)
   })
 
   it('a broadcast landing inside the debounce window must not revert the pending desktop toggle', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
     // t=0: desktop toggles a filter; its write is pending in the 150ms debounce.
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
 
-    // t<150ms: mobile changes a disjoint field AND its broadcast is delivered
+    // t<150ms: another client changes a disjoint field AND its broadcast is delivered
     // before the desktop debounce fires. The broadcast still carries the OLD
     // value of the desktop's pending toggle.
-    mobile.tap({ hideSleeping: true })
+    authority.set({ hideSleepingWorkspaces: true })
     deliverBroadcasts()
 
     // The hydration must not wipe the user's pending toggle from the mirror.
@@ -509,17 +418,15 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     // hydration advanced past, or the mirror and authority diverge with no
     // further traffic to reconcile them (the reset then reappears later).
     holdAcks = true
-    const mobile = createMobileClient(authority)
-    mobile.sync()
 
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
     await flushDesktopDebounce()
 
-    // Mobile writes the SAME field at the authority after us; both broadcasts
-    // (our echo, then mobile's) land before our ack does.
-    mobile.tap({ hideDefaultBranch: false })
+    // Another client writes the SAME field at the authority after us; both broadcasts
+    // (our echo, then the other client's) land before our ack does.
+    authority.set({ hideDefaultBranchWorkspace: false })
     deliverBroadcasts()
     await resolveAcks()
 
@@ -722,18 +629,15 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
-  it('desktop and mobile changing the same field converges on the newest write', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('desktop and another client changing the same field converge on the newest write', async () => {
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
     await flushDesktopDebounce()
     deliverBroadcasts()
 
-    // Mobile flips the SAME field afterwards; last writer wins everywhere.
-    mobile.tap({ hideDefaultBranch: false })
+    // Another client flips the SAME field afterwards; last writer wins everywhere.
+    authority.set({ hideDefaultBranchWorkspace: false })
     deliverBroadcasts()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
     await flushDesktopDebounce()

@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater/updater-state'
-import type { BrowserWindow } from 'electron'
-
-function windowSending(send: ReturnType<typeof vi.fn>): BrowserWindow {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the updater only reaches the window through webContents.send.
-  return { webContents: { send } } as unknown as BrowserWindow
-}
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
@@ -95,7 +90,6 @@ vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: () => null,
   isExternallyManagedLinuxInstall: () => false
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({
@@ -453,8 +447,7 @@ describe('headless serve update install handoff', () => {
       'mac-updater-app-quit'
     ]
 
-    // Models electron-updater's MacUpdater with autoInstallOnAppQuit off: each unstaged quitAndInstall adds a
-    // persistent native listener that app.quit()s and only starts Squirrel; native errors are re-emitted first.
+    // Model MacUpdater's persistent native quit listeners, including listeners left by failed attempts.
     const downloadSupervisedUpdate = async (
       lifecycle: string[]
     ): Promise<{
@@ -480,7 +473,7 @@ describe('headless serve update install handoff', () => {
 
       const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
         await loadUpdaterModule()
-      setupAutoUpdater(windowSending(send), {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'supervised-headless-serve'
       })
@@ -489,7 +482,7 @@ describe('headless serve update install handoff', () => {
       downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
-      // Why: EventEmitter semantics — listeners run in registration order and a throw stops the rest.
+      // Preserve EventEmitter ordering: a throwing listener stops later listeners.
       const emitNative = (event: string, ...args: unknown[]): void => {
         for (const [name, handler] of nativeUpdaterMock.on.mock.calls) {
           if (name === event && typeof handler === 'function') {
@@ -551,7 +544,7 @@ describe('headless serve update install handoff', () => {
       expect(requestServeUpdateHandoffMock).toHaveBeenCalledTimes(2)
       expect(armUpdateInstallExitWatchdogMock).toHaveBeenCalledOnce()
       expect(killAllPtyMock).toHaveBeenCalledOnce()
-      // Why: MacUpdater keeps the failed attempt's listener too, so both quit; Orca commits once.
+      // MacUpdater retains both listeners after failure; Orca must commit only once.
       expect(lifecycle).toEqual([
         'native-quit-and-install',
         'native-quit-and-install',

@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { installDaemonProvider, replaceDaemonProvider } from '../daemon/daemon-provider-state'

@@ -23,18 +23,16 @@ struct Agent {
     source: &'static str,
     /// Set means the event is not this pane's to report: exit without owning stdin.
     exit_vars: &'static [&'static str],
-    /// Set means another agent imported these hooks: drain stdin and stay silent.
-    drain_vars: &'static [&'static str],
 }
 
 fn agent(name: &str) -> Option<Agent> {
     match name {
         "claude" => Some(Agent {
             source: "claude",
-            // A backgrounded session inherited the dispatching pane's env (#9236).
-            exit_vars: &["CLAUDE_JOB_DIR"],
-            // Grok and Devin import .claude hooks; only their own hooks report those events.
-            drain_vars: &["GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR"],
+            // CLAUDE_JOB_DIR: a backgrounded session inherited the dispatching pane's env (#9236).
+            // Grok and Devin import .claude hooks; only their own hooks report those events, and
+            // a drain-to-EOF would hang on a caller that holds stdin open (#24907).
+            exit_vars: &["CLAUDE_JOB_DIR", "GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR"],
         }),
         _ => None,
     }
@@ -68,13 +66,8 @@ fn run(agent: &Agent) {
     if agent.exit_vars.iter().any(is_set) {
         return;
     }
-    let mut stdin = io::stdin().lock();
-    if agent.drain_vars.iter().any(is_set) {
-        let _ = io::copy(&mut stdin, &mut io::sink());
-        return;
-    }
     let mut payload = Vec::new();
-    let _ = stdin.read_to_end(&mut payload);
+    let _ = io::stdin().lock().read_to_end(&mut payload);
     let form = [
         ("paneKey", var("ORCA_PANE_KEY")),
         ("tabId", var("ORCA_TAB_ID")),

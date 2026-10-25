@@ -13,6 +13,7 @@ import {
   structuredLaunchIdentity,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
+import { initialStructuredLaunchSelection } from './structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,
@@ -51,14 +52,17 @@ export function restorePersistedStructuredLaunchState(
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
     identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
-    intent,
+    intent: {
+      ...intent,
+      ...(record.surfaceAddress ? { surfaceAddress: record.surfaceAddress } : {})
+    },
     promptDelivery: 'draft',
     promise: Promise.resolve({ sessionId: record.sessionId, fence: 0 }),
     visibilityUnknown: record.lifecycle === 'visibility-unknown',
     cancelled: false,
     onVisibilityChanged: undefined,
     callers,
-    selection: { seed: intent.seedOptions, held: {} }
+    selection: initialStructuredLaunchSelection(intent)
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
   callers.failedAt = record.failedAt

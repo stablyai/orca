@@ -1,5 +1,6 @@
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 
 type CodexThreadGoalRequest = {
@@ -7,7 +8,6 @@ type CodexThreadGoalRequest = {
   params: Record<string, unknown>
 }
 
-/** The app-server requests that make one goal change on a thread, in order. */
 export function codexThreadGoalRequests(
   threadId: string,
   change: AgentSessionThreadGoalChange,
@@ -20,9 +20,7 @@ export function codexThreadGoalRequests(
   if (change.kind === 'status') {
     return [{ method: 'thread/goal/set', params: { threadId, status: change.status } }]
   }
-  // `set` on an existing goal rewrites its objective and keeps its id and usage
-  // counters, so a replacement clears first. An active goal on an idle thread
-  // starts work by itself, so a set needs no turn.
+  // Clear replacements to reset identity/usage; activating a goal starts work without a turn.
   return [
     ...(replacesGoal ? [clear] : []),
     {
@@ -36,10 +34,12 @@ export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
   replacesGoal: boolean,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<{ ok: true } | { ok: false; rejected: string }> {
   try {
     for (const request of codexThreadGoalRequests(session.threadId, change, replacesGoal)) {
+      throwIfSignalAborted(signal)
       await session.connection.request(request.method, request.params, { timeoutMs })
     }
     return { ok: true }

@@ -44,7 +44,6 @@ describe('structured AI Vault ownership', () => {
     expect(projected.sessions[1]).toBe(unowned)
   })
 
-  // An owned hit opens its chat, so it carries no terminal resume command for any agent.
   it('names and owns an indexed search hit as its list row is, leaving other hits alone', () => {
     installOwnership({ conversationName: 'auth/login' })
     const { resumeCommand: _resumeCommand, ...plain } = searchHit()
@@ -140,8 +139,7 @@ describe('structured AI Vault ownership', () => {
     `claude -r`,
     `claude --continue`,
     `claude -c`,
-    // `--continue` takes no session id, so the trailing token is a prompt —
-    // reading it as a target would admit a writer onto the owned session.
+    // --continue takes no id; trailing prompt text must not be mistaken for a different target.
     `claude --continue "keep going"`,
     `claude -c 019fd532-7c11-7a90-b6de-4e1a2c3d5f61`
   ])('refuses resume commands without a provably different target: %s', async (command) => {
@@ -163,7 +161,6 @@ describe('structured AI Vault ownership', () => {
     ).resolves.toBeUndefined()
   })
 
-  // A fork writes a new conversation, so "Resume in New CLI" on a chat-owned row must pass.
   it.each([
     {
       provider: 'claude' as const,
@@ -234,8 +231,6 @@ describe('Session History ownership read from the agent registration', () => {
     ).resolves.toBeUndefined()
   })
 
-  // Each agent reads its own binary's tokens: a folder or argument named after another agent no
-  // longer hides a Claude or Codex resume (on main the first claude/codex token decided).
   it.each([
     {
       provider: 'claude' as const,
@@ -264,7 +259,6 @@ describe('Session History ownership read from the agent registration', () => {
     }
   )
 
-  // A later `claude` path inside the command is an argument, so `--session-id` still cancels the fork.
   it.each([
     `claude --session-id ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session --resume ${PROVIDER_SESSION}`,
     `claude --fork-session --resume=${PROVIDER_SESSION} --add-dir ~/x/claude --session-id ${PROVIDER_SESSION}`,

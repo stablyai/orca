@@ -435,7 +435,8 @@ CREATE TABLE IF NOT EXISTS relay_cell_connection_limits (
   cell_id TEXT PRIMARY KEY,
   hard_cap BIGINT NOT NULL,
   unobserved_bound BIGINT NOT NULL,
-  updated_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL,
+  reported_hard_cap BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS relay_cell_connection_runtime (
@@ -712,6 +713,9 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
   // the rewrite is catalog-only; a cell isolated before this column existed reads as unmarked and
   // keeps its hosts pinned, which is the pre-existing behaviour.
   `ALTER TABLE relay_cell_admission ADD COLUMN IF NOT EXISTS roll_isolated_at BIGINT`,
+  // The cap the cell last reported enforcing; see cell-connection-cap.ts. Nullable with no default,
+  // so the rewrite is catalog-only, and a director that predates it neither reads nor clears it.
+  `ALTER TABLE relay_cell_connection_limits ADD COLUMN IF NOT EXISTS reported_hard_cap BIGINT`,
   // Dropped, not created: see the comment on relay_assignment_activity_leases. Deferrable because
   // this is the one boot where it has to take ACCESS EXCLUSIVE on a table under continuous write,
   // and all 28 directors reach it at once; a lock timeout here must not restart the instance, which
@@ -1466,13 +1470,14 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   for (const statement of SCHEMA.split(';')) {
     if (statement.trim()) await database.query(statement)
   }
-  for (const [table, column] of [
-    ['relay_control_capabilities', 'idle_regional_rehome'],
-    ['relay_region_rehome_attempts', 'source_generation']
+  for (const [table, column, definition] of [
+    ['relay_control_capabilities', 'idle_regional_rehome', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_region_rehome_attempts', 'source_generation', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_cell_connection_limits', 'reported_hard_cap', 'BIGINT']
   ]) {
     const columns = await database.query('SELECT name FROM pragma_table_info(?)', [table])
     if (!columns.some((existing) => existing.name === column)) {
-      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} BIGINT NOT NULL DEFAULT 0`)
+      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
     }
   }
 }

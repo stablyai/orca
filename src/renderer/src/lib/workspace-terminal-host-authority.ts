@@ -1,11 +1,11 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'
-import { resolveStrictWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
+import { resolveWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
@@ -66,13 +66,16 @@ function resolveDirectSshAuthority(
  */
 export function resolveWorkspaceTerminalHostAuthority(
   state: WorkspaceTerminalHostAuthorityState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  /** The host the caller knows owns the workspace (a create's target), over the active selection. */
+  executionHostId?: ExecutionHostId
 ): WorkspaceTerminalHostAuthority {
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
   }
-  const selectedHost =
-    state.activeWorktreeId === worktreeId
+  const selectedHost = executionHostId
+    ? parseExecutionHostId(executionHostId)
+    : state.activeWorktreeId === worktreeId
       ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
       : null
   const scope = parseWorkspaceKey(worktreeId)
@@ -98,7 +101,7 @@ export function resolveWorkspaceTerminalHostAuthority(
     return isWebRuntimeSessionActive(environmentId) ? 'live' : 'none'
   }
   const resolution = selectedHost
-    ? resolveStrictWorktreeOperationRouteResultForHost(state, worktreeId, selectedHost.id)
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, selectedHost.id)
     : resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (
     resolution.kind === 'ambiguous' ||

@@ -31,8 +31,8 @@ describe('restart-survival E2E routing', () => {
     'src/main/runtime/client-hosted-page-reconciliation-window.ts',
     'src/main/runtime/runtime-browser-client-page-adoption.ts',
     'src/main/runtime/runtime-browser-client-page-recovery.ts',
-    'src/main/runtime/browser-host-client-page-adoption.ts',
-    'src/main/runtime/browser-host-page-reconciliation-orchestration.ts',
+    'src/main/runtime/browser-host/browser-host-client-page-adoption.ts',
+    'src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.ts',
     'src/main/runtime/rpc/methods/browser-client-host.ts',
     'src/main/browser/browser-client-host-authority-replacement-wait.ts',
     'src/main/browser/paired-runtime-browser-client-host-composition.ts',
@@ -283,7 +283,7 @@ describe('Daemon mock modified-only source routing', () => {
   it('omits the real D7 route only for the proven unit-support scope', () => {
     expect(selectPrE2eSpecs([helper])).toContain('tests/e2e/orcad-serve-mode-switch.spec.ts')
     expect(selectPrE2eSpecs([helper], undefined, verified)).toEqual([])
-    const companion = 'src/main/codex/codex-app-server-connection.test.ts'
+    const companion = 'config/scripts/process-host-build-dist.test.mjs'
     expect(selectPrE2eSpecs([helper, companion], undefined, verified)).toEqual(
       selectPrE2eSpecs([companion])
     )

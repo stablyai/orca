@@ -1,11 +1,12 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,
   getTaskPageGitHubPRIconTone
-} from '@/components/task-page-github-work-item-status'
+} from '@/components/task-page/github/task-page-github-work-item-status'
 import {
   GitPullRequestDraft,
   GitPullRequest,
@@ -27,7 +28,7 @@ import {
 } from '../../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
 import { PRReviewCell } from './ReviewCell'
@@ -48,7 +49,7 @@ export function TaskPageGitHubRows({
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const {
-    repoMap,
+    repos,
     allWorktrees,
     selectedRepos,
     openGitHubDetailPage,
@@ -65,7 +66,7 @@ export function TaskPageGitHubRows({
     <div className="divide-y divide-border/40">
       {!showGitHubTaskSkeletons &&
         filteredWorkItems.map((item) => {
-          const itemRepo = repoMap.get(item.repoId) ?? null
+          const itemRepo = getWorkItemRepo(repos, item) ?? null
           const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
             allWorktrees,
             item.repoId,
@@ -106,7 +107,7 @@ export function TaskPageGitHubRows({
             // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
             <div
               // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
-              key={`${item.repoId}:${item.id}`}
+              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               role="button"
               tabIndex={0}
               onClick={() => openGitHubDetailPage(item)}

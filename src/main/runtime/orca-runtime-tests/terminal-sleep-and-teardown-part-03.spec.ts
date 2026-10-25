@@ -6,6 +6,31 @@ import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop-targets'
 
 describe('OrcaRuntimeService', () => {
+  it('stops nothing for a sole-terminal sleep while another terminal in the worktree is live', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
+        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+      ]
+    })
+
+    await expect(
+      runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { soleLivePtyId: 'pty-run' })
+    ).resolves.toEqual({
+      stopped: 0,
+      stoppedPtyIds: [],
+      livePtyIds: ['pty-run', 'pty-user'],
+      postStopVerified: true
+    })
+    expect(stopAndWait).not.toHaveBeenCalled()
+  })
+
   it('rejects exact terminal stop when async PTY stop fails', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []

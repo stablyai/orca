@@ -4,10 +4,8 @@ import {
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -63,7 +61,12 @@ export function resolveAgentAccountRestartResumeStartup(
     return null
   }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+  // Why Codex only: a WSL Claude resume reads the guest's selected-account pointer at launch.
+  if (
+    agent === 'codex' &&
+    projectRuntime?.status === 'resolved' &&
+    projectRuntime.runtime.kind === 'wsl'
+  ) {
     return null
   }
   const worktree = state.getKnownWorktreeById(args.worktreeId)
@@ -82,7 +85,7 @@ export function resolveAgentAccountRestartResumeStartup(
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      getExplicitRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId)
     )
   })
   const startupPlan = buildAgentResumeStartupPlan({
@@ -93,13 +96,13 @@ export function resolveAgentAccountRestartResumeStartup(
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
+          ? resolveTuiAgentLaunchArgs(agent, state.settings)
           : null,
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
+          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
           : null,
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath

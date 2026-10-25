@@ -13,6 +13,7 @@ import {
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import { createRect } from './pty-connection-test-dom'
 import {
+  terminalWriteText,
   createMockTransport,
   createPane,
   createManager,
@@ -34,7 +35,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep,
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
   scheduleTerminalWebglAtlasRecovery: vi.fn(),
@@ -42,7 +43,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
-  presentPaneViewportPreservingSynchronizedOutput: vi.fn()
+  presentPaneViewport: vi.fn()
 }))
 
 let mockStoreState: StoreState
@@ -61,7 +62,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
 
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 }))
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
@@ -211,7 +212,7 @@ describe('connectPanePty', () => {
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)
     )
-    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    expect(presentPaneViewport).toHaveBeenCalledWith(pane)
     disposable.dispose()
   })
 
@@ -653,7 +654,8 @@ describe('connectPanePty', () => {
     pane.terminal.cols = 80
     pane.terminal.rows = 24
     const writes: string[] = []
-    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+    pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+      data = terminalWriteText(data)
       writes.push(data)
       callback?.()
     })
@@ -776,7 +778,7 @@ describe('connectPanePty', () => {
 
     const heldCallbacks: (() => void)[] = []
     pane.terminal.write.mockImplementation(function write(
-      data: string,
+      data: string | Uint8Array,
       callback?: () => void
     ): void {
       if (callback) {

@@ -81,6 +81,38 @@ describe('openEditorTab', () => {
     expect(pinned.model.workspaces[WS]!.tabs[0]!.isPreview).toBeUndefined()
   })
 
+  it("replaces an open tab's file record by path and keeps the tab where it is", () => {
+    const { ctx, model, groupOne } = twoGroups()
+    const logFile = { filePath: '/w/log.md', relativePath: 'log.md', language: 'markdown' }
+    const readOnly = build(
+      ctx,
+      [
+        open('/w/log.md', {
+          tabId: 'log-tab',
+          groupId: groupOne,
+          file: { ...logFile, readOnly: true, liveTail: true }
+        })
+      ],
+      model
+    ).model
+    const tabsBefore = readOnly.workspaces[WS]!.tabs
+    const groupsBefore = readOnly.workspaces[WS]!.groups
+
+    // The window resends its existing tab's id; another sender names only the file.
+    for (const fields of [{ tabId: 'log-tab' }, {}]) {
+      const reopened = build(
+        ctx,
+        [open('/w/log.md', { ...fields, groupId: groupOne, file: logFile })],
+        readOnly
+      )
+      expect(reopened.results[0]!.tabId).toBe('log-tab')
+      const workspace = reopened.model.workspaces[WS]!
+      expect(workspace.editorFiles).toEqual([logFile])
+      expect(workspace.tabs).toEqual(tabsBefore)
+      expect(workspace.groups).toEqual(groupsBefore)
+    }
+  })
+
   it("replaces only the target group's preview", () => {
     const { ctx, model, groupOne, groupTwo } = twoGroups()
     const previews = build(

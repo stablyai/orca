@@ -3,7 +3,7 @@ import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifa
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { flushPendingEditorChange } from './editor-pending-flush'
+import { flushPendingEditorBuffer } from './editor-pending-flush'
 
 export type ShareableFileContentType = ArtifactWriteRequest['contentType']
 
@@ -55,7 +55,7 @@ export function createCurrentEditorArtifactRequest(
   fallbackContent: string,
   contentType: ShareableFileContentType
 ): ArtifactWriteRequest {
-  flushPendingEditorChange(contentFileId)
+  flushPendingEditorBuffer(useAppStore.getState(), contentFileId)
   const content = useAppStore.getState().editorDrafts[contentFileId] ?? fallbackContent
   return createEditorArtifactRequest(file, content, contentType)
 }

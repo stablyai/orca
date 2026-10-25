@@ -3,17 +3,17 @@ import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-co
 import {
   parseOrcadMigrationCatalogAbortResult,
   parseOrcadMigrationCatalogState
-} from '../../shared/orcad-migration-catalog-state'
+} from '../../shared/orcad-migration/orcad-migration-catalog-state'
 import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   parseOrcadMigrationSnapshotChunkResult,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   findUnsupportedMigrationBlobKind,
   orcadMigrationBlobKindUnsupportedBlocker,
@@ -21,15 +21,16 @@ import {
   type OrcadMigrationBlobChunkRequest,
   type OrcadMigrationBlobChunkResult,
   type OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { parsePairingCode } from '../../shared/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
-import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration-source-kind'
+import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { OrcadServerRepository } from './orcad-migration-repository-link'
 
 type OrcadCatalogMigrationOperation = 'abort' | 'commit' | 'stage' | 'state'
@@ -222,6 +223,11 @@ async function request(
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
+  // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
+  const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
+  // A manifest under the validation cap can still overflow the host's sealed frame (more so with
+  // expectedBlobs); the host would answer by closing the socket, so refuse before sending.
+  assertOrcadMigrationRequestFits(params)
   const carriesExtraAgentArgs =
     (operation === 'stage' || operation === 'commit') &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
@@ -230,8 +236,7 @@ async function request(
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
-    // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
-    expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest },
+    params,
     options,
     carriesExtraAgentArgs,
     // Every operation: an older destination would parse a non-SSH source as malformed or as SSH.
@@ -250,7 +255,7 @@ async function request(
   return response.result
 }
 
-async function sendSupportedMigrationRequest(
+export async function sendSupportedMigrationRequest(
   pairing: NonNullable<ReturnType<typeof parsePairingCode>>,
   method: string,
   params: unknown,

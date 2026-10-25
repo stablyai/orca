@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertPortNotShadowingListener } from './shadowed-port-probe'
+import * as shadowedPortProbe from './shadowed-port-probe'
 import { WebSocketTransport } from './ws-transport'
 
 const servers: Server[] = []
@@ -72,8 +73,15 @@ describe('WebSocketTransport beside a wildcard listener', () => {
     })
     transports.push(transport)
 
-    await transport.start()
+    const probe = vi.spyOn(shadowedPortProbe, 'assertPortNotShadowingListener')
+    try {
+      await transport.start()
 
-    expect(transport.resolvedPort).toBe(nextPort)
+      expect(transport.resolvedPort).toBe(nextPort)
+      // Linux rejects the overlap itself, so the selected port alone cannot prove the preflight ran.
+      expect(probe).toHaveBeenCalledWith('127.0.0.1', heldPort)
+    } finally {
+      probe.mockRestore()
+    }
   })
 })

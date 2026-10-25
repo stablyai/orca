@@ -1,6 +1,3 @@
-// Restart-timer policy: recovery must re-ensure a running distro, must NOT
-// boot a stopped one (wsl -d starts stopped distros), and must respect state
-// currency and disposal.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WslRelayRecovery, type WslRelayRecoveryState } from './wsl-hook-relay-recovery'
@@ -55,7 +52,7 @@ describe('WslRelayRecovery', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('distro not running'))
   })
 
-  it('does nothing when the state was replaced or the manager is disposed', async () => {
+  it('does nothing when the state was replaced before the restart probe', async () => {
     const restart = vi.fn()
     const probe = vi.fn(async () => true)
     const recovery = new WslRelayRecovery({
@@ -91,7 +88,6 @@ describe('WslRelayRecovery', () => {
     recovery.scheduleRestart(state)
     await vi.advanceTimersByTimeAsync(250)
     await waitFor(() => probe.mock.calls.length === 1)
-    // A fresh ensure() replaces this state while the probe is in flight.
     current = false
     resolveProbe?.(false)
     await vi.advanceTimersByTimeAsync(100)

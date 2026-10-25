@@ -93,9 +93,20 @@ function targetPath(target: unknown): string | null {
   return null
 }
 
+function realClaudeTranscriptWriteOptedIn(path: string): boolean {
+  if (process.env.ORCA_REAL_CLAUDE_CLI_TEST !== '1') {
+    return false
+  }
+  const homes = [
+    ...realHomes().map((home) => join(home, '.claude')),
+    process.env.CLAUDE_CONFIG_DIR
+  ].filter((home): home is string => Boolean(home))
+  return homes.some((home) => normalize(path).startsWith(normalize(join(home, 'projects')) + sep))
+}
+
 function assertOutsideRealHome(state: GuardState, operation: string, target: unknown): void {
   const path = targetPath(target)
-  if (path === null || realAgentSuiteOptedIn()) {
+  if (path === null || realAgentSuiteOptedIn() || realClaudeTranscriptWriteOptedIn(path)) {
     return
   }
   const normalized = normalize(path) + sep

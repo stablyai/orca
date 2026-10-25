@@ -15,11 +15,11 @@ import {
   orcadMigrationBlobIdentity,
   orcadMigrationBlobKindUnsupportedBlocker,
   sameOrcadMigrationBlob
-} from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 export type OrcadMigrationBlobSource = {
   /** Up to `maxBytes` bytes of the blob starting at `offset`, exactly as the descriptor hashed. */
@@ -36,7 +36,7 @@ export type OrcadMigrationBlobDestination = {
   stageChunk: (request: OrcadMigrationBlobChunkRequest) => Promise<OrcadMigrationBlobChunkResult>
 }
 
-export type OrcadMigrationBlobTransfer = {
+type OrcadMigrationBlobTransfer = {
   source: OrcadMigrationBlobSource
   manifest: OrcadMigrationManifest
   blobs: readonly OrcadMigrationBlobDescriptor[]

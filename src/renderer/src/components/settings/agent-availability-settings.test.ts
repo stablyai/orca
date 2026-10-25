@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat/native-chat-providers'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {

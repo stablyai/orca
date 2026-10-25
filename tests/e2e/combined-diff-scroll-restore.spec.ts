@@ -360,7 +360,7 @@ async function clickVisibleDiffLine(page: Page): Promise<void> {
   // asynchronously, so the visible .view-line set is briefly empty on a loaded
   // CI runner. Poll until a line is painted in the viewport instead of reading
   // it once and throwing on the first miss.
-  let linePoint: { x: number; y: number } | null = null
+  let linePoint: { x: number; y: number } | null | undefined
   await expect
     .poll(
       async () => {

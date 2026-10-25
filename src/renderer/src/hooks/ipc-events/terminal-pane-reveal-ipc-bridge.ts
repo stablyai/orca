@@ -1,5 +1,5 @@
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalPaneRevealTarget } from '../../../../shared/terminal-pane-reveal'
@@ -18,7 +18,8 @@ function toWindowTabId(target: TerminalPaneRevealTarget): string {
     ? host.kind === 'runtime'
       ? host.environmentId
       : null
-    : getExplicitRuntimeEnvironmentIdForWorktree(useAppStore.getState(), target.worktreeId)
+    : // Why: reveal only focuses a tab; a twin keeps the id the caller named.
+      runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
   return environmentId && !isWebTerminalSurfaceTabId(target.tabId)
     ? toWebTerminalSurfaceTabId(target.tabId)
     : target.tabId

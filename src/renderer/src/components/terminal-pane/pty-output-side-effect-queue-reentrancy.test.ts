@@ -49,7 +49,9 @@ describe('PTY side-effect queue reentrant delivery', () => {
       },
       (effect) => {
         observed.push(effect.titleScanEffect)
-        queue.enqueue(emptyEffect('stale-probe'))
+        if (observed.length === 1) {
+          queue.enqueue(emptyEffect('stale-probe'))
+        }
         observed.push(effect.titleScanEffect)
       }
     )

@@ -16,11 +16,13 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../src/shared/agent-session-wire'
-import type { AgentJournalItemBody } from '../../src/shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../src/shared/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
-import type * as WorktreeRuntimeOwnerModule from '../../src/renderer/src/lib/worktree-runtime-owner'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
@@ -58,13 +60,6 @@ vi.mock('@/store', async () => {
   mocks.store = useAppStore
   return { useAppStore }
 })
-
-// Partial: the status projection also resolves each chat's owner from the worktree.
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
-}))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(),
@@ -118,6 +113,7 @@ beforeEach(async () => {
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
     retainedAgentsByPaneKey: {},
+    refreshGitHubForWorktreeIfStale: vi.fn(),
     testRuntimeOwner: null,
     repos: [makeRepo()],
     worktreesByRepo: { [worktree.repoId]: [worktree] },
@@ -151,7 +147,13 @@ async function openHost() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
-      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+      [
+        SESSION,
+        indexedStatusFeedSession({
+          journal,
+          child: { phase: 'ready', generation: null, fence: 1 }
+        })
+      ]
     ]),
     getRecord: () => null,
     now: () => 1
@@ -201,7 +203,10 @@ async function openHost() {
         resolvedAt: tick()
       }
     }
-    await journal.appendItem(identity, resolved, { fence: 1 })
+    await journal.appendItem(identity, resolved, {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     publish()
     translator.resolvePrompt(itemId)
   }
@@ -234,7 +239,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     await host.journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     host.on(CODEX_THREAD, 'turn/started', { turn: { id: 'parent-turn' } })
     const spawn = {

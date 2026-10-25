@@ -5,13 +5,13 @@
  */
 import { readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { OrcadMigrationBlobKind } from '../../../shared/orcad-migration-blob-transfer'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobKind } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_KEY,
   parseOrcadMigrationTerminalRestoreHintsText,
   type OrcadMigrationTerminalRestoreHint
-} from '../../../shared/orcad-migration-terminal-restore-hints'
+} from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 import {
   getOrcadMigrationReceivedBlobPath,

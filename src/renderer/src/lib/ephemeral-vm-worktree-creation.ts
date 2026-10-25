@@ -6,18 +6,29 @@ import { getProjectIdentityKey } from '../../../shared/project-host-setup-projec
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import {
+  appendProvisioningLog,
+  appendProvisioningWarnings
+} from '@/lib/pending-creation-provisioning-log'
 
-const MAX_PROVISIONING_LOG_CHARS = 12_000
-
+/** Provisions whatever remote target the request still needs before the worktree is created. */
 export async function prepareRequestForCreate(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<WorktreeCreationRequest | null> {
-  if (!request.ephemeralVmRecipe || request.ephemeralVmRuntimeId) {
-    return request
+  if (request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId) {
+    return prepareEphemeralVmRecipeRequest(creationId, request, request.ephemeralVmRecipe)
   }
+  return request
+}
+
+async function prepareEphemeralVmRecipeRequest(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  recipe: NonNullable<WorktreeCreationRequest['ephemeralVmRecipe']>
+): Promise<WorktreeCreationRequest | null> {
   const store = useAppStore.getState()
-  if (request.ephemeralVmRecipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
+  if (recipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
     store.updatePendingWorktreeCreation(creationId, {
       status: 'error',
       error: getProvisionedRootSparseCheckoutError()
@@ -36,16 +47,13 @@ export async function prepareRequestForCreate(
   })
   let preparedTarget: Awaited<ReturnType<typeof prepareEphemeralVmWorkspaceTarget>>
   try {
-    const sourceRepo = store.repos.find(
-      (repo) => repo.id === request.ephemeralVmRecipe?.sourceRepoId
-    )
+    const sourceRepo = store.repos.find((repo) => repo.id === recipe.sourceRepoId)
     preparedTarget = await prepareEphemeralVmWorkspaceTarget({
-      repoId: request.ephemeralVmRecipe.sourceRepoId,
-      recipeId: request.ephemeralVmRecipe.recipeId,
-      projectId:
-        resolvePortableEphemeralVmProjectId(sourceRepo) ?? request.ephemeralVmRecipe.projectId,
+      repoId: recipe.sourceRepoId,
+      recipeId: recipe.recipeId,
+      projectId: resolvePortableEphemeralVmProjectId(sourceRepo) ?? recipe.projectId,
       workspaceName: request.name,
-      ...(request.ephemeralVmRecipe.checkoutMode === 'provisioned-root'
+      ...(recipe.checkoutMode === 'provisioned-root'
         ? {
             branch: request.branchNameOverride ?? request.name,
             ...(request.baseBranch ? { ref: request.baseBranch } : {})
@@ -136,35 +144,6 @@ function getEphemeralVmPortableBaseSelection(
   // let the remote repo resolve its own default unless the user selected a
   // provider-backed start point above.
   return { baseBranch: undefined, compareBaseRef: undefined }
-}
-
-function appendProvisioningWarnings(
-  creationId: string,
-  warnings: readonly { message: string; remediation?: string }[]
-): void {
-  if (warnings.length === 0) {
-    return
-  }
-  const text = warnings
-    .map((warning) =>
-      warning.remediation
-        ? `Warning: ${warning.message}\n${warning.remediation}\n`
-        : `Warning: ${warning.message}\n`
-    )
-    .join('')
-  appendProvisioningLog(creationId, text)
-}
-
-function appendProvisioningLog(creationId: string, chunk: string): void {
-  const store = useAppStore.getState()
-  const entry = store.pendingWorktreeCreations[creationId]
-  if (!entry) {
-    return
-  }
-  // Why: recipe stdout contains the structured result with pairing credentials;
-  // only stderr is displayed, and the in-memory tail is bounded.
-  const nextLog = `${entry.provisioningLog ?? ''}${chunk}`.slice(-MAX_PROVISIONING_LOG_CHARS)
-  store.updatePendingWorktreeCreation(creationId, { provisioningLog: nextLog })
 }
 
 export async function attachEphemeralVmRuntimeToWorkspace(

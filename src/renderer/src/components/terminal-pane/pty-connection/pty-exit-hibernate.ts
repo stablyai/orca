@@ -21,7 +21,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
 import { armRestartReplacement } from './restart-replacement-on-show'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
-import { closeExitedSplitPaneThroughLayoutOwner } from './exited-split-pane-close'
+import { expectExitedSplitPaneClose } from './exited-split-pane-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 // Why live+done arms too: kept from #16308's wake-sweep widening; hibernation itself only writes worktree-sleep notes.
@@ -356,19 +356,13 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       session.focusSurvivingPtyPaneAfterKeptExit()
       return
     }
-    // Switch point: main closes the exited pane first; the window then removes it.
+    // Switch point: main closes the exited pane; the window removes it when main's frame does.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
-      closeExitedSplitPaneThroughLayoutOwner({
+      expectExitedSplitPaneClose({
         worktreeId: session.deps.worktreeId,
         tabId: session.deps.tabId,
-        manager: session.manager,
-        paneId: session.pane.id,
-        closeTab: () => {
-          if (!keepsUntouchedFreshPane(session, ptyId)) {
-            session.deps.onPtyExitRef.current(ptyId, exitCode)
-          }
-        }
+        leafId: session.manager.getLeafId(session.pane.id)
       })
     ) {
       return

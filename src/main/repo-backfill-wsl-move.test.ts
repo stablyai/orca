@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../shared/execution-host'
+import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
-import { closeTestStores, createStore, testState } from './persistence-test-harness'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
+import { closeTestStores, createStore, testState } from './persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from './persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from './persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
@@ -69,9 +70,11 @@ describe('git remote identity enrichment under a WSL move', () => {
     ]
     const store = {
       getRepos: () => rows,
-      updateRepo: (id: string, updates: Partial<Repo>, hostId?: ExecutionHostId) => {
+      updateRepo: (target: RepoHostTarget, updates: Partial<Repo>) => {
         const row = rows.find(
-          (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
+          (candidate) =>
+            candidate.id === target.id &&
+            getRepoExecutionHostId(candidate) === getRepoExecutionHostId(target)
         )
         return row ? Object.assign(row, updates) : null
       }

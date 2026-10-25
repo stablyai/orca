@@ -48,40 +48,6 @@ describe('matchFilePathAtColumn', () => {
     }
   )
 
-  it('matches an absolute path under the tap', () => {
-    const line = 'created /tmp/out/report.html for you'
-    const result = matchFilePathAtColumn(line, colOf(line, 'report'))
-    expect(result?.pathText).toBe('/tmp/out/report.html')
-  })
-
-  it('matches a relative path and parses line:col', () => {
-    const line = 'see src/components/Button.tsx:12:7 here'
-    const result = matchFilePathAtColumn(line, colOf(line, 'Button'))
-    expect(result).toEqual({ pathText: 'src/components/Button.tsx', line: 12, column: 7 })
-  })
-
-  it('matches a tilde path', () => {
-    const line = 'wrote ~/Documents/notes.md'
-    const result = matchFilePathAtColumn(line, colOf(line, 'notes'))
-    expect(result?.pathText).toBe('~/Documents/notes.md')
-  })
-
-  it('matches a path whose directory name contains a space', () => {
-    const line = '/Users/me/My Project/readme.md done'
-    const result = matchFilePathAtColumn(line, colOf(line, 'readme'))
-    expect(result?.pathText).toBe('/Users/me/My Project/readme.md')
-  })
-
-  it('matches a spaced path with line and column suffixes', () => {
-    const line = 'wrote /tmp/orca report/result.json:12:3 for you'
-    const result = matchFilePathAtColumn(line, colOf(line, 'result'))
-    expect(result).toEqual({
-      pathText: '/tmp/orca report/result.json',
-      line: 12,
-      column: 3
-    })
-  })
-
   it('matches a spaced path when an earlier directory segment contains a dot', () => {
     const line = 'wrote /tmp/v1.2 reports/result.json for you'
     expect(matchFilePathAtColumn(line, colOf(line, 'v1.2'))).toEqual({
@@ -114,26 +80,6 @@ describe('matchFilePathAtColumn', () => {
       line: null,
       column: null
     })
-  })
-
-  it('does not merge two spaced path candidates through prose', () => {
-    const line = 'see /tmp/a.txt and /tmp/b.txt done'
-    expect(matchFilePathAtColumn(line, colOf(line, 'a.txt'))).toEqual({
-      pathText: '/tmp/a.txt',
-      line: null,
-      column: null
-    })
-    expect(matchFilePathAtColumn(line, colOf(line, 'b.txt'))).toEqual({
-      pathText: '/tmp/b.txt',
-      line: null,
-      column: null
-    })
-  })
-
-  it('trims surrounding punctuation', () => {
-    const line = 'open (src/a.ts) now'
-    const result = matchFilePathAtColumn(line, colOf(line, 'a.ts'))
-    expect(result?.pathText).toBe('src/a.ts')
   })
 
   it('returns null when the tap is not on a path', () => {

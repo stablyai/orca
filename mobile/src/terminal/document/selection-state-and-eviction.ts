@@ -1,6 +1,6 @@
 import { elementInRoot } from './document-host-seams'
 import { repositionOverlay } from './selection-overlay'
-import { cancelSelect } from './selection-range'
+import { cancelSelect } from './selection-mode'
 import { notify } from './host-notify'
 import type { TerminalDocumentScope } from './document-scope'
 

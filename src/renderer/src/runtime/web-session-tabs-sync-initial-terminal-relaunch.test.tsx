@@ -8,13 +8,12 @@ import {
 } from '../../../shared/runtime-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  ownerEnvironmentIdForWorkspace: vi.fn(),
   hostAnswersEmptyWorktree: vi.fn(async () => true),
   recoverSnapshot: vi.fn(),
   runtimeSessionMirrorEnvironmentKey: vi.fn(),
@@ -29,13 +28,10 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
   useRuntimeSessionMirrorEnvironmentKeys: mocks.runtimeSessionMirrorEnvironmentKeys
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
@@ -52,7 +48,6 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -61,6 +56,10 @@ import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/sl
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from './web-runtime-wake-terminal-respawn'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'
@@ -181,15 +180,13 @@ function hostTerminalSnapshot(snapshotVersion: number): RuntimeMobileSessionTabs
 }
 
 function runtimeStatusMap(connectionGeneration: number): AppState['runtimeStatusByEnvironmentId'] {
-  return new Map([
-    [ENV, { status: { runtimeId: 'runtime-a' }, connectionGeneration }]
-  ]) as AppState['runtimeStatusByEnvironmentId']
+  return new Map([[ENV, connectedRuntimeStatus('runtime-a', connectionGeneration)]])
 }
 
 function seedRemoteMirrorState(connectionGeneration: number): void {
   const runtimeEnvironments = [
-    { id: ENV, createdAt: 100, pairingRevision: REVISION }
-  ] as PublicKnownRuntimeEnvironment[]
+    publicRuntimeEnvironment({ id: ENV, createdAt: 100, pairingRevision: REVISION })
+  ]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {
@@ -210,7 +207,7 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset()
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -377,7 +374,7 @@ describe('activating a host-owned workspace before the host has answered', () =>
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset().mockResolvedValue({ status: 'created' })
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     mocks.hostAnswersEmptyWorktree.mockReset().mockResolvedValue(true)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {

@@ -1,7 +1,11 @@
-import { applyClaudeTerminalImageViewerEnv } from './terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal/launch/terminal-create'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
+
+// Without a window, the missing piece the caller can supply is the workspace, so name that.
+const NO_WORKSPACE_OR_WINDOW_MESSAGE =
+  'No workspace was given or found for this terminal, and this Orca host has no open app window to create one in. Pass --worktree to choose a workspace. No terminal was created.'
 
 // A create with no workspace lands in whatever the window is showing, so only the window can make it.
 export async function createDesktopTerminal(
@@ -15,9 +19,9 @@ export async function createDesktopTerminal(
       `--shell ${opts.shellOverride} needs a workspace, because the shell is resolved on the workspace's execution host. No terminal was created.`
     )
   }
-  opts = applyClaudeTerminalImageViewerEnv(opts, opts.terminalImageViewerSupported)
+  opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
   runtime.assertGraphReady()
-  const win = runtime.getAuthoritativeWindow()
+  const win = runtime.getAuthoritativeWindow(NO_WORKSPACE_OR_WINDOW_MESSAGE)
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {

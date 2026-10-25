@@ -6,7 +6,7 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
 import { compareNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
 import {
   hasImagePromptMarker,

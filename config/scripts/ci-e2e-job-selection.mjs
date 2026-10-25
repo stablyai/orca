@@ -11,7 +11,7 @@ export const WINDOWS_MISSING_APPDATA_E2E_SPEC = 'tests/e2e/windows-missing-appda
 export const WINDOWS_COPY_FILE_E2E_SPEC = 'tests/e2e/file-explorer-copy-file-windows.spec.ts'
 // Needs out/orcad, which only the mode-switch job builds; it runs there beside that spec.
 export const LAYOUT_ORACLE_HEADLESS_E2E_SPEC = 'tests/e2e/workspace-layout-oracle-headless.spec.ts'
-// One Docker job runs every managed-SSH spec; it builds the orcad template they need.
+// Managed-SSH specs need the orcad template built by their Docker lane.
 export const MANAGED_SSH_E2E_SPEC_PREFIX = 'tests/e2e/ssh-orcad-'
 export const DEDICATED_E2E_SPECS = [
   NODE_NETWORK_E2E_SPEC,
@@ -46,6 +46,38 @@ function parseSpecs(input) {
   return specs
 }
 
+export function selectManagedSshE2eSpecs(input) {
+  if (input === '') {
+    return [MANAGED_SSH_E2E_SPEC_PREFIX]
+  }
+  const specs = [...new Set(parseSpecs(input))].filter((spec) =>
+    spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)
+  )
+  if (
+    specs.length === 0 ||
+    specs.some(
+      (spec) =>
+        spec !== MANAGED_SSH_E2E_SPEC_PREFIX &&
+        !/^tests\/e2e\/ssh-orcad-[\w-]+\.spec\.ts$/.test(spec)
+    )
+  ) {
+    throw new Error('Expected at least one managed SSH spec')
+  }
+  return specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) ? [MANAGED_SSH_E2E_SPEC_PREFIX] : specs
+}
+
+export function managedSshShards(input) {
+  try {
+    const specs = selectManagedSshE2eSpecs(input)
+    if (!specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) && specs.length <= 2) {
+      return ['1/1']
+    }
+  } catch {
+    // Invalid evidence keeps the full allocation; the test consumer rejects it.
+  }
+  return ['1/2', '2/2']
+}
+
 export function classifyE2eJobs(input) {
   const conservative = { e2e_run_changed: true, e2e_needs_build: true }
   let specs
@@ -74,6 +106,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const [name, value] of Object.entries(classifyE2eJobs(input))) {
       process.stdout.write(`${name}=${value}\n`)
     }
+    process.stdout.write(`e2e_ssh_shards=${JSON.stringify(managedSshShards(input))}\n`)
   } else {
     for (const spec of selectGeneralE2eSpecs(parseSpecs(input))) {
       if (/[\r\n]/.test(spec)) {

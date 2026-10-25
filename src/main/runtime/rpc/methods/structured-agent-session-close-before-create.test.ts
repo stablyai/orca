@@ -157,6 +157,15 @@ describe('a close that reaches main before its create', () => {
     expect(rig.host.hasSession(SESSION)).toBe(false)
   })
 
+  it('a close main fails for want of its chat host still refuses the create that follows', async () => {
+    setStructuredAgentSessionHost(null)
+    expect(await close()).toMatchObject({ ok: false })
+    setStructuredAgentSessionHost(rig.host)
+
+    expect(await create()).toMatchObject(refusedAsClosed)
+    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+  })
+
   it('switch off: a close before the create is not remembered', async () => {
     mocks.layoutOwnerIsMain = false
     await close()

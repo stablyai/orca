@@ -48,6 +48,7 @@ async function rig(bodies: ('hang' | 'whole')[]) {
     new ManagedRuntimeInstallation('agent', runtime, {
       dataDirectory,
       findExternal: async () => false,
+      fence: (work) => work(),
       fetcher
     })
   const phase = async (installation: ManagedRuntimeInstallation) =>
@@ -124,7 +125,11 @@ it('repairs a damaged copy when Install is clicked again', async () => {
   installation.install()
   await vi.waitFor(async () => expect(await phase(installation)).toBe('succeeded'))
   await writeFile(join(root, '1.0', 'server'), 'cut')
-  expect(await installation.status()).toMatchObject({ installedVersion: null, damaged: true })
+  expect(await installation.status()).toMatchObject({
+    installedVersion: null,
+    damaged: true,
+    canRemove: true
+  })
 
   installation.install()
   await vi.waitFor(async () => expect(await phase(installation)).toBe('succeeded'))

@@ -6,6 +6,8 @@ import { createNativeChatSessionOptionRecord } from './native-chat-session-optio
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
+  canSetStructuredAgentSessionOption,
+  commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
   settleStructuredAgentSessionBuiltinCatalog,
   structuredAgentSessionOptionSnapshot,
@@ -19,7 +21,7 @@ function viewModel(
   held: Readonly<Record<string, string>>
 ) {
   const model = structuredAgentSessionOptionSnapshot(
-    structuredAgentSessionOptionView(state, seed, held, true)
+    structuredAgentSessionOptionView(state, seed, held)
   ).find((descriptor) => descriptor.id === 'model')
   return model?.kind.type === 'select' ? model.kind.currentValue : undefined
 }
@@ -33,7 +35,7 @@ describe('structured agent session options', () => {
     )
     expect(state.catalog?.models).toEqual([])
     expect(structuredAgentSessionOptionSnapshot(state)).toEqual([])
-    expect(state.record.model).toBeUndefined()
+    expect(state.record.values.model).toBeUndefined()
 
     const reported = applyStructuredAgentSessionOptions(state, OMP_SESSION_OPTION_CATALOG, {
       models: [{ id: 'reported-model', label: 'Reported Model', isDefault: true, efforts: [] }],
@@ -190,7 +192,7 @@ describe('structured agent session options', () => {
       current: { model: 'account-model' }
     })
     expect(structuredAgentSessionOptionSnapshot(absent).map(({ id }) => id)).toEqual(['model'])
-    expect(absent.record.valuesByModel['account-model']?.fastMode).toBeUndefined()
+    expect(absent.record.values.fastMode).toBeUndefined()
   })
 
   it('offers one speed choice in place of the Fast toggle where the model lists speeds', () => {
@@ -284,20 +286,52 @@ describe('structured agent session options', () => {
     // A saved pick the host's list does not name shows the quiet placeholder, never its raw id.
     expect(
       structuredAgentSessionOptionSnapshot(
-        structuredAgentSessionOptionView(seeded, { model: 'gpt-next' }, {}, true)
+        structuredAgentSessionOptionView(seeded, { model: 'gpt-next' }, {})
       )
     ).toEqual([expect.objectContaining({ id: 'model', settable: false, valueSource: 'unknown' })])
     // Before the host answers, and on the built-in list, no saved pick is named.
     expect(viewModel(cold, seed, {})).toBeUndefined()
-    expect(viewModel(settleStructuredAgentSessionBuiltinCatalog(cold), seed, {})).toBeUndefined()
+    const settled = settleStructuredAgentSessionBuiltinCatalog(cold, false)
+    expect(viewModel(settled, seed, {})).toBeUndefined()
+    expect(settleStructuredAgentSessionBuiltinCatalog(settled, false)).toBe(settled)
+    expect(
+      settleStructuredAgentSessionBuiltinCatalog({ ...settled, listingInProgress: true }, false)
+        .listingInProgress
+    ).toBe(false)
     // Derived only: the record itself never takes the seed.
-    expect(seeded.record.model).toBeUndefined()
+    expect(seeded.record.values.model).toBeUndefined()
     const live = applyStructuredAgentSessionOptions(seeded, CODEX_SESSION_OPTION_CATALOG, {
       models: [{ id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', isDefault: true, efforts: [] }],
       current: { model: 'gpt-5.6-luna', confirmed: ['model'] }
     })
     expect(viewModel(live, seed, {})).toBe('gpt-5.6-luna')
     expect(viewModel(live, seed, { model: 'gpt-5.5' })).toBe('gpt-5.5')
-    expect(live.record.model?.value).toBe('gpt-5.6-luna')
+    expect(live.record.values.model?.value).toBe('gpt-5.6-luna')
+  })
+
+  it('keeps a saved Fast with no model known, Standard turning it off', () => {
+    const sol = {
+      id: 'gpt-6.1-sol',
+      label: 'GPT-6.1 Sol',
+      isDefault: false,
+      efforts: [],
+      serviceTiers: [{ value: 'priority', label: 'Fast' }]
+    }
+    // A resumed chat's at-rest answer, whose listing names no default.
+    const fast = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [sol],
+        fastModeSupport: { supported: true },
+        current: { serviceTier: 'priority', defaulted: [] }
+      }
+    )
+    expect(
+      structuredAgentSessionOptionSnapshot(fast).find(({ id }) => id === 'serviceTier')
+    ).toMatchObject({ settable: true, kind: { currentValue: 'priority' } })
+    const standard = commitStructuredAgentSessionOption(fast, 'serviceTier', 'default')
+    // With no model, nothing says which other speed the chat can take.
+    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(false)
   })
 })

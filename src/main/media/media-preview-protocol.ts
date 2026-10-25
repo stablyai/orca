@@ -72,7 +72,7 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
   }
   try {
     const { target, store, mimeType } = grant
-    // Why: this process serves no SSH filesystem.
+    // This process cannot serve SSH filesystems.
     if (target.connectionId) {
       return new Response(null, { status: 404 })
     }

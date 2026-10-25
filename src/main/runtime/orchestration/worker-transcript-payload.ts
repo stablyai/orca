@@ -3,7 +3,6 @@ import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 import { replaceDispatchCapabilities } from './worker-terminal-redaction'
-export { redactWorkerTerminalLines } from './worker-terminal-redaction'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50

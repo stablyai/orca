@@ -12,7 +12,7 @@ import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
+const TASK_SEARCH_DEBOUNCE_MS = 600
 
 type Input = Pick<WorktreeJumpPaletteStoreState, 'visible' | 'repos' | 'settings'> &
   Pick<WorktreeJumpPaletteLocalState, 'query' | 'filter'> &

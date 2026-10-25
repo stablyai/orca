@@ -223,14 +223,3 @@ export type DashboardRevealAgentArgs = {
   tabId: string
   leafId: string | null
 }
-
-export type DashboardSpawnAgentArgs = {
-  worktreeId: string
-  agent: TuiAgent
-}
-
-/** Puts a workspace to sleep from the dashboard: the main renderer owns the
- *  teardown sequence, so the pop-out only names the target. */
-export type DashboardSleepWorkspaceArgs = {
-  worktreeId: string
-}

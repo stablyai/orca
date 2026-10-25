@@ -6,6 +6,7 @@
 // Older hosts retain the copy-before-delete fallback; capable hosts edit in place.
 
 import { createElement } from 'react'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
@@ -320,6 +321,19 @@ describe('mobile structured queued messages', () => {
             queuedDraft({ messageId: 'drained' }),
             queuedDraft({ messageId: 'still-waiting' })
           ],
+          items: [
+            {
+              itemId: agentJournalSubmissionKey('fresh-hand-off-id'),
+              revision: 1,
+              sequence: 1,
+              observedAt: 10,
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'sent message' }]
+              }
+            }
+          ],
           submissions: [acceptedSubmission('fresh-hand-off-id', 'drained')]
         })
       )
@@ -331,6 +345,19 @@ describe('mobile structured queued messages', () => {
         CAPABLE,
         snapshotEvent({
           queuedMessages: [queuedDraft({ messageId: 'same-id' })],
+          items: [
+            {
+              itemId: agentJournalSubmissionKey('same-id'),
+              revision: 1,
+              sequence: 1,
+              observedAt: 10,
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'sent message' }]
+              }
+            }
+          ],
           submissions: [acceptedSubmission('same-id')]
         })
       )

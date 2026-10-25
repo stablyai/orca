@@ -90,7 +90,7 @@ export async function removeUnregisteredWorktree(
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId
@@ -106,10 +106,10 @@ export async function removeUnregisteredWorktree(
   }
   if (await isAlreadyRemovedWorktreePath(worktreePath, localWorktreeGitOptions)) {
     if (!args.force && !removedMeta) {
-      // Why: without persisted metadata, require the renderer recovery path before deleting Orca-only state for an unregistered path.
+      // Without persisted ownership, require renderer recovery approval before deleting unregistered state.
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
-    // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
+    // Persisted metadata proves an already-missing path was Orca-owned; cleanup needs no force.
     await cleanupUnusedWorktreePushTargetRemote(
       repo.path,
       args.worktreeId,
@@ -120,7 +120,7 @@ export async function removeUnregisteredWorktree(
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

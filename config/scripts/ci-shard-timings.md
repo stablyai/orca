@@ -57,13 +57,13 @@ errors. Artifact digests, all 20 report hashes, source/runtime provenance, full
 discovery, and each saved assignment were checked before importing. The E2E
 weights remain unchanged.
 
-| Shard | Job ID | Measured worker-seconds | Job seconds |
-| --- | --- | ---: | ---: |
-| 1 | 116137259336 | 1,966.470 | 568 |
-| 2 | 116137259460 | 2,080.624 | 604 |
-| 3 | 116137259318 | 2,121.495 | 611 |
-| 4 | 116137259783 | 2,094.487 | 614 |
-| 5 | 116137259540 | 2,190.636 | 641 |
+| Shard | Job ID       | Measured worker-seconds | Job seconds |
+| ----- | ------------ | ----------------------: | ----------: |
+| 1     | 116137259336 |               1,966.470 |         568 |
+| 2     | 116137259460 |               2,080.624 |         604 |
+| 3     | 116137259318 |               2,121.495 |         611 |
+| 4     | 116137259783 |               2,094.487 |         614 |
+| 5     | 116137259540 |               2,190.636 |         641 |
 
 Retrospectively assigning those measurements projects 2,090.726–2,090.747
 worker-seconds per shard, instead of 1,966.470–2,190.636. That is a scheduling

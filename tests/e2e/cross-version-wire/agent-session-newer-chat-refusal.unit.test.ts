@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
   type AgentSessionJournalIdentity,
   type AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
@@ -22,7 +22,8 @@ import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
-  resolveBaselineReleaseRef
+  resolveBaselineReleaseRef,
+  releaseModuleExport
 } from './release-checkout'
 
 /**
@@ -74,16 +75,6 @@ afterAll(async () => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-/** A function the checked-out build exports, typed as the caller calls it. */
-function releaseExport<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the checked-out build exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an export the checked-out build defines; each caller names the shape it uses, and a changed one fails the test.
-  return value as T
-}
-
 const NEWER_BODY_KIND = { kind: 'plan-card', steps: [{ text: 'by a newer build' }] }
 const NEWER_NESTED_LITERAL = {
   kind: 'approval',
@@ -115,7 +106,8 @@ async function journalWithNewerRow(
   )
   const seq = journal.cursor().sequence + 1
   const newer = JSON.stringify({
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    // A version the older build reads, so it meets the kind rather than a newer version.
+    v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
     epoch: journal.epoch,
     seq,
     fence: 1,
@@ -162,11 +154,11 @@ async function releasedReader(ref: string) {
     checkout,
     'src/shared/structured-agent-session-read-refusal.ts'
   )
-  const parts = releaseExport<ReadHistoryParts>(notice, 'agentSessionReadHistoryRefusalParts')
-  const english = releaseExport<NoticeEnglish>(notice, 'agentSessionWriteNoticeEnglish')
-  const isFinal = releaseExport<IsFinal>(readRefusal, 'isFinalAgentSessionReadRefusal')
+  const parts = releaseModuleExport<ReadHistoryParts>(notice, 'agentSessionReadHistoryRefusalParts')
+  const english = releaseModuleExport<NoticeEnglish>(notice, 'agentSessionWriteNoticeEnglish')
+  const isFinal = releaseModuleExport<IsFinal>(readRefusal, 'isFinalAgentSessionReadRefusal')
   // The pane's own Retry stands beside the words, as on desktop.
-  const words = (refusal: Pick<AgentSessionRefusalReference, 'code' | 'details'>) =>
+  const words = (refusal: { code: string; details?: unknown }) =>
     english(parts(refusal.code, refusal.details, { retryControl: true }))
   return { words, isFinal }
 }
@@ -227,7 +219,7 @@ describe('a chat a newer Orca saved, across versions', () => {
         checkout,
         `${JOURNAL}/journal-host-database-test-support.ts`
       )
-      const older = releaseExport<
+      const older = releaseModuleExport<
         () => {
           open: (options: {
             identity: OlderJournalIdentity

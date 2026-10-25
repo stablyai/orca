@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -24,6 +24,7 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** Everything the pane lane needs: the workspace path plus the project runtime inputs. */
 type CodexPaneLaneState = Pick<
@@ -297,12 +298,13 @@ function getWorkspacePath(
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
     return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
+      (selectFolderWorkspaces(state) ?? []).find(
+        (workspace) => workspace.id === parsed.folderWorkspaceId
+      )?.folderPath ?? null
     )
   }
   return (
-    Object.values(state.worktreesByRepo ?? {})
+    Object.values(selectWorktreesByRepo(state) ?? {})
       .flat()
       .find((entry) => entry.id === worktreeId)?.path ?? null
   )

@@ -151,7 +151,10 @@ describe('NativeChatImageAttachments', () => {
         fireEvent.click(thumbnail)
         const preview = screen.getByRole('dialog', { name: 'Sent image' })
         expect(
-          within(preview).getByRole('img').getAttribute('data-native-chat-copy-image-src')
+          within(preview)
+            .getByTestId('pan-zoom-image-canvas')
+            .closest('[data-native-chat-copy-image-src]')
+            ?.getAttribute('data-native-chat-copy-image-src')
         ).toBe(src)
         expect(window.api.fs.readFile).not.toHaveBeenCalled()
         fireEvent.click(within(preview).getByRole('button', { name: 'Close' }))

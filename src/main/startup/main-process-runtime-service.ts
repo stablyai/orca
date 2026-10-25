@@ -10,8 +10,10 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
+import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
-import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
@@ -24,8 +26,9 @@ import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -42,6 +45,7 @@ import {
 } from '../runtime/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -123,9 +127,14 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareCodexCatalogProbeHome: (homePath) =>
       state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
         homePath,
-        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+        resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
     orchestrationEnvironmentTransport,
+    workspaceSleepPlatform: {
+      callEnvironment: (environmentId, method, params, timeoutMs) =>
+        callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+    },
     // Why the same function the settings IPC handler calls: a paired client's write and a
     // local one must reconcile the scanner child through one path, or they can disagree.
     applySessionSearchSettings: applySessionSearchSettingsChange,
@@ -146,16 +155,26 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
-  runtime.sidebarFacts?.attachSidebarAgentStatusStore(agentHookServer)
+  runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
-    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
+    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
+  agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  // Switch point: main keeps the resume record of each pane it holds from the status it accepts.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    agentHookServer.subscribeEnrichedStatus((enriched) =>
+      runtime.recordHookStatusResume(toAgentStatusIpcPayload(enriched))
+    )
+    agentHookServer.subscribePaneStatusClear((clear) => runtime.forgetHookStatusResume(clear))
+    agentHookServer.subscribeStatusDrop((paneKey) => runtime.forgetHookStatusResume({ paneKey }))
+  }
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+  browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
   return runtime
 }
 

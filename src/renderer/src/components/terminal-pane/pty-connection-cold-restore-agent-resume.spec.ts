@@ -1,10 +1,16 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  expectWindowPaintsColdRestoreOnly,
+  mainLayoutApplyTransport
+} from './pty-connection-test-main-pane-start-fixtures'
 import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -47,6 +53,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -104,6 +111,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
+
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
@@ -200,6 +213,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -278,6 +297,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -286,7 +311,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         expect.stringContaining('--- session restored ---'),
         expect.any(Function)
       )
-      const writeCalls = pane.terminal.write.mock.calls.map(([data]) => data)
+      const writeCalls = pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data))
       expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
@@ -367,6 +392,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'resume-unavailable')
     })
@@ -433,6 +464,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
+
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,

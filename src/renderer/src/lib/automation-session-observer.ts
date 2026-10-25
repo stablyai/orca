@@ -65,6 +65,7 @@ export async function observeExistingAutomationSession(args: {
 
   if (isRemoteRuntimePtyId(ptyId)) {
     let disposed = false
+    const exitWait = new AbortController()
     const owner = getRemoteRuntimePtyOwner(ptyId)
     if (!owner) {
       return () => {}
@@ -84,7 +85,7 @@ export async function observeExistingAutomationSession(args: {
       runtimeTarget,
       'terminal.wait',
       { terminal, for: 'exit' },
-      { timeoutMs: 24 * 60 * 60 * 1000 }
+      { timeoutMs: 24 * 60 * 60 * 1000, signal: exitWait.signal }
     )
       .then((result) => {
         if (!disposed) {
@@ -94,6 +95,8 @@ export async function observeExistingAutomationSession(args: {
       .catch(() => {})
     return () => {
       disposed = true
+      // Why: frees the server's long-wait slot; the reused terminal stays open.
+      exitWait.abort()
       stream.close()
     }
   }

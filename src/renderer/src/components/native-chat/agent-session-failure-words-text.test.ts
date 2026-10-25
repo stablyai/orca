@@ -213,6 +213,20 @@ describe('desktop words for a failure fact', () => {
     )
   })
 
+  it("says which request a start ran out of time on in the reader's language", async () => {
+    await i18n.changeLanguage('fr')
+    expect(
+      agentSessionFailureSentence(
+        { kind: 'startFailed', requestTimeout: { method: 'thread/start', timeoutMs: 30_000 } },
+        'row',
+        { agentName: 'Codex', retryControl: true },
+        sayAgentSessionFailureTranslated
+      )
+    ).toBe(
+      "Codex a mis trop de temps à démarrer (aucune réponse à thread/start après 30 s). Si cela se reproduit, l'ordinateur qui exécute ce chat est peut-être surchargé."
+    )
+  })
+
   it("says a refused command and a refused Stop in the reader's language", async () => {
     await i18n.changeLanguage('fr')
     const sentence = (fact: AgentSessionFailureFact) =>

@@ -14,12 +14,11 @@ export function adapterSupportsCreate(
   if (adapter.supportsCreate) {
     return adapter.supportsCreate(location, agent)
   }
-  // An adapter with no per-agent gate serves the one agent it was built for, so only its location
-  // support can refuse; absence still fails closed here.
+  // Legacy single-agent adapters may refuse only location; absent support still fails closed.
   return adapter.supportsLocation?.(location) ?? false
 }
 
-/** Honors declared gates while retaining legacy adapters whose acquire path is authoritative. */
+/** Honor declared create gates; retain legacy adapters with authoritative spawn paths. */
 export function adapterSupportsCreateIfDeclared(
   adapter: StructuredAgentSessionAdapter,
   location: AgentSessionExecutionLocation,
@@ -31,10 +30,7 @@ export function adapterSupportsCreateIfDeclared(
   return adapterSupportsCreate(adapter, location, agent)
 }
 
-/** Whether this build can start the agent of `session`: the agent is registered here, its account
- *  is the kind that agent pins (it becomes the child's environment), and every handle it holds is
- *  in the transport the agent's adapter speaks. A record failing this stays readable (tab, history);
- *  only starting its agent is refused, by the one launch admission every agent passes through. */
+/** Admit registered agents with compatible pinned accounts/handle transports; unsupported chats stay readable. */
 export function agentDrivesSession(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   session: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'providerHandleChain'>
@@ -50,9 +46,7 @@ export function agentDrivesSession(
   )
 }
 
-/** Whether this host can start `record`'s agent: the adapter runs its location and this build
- *  drives it. The restart offer, a retry, the pre-send check and the start itself all ask this, so
- *  none offers what the start refuses. Reading the stored chat needs no adapter. */
+/** Share launch support checks with restart/retry offers; stored history needs no adapter. */
 export function hostCanStartRecord(
   deps: {
     adapter: StructuredAgentSessionAdapter
@@ -66,7 +60,7 @@ export function hostCanStartRecord(
   )
 }
 
-/** Saved chats can outlive their registration; both vocabularies bound a client's audience. */
+/** Include saved chats whose agents are no longer registered when bounding client audiences. */
 export function knownAgentIds(deps: {
   agents: Pick<StructuredAgentRegistry, 'definitions'>
   store: { listRecords: () => readonly Pick<AgentSessionRecord, 'provider'>[] }

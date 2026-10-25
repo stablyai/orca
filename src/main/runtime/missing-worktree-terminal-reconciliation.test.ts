@@ -3,6 +3,8 @@ import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
+import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 
 function createProvider(sessionIds: string[]): IPtyProvider {
   return {
@@ -58,12 +60,15 @@ describe('stopMissingWorktreeTerminals', () => {
     )
   })
 
-  it('never sweeps an SSH repo through the local provider', async () => {
+  it.each([
+    ['legacy connectionId', { connectionId: 'ssh-1' }],
+    ['unified executionHostId', { executionHostId: 'ssh:ssh-1' as const }]
+  ])('never sweeps an SSH repo (%s) through the local provider', async (_, host) => {
     const deletedId = 'repo-1::/workspace/deleted'
     const localProvider = createProvider([`${deletedId}@@local-session`])
     const runtime = createRuntime()
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, [deletedId], [], {
+    await stopMissingWorktreeTerminals({ ...localRepo, ...host }, [deletedId], [], {
       runtime,
       getLocalProvider: () => localProvider
     })
@@ -115,6 +120,37 @@ describe('stopMissingWorktreeTerminals', () => {
     expect(provider.listProcesses).toHaveBeenCalledTimes(1)
     expect(provider.shutdown).toHaveBeenCalledTimes(ids.length)
   })
+
+  it.each([false, true])(
+    'stops multiple workspaces through scoped daemon listings (unrelated duplicate: %s)',
+    async (duplicate) => {
+      const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
+      const targetSessions = ids.map((id) => `${id}@@session`)
+      const currentSessions = [...targetSessions, ...(duplicate ? ['unrelated'] : [])]
+      const current = createAdapter('current', currentSessions)
+      const legacy = createAdapter('legacy', duplicate ? ['unrelated'] : [])
+      const provider = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(
+        stopMissingWorktreeTerminals(localRepo, ids, [], {
+          runtime: createRuntime(),
+          getLocalProvider: () => provider
+        })
+      ).resolves.toEqual({ stoppedWorktreeIds: ids })
+
+      expect(currentSessions).toEqual(duplicate ? ['unrelated'] : [])
+      expect(
+        vi
+          .mocked(current.shutdown)
+          .mock.calls.map(([id]) => id)
+          .sort()
+      ).toEqual(targetSessions)
+      expect(legacy.shutdown).not.toHaveBeenCalled()
+      if (!duplicate) {
+        expect(current.listProcesses).toHaveBeenCalledOnce()
+      }
+    }
+  )
 
   // Why: real providers put listProcesses/shutdown on the prototype and use `this`;
   // batching them behind a wrapper must not break that binding.

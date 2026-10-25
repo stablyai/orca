@@ -16,6 +16,30 @@ export type TuiIdleHookTurn = {
   state: HookTurnState
   blockedReason: RuntimeTerminalWaitBlockedReason | null
   taskWakeupPending?: true
+  /** When a fresh `done`'s turn has had time to paint its last frame. */
+  finalFrameAt?: number
+}
+
+// Why: Codex runs its Stop hook before it paints the turn's last frame, which can be its plan menu.
+const TURN_END_FINAL_FRAME_MS = 750
+// Why: Codex opens its plan menu only after a turn that rendered a proposed plan; no hook field says so.
+const CODEX_PROPOSED_PLAN_HEADER = 'Proposed Plan'
+
+/** Scans newest-first so the common hit (this turn's plan) returns early. */
+export function retainedTailIncludes(
+  lines: readonly string[],
+  partialLine: string,
+  text: string
+): boolean {
+  if (partialLine.includes(text)) {
+    return true
+  }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].includes(text)) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -55,6 +79,8 @@ export type TuiIdleHookTurnRead = {
    *  the turn that input may have started (or the agent it restarted), whose first hook can still
    *  be in flight. */
   lastInputAt?: number | null
+  /** Whether the pane's retained output holds `text`; read only while a fresh `done` may precede a menu. */
+  tailIncludes?: (text: string) => boolean
   /** The existing permission arbiter, given the turn as the pane's explicit status. */
   resolveBlockedText(
     status: HookTurnState,
@@ -94,9 +120,16 @@ export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn 
     row.providerSession?.key === 'session_id' &&
     terminalHostConnectionMatches(row.connectionId, read.connectionId ?? null, read.wslDistro) &&
     (!read.launchToken || row.launchToken === read.launchToken)
+  const finalFrameAt = row.receivedAt + TURN_END_FINAL_FRAME_MS
+  const finalFramePending =
+    state === 'done' &&
+    hookAuthority(read.agent) === 'turn-end' &&
+    Date.now() < finalFrameAt &&
+    read.tailIncludes?.(CODEX_PROPOSED_PLAN_HEADER) === true
   return {
     state,
     ...(taskWakeupPending ? { taskWakeupPending: true as const } : {}),
+    ...(finalFramePending ? { finalFrameAt } : {}),
     blockedReason:
       blockedReason ??
       (state === 'permission' && !predatesInput ? 'agent-interactive-prompt' : null)
@@ -108,7 +141,7 @@ export type TuiIdleHookVerdict =
   | { kind: 'ready-strong' }
   | { kind: 'working' }
   | { kind: 'blocked'; reason: RuntimeTerminalWaitBlockedReason }
-  | { kind: 'pending'; quietForeground: 'closed' }
+  | { kind: 'pending'; quietForeground: 'closed'; recheckAt?: number }
 
 /**
  * Tier 0 of tui-idle-evidence.ts for an agent whose hooks are trusted (`profile.hooks`). Why ahead
@@ -146,7 +179,9 @@ export function evaluateHookTurn(
     case undefined:
       return null
     case 'done':
-      return { kind: 'ready-strong' }
+      return turn.finalFrameAt
+        ? { kind: 'pending', quietForeground: 'closed', recheckAt: turn.finalFrameAt }
+        : { kind: 'ready-strong' }
     case 'working':
       return { kind: 'working' }
     case 'permission':

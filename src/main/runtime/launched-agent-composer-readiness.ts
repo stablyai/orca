@@ -97,16 +97,17 @@ export async function waitForWorkerStartComposer(
 }
 
 /**
- * An agent whose only rest signal is its bare name, which a launch holds to quiet output, and whose
- * composer draws a marker: that marker answers first. Grok draws its glyph at 0.6 s, then animates
- * its logo for ten.
+ * An agent whose composer draws a marker, and whose only rest signal is its bare name (which a
+ * launch holds to quiet output) or a title the user can turn off: that marker answers first. Grok
+ * draws its glyph at 0.6 s, then animates its logo for ten; Claude without its title never settles.
  */
 export function workerStartReadsComposerMarker(agent: TuiAgent): boolean {
-  const signal = TUI_AGENT_CONFIG[agent].draftPasteReadySignal
+  const config = TUI_AGENT_CONFIG[agent]
+  const signal = config.draftPasteReadySignal
   return (
     signal !== undefined &&
     draftPasteReadySignalHasMarker(signal) &&
-    !nameOnlyIdleNeedsCorroboration(agent)
+    (config.workerStartReadsComposerMarker === true || !nameOnlyIdleNeedsCorroboration(agent))
   )
 }
 
@@ -152,10 +153,15 @@ export async function waitForLaunchedAgentComposer(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
-  timeoutMs: number
+  timeoutMs: number,
+  /** Aborting rejects the wait; the idle fallback rejects on the same signal. */
+  signal?: AbortSignal
 ): Promise<RuntimeTerminalWait> {
+  const abort = signal ? { signal } : {}
   if (getLaunchedAgentReadinessLane(agent) === 'composer-marker') {
-    return runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs)
+    return signal
+      ? runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs, abort)
+      : runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs)
   }
   const startedAt = Date.now()
   try {
@@ -163,7 +169,7 @@ export async function waitForLaunchedAgentComposer(
       handle,
       agent,
       Math.min(timeoutMs, resolveDraftPasteReadyTimeoutMs(agent)),
-      { requireComposerMarker: false, stopOnDialog: true }
+      { requireComposerMarker: false, stopOnDialog: true, ...abort }
     )
   } catch {
     // Out of budget, a dialog up, or a pane it could not read: the idle wait answers each, and
@@ -173,6 +179,7 @@ export async function waitForLaunchedAgentComposer(
   return runtime.waitForTerminal(handle, {
     condition: 'tui-idle',
     timeoutMs: Math.max(1, timeoutMs - (Date.now() - startedAt)),
-    launchReadiness: true
+    launchReadiness: true,
+    ...abort
   })
 }

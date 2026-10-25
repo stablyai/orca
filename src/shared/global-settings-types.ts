@@ -1,3 +1,5 @@
+import type { TelemetrySettings } from './telemetry-settings-types'
+import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
@@ -79,6 +81,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage
+  uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -202,6 +205,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Optional mirror of nodejs.org/dist for the Node runtime Orca installs on SSH and WSL servers. */
+  nodeDistMirrorUrl?: string
   /** Why: corporate TLS-intercepting proxies can break HTTP/2 downloads; opt-in Chromium process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */
@@ -237,6 +242,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** New chats' permission mode, for agents whose chats offer modes; seeded once from Agent Permissions. */
   nativeChatPermissionMode?: AgentChatPermissionMode
+  /** Per-agent new-chat defaults chosen alongside that agent's terminal permission mode. */
+  agentNativeChatPermissionModes?: Partial<Record<TuiAgent, AgentChatPermissionMode>>
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
@@ -265,6 +272,10 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  Renderer-writable only: omitted from the SettingsUpdate RPC schema so a worker
    *  cannot raise its own cap via `orca settings update`. */
   nestedWorkerMaxDepth?: number
+  /** Whether a native-chat worker's turn-ending error is sent to the Run that dispatched it.
+   *  Absent reads as on. Renderer-writable only, like the depth cap: a worker must not be able to
+   *  silence its own failures through `orca settings update`. */
+  orchestrationChatErrorEscalationEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -281,6 +292,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
+  /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
+  browserProfileScope?: BrowserProfileScope
   /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
   browserSshWorkspaceRoutingEnabled?: boolean
   /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
@@ -519,16 +532,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
-  /** Anonymous product-telemetry state; optional until the one-shot Store.load() migration populates it.
-   *  Holds only consent + identity, not volatile counters — those would amplify the debounced settings write. */
-  telemetry?: {
-    /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
-    optedIn: boolean | null
-    /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
-    installId: string
-    /** Cohort marker: true for pre-existing profiles (gates the opt-in banner), false for fresh installs. */
-    existedBeforeTelemetryRelease: boolean
-  }
+  /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */
+  telemetry?: TelemetrySettings
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'

@@ -20,6 +20,20 @@ describe('the shared create builder used by mobile', () => {
   })
 
   it('accepts only user-authored opening messages at the type and wire boundaries', () => {
+    const firstMessage: StructuredAgentSessionFirstMessage = {
+      clientMessageId: 'opening-message',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+    }
+    const params = structuredAgentSessionCreateParams({
+      sessionId: 'codex_11111111_2222_3333_4444_555555555555',
+      worktree: 'id:workspace-1',
+      agent: 'codex',
+      firstMessage,
+      randomUuid: () => '11111111-2222-3333-4444-555555555555'
+    })
+    expect(params.firstMessage).toEqual(firstMessage)
+    expect(CreateIntentParams.safeParse(params).success).toBe(true)
+
     type AssistantBody = {
       kind: 'message'
       role: 'assistant'

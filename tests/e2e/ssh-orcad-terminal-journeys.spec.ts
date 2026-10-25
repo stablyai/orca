@@ -156,7 +156,12 @@ test('managed tabs restore exactly once, and a tab closed while disconnected sta
     // The lid-closed shape: close a tab while disconnected, then reconnect.
     const closed = opened[2]
     await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), seeded.targetId)
-    await page.evaluate((tabId) => window.__store!.getState().closeTab(tabId), closed)
+    // Why the tab's own X: the user's close path holds a close the host cannot hear yet, and
+    // the store's bare closeTab only passed while the disconnected host was silently redialed.
+    const closedTab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${closed}"]`).first()
+    await closedTab.hover()
+    await closedTab.getByRole('button', { name: /^Close tab /i }).click()
+    await expect(closedTab).toHaveCount(0, { timeout: 15_000 })
     await reconnect(page, seeded.targetId)
     const remaining = expected.filter((id) => id !== closed)
     expect(await settledTabIds(page, seeded.worktreeId)).toEqual(remaining)

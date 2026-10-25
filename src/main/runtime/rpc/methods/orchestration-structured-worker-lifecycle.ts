@@ -46,7 +46,7 @@ import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource

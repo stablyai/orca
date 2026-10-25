@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../terminal-restored-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../../shared/terminal-fresh-shell-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,

@@ -1,5 +1,5 @@
-import type { JiraQuickFilterState } from './jira-quick-filters'
-import type { JiraSavedFilterState } from './jira-saved-filters'
+import type { JiraQuickFilterState } from './jira/jira-quick-filters'
+import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
@@ -215,9 +215,9 @@ export type PersistedUIState = {
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
   /** One-shot backfill flag for 'host', which became a toggleable property after earlier profiles were already stamped. */
   _hostWorktreeCardPropertyDefaulted?: boolean
-  /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
+  /** Agent total when the star countdown began or was deferred; preserved across app updates. */
   starNagBaselineAgents?: number | null
-  /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */
+  /** Legacy baseline version retained for older builds; no longer resets the countdown. */
   starNagAppVersion?: string | null
   /** Next agents-since-baseline threshold that fires the star-nag; starts at 35, doubles per dismissal without starring. */
   starNagNextThreshold?: number
@@ -225,7 +225,7 @@ export type PersistedUIState = {
   starNagCompleted?: boolean
   /** Timestamp until which nonterminal dismissals suppress threshold prompts (force-show bypasses for dev/testing). */
   starNagDeferredUntil?: number | null
-  /** App version that consumed the first value-moment ask; main-owned so remote/web clients can't spoof the once-per-version cap. */
+  /** Version that consumed the one-time value-moment ask; any saved version suppresses future attempts. Main-owned. */
   starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]

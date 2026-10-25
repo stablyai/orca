@@ -140,13 +140,7 @@ export function prepareBrowserClientPageInventoryForAttach(
   return prepared.success ? prepared.data : undefined
 }
 
-/**
- * Records where a guest actually is, from the metadata publish that reports every navigation.
- *
- * Without this the inventory only ever names URLs the runtime navigated to, so a page the user
- * browsed away from -- a link, a form, a redirect -- would be restored at the address it was
- * opened with rather than where they left it.
- */
+/** Include user navigation so restored pages reopen where the guest was left. */
 export function recordBrowserClientPagePublishedUrl(
   pages: ReadonlyMap<string, { generation: number; inventory: BrowserClientHostedPageInventory }>,
   params: unknown

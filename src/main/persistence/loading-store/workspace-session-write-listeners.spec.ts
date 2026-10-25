@@ -1,10 +1,10 @@
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import type { WorkspaceLayoutEvent } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
-import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
+import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-events.test-fixture'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import type { Store } from './store'
 
@@ -65,20 +65,22 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { store, authority, readState } = await fixture()
-    const pushes: WorkspaceLayoutEvent[] = []
+    const collector = collectLayoutEvents()
+    const pushes = collector.events
     if (mode !== 'none') {
       const stream = new WorkspaceLayoutStream({
         store: () => store,
         homeHostId: (key) => homeOf(store, key),
         liveTitle: () => null
       })
-      stream.subscribe(
+      const { snapshot } = stream.subscribe(
         mode === 'publisher'
-          ? (event) => pushes.push(event)
+          ? collector.listener
           : () => {
               throw new Error('listener failed')
             }
       )
+      collector.seed(snapshot)
     }
     const snapshots: unknown[] = []
     const step = async (run: () => unknown) => {
@@ -95,12 +97,14 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
     await step(() => store.setWorkspaceSession(hostSession(store), SSH_HOST))
     await step(async () => {
       authority.failNextWrite()
-      await store
-        .persistPtyBinding({ ...binding, ptyId: 'failed-pty', incarnationId: 'failed' })
-        .catch((error: unknown) => error instanceof ProfileStateWriterError || error)
+      await expect(
+        store.persistPtyBinding({ ...binding, ptyId: 'failed-pty', incarnationId: 'failed' })
+      ).rejects.toThrow('profile_state_write_failed')
     })
     await step(() => store.retirePtyBinding(binding))
-    await step(() => store.removeWorkspaceSessionStateForWorktree(WT))
+    await step(() =>
+      store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: WT, hostId: 'local' }))
+    )
     return {
       saved: withStableFixtureIds({
         captures: authority.captures,

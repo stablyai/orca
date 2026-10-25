@@ -70,6 +70,7 @@ type IdlePollEntry = {
   waiter: TerminalWaiter
   foregroundPollInFlight: boolean
   screenReadInFlight: boolean
+  recheckTimer?: ReturnType<typeof setTimeout>
 } & ({ kind: 'leaf'; leaf: RuntimeLeafRecord } | { kind: 'pty'; pty: RuntimePtyWorktreeRecord })
 
 /** One reading of a waiter's pane, and the results it would settle with. */
@@ -116,7 +117,22 @@ export class RuntimeTerminalIdlePolls {
     // times out under one interval (the automation start probe) would otherwise never see it.
     if (verdict?.kind === 'ready-weak') {
       void this.tick(entry)
+    } else if (verdict) {
+      this.armRecheck(entry, verdict)
     }
+  }
+
+  private armRecheck(entry: IdlePollEntry, verdict: TuiIdleVerdict): void {
+    if (verdict.kind !== 'pending' || verdict.recheckAt === undefined || entry.recheckTimer) {
+      return
+    }
+    entry.recheckTimer = setTimeout(
+      () => {
+        entry.recheckTimer = undefined
+        void this.tick(entry)
+      },
+      Math.max(verdict.recheckAt - Date.now(), 0)
+    )
   }
 
   private sweep(): void {
@@ -195,6 +211,7 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.ready())
         return
       }
+      this.armRecheck(entry, verdict)
       // Why no screen read while working: its output can quote dialog wording (a diff of this
       // detector), and the dialogs only the screen shows are start-up ones, painted before any title.
       if (verdict.kind === 'working' || entry.screenReadInFlight) {
@@ -266,6 +283,7 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     entry.waiter.cancelIdlePoll = null
+    clearTimeout(entry.recheckTimer)
     if (this.entries.size === 0 && this.sweepTimer) {
       clearInterval(this.sweepTimer)
       this.sweepTimer = null

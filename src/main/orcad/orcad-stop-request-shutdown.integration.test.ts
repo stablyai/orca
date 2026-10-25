@@ -19,9 +19,9 @@ import {
   recordProfileDaemons,
   removeTestRoot
 } from './orcad-daemon-teardown-fixture'
-import { parseOrcadReadinessOutput } from '../ssh/orcad-remote-launch'
+import { parseOrcadReadinessOutput } from '../managed-server/install/orcad-remote-launch'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
-import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import {
   installPackagedOrcadSlotForTests,
   locatePinnedNodeForTests,

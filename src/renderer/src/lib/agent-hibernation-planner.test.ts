@@ -789,6 +789,15 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
         })
       )[0]!.signature
     const baseline = sigFor(base)
+    expect(
+      sigFor(
+        entry({
+          stateStartedAt: OLD,
+          updatedAt: OLD,
+          providerSession: { key: 'session_id', id: 'session-2' }
+        })
+      )
+    ).not.toBe(baseline)
     // updatedAt held constant throughout, so today's signature would NOT change.
     expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(
       baseline

@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { DORMANT_AUTOMATION } from '../../persistence-orcad-migration-catalog-fixture'
+import { DORMANT_AUTOMATION } from './persistence-orcad-migration-catalog-fixture'
 import { subtractOrcadMigrationClientState } from './orcad-source-client-subtraction'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 import { subtractOrcadMigrationSourceDormantState } from './orcad-source-dormant-subtraction'

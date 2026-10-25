@@ -89,7 +89,7 @@ describe('the keyboard the phone reports', () => {
     keyboardState = { height: 0, visible: false }
   })
 
-  it('animates with the keyboard on iOS and after it on Android', async () => {
+  it('subscribes to will events on iOS and did events on Android', async () => {
     await mount()
     expect([...keyboard.listeners.keys()].sort()).toEqual(['keyboardWillHide', 'keyboardWillShow'])
 

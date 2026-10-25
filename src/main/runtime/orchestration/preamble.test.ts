@@ -86,8 +86,8 @@ describe('buildDispatchPreamble', () => {
     expect(headings).toHaveLength(0)
     expect(codeBlocks).toHaveLength(2)
     expect(codeBlocks[1]).toMatchObject({ lang: 'sh' })
-    expect(codeBlocks[1].value).toContain('orchestration worker-start --task <task_id>')
-    expect(result).toContain('able to dispatch further.\n\n---')
+    expect(codeBlocks[1].value).toContain('orchestration worker-start --from')
+    expect(result).toContain('helpers of their own.\n\n---')
     expect(result).toContain('before starting.\n\n---')
   })
 
@@ -256,11 +256,11 @@ describe('sub-dispatch section', () => {
     )
   })
 
-  it('appears with the run-create sequence when budget remains', () => {
+  it('starts helpers on this Dispatch, without a Run of their own, when budget remains', () => {
     const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
     expect(preamble).toContain('=== SUB-DISPATCH ===')
-    expect(preamble).toContain('orchestration run-create')
-    expect(preamble).toContain('orchestration worker-start')
+    expect(preamble).toContain('orchestration worker-start --from term_worker --spec')
+    expect(preamble).not.toContain('orchestration run-create')
   })
 
   it('keeps the task block last so the spec is not buried', () => {

@@ -1,10 +1,8 @@
-/**
- * Production wiring for the desktop browser bridge: which managed SSH hosts may attach, how to
- * reach their orcad over the paired encrypted connection, and how a forwarded command runs here.
- */
+/** Route eligible SSH hosts through their paired orcad connection to this desktop's browser bridge. */
 import { randomUUID } from 'node:crypto'
 import { webContents, type BrowserWindow } from 'electron'
 import {
+  DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   isDesktopBrowserBridgeMethod
 } from '../../shared/desktop-browser-bridge-protocol'
@@ -30,14 +28,14 @@ import { rendererResolveRemoteCliWorkspace } from '../browser/desktop-browser-br
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
-import { ensureOrcadManagedTunnel } from '../ssh/orcad-managed-tunnel'
-import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
-import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
+import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
+import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
+import type { SshConnectionManager } from '../ssh/connection/ssh-connection-manager'
+import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
+import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environments/runtime-environment-connectivity-handlers'
 import { setDesktopBrowserBridgeControl } from './desktop-browser-bridge-reconcile'
 import { markRemoteCliDrivenWorkspace } from '../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
-import { persistedStore } from './ssh-ipc-context'
+import { persistedStore } from './ssh/ssh-ipc-context'
 import { localSshBrowserTargetIdForSession } from '../browser/local-ssh-browser-partitions'
 
 const ATTACH_TIMEOUT_MS = 15_000
@@ -62,12 +60,12 @@ export function listDesktopBrowserBridgeCandidates(
     if (connections?.getState(target.id)?.status !== 'connected') {
       continue
     }
-    // Why first: with the switch on by default, every plain host reaches here; only managed ones qualify.
+    // Only managed hosts qualify even when the global switch defaults on.
     const environmentId = getManagedOrcadFenceEnvironmentId(target)
     if (!environmentId || isRuntimeEnvironmentManuallyDisconnected(environmentId)) {
       continue
     }
-    // Why: an unrouted host's pages egress from this desktop, so it must not stay attached at all.
+    // Detached routing must not retain desktop egress authority.
     if (!isSshTargetBrowsingRouted(target.id)) {
       continue
     }
@@ -99,7 +97,7 @@ export function installDesktopBrowserBridge(options: {
   const getDispatcher = (): RpcDispatcher => {
     dispatcher ??= new RpcDispatcher({
       runtime,
-      // Why a registry of only these methods: even a bug upstream cannot reach anything else.
+      // Restrict the registry even if an upstream caller misroutes a method.
       methods: ALL_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
@@ -135,12 +133,13 @@ export function installDesktopBrowserBridge(options: {
         {
           clientCapabilities: [
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY
           ]
         }
       )
     },
-    execute: (candidate, request, signal) =>
+    execute: (candidate, request, signal, hostRevoked) =>
       executeDesktopBrowserBridgeRequest(
         request,
         {
@@ -169,13 +168,13 @@ export function installDesktopBrowserBridge(options: {
             getDispatcher().dispatch({ id: randomUUID(), authToken: '', method, params }),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },
-        signal
+        signal,
+        hostRevoked
       ),
     log
   })
-  // Why: turning routing off for a host must detach it (and cancel its waiting commands) at once.
+  // Routing changes must immediately detach hosts and cancel pending commands.
   stopWatchingRoutingSettings?.()
-  // Why optional: test doubles of the store omit the listener API.
   stopWatchingRoutingSettings =
     persistedStore?.onSettingsChanged?.((updates) => {
       if (
@@ -192,7 +191,6 @@ export function installDesktopBrowserBridge(options: {
   manager.reconcile()
 }
 
-// Mirrors the renderer's route eligibility: routing on globally and not opted out for this host.
 function isSshTargetBrowsingRouted(targetId: string): boolean {
   const settings = persistedStore?.getSettings()
   return (

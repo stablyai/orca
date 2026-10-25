@@ -133,11 +133,15 @@ export function containsStatefulRendererQuery(data: string): boolean {
   return false
 }
 
+// Why: ESC/CAN/SUB abort a CSI (as in xterm), so a carried partial can't eat the next sequence's introducer.
 export function findCsiFinalByteIndex(data: string, offset: number): number {
   for (let index = offset; index < data.length; index++) {
     const code = data.charCodeAt(index)
     if (code >= 0x40 && code <= 0x7e) {
       return index
+    }
+    if (code === 0x1b || code === 0x18 || code === 0x1a) {
+      return index - 1
     }
   }
   return -1

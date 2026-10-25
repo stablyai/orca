@@ -4,6 +4,7 @@ import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-mes
 import { RuntimeAccountController, type RuntimeAccountServices } from './runtime-account-controller'
 import { withHostAccountLaunchEnv } from './runtime-agent-terminal-startup'
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerHostAccountLaunchEnvTests(): void {
   const LAUNCH_ENV = HostAccountLaunchEnvParams.parse({
@@ -97,8 +98,7 @@ export function registerHostAccountLaunchEnvTests(): void {
           }
         })
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only getSettings().
-      const runtime = new OrcaRuntimeService(store as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
       runtime.setHostAccountLaunchEnv(LAUNCH_ENV)
       return runtime
     }

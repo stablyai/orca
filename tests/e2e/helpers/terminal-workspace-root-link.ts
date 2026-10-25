@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { focusActiveTerminalInput, getTerminalContent } from './terminal'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 export async function openTerminalWorkspaceRootLink(
   page: Page,

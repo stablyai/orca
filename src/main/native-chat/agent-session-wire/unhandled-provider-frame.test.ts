@@ -136,7 +136,6 @@ describe('unhandled provider frame journal fallback', () => {
         content: 'Session usage: 12% of your limit'
       })?.body.text
     ).toBe('Session usage: 12% of your limit')
-    // Scoped to that frame: another frame's `content` is not its sentence.
     expect(
       unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
         .text
@@ -148,11 +147,10 @@ describe('unhandled provider frame journal fallback', () => {
       message: 'Your plan limit resets in 2 hours.'
     })
     expect(row?.body.text).toBe('Your plan limit resets in 2 hours.')
-    // The raw frame stays available behind the row's disclosure.
     expect(row?.body.providerFrame?.kind).toBe('notification:warning')
   })
 
-  it('bounds a provider sentence inline', () => {
+  it('keeps the provider sentence whole while the raw frame keeps a head', () => {
     const message = 'abcdefghij'
     const row = unhandledProviderFrameJournalItem(
       'codex',
@@ -161,8 +159,8 @@ describe('unhandled provider frame journal fallback', () => {
       { inlineHeadBytes: 8 }
     )
 
-    expect(row?.body.text).toContain('abcdefgh')
-    expect(row?.body.text).toContain('[Orca: output truncated')
+    expect(row?.body.text).toBe(message)
+    expect(row?.body.providerFrame?.payload.truncated).toBe(true)
   })
 
   it('unwraps a nested sentence and falls back to the opcode when there is none', () => {

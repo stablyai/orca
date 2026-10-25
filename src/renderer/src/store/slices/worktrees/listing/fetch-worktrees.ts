@@ -25,6 +25,7 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -52,7 +53,7 @@ export function createFetchWorktrees(
       options && 'directSshAuthority' in options ? options.directSshAuthority : undefined
     try {
       const ownerState = get()
-      const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
+      const requestStartedWorktrees = selectWorktreesByRepo(ownerState)[repoId]
       const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
       const ownerWasMissingAtStart = repoOwners.length === 0
       const hasLocalOwner = repoOwners.some(
@@ -98,7 +99,7 @@ export function createFetchWorktrees(
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
-      const outcome = mergeFetchedWorktrees(set, {
+      const outcome = mergeFetchedWorktrees(set, get, {
         repoId,
         hostId,
         ownerWasMissingAtStart,

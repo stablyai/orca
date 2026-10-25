@@ -6,7 +6,6 @@ import {
   isSessionInActiveWorktree
 } from './agent-history-session-card'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
-import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 
 const NOW = Date.parse('2026-06-29T00:00:00.000Z')
@@ -198,14 +197,6 @@ describe('buildMobileAgentHistorySections', () => {
         .map((card) => card.id)
         .sort()
     ).toEqual(['claude:a', 'claude:b'])
-  })
-})
-
-describe('MOBILE_AI_VAULT_CAPABILITY', () => {
-  it('stays in lockstep with the host AI_VAULT_RUNTIME_CAPABILITY string', () => {
-    // Why: mobile's protocol-version copy lacks the host constant; this literal
-    // must match src/shared/protocol-version.ts AI_VAULT_RUNTIME_CAPABILITY.
-    expect(MOBILE_AI_VAULT_CAPABILITY).toBe('aiVault.v1')
   })
 })
 

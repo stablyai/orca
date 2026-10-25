@@ -1,8 +1,10 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import { toast } from 'sonner'
-import { sshTargetConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
+import { SshHostNodeMirrorAction } from '@/components/settings/SshHostNodeMirrorAction'
+import { SshHostMoveAnywayButton } from '@/components/settings/SshHostMoveAnywayAction'
+import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -86,6 +88,9 @@ export function TerminalSshReconnectOverlay({
   sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
+  const managedServer = useAppStore(
+    (store) => store.sshConnectionStates.get(targetId)?.managedServer
+  )
   // Why: shared registry, not local state — the sidebar card control can dial the same
   // target, and the store status lags a click by one IPC hop.
   const connecting = useSshConnectInFlight(targetId)
@@ -122,15 +127,14 @@ export function TerminalSshReconnectOverlay({
         }
       }
     } catch (err) {
-      toast.error(
-        sshTargetConnectFailureText(
-          targetId,
-          err,
-          translate(
-            'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
-            'SSH connection failed'
-          )
-        )
+      toastSshConnectFailure(
+        targetId,
+        err,
+        translate(
+          'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
+          'SSH connection failed'
+        ),
+        sshOwnerEnvironmentId
       )
       // Why: a failed connect usually means the renderer's target metadata is
       // stale (target removed, or re-added under a new id). Resync it so the
@@ -199,6 +203,30 @@ export function TerminalSshReconnectOverlay({
           {!targetRemoved && error ? (
             <div className="mt-1 text-xs leading-5 text-red-400 [overflow-wrap:anywhere]">
               {error}
+            </div>
+          ) : null}
+          {!targetRemoved ? (
+            <div className="mt-2 flex flex-wrap gap-2 empty:hidden">
+              <SshHostNodeMirrorAction
+                targetId={targetId}
+                status={managedServer}
+                ownerEnvironmentId={sshOwnerEnvironmentId}
+              />
+              {/* Why local only: the dialog drives this desktop's own move, not a server's. */}
+              {sshOwnerEnvironmentId ? null : (
+                <SshHostMoveAnywayButton
+                  target={{ id: targetId, label: targetLabel }}
+                  status={managedServer}
+                  // A connect in flight may clear the refusal; a click would start a second one.
+                  disabled={isConnecting}
+                />
+              )}
+              <OpenPlainSshTerminalButton
+                targetId={targetId}
+                targetLabel={targetLabel}
+                status={managedServer}
+                ownerEnvironmentId={sshOwnerEnvironmentId}
+              />
             </div>
           ) : null}
         </div>

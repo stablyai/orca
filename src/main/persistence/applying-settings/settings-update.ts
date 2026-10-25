@@ -1,12 +1,11 @@
+import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat-providers'
+import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import {
-  normalizeTuiAgentArgsRecord,
-  normalizeTuiAgentEnvRecord
-} from '../../../shared/tui-agent-launch-defaults'
+import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
@@ -48,9 +47,7 @@ import {
 export type SettingsMutationOperations = {
   state: PersistedState
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
-  removeRetainedBlob: (
-    slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
-  ) => void
+  removeRetainedBlob: ProtectedSecretPersistence['removeRetainedBlob']
   scheduleSave: () => void
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
@@ -85,6 +82,11 @@ export function updateSettings(
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth
     })
   }
+  if ('nativeChatPermissionMode' in updates || 'agentNativeChatPermissionModes' in updates) {
+    sanitizedUpdates.agentNativeChatPermissionModes = normalizeAgentNativeChatPermissionModes(
+      updates.agentNativeChatPermissionModes
+    )
+  }
   if ('nativeChatAppearance' in updates) {
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
       updates.nativeChatAppearance
@@ -106,14 +108,7 @@ export function updateSettings(
       })
     }
   }
-  if ('agentDefaultArgs' in updates) {
-    sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
-    sanitizedUpdates.agentYoloDefaultsMigrated = true
-  }
-  if ('agentDefaultEnv' in updates) {
-    sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
-    sanitizedUpdates.agentYoloDefaultsMigrated = true
-  }
+  sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('terminalQuickCommands' in updates) {
     const terminalQuickCommands = normalizeTerminalQuickCommands(updates.terminalQuickCommands)
     // Every local and paired save lands here, so this is where an unstorable list is refused.
@@ -299,6 +294,7 @@ export function updateSettings(
       changedUpdates[String(key)] = operations.state.settings[key]
     }
   }
+  retireAtRestCommandSettings(Object.keys(changedUpdates))
   if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
     operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
   }

@@ -1,12 +1,12 @@
 /**
- * Gives a host whose conversion stopped short back to the relay. A destination that was never
+ * Releases a host whose conversion stopped short, leaving it unmoved. A destination that was never
  * registered held nothing; a registered one must prove through an abort that it holds nothing,
  * and is unregistered before the fence goes so no later start re-fences the host to it.
  */
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import {
   abortOrcadMigrationCutover,
   type OrcadMigrationAbortResult,

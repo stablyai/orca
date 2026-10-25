@@ -13,6 +13,11 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
 
+// Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
+const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
+  codex: ['-c', 'check_for_update_on_startup=false']
+}
+
 export type ResolvedAgentLaunchCommand =
   | {
       ok: true
@@ -31,6 +36,8 @@ export function resolveAgentLaunchCommand(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
+  /** Launch-only, like session options: a resumed session must not inherit it. */
+  suppressStartupUpdatePrompt?: boolean
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
   const command =
@@ -38,6 +45,12 @@ export function resolveAgentLaunchCommand(args: {
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
+  const suppressionArgs = args.suppressStartupUpdatePrompt
+    ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
+    : []
+  const launchHead = suppressionArgs.length
+    ? `${command} ${suppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
+    : command
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -79,7 +92,7 @@ export function resolveAgentLaunchCommand(args: {
   }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
   const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
-  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
+  const commandWithOptions = optionSuffix ? `${launchHead} ${optionSuffix}` : launchHead
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(
         args.agent,
@@ -88,8 +101,8 @@ export function resolveAgentLaunchCommand(args: {
       )
     : []
   const commandWithOverrides = overrideTokens.length
-    ? `${command} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
-    : command
+    ? `${launchHead} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
+    : launchHead
   return {
     ok: true,
     command: args.sessionOptionsOverrideAgentArgs

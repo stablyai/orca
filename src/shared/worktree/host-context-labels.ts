@@ -2,7 +2,7 @@ import {
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
   normalizeExecutionHostId,
-  parseExecutionHostId,
+  isLocalExecutionHost,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
@@ -26,7 +26,7 @@ export function getHostContextLabel(
   if (override) {
     return override
   }
-  if (parseExecutionHostId(hostId)?.kind === 'local') {
+  if (isLocalExecutionHost(hostId)) {
     // An explicit null means the paired host platform is unknown (mobile); an
     // omitted platform means use the current process (desktop).
     if (sources.hostPlatform === null) {

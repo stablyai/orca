@@ -17,6 +17,7 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { electronServeEnvironment } from './electron-serve-browser-environment'
 import {
   ElectronSidecarTabRegistry,
   ElectronSidecarTabSchema,
@@ -55,35 +56,6 @@ async function reserveLoopbackPort(): Promise<number> {
   })
   return address.port
 }
-function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
-  const environment = { ...process.env }
-  for (const key of [
-    'ORCA_E2E_USER_DATA_DIR',
-    'ORCA_USER_DATA',
-    'ORCA_USER_DATA_PATH',
-    'AGENT_BROWSER_ARGS',
-    'AGENT_BROWSER_AUTO_CONNECT',
-    'AGENT_BROWSER_CDP',
-    'AGENT_BROWSER_ENGINE',
-    'AGENT_BROWSER_EXECUTABLE_PATH',
-    'AGENT_BROWSER_HEADED',
-    'AGENT_BROWSER_PROFILE',
-    'AGENT_BROWSER_PROVIDER',
-    'AGENT_BROWSER_SESSION',
-    'AGENT_BROWSER_SESSION_NAME',
-    'AGENT_BROWSER_STATE'
-  ]) {
-    delete environment[key]
-  }
-  // Keep Electron's native home override active in isolated sidecars.
-  if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
-    environment.ORCA_E2E_USER_DATA_DIR = userDataPath
-  }
-  // Why not ORCA_BACKGROUND_LAUNCH: an older installed app would hide without handing opens to the desktop app.
-  environment.ORCA_ORCAD_SIDECAR = '1'
-  return environment
-}
-
 function signalProcess(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal)
@@ -124,6 +96,11 @@ export class ElectronServeBrowserProcess {
       serialization: 'json'
     })
     this.child = child
+    let spawnError: unknown = null
+    // Why: a restart can race the bundle swap after an install; ENOENT must fail start, not orcad.
+    child.on('error', (error) => {
+      spawnError = error
+    })
     for (const stream of [child.stdout, child.stderr]) {
       stream?.on('error', () => undefined)
       stream?.resume()
@@ -147,6 +124,10 @@ export class ElectronServeBrowserProcess {
         } catch (error) {
           lastError = error
         }
+      }
+      if (spawnError) {
+        lastError = spawnError
+        break
       }
       if (child.exitCode !== null || child.signalCode !== null) {
         break
@@ -177,6 +158,12 @@ export class ElectronServeBrowserProcess {
   }
   isAvailable(): boolean {
     return this.metadata !== null && isProcessAlive(this.metadata.pid)
+  }
+
+  /** From the child's own exit state, so a recycled pid is never reported as the helper. */
+  pid(): number | null {
+    const child = this.child
+    return child?.pid && child.exitCode === null && child.signalCode === null ? child.pid : null
   }
 
   async stop(): Promise<void> {

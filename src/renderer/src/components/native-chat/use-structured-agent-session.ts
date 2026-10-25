@@ -1,3 +1,4 @@
+import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
@@ -11,6 +12,7 @@ import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-le
 import {
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostEditsQueuedMessages,
+  useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from './structured-agent-session-stop-control'
@@ -41,6 +43,7 @@ import {
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
+import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
 import type { NativeChatRewindHost } from './use-native-chat-rewind'
 
@@ -71,9 +74,7 @@ export function useStructuredAgentSession(args: {
 }) {
   const {
     agent,
-    composerScopeKey,
     hostStopping = false,
-    isVisible,
     launch,
     providerStarting = false,
     queueFollowUps = true,
@@ -90,17 +91,20 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     mutate,
     write,
+    admit,
+    capturePresentation,
     providerVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
     target,
-    isVisible,
+    isVisible: args.isVisible,
     enabled: transportEnabled,
     agentName: structuredAgentLabel(agent)
   })
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
+  const journalItems = transportState.journalItems
   const {
     conversationCommands,
     optionSnapshot,
@@ -110,7 +114,7 @@ export function useStructuredAgentSession(args: {
     unavailable,
     threadGoal: threadGoalSupport,
     reportedThreadGoal,
-    contextUsage: contextUsageSupport,
+    contextUsage: usageSupport,
     rewind: rewindSupport,
     acceptsImages
   } = useStructuredAgentSessionOptions({
@@ -118,7 +122,7 @@ export function useStructuredAgentSession(args: {
     sessionId,
     target,
     transportEnabled,
-    isVisible,
+    isVisible: args.isVisible,
     providerVisible,
     providerStarting,
     ...(args.providerRunning ? { providerRunning: true } : {}),
@@ -164,16 +168,14 @@ export function useStructuredAgentSession(args: {
     sendOptions
   })
 
-  const contextUsage = useStructuredAgentSessionContextUsage(
-    transportState.journalItems,
-    contextUsageSupport,
-    state.epoch
-  )
+  const usage = useStructuredAgentSessionContextUsage(journalItems, usageSupport, state.epoch)
 
+  const contextFloor = usageSupport?.contextFloor ?? threadGoalSupport?.contextFloor
   const railOutline = useStructuredAgentSessionRailOutline({
     sessionId,
     target,
     state,
+    contextFloor,
     enabled: providerVisible
   })
 
@@ -186,25 +188,26 @@ export function useStructuredAgentSession(args: {
   const rewind = useStructuredAgentSessionRewind({
     sessionId,
     target,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     ...args.rewind,
     state,
     support: transportEnabled ? rewindSupport : undefined,
-    contextFloor: contextUsageSupport?.contextFloor ?? threadGoalSupport?.contextFloor,
+    contextFloor,
     // The host also refuses a rewind behind its queued cards, paused ones included.
     blocked: conversationBusy || commandPending.current || queuedMessageIds.length > 0,
-    write
+    write,
+    capturePresentation
   })
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking || transportState.queueSendsNext
   // A message typed during a command queues behind it on the host.
   const send = (...input: Parameters<typeof sends.send>) =>
     // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
-    (!commandPending.current || hostStatesTurnScopes(transportState.journalItems)) &&
+    (!commandPending.current || hostStatesTurnScopes(journalItems)) &&
     rewind.admitsSend() &&
     sends.send(...input)
   const threadGoal = useStructuredAgentSessionThreadGoal({
-    journalItems: transportState.journalItems,
+    journalItems,
     journalEpoch: state.epoch,
     support: threadGoalSupport,
     reported: reportedThreadGoal,
@@ -215,10 +218,12 @@ export function useStructuredAgentSession(args: {
     () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
     [isWorking, pending, queuedMessageIds]
   )
-  // What the transcript reads: the journal plus the one notice a cut turn with no row gets.
+  const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
+  // What the transcript reads: the journal since the latest /clear, plus the one notice a cut turn
+  // with no row gets.
   const transcriptItems = useMemo(
-    () => withNativeChatCutTurnNotices(transportState.journalItems, { agentName }),
-    [agentName, transportState.journalItems]
+    () => withNativeChatCutTurnNotices(contextClear.rows, { agentName }),
+    [agentName, contextClear.rows]
   )
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
@@ -226,9 +231,10 @@ export function useStructuredAgentSession(args: {
     transportState.submissions
   )
   const editCapable = useStructuredAgentSessionHostEditsQueuedMessages(target)
+  const imagesCapable = useStructuredAgentSessionHostEditsQueuedImages(target)
   const editTransport = useMemo(
-    () => ({ target, sessionId, capable: editCapable, write }),
-    [editCapable, sessionId, target, write]
+    () => ({ target, sessionId, capable: editCapable, imagesCapable, write }),
+    [editCapable, imagesCapable, sessionId, target, write]
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     // Its published list, pause and submissions; the rest is named below.
@@ -238,12 +244,16 @@ export function useStructuredAgentSession(args: {
     isWorking,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     mutate,
-    editTransport
+    editTransport,
+    admit,
+    capturePresentation
   })
   return {
     epoch: state.epoch,
+    /** Whether a live `/clear` is fading the old transcript out, and how many this view drew. */
+    contextClear,
     /** The transcript has caught up with the host since this pane last started reading. */
     readCurrent: transportEnabled && readCurrent,
     rewind,
@@ -298,20 +308,16 @@ export function useStructuredAgentSession(args: {
       ...legacyLaunchStop,
       host: stopControl,
       transportState,
-      sends: {
-        sending,
-        stopSends: sends.stopSends
-      }
+      sends: { sending, stopSends: sends.stopSends }
     }),
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
+    capturePresentation,
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
-    cancel: (
-      turnId: string | undefined,
-      prompt?: Parameters<typeof cancelStructuredAgentSessionPrompt>[3]
-    ) => cancelStructuredAgentSessionPrompt(target, mutate, turnId, prompt),
+    cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
+      cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -319,15 +325,16 @@ export function useStructuredAgentSession(args: {
         ...(taskId ? { taskId } : {})
       }),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
-      respondToStructuredAgentSessionPrompt({ item, response, target, mutate }),
+      respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
+    refreshCommands: () => refreshStructuredAgentSessionCommands(target, sessionId),
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,
     threadGoal,
-    contextUsage,
+    contextUsage: usage,
     /** Whether this session takes images, by its options report; undefined until it answers. */
     acceptsImages
   }

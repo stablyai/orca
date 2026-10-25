@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
-import type { TuiAgentConfig } from './tui-agent-config-types'
+import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 export type {
   AgentPromptInjectionMode,
@@ -9,12 +9,6 @@ export type {
   TuiAgentConfig,
   TuiAgentDetectionRuntime
 } from './tui-agent-config-types'
-
-/** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
-type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
-  launchCmd?: string
-  expectedProcess?: string
-}
 
 function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
   return {
@@ -31,7 +25,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
-    preflightTrust: 'claude'
+    preflightTrust: 'claude',
+    // Why: CLAUDE_CODE_DISABLE_TERMINAL_TITLE drops the `✳` title tui-idle waits on (#22655).
+    draftPasteReadySignal: 'claude-composer-prompt',
+    workerStartReadsComposerMarker: true,
+    // Why: Claude decodes CSI-u Ctrl+Enter on local ConPTY; CR made a remapped ctrl+enter act as Enter (#29711).
+    ctrlEnterEncoding: 'csi-u'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
@@ -49,7 +48,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start',
     pasteNeedsTypedRequest: true,
-    preflightTrust: 'claude'
+    preflightTrust: 'claude',
+    draftPasteReadySignal: 'claude-composer-prompt',
+    workerStartReadsComposerMarker: true,
+    // Why: runs the same Claude binary, so Ctrl+Enter must match `claude`.
+    ctrlEnterEncoding: 'csi-u'
   },
   codebuddy: {
     detectCmd: 'codebuddy',
@@ -70,10 +73,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  autohand: {
-    detectCmd: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
   ante: {
     detectCmd: 'ante',
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
@@ -103,6 +103,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // was pasted blind, mid-startup (#22479). The signal itself fired every time in
     // those runs, so the budget was the problem, not a dropped escape.
     draftPasteReadyTimeoutMs: 20_000,
+    // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
+    ctrlEnterEncoding: 'csi-u',
     composerReadyCaptures: [
       'opencode-1-18-32-timed-boot-slow',
       'opencode-1-18-32-timed-boot-hidden-pane',
@@ -257,6 +259,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
+    preflightTrust: 'kimi',
     // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
     // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
     detectCmd: 'kimi',
@@ -328,7 +331,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     expectedProcess: 'dsh',
     promptInjectionMode: 'stdin-after-start',
     // The whale intro keeps repainting behind the ready composer.
-    draftPasteReadySignal: 'dsh-composer-prompt'
+    draftPasteReadySignal: 'dsh-composer-prompt',
+    // Why: dsh-tui 0.17's launchpad refuses Enter, keeping the draft, until its session opens (1-24 s).
+    submitRetryDelayMs: 1000,
+    submitRetryBudgetMs: 30_000
   },
   zcode: {
     detectCmd: 'zcode',
@@ -344,11 +350,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'zcode-composer-prompt',
     composerReadyCaptures: ['zcode-composer-ready']
   },
-  devin: {
-    detectCmd: 'devin',
-    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
-    promptInjectionMode: 'stdin-after-start'
-  },
+  // Why: stdin-after-start's follow-up wrote before Devin's input loop existed (#26302); `devin -- <prompt>` submits reliably.
+  // prettier-ignore
+  devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
   jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
 }

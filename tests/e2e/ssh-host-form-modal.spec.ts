@@ -84,7 +84,7 @@ async function openSshHostSettings(page: Page): Promise<void> {
   await expect(sshSection).toBeVisible({ timeout: 10_000 })
   // Why: section chrome uses "SSH Hosts"; the pane body catalog string is "Targets".
   await expect(sshSection.getByRole('heading', { name: 'SSH Hosts' })).toBeVisible()
-  await expect(sshSection.getByRole('button', { name: 'Add Target' })).toBeVisible({
+  await expect(sshSection.getByRole('button', { name: 'Add host' })).toBeVisible({
     timeout: 10_000
   })
 }
@@ -123,7 +123,7 @@ test.describe('SSH host add/edit modal', () => {
     }
 
     // ── Add flow ────────────────────────────────────────────────────
-    await sshSection.getByRole('button', { name: 'Add Target' }).click()
+    await sshSection.getByRole('button', { name: 'Add host' }).click()
 
     const addDialog = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
     await expect(addDialog).toBeVisible()
@@ -131,14 +131,14 @@ test.describe('SSH host add/edit modal', () => {
     await expect(
       addDialog.getByText('Add a persistent machine you can log into over SSH.')
     ).toBeInViewport()
-    await expect(addDialog.getByRole('button', { name: 'Add Target' })).toBeInViewport()
+    await expect(addDialog.getByRole('button', { name: 'Add host' })).toBeInViewport()
     await expect(addDialog.getByRole('button', { name: 'Cancel' })).toBeInViewport()
 
     // Why: Advanced expands the form; sticky header/footer must stay on screen.
     await addDialog.getByRole('button', { name: 'Advanced' }).click()
     await expect(addDialog.getByText('Proxy Command')).toBeVisible()
     await expect(addDialog.getByRole('heading', { name: 'Add SSH host' })).toBeInViewport()
-    await expect(addDialog.getByRole('button', { name: 'Add Target' })).toBeInViewport()
+    await expect(addDialog.getByRole('button', { name: 'Add host' })).toBeInViewport()
 
     // Collapse before save so the dialog body is quieter; Advanced state is
     // re-checked on the next open session.
@@ -149,7 +149,7 @@ test.describe('SSH host add/edit modal', () => {
     await addDialog.locator('#ssh-target-host').fill('created.example.test')
     await addDialog.locator('#ssh-target-username').fill('alice')
     await addDialog.locator('#ssh-target-port').fill('2222')
-    await addDialog.getByRole('button', { name: 'Add Target' }).click()
+    await addDialog.getByRole('button', { name: 'Add host' }).click()
 
     await expect(addDialog).toBeHidden({ timeout: 10_000 })
     await expect(sshSection.getByText(createdLabel, { exact: true })).toBeVisible({
@@ -161,7 +161,8 @@ test.describe('SSH host add/edit modal', () => {
     const createdCard = sshSection.locator(
       `[data-ssh-target-card][data-ssh-target-label="${createdLabel}"]`
     )
-    await createdCard.getByRole('button', { name: 'Edit target' }).click()
+    await createdCard.getByRole('button', { name: `More actions for ${createdLabel}` }).click()
+    await orcaPage.getByRole('menuitem', { name: 'Edit…' }).click()
 
     const editDialog = orcaPage.getByRole('dialog', { name: 'Edit SSH host' })
     await expect(editDialog).toBeVisible()
@@ -199,7 +200,8 @@ test.describe('SSH host add/edit modal', () => {
     await editDialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(editDialog).toBeHidden()
 
-    await createdCard.getByRole('button', { name: 'Edit target' }).click()
+    await createdCard.getByRole('button', { name: `More actions for ${createdLabel}` }).click()
+    await orcaPage.getByRole('menuitem', { name: 'Edit…' }).click()
     const reopened = orcaPage.getByRole('dialog', { name: 'Edit SSH host' })
     await expect(reopened).toBeVisible()
     await expect(reopened.locator('#ssh-target-label')).toHaveValue(createdLabel)

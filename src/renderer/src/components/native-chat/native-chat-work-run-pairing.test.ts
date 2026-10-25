@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { foldToolMessages, pairToolBlocks } from '../../../../shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
 } from '../../../../shared/native-chat-work-run'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
-import { buildEditCards } from '../../../../shared/native-chat-edit-cards'
+import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 
 function item(

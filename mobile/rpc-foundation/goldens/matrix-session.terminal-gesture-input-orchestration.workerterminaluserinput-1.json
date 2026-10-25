@@ -145,6 +145,48 @@
         }
       }
     },
+    "47c387a75ffc": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
     "60ae3b4c26a5": {
       "name": "orchestration.workerTerminalUserInput#1",
       "ordinal": 3,
@@ -265,15 +307,6 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
-    "93092a2f06c5": {
-      "bucketTokens": 63,
-      "crash": {
-        "$rpc": "null"
-      },
-      "inFlight": false,
-      "queuedBytes": "\u001b[<64;10;5M",
-      "queuedSequences": 1
-    },
     "94ce15ec36dc": {
       "name": "orchestration.workerTerminalUserInput#1",
       "ordinal": 3,
@@ -383,6 +416,38 @@
         }
       }
     },
+    "9fa6cd0b7fa0": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "aa1058fa6654": {
       "name": "orchestration.workerTerminalUserInput#1",
       "ordinal": 3,
@@ -441,48 +506,6 @@
       "settlement": {
         "status": "pending",
         "startedAt": 16
-      }
-    },
-    "c9e4131930e5": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[<64;10;5M"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
       }
     },
     "caa6ece1bdab": {
@@ -609,38 +632,6 @@
           }
         }
       }
-    },
-    "fd81ada317ab": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[<64;10;5M"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
     }
   },
   "recording": {
@@ -649,20 +640,20 @@
       {
         "id": "terminal-gesture-flush-and-clear.prelude:queued",
         "observation": {
-          "sender": [],
-          "payloads": [],
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
           },
-          "state": "93092a2f06c5",
+          "state": "caa6ece1bdab",
           "effects": []
         }
       },
       {
         "id": "terminal-gesture-flush-and-clear.prelude:flushing",
         "observation": {
-          "sender": ["fd81ada317ab"],
+          "sender": ["9fa6cd0b7fa0"],
           "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -675,7 +666,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.prelude:sent",
         "observation": {
-          "sender": ["c9e4131930e5", "77d8a44e0dcc"],
+          "sender": ["47c387a75ffc", "77d8a44e0dcc"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -688,7 +679,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -701,7 +692,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -715,7 +706,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -729,7 +720,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-absent:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "e24bc71ad7f1"],
+          "sender": ["47c387a75ffc", "e24bc71ad7f1"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -742,7 +733,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-absent:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "e24bc71ad7f1", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "e24bc71ad7f1", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -756,7 +747,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-absent:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "e24bc71ad7f1", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "e24bc71ad7f1", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -770,7 +761,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-null:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "9c7f27a40956"],
+          "sender": ["47c387a75ffc", "9c7f27a40956"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -783,7 +774,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-null:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "9c7f27a40956", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "9c7f27a40956", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -797,7 +788,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-null:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "9c7f27a40956", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "9c7f27a40956", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -811,7 +802,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-ok-missing:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "0bbc8e9d2e60"],
+          "sender": ["47c387a75ffc", "0bbc8e9d2e60"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -824,7 +815,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-ok-missing:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "0bbc8e9d2e60", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "0bbc8e9d2e60", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -838,7 +829,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-ok-missing:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "0bbc8e9d2e60", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "0bbc8e9d2e60", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -852,7 +843,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-string-error:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "41eb762c53f0"],
+          "sender": ["47c387a75ffc", "41eb762c53f0"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -865,7 +856,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-string-error:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "41eb762c53f0", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "41eb762c53f0", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -879,7 +870,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-string-error:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "41eb762c53f0", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "41eb762c53f0", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -893,7 +884,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-object-error:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "8412fcb9c620"],
+          "sender": ["47c387a75ffc", "8412fcb9c620"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -906,7 +897,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-object-error:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "8412fcb9c620", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "8412fcb9c620", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -920,7 +911,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-object-error:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "8412fcb9c620", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "8412fcb9c620", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -934,7 +925,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "dfe8d1bab9c5"],
+          "sender": ["47c387a75ffc", "dfe8d1bab9c5"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -947,7 +938,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "dfe8d1bab9c5", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "dfe8d1bab9c5", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -961,7 +952,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "dfe8d1bab9c5", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "dfe8d1bab9c5", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -975,7 +966,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "9850afd5b555"],
+          "sender": ["47c387a75ffc", "9850afd5b555"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -988,7 +979,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "9850afd5b555", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "9850afd5b555", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1002,7 +993,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "9850afd5b555", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "9850afd5b555", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1016,7 +1007,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.method-not-found:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "31a1ebf3ac68"],
+          "sender": ["47c387a75ffc", "31a1ebf3ac68"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1029,7 +1020,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.method-not-found:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "31a1ebf3ac68", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "31a1ebf3ac68", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1043,7 +1034,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.method-not-found:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "31a1ebf3ac68", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "31a1ebf3ac68", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1057,7 +1048,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "aa1058fa6654"],
+          "sender": ["47c387a75ffc", "aa1058fa6654"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1070,7 +1061,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "aa1058fa6654", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "aa1058fa6654", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1084,7 +1075,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "aa1058fa6654", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "aa1058fa6654", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1098,7 +1089,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:reported",
         "observation": {
-          "sender": ["c9e4131930e5", "60ae3b4c26a5"],
+          "sender": ["47c387a75ffc", "60ae3b4c26a5"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1111,7 +1102,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "60ae3b4c26a5", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "60ae3b4c26a5", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1125,7 +1116,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "60ae3b4c26a5", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "60ae3b4c26a5", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",

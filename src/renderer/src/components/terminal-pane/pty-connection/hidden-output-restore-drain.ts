@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-i
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
 import {
   HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS,
@@ -11,6 +11,7 @@ import {
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
 
 export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): void {
   // 'drained' = painted all queued bytes; 'overflow' = queue blew its cap (stream outran fetch+replay); 'refetch' = offsets unmappable, need a fresher snapshot.
@@ -128,16 +129,22 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
-      // A fetched snapshot plus live overflow is backpressure, not unavailable recovery. The
-      // replay paints synchronously before it awaits its fit, so this deadline never lands
-      // mid-paint: adopt that painted image as the baseline — the overflow abandon below
-      // returns before arming one, and without it main's ACK backlog repaints as duplicates.
-      const replayed = session.hiddenOutputRestorePendingOverflow
-        ? session.hiddenOutputRestoreReplayingSnapshot
-        : null
+      // A painted snapshot awaiting fit proves recovery answered, regardless of live queue size.
+      const replayed = session.hiddenOutputRestoreReplayingSnapshot
       if (replayed) {
         session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
-        session.noteHiddenOutputRestoreFloodBackpressure()
+        if (
+          session.hiddenOutputRestorePendingOverflow ||
+          session.hiddenOutputRestoreFreshSnapshotNeeded ||
+          (session.hiddenOutputRestoreUnhideSeq !== null &&
+            replayed.seq < session.hiddenOutputRestoreUnhideSeq) ||
+          session.hiddenOutputRestorePendingChunks.some(
+            (chunk: PendingHiddenOutputRestoreChunk) =>
+              session.getChunkDataAfterSnapshot(chunk, replayed.seq) === null
+          )
+        ) {
+          session.noteHiddenOutputRestoreFloodBackpressure()
+        }
       }
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
         quiet: replayed !== null

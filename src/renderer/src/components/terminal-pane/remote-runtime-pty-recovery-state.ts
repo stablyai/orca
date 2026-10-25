@@ -1,17 +1,11 @@
-export const REMOTE_RUNTIME_RECOVERY_DELAYS_MS = [
-  250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000
-] as const
+import type { PtyConnectResult } from './pty-transport-types'
 
-// Why: mirrors DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS in the main-process runtime router; a silently
-// dropped link burns the whole RPC timeout on the attempt each backoff step leads into.
-export const REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS = 15_000
-
-// Why derived, not hand-tuned: a literal deadline drifted below the ladder it arms, making the last
-// backoff steps unreachable dead code (#11305). Loss of contact is never evidence of exit, so the
-// window must outlast the schedule it advertises rather than the schedule being trimmed to fit.
-export const REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS =
-  REMOTE_RUNTIME_RECOVERY_DELAYS_MS.reduce((total, delayMs) => total + delayMs, 0) +
-  REMOTE_RUNTIME_RECOVERY_DELAYS_MS.length * REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS
+import {
+  REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  REMOTE_RUNTIME_RECOVERY_DELAYS_MS
+} from './remote-runtime-pty-recovery-limits'
+export * from './remote-runtime-pty-recovery-limits'
+export * from './remote-runtime-pty-control-ready-revivers'
 
 export type RemoteRuntimePtyRecoveryPhase =
   | 'idle'
@@ -38,45 +32,13 @@ export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
   return advanced
 }
 
-// Why: a route that returns without an OS `online` event (Tailscale, VPN, a re-keyed link) fires no
-// trigger, so a pane latched past its window stayed dead over a working link. The environment's
-// control socket answering again is positive reachability evidence, as good as a Reconnect click.
-const controlReadyRevivers = new Map<string, Set<() => boolean>>()
-
-export function registerRemoteRuntimePtyControlReadyReviver(
-  environmentId: string,
-  revive: () => boolean
-): () => void {
-  let revivers = controlReadyRevivers.get(environmentId)
-  if (!revivers) {
-    revivers = new Set()
-    controlReadyRevivers.set(environmentId, revivers)
-  }
-  revivers.add(revive)
-  return () => {
-    const current = controlReadyRevivers.get(environmentId)
-    current?.delete(revive)
-    if (current?.size === 0) {
-      controlReadyRevivers.delete(environmentId)
-    }
-  }
-}
-
-export function getControlReadyReviverCountForTests(environmentId: string): number {
-  return controlReadyRevivers.get(environmentId)?.size ?? 0
-}
-
-export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
-  let revived = 0
-  for (const revive of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {
-    if (revive()) {
-      revived += 1
-    }
-  }
-  return revived
-}
-
 export class RemoteRuntimePtyRecoveryState {
+  // Caller settlement does not restore this epoch's spent owner-refresh allowance.
+  private ownerRefresh: {
+    promise: Promise<PtyConnectResult | undefined>
+    settle: ((result?: PtyConnectResult) => void) | null
+    retry: (epoch: number) => void
+  } | null = null
   private phase: RemoteRuntimePtyRecoveryPhase = 'idle'
   private epoch = 0
   private attempt = 0
@@ -110,11 +72,59 @@ export class RemoteRuntimePtyRecoveryState {
     return this.deadlineExpired
   }
 
+  /** A retry is parked for online/resume/control-ready or a host publish; nothing is in flight. */
+  get awaitingExternalTrigger(): boolean {
+    return this.phase === 'recovering' && this.pendingRetry !== null && this.retryTimer === null
+  }
+
+  get hasOwnerRefresh(): boolean {
+    return this.ownerRefresh !== null
+  }
+
+  claimOwnerRefresh(epoch: number, retry: (epoch: number) => void) {
+    if (!this.isCurrent(epoch)) {
+      return null
+    }
+    if (this.ownerRefresh) {
+      return { started: false, promise: this.ownerRefresh.promise }
+    }
+    const { promise, resolve } = Promise.withResolvers<PtyConnectResult | undefined>()
+    this.ownerRefresh = { promise, settle: resolve, retry }
+    return { started: true, promise }
+  }
+
+  parkOwnerRefresh(epoch: number): void {
+    if (!this.ownsEpoch(epoch) || !this.ownerRefresh) {
+      return
+    }
+    this.settleOwnerRefresh()
+    if (this.isActive) {
+      this.parkRetryForExternalTrigger(epoch, this.ownerRefresh.retry)
+    } else {
+      this.parkRetryAfterDeadline(this.ownerRefresh.retry)
+    }
+  }
+
+  private settleOwnerRefresh(result?: PtyConnectResult): void {
+    const refresh = this.ownerRefresh
+    if (refresh?.settle) {
+      const settle = refresh.settle
+      refresh.settle = null
+      settle(result)
+    }
+  }
+
+  private clearOwnerRefresh(result?: PtyConnectResult): void {
+    this.settleOwnerRefresh(result)
+    this.ownerRefresh = null
+  }
+
   begin(): number {
     if (this.phase === 'disposed') {
       return this.epoch
     }
     if (!this.isActive) {
+      this.clearOwnerRefresh()
       this.epoch += 1
       this.attempt = 0
       this.armDeadline(this.epoch)
@@ -169,7 +179,12 @@ export class RemoteRuntimePtyRecoveryState {
 
   // Why: a wait that ends with no liveness evidence arms no timer, so park a retry or online/resume/reconnect find nothing to revive.
   parkRetryForExternalTrigger(epoch: number, retry: (epoch: number) => void): boolean {
-    return this.isCurrent(epoch) && this.parkRetry(retry)
+    if (!this.isCurrent(epoch) || !this.parkRetry(retry)) {
+      return false
+    }
+    // Why: the phase stays 'recovering', but the pane must now say it waits rather than retries.
+    this.onChange?.()
+    return true
   }
 
   // Why: the deadline can latch while an attempt is still in flight, before schedule() parked anything,
@@ -211,6 +226,7 @@ export class RemoteRuntimePtyRecoveryState {
     this.clearRetryTimer()
     if (latched) {
       // Why: the deadline only stops auto-retry; an explicit trigger opens a fresh recovery window.
+      this.clearOwnerRefresh()
       this.epoch += 1
       this.attempt = 0
       this.armDeadline(this.epoch)
@@ -222,10 +238,11 @@ export class RemoteRuntimePtyRecoveryState {
     return true
   }
 
-  markHealthy(): void {
+  markHealthy(result?: PtyConnectResult): void {
     if (this.phase === 'disposed') {
       return
     }
+    this.clearOwnerRefresh(result)
     this.deadlineExpired = false
     this.clearTimers()
     this.phase = 'idle'
@@ -243,6 +260,11 @@ export class RemoteRuntimePtyRecoveryState {
     this.stopRetryTimer()
     this.clearDeadlineTimer()
     this.phase = 'disconnected'
+    if (this.ownerRefresh) {
+      this.settleOwnerRefresh()
+      this.clearRetryTimer()
+      this.parkRetry(this.ownerRefresh.retry)
+    }
     this.onChange?.()
   }
 
@@ -250,6 +272,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
+    this.clearOwnerRefresh()
     this.deadlineExpired = false
     this.epoch += 1
     this.clearTimers()
@@ -259,6 +282,7 @@ export class RemoteRuntimePtyRecoveryState {
   }
 
   dispose(): void {
+    this.clearOwnerRefresh()
     this.epoch += 1
     this.clearTimers()
     this.phase = 'disposed'
@@ -275,9 +299,7 @@ export class RemoteRuntimePtyRecoveryState {
       this.deadlineTimer = null
       this.deadlineExpired = true
       // Why: the cutoff stops self-initiated retries but must keep the pane revivable by online/resume/reconnect.
-      this.stopRetryTimer()
-      this.phase = 'disconnected'
-      this.onChange?.()
+      this.markDisconnected()
     }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
     timer.unref?.()
     this.deadlineTimer = timer

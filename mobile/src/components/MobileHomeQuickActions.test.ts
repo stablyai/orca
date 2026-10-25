@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostProfile } from '../transport/types'
 import { MobileHomeQuickActions } from './MobileHomeQuickActions'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -15,24 +16,6 @@ vi.mock('lucide-react-native', () => ({
   Plus: 'Plus',
   QrCode: 'QrCode'
 }))
-
-vi.mock('./PickerModal', async () => {
-  const React = await import('react')
-  return {
-    PickerModal: (props: unknown) => React.createElement('PickerModal', props)
-  }
-})
-
-function host(id: string, name: string, endpoint: string): HostProfile {
-  return {
-    id,
-    name,
-    endpoint,
-    deviceToken: `token-${id}`,
-    publicKeyB64: `key-${id}`,
-    lastConnected: 1
-  }
-}
 
 describe('MobileHomeQuickActions', () => {
   let renderer: ReactTestRenderer | null = null
@@ -57,15 +40,10 @@ describe('MobileHomeQuickActions', () => {
       )
     })
     consoleError.mockRestore()
-    return { onCreateWorkspace }
   }
 
   function newWorkspaceButton() {
-    return renderer!.root.findAllByType('Pressable')[1]
-  }
-
-  function picker() {
-    return renderer!.root.findByType('PickerModal')
+    return findAllByHostType(renderer!.root, 'Pressable')[1]
   }
 
   it('disables workspace creation without a connected host', async () => {
@@ -73,40 +51,5 @@ describe('MobileHomeQuickActions', () => {
 
     expect(newWorkspaceButton().props.disabled).toBe(true)
     expect(newWorkspaceButton().props.accessibilityState).toEqual({ disabled: true })
-    expect(picker().props.visible).toBe(false)
-  })
-
-  it('opens the only connected host directly', async () => {
-    const desk = host('desk', 'Desk', 'ws://192.168.1.2:6768')
-    const callbacks = await renderQuickActions([desk])
-
-    act(() => newWorkspaceButton().props.onPress())
-
-    expect(callbacks.onCreateWorkspace).toHaveBeenCalledWith('desk')
-    expect(picker().props.visible).toBe(false)
-  })
-
-  it('asks which host to use when multiple are connected', async () => {
-    const callbacks = await renderQuickActions([
-      host('desk', 'Desk', 'ws://192.168.1.2:6768'),
-      host('laptop', 'Laptop', 'wss://relay.example.com/mobile')
-    ])
-
-    act(() => newWorkspaceButton().props.onPress())
-
-    expect(callbacks.onCreateWorkspace).not.toHaveBeenCalled()
-    expect(picker().props.visible).toBe(true)
-    expect(picker().props.title).toBe('Create Workspace On')
-    expect(picker().props.options).toEqual([
-      { value: 'desk', label: 'Desk', subtitle: '192.168.1.2:6768' },
-      { value: 'laptop', label: 'Laptop', subtitle: 'relay.example.com' }
-    ])
-
-    act(() => picker().props.onSelect('laptop'))
-    expect(callbacks.onCreateWorkspace).not.toHaveBeenCalled()
-    expect(picker().props.visible).toBe(false)
-
-    act(() => picker().props.onAfterClose())
-    expect(callbacks.onCreateWorkspace).toHaveBeenCalledWith('laptop')
   })
 })

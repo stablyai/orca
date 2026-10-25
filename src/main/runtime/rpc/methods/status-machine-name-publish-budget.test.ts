@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../runtime-machine-name'
-import type { RuntimeStore } from '../../runtime-store-contract'
 import { STATUS_METHODS } from './status'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 // Why its own file: the lookup memo is process-wide, and `status.test.ts` already lands it; this
 // case needs a process whose first lookup is still running when the publish budget runs out.
@@ -38,8 +38,7 @@ describe('status.get publish budget', () => {
           finishLookup = resolve
         })
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only `getSettings` off the store during construction and status.
-    const runtime = new OrcaRuntimeService({ getSettings: () => ({}) } as RuntimeStore)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
     expect(finishLookup).toBeTypeOf('function')
     const hostname = normalizeMachineName(os.hostname())
 

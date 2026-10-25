@@ -34,6 +34,11 @@ describe('resolvePairConfirmRouteState', () => {
       offer,
       errorMessage: ''
     })
+    expect(resolvePairConfirmRouteState(`orca://pair?code=${encodeOffer(offer)}`)).toEqual({
+      kind: 'ready',
+      offer,
+      errorMessage: ''
+    })
   })
 
   it('reports a missing pairing code', () => {
@@ -46,6 +51,12 @@ describe('resolvePairConfirmRouteState', () => {
 
   it('reports an invalid pairing code', () => {
     expect(resolvePairConfirmRouteState('not a pairing code')).toEqual({
+      kind: 'error',
+      offer: null,
+      errorMessage: 'Not a valid pairing code'
+    })
+    const invalidOffer = Buffer.from(JSON.stringify({ ...offer, v: 99 })).toString('base64url')
+    expect(resolvePairConfirmRouteState(invalidOffer)).toEqual({
       kind: 'error',
       offer: null,
       errorMessage: 'Not a valid pairing code'

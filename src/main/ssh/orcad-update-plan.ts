@@ -18,16 +18,14 @@
  * has no answer that can be computed. That is why rollback is defined against a
  * pre-activation snapshot rather than against a version comparison.
  */
-import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import {
   assessOrcadLiveDaemonCrossing,
   type OrcadDaemonProtocolFacts
 } from './orcad-daemon-protocol-crossing'
 
-export type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
-
-export type OrcadUpdateDecision =
+type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
   | {
       action: 'proceed'
@@ -36,6 +34,9 @@ export type OrcadUpdateDecision =
       notes: string[]
     }
   | { action: 'defer'; code: OrcadUpdateDeferCode; reason: string }
+
+/** `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. */
+export type OrcadUpdateForce = boolean | 'live-terminals'
 
 export type OrcadUpdateDeferCode =
   | 'orcad_update_terminals_running'
@@ -58,7 +59,7 @@ export function planOrcadUpdate(input: {
   census: OrcadTerminalCensus
   /** The candidate's daemon protocol and the older ones it can still attach to. */
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  force?: boolean
+  force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
     return {
@@ -105,7 +106,7 @@ export function planOrcadUpdate(input: {
     }
   }
   if (liveSessions === null) {
-    if (!input.force) {
+    if (input.force !== true) {
       return {
         action: 'defer',
         code: 'orcad_update_terminal_census_unavailable',
@@ -161,12 +162,12 @@ export function planOrcadUpdate(input: {
   }
 }
 
-export type OrcadRollbackSafety =
+type OrcadRollbackSafety =
   | { safety: 'clean'; target: string; notes: string[] }
   | { safety: 'lossy'; target: string; discards: string[] }
   | { safety: 'unsafe'; code: OrcadRollbackUnsafeCode; reason: string }
 
-export type OrcadRollbackUnsafeCode =
+type OrcadRollbackUnsafeCode =
   | 'orcad_rollback_no_target'
   | 'orcad_rollback_snapshot_missing'
   | 'orcad_rollback_orphans_live_terminals'

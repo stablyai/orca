@@ -21,6 +21,12 @@ import {
   useActivityTerminalPortalStatus
 } from './activity-terminal-portal-status'
 import type { ActivityTerminalPortalSlotId } from './activity-thread-types'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export * from './activity-prototype-page-exports'
 
@@ -214,7 +220,6 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   // Why useLayoutEffect (not useEffect): publish before paint so Terminal's portal subscriber rerenders in the same commit, else the stale target flashes on screen.
   // Why no cleanup-to-null on each change: it forces the portal through null on every switch, flashing the workspace pane; null only on unmount (effect below).
-  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this publishes portal descriptors to Terminal's external portal store before paint.
   useLayoutEffect(() => {
     setActivityTerminalPortals(portalDescriptors)
   }, [portalDescriptors])
@@ -236,8 +241,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       })
     }
 
-    window.addEventListener('keydown', focusActivityFilter, { capture: true })
-    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
+    addAppKeyListener('keydown', focusActivityFilter)
+    return () => removeAppKeyListener('keydown', focusActivityFilter)
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
   const {
@@ -259,19 +264,23 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setSelectedPaneKey
   })
 
+  const worktreesByRepo = selectWorktreesByRepo(storeData)
+  const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(storeData)
+  const folderWorkspaces = selectFolderWorkspaces(storeData)
+
   const canJumpToWorkspace = useCallback(
     (thread: Parameters<typeof hasActivityThreadWorkspace>[0]) =>
       hasActivityThreadWorkspace(thread, {
-        worktreesByRepo: storeData.worktreesByRepo,
-        detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
-        folderWorkspaces: storeData.folderWorkspaces,
+        worktreesByRepo,
+        detectedWorktreesByRepo,
+        folderWorkspaces,
         floatingWorkspacePath: storeData.floatingWorkspacePath,
         defaultHostId: storeData.defaultHostId
       }),
     [
-      storeData.worktreesByRepo,
-      storeData.detectedWorktreesByRepo,
-      storeData.folderWorkspaces,
+      worktreesByRepo,
+      detectedWorktreesByRepo,
+      folderWorkspaces,
       storeData.floatingWorkspacePath,
       storeData.defaultHostId
     ]

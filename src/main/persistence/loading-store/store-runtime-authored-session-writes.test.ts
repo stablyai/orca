@@ -1,4 +1,5 @@
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * Drives the real `Store`, not the helper and not a fake.
  *
@@ -155,7 +156,7 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
       }
     })
 
-    store.removeWorkspaceSessionStateForWorktree(WT)
+    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: WT, hostId: 'local' }))
 
     expect(
       Object.keys(store.getWorkspaceSession().clientHostedBrowserPagesByWorktree ?? {})

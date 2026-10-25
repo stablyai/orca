@@ -474,7 +474,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
+    it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -702,7 +702,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('remounts a connected pane when main reports its daemon write unavailable', async () => {
+    it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -791,7 +791,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await flushAsyncTicks()
 
       expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply')
-      expect(pane.terminal.write).toHaveBeenCalledWith('', expect.any(Function))
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
       binding.dispose()
     })
@@ -820,7 +820,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await flushAsyncTicks()
 
       expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       binding.dispose()
     })
 

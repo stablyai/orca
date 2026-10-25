@@ -28,7 +28,7 @@ describe('clipboard image limits', () => {
     ).toThrow('Clipboard image is too large')
   })
 
-  it('rejects invalid or oversized image dimensions before pixel allocation', () => {
+  it('rejects invalid or oversized image dimensions', () => {
     expect(() =>
       assertClipboardImageDimensionsWithinLimit({
         height: 1,

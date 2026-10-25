@@ -11,6 +11,7 @@
 // structured request with the refusal that says why.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -20,7 +21,7 @@ import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
   type InstalledRuntime
-} from './structured-agent-session-runtime-teardown'
+} from './agent-session/structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import {
@@ -63,7 +64,6 @@ import {
 import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import { migrateLegacyNativeChatVisualsFolders } from '../native-chat/native-chat-scratch-folder-migration'
 import { scheduleNativeChatVisualsSweep } from '../native-chat/native-chat-visuals-sweep'
-import { readJournalSessionLastActivityAt } from '../native-chat/agent-session-journal/journal-row-table'
 
 /** Whether this profile holds a structured chat: a record or tab in the journal database. */
 export function hasPersistedStructuredAgentSessionStore(
@@ -96,8 +96,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   /** Gives each chat a scratch folder and the visuals skill that teaches it, and sweeps folders
-   *  whose chat is gone or long unused. Wired by the real hosts only, so a test runtime never loads
-   *  the bundled skill. */
+   *  whose chat is gone. Wired by the real hosts only, so a test runtime never loads the bundled
+   *  skill. */
   nativeChatVisuals?: {
     /** Read this host's preference when a chat starts a provider process. */
     isEnabled: () => boolean
@@ -121,8 +121,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
-  /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
-  statusSink?: StructuredAgentSessionHostDeps['statusSink']
+  conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
@@ -135,7 +134,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
-}
+} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>
 
 let installing: Promise<InstalledRuntime> | null = null
 
@@ -311,8 +310,10 @@ async function installOnJournal(
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
+    ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
@@ -342,7 +343,6 @@ async function installOnJournal(
       onState: delivery.reconcile
     })
   }
-  setStructuredAgentSessionHost(host)
   // The host starts with its runtime, local or remote, so this is the runtime-start listing.
   const modelCatalog = host.deps.modelCatalog
   void modelCatalog?.prewarm()
@@ -356,18 +356,25 @@ async function installOnJournal(
     ? scheduleNativeChatVisualsSweep({
         stateDirectory: deps.stateDirectory,
         listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
-        lastJournalActivityAt: (sessionId) =>
-          readJournalSessionLastActivityAt(journalDatabase.db, sessionId),
-        runWhileExecutionIdle: host.runWhileExecutionIdle,
         logger: deps.logger
       })
     : undefined
+  const stopCommands = bindAtRestCommandContexts(
+    registrations.map(({ adapter }) => adapter.atRestCommands)
+  )
+  try {
+    setStructuredAgentSessionHost(host)
+  } catch (error) {
+    stopCommands()
+    throw error
+  }
   return {
     host,
     adapter,
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      stopCommands()
       stopVisualsSweep?.()
       modelCatalog?.stop()
     }

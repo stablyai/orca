@@ -29,13 +29,20 @@ describe('fetchPrHeadTrackingRef', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', 'origin', '+refs/heads/feature/x:refs/remotes/origin/feature/x'],
-      { cwd: '/repo' }
+      { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 
   it('throws for an SSH repo, which this process does not serve', async () => {
     await expect(
       fetchPrHeadTrackingRef({ path: '/repo', connectionId: 'conn-1' }, 'origin', 'feature/x')
+    ).rejects.toThrow('SSH Git provider is not available')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('throws for an SSH repo named only by executionHostId', async () => {
+    await expect(
+      fetchPrHeadTrackingRef({ path: '/repo', executionHostId: 'ssh:gpu' }, 'origin', 'feature/x')
     ).rejects.toThrow('SSH Git provider is not available')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
@@ -47,7 +54,6 @@ describe('fetchPrHeadTrackingRef', () => {
       42
     )
 
-    // The fetch is bounded so a stalled remote can't hang PR resolution.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', '--no-tags', 'origin', `+refs/pull/42/head:refs/orca/pull/${ORIGIN_COMPONENT}/42`],
       { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }

@@ -6,6 +6,9 @@ import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListSearchField } from '../host-picker/HostListSearchField'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]
@@ -23,7 +26,10 @@ export function NotificationHostToggles({
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
   const isMuted = (host: (typeof hostOptions)[number]): boolean =>
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
-  const mutedCount = hostOptions.filter(isMuted).length
+  const mutedHosts = hostOptions.filter(isMuted)
+  const mutedCount = mutedHosts.length
+  // Why muted ones pinned: an off switch must never be hidden behind the row cap.
+  const rows = useBoundedHostRows(hostOptions, new Set(mutedHosts.map((host) => host.id)))
   // Keep an effective mute reachable after the last remote machine is removed.
   if (hostOptions.length <= 1 && mutedCount === 0) {
     return null
@@ -62,7 +68,10 @@ export function NotificationHostToggles({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="ml-4">
-            {hostOptions.map((host) => (
+            {rows.searchable ? (
+              <HostListSearchField value={rows.query} onChange={rows.setQuery} />
+            ) : null}
+            {rows.shown.map((host) => (
               <NotificationSettingToggle
                 key={host.id}
                 label={host.label}
@@ -72,6 +81,7 @@ export function NotificationHostToggles({
                 onToggle={() => onChange([host.id, ...(host.aliasHostIds ?? [])], !isMuted(host))}
               />
             ))}
+            <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </div>
         </CollapsibleContent>
       </Collapsible>

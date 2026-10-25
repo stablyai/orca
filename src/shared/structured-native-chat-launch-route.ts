@@ -11,7 +11,7 @@
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
-import type { NativeChatProviderSettings } from './native-chat-providers'
+import type { NativeChatProviderSettings } from './native-chat/native-chat-providers'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -127,8 +127,8 @@ export function resolveStructuredNativeChatSupport(
     if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)) {
       return { supported: false, blocker: 'runtime-capability' }
     }
-    // The host refuses a client that did not say it reads structured sessions, as the browser
-    // client does not; that client keeps the host terminal.
+    // The host refuses a client that did not say it reads structured sessions; that client keeps
+    // the host terminal.
     if (!clientChoosesStructuredLaunches(input.clientCapabilities)) {
       return { supported: false, blocker: 'client-capability' }
     }

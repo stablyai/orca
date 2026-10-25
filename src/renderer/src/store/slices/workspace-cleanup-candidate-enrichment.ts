@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/workspace-cleanup-host-identity'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { withCleanupVisitEvidence } from '../../../../shared/workspace-last-active'
 import {
   probeTerminalLiveness,
   shouldPreserveCleanupInspection
@@ -240,8 +241,9 @@ async function enrichWorkspaceCleanupCandidate(
     blockers.push('recent-visible-context')
   }
 
+  // Why the client: visits live here, and a remote host's scan never sees them.
   const enriched = applyWorkspaceCleanupPolicy({
-    ...candidate,
+    ...withCleanupVisitEvidence(candidate, lastVisitedAt, Date.now()),
     blockers: [...new Set(blockers)],
     localContext: {
       ...candidate.localContext,

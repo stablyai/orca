@@ -174,3 +174,36 @@ export function buildAiVaultHostScopeOptions(args: {
 
   return options
 }
+
+export function useAiVaultSessionHostRefreshEvents(
+  error: string | null,
+  refresh: (args: { background: boolean; force: boolean }) => Promise<void>
+): void {
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const sshGenerationRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration <= sshGenerationRef.current) {
+      return
+    }
+    sshGenerationRef.current = sshConnectedGeneration
+    if (error !== null) {
+      void refresh({ background: true, force: false })
+    }
+  }, [sshConnectedGeneration, error, refresh])
+
+  // Refocus checks the shared host cache without forcing another transcript scan.
+  useEffect(() => {
+    const onRefocus = (): void => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      void refresh({ background: true, force: false })
+    }
+    const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
+    document.addEventListener('visibilitychange', onRefocus)
+    return () => {
+      unsubscribeWindowFocus?.()
+      document.removeEventListener('visibilitychange', onRefocus)
+    }
+  }, [refresh])
+}

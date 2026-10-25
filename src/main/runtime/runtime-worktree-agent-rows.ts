@@ -54,7 +54,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       updatedAt: source.updatedAt,
       ...(source.children !== undefined ? { children: source.children } : {}),
       ...(source.subagents !== undefined ? { subagents: source.subagents } : {}),
-      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
+      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+      ...(source.programStatus ? { programStatus: source.programStatus } : {})
     }
     if (source.children !== undefined || source.subagents !== undefined) {
       row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'

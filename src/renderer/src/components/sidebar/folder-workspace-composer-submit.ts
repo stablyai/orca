@@ -15,9 +15,13 @@ import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-composer-helpers'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import {
+  planAgentSessionLaunch,
+  adoptAgentSessionLaunchVerdict
+} from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
 import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
@@ -51,6 +55,7 @@ type SubmitFolderWorkspaceCreateParams = {
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
   quickAgent: TuiAgent | null
+  launchChoice?: AgentLaunchChoice
   autoRenameBranchFromWork: boolean | undefined
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
@@ -71,6 +76,7 @@ export async function submitFolderWorkspaceCreate({
   linkedTaskSourceContext,
   note,
   quickAgent,
+  launchChoice,
   autoRenameBranchFromWork,
   agentCmdOverrides,
   agentArgs,
@@ -130,18 +136,28 @@ export async function submitFolderWorkspaceCreate({
   // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
   const launchDraftPrompt =
     quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
-  const plan = quickAgent
-    ? planAgentSessionLaunch(useAppStore.getState(), {
+  const launchRequest = quickAgent
+    ? {
         requestId: newAgentLaunchRequestId(),
         agent: quickAgent,
         workspace: {
-          kind: 'folder',
+          kind: 'folder' as const,
           runtimeEnvironmentId,
           executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
         },
         prompt: launchDraftPrompt ?? note,
-        promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit'
-      })
+        promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+      }
+    : null
+  // Creation retains its chosen route, but admission after materialization may fall back.
+  const plan = launchRequest
+    ? launchChoice
+      ? adoptAgentSessionLaunchVerdict({
+          ...launchRequest,
+          route: launchChoice.route,
+          executionHostId: launchChoice.executionHostId
+        })
+      : planAgentSessionLaunch(useAppStore.getState(), launchRequest)
     : null
   const structuredLaunch = plan?.route === 'structured-native-chat'
   // Why: the pending badge should only appear when the submitted prompt can

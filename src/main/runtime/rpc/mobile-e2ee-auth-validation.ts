@@ -1,6 +1,6 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
-import { publicKeyFromBase64 } from './e2ee-crypto'
-import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
+import { publicKeyFromBase64 } from '../../../shared/e2ee-crypto'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
 
 export type ClassifiedE2EEAuth =

@@ -39,6 +39,23 @@ describe('formatAgentToolPreview', () => {
     expect(formatAgentToolPreview({ toolName: 'edit' }, 'waiting')).toBe('edit')
   })
 
+  it("shows a program's bare message when no tool is named", () => {
+    const program = {
+      agentType: 'brew',
+      toolInput: 'Pouring wget',
+      programStatus: { state: 'working' as const, observedAt: 1 }
+    }
+    expect(formatAgentToolPreview(program, 'working')).toBe('Pouring wget')
+    expect(formatAgentToolPreview(program, 'done')).toBe('')
+  })
+
+  it("hides a real agent's tool input that has no tool name", () => {
+    expect(
+      formatAgentToolPreview({ agentType: 'claude', toolInput: 'src/app.ts' }, 'working')
+    ).toBe('')
+    expect(formatAgentToolPreview({ toolInput: 'src/app.ts' }, 'working')).toBe('')
+  })
+
   it('ignores whitespace-only fields', () => {
     expect(formatAgentToolPreview({ toolName: '  ', toolInput: '  ' }, 'working')).toBe('')
   })

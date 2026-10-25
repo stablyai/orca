@@ -96,3 +96,92 @@ it('rechecks a goal retry settled during startup, and replays it later without a
   expect(acquire).toHaveBeenCalledTimes(2)
   expect(changeThreadGoal).toHaveBeenCalledTimes(3)
 })
+
+it.each([false, true])('keeps a goal behind active dispatch (ready child: %s)', async (ready) => {
+  const { host, dispatch } = hostTestState()
+  const changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
+  host.deps.adapter.changeThreadGoal = changeThreadGoal
+  await attach()
+  if (ready) {
+    const change = { kind: 'set' as const, objective: 'Warm child' }
+    await host.changeThreadGoal(CALLER, {
+      envelope: envelope('agentSession.threadGoal', { change }),
+      change
+    })
+    changeThreadGoal.mockClear()
+  }
+  const held = Promise.withResolvers<{ state: 'admitted' }>()
+  dispatch.mockImplementationOnce(() => held.promise)
+  const body = hostTestMessage('Earlier message')
+  await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+  const change = { kind: 'set' as const, objective: 'Later goal' }
+  const goal = host.changeThreadGoal(CALLER, {
+    envelope: envelope('agentSession.threadGoal', { change }),
+    change
+  })
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
+  expect(changeThreadGoal).not.toHaveBeenCalled()
+  held.resolve({ state: 'admitted' })
+  expect(await goal).toMatchObject({ ok: true })
+  expect(changeThreadGoal).toHaveBeenCalledOnce()
+})
+
+it.each(['append', 'wait'] as const)(
+  'Stop revokes a goal during %s through settlement',
+  async (phase) => {
+    const { host, dispatch } = hostTestState()
+    const changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
+    host.deps.adapter.changeThreadGoal = changeThreadGoal
+    await attach()
+    const change = { kind: 'set' as const, objective: 'Warm child' }
+    await host.changeThreadGoal(CALLER, {
+      envelope: envelope('agentSession.threadGoal', { change }),
+      change
+    })
+    changeThreadGoal.mockClear()
+    const held = Promise.withResolvers<void>()
+    if (phase === 'wait') {
+      dispatch.mockImplementationOnce(async () => {
+        await held.promise
+        return { state: 'admitted' }
+      })
+      const body = hostTestMessage('Earlier message')
+      await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+    }
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const append = vi.spyOn(journal, 'appendItem')
+    const withdraw = vi.spyOn(journal, 'appendTombstone')
+    if (phase === 'append') {
+      const original = journal.appendItem.bind(journal)
+      append.mockImplementationOnce(async (...args) => {
+        await held.promise
+        return original(...args)
+      })
+    }
+    const next = { ...change, objective: 'Later goal' }
+    const goal = host.changeThreadGoal(CALLER, {
+      envelope: envelope('agentSession.threadGoal', { change: next }),
+      change: next
+    })
+    const result = goal.catch((error: unknown) => error)
+    await (phase === 'append'
+      ? vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
+      : host.collaboratorsForTests().serialize(SESSION, async () => {}))
+    const stopped = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+    expect(changeThreadGoal).not.toHaveBeenCalled()
+    held.resolve()
+    if (phase === 'append') {
+      expect(await result).toBeInstanceOf(Error)
+      expect(withdraw).toHaveBeenCalledOnce()
+    } else {
+      expect(await result).toMatchObject({ ok: false })
+    }
+    expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(changeThreadGoal).not.toHaveBeenCalled()
+    if (phase === 'append') {
+      expect(append.mock.calls.some(([, body]) => body.kind === 'status')).toBe(false)
+    }
+  }
+)

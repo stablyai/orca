@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import type { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
@@ -100,7 +101,9 @@ function dependencies(client: RpcClient, events: string[]) {
     connectDirect: vi.fn(
       (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
     ),
-    connectRelay: vi.fn(() => unavailableRelay),
+    connectRelay: vi.fn(
+      (..._args: Parameters<typeof connectMobileRelayForPairing>) => unavailableRelay
+    ),
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director unavailable')
     }),

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   emptyWorkspaceDefaultChatAwaitsDetection,
   loadEmptyWorkspaceDefaultChatDetection,
@@ -52,6 +53,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
+  setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -127,6 +129,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
 describe('agent detection for the default chat', () => {
   it('waits only while chat is the default and the host list has not loaded', () => {
     seedSettings({})
+    setLocalRuntimeCapabilitiesForTests([])
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
     useAppStore.setState({ remoteDetectedAgentIds: {} })
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(true)

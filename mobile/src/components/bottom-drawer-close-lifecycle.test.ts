@@ -1,11 +1,22 @@
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BottomDrawer } from './BottomDrawer'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('./mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedBottomDrawer'
 }))
+
+function drawerElement(visible: boolean, onClose: () => void, onAfterClose: () => void) {
+  const props: ComponentProps<typeof BottomDrawer> = {
+    visible,
+    onClose,
+    onAfterClose,
+    children: createElement('DrawerContent')
+  }
+  return createElement(BottomDrawer, props)
+}
 
 function renderDrawer(
   visible: boolean,
@@ -14,13 +25,7 @@ function renderDrawer(
 ): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(
-      createElement(
-        BottomDrawer,
-        { visible, onClose, onAfterClose },
-        createElement('DrawerContent')
-      )
-    )
+    renderer = create(drawerElement(visible, onClose, onAfterClose))
   })
   if (!renderer) {
     throw new Error('Bottom drawer did not render')
@@ -35,18 +40,12 @@ function updateDrawer(
   onAfterClose: () => void
 ): void {
   act(() => {
-    renderer.update(
-      createElement(
-        BottomDrawer,
-        { visible, onClose, onAfterClose },
-        createElement('DrawerContent')
-      )
-    )
+    renderer.update(drawerElement(visible, onClose, onAfterClose))
   })
 }
 
 function mountedDrawer(renderer: ReactTestRenderer) {
-  return renderer.root.findByType('MountedBottomDrawer')
+  return findByHostType(renderer.root, 'MountedBottomDrawer')
 }
 
 describe('BottomDrawer close lifecycle', () => {

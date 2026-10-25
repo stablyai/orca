@@ -6,6 +6,11 @@ import {
   ACK_TAB,
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+
+// The window's acknowledged close; a layout-owner build closes in main without one, and the twin
+// of that case is in acknowledged-terminal-tab-retirement-main-close.test.ts.
+const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
 afterEach(async () => {
@@ -19,7 +24,7 @@ function fixture() {
   return result
 }
 
-it('withholds the acknowledged close until its host retirement is durable', async () => {
+itSwitchOff('withholds the acknowledged close until its host retirement is durable', async () => {
   const f = fixture()
   let acknowledged = false
   const closing = f.close().then((result) => {

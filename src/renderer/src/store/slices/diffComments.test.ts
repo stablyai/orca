@@ -31,7 +31,6 @@ const mockApi = {
     set: vi.fn().mockResolvedValue(undefined)
   },
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta

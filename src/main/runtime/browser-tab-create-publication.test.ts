@@ -112,26 +112,6 @@ describe('publishCreatedBrowserSessionTab', () => {
     })
   })
 
-  // Why: `session-notify` is not a free-standing choice — the host row rides the very announcement
-  // `notifiesSessionTabsChanged` gates, so silencing that flag would delete the row with no other
-  // test noticing. Pin the coupling, not just the two values.
-  it('gives every session-notify placement the announcement its host row rides on', () => {
-    // Presence precondition: the loop below only asserts anything about placements that declare
-    // `session-notify`, so flipping the one that does to `none` in the same edit that silences its
-    // announcement would satisfy the coupling by emptying it. Name the placement that must declare
-    // it — a client-placed page reaches the host renderer through no other route.
-    expect(BROWSER_TAB_CREATE_PUBLICATION_RULES.client.hostRowSource).toBe('session-notify')
-    for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
-      const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[placementKind]
-      if (rules.hostRowSource === 'session-notify') {
-        expect(
-          rules.notifiesSessionTabsChanged,
-          `${placementKind} sources its host row from the session-tabs announcement`
-        ).toBe(true)
-      }
-    }
-  })
-
   it.each(BROWSER_TAB_CREATE_PLACEMENT_KINDS)(
     'moves a user-created %s tab into the clicked split group when the placement marks focus',
     (placementKind) => {

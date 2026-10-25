@@ -5,11 +5,12 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-te
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -152,7 +153,13 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
@@ -167,6 +174,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     }
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
       ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
     })
     if (startup.launchRuntime instanceof Error) {
@@ -196,14 +204,21 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
   // drop immediately so a genuine retry starts fresh, and successes linger
   // briefly so a retry whose response was lost in the cutover still reconciles.
   dedupeWorktreeCreate<T>(
-    repoSelector: string,
+    target: string | { repo: string; repoHostId?: ExecutionHostId },
     clientMutationId: string | undefined,
     run: () => Promise<T>
   ): Promise<T> {
     if (!clientMutationId) {
       return run()
     }
-    const key = `${repoSelector}\0${clientMutationId}`
+    // Why the host: two creates for one repo id on different hosts are different creates.
+    const repoKey =
+      typeof target === 'string'
+        ? target
+        : target.repoHostId
+          ? `${target.repoHostId}\0${target.repo}`
+          : target.repo
+    const key = `${repoKey}\0${clientMutationId}`
     const inflight = this.worktreeCreateByMutationId.get(key)
     if (inflight) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Callers must use one operation/result type per repo and mutation key.

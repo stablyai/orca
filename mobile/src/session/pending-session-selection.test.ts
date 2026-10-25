@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
-  LAUNCHED_SELECTION_SNAPSHOT_BUDGET,
   isLaunchedSurfaceListed,
   launchedSelection,
   pendingSelectionHandle,
@@ -101,13 +100,13 @@ describe('resolveLaunchedSelection', () => {
 
   it('waits without a countdown until the reply, then gives up after the budget', () => {
     let selection: PendingSessionSelection | null = launchedSelection('l1', { pane: PANE }, null)
-    for (let snapshot = 0; snapshot < LAUNCHED_SELECTION_SNAPSHOT_BUDGET * 2; snapshot += 1) {
+    for (let snapshot = 0; snapshot < 10; snapshot += 1) {
       selection = resolveLaunchedSelection(selection, []).selection
     }
     expect(selection).toEqual(launchedSelection('l1', { pane: PANE }, null))
 
     selection = withLaunchReply(selection, 'l1', { handle: 'term_9' })
-    for (let snapshot = 1; snapshot < LAUNCHED_SELECTION_SNAPSHOT_BUDGET; snapshot += 1) {
+    for (let snapshot = 1; snapshot < 5; snapshot += 1) {
       const next = resolveLaunchedSelection(selection, [chatTab('other', 'claude_other')])
       expect(next.landedTabId).toBeNull()
       expect(next.selection?.kind).toBe('launched')

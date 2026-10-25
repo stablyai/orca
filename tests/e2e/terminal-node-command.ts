@@ -1,5 +1,5 @@
 import { quotePowerShellLiteral } from '../../src/shared/powershell-native-argument'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 function quoteTerminalArg(value: string): string {
   return process.platform === 'win32' ? quotePowerShellLiteral(value) : quotePosixShell(value)

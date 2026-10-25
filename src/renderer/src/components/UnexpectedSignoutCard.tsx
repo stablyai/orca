@@ -7,6 +7,7 @@ import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { shouldShowUnexpectedSignoutCard } from './unexpected-signout/unexpected-signout-visibility'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from './OrcaSignInProgress'
 
 function readPreviewFlag(): boolean {
   if (!import.meta.env.DEV) {
@@ -48,7 +49,6 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const persistedDismissedVersion = useAppStore((s) => s.dismissedUnexpectedSignoutVersion)
   const dismissedVersions = useAppStore((s) => s.unexpectedSignoutDismissedVersions)
   const dismissForVersion = useAppStore((s) => s.dismissUnexpectedSignoutCard)
-  const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [authRefreshReady, setAuthRefreshReady] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -238,16 +238,11 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           </Collapsible>
 
           <div className="mt-0.5 flex gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1"
-              disabled={!canConnect}
-              onClick={() => void connect()}
-            >
+            <OrcaSignInButton variant="default" size="sm" className="flex-1" disabled={!canConnect}>
               {translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
-            </Button>
+            </OrcaSignInButton>
           </div>
+          <OrcaSignInWaitNotice />
         </div>
       </Card>
     </div>

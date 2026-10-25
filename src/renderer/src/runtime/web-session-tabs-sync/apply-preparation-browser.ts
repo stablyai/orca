@@ -1,4 +1,5 @@
 import { buildWebSessionExistingTabIndex } from '../web-session-existing-tab-index'
+import { resolveWebSessionVisibleTabId } from '../web-session-focus-intent'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
 import {
   buildMirroredBrowserTabs,
@@ -9,7 +10,8 @@ import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
 import {
   hostSnapshotAffirmsAgentSessions,
-  hostSnapshotAffirmsClientHostedPages
+  hostSnapshotAffirmsClientHostedPages,
+  hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../store/slices/editor'
@@ -20,6 +22,8 @@ import {
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { isAgentSessionTabOfAnotherHost } from './mirror-row-ownership'
+import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -34,7 +38,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     mirroredTerminalIds,
     removedTerminalIds,
     reconcilesNonAgentTabs,
-    batchContext
+    batchContext,
+    navigationIntentTab
   } = base
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
@@ -42,6 +47,14 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
+  // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
+  const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
+  for (const tab of snapshot.tabs) {
+    if (tab.type === 'agent-session' && tab.replacesSessionId) {
+      claimedAgentSessionIds.add(tab.replacesSessionId)
+    }
+  }
+  const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
@@ -122,7 +135,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
     now,
-    (fileId) => state.editorDrafts?.[fileId] !== undefined
+    (fileId) => state.editorDrafts?.[fileId] !== undefined,
+    navigationIntentTab?.id ?? resolveWebSessionVisibleTabId(state, worktreeId)
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,
@@ -139,8 +153,11 @@ export function prepareWebSessionTabsSnapshotBrowser(
     ...new Map(mirroredEditorTabs.map((entry) => [entry.file.id, entry.file])).values()
   ]
   const mirroredFileRecords = new Set(mirroredOpenFiles)
+  // A host that has not published this worktree yet proves nothing about its editor tabs.
+  const reconcilesEditorFiles =
+    reconcilesNonAgentTabs && hostSnapshotAffirmsWorktreeContents(snapshot)
   const removedEditorFileIds = new Set(
-    (reconcilesNonAgentTabs ? worktreeOpenFiles : [])
+    (reconcilesEditorFiles ? worktreeOpenFiles : [])
       .filter(
         (file) =>
           file.runtimeEnvironmentId === environmentId &&
@@ -179,13 +196,20 @@ export function prepareWebSessionTabsSnapshotBrowser(
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
+      if (
+        !claimedAgentSessionIds.has(tab.entityId) &&
+        isAgentSessionTabOfAnotherHost(state, tab, snapshotExecutionHostId)
+      ) {
+        return true
+      }
       // A matching host row is authoritative; retaining the provisional tab beside its mirror
       // would briefly render two panes before lifecycle publication is recorded.
       // A host that cannot list its chats is no evidence this one closed.
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
         (!agentSessionsAffirmed ||
-          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId))
+          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
+          isUnlistedCreatedChat(worktreeId, tab.entityId))
       )
     }
     if (tab.contentType === 'browser') {

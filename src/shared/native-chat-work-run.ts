@@ -5,7 +5,7 @@
 import { isNativeChatAskCall } from './native-chat-ask-row'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
-import { pairToolBlocks } from './native-chat-tool-fold'
+import { pairToolBlocks } from './native-chat/tools/native-chat-tool-pairs'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** `lead`: the agent's words with calls already folded under them, which may head a run but

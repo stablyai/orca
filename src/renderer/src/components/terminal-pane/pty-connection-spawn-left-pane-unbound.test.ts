@@ -14,6 +14,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -138,7 +139,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  it('remounts the pane when the spawn resolves without a PTY id', async () => {
+  it('requests pane recovery when the spawn resolves without a PTY id', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     // A spawn that produced nothing: no id returned and nothing bound after it.
@@ -146,9 +147,11 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-unbound-spawn' }) as never
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
     )
     await flushAsyncTicks(40)
 
@@ -170,8 +173,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     const deps = createDeps({ tabId: 'tab-transport-retry' })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocks cover every pane, manager, and deps member the connect path reads.
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
     await flushAsyncTicks(40)
 
     expect(transport.connect).toHaveBeenCalled()
@@ -187,9 +189,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-bound-spawn' }) as never
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
     )
     await flushAsyncTicks(40)
 
@@ -211,9 +211,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-bound-spawn' }) as never
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
     )
     await flushAsyncTicks(40)
 
@@ -232,9 +230,11 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-unbound-spawn' }) as never
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
     )
     await flushAsyncTicks(40)
 

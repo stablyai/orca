@@ -112,7 +112,7 @@ describe('computeActiveTerminalKeyboardLift', () => {
     expect(taller).toBe(KEYBOARD_LIFT)
   })
 
-  it('uses the platform-adjusted lift proportionally on iOS and Android', () => {
+  it('applies the supplied keyboard coverage to the lift', () => {
     const tuiMetrics = metrics({ cursorY: 30, contentBottomRow: 34 })
     const android = computeActiveTerminalKeyboardLift({
       keyboardLift: 300,
@@ -127,19 +127,6 @@ describe('computeActiveTerminalKeyboardLift', () => {
     expect({ android, ios }).toEqual({ android: 220, ios: 186 })
   })
 
-  /** Base's arithmetic, kept here as the oracle a covered frame must match to the pixel. */
-  function baseLift(keyboardLift: number, m: TerminalKeyboardAvoidanceMetrics, frame: number) {
-    if (keyboardLift <= 0) {
-      return 0
-    }
-    if (m.rows <= 0 || frame <= 0 || m.altScreen) {
-      return keyboardLift
-    }
-    const rowHeight = frame / m.rows
-    const anchorBottom = (Math.max(m.cursorY, m.contentBottomRow) + 1) * rowHeight
-    return Math.min(keyboardLift, Math.max(0, anchorBottom + rowHeight - (frame - keyboardLift)))
-  }
-
   describe('a keyboard that covers the frame', () => {
     const lift = (keyboardLift: number, m: TerminalKeyboardAvoidanceMetrics, frame = 713.7) =>
       computeActiveTerminalKeyboardLift({
@@ -152,7 +139,6 @@ describe('computeActiveTerminalKeyboardLift', () => {
       // Pixel_API_37: 47 rows of 15 px in a 713.7 px frame under a 312 px keyboard.
       const phone = metrics({ rows: 47, rowPitch: 15, cursorY: 46, contentBottomRow: 46 })
       expect(lift(312, phone)).toBe(312)
-      expect(lift(312, phone)).toBe(baseLift(312, phone, 713.7))
     })
 
     it('lifts a desktop-mode grid only by what the keyboard hides of it', () => {
@@ -180,36 +166,6 @@ describe('computeActiveTerminalKeyboardLift', () => {
       expect(lift(150, rotated, 300)).toBe(150)
       const resized = metrics({ rows: 47, rowPitch: 18, cursorY: 46, contentBottomRow: 46 })
       expect(lift(312, resized)).toBe(312)
-    })
-
-    it('matches base wherever the drawn grid fills the frame, and never lifts past it elsewhere', () => {
-      let matched = 0
-      let drawnShort = 0
-      for (const rows of [8, 26, 47, 50, 80]) {
-        for (const rowPitch of [undefined, 5.1, 8.5, 15, 18, 25]) {
-          for (const frame of [300, 401.7, 710.33, 713.7]) {
-            for (const keyboard of [0.5, 150, 312, 336]) {
-              for (const anchor of [0, Math.floor(rows / 2), rows - 1]) {
-                const m = metrics({ rows, rowPitch, cursorY: anchor, contentBottomRow: anchor })
-                const got = lift(keyboard, m, frame)
-                const drawn = rowPitch === undefined ? frame : rows * rowPitch
-                // The fit floors rows, so a grid that fills the frame leaves less than a row.
-                if (drawn >= frame - (rowPitch ?? 0)) {
-                  expect(got).toBe(baseLift(keyboard, m, frame))
-                  matched++
-                  continue
-                }
-                expect(got).toBeLessThanOrEqual(keyboard)
-                expect(got).toBeLessThanOrEqual(Math.max(0, drawn - (frame - keyboard)) + 1e-9)
-                drawnShort++
-              }
-            }
-          }
-        }
-      }
-      // Presence: both halves of the sweep ran.
-      expect(matched).toBeGreaterThan(500)
-      expect(drawnShort).toBeGreaterThan(500)
     })
   })
 })

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'

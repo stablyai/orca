@@ -6,7 +6,7 @@ import { createAgentStatusStore } from './agent-status-store'
 import { parseAgentStatusStoreMutation } from './agent-status-store-codec'
 import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
 import {
-  AGENT_STATUS_STORE_LIMITS,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
   type AgentStatusStoreMutation
 } from './agent-status-store-contract'
@@ -122,7 +122,6 @@ function indexContents(indexes: AgentStatusStoreIndexes) {
   const ranked = (order: Map<string, number>) =>
     [...order].sort((left, right) => left[1] - right[1]).map(([key]) => key)
   return {
-    recordBytes: indexes.recordBytes,
     childrenByParent: sets(indexes.childrenByParent),
     factsByParent: sets(indexes.factsByParent),
     aliasesByChild: sets(indexes.aliasesByChild),
@@ -149,7 +148,6 @@ describe('AgentStatusStore applied in place', () => {
         if (mutation) {
           commitAgentStatusStoreMutation(state, indexes, mutation, state.revision + 1)
         }
-        // The running byte total is only observable at the budget, so it is held to a rebuild.
         expect({ step, ...indexContents(indexes) }).toEqual({
           step,
           ...indexContents(indexAgentStatusStoreState(state))
@@ -190,7 +188,7 @@ describe('AgentStatusStore applied in place', () => {
   it('keeps the newest tombstones in order when their count overflows', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
     const childWorkIds = Array.from(
-      { length: AGENT_STATUS_STORE_LIMITS.tombstones },
+      { length: AGENT_STATUS_STORE_TOMBSTONE_LIMIT },
       (_, index) => `removed-${index}`
     )
     for (const mutation of [{ removeChildren: ['oldest'] }, { removeChildren: childWorkIds }]) {

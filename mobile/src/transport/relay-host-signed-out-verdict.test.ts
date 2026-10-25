@@ -72,7 +72,14 @@ describe('relay close reason on the phone', () => {
     })
 
     expect(onHostCloseReason).toHaveBeenCalledWith(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-    expect(onError).toHaveBeenCalledWith(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE))
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(
+      new RelayOuterError(
+        MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE,
+        false,
+        RELAY_HOST_CLOSE_REASON.SIGNED_OUT
+      )
+    )
   })
 
   // An old cell sends its constant, and every other close sends nothing.
@@ -91,7 +98,7 @@ describe('relay close reason on the phone', () => {
 
   // The rejection arrives as a relay-hello AND a close, in an unordered pair.
   // Whichever lands first, the reason must survive.
-  it('still reports the reason when the hello already failed the link', async () => {
+  it('still reports the reason when the hello refusal lands first', async () => {
     const socket = new FakeSocket()
     const onHostCloseReason = vi.fn()
     linkOver(socket, onHostCloseReason, vi.fn())
@@ -155,17 +162,11 @@ describe('the sign-out the cell reported outranks a later plain 4404', () => {
     const controller = controllerReporting(reported)
 
     controller.assertHostReachability('signed-out')
+    expect(reported).toEqual(['connecting', 'signed-out'])
     controller.registerFailure(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE), false)
     controller.registerFailure(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE), false)
 
     expect(reported).toEqual(['connecting', 'signed-out'])
-  })
-
-  it('needs no streak: one cell close reason is the whole evidence', () => {
-    const reported: RelayHostReachability[] = []
-    controllerReporting(reported).assertHostReachability('signed-out')
-
-    expect(reported.at(-1)).toBe('signed-out')
   })
 
   it('retires on a connection like every other verdict', () => {
@@ -173,7 +174,7 @@ describe('the sign-out the cell reported outranks a later plain 4404', () => {
     const controller = controllerReporting(reported)
 
     controller.assertHostReachability('signed-out')
-    controller.setActiveSession({ getFailure: () => null })
+    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
 
     expect(reported).toEqual(['connecting', 'signed-out', 'connecting'])
   })

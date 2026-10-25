@@ -1,6 +1,8 @@
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { resolveNewBrowserTabProfile } from '@/store/slices/browser/browser-new-tab-profile'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -10,8 +12,10 @@ import type { SearchEngine } from '../../../shared/browser-url'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
+import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import {
   getClientCreationActionPolicy,
+  runtimeHostsPagesOnThisDesktop,
   type ClientCreationActionAvailability
 } from './client-creation-action-policy'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
@@ -28,6 +32,8 @@ export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engi
 export type OpenWorkspaceBrowserTabRequest = {
   workspaceId: string
   targetGroupId?: string
+  /** Opens the tab in a new split beside this group instead of targetGroupId. */
+  split?: TabSplitTarget
   /** Client-local unified tab id of the source; a source-following open omits targetGroupId. */
   afterTabId?: string
   url: string
@@ -58,7 +64,8 @@ function isExpectedRuntimeBrowserRoute(
     state.runtimeStatusByEnvironmentId?.get(expectedEnvironmentId)?.status?.capabilities
   if (
     environmentId !== expectedEnvironmentId ||
-    !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    (!capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
+      !runtimeHostsPagesOnThisDesktop(state, expectedEnvironmentId))
   ) {
     return false
   }
@@ -171,20 +178,20 @@ function createClientBrowserTab(
   // Why: a desktop-hosted page in a runtime workspace stays owned by that runtime, or the
   // unified tab is disowned from its worktree (palette and activation skip it).
   ownerHostId: ExecutionHostId = hostId
-): void {
+): string | null {
   try {
-    state.createBrowserTab(request.workspaceId, request.url, {
+    const created = state.createBrowserTab(request.workspaceId, request.url, {
       activate: request.focusOnCreate !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
       executionHostId: ownerHostId,
-      sessionProfileId:
-        state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-        state.defaultBrowserSessionProfileId,
+      ...resolveNewBrowserTabProfile(state, request.workspaceId, hostId),
       targetGroupId: request.targetGroupId,
+      ...(request.split ? { split: request.split } : {}),
       ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
     })
+    return created.activePageId ?? null
   } catch (error) {
     throw openFailure(presentation.error, 'client tab creation rejected', error)
   }
@@ -199,9 +206,10 @@ function assertManagedBrowserEnabled(
   }
 }
 
+/** Resolves to the page id when the page renders on this desktop, else null. */
 export async function openWorkspaceBrowserTab(
   request: OpenWorkspaceBrowserTabRequest
-): Promise<void> {
+): Promise<string | null> {
   const presentation = intentPresentation(request.intent, request.url)
   if (!validateTarget(request.url)) {
     throw openFailure(presentation.error, 'target is not an http(s) URL')
@@ -262,8 +270,7 @@ export async function openWorkspaceBrowserTab(
     if (!host || host.kind === 'runtime') {
       throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
     }
-    createClientBrowserTab(state, request, host.id, presentation)
-    return
+    return createClientBrowserTab(state, request, host.id, presentation)
   }
   if (
     route.executionHostId &&
@@ -284,8 +291,7 @@ export async function openWorkspaceBrowserTab(
     const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
     const ownerHostId =
       host?.kind === 'runtime' && route.executionHostId ? route.executionHostId : localHostId
-    createClientBrowserTab(state, request, localHostId, presentation, ownerHostId)
-    return
+    return createClientBrowserTab(state, request, localHostId, presentation, ownerHostId)
   }
   let created = false
   try {
@@ -293,9 +299,7 @@ export async function openWorkspaceBrowserTab(
       worktreeId: request.workspaceId,
       environmentId,
       url: request.url,
-      targetGroupId: request.targetGroupId,
-      // Client placement survives older hosts publishing a page before the create response.
-      ...(request.targetGroupId ? { clientTargetGroupId: request.targetGroupId } : {}),
+      ...resolveWebRuntimeBrowserClientTargetGroup(state, request, environmentId),
       ...(request.afterTabId ? { clientAfterTabId: request.afterTabId } : {}),
       // Owner-pinned links need the host tab published before client reconciliation.
       ...(expectedEnvironmentId !== null ? { waitForRegistration: true } : {}),
@@ -316,4 +320,5 @@ export async function openWorkspaceBrowserTab(
   if (!created) {
     throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
   }
+  return null
 }

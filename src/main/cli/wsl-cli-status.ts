@@ -1,5 +1,6 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { getBridgePathFromCommandPath, getPosixDirname, quoteShell } from './wsl-cli-scripts'
+import { getBridgePathFromCommandPath, getPosixDirname } from './wsl-cli-scripts'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const WSL_COMMAND_NAME = 'orca-ide'
 
@@ -47,14 +48,14 @@ export async function readWslCliCommandFile(
   const output = await run(
     distro,
     [
-      `if [ -L ${quoteShell(commandPath)} ]; then`,
+      `if [ -L ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_NOT_FILE__',
-      `elif [ ! -e ${quoteShell(commandPath)} ]; then`,
+      `elif [ ! -e ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_MISSING__',
-      `elif [ ! -f ${quoteShell(commandPath)} ]; then`,
+      `elif [ ! -f ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_NOT_FILE__',
       'else',
-      `  cat ${quoteShell(commandPath)}`,
+      `  cat ${quotePosixShellDoubleQuotedApostrophe(commandPath)}`,
       'fi'
     ].join('\n'),
     { loginPath: 'none' }
@@ -156,8 +157,7 @@ export async function resolveReadyWslCliState(args: {
     }
   }
 
-  // Why 'none': this first call is the one that boots a stopped distro, and a
-  // login-PATH probe would take half its budget (#29497).
+  // Leave the cold-distro startup budget for booting; this call does not need the login PATH.
   const home = (await args.run(args.distro, 'printf %s "$HOME"', { loginPath: 'none' })).trim()
   if (!home.startsWith('/')) {
     return {
@@ -173,8 +173,7 @@ export async function resolveReadyWslCliState(args: {
       await args.run(
         args.distro,
         '{ command -v powershell.exe >/dev/null 2>&1 || [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; } && command -v wslpath >/dev/null 2>&1 && printf yes || printf no',
-        // WSL appends the Windows PATH and ships wslpath in /usr/bin, so the
-        // default PATH answers this; the absolute fallback covers the rest.
+        // WSL's default PATH and absolute PowerShell fallback suffice for interop detection.
         { loginPath: 'none' }
       )
     ).trim() === 'yes'
@@ -208,14 +207,12 @@ async function readPathConfigured(
   try {
     const output = await run(
       distro,
-      `case ":$PATH:" in *:${quoteShell(pathDirectory)}:*) printf yes ;; *) printf no ;; esac`,
+      `case ":$PATH:" in *:${quotePosixShellDoubleQuotedApostrophe(pathDirectory)}:*) printf yes ;; *) printf no ;; esac`,
       { loginPath: 'preferred' }
     )
     return output.trim() === 'yes'
   } catch (error) {
-    // Why null, not throw: the distro already answered the calls before this,
-    // so a blocking ~/.profile (#14288) must not hide whether the command file
-    // exists; null is "unknown", never "not on PATH".
+    // A blocked login probe means PATH is unknown; it must not hide the command's known file state.
     if (
       error instanceof WslCliLoginPathUnavailableError ||
       error instanceof WslCliUnreachableError

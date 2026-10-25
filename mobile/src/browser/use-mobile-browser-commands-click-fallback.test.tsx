@@ -7,9 +7,9 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import type { RpcClient } from '../transport/rpc-client'
 import { useMobileBrowserCommands } from './use-mobile-browser-commands'
 import { useMobileBrowserRequest } from './use-mobile-browser-request'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const { sent, clickFailure, clickReply } = vi.hoisted(() => {
   const failure: { current: Error | null } = { current: null }
@@ -47,8 +47,7 @@ vi.mock('./mobile-browser-command-operations', () => {
 type Commands = ReturnType<typeof useMobileBrowserCommands>
 
 function mountCommands(): Commands {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the operations module is mocked, so the client is only passed through and never called.
-  const client = {} as RpcClient
+  const client = stubRpcClient()
   const held: { commands: Commands | null } = { commands: null }
   function Screen(): null {
     const { pageParams, sendBrowserRequest } = useMobileBrowserRequest({

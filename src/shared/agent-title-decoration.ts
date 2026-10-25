@@ -4,8 +4,7 @@
 // provider icon, this leading glyph reads as a redundant second icon, so strip
 // it from the displayed title. Scoped to titles we already know belong to an agent.
 const LEADING_AGENT_TITLE_DECORATION_RE =
-  // eslint-disable-next-line no-control-regex -- intentional unicode status-glyph ranges
-  /^(?:[✳✦⏲◇✋▲⠀-⣿◐-◓]+|[.*]\s)\s*/
+  /^(?:[\u2733\u2726\u23F2\u25C7\u270B\u25B2\u2800-\u28FF\u25D0-\u25D3]+|[.*]\s)\s*/
 
 export function stripLeadingAgentTitleDecorationOrEmpty(title: string): string {
   return title.replace(LEADING_AGENT_TITLE_DECORATION_RE, '').trimStart()

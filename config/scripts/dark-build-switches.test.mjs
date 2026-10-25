@@ -4,8 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-const { assertNotDarkBuild, darkBuildDefines, darkBuildMarkers, turnedOnDarkBuildDefines } =
-  createRequire(import.meta.url)('../dark-build-switches.cjs')
+const {
+  assertNoDarkOutputOfOffSwitches,
+  assertNotDarkBuild,
+  darkBuildDefines,
+  darkBuildMarkers,
+  turnedOnDarkBuildDefines
+} = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 const scratch = []
 afterEach(async () => {
@@ -48,4 +53,18 @@ describe('dark build switches', () => {
       expect(() => assertNotDarkBuild([clean, dark], {})).toThrow(dark)
     }
   )
+
+  it.each([
+    ['ORCA_LAYOUT_OWNER', 'ORCA_SIDEBAR_INPUTS'],
+    ['ORCA_SIDEBAR_INPUTS', 'ORCA_LAYOUT_OWNER']
+  ])('lets a dark build carry its own %s output, never one of %s', async (own, other) => {
+    const dark = await mkdtemp(join(tmpdir(), 'orca-dark-build-own-'))
+    scratch.push(dark)
+    const [marker] = darkBuildMarkers({ [own]: 'main' })
+    await writeFile(join(dark, marker.fileName), marker.text)
+
+    expect(() => assertNoDarkOutputOfOffSwitches([dark], { [own]: 'main' })).not.toThrow()
+    expect(() => assertNoDarkOutputOfOffSwitches([dark], { [other]: 'main' })).toThrow(dark)
+    expect(() => assertNoDarkOutputOfOffSwitches([dark], {})).toThrow(dark)
+  })
 })

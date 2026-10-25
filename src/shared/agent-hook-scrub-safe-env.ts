@@ -4,9 +4,10 @@
  *
  * DeepSeek Harness runs command hooks through its own shell executor, which drops every
  * variable whose name contains `KEY`, `TOKEN`, `SECRET` or `PASSWORD` before the hook
- * process starts. That is a reasonable credential-scrub default, and it is not something
- * Orca can turn off — but it takes `ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN` with it,
- * which are the two values a status hook needs to say *which pane* it is reporting for.
+ * process starts. Claude Code does the same for hooks when `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`
+ * is on (verified on 2.1.310). That is a reasonable credential-scrub default, and it is not
+ * something Orca can turn off — but it takes `ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN`
+ * with it, which are the two values a status hook needs to say *which pane* it is reporting for.
  * Without them the hook has nothing to attribute to and exits without posting, so the pane
  * reads as an agent Orca never hears from.
  *
@@ -46,4 +47,19 @@ export function applyScrubSafeAgentEnvAliases(env: Record<string, string>): void
     }
     env[alias] = value
   }
+}
+
+/** POSIX hook prologue: refill the canonical names from their aliases; never overwrites a live value. */
+export function buildPosixScrubSafeEnvRestoreLines(): string[] {
+  return [
+    ...ALIASES.map(([source, alias]) => `: "\${${source}:=\${${alias}:-}}"`),
+    `export ${ALIASES.map(([source]) => source).join(' ')}`
+  ]
+}
+
+/** Windows `.cmd` hook prologue with the same contract. */
+export function buildWindowsScrubSafeEnvRestoreLines(): string[] {
+  return ALIASES.map(
+    ([source, alias]) => `if not defined ${source} if defined ${alias} set "${source}=%${alias}%"`
+  )
 }

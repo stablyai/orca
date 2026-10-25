@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
-import type { WatcherProcessSubscription } from './parcel-watcher-process-subscription'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessSubscription } from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
@@ -16,12 +16,7 @@ const PRIMARY_WATCH_OPTIONS = {
   include: PRIMARY_CHECKOUT_METADATA_FILES
 }
 
-// Why: the shallow watcher can stop reporting without ever erroring — a lossy
-// notification path (network mount, inotify queue overflow in the shared child),
-// a dropped event batch, or a binding that went deaf between rebind sweeps. None
-// of those raise, so the error-driven fallback never fires. A bounded re-stat is
-// the only thing that turns "silently stale forever" into "stale for one tick".
-// At 15 ticks this is ~0.2 stats/s/repo against the 3/s the old poll cost.
+// Native watches can silently lose events; bounded re-stat catches stale primary metadata without full polling cost.
 const PRIMARY_BACKSTOP_TICKS = 15
 
 function primaryMetadataEvents(commonDirPath: string): WorktreeBasePollEvent[] {
@@ -43,10 +38,7 @@ export async function startGitCommonPrimaryWatch(
   let disposed = false
   let watcher: WatcherProcessSubscription | null = null
   let statusRefPolling: WorktreeBaseSubscription | null = null
-  // Why: startup and every rebind can each be mid-build at the same time. The
-  // generation names which attempt still owns the slot, so a loser unsubscribes
-  // its own poller instead of being silently overwritten — an overwrite would
-  // strand that poller's timer and visibility listener for the process lifetime.
+  // Concurrent start/rebind attempts need generations so losing pollers release their timers and visibility listeners.
   let statusRefGeneration = 0
   let backstopPolling: WorktreeBaseSubscription | null = null
   let fallback: WorktreeBaseSubscription | null = null
@@ -62,8 +54,7 @@ export async function startGitCommonPrimaryWatch(
         visibility,
         onFullScan
       ).then(async (nextFallback) => {
-        // `statusRefPolling` deliberately excluded: it covers only status refs,
-        // so its presence is not evidence that primary metadata is covered.
+        // Status-ref polling does not cover primary metadata.
         if (disposed || watcher) {
           await nextFallback.unsubscribe()
           return
@@ -86,10 +77,7 @@ export async function startGitCommonPrimaryWatch(
           false
         )
 
-  // Why: rebinding is synchronous and in-process, so reacting to it costs the
-  // same detection latency as polling would have, without the idle wake-ups.
-  // Adopts a freshly built poller only if this attempt still owns the slot and a
-  // ref is still selected; anything else unsubscribes what it built.
+  // Synchronous binding events avoid idle polling; only the current generation may adopt a newly built poller.
   const adoptStatusRefPolling = async (
     generation: number,
     next: WorktreeBaseSubscription | null
@@ -202,9 +190,7 @@ export async function startGitCommonPrimaryWatch(
           true
         )
       ])
-      // Why: a terminal watch error can land while the two polls above are still
-      // starting. handleWatcherError already ran its teardown against nulls, so
-      // adopting these now would strand the repo with status-ref coverage only.
+      // A terminal watch error can finish teardown before starting polls settle; refuse late adoption.
       if (disposed || !watcher) {
         await Promise.all([
           nextStatusRefPolling?.unsubscribe().catch(() => {}),

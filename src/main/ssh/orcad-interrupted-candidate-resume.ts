@@ -5,13 +5,13 @@
  * leave the host serving nothing until an operator accepts losing that state (P1-A).
  */
 import type { ServeReadiness } from '../server/serve-readiness'
-import { withActivatedVersion } from './orcad-activation-record'
-import { writeOrcadActivationRecord } from './orcad-activation-record-store'
-import type { OrcadActivateTransaction } from './orcad-activation-transaction'
-import { writeOrcadActivationTransaction } from './orcad-activation-transaction-store'
-import { withOrcadActivationCandidateReady } from './orcad-activation-transaction-transitions'
+import { withActivatedVersion } from '../managed-server/activation/orcad-activation-record'
+import { writeOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
+import type { OrcadActivateTransaction } from '../managed-server/activation/orcad-activation-transaction'
+import { writeOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
+import { withOrcadActivationCandidateReady } from '../managed-server/activation/orcad-activation-transaction-transitions'
 import { OrcadActiveReadinessError } from './orcad-active-readiness'
-import { orcadLivenessProvenExited } from './orcad-remote-launch'
+import { orcadLivenessProvenExited } from '../managed-server/install/orcad-remote-launch'
 import {
   ORCAD_RECOVERY_CHANGED_STATE_CODE,
   type OrcadManagedRefusal

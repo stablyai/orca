@@ -5,14 +5,22 @@ import type { ForegroundProcessEvidence } from '../../shared/foreground-process-
 export type PtyProcessInfo = {
   id: string
   incarnationId?: PtyIncarnationId
+  /** Local diagnostic provenance supplied by a multi-daemon router. */
+  inventorySourceId?: string
+  /** Whether this diagnostic candidate is the established route for its id. */
+  routed?: boolean
   /** Root process owned by this exact PTY incarnation, when the provider can prove it. */
   rootProcessId?: number
+  /** Recently observed process name; inventory reads never initiate process inspection. */
+  foregroundProcess?: string
   cwd: string
   title: string
   /** Owning worktree when the provider can report it authoritatively. */
   worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
+  /** ORCA_PANE_KEY this PTY was spawned with, when the provider recorded it. */
+  paneKey?: string
   /** Exact WSL owner reported by the PTY provider; null means native Windows. */
   wslDistro?: string | null
   /** Optional host-side process evidence attached to an inventory seed. */

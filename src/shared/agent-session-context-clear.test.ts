@@ -7,6 +7,8 @@ import type {
 } from './agent-session-journal-types'
 import {
   agentSessionCurrentContextRows,
+  agentSessionHasOlderTranscript,
+  agentSessionTranscriptRows,
   isAgentSessionContextClear,
   isNativeChatContextClear,
   latestAgentSessionContextClearSequence
@@ -113,6 +115,22 @@ describe('completed context clear projections', () => {
     expect(isNativeChatContextClear(message)).toBe(true)
   })
 
+  it('starts the transcript at the latest divider, which also ends paging', () => {
+    const rows = [
+      user,
+      running,
+      clear,
+      row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })
+    ]
+    expect(agentSessionTranscriptRows(rows, latestAgentSessionContextClearSequence(rows))).toEqual([
+      clear,
+      rows[3]
+    ])
+    expect(agentSessionTranscriptRows([user, running], 0)).toEqual([user, running])
+    expect(agentSessionHasOlderTranscript(rows, true)).toBe(false)
+    expect(agentSessionHasOlderTranscript([rows[3]], true)).toBe(true)
+  })
+
   it('leaves earlier rows and uncertainty visible while clearing current work and prompts', () => {
     const rows = [user, running, oldPrompt, clear]
     const state = projectStructuredAgentSessionStatusState(rows, [oldSend], 3)
@@ -129,8 +147,9 @@ describe('completed context clear projections', () => {
 
   it('includes new sends but excludes older unknown sends even at the current fence', () => {
     const currentSend = { ...oldSend, clientMessageId: 'new-send', acceptedSequence: 6 }
+    const boundarySend = { ...oldSend, clientMessageId: 'boundary-send', acceptedSequence: 5 }
     const rows = [user, clear, row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })]
-    expect(agentSessionCurrentContextRows(rows, [oldSend, currentSend])).toEqual({
+    expect(agentSessionCurrentContextRows(rows, [oldSend, boundarySend, currentSend])).toEqual({
       items: [rows[2]],
       submissions: [currentSend]
     })

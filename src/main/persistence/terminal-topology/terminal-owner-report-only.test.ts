@@ -6,7 +6,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
-import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../persistence-session-fixtures'
 import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
@@ -14,7 +14,7 @@ import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqli
 import type * as OwnerInvariants from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

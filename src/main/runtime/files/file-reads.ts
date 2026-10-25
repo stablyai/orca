@@ -173,15 +173,29 @@ export class RuntimeFileReads {
 }
 
 async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
+  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
+  const { bytes } = await readLocalRuntimeFilePrefix(
+    filePath,
+    store,
+    MOBILE_FILE_READ_MAX_BYTES + 1
+  )
+  return bytes.toString('utf8')
+}
+
+/** Up to `maxBytes` from the start of an authorized local file, and the file's full size. */
+export async function readLocalRuntimeFilePrefix(
+  filePath: string,
+  store: RuntimeStore,
+  maxBytes: number
+): Promise<{ bytes: Buffer; size: number }> {
   const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store)
   const fileStat = await stat(authorizedPath)
-  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
-  const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
+  const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')
   try {
     const buffer = Buffer.alloc(readLimit)
     const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
-    return buffer.subarray(0, bytesRead).toString('utf8')
+    return { bytes: buffer.subarray(0, bytesRead), size: fileStat.size }
   } finally {
     await handle.close()
   }

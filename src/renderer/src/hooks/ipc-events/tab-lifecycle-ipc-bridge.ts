@@ -1,10 +1,8 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import {
-  runtimeEnvironmentIdForWorkspaceOwner,
-  warnAmbiguousOwnerRefusalOnce
-} from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
@@ -35,7 +33,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
       const owner = runtimeEnvironmentIdForWorkspaceOwner(store, { workspaceId: worktreeId })
       if (owner.kind === 'ambiguous') {
         // Why: a local tab here would start a shell on this computer for a workspace two hosts publish.
-        warnAmbiguousOwnerRefusalOnce('new-terminal-tab', worktreeId)
+        warnAmbiguousOwnerOnce(worktreeId, 'open a new terminal tab')
         return
       }
       const environmentId = owner.environmentId

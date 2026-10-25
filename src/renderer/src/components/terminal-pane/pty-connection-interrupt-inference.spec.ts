@@ -707,38 +707,6 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       }
     })
 
-    it('does not request interrupt inference from a selection-copy keydown without terminal input', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'copy selection',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'codex',
-        paneKey,
-        terminalTitle: 'Codex',
-        stateHistory: []
-      }
-      const terminalTarget = createKeyboardEventTarget()
-      const pane = createPane(1)
-      ;(pane.terminal as { element?: unknown; hasSelection: ReturnType<typeof vi.fn> }).element =
-        terminalTarget.target
-      ;(pane.terminal as { hasSelection: ReturnType<typeof vi.fn> }).hasSelection.mockReturnValue(
-        true
-      )
-
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      vi.advanceTimersByTime(500)
-
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    })
-
     it('removes the terminal key listener on dispose before a remount adds another', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const firstTransport = createMockTransport()

@@ -124,7 +124,7 @@ export function buildTerminalCreateWindow(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
@@ -163,6 +163,7 @@ export function buildTerminalCreateWindow(args: {
       browser: {
         onGuestLoadFailed: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {},
         onPaneFocus: () => () => {}
@@ -184,6 +185,7 @@ export function buildTerminalCreateWindow(args: {
       ssh: {
         listTargets: () => Promise.resolve([]),
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
         onStateChanged: () => () => {},

@@ -11,6 +11,7 @@ import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-disc
 import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
+import { scopeWalksAgentFiles } from './session-scope-cwd'
 
 export function opencodeDiscoveries(
   options: AiVaultScanOptions,
@@ -27,12 +28,13 @@ export function opencodeDiscoveries(
           dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
           limitPerAgent: limit,
           issues,
+          scopePaths: options.scopePaths,
           signal: options.signal
         })
       ),
       // Current releases share opencode.db with v1; the worker checks for v2 tables.
       paths.then((dbPaths) =>
-        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options.signal)
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options)
       )
     ]
   })
@@ -61,7 +63,7 @@ async function opencodeDbPathsForSource(
   const onRefusal = (path: string, error: WslTranscriptFsError): void => {
     recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
   }
-  // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
+  // Custom storage roots still place SQLite databases in the parent data directory.
   if (sourceIndex === 0 && options.opencodeStorageDir) {
     return listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
   }
@@ -83,12 +85,24 @@ async function discoverOpenCode2Sessions(
   dbPaths: readonly string[],
   limit: number,
   issues: AiVaultScanIssue[],
-  signal?: AbortSignal
+  options: AiVaultScanOptions
 ): Promise<SessionFileDiscovery> {
-  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues, signal })
+  const list = (scopePaths?: readonly string[]) =>
+    listOpenCode2SqliteSessionsViaWorker({
+      dbPaths,
+      limit,
+      issues,
+      scopePaths,
+      signal: options.signal
+    }).then((candidates) => candidates.map((candidate) => candidate.file))
+  const [files, scopeFiles] = await Promise.all([
+    list(),
+    scopeWalksAgentFiles('opencode2', options.scopePaths) ? list(options.scopePaths) : undefined
+  ])
   return {
     agent: 'opencode2' as const,
     rootDir: storageDir,
-    files: files.map((candidate) => candidate.file)
+    files,
+    ...(scopeFiles ? { scopeFiles } : {})
   }
 }

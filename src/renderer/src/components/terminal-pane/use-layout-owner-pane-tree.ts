@@ -77,6 +77,6 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController):
     if (changed) {
       persistLayoutSnapshot()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs and stable callbacks.
-  }, [restoredLayout, redraws, zoomed, tabId, worktreeId])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- closePaneLocally/persistLayoutSnapshot change with tab callbacks; re-reconciling on that would replay layout writes.
+  }, [restoredLayout, redraws, zoomed, tabId, worktreeId, managerRef, expandedPaneIdRef])
 }

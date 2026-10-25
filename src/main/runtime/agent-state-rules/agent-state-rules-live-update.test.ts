@@ -143,7 +143,7 @@ describe('agent state rules live updates', () => {
     h.updater.stop()
   })
 
-  it('accepts a newer download, writes it atomically, and hot-reloads the engine', async () => {
+  it('accepts a newer download, caches its bytes, and hot-reloads the engine', async () => {
     const h = harness({ appVersion: '1.4.1-rc.0' })
     expect(idleTitleRequiresQuiet('claude')).toBe(true)
     const text = bundleText(NEWER)

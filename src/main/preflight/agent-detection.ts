@@ -27,22 +27,21 @@ import {
   execCommandInWslOrThrow,
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
-  isCommandAvailable,
-  shellQuote
+  isCommandAvailable
 } from '../ipc/preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
-import {
-  getTuiAgentDetectionProbeCommands,
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
-} from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { detectInstalledAgents } from './installed-agent-detection'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
+export {
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration
+} from './installed-agent-detection'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -139,25 +138,6 @@ async function detectCommandRuntime(
     : { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const commands = getTuiAgentDetectionProbeCommands(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
-  )
-  return resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    await detectAgentCommandsOnHost(commands, { context }),
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
-  )
-}
-
-export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
-): Promise<string[]> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
-}
-
 export type RefreshAgentsResult = {
   /** Agents detected after hydrating PATH from the user's login shell. */
   agents: string[]
@@ -220,7 +200,7 @@ export async function refreshShellPathAndDetectAgents(
 async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${shellQuote('gh')} auth status`)
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('gh')} auth status`)
       : execLocalPreflightCommandOrThrow(probe.binary ?? 'gh', ['auth', 'status']))
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
@@ -241,7 +221,7 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
 async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${shellQuote('glab')} auth status`)
+      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
       : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status']))
     return true
   } catch (error) {

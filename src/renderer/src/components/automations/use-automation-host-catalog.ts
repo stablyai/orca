@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
@@ -24,6 +24,7 @@ import type {
 } from './automation-host-catalog-types'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import {
+  foldDesktopHostFilter,
   resolveAutomationHostFilter,
   type AutomationHostFilterResolution
 } from './automation-host-filter-resolution'
@@ -146,7 +147,11 @@ export function useAutomationHostCatalog(
     desktopSshGenerations,
     runtimeEnvironments
   })
-  const selectedStableKey = automationHostFilterStableKey(automationHostFilter)
+  const hostFilter = useMemo(
+    () => foldDesktopHostFilter(automationHostFilter, sourceState.desktopAliasEnvironmentId),
+    [automationHostFilter, sourceState.desktopAliasEnvironmentId]
+  )
+  const selectedStableKey = automationHostFilterStableKey(hostFilter)
   // The saved selection references itself: without this the catalog would omit a
   // removed host the user is still filtered to, and absence would read as removal.
   const referencedStableKeys = useMemo(
@@ -189,9 +194,11 @@ export function useAutomationHostCatalog(
       ].join('\n'),
     [queryCatalog, selectedStableKey]
   )
+  const applyCatalog = useEffectEvent(
+    () => void controller.applyCatalog(queryCatalog, { selectedStableKey })
+  )
   useEffect(() => {
-    void controller.applyCatalog(queryCatalog, { selectedStableKey })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- applySignature is the apply policy: it covers the generation fingerprint plus every other field the scheduler reads, and keying off the catalog object would re-apply (and cancel in-flight work) on a label or health change.
+    applyCatalog()
   }, [applySignature, controller])
 
   const catalog = useMemo(
@@ -206,7 +213,7 @@ export function useAutomationHostCatalog(
   const resolution = useMemo(
     () =>
       resolveAutomationHostFilter({
-        filter: automationHostFilter,
+        filter: hostFilter,
         catalog,
         // Deliberately not `referencedStableKeys`: that set includes the saved
         // selection so the catalog still projects it, and a selection that
@@ -219,7 +226,7 @@ export function useAutomationHostCatalog(
         ])
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal; the cache object itself never changes identity.
-    [automationHostFilter, cacheVersion, catalog, controller, options.referencedStableKeys]
+    [cacheVersion, catalog, controller, hostFilter, options.referencedStableKeys]
   )
   const rows = useMemo(
     () =>

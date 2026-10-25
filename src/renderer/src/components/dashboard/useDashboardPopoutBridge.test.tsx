@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      ...makeSnapshotWatchState(),
       acknowledgeAgents: mocks.acknowledgeAgents,
       setActiveWorktree: mocks.setActiveWorktree
     }),
@@ -55,10 +56,8 @@ import {
   repoIconsUnchanged,
   useDashboardPopoutBridge
 } from './useDashboardPopoutBridge'
-import type { DashboardSnapshotState } from './build-dashboard-snapshot'
-import type { AppState } from '@/store/types'
 
-type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
+type DashboardSnapshotWatchState = Parameters<typeof dashboardSnapshotInputsChanged>[0]
 
 function makeSnapshotWatchState(): DashboardSnapshotWatchState {
   return {
@@ -89,8 +88,12 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: false,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeRepoId: null,
+    projects: [],
     removedRuntimeEnvironmentIds: new Set()
-  } as DashboardSnapshotWatchState
+  }
 }
 
 function Harness({ enabled }: { enabled: boolean }): null {

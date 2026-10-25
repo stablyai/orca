@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PDF loading drives pdf.js document/viewer instances and decode errors through an external worker lifecycle. */
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -24,7 +23,7 @@ import {
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { listenForPdfZoomRequests } from './pdf-zoom-request'
+import { listenForViewerZoomRequests } from './viewer-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -179,8 +178,9 @@ function PdfDocumentViewer({
     if (!isCommandOwner) {
       return
     }
-    return listenForPdfZoomRequests((direction) =>
-      direction === 'reset' ? zoomReset() : stepZoom(direction)
+    return listenForViewerZoomRequests(
+      (direction) => (direction === 'reset' ? zoomReset() : stepZoom(direction)),
+      rootRef
     )
   }, [isCommandOwner, stepZoom, zoomReset])
 

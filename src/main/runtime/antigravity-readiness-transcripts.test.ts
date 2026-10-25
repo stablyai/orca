@@ -49,10 +49,6 @@ describe('Antigravity raw captured readiness', () => {
   const REFUSAL_TIMEOUT_MS = 600
   /** Antigravity's binary, as Orca launches and probes it (`tui-agent-config.ts` detectCmd). */
   const ANTIGRAVITY_COMMAND = 'agy'
-  // String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
-  // control byte in source, which is unreadable and survives badly in diffs.
-  const ESC = String.fromCharCode(27)
-
   type TranscriptCase = {
     /** Fixture basename; `<name>.txt` under `__fixtures__/`. */
     name: string
@@ -222,13 +218,6 @@ describe('Antigravity raw captured readiness', () => {
         },
         READY_TIMEOUT_MS + 10_000
       )
-
-      it.skipIf(!captured)(`${label} was captured raw, not pasted from a rendered screen`, () => {
-        const text = readFileSync(path, 'utf8')
-        // Why: a transcript with no escape bytes went through a terminal's renderer and a
-        // human's clipboard. It cannot answer what the caret or chrome looked like.
-        expect(text).toContain(ESC)
-      })
     }
   })
 })

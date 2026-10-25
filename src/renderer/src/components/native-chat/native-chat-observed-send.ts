@@ -1,4 +1,4 @@
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
   clearConfirmDurationMs,

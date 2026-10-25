@@ -11,6 +11,7 @@ import { getProjectGroupingForRepo, type ProjectGroupingIndex } from '../project
 import type { WorktreeGroupEntry } from './worktree-group-entry'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
+import type { RepoOfWorktree } from './row-types'
 
 function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): ExecutionHostId | null {
   const repo = repoMap.get(repoId)
@@ -127,13 +128,12 @@ export function getNoticeHostContextLabels(
 /** Keyed by host-qualified identity: two hosts sharing an id need two labels. */
 export function getMixedWorktreeHostContextLabels(
   worktrees: readonly Worktree[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   hostLabelById: ReadonlyMap<string, string> | undefined,
   defaultHostId: ExecutionHostId
 ): Map<string, string> | undefined {
   return getSharedMixedHostContextLabels(worktrees, {
-    getHostId: (worktree) =>
-      getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId),
+    getHostId: (worktree) => getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId),
     getIdentity: getWorktreeHostIdentity,
     sources: { hostLabelById }
   })
@@ -141,7 +141,7 @@ export function getMixedWorktreeHostContextLabels(
 
 export function getHostWorktreeCounts(
   worktrees: readonly Worktree[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, number> | undefined {
   if (worktrees.length === 0) {
@@ -151,7 +151,7 @@ export function getHostWorktreeCounts(
   // and a host's count is exactly the length of its id list by construction.
   // Dedup by host, not by bare id: the same id on two hosts is two workspaces
   // and has to be counted under each of them (STA-4343).
-  const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId)
+  const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId)
   if (!idsByHost) {
     return undefined
   }
@@ -164,7 +164,7 @@ export function getHostWorktreeCounts(
 
 export function getHostWorktreeIds(
   worktrees: readonly Worktree[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, string[]> | undefined {
   if (worktrees.length === 0) {
@@ -179,7 +179,7 @@ export function getHostWorktreeIds(
       continue
     }
     seenIdentities.add(identity)
-    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
     const ids = idsByHost.get(hostId) ?? []
     ids.push(worktree.id)
     idsByHost.set(hostId, ids)
@@ -198,13 +198,13 @@ export function getHostWorktreeIds(
 export function getLaneHostWorktreeCounts(
   worktrees: readonly Worktree[],
   folderWorkspaces: readonly RenderableFolderWorkspace[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, number> | undefined {
   if (worktrees.length === 0 && folderWorkspaces.length === 0) {
     return undefined
   }
-  const counts = getHostWorktreeCounts(worktrees, repoMap, defaultHostId) ?? new Map()
+  const counts = getHostWorktreeCounts(worktrees, repoOf, defaultHostId) ?? new Map()
   for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
     const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
     counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
@@ -223,13 +223,13 @@ export function getLaneHostWorktreeCounts(
 export function getLaneHostWorktreeIds(
   worktrees: readonly Worktree[],
   folderWorkspaces: readonly RenderableFolderWorkspace[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, string[]> | undefined {
   if (worktrees.length === 0 && folderWorkspaces.length === 0) {
     return undefined
   }
-  const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId) ?? new Map()
+  const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId) ?? new Map()
   for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
     const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
     if (!idsByHost.has(hostId)) {

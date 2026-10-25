@@ -9,6 +9,7 @@ import type {
   LinearViewMode,
   TaskItem
 } from './mobile-tasks-legacy-foundation'
+import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
 
 // Why: the tasks barrel pulls the whole react-native screen graph in; re-export only the
@@ -89,11 +90,14 @@ function makeIssue(index: number): LinearIssue {
 
 function makeItems(count: number): TaskItem[] {
   return Array.from({ length: count }, (_, index) => ({
-    id: `task-${index}`,
+    key: `task-${index}`,
+    subtitle: 'Linear issue',
+    status: 'Open',
+    updatedAt: '2026-01-01T00:00:00Z',
     provider: 'linear' as const,
     title: `Issue ${index}`,
     source: makeIssue(index)
-  })) as unknown as TaskItem[]
+  }))
 }
 
 type ProbeInput = {
@@ -115,13 +119,13 @@ const DEFAULT_INPUT: ProbeInput = {
 /** The hook mutates the model it is handed, so each render gets a fresh envelope around
  *  the same input identities — exactly how the picker projection feeds it in the app. */
 function createModel(input: ProbeInput): PickerProjectionModel {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every field the projection reads; unrelated screen actions are never called.
-  return {
+  return mountFixture<PickerProjectionModel>({
+    effectiveRepoIds: new Set<string>(),
     activeGitHubProject: null,
-    defaultGitHubPreset: 'open',
+    defaultGitHubPreset: 'issues',
     githubKind: 'issues',
-    githubMode: 'repo',
-    githubPreset: 'open',
+    githubMode: 'items',
+    githubPreset: 'issues',
     githubProjectPickerSearch: input.githubProjectPickerSearch,
     githubProjectSearch: '',
     githubProjectSettings: { pinned: [], recent: [] },
@@ -151,7 +155,7 @@ function createModel(input: ProbeInput): PickerProjectionModel {
     selectedLinearWorkspaceId: 'all',
     setAppliedGithubProjectSearch: () => {},
     setSelectedRepoIds: () => {}
-  } as unknown as PickerProjectionModel
+  })
 }
 
 type Projection = ReturnType<typeof useMobileTasksProviderViewProjection>
@@ -239,7 +243,7 @@ function countLinearWork(run: () => void): WorkCounts {
           return compare(a, b)
         })
     )
-  } as typeof Array.prototype.sort
+  }
   try {
     run()
   } finally {
@@ -298,26 +302,35 @@ describe('useMobileTasksProviderViewProjection linear sections', () => {
     expect(projection.linearListEntries.every((entry) => entry.type === 'issue')).toBe(true)
   })
 
-  it.each(ORDERINGS)('matches the pre-change sections for every grouping at order %s', (order) => {
-    for (const linearGroupBy of GROUPINGS) {
-      const projection = mount({ linearGroupBy, linearOrderBy: order })
-      const legacy = legacyProjection({
-        ...DEFAULT_INPUT,
-        linearGroupBy,
-        linearOrderBy: order
-      })
-      expect(summarizeSections(projection.linearIssueSections)).toEqual(
-        summarizeSections(legacy.listSections)
-      )
-      expect(summarizeSections(projection.linearBoardSections)).toEqual(
-        summarizeSections(legacy.boardSections)
-      )
-      expect(projection.linearIssuesForView.map((issue) => issue.id)).toEqual(
-        legacy.issuesForView.map((issue) => issue.id)
-      )
-      unmountAll()
+  it.each(ORDERINGS)(
+    'preserves literal issue order and pre-change section parity at order %s',
+    (order) => {
+      const items = makeItems(3)
+      const expectedIds = {
+        priority: ['issue-1', 'issue-2', 'issue-0'],
+        updated: ['issue-2', 'issue-1', 'issue-0'],
+        identifier: ['issue-0', 'issue-2', 'issue-1']
+      }
+      for (const linearGroupBy of GROUPINGS) {
+        const projection = mount({ items, linearGroupBy, linearOrderBy: order })
+        const legacy = legacyProjection({
+          ...DEFAULT_INPUT,
+          linearGroupBy,
+          linearOrderBy: order,
+          items
+        })
+        expect(summarizeSections(projection.linearIssueSections)).toEqual(
+          summarizeSections(legacy.listSections)
+        )
+        expect(summarizeSections(projection.linearBoardSections)).toEqual(
+          summarizeSections(legacy.boardSections)
+        )
+        expect(projection.linearIssuesForView.map((issue) => issue.id)).toEqual(expectedIds[order])
+        expect(items.map((item) => item.source.id)).toEqual(['issue-0', 'issue-1', 'issue-2'])
+        unmountAll()
+      }
     }
-  })
+  )
 })
 
 describe('useMobileTasksProviderViewProjection transitions', () => {

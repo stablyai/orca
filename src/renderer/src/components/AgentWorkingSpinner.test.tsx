@@ -9,14 +9,14 @@ import { AgentWorkingSpinner } from './AgentWorkingSpinner'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 describe('AgentWorkingSpinner', () => {
-  it('hooks the compositor-driven CSS animation, not a JS clock', () => {
+  it('renders the spinner animation and reduced-motion classes', () => {
     const markup = renderToStaticMarkup(React.createElement(AgentWorkingSpinner))
 
     expect(markup).toContain('agent-working-spinner')
     expect(markup).toContain('data-agent-spinner')
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-agent-working')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('motion-reduce:border-t-yellow-500')
+    expect(markup).toContain('motion-reduce:border-t-agent-working')
   })
 
   it('renders when the Web Animations API is unavailable', async () => {
@@ -92,43 +92,6 @@ describe('AgentWorkingSpinner', () => {
       await fireAnimationStart()
       expect(animation.startTime).toBe(0)
       expect(getAnimations).toHaveBeenCalledTimes(2)
-    } finally {
-      act(() => root.unmount())
-      container.remove()
-      if (originalGetAnimations === undefined) {
-        Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
-      } else {
-        Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
-      }
-    }
-  })
-
-  // Why: reduced motion resolves the rule to `animation: none`, so no animation
-  // exists to start and none to anchor. Pins that dropping the ref-time anchor
-  // adds no exposure here — both paths were already no-ops.
-  it('anchors nothing when reduced motion leaves no animation to start', async () => {
-    const getAnimations = vi.fn(() => [] as Animation[])
-    const originalGetAnimations = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'getAnimations'
-    )
-    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
-      configurable: true,
-      value: getAnimations
-    })
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    const root = createRoot(container)
-
-    try {
-      await act(async () => {
-        root.render(<AgentWorkingSpinner />)
-      })
-      const el = container.querySelector('[data-agent-spinner]')
-
-      expect(el).not.toBeNull()
-      expect(getAnimations).not.toHaveBeenCalled()
-      expect(el!.className).toContain('motion-reduce:border-t-yellow-500')
     } finally {
       act(() => root.unmount())
       container.remove()

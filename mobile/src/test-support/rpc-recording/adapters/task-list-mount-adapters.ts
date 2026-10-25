@@ -104,7 +104,7 @@ export function taskListMountAdapters(
         'github-page': () =>
           actions().fetchGitHubItemsPage(context.client, mountFixture([HOSTED_REPO])),
         'github-count': () =>
-          actions().countGitHubItems(context.client, mountFixture([HOSTED_REPO]))
+          actions().countGitHubItemPages(context.client, mountFixture([HOSTED_REPO]))
       }),
       state: (model) => ({
         connected: model.linearConnected,
@@ -127,7 +127,7 @@ export function taskListMountAdapters(
           appliedQuery: '',
           clientRef: { current: context.client },
           connState: 'connected',
-          countGitHubItems: async () => 0,
+          countGitHubItemPages: async () => 0,
           fetchGitHubItemsPage: async () => ({
             items: [],
             failedCount: 0,
@@ -184,14 +184,16 @@ export function taskListMountAdapters(
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
+        clientRef: { current: context.client },
         connState: 'connected',
         fetchGitHubItemsPage: async () => ({ items: [], failedCount: 0 }),
         githubCurrentPage: 0,
         githubPages: [[]],
         githubPaginationLoading: false,
-        githubTotalCount: null,
+        githubCountedTotalPages: null,
         linearApiKeyDraft: 'lin_api_key',
         linearConnectState: 'idle',
+        loadGenerationRef: { current: 0 },
         loadLinearContext: async () => {},
         loadTasks: async () => {},
         selectedHostedRepos: [HOSTED_REPO],

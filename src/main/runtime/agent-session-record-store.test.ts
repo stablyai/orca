@@ -18,9 +18,9 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
-import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
+import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session/ownership/agent-session-claim-key-retention'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -304,7 +304,7 @@ describe('acquisition path', () => {
 })
 
 describe('concurrent claims', () => {
-  it('lets exactly one of two concurrent reservations win and never spawns the loser', async () => {
+  it('grants exactly one of two concurrent reservations at the next fence', async () => {
     const store = await open()
     await establishOwner(store)
     const request = () =>
@@ -738,26 +738,35 @@ describe('claim keys and unreadable rows', () => {
     expect(store.isClaimKeyVerifiable('key-unknown', NOW)).toBe(true)
   })
 
-  it.each([
-    [
-      'invalid checkpoint',
-      (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { journalCheckpoint: { epoch: 'bad', sequence: 1 } })
-    ],
-    [
-      // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
-      'live proof naming no handle',
-      (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { provenHandleLinkId: 'link-never-minted' })
-    ]
-  ])('quarantines a record with %s', async (_name, corrupt) => {
+  // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
+  it('quarantines a record with a live proof naming no handle', async () => {
     const first = await open()
     await establishOwner(first)
     await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      corrupt(persisted.records['session-alpha'])
+      Object.assign(persisted.records['session-alpha'].lease, {
+        provenHandleLinkId: 'link-never-minted'
+      })
     })
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
   })
+
+  // Nothing reads the checkpoint any more, so even one this build could never have parsed loads.
+  it.each([null, { epoch: 3, sequence: 0 }, { epoch: 'bad', sequence: 1 }])(
+    "loads a record carrying an older build's journal checkpoint %o, and drops it on the next write",
+    async (journalCheckpoint) => {
+      const first = await open()
+      await establishOwner(first)
+      await editPersistedTestAgentSessionStore(directory, (persisted) => {
+        Object.assign(persisted.records['session-alpha'].lease, { journalCheckpoint })
+      })
+      const reopened = await open()
+      expect(reopened.isSessionUnreadable('session-alpha')).toBe(false)
+      await reopened.setConversationName('session-alpha', 'renamed')
+      const stored = (await readPersistedTestAgentSessionStore(directory)).records['session-alpha']
+      expect(stored.conversationName).toBe('renamed')
+      expect(stored.lease).not.toHaveProperty('journalCheckpoint')
+    }
+  )
 
   it('sets aside a row whose handle is in both stored forms and never rewrites it', async () => {
     const first = await open()

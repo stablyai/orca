@@ -44,7 +44,10 @@ export function launchNewTabPromptThroughHost(
   promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }>
 } {
   const { pasteContent, submit, onPromptDelivered, onPromptDeliveryUnconfirmed, ...launch } = args
-  const { tabId, started } = launchAgentThroughHost(launch)
+  const { tabId, started } = launchAgentThroughHost({
+    ...launch,
+    suppressStartupUpdatePrompt: submit
+  })
   const pasted = pasteAgentLaunchPromptOnceReady({
     worktreeId: args.worktreeId,
     tabId,

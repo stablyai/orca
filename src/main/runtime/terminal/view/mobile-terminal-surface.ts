@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type {
@@ -205,7 +204,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       // Why: the renderer's ready publication already landed with the intended mode; only a pending shell needs the main-side rescue.
       return existing
     }
-    const leafId = pty ? parsePaneKey(pty.paneKey ?? '')?.leafId : undefined
+    const leafId = pty ? parsePaneKey(this.paneOfPty(pty).paneKey ?? '')?.leafId : undefined
     if (!pty || !leafId) {
       return existing
     }
@@ -218,7 +217,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
     // Why: check closures normally drain only inside syncWindowGraph; a main-side publish must drain them too or the pending wait misses the insertion.
-    for (const cb of [...this.graphSyncCallbacks]) {
+    for (const cb of Array.from(this.graphSyncCallbacks)) {
       cb()
     }
     return this.findMobileTerminalSurface(worktreeId, tabId)

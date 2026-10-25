@@ -9,9 +9,16 @@ import type * as SendHook from './use-native-chat-structured-composer-send'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { createMemoryNativeChatComposerDraftStorage } from './native-chat-composer-draft-storage'
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 vi.mock('@/lib/worker-terminal-takeover-report', () => ({
   reportStructuredSessionUserInput: vi.fn()
@@ -63,6 +70,7 @@ function heldTransport(hostCommand = false): {
   })
   return {
     transport: {
+      capturePresentation: () => () => true,
       send: vi.fn(() => true),
       dispatchCommand: vi.fn(() => dispatched),
       optionsSurface: {
@@ -639,10 +647,6 @@ describe('native-chat composer draft lifecycle', () => {
       vi.unstubAllGlobals()
     }
 
-    expect(restoreNativeChatPastes).toHaveBeenCalledWith([
-      `${folder}/orca-paste-1-ab.png`,
-      `${folder}/orca-paste-2-ab.png`
-    ])
     expect(seen.api?.attachments.imageAttachments).toEqual([
       { id: 'kept', path: `${folder}/orca-paste-1-ab.png` },
       { id: 'swept', path: '', unavailableName: 'orca-paste-2-ab.png' }

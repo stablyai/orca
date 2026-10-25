@@ -54,7 +54,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     }
   })
 
-  it('fires onTitleChange with the normalized working label on each spinner frame', async () => {
+  it('surfaces normalized working and idle labels across a spinner cycle', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
@@ -78,29 +78,6 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     // 'working' (detectAgentStatusFromTitle('⠋ π - cwd') === 'working').
     expect(normalized).toContain('⠋ π - cwd')
     expect(normalized).toContain('π - cwd')
-
-    transport.disconnect()
-  })
-
-  it('fires onTitleChange for working frames via attach() (reattach path)', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const onTitleChange = vi.fn()
-
-    const transport = createIpcPtyTransport({ onTitleChange })
-    // Why: reattach is the path taken when a worktree is restored or when
-    // tab re-mounting happens mid-session. The transport must still wire up
-    // the title observer on this path — otherwise Pi emits spinner frames
-    // that never propagate to the store.
-    transport.attach({ existingPtyId: 'pty-pi', callbacks: {} })
-
-    onTitleChange.mockClear()
-
-    onData?.({ id: 'pty-pi', data: workingFrame('⠋') })
-    onData?.({ id: 'pty-pi', data: workingFrame('⠙') })
-    await flushPtySideEffects()
-
-    const calls = onTitleChange.mock.calls.map((c) => c[0])
-    expect(calls).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })

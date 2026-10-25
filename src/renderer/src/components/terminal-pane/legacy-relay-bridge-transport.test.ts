@@ -68,10 +68,10 @@ function publishPanes(panes: LegacyRelayBridgedPane[]): void {
 function attachedWithScreen(screen: string) {
   return async (args: { ptyId: string; replayInStream?: boolean }) => {
     if (!args.replayInStream) {
-      return { status: 'attached', replay: screen }
+      return { status: 'attached', replay: screen, acquisitionId: 1 }
     }
     bridge.replay.forEach((listener) => listener({ ptyId: args.ptyId, replay: screen }))
-    return { status: 'attached', replay: '' }
+    return { status: 'attached', replay: '', acquisitionId: 1 }
   }
 }
 
@@ -165,7 +165,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
   })
 
   it('reattaches with the relay’s screen, then carries input, output, size and exit', async () => {
-    bridge.attach.mockResolvedValue({ status: 'attached', replay: 'SCREEN' })
+    bridge.attach.mockResolvedValue({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
     const inner = innerTransport()
     const transport = createLegacyRelayBridgeTransport(PTY, inner)
     const cb = callbacks()
@@ -184,12 +184,12 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(cb.onData.mock.calls).toEqual([['out']])
     bridge.exit.forEach((listener) => listener({ ptyId: PTY, code: 0 }))
     expect(cb.onExit).toHaveBeenCalledWith(0)
-    expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY })
+    expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 1 })
     expect(inner.connect).not.toHaveBeenCalled()
   })
 
   it('asks main to hold a hidden pane’s output, and repaints from the screen main re-read', async () => {
-    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN' })
+    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
     const inner = innerTransport()
     inner.setOutputPaused = vi.fn(() => true)
     const transport = createLegacyRelayBridgeTransport(PTY, inner)
@@ -239,7 +239,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
   })
 
   it('reattaches after a disconnect hung the bridge up, so the pane is never left deaf', async () => {
-    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN' })
+    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
     const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
     const cb = callbacks()
     await transport.connect({ url: '', sessionId: PTY, callbacks: cb })
@@ -266,7 +266,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
   })
 
   it('asks again for a pane that turned live while an earlier ask was still out', async () => {
-    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN' })
+    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
     const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
     const cb = callbacks()
     await transport.connect({ url: '', sessionId: PTY, callbacks: cb })
@@ -301,7 +301,8 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       bridge.data.forEach((listener) => listener({ ptyId: PTY, data: 'after' }))
       return new Promise((resolve) => (answer = resolve)).then(() => ({
         status: 'attached',
-        replay: args.replayInStream ? '' : 'SCREEN'
+        replay: args.replayInStream ? '' : 'SCREEN',
+        acquisitionId: 1
       }))
     })
     publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-1', state: 'live' }])
@@ -318,9 +319,9 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     const cb = callbacks()
     const connecting = transport.connect({ url: '', sessionId: PTY, callbacks: cb })
     transport.detach?.()
-    answer({ status: 'attached', replay: 'SCREEN' })
+    answer({ status: 'attached', replay: 'SCREEN', acquisitionId: 9 })
     await expect(connecting).resolves.toBeUndefined()
-    expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY })
+    expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 9 })
     expect(transport.isConnected()).toBe(false)
     expect(cb.onConnect).not.toHaveBeenCalled()
   })
@@ -335,8 +336,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-1', state: 'live' }])
     await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
     transport.destroy?.()
-    answer({ status: 'attached', replay: '' })
-    await vi.waitFor(() => expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY }))
+    answer({ status: 'attached', replay: '', acquisitionId: 9 })
+    await vi.waitFor(() =>
+      expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 9 })
+    )
     expect(cb.onErrorCleared).not.toHaveBeenCalled()
   })
 
@@ -351,7 +354,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
   })
 
   it('stops the old shell when its pane is closed, and never when it is only detached', async () => {
-    bridge.attach.mockResolvedValue({ status: 'attached', replay: '' })
+    bridge.attach.mockResolvedValue({ status: 'attached', replay: '', acquisitionId: 1 })
     const detached = createLegacyRelayBridgeTransport(PTY, innerTransport())
     await detached.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
     detached.detach?.()
@@ -382,6 +385,48 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(
       legacyRelayBridgedPtyIdsForClosingTab('local-tab', ['ssh:ssh-box@@pty-3', 'pty-local'])
     ).toEqual(['ssh:ssh-box@@pty-3'])
+  })
+
+  it('hands back every viewer when two attaches for the pane overlap', async () => {
+    let next = 0
+    bridge.attach.mockImplementation(async () => {
+      next += 1
+      return { status: 'attached', replay: '', acquisitionId: next }
+    })
+    const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
+    // A connect and an attach for the same pane, both answered before either settles.
+    const connecting = transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    transport.attach({ existingPtyId: PTY, callbacks: callbacks() })
+    await connecting
+    await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
+    await Promise.resolve()
+    transport.detach?.()
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId).sort()).toEqual([1, 2])
+  })
+
+  it('keeps the newest attach’s viewer when an older attach answers last', async () => {
+    const answers: ((acquisitionId: number) => void)[] = []
+    bridge.attach.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          answers.push((acquisitionId) =>
+            resolve({ status: 'attached', replay: `SCREEN-${acquisitionId}`, acquisitionId })
+          )
+        )
+    )
+    const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
+    const older = transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    transport.attach({ existingPtyId: PTY, callbacks: callbacks() })
+    await vi.waitFor(() => expect(answers).toHaveLength(2))
+    // The newer attach answers first, then the older one.
+    answers[1](2)
+    await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
+    answers[0](1)
+    // The connect still paints its screen: the attach that won delivers none of its own.
+    await expect(older).resolves.toMatchObject({ replay: 'SCREEN-1' })
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId)).toEqual([1])
+    transport.detach?.()
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId)).toEqual([1, 2])
   })
 
   it('hands any other connect straight to the managed server’s transport', async () => {

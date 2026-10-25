@@ -6,6 +6,7 @@ import {
 } from '../pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
 export type ProviderProcessTeardownVerdict = DescendantTreeVerdict | null
@@ -23,6 +24,7 @@ export type ProviderProcessTeardownDeps = {
   /** Resolves true only when taskkill reports the whole tree terminated. */
   terminateWindowsTree?: (rootPid: number, deps?: { site?: string }) => Promise<boolean>
   signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
+  signalProcess?: (pid: number, signal: NodeJS.Signals) => void
 }
 
 function terminateDedicatedPosixGroup(
@@ -36,8 +38,7 @@ function terminateDedicatedPosixGroup(
     signalGroup(rootPid, 'SIGKILL')
   } catch (error) {
     // ESRCH says only that the group is empty; a descendant that left it, or a root that never led it, may live.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Node process.kill errors expose an optional errno code; only that field is read.
-    return (error as NodeJS.ErrnoException).code === 'ESRCH' ? null : 'unverifiable'
+    return hasErrorCode(error, 'ESRCH') ? null : 'unverifiable'
   }
   // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
   recordSelfInitiatedTreeKill({
@@ -66,41 +67,48 @@ async function terminatePosixTree(
   const terminate =
     deps.terminateDescendants ??
     ((captured: DescendantSnapshot) => terminateDescendantSnapshotWithVerdict(captured))
-  const verdict = await terminate(snapshot)
-  const descendantsExited = verdict === 'exited'
-  // A detached POSIX launch is the leader of its own process group. Group
-  // signalling reaches grandchildren even after they daemonise/reparent,
-  // while the stopped root and captured pgid make the ownership proof exact.
-  // The identity-gated descendant sweep remains the fallback for older hosts
-  // or launches that could not establish a dedicated group.
-  if (descendantsExited && snapshot.rootPgid === rootPid) {
+  let verdict: ProviderProcessTeardownVerdict = 'unverifiable'
+  try {
+    verdict = await terminate(snapshot)
+  } finally {
+    const signal = deps.signalProcess ?? process.kill
     const signalGroup =
       deps.signalProcessGroup ??
-      ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
-    let groupSignalled = false
-    try {
-      signalGroup(snapshot.rootPgid, 'SIGKILL')
-      groupSignalled = true
-    } catch {
-      // Already-gone is still the desired outcome, but nothing here killed it,
-      // and a crumb for a kill we never landed is a false render-process-gone suspect.
+      ((pgid: number, toSend: NodeJS.Signals) => process.kill(-pgid, toSend))
+    // The stopped root cannot reap or release its direct children's PIDs. Its snapshot pins
+    // their identity until after this root is killed, even if a later table read fails.
+    for (const descendant of snapshot.descendants) {
+      if (descendant.ppid !== rootPid) {
+        continue
+      }
+      if (descendant.pgid === descendant.pid) {
+        try {
+          signalGroup(descendant.pid, 'SIGKILL')
+        } catch {
+          // An already exited group is safe to ignore.
+        }
+      }
+      try {
+        signal(descendant.pid, 'SIGKILL')
+      } catch {
+        // The root still has to be stopped when a child rejects a signal.
+      }
     }
-    if (groupSignalled) {
-      // Outside the try, as in terminateDedicatedPosixGroup: that catch is the
-      // already-gone contract, not a breadcrumb handler.
-      recordSelfInitiatedTreeKill({
-        pid: snapshot.rootPgid,
-        site: deps.site,
-        scope: 'posix-process-group'
-      })
+    if (snapshot.rootPgid === rootPid) {
+      try {
+        signalGroup(rootPid, 'SIGKILL')
+        recordSelfInitiatedTreeKill({
+          pid: rootPid,
+          site: deps.site,
+          scope: 'posix-process-group'
+        })
+      } catch {
+        // The held root is still addressed through its exact child handle below.
+      }
     }
+    child.kill('SIGKILL')
   }
-  if (!descendantsExited) {
-    child.kill('SIGCONT')
-    return verdict
-  }
-  child.kill('SIGKILL')
-  return 'exited'
+  return verdict
 }
 
 /** Stops every process owned by one provider launch before releasing its wrapper. */

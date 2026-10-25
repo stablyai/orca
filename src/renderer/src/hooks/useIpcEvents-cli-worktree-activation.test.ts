@@ -72,6 +72,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -158,7 +159,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -194,6 +195,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -205,6 +207,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
@@ -347,6 +350,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -428,7 +432,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -464,6 +468,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -475,6 +480,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},

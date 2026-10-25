@@ -760,9 +760,12 @@ describe('createPaneForegroundAgentTracker', () => {
       onCommandFinished: () => tracker.onCommandFinished()
     })
 
-    lifecycle.handlePtyData("printf '\\033]133;A\\007\\033]777;agent=codex\\007\\033]133;D;0\\007'")
+    lifecycle.handlePtyData('\x1b]133;C\x07\x1b]777;agent=codex\x07')
     await flushSettleRead(COMMAND_SETTLE_MS)
 
+    expect(remoteRead).toHaveBeenCalledExactlyOnceWith('ssh:conn-1@@pty-9', {
+      expectedIncarnationId: 'inc-remote'
+    })
     expect(publish).not.toHaveBeenCalledWith(
       expect.objectContaining({ agent: 'codex', shellForeground: false })
     )

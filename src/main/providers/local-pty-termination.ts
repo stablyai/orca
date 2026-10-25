@@ -1,6 +1,7 @@
 import type * as pty from 'node-pty'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { terminateShutdownDescendants } from '../daemon/terminal-descendant-shutdown'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { terminatePtyJob } from '../windows/windows-pty-job'
 import {
@@ -179,7 +180,10 @@ async function shutdownTrackedPty(
     // Typed agents also detach tool process groups; immediate close must snapshot before root exit.
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
-      terminateOwnedTree: () => terminatePtyJob(proc)
+      terminateOwnedTree: () => terminatePtyJob(proc),
+      terminateDescendants: terminateShutdownDescendants,
+      // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
+      awaitEscalation: () => operation.immediate
     })
   } else {
     signalRoot()

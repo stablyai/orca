@@ -33,8 +33,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args),
-  sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
+  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args)
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
@@ -65,6 +64,23 @@ describe('useNativeChatInteractiveSend', () => {
     mocks.sendNativeChatMessage.mockReturnValue(handle)
   })
 
+  it('refuses OMP question answers and cancellation without writing or clearing the wait', async () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'omp'))
+    const settled = vi.fn()
+    act(() => {
+      expect(result.current.sendAnswer(PROMPT, [{ indices: [1] }], settled)).toEqual({
+        settleAfterMs: 0
+      })
+    })
+    expect(settled).toHaveBeenCalledWith(false)
+    await expect(result.current.cancelAsk()).resolves.toBe(false)
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
   it('routes a non-selector answer through the pasted-text send path', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'grok'))
 
@@ -90,6 +106,33 @@ describe('useNativeChatInteractiveSend', () => {
       expect.any(Function)
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
+  it('sends a Codex async answer as an ordinary message that quotes each answered question', () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'codex'))
+    const prompt: AskPrompt = {
+      replyAsMessage: true,
+      questions: [
+        { question: 'Which color?', multiSelect: false, options: [{ label: 'Red' }] },
+        { question: 'Skipped?', multiSelect: false, options: [] },
+        { question: 'Any constraints?', multiSelect: false, options: [] }
+      ]
+    }
+
+    act(() =>
+      result.current.sendAnswer(prompt, [
+        { indices: [0] },
+        { indices: [] },
+        { indices: [], other: 'None' }
+      ])
+    )
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
+      'pty-1',
+      '> Which color?\n\nRed\n\n> Any constraints?\n\nNone',
+      { onDeliverySettled: expect.any(Function) }
+    )
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
   })
 
   it('routes a Claude answer through the option-number keystroke path', () => {

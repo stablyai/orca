@@ -1,6 +1,3 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 10 AutomationsPage specs, not shipped code, and it falls outside
-   the *.test / *.spec / tests glob set. Inlining these 13 stubs would duplicate them into all 10 specs and push the largest
-   past the max-lines ratchet. */
 /**
  * The mount rig for AutomationsPage tests: child stand-ins, the preload API
  * double, and the per-test store reset.
@@ -65,6 +62,7 @@ export type ListPanelProps = {
   selectExternalKey: (entryKey: string | null) => void
   onOpenDetail: () => void
   onRefresh: () => void
+  onOpenRuns: () => void
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
@@ -199,6 +197,7 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
+        <button onClick={props.onOpenRuns}>Runs</button>
         {props.sortedListItems.map((item) =>
           item.kind === 'local' ? (
             <button

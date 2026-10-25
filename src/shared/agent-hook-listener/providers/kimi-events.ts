@@ -27,6 +27,18 @@ export function normalizeKimiEvent(
   if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
     return null
   }
+  if (eventName === 'SessionStart') {
+    // Why: a resumed session's only pre-prompt signal, so its id stays resumable at the next quit
+    // (#31311); `startup` fires mid-submit of the first message, so it is not an idle boundary.
+    return hookPayload['source'] === 'resume'
+      ? normalizeAgentStatusPayload({
+          state: 'done',
+          prompt: '',
+          agentType: 'kimi',
+          sessionBoundary: true
+        })
+      : null
+  }
 
   const toolName = readString(hookPayload, 'tool_name')
   const isUserInputTool = isKimiUserInputTool(toolName)

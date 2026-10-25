@@ -12,13 +12,13 @@ import {
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import { registerSocketDeviceKey } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../src/main/runtime/rpc/e2ee-crypto'
+import { generateKeyPair } from '../../../src/shared/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
   type MobileSocketTransport
 } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
-import type { WebDeviceKeySupport } from '../../../src/renderer/src/web/web-device-key'
+import type { KeyedWebDeviceKeySupport } from '../../../src/renderer/src/web/web-device-key'
 import { createMemoryWebDeviceKeyStore } from '../../../src/renderer/src/web/web-device-key-store'
 import { WebRuntimeConnectionTransport } from '../../../src/renderer/src/web/web-runtime-connection-transport'
 import { createWebRuntimeCredentialSource } from '../../../src/renderer/src/web/web-runtime-credential-source'
@@ -168,7 +168,7 @@ const dialedUrls: string[] = []
 
 function browserFor(
   token: string,
-  support: WebDeviceKeySupport,
+  support: KeyedWebDeviceKeySupport,
   storage: 'persisted' | 'session',
   store = createMemoryWebDeviceKeyStore(),
   pairingRevision = 1
@@ -284,7 +284,7 @@ describe('a browser moving from its pairing code to a device key', () => {
     currentHost = host([DEVICE_KEY_RUNTIME_CAPABILITY, DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY])
     const paired = currentHost.registry.addDevice('Browser', 'runtime')
     currentHost.registry.updateLastSeen(paired.deviceId)
-    const browser = browserFor(paired.token, 'session-insecure-origin', 'persisted')
+    const browser = browserFor(paired.token, 'session-no-ed25519', 'persisted')
 
     await browser.transport.waitForConnected(5_000)
     expect(currentHost.authenticated.at(-1)?.device.deviceToken).toBe(paired.token)
@@ -296,7 +296,7 @@ describe('a browser moving from its pairing code to a device key', () => {
     currentHost = host([DEVICE_KEY_RUNTIME_CAPABILITY, DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY])
     const paired = currentHost.registry.addDevice('Browser', 'runtime')
     currentHost.registry.updateLastSeen(paired.deviceId)
-    const browser = browserFor(paired.token, 'session-insecure-origin', 'session')
+    const browser = browserFor(paired.token, 'session-no-ed25519', 'session')
 
     await browser.transport.waitForConnected(5_000)
     const keyed = currentHost.authenticated.at(-1)!

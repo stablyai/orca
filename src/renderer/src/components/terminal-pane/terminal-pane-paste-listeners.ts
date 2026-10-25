@@ -1,6 +1,6 @@
 import { useAppStore } from '../../store'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
   firesNativePasteEvent,
@@ -36,14 +36,9 @@ export function registerTerminalPanePasteListeners({
   isMac: boolean
   shortcutPlatform: NodeJS.Platform
 }): () => void {
-  const {
-    forceBracketedMultilineTextPaste,
-    keybindings,
-    managerRef,
-    setTerminalError,
-    worktreeId
-  } = controller
-  const { executePanePasteText, pasteFromClipboard } = execution
+  const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId } = controller
+  const { executePanePasteText, pasteFromClipboard, resolvePaneProtectedMultilinePasteOptions } =
+    execution
   let suppressNextNativePaste = false
   let pasteSuppressionTimerId: number | null = null
   const shouldSuppressNativePaste = (event: KeyboardEvent): boolean => {
@@ -178,16 +173,17 @@ export function registerTerminalPanePasteListeners({
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+    const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
       useAppStore.getState(),
-      worktreeId
+      worktreeId,
+      paneTransportsRef.current.get(pane.id)
     )
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       runtimeEnvironmentId,
-      forceBracketedMultilineTextPaste,
+      protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
       onTextPasteError: () =>

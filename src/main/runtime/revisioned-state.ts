@@ -1,7 +1,5 @@
-// A value read by revision: a reader subscribes to every change, or names the revision it shows and
-// waits, bounded, for a newer one. Its owner keeps its own lifecycle policy; this only publishes.
-
-import { delayUnlessAborted } from '../../shared/abort-aware-delay'
+// A value read by revision: a reader subscribes to every change. Its owner keeps its own lifecycle
+// policy; this only publishes.
 
 export class RevisionedState<S> {
   private revision = 0
@@ -24,24 +22,6 @@ export class RevisionedState<S> {
     this.changed.add(onChange)
     return () => {
       this.changed.delete(onChange)
-    }
-  }
-
-  /** Resolves once the revision differs from `shown`, after `waitMs`, or when `signal` aborts. */
-  async waitForChange(shown: number | undefined, waitMs: number, signal?: AbortSignal) {
-    if (shown !== this.revision) {
-      return
-    }
-    const changed = new AbortController()
-    const notify = (): void => changed.abort()
-    this.changed.add(notify)
-    try {
-      await delayUnlessAborted(
-        waitMs,
-        AbortSignal.any([changed.signal, ...(signal ? [signal] : [])])
-      )
-    } finally {
-      this.changed.delete(notify)
     }
   }
 }

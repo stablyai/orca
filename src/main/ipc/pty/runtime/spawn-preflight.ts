@@ -19,7 +19,10 @@ import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { ensureJcodeRuntimeDir, JCODE_RUNTIME_DIR_ENV_KEY } from '../../../../shared/jcode-runtime-dir'
+import {
+  ensureJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../../shared/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -31,7 +34,7 @@ export async function prepareRuntimePtySpawn(
       await admission
     }
   }
-  // Only this machine spawns here: an `ssh:` connection throws, so every line below is local.
+  // SSH execution is rejected here; remaining preparation belongs to this machine.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
@@ -56,8 +59,7 @@ export async function prepareRuntimePtySpawn(
     !ctx.preAdoptedStablePane &&
     ctx.isDaemonHostSpawn &&
     (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
-  // Why: runtime-created terminals carry no renderer projectRuntime. An agent launch brings the PTY
-  // its command was quoted for; anything else takes the project's runtime and `--shell` pick.
+  // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
   const target = await resolvePtySpawnStartupTarget({
     worktreeId: args.worktreeId,
     cwd: args.cwd,
@@ -65,10 +67,15 @@ export async function prepareRuntimePtySpawn(
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.startupCwdFallback = target.startupCwdFallback
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
@@ -108,21 +115,15 @@ export async function prepareRuntimePtySpawn(
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
   if (ctx.env) {
-    // Why a copy: without a handle or Claude auth this is still the caller's env, which a split reuses.
+    // Clone caller environment before injection; another split may reuse it.
     ctx.env = { ...ctx.env }
     const pane = ptySpawnPaneFromIds(args)
     const jcodeEnv = pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
     stampPtySpawnPaneEnv(ctx.env, {
       pane,
-      jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY],
-      isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-      launchAgent: args.launchAgent,
-      cwd: args.cwd,
-      prewarmsJcodeOnDaemonHost: false
+      jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
     })
   }
-  // Why: a dropped resume still applies here, but this controller's result has no field for
-  // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,
     command: args.command,
@@ -145,6 +146,7 @@ export async function prepareRuntimePtySpawn(
   })
   ctx.launchCommand = hostEnv.launchCommand
   ctx.codexResumeArgvDropped = hostEnv.codexResumeLaunch.droppedResumeArgv
+  ctx.codexResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
   ctx.env = hostEnv.env
   ctx.selectedCodexHomePath = hostEnv.selectedCodexHomePath
   ctx.codexResumeHomeSelected = hostEnv.codexResumeHomeSelected

@@ -3,6 +3,7 @@ import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-termi
 import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS } from './hidden-output-restore-limits'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
 
 import type { PtyBufferSnapshot } from '../pty-transport-types'
@@ -150,6 +151,11 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     if (!repainted) {
       session.cancelHiddenOutputRestoreFloodRepaintPark = cancelPark
     }
+  }
+
+  session.extendHiddenOutputRestoreFloodSuppression = function (): void {
+    session.hiddenOutputRestoreFloodSuppressedUntil =
+      Date.now() + HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS
   }
 
   session.resetHiddenOutputRestoreFloodSuppression = function (): void {

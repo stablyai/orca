@@ -2,11 +2,12 @@ import type { AppState } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export function getWorkspacePath(state: AppState, worktreeId: string): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
   return parsed?.type === 'folder'
-    ? (state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+    ? (selectFolderWorkspaces(state).find((workspace) => workspace.id === parsed.folderWorkspaceId)
         ?.folderPath ?? null)
     : (getWorktreeMapFromState(state).get(worktreeId)?.path ?? null)
 }
@@ -20,7 +21,7 @@ export function buildPaneIdentityEnv(
   const parsed = parseWorkspaceKey(worktreeId)
   const folderWorkspace =
     parsed?.type === 'folder'
-      ? state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+      ? selectFolderWorkspaces(state).find((workspace) => workspace.id === parsed.folderWorkspaceId)
       : null
   return {
     ORCA_WORKSPACE_ID: worktreeId,

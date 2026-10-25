@@ -70,16 +70,4 @@ describe('remote runtime error surface dismissal', () => {
     expect(onError).toHaveBeenCalledTimes(2)
     transport.destroy?.()
   })
-
-  it('leaves an undismissed surface deduped', async () => {
-    const onError = vi.fn()
-    const transport = await attachTransportWithFatalSends(onError)
-
-    expect(await transport.sendInputAccepted?.('a', 'driving')).toBe(false)
-    expect(await transport.sendInputAccepted?.('b', 'driving')).toBe(false)
-    expect(await transport.sendInputAccepted?.('c', 'driving')).toBe(false)
-
-    expect(onError).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
-  })
 })

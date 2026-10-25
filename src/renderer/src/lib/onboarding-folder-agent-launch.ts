@@ -15,7 +15,7 @@ import {
   type OnboardingFolderAgentStartup
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null

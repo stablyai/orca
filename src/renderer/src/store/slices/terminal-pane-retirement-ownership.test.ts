@@ -83,3 +83,27 @@ it.each(['row', 'layout', 'aggregate', 'relay', 'deferred', 'reconnect'] as cons
     expect(hasTerminalPtyOwnerOutsidePane(current, identity, 'closing', 'original')).toBe(false)
   }
 )
+
+it('keys a legacy id where spawn put it: exact for an unattributed twin, the runtime for setup', () => {
+  const twin: TerminalTabRetirementState = {
+    ...state(),
+    repos: [
+      { id: 'repo', connectionId: null, executionHostId: 'local' },
+      { id: 'repo', connectionId: null, executionHostId: 'runtime:env-1' }
+    ],
+    worktreesByRepo: { repo: [{ id: 'wt', repoId: 'repo' }] }
+  }
+  expect(getTerminalPtyOwnershipIdentity(twin, 'remote:session', 'wt')).toBe('pty:remote:session')
+  const focused: TerminalTabRetirementState = {
+    ...state(),
+    settings: { activeRuntimeEnvironmentId: 'env-1' },
+    runtimeEnvironments: [{ id: 'env-1' }]
+  }
+  expect(
+    getTerminalPtyOwnershipIdentity(
+      focused,
+      'remote:session',
+      'ephemeral-setup-terminal:skill-panel'
+    )
+  ).toBe(JSON.stringify(['runtime', 'env-1', 'session']))
+})

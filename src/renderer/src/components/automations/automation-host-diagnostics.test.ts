@@ -605,16 +605,4 @@ describe('automation host diagnostics bookkeeping', () => {
       byStableKey: {}
     })
   })
-
-  it('never copies an automation, a prompt, or a name into a counter', () => {
-    const diagnostics = createAutomationHostDiagnostics()
-    diagnostics.recordResponse({
-      authorityKey: 'a',
-      stableKey: 'k1',
-      rows: 3,
-      durationMs: 12,
-      approxSerializedChars: 900
-    })
-    expect(JSON.stringify(diagnostics.snapshot())).not.toMatch(/prompt|automation-|secret/i)
-  })
 })

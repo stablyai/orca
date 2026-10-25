@@ -8,6 +8,8 @@ import { setSecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
 import { createOrcadSecretStore, type OrcadSecretStore } from './orcad-secret-store'
+import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
+import { orcadSpeechServiceFactories } from './orcad-speech-services'
 
 let quitRegisteredHandlers = (): void => {}
 
@@ -88,4 +90,5 @@ export function installOrcadHostAdapters(): void {
   setAppEnvironment(createNodeAppEnvironment())
   orcadSecretStore = createOrcadSecretStore()
   setSecretStore(orcadSecretStore)
+  setSpeechServiceFactories(orcadSpeechServiceFactories)
 }

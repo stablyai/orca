@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { getRepoExecutionHostId } from '../execution-host'
+import type { Repo } from '../repo-types'
 
 /** Longest data URL one icon may reply with. */
 export const MAX_REPO_ICON_DATA_URL_BYTES = 16 * 1024
@@ -17,4 +19,11 @@ export const RepoIconDataUrlsParams = /* @__PURE__ */ (() =>
  */
 export type RepoIconDataUrlsReply = {
   icons: { id: string; dataUrl: string | null }[]
+}
+
+/** A repo's key in the feed's `repoIcons` domain: one repo id can be registered on two hosts. */
+export function repoIconFeedKey(
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+): string {
+  return `${getRepoExecutionHostId(repo)}|${repo.id}`
 }

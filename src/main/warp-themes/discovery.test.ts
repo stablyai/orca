@@ -50,7 +50,7 @@ describe('getWarpThemeDirectories', () => {
     )
     readdirSyncMock.mockReturnValue(names.map(directoryEntry))
     const expected = [...names].sort((a, b) =>
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+      // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     )
     const NativeCollator = Intl.Collator
@@ -76,7 +76,7 @@ describe('getWarpThemeDirectories', () => {
     const warpNames = ['.warp-zebra', '.warp-Ångström', '.warp-éclair']
     readdirSyncMock.mockReturnValue([...noise, ...warpNames.map(directoryEntry)])
     const expected = [...warpNames].sort((a, b) =>
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+      // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     )
     const NativeCollator = Intl.Collator

@@ -35,6 +35,9 @@ vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshMod
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+vi.mock('node:fs/promises', async (importOriginal) =>
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+)
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
@@ -61,7 +64,7 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
 
   it('passes floating terminal cwds through to the spawned shell', async () => {
-    // Why: the floating sentinel has no worktree root; its cwd is validated against trusted-directory grants before reaching pty:spawn.
+    // Floating terminals have no worktree root; trusted-directory grants validate cwd before IPC.
     registerPtyHandlers(mainWindow as never)
 
     await handlers.get('pty:spawn')!(null, {
@@ -152,7 +155,7 @@ describe('registerPtyHandlers', () => {
   })
   it('falls back to the worktree root when a saved local cwd no longer exists', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback must return the selected worktree path verbatim.
+    // Preserve Unicode worktree paths verbatim when falling back (#7239).
     const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
     const missingCwd = `${worktreePath}/deleted-folder`
     statSyncMock.mockImplementation((target: string) => {
@@ -166,7 +169,6 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: missingCwd,
-      cwdFallback: 'worktree',
       worktreeId: `repo-1::${worktreePath}`
     })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
@@ -195,7 +197,6 @@ describe('registerPtyHandlers', () => {
           cols: 80,
           rows: 24,
           cwd: startupCwd,
-          cwdFallback: 'worktree',
           worktreeId: 'repo-1::C:\\Users\\alice\\repo',
           projectRuntime: {
             status: 'resolved',
@@ -230,7 +231,9 @@ describe('registerPtyHandlers', () => {
   )
   it('falls back when the selected WSL runtime reports a POSIX cwd missing', async () => {
     const originalPlatform = process.platform
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-missing-cwd' })
+    const providerSpawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-wsl-missing-cwd', startupCwdSource: 'request' })
     const worktreePath = 'C:/Users/alice/repo'
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     wslUncDirectoryExistsAsyncMock.mockResolvedValue(false)
@@ -242,7 +245,6 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         cwd: '/a',
-        cwdFallback: 'worktree',
         worktreeId: `repo-1::${worktreePath}`,
         projectRuntime: {
           status: 'resolved',
@@ -280,7 +282,6 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         cwd: '/a',
-        cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
@@ -304,7 +305,6 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         cwd: '/c',
-        cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
@@ -338,7 +338,9 @@ describe('PTY WSL working-directory validation', () => {
     }
   ])('resolves POSIX cwd existence for a WSL UNC workspace ($exists)', async (testCase) => {
     const originalPlatform = process.platform
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-unc-cwd' })
+    const providerSpawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-wsl-unc-cwd', startupCwdSource: 'request' })
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     wslUncDirectoryExistsAsyncMock.mockResolvedValueOnce(testCase.exists)
     if (!testCase.exists) {
@@ -352,7 +354,6 @@ describe('PTY WSL working-directory validation', () => {
         cols: 80,
         rows: 24,
         cwd: '/home/alice/repo',
-        cwdFallback: 'worktree',
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
@@ -381,7 +382,6 @@ describe('PTY WSL working-directory validation', () => {
         cols: 80,
         rows: 24,
         cwd: '/c',
-        cwdFallback: 'worktree',
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: unknown }
 
@@ -408,7 +408,6 @@ describe('PTY WSL working-directory validation', () => {
         cols: 80,
         rows: 24,
         cwd: '/mnt/c/Users/alice/repo',
-        cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })
@@ -424,7 +423,9 @@ describe('PTY WSL working-directory validation', () => {
   })
   it('still falls back a missing Windows cwd when the selected runtime is WSL', async () => {
     const originalPlatform = process.platform
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-windows-cwd' })
+    const providerSpawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-wsl-windows-cwd', startupCwdSource: 'request' })
     const worktreePath = 'C:/Users/alice/repo'
     const missingCwd = `${worktreePath}/deleted-folder`
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -442,7 +443,6 @@ describe('PTY WSL working-directory validation', () => {
         cols: 80,
         rows: 24,
         cwd: missingCwd,
-        cwdFallback: 'worktree',
         worktreeId: `repo-1::${worktreePath}`,
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
@@ -469,7 +469,6 @@ describe('PTY WSL working-directory validation', () => {
         cols: 80,
         rows: 24,
         cwd: '/c',
-        cwdFallback: 'worktree',
         worktreeId: `repo-1::${worktreePath}`,
         shellOverride: 'C:\\Program Files\\Git\\bin\\bash.exe'
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
@@ -488,28 +487,6 @@ describe('PTY WSL working-directory validation', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
-  it('keeps a missing cwd unchanged without the fallback flag', async () => {
-    registerPtyHandlers(mainWindow as never)
-    existsSyncMock.mockImplementation((target: string) => target !== '/repo/app/deleted-folder')
-    statSyncMock.mockImplementation((target: string) => {
-      if (target === '/repo/app/deleted-folder') {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }
-      return { isDirectory: () => true, mode: 0o755, size: 1 }
-    })
-
-    // Why: without the renderer opt-in the provider surfaces its normal missing-directory error — API/runtime callers keep exact cwd semantics.
-    await expect(
-      handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/repo/app/deleted-folder',
-        worktreeId: 'repo-1::/repo/app'
-      })
-    ).rejects.toThrow('Working directory "/repo/app/deleted-folder" does not exist.')
-
-    expect(spawnMock).not.toHaveBeenCalled()
-  })
   it('spawns at an existing outside-worktree cwd without falling back (#7685)', async () => {
     registerPtyHandlers(mainWindow as never)
 
@@ -517,7 +494,6 @@ describe('PTY WSL working-directory validation', () => {
       cols: 80,
       rows: 24,
       cwd: '/repo/app-other',
-      cwdFallback: 'worktree',
       worktreeId: 'repo-1::/repo/app'
     })) as { startupCwdFallback?: unknown }
 
@@ -525,7 +501,7 @@ describe('PTY WSL working-directory validation', () => {
     expect(options.cwd).toBe('/repo/app-other')
     expect(result.startupCwdFallback).toBeUndefined()
   })
-  it('ignores the cwd fallback flag for session reattach spawns', async () => {
+  it('falls back for a caller-named session that has to be created, and says so', async () => {
     registerPtyHandlers(mainWindow as never)
     existsSyncMock.mockImplementation((target: string) => target !== '/repo/app/deleted-folder')
     statSyncMock.mockImplementation((target: string) => {
@@ -535,19 +511,17 @@ describe('PTY WSL working-directory validation', () => {
       return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
-    // Why: a reattach must keep the session's exact cwd; remapping would silently detach the restored terminal from its recorded state.
-    await expect(
-      handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/repo/app/deleted-folder',
-        cwdFallback: 'worktree',
-        sessionId: 'session-1',
-        worktreeId: 'repo-1::/repo/app'
-      })
-    ).rejects.toThrow('Working directory "/repo/app/deleted-folder" does not exist.')
+    const result = await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo/app/deleted-folder',
+      sessionId: 'session-1',
+      worktreeId: 'repo-1::/repo/app'
+    })
 
-    expect(spawnMock).not.toHaveBeenCalled()
+    const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
+    expect(options.cwd).toBe('/repo/app')
+    expect(result).toHaveProperty('startupCwdFallback', { kind: 'worktree', cwd: '/repo/app' })
   })
   it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
     const originalPlatform = process.platform
@@ -559,7 +533,7 @@ describe('PTY WSL working-directory validation', () => {
     })
     process.env.USERPROFILE = 'C:\\Users\\jinwo'
 
-    // Why: the startup-cwd guard normalizes separators, so the provider sees the forward-slash UNC form.
+    // Startup cwd normalization converts UNC separators before provider validation.
     existsSyncMock.mockImplementation((targetPath: string) => {
       if (targetPath === '//wsl.localhost/Ubuntu/home/jin/missing') {
         return false
@@ -604,7 +578,7 @@ describe('PTY WSL working-directory validation', () => {
       configurable: true,
       value: 'darwin'
     })
-    // Why: this test simulates macOS even when Vitest runs on a Windows host.
+    // The fixture forces macOS even on Windows test hosts.
     process.env.HOME = '/Users/test'
     delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.SHELL = '/bin/zsh'
@@ -618,9 +592,7 @@ describe('PTY WSL working-directory validation', () => {
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      // Why absent: this HOME holds no zsh startup file, so there is no user
-      // config dir to hand back and Orca must not invent one — the wrapper
-      // leaves ZDOTDIR unset, exactly as an unwrapped login zsh would.
+      // Without user zsh startup files, leave ZDOTDIR unset as an ordinary login shell would.
       expect(options.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', {

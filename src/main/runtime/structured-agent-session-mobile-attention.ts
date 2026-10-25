@@ -21,7 +21,12 @@ import type {
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../shared/notification-settings-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -33,8 +38,8 @@ export type StructuredAttentionMobileDeliveryDeps = {
   readNotificationSettings: () => NotificationSettings | undefined
   /** In-memory metadata only: a lookup that could wait would let the alert outlive its prompt. */
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
-  /** In-memory only, like the labels: whether the desktop's Filters switches hide this workspace. */
-  isWorkspaceHidden: (scope: AgentSessionExecutionLocation) => boolean
+  /** In-memory only, like the labels: "Notify About Hidden Workspaces" is off and the Filters hide it. */
+  isWorkspaceMuted: (scope: AgentSessionExecutionLocation) => boolean
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -51,8 +56,11 @@ export function readStructuredAttentionWorkspaceLabels(
   store: Pick<RuntimeStore, 'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspaces'>,
   scope: AgentSessionExecutionLocation
 ): StructuredAttentionWorkspaceLabels {
-  if (scope.workspaceKind === 'folder') {
-    const folder = store.getFolderWorkspaces?.().find((item) => item.id === scope.workspaceId)
+  const folderScope = parseWorkspaceKey(scope.workspaceId)
+  if (folderScope?.type === 'folder') {
+    const folder = store
+      .getFolderWorkspaces?.()
+      .find((item) => item.id === folderScope.folderWorkspaceId)
     return folder ? { worktreeLabel: folder.name } : {}
   }
   const repo = store.getRepo(getRepoIdFromWorktreeId(scope.workspaceId))
@@ -84,11 +92,11 @@ export function createStructuredAttentionMobileDelivery(
       if (!news) {
         return
       }
-      const scope = edge.type === 'prompt' ? edge.prompt.scope : edge.completion.scope
-      const settings = deps.readNotificationSettings()!
-      if (!settings.notifyHiddenWorkspaces && deps.isWorkspaceHidden(scope)) {
+      const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
+      if (deps.isWorkspaceMuted(scope)) {
         return
       }
+      const settings = deps.readNotificationSettings()!
       const attentionKey = agentSessionAttentionKey(edge)
       const request: NotificationDispatchRequest = {
         source: 'agent-task-complete',
@@ -117,6 +125,8 @@ export function createStructuredAttentionMobileDelivery(
         title,
         body,
         worktreeId: scope.workspaceId,
+        // The host has no window tab id; the phone matches this session-derived key to the chat.
+        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
         notificationId: attentionKey,
         attentionKey,
         ...(structuredAttentionOrigin(edge)

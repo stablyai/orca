@@ -167,8 +167,7 @@ export async function runLinearLookup<T>(
 
 export function isLinearLookupMiss(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  // Why: Linear throws for direct entity lookups that miss; write-id probes
-  // need the same null shape as GraphQL nullable data, not a failed write.
+  // Normalize SDK missing-entity throws to nullable lookup results, avoiding false write failures.
   return message.includes('Entity not found:') && message.includes('Could not find referenced')
 }
 

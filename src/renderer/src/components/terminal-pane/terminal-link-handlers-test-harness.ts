@@ -58,6 +58,8 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     storeState.settings = undefined
     storeState.activeFileIdByWorktree = {}
     storeState.openFiles = []
+    storeState.unifiedTabsByWorktree = {}
+    storeState.groupsByWorktree = {}
     storeState.worktreesByRepo = {}
     registerHttpLinkStoreAccessor(() => storeState)
     vi.stubGlobal('window', {

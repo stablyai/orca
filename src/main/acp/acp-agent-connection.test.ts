@@ -81,13 +81,17 @@ describe('ACP process-owning connection', () => {
       expect.objectContaining({
         cwd: start.cwd,
         env: expect.objectContaining({ ACP_ACCOUNT_HOME: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
-    expect(await connection.start(start)).toMatchObject({ sessionId: 'session-1' })
+    expect(await connection.start(start)).toMatchObject({
+      sessionId: 'session-1'
+    })
     agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
-    expect(await connection.prompt([...prompt])).toEqual({ stopReason: 'end_turn' })
+    expect(await connection.prompt([...prompt])).toEqual({
+      stopReason: 'end_turn'
+    })
     connection.pauseReading()
     expect(child.stdout.isPaused()).toBe(true)
     connection.resumeReading()
@@ -140,7 +144,10 @@ describe('ACP process-owning connection', () => {
     const { connection, child } = fixture({
       onExit,
       onDiagnostic: (message) => said.push(message),
-      signInPrompt: (line) => line.startsWith('Open the following link to authenticate')
+      signIn: {
+        read: (line) =>
+          line.startsWith('Open the following link to authenticate') ? 'link' : undefined
+      }
     })
     await connection.start(start)
     const turn = connection.prompt([...prompt]).catch((error: unknown) => error)
@@ -157,9 +164,13 @@ describe('ACP process-owning connection', () => {
   })
 
   it('drops an overlong stderr line it could not classify instead of keeping its prefix', async () => {
-    const { connection, child } = fixture({ signInPrompt: (line) => line.endsWith('authenticate') })
+    const { connection, child } = fixture({
+      signIn: {
+        read: (line) => (line.endsWith('authenticate') ? 'link' : undefined)
+      }
+    })
     await connection.start(start)
-    const link = `https://accounts.example/auth?state=${'x'.repeat(9000)}`
+    const link = `https://accounts.example/auth?state=${'x'.repeat(33_000)}`
     child.stderr.write(`warming up\nplease visit ${link}`)
     child.stderr.write('s3cret\nready\n')
     await vi.waitFor(() => expect(connection.stderrTail()).toContain('ready'))
@@ -277,7 +288,11 @@ describe('ACP process-owning connection', () => {
     connection.onExit(failing)
     connection.onExit(early)
     expect(() => child.emit('exit', 0, null)).not.toThrow()
-    expect(early).toHaveBeenCalledExactlyOnceWith({ code: 0, signal: null, processless: false })
+    expect(early).toHaveBeenCalledExactlyOnceWith({
+      code: 0,
+      signal: null,
+      processless: false
+    })
     expect(() => connection.onExit(failing)).not.toThrow()
     const late = vi.fn()
     connection.onExit(late)
@@ -327,4 +342,45 @@ describe('ACP process-owning connection', () => {
     ).toThrow('positive finite integers')
     expect(spawn).not.toHaveBeenCalled()
   })
+})
+
+it.each([true, false])(
+  'settles a typed session response synchronously before the following stdout sign-in line (valid=%s)',
+  async (valid) => {
+    const answers: boolean[] = []
+    const { connection, agent } = fixture({
+      signIn: {
+        read: (line) => (line.startsWith('SIGN IN') ? 'fixture-link' : undefined),
+        answered: (answer) => answers.push(answer)
+      }
+    })
+    agent.on('session/new', (frame) =>
+      agent.stdout.write(
+        `${JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: valid ? { sessionId: 'accepted-session' } : {} })}\nSIGN IN fixture-link\n`
+      )
+    )
+    const result = await connection.start(start).catch((error: unknown) => error)
+    expect(answers).toEqual(valid ? [true, false] : [false])
+    if (valid) {
+      expect(result).toMatchObject({ sessionId: 'accepted-session' })
+    } else {
+      expect(result).toBeInstanceOf(Error)
+    }
+    expect(connection.closed).toBe(true)
+  }
+)
+
+it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out answer', async () => {
+  const answered = vi.fn()
+  const { connection, agent } = fixture({
+    signIn: {
+      read: (line) => (line.startsWith('SIGN IN') ? 'prefix-only' : undefined),
+      answered
+    }
+  })
+  await connection.start(start)
+  expect(answered).toHaveBeenCalledExactlyOnceWith(true)
+  agent.stdout.write(`SIGN IN ${'x'.repeat(16 * 1024 * 1024)}\n`)
+  await vi.waitFor(() => expect(connection.closed).toBe(true))
+  expect(answered).toHaveBeenCalledTimes(1)
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal, codexThreadGoalRequests } from './codex-structured-thread-goal'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -61,6 +61,27 @@ describe('codex thread goal requests', () => {
         { timeoutMs: 5_000 }
       ]
     ])
+  })
+
+  it('awaits a revoked clear and never activates the replacement', async () => {
+    const clear = Promise.withResolvers<unknown>()
+    const authority = new AbortController()
+    const request = vi.fn(() => clear.promise)
+    const result = changeCodexThreadGoal(
+      session(request),
+      { kind: 'set', objective: 'Ship it' },
+      true,
+      undefined,
+      authority.signal
+    )
+    const settled = vi.fn()
+    void result.then(settled, settled)
+    authority.abort(new Error('stopped'))
+    await Promise.resolve()
+    expect(settled).not.toHaveBeenCalled()
+    clear.resolve({ goal: null })
+    await expect(result).rejects.toThrow('stopped')
+    expect(request).toHaveBeenCalledOnce()
   })
 
   it('stops at a refused clear, so a refused replacement leaves the old goal alone', async () => {

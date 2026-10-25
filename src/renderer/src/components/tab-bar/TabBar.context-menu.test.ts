@@ -5,6 +5,15 @@ import {
   stubShallowSelector,
   stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -142,7 +151,11 @@ vi.mock('./BrowserTab', () => ({
 vi.mock('./QuickLaunchButton', () => ({
   QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
     return null
-  }
+  },
+  ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+    return null
+  },
+  useTabAgentMenuLaunch: () => () => undefined
 }))
 
 vi.mock('./shell-icons', () => ({
@@ -321,14 +334,6 @@ describe('TabBar context menu wiring', () => {
     vi.unstubAllGlobals()
   })
 
-  it('wires the shared agent projection selector into the production TabBar', async () => {
-    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
-
-    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
-
-    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
-  })
-
   it('counts every tab kind for SortableTab.tabCount', async () => {
     // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
     // terminal list. With one terminal + any number of editor/browser tabs, the
@@ -448,8 +453,15 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.isPinned).toBe(true)
 
     ;(sortable[0].props.onTogglePin as () => void)()
+    await layoutApplyTestTransport.settle()
 
-    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    // A layout-owner build has main unpin it (tab-bar-layout-owner-props.test.ts); main's frame
+    // draws the unpin, so the window does not unpin it itself.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(unpinTabMock).not.toHaveBeenCalled()
+    } else {
+      expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    }
     expect(pinTabMock).not.toHaveBeenCalled()
   })
 

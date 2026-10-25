@@ -1,7 +1,3 @@
-// A conversation command is refused for background work the provider reported running and not
-// over, and the strip's child records word the refusal. The provider tracker's own roster is
-// present and claims live work throughout; nothing here may be decided by it.
-
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-wire'
@@ -20,10 +16,8 @@ import { reportedChildWork } from './structured-agent-session-reported-child-wor
 
 let state: ReturnType<typeof hostTestState>
 let compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>>
-/** What the store holds for the session; the sink serves it to every reader. */
 let records: AgentChildWorkView[] = []
 
-/** The provider reports `next`, which the store then holds. */
 function report(next: AgentChildWorkView[]): void {
   records = next
   state.host.publishChildWorkEvidence(HOST_TEST_SESSION, reportedChildWork(next, HOST_TEST_NOW))
@@ -52,7 +46,6 @@ function devServer(overrides: Partial<AgentChildWorkView> = {}): AgentChildWorkV
   }
 }
 
-/** The provider ends the command's turn, as the child's journal translator does. */
 function finish(): void {
   const { command } = compact.mock.calls.at(-1)![0]
   const events = state.acquire.mock.calls.at(-1)![0].events!
@@ -89,7 +82,7 @@ beforeEach(() => {
   Object.assign(state.host.deps.adapter, {
     compact,
     backgroundTaskStops: () => ({ supportsTaskStop: true, supportsStopAll: true }),
-    // A tracker that drifted from the records: it still claims work the strip does not list.
+    // Keep a drifted provider roster claiming live work after visible records settle.
     backgroundTaskState: () => trackerRoster
   })
   serveHostTestChildWork(() => records)
@@ -116,7 +109,6 @@ describe('conversation command admission reads the work the provider reported', 
         providerId: row.providerId
       }))
 
-    // Nothing on the strip: the drifted tracker's roster refuses nothing.
     expect(stripRows()).toEqual([])
     const first = compactParams()
     expect(await state.host.conversationCommand(CALLER, first)).toMatchObject({ ok: true })
@@ -136,7 +128,6 @@ describe('conversation command admission reads the work the provider reported', 
     })
 
     report([devServer({ state: 'done', membership: 'settled', outcome: 'succeeded' })])
-    // Finished: the strip hides (it lists running children only), and the record blocks nothing.
     expect(strip.at(-1)).toBeNull()
     expect(stripRows()).toEqual([])
     expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
@@ -147,13 +138,11 @@ describe('conversation command admission reads the work the provider reported', 
 
   it('refuses a queued command at handover once reported work runs', async () => {
     const acquireChild = state.acquire.getMockImplementation()!
-    // Each child names its generation, so the exit below ends exactly the one it names.
     state.acquire.mockImplementation(async (input) => ({
       ...(await acquireChild(input)),
       acquisitionGeneration: `generation-${input.fence}`
     }))
     await attach()
-    // The provider exits, so the next command is accepted at rest and waits for a new start.
     const fence = state.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
     await state.host.handleAdapterEvent({
       type: 'ended',
@@ -164,7 +153,6 @@ describe('conversation command admission reads the work the provider reported', 
       cause: 'unexpected-exit'
     })
     await vi.waitFor(() => expect(state.host['sessions'].get(HOST_TEST_SESSION)?.child).toBeNull())
-    // The records gain live work while that start runs, after the command was accepted.
     const start = state.acquire.getMockImplementation()!
     state.acquire.mockImplementationOnce(async (input) => {
       report([devServer()])

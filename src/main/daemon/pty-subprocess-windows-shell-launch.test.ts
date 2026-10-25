@@ -1,4 +1,3 @@
-// Native Windows shell launch: PowerShell implementations, cmd.exe and Git Bash.
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
@@ -30,9 +29,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -65,10 +62,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -87,6 +80,62 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock,
     resolveAgentForegroundProcessMock,
     validateWorkingDirectoryMock
+  })
+
+  it('delivers output and exit that land while ConPTY startup is still being confirmed', async () => {
+    const proc = mockPtyProcess()
+    // The shell dies before ConPTY announces its input reader, so nothing has subscribed yet.
+    // Each event is emitted once, to whoever listens at that moment, as node-pty does.
+    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
+      queueMicrotask(() => cb('\x1b[1t'))
+      return { dispose: vi.fn() }
+    })
+    proc.onExit.mockImplementationOnce((cb: (e: { exitCode: number }) => void) => {
+      queueMicrotask(() => queueMicrotask(() => cb({ exitCode: 7 })))
+      return { dispose: vi.fn() }
+    })
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      const data: string[] = []
+      const exitCode = new Promise<number>((resolve) => handle.onExit((code) => resolve(code)))
+      handle.onData((chunk) => data.push(chunk))
+      expect(await exitCode).toBe(7)
+      expect(data[0]).toBe('\x1b[1t')
+      expect(spawnMock).toHaveBeenCalledOnce()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('never respawns a dead ConPTY pane whose user shell args may run a command', async () => {
+    const proc = mockPtyProcess()
+    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
+      queueMicrotask(() => cb('Microsoft Windows\r\n'))
+      return { dispose: vi.fn() }
+    })
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { COMSPEC: CMD_ABS },
+        terminalShellArgs: ['/c', 'deploy.cmd']
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(proc.kill).not.toHaveBeenCalled()
   })
 
   it('keeps powershell.exe when the inbox PowerShell implementation is selected on Windows', async () => {

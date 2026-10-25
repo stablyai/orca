@@ -1,6 +1,11 @@
+import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  isLocalExecutionHost,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -29,9 +34,14 @@ import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
+/** Which surface the user picked for one launch: the agent's chat, or its CLI in a terminal. */
+export type AgentLaunchSurface = 'chat' | 'terminal'
+
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   /** The user action this launch serves, minted where that action is handled. */
   requestId: AgentLaunchRequestId
+  requestedSurface?: AgentLaunchSurface
+  selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
@@ -45,6 +55,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
  */
 export type AgentSessionLaunchVerdict = {
   route: AgentLaunchRoute
+  requestedSurface?: AgentLaunchSurface
   /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
   agent: TuiAgent
@@ -65,6 +76,7 @@ export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
 }
 
 export type AgentSessionLaunchTarget = {
+  surfaceAddress?: StructuredLaunchSurfaceAddress
   /** Overrides the verdict's workspace when it was created after planning. */
   worktreeId?: string
   /** The host that admitted the chat, when one was asked first; it is the host the chat is made on. */
@@ -118,6 +130,7 @@ function beginStructuredPlanLaunch(
       verdict.agent,
       {
         ...structuredLaunchOptions(verdict),
+        ...(target?.surfaceAddress ? { surfaceAddress: target.surfaceAddress } : {}),
         ...(executionHostId ? { executionHostId } : {}),
         ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {})
       },
@@ -216,8 +229,7 @@ function structuredRouteAwaits(
   ) {
     return 'host-agents'
   }
-  return downgrade === 'runtime-capability-unknown' &&
-    parseExecutionHostId(input.executionHostId)?.kind === 'local'
+  return downgrade === 'runtime-capability-unknown' && isLocalExecutionHost(input.executionHostId)
     ? 'local-capabilities'
     : null
 }
@@ -245,7 +257,7 @@ export function awaitStructuredRouteHostAnswer(
     let capabilities = input.hostCapabilities
     // Either route may be missing this computer's capabilities: wait for the probe that lands
     // them, since one that failed at startup answers null at once.
-    if (capabilities === null && parseExecutionHostId(input.executionHostId)?.kind === 'local') {
+    if (capabilities === null && isLocalExecutionHost(input.executionHostId)) {
       const wait = awaitLocalRuntimeCapabilities()
       stopCapabilitiesWait = wait.stop
       capabilities = await Promise.race([wait.known, deadline])
@@ -277,12 +289,21 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   const input = buildAgentLaunchRouteInput(store, request)
-  const route = resolveAgentLaunchRoute(input)
-  reportStructuredLaunchDowngrade(store, input, route)
+  const route = request.requestedSurface
+    ? request.requestedSurface === 'chat'
+      ? 'structured-native-chat'
+      : 'terminal-tui'
+    : resolveAgentLaunchRoute(input)
+  if (!request.requestedSurface) {
+    reportStructuredLaunchDowngrade(store, input, route)
+  }
   const executionHostId =
-    route === 'structured-native-chat' ? parseExecutionHostId(input.executionHostId)?.id : undefined
+    route === 'structured-native-chat'
+      ? (request.selectedExecutionHostId ?? parseExecutionHostId(input.executionHostId)?.id)
+      : undefined
   return adoptAgentSessionLaunchVerdict({
     route,
+    ...(request.requestedSurface ? { requestedSurface: request.requestedSurface } : {}),
     requestId: request.requestId,
     agent: request.agent,
     ...(executionHostId ? { executionHostId } : {}),

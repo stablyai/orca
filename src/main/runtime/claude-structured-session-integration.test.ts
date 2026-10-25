@@ -535,7 +535,8 @@ describe('a structured Claude session over agentSession.*', () => {
         return false
       }
       // Claude takes the message but crashes before echoing it.
-      connection.send = async (message) => {
+      connection.send = async (message, beforeDispatch) => {
+        await beforeDispatch?.()
         connection.sent.push(message)
       }
       const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'in flight' }] }

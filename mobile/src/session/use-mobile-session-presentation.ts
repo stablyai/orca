@@ -4,6 +4,7 @@ import { useInitialSessionTerminalAutoCreate } from './use-initial-session-termi
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const {
@@ -61,8 +62,10 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   // Not on the page: the shell owns the connection and the tap could only do nothing.
   const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
 
+  // Why: a drop the client heals in a few seconds must not flip the header to Reconnecting and back.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const terminalSummary =
-    connState === 'connected'
+    presentedConnState === 'connected'
       ? showLoadingState
         ? 'Loading tabs'
         : visibleTabs.length === 1
@@ -72,7 +75,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
         : connectionEscalated
           ? verdictDisplayLabel(connectionVerdict)
-          : MOBILE_SESSION_STATUS_LABELS[connState]
+          : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
 
   // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
   const keyboardLift =
@@ -91,6 +94,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     transform: [{ translateY: -keyboardLift }]
   }
   return {
+    presentedConnState,
     showLoadingState,
     showEmptyState,
     connectionVerdict,

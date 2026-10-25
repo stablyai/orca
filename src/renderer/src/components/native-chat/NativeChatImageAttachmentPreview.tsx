@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import {
   isNativeChatImageAttachmentPath,
@@ -260,44 +260,33 @@ function NativeChatImageThumbnail({
         <ImageNumberBadge number={number} />
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
       </div>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent
-          onInteractOutside={keepPreviewOpenForChatMenu}
-          className="flex max-h-[90vh] max-w-[90vw] flex-col sm:max-w-4xl"
-        >
-          <DialogTitle className="truncate text-sm">{label}</DialogTitle>
-          <DialogDescription className="sr-only">
-            {translate('components.native-chat.composer.imagePreview', 'Full-size image preview')}
-          </DialogDescription>
-          <div className="scrollbar-sleek flex min-h-0 items-center justify-center overflow-auto rounded-md bg-muted/20 p-2">
-            {fullSizeSrc ? (
-              <img
-                src={fullSizeSrc}
-                alt={label}
-                data-native-chat-copy-image-src={copySrc}
-                className="max-h-[75vh] max-w-full object-contain"
-              />
+      <PanZoomImageDialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        src={fullSizeSrc}
+        title={label}
+        showTitle
+        onInteractOutside={keepPreviewOpenForChatMenu}
+        data-native-chat-copy-image-src={copySrc}
+        fallback={
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isPending ? (
+              <>
+                <LoadingSpinner className="size-4" />
+                {pendingLabel}
+              </>
             ) : (
-              <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
-                {isPending ? (
-                  <>
-                    <LoadingSpinner className="size-4" />
-                    {pendingLabel}
-                  </>
-                ) : (
-                  <>
-                    <ImageIcon className="size-4" />
-                    {translate(
-                      'components.native-chat.composer.imagePreviewUnavailable',
-                      'Preview unavailable'
-                    )}
-                  </>
+              <>
+                <ImageIcon className="size-4" />
+                {translate(
+                  'components.native-chat.composer.imagePreviewUnavailable',
+                  'Preview unavailable'
                 )}
-              </div>
+              </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        }
+      />
     </>
   )
 }

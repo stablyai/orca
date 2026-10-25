@@ -1,5 +1,5 @@
 import { connect } from 'node:net'
-import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 import { readNetworkProxySettings } from './browser-network-proxy-settings-source'
@@ -82,7 +82,6 @@ export function resolveNativeBrowserNetworkExecutionRoute(
   }
 }
 
-/** Dials a tunnel destination from this host the way its own browser would: through its proxy. */
 export function connectNativeBrowserNetworkTarget(
   target: BrowserNetworkTunnelOpen,
   env: Record<string, string | undefined> = process.env
@@ -98,7 +97,7 @@ export function connectNativeBrowserNetworkTarget(
     )
   }
   if (proxy.kind !== 'direct') {
-    // Why throw, not dial direct: a host that requires a proxy must not leak traffic around it.
+    // Reject unsupported proxies to prevent direct traffic from bypassing host policy.
     throw new Error('browser_tunnel_proxy_unsupported')
   }
   return connect({ ...target, allowHalfOpen: true })

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
+import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -95,8 +96,20 @@ describe('mobile rpc-client capabilities', () => {
       clientCapabilities: expect.arrayContaining([
         'agent-session.structured.v1',
         'agent-session.pending-send-result.v1',
-        'agent-session.structured.claude.v1'
+        'agent-session.structured.claude.v1',
+        'agent-session.structured.hold.v1',
+        'agent-session.turn-item.v1',
+        'session-tabs.split-group-placement.v1',
+        'agent-session.structured.registered-agents.v1',
+        'agent-session.structured.pi-dialogs.v1',
+        'agent-session.options.optional-model.v1',
+        'agent.launch.v2',
+        'agent.launch.unstarted-tab.v1',
+        'agent.launch.tab-closed.v1'
       ])
+    })
+    expect(capabilityRequest.params).toEqual({
+      clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES]
     })
     expect(socket.sent.some((payload) => payload.includes('session.tabs.subscribe'))).toBe(false)
 
@@ -110,6 +123,7 @@ describe('mobile rpc-client capabilities', () => {
     )
 
     await vi.waitFor(() => expect(sentRequest(socket, 'session.tabs.subscribe')).toBeDefined())
+    expect(client.getState()).toBe('connected')
 
     client.close()
   })

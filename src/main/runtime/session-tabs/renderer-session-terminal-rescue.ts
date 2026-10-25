@@ -1,9 +1,9 @@
 import type { OrcaRuntimeWithWaitForLeafPtyId as WaitForLeafPtyIdMethods } from '../terminal/view/renderer-terminal-snapshot'
 import { OrcaRuntimeWithWaitForMobileTerminalSurface } from '../terminal/view/mobile-terminal-surface'
-import { runtimeWorktreeIdsEqual } from '../runtime-worktree-path-identity'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals extends OrcaRuntimeWithWaitForMobileTerminalSurface {
   protected abstract resolveHandleForTab(
@@ -16,16 +16,19 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
   ): void {
     for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
       const pty = this.ptysById.get(ptyId)
+      const recorded = pty?.connected ? this.paneOfPty(pty) : null
+      const tabId = recorded?.tabId
       if (
         !pty?.connected ||
-        !pty.tabId ||
-        (worktreeId !== null && !runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId))
+        !recorded ||
+        !tabId ||
+        (worktreeId !== null && !worktreeIdsEqual(pty.worktreeId, worktreeId))
       ) {
         continue
       }
       const targetWorktreeId = worktreeId ?? pty.worktreeId
-      const pane = parsePaneKey(pty.paneKey ?? '')
-      if (!pane || pane.tabId !== pty.tabId) {
+      const pane = parsePaneKey(recorded.paneKey ?? '')
+      if (!pane || pane.tabId !== tabId) {
         continue
       }
       const existing = this.mobileSessionTabsByWorktree.get(targetWorktreeId)
@@ -36,8 +39,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
         existing?.tabs.some(
           (tab) =>
             tab.type === 'terminal' &&
-            (tab.ptyId === pty.ptyId ||
-              (tab.parentTabId === pty.tabId && tab.leafId === pane.leafId))
+            (tab.ptyId === pty.ptyId || (tab.parentTabId === tabId && tab.leafId === pane.leafId))
         )
       ) {
         continue
@@ -55,7 +57,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
         })
       }
       this.publishPtyBackedMobileSessionTerminal(targetWorktreeId, pty, {
-        tabId: pty.tabId,
+        tabId,
         leafId: pane.leafId,
         title: null,
         activate: false,
@@ -78,11 +80,14 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
     tabId: string
   ): RuntimePtyWorktreeRecord | null {
     for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId !== worktreeId) {
+        continue
+      }
+      const recorded = this.paneOfPty(pty)
       if (
-        pty.worktreeId === worktreeId &&
-        pty.tabId === tabId &&
+        recorded.tabId === tabId &&
         pty.connected &&
-        parsePaneKey(pty.paneKey ?? '')?.leafId
+        parsePaneKey(recorded.paneKey ?? '')?.leafId
       ) {
         return pty
       }
@@ -93,7 +98,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
   // Why: looser rollback guard than findLiveRegisteredPtyForRendererTab — a shell without a registered pane key is still a real terminal the timeout must not kill (#7718).
   protected hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean {
     for (const pty of this.ptysById.values()) {
-      if (pty.worktreeId === worktreeId && pty.tabId === tabId && pty.connected) {
+      if (pty.worktreeId === worktreeId && this.paneOfPty(pty).tabId === tabId && pty.connected) {
         return true
       }
     }

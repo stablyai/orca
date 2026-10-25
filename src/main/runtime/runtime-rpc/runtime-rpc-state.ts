@@ -12,7 +12,7 @@ import type { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-thr
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../mobile-cloud-relay/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
 import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
@@ -66,7 +66,6 @@ export class RuntimeRpcState {
   protected e2eeKeypair: E2EEKeypair | null = null
   protected hostDescriptor: RuntimeHostDescriptor | null = null
   protected pairingInitializationFailure: PairingOfferUnavailable | null = null
-  protected tlsFingerprint: string | null = null
   protected activeTransports: RpcTransport[] = []
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null

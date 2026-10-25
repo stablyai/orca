@@ -31,7 +31,13 @@ describe('the repo filter', () => {
           path: '/Users/m4air/orca/orca',
           executionHostId: 'runtime:m4air'
         },
-        { id: 'assets', displayName: 'design-assets', path: '/Users/me/design-assets' }
+        { id: 'assets', displayName: 'design-assets', path: '/Users/me/design-assets' },
+        {
+          id: 'local-orca',
+          displayName: 'orca',
+          path: '/srv/orca',
+          executionHostId: 'runtime:other'
+        }
       ],
       []
     )
@@ -39,7 +45,8 @@ describe('the repo filter', () => {
     expect(repos.map(({ key, id, name }) => ({ key, id, name }))).toEqual([
       { key: 'local|local-orca', id: 'local-orca', name: 'orca' },
       { key: 'runtime:m4air|m4-orca', id: 'm4-orca', name: 'orca' },
-      { key: 'local|assets', id: 'assets', name: 'design-assets' }
+      { key: 'local|assets', id: 'assets', name: 'design-assets' },
+      { key: 'runtime:other|local-orca', id: 'local-orca', name: 'orca' }
     ])
     expect(repos[0]?.color).toBe('#111111')
   })

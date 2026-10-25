@@ -1,4 +1,4 @@
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { mergeWorkspaceSessions } from '../../orca-profiles/profile-project-session-state'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'

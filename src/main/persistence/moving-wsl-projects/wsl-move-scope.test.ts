@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { Repo } from '../../../shared/repo-types'
 import { rewriteOrcadMigrationPayloadPaths } from '../../ssh/orcad-migration-path-rewrite'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'

@@ -182,7 +182,7 @@ describe('useBufferedTerminalDrafts', () => {
       renderer = create(createElement(Probe, { activeHandle: 'terminal' }))
     })
     act(() => hook().setInput('rejected command'))
-    let send: ReturnType<BufferedDraftHook['beginBufferedTerminalDraftSend']>
+    let send!: ReturnType<BufferedDraftHook['beginBufferedTerminalDraftSend']>
     act(() => {
       send = hook().beginBufferedTerminalDraftSend('terminal', hook().input)
     })

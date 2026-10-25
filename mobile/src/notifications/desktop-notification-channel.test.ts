@@ -20,13 +20,16 @@ beforeEach(() => {
 })
 
 describe('ensureDesktopNotificationChannel', () => {
-  it('creates the channel the gateway payload names', async () => {
+  it('creates the audible and silent channels the gateway payload names', async () => {
     await ensureDesktopNotificationChannel()
 
-    expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
-      'orca-desktop',
-      expect.objectContaining({ importance: 'high' })
-    )
+    expect(vi.mocked(Notifications.setNotificationChannelAsync).mock.calls).toEqual([
+      [
+        'orca-desktop-silent',
+        expect.objectContaining({ importance: 'high', sound: null, enableVibrate: false })
+      ],
+      ['orca-desktop', expect.objectContaining({ importance: 'high' })]
+    ])
   })
 
   it('does nothing on iOS, which has no notification channels', () => {

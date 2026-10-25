@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
   /**
@@ -73,8 +74,7 @@ export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
   }
 
   async function closeOneTab(): Promise<RuntimeMobileSessionTabsSnapshot> {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore covers the reads this suite drives.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const closedTab = terminalTab('tab-a', LEAF_ID)
     const snapshot = storedSnapshot([closedTab, terminalTab('tab-b', LEAF_ID)])
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: closeHeadlessMobileTerminalTab is protected; reaching it is the only way to drive a headless close.

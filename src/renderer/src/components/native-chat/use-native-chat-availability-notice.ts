@@ -7,12 +7,13 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { inSendOrder } from '../../../../shared/native-chat-send-order'
+import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
+import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
@@ -109,6 +110,7 @@ export function useNativeChatAvailabilityNotice(input: {
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),
+    content: nativeChatAntigravitySignInContent(unavailable.reason, input.agent),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

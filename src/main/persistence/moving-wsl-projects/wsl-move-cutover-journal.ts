@@ -8,7 +8,7 @@ import {
   parseWslMoveCutover,
   type WslMoveCutover
 } from '../../../shared/wsl-move/wsl-move-cutover'
-import { isRecord } from '../../../shared/orcad-migration-manifest-fields'
+import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { assertOrcadMigrationManifestDigest } from '../../orcad/orcad-migration-manifest-digest'
 import {
   createMigrationJournalDirectory,

@@ -71,7 +71,7 @@ async function captureNestedTerminalRouteDiagnostic(
           })
         : null
       return {
-        activeRuntimeEnvironmentId: state?.settings.activeRuntimeEnvironmentId ?? null,
+        activeRuntimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId ?? null,
         environmentId,
         environments: await window.api.runtimeEnvironments.list(),
         leafId,
@@ -114,7 +114,7 @@ async function captureNestedTerminalRouteDiagnostic(
           ([owner, bucket]) => ({
             owner,
             statuses: [...bucket.connectionStates.entries()],
-            targets: bucket.targets?.map((target) => target.id) ?? [],
+            targets: [...bucket.targetLabels.keys()],
             targetsHydrated: bucket.targetsHydrated
           })
         ),

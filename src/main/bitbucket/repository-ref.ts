@@ -51,14 +51,15 @@ function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
 
 export function parseBitbucketRepoRef(remoteUrl: string): BitbucketRepoRef | null {
   const trimmed = remoteUrl.trim()
-  const scpLike = trimmed.match(/^(?:[^@]+@)?bitbucket\.org:([^\s]+?)(?:\.git)?$/i)
+  const scpLike = trimmed.match(/^(?:[^@]+@)?(?:ssh\.)?bitbucket\.org:([^\s]+?)(?:\.git)?$/i)
   if (scpLike) {
     return parseBitbucketPath(scpLike[1])
   }
 
   try {
     const url = new URL(trimmed)
-    if (url.hostname.toLowerCase() !== 'bitbucket.org') {
+    const host = url.hostname.toLowerCase()
+    if (host !== 'bitbucket.org' && host !== 'ssh.bitbucket.org') {
       return null
     }
     return parseBitbucketPath(url.pathname)

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../../shared/managed-runtime-install'
+import {
+  MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
+} from '../../../shared/managed-runtime-install'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
@@ -13,6 +16,7 @@ import {
 } from './host-structured-agents'
 import {
   ensureLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilitiesKnown
 } from './local-runtime-capabilities'
@@ -35,6 +39,8 @@ export type ManagedRuntimeInstallObservation =
       kind: 'active'
       subject: ManagedRuntimeInstallSubject
       snapshot: ManagedRuntimeInstallSnapshot
+      /** The host can also remove the runtime it installed. */
+      removable: boolean
     }
 
 const INACTIVE: ManagedRuntimeInstallObservation = { kind: 'inactive' }
@@ -45,6 +51,8 @@ const READ_FAILED: ManagedRuntimeInstallSnapshot = { kind: 'readFailed' }
 const localInstallCapable = (): boolean | null =>
   readLocalRuntimeCapabilitiesOrUnknown()?.includes(MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY) ??
   null
+const localRemoveCapable = (): boolean =>
+  readLocalRuntimeCapabilities().includes(MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY)
 
 /** The install state of the runtime Orca provides for `agent` on the target's host. Subscribes
  *  only while `shown`, so a hidden chat holds no subscription. */
@@ -77,6 +85,15 @@ export function useManagedRuntimeInstall(
     localInstallCapable,
     localInstallCapable
   )
+  const localRemovable = useSyncExternalStore(
+    subscribeLocalRuntimeCapabilitiesKnown,
+    localRemoveCapable,
+    localRemoveCapable
+  )
+  const removable =
+    environmentId === null
+      ? localRemovable
+      : remote?.capabilities?.includes(MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY) === true
   const capable =
     environmentId === null
       ? localCapable
@@ -119,16 +136,16 @@ export function useManagedRuntimeInstall(
       return INACTIVE
     }
     if (subject && managed && snapshot) {
-      return { kind: 'active', subject, snapshot }
+      return { kind: 'active', subject, snapshot, removable }
     }
     // A failed list leaves the chat's composer and the host's refusal, and Settings says so.
     if (subject && list === 'failed') {
-      return { kind: 'active', subject, snapshot: READ_FAILED }
+      return { kind: 'active', subject, snapshot: READ_FAILED, removable }
     }
     // Only an answer a reachable host still owes may hold the slot; an unreachable one leaves the
     // composer and the host's refusal. Claude and Codex run the program every build ships.
     return reachable && !isAgentSessionHandleProvider(agent) ? PENDING : INACTIVE
-  }, [agent, capable, list, managed, reachable, snapshot, subject])
+  }, [agent, capable, list, managed, reachable, removable, snapshot, subject])
   const pending = observation.kind === 'pending'
   const hostCapabilities = remote?.capabilities
   // The slot waits on the host's answer, so make sure it was asked.

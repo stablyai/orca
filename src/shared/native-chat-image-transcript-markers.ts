@@ -86,11 +86,14 @@ export function promptMarkersToImageReferences(text: string, imageIds: readonly 
   })
 }
 
-/** A structured chat's sent text without the `[Image #k]` markers its send added. */
-export function stripSentImagePromptMarkers(text: string): string {
+/** A structured chat's sent text without the `[Image #k]` markers its send added for its
+ *  `imageCount` images. A number past its images is left as typed. */
+export function stripSentImagePromptMarkers(text: string, imageCount: number): string {
   return withoutStrippedMarkerSpace(
     text,
-    replaceSentImagePromptMarkers(text, () => '')
+    replaceSentImagePromptMarkers(text, (number, marker) =>
+      number >= 1 && number <= imageCount ? '' : marker
+    )
   )
 }
 

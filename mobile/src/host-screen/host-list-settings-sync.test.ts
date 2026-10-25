@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
-vi.mock('react-native', () => ({}))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('../cache/worktree-cache', () => ({
   getCachedWorktrees: () => null,
@@ -191,8 +191,12 @@ describe('Card layout from the phone', () => {
   async function chooseCompact(settingsReply: RpcResponse) {
     const client = new FakeSession('connected')
     const clientRef: ClientRef = { current: client }
+    let acceptSetting: (response: RpcResponse) => void = () => {}
+    const setting = new Promise<RpcResponse>((resolve) => {
+      acceptSetting = resolve
+    })
     client.sendRequest.mockImplementation(async (method: string) =>
-      method === 'settings.update' ? settingsReply : reply(null)
+      method === 'settings.update' ? setting : reply(null)
     )
     const state = screenState(clientRef, [])
     let actions: Actions | null = null
@@ -208,6 +212,11 @@ describe('Card layout from the phone', () => {
     await act(async () => {
       actions!.setCardLayout('compact')
     })
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual(['settings.update'])
+    expect(state.viewRef.current).toBe(INITIAL_MOBILE_VIEW)
+    await act(async () => {
+      acceptSetting(settingsReply)
+    })
     return {
       view: state.viewRef.current,
       calls: client.sendRequest.mock.calls.map(([method, params]) => ({ method, params }))
@@ -217,6 +226,7 @@ describe('Card layout from the phone', () => {
   it('writes the setting first, then the matching preset once the host accepts it', async () => {
     const { view, calls } = await chooseCompact(reply({ settings: {} }))
     expect(calls.map(({ method }) => method)).toEqual(['settings.update', 'ui.set'])
+    expect(calls[0]?.params).toMatchObject({ compactWorktreeCards: true })
     expect(calls[1]?.params).toEqual({
       worktreeCardProperties: ['status'],
       _worktreeCardModeDefaulted: true

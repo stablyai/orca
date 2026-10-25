@@ -1,4 +1,4 @@
-import { normalizeAgentSessionConversationName } from '../../shared/agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from '../../shared/agent-session/agent-session-conversation-name'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
 /**

@@ -5,7 +5,19 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -107,7 +119,7 @@ function corruptSession(worktreeId = WORKTREE_ID, filePath = FILE_PATH): Workspa
   }
 }
 
-function closeAndRestart(
+async function closeAndRestart(
   prepare: typeof prepareStore,
   session: WorkspaceSessionState,
   workspaceId: string
@@ -115,6 +127,7 @@ function closeAndRestart(
   const store = prepare()
   store.getState().hydrateTabsSession(session)
   store.getState().hydrateEditorSession(session)
+  const main = await drawTabsFromMain(store)
 
   expect.soft(store.getState().openFiles).toHaveLength(1)
   expect.soft(store.getState().unifiedTabsByWorktree[workspaceId]).toHaveLength(1)
@@ -122,6 +135,9 @@ function closeAndRestart(
   const activeFileId = store.getState().activeFileIdByWorktree[workspaceId]
   expect(activeFileId).toBeTruthy()
   store.getState().closeFile(activeFileId!)
+  // A layout-owner build closes the tab in main; the tab and its file go with the frame.
+  await main.settle()
+  main.close()
 
   const persistedAfterClose = buildWorkspaceSessionPayload(store.getState())
   const restartedStore = prepare()
@@ -135,14 +151,14 @@ describe('corrupt editor session restore', () => {
     vi.clearAllMocks()
   })
 
-  it('does not preserve duplicate records that resurrect a closed editor', () => {
-    const restarted = closeAndRestart(prepareStore, corruptSession(), WORKTREE_ID)
+  it('does not preserve duplicate records that resurrect a closed editor', async () => {
+    const restarted = await closeAndRestart(prepareStore, corruptSession(), WORKTREE_ID)
     expect(restarted.openFiles).toEqual([])
     expect(restarted.unifiedTabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
   })
 
-  it('cleans the same corruption for an SSH-hosted folder workspace', () => {
-    const restarted = closeAndRestart(
+  it('cleans the same corruption for an SSH-hosted folder workspace', async () => {
+    const restarted = await closeAndRestart(
       prepareSshFolderStore,
       corruptSession(SSH_FOLDER_KEY, SSH_FILE_PATH),
       SSH_FOLDER_KEY

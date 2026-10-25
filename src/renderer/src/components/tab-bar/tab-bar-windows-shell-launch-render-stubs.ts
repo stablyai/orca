@@ -1,8 +1,9 @@
+import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 
 // Headless React: hooks are stubbed so TabBar can be invoked as a plain function.
 export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     memo: <T>(component: T) => component,
@@ -102,7 +103,11 @@ export function stubQuickLaunchButton(): Record<string, unknown> {
   return {
     QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
       return null
-    }
+    },
+    ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+      return null
+    },
+    useTabAgentMenuLaunch: () => () => undefined
   }
 }
 

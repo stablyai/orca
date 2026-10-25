@@ -3,11 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration-blob-transfer'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   abortOrcadMigrationBlobs,
   assertOrcadMigrationBlobSetMatches,
@@ -28,7 +26,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('orcad migration blob staging', () => {
-  it('stages, resumes from disk after a restart, and accepts only exact retries', () => {
+  it('stages, reloads progress from disk, and accepts only exact retries', () => {
     const bytes = Buffer.from('echo one\necho two 🐋\n', 'utf8')
     const descriptor = blob('shell-history', `${'a'.repeat(16)}-zsh`, bytes)
     const manifest = migrationManifest('resume')

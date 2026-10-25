@@ -30,8 +30,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -99,8 +101,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     webContentsFromIdMock.mockReturnValue(wc)
   })
 
-  // ── Transport ──
-
   it('dispatches move, down, up and wheel over CDP without spawning the helper', async () => {
     await expect(bridge.mouseMove(10, 20)).resolves.toEqual({ moved: true })
     await expect(bridge.mouseDown('left')).resolves.toEqual({ pressed: true })
@@ -140,8 +140,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
       }
     ])
   })
-
-  // ── Position tracking ──
 
   it('drags from the tracked position while the button stays held', async () => {
     await bridge.mouseMove(10, 20)
@@ -188,10 +186,8 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     })
   })
 
-  // ── Click cadence ──
-
   it('escalates clickCount for a repeat press at the same point', async () => {
-    // Why: real wall-clock makes this flake — a >500ms stall under load resets the cadence.
+    // A wall-clock stall over 500ms resets click cadence.
     vi.useFakeTimers()
     try {
       await bridge.mouseMove(10, 20)
@@ -263,8 +259,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
       clickCount: 1
     })
   })
-
-  // ── Buttons mask ──
 
   it('carries back and forward through as X1 and X2 presses', async () => {
     await bridge.mouseDown('back')
@@ -338,8 +332,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     })
   })
 
-  // ── Failures ──
-
   it('rejects non-finite coordinates and deltas before dispatching', async () => {
     await expect(bridge.mouseMove(Number.NaN, 20)).rejects.toMatchObject({
       code: 'browser_error'
@@ -402,8 +394,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
     expect(dispatched().at(-1)).toMatchObject({ type: 'mousePressed', clickCount: 1 })
   })
-
-  // ── Lifecycle ──
 
   it('attaches and detaches the debugger around each dispatch', async () => {
     let attached = false

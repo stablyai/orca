@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
@@ -17,8 +18,10 @@ import {
 } from '../../../src/shared/agent-launch-runtime-capability'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
@@ -42,7 +45,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Reads `agent_launch_tab_closed` (a user closed its tab, which stopped it) as a definite answer.
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   // Native chat offers no Stop for a turn the host restored but could not confirm.
-  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
+  // A new empty chat waits at rest and its first message starts the agent, as on desktop.
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

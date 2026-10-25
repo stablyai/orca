@@ -78,3 +78,15 @@ describe('PR workflow parallelism', () => {
     expect(env['INPUT_GITHUB-TOKEN']).toBe('test-token')
   })
 })
+
+it('keeps the costly layout-owner experiment manual and limits it to one active suite', () => {
+  const experiment = parse(readFileSync('.github/workflows/layout-owner-e2e.yml', 'utf8'))
+  expect(Object.keys(experiment.on)).toEqual(['workflow_dispatch'])
+  expect(experiment.concurrency).toEqual({
+    group: 'layout-owner-e2e',
+    'cancel-in-progress': false
+  })
+  for (const job of Object.values(workflow.jobs)) {
+    expect(job.with?.layout_owner).toBeUndefined()
+  }
+})

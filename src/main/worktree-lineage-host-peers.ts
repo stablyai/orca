@@ -8,7 +8,7 @@ import {
   projectResolvedWorktreeLineage
 } from '../shared/resolved-worktree-lineage'
 import { readAllWorktreeMetaForHost } from './persistence/host-qualified-worktree-meta'
-import { areWorktreePathsEqual } from './ipc/worktree-path-comparison'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { mergeWorktree } from './ipc/worktree-metadata-merge'
 import { resolveRepoOwnershipEvidence } from './ipc/worktrees/listing/worktree-host-ownership'
 import {
@@ -24,7 +24,6 @@ type HostPeerStore = Pick<
   'getRepos' | 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost' | 'getAllWorktreeLineage'
 >
 
-/** Project a per-repo publication against persisted peers on its execution host. */
 export function projectWorktreeLineageWithHostPeers<T extends Worktree>(
   store: HostPeerStore,
   repo: Repo,

@@ -44,10 +44,12 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     branchName,
     hostedReviewCacheKey,
     hostedReviewEntryData,
+    currentHeadOid: activeWorktree?.head,
     linkedPR: activeWorktree?.linkedPR ?? null,
     suppressedGitHubPR: activeWorktree?.suppressedGitHubPR ?? null
   })
   const {
+    currentPrFromQueue,
     hasSuppressedGitHubPR,
     hostedReview,
     hostedReviewCreation,
@@ -88,7 +90,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     worktreePath
   })
   const linkedReviews = useSourceControlLinkedReviews({
-    activePrFromQueue: hasSuppressedGitHubPR ? null : activePrFromQueue,
+    activePrFromQueue: hasSuppressedGitHubPR ? null : currentPrFromQueue,
     activeRepo,
     activeWorktree,
     branchName,

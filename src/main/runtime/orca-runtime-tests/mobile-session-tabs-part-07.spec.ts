@@ -18,6 +18,7 @@ import {
 import { makePendingAgentTabActivationRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { trackRunningAgentLaunchPane } from '../../agent-launch/agent-launch-pane-attachment'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
   it('briefly preserves abnormal SSH exits for paired pane recovery', async () => {
@@ -424,14 +425,23 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })
       ])
 
+      // Switch point: the lease bounds only a row the window's list omits. Main's layout holds the
+      // tab with the switch on, so the phone lists it as the desktop draws it, whatever the lease.
+      const afterLease = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })]
+        : []
       vi.advanceTimersByTime(30_001)
       publishEmpty(2)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
 
       leaseState = 'terminated'
       leaseUpdatedAt = Date.now()
       publishEmpty(3)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -531,7 +541,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

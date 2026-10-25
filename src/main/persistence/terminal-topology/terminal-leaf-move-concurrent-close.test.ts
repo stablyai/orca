@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
-import { makeRepo } from '../../persistence-test-harness'
+import { makeRepo } from '../persistence-test-harness'
 import {
   closeMoveTestStores,
   MOVED,

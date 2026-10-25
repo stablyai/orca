@@ -1,7 +1,18 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-terminal-sleep'
 import { setsEqual } from '../../runtime-worktree-binding-index'
-import { runtimeWorktreeIdsEqual } from '../../runtime-worktree-path-identity'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { mainHoldsTerminal } from '../surface/main-pane-verdict'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+
+// Why: a newer overlapping inventory (e.g. the session republish the exit itself triggers) voids
+// this one; retry within one list budget instead of reporting a confirmed stop as unverifiable.
+const POST_STOP_LIVENESS_RETRY_MS = PTY_CONTROLLER_LIST_TIMEOUT_MS
+const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -68,7 +79,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       }
       stoppedPtyIds.push(ptyId)
     }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const postStopLiveness = await this.refreshPostStopPtyLiveness(resolvedWorktrees)
     if (!postStopLiveness) {
       return {
         stopped: stoppedPtyIds.length,
@@ -101,14 +112,33 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
   }
 
+  private async refreshPostStopPtyLiveness(
+    resolvedWorktrees: ResolvedWorktree[]
+  ): Promise<Set<string> | null> {
+    const deadline = Date.now() + POST_STOP_LIVENESS_RETRY_MS
+    for (;;) {
+      const liveness = await this.refreshPtyWorktreeRecordsFromController(
+        resolvedWorktrees,
+        null,
+        deadline
+      )
+      if (liveness || Date.now() + POST_STOP_LIVENESS_RETRY_DELAY_MS >= deadline) {
+        return liveness
+      }
+      await delay(POST_STOP_LIVENESS_RETRY_DELAY_MS)
+    }
+  }
+
+  /** With `hostFence`, only that host's copy: a same-id twin's PTYs are another host's. */
   protected getLivePtyIdsForWorktree(
     worktreeId: string,
-    freshPtyIds?: ReadonlySet<string>
+    freshPtyIds?: ReadonlySet<string>,
+    hostFence?: WorktreePtyHostFence
   ): Set<string> {
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (
-        runtimeWorktreeIdsEqual(leaf.worktreeId, worktreeId) &&
+        worktreeIdsEqual(leaf.worktreeId, worktreeId) &&
         leaf.connected &&
         leaf.ptyId &&
         (!freshPtyIds || freshPtyIds.has(leaf.ptyId))
@@ -118,11 +148,30 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
     for (const pty of this.ptysById.values()) {
       if (
-        runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId) &&
+        worktreeIdsEqual(pty.worktreeId, worktreeId) &&
         pty.connected &&
         (!freshPtyIds || freshPtyIds.has(pty.ptyId))
       ) {
         ptyIds.add(pty.ptyId)
+      }
+    }
+    // Switch point: a registered terminal main's layout binds may run through a host's listing gap,
+    // as the window kept it connected; only a certified exit, or a fresh inventory, drops it.
+    for (const pty of ORCA_LAYOUT_OWNER_IS_MAIN ? this.ptysById.values() : []) {
+      if (
+        worktreeIdsEqual(pty.worktreeId, worktreeId) &&
+        mainHoldsTerminal(this, pty.ptyId) &&
+        this.getPtyLivenessVerdict(pty.ptyId)?.status !== 'exited' &&
+        (!freshPtyIds || freshPtyIds.has(pty.ptyId))
+      ) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    if (hostFence) {
+      for (const ptyId of ptyIds) {
+        if (!worktreePtyBelongsToHost(ptyId, this.ptysById.get(ptyId)?.connectionId, hostFence)) {
+          ptyIds.delete(ptyId)
+        }
       }
     }
     return ptyIds

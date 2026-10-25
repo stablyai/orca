@@ -132,6 +132,8 @@ export function prepareWebSessionTabsSnapshotUnified(
     (snapshot.activeTabType === 'terminal'
       ? (activeMirroredTerminalId ?? mirroredTerminalTabEntries[0]?.id)
       : mirroredTerminalTabEntries[0]?.id) ??
+    // Another runtime's terminals can outlive this frame's own (#31983).
+    nextTerminalTabs?.[0]?.id ??
     null
   const currentActiveBrowserStillExists =
     state.activeBrowserTabIdByWorktree[worktreeId] &&

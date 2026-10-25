@@ -3,6 +3,7 @@ import {
   PairingOfferSchema,
   type PairingOffer
 } from './mobile-relay-pairing-offer'
+import { normalizePairingBase64 } from './mobile-pairing-base64'
 import {
   PAIRING_CODE_MAX_CHARACTERS,
   PAIRING_INPUT_MAX_CHARACTERS
@@ -81,14 +82,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
 }
 
 function decodePairingBase64(base64url: string): PairingOffer {
-  if (
-    base64url.length === 0 ||
-    base64url.length > PAIRING_CODE_MAX_CHARACTERS ||
-    !/^[A-Za-z0-9+/_-]+={0,2}$/.test(base64url)
-  ) {
-    throw new Error('Invalid pairing code')
-  }
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  const base64 = normalizePairingBase64(base64url)
   const json =
     typeof Buffer === 'undefined'
       ? new TextDecoder().decode(

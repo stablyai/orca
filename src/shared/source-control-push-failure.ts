@@ -1,3 +1,7 @@
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from './ansi-escape-sequences'
 import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_PUSH_FAILURE_SUMMARY = 'Push failed.'
@@ -10,12 +14,6 @@ export const PUSH_FAILURE_PROMPT_FILE_LIMIT = 40
 const PUSH_FAILURE_REPLY_INSTRUCTION =
   'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
 
-const ANSI_PATTERN =
-  // eslint-disable-next-line no-control-regex
-  /[\u001b\u009b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
-const CONTROL_PATTERN =
-  // eslint-disable-next-line no-control-regex
-  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
 const LOW_SIGNAL_LINE_PATTERN =
   /^(?:npm\s+(?:warn|warning)\b.*(?:env|config)|npm\s+notice\b|husky\s+-\s+deprecated\b)/i
 const PUSH_HOOK_PATTERN = /\b(?:pre-push|prepush)\b/i
@@ -26,11 +24,9 @@ const REMOTE_PUSH_EXCLUSION_PATTERN =
   /authentication failed|repository not found|not a git repository|does not appear to be a git repository|permission denied|protected branch|pre-receive hook declined|non-fast-forward|fetch first|updates were rejected|stale info|submodule|failed to push all needed submodules|unable to push submodule|unable to access|could not resolve host|network is unreachable|connection timed out|failed to connect|rpc failed|remote end hung up/i
 
 function normalizePushFailure(raw: string): string {
-  return raw
-    .slice(0, PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS)
-    .replace(ANSI_PATTERN, '')
+  return stripAnsiEscapeSequences(raw.slice(0, PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS))
     .replace(/\r\n?/g, '\n')
-    .replace(CONTROL_PATTERN, '')
+    .replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
     .trim()
 }
 

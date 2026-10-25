@@ -14,6 +14,8 @@ import {
 type RemoteCliBrowserScope = {
   workspaceId: string
   revoked?: AbortSignal
+  /** The host's attachment ending; unlike `revoked`, one command's cancel or deadline never fires it. */
+  hostRevoked?: AbortSignal
   /** True only for a guest that browses through this host's SSH route right now. */
   admitGuest?: (webContentsId: number) => boolean
 }
@@ -24,10 +26,16 @@ export function runInRemoteCliBrowserScope<T>(
   workspaceId: string,
   run: () => Promise<T>,
   revoked?: AbortSignal,
-  admitGuest?: (webContentsId: number) => boolean
+  admitGuest?: (webContentsId: number) => boolean,
+  hostRevoked?: AbortSignal
 ): Promise<T> {
   return scope.run(
-    { workspaceId, ...(revoked ? { revoked } : {}), ...(admitGuest ? { admitGuest } : {}) },
+    {
+      workspaceId,
+      ...(revoked ? { revoked } : {}),
+      ...(admitGuest ? { admitGuest } : {}),
+      ...(hostRevoked ? { hostRevoked } : {})
+    },
     run
   )
 }
@@ -53,6 +61,37 @@ export function captureRemoteCliBrowserRevocation(): (webContentsId?: number) =>
       )
     }
   }
+}
+
+/**
+ * Captured where a browser command is queued: `run` puts the queued work back in exactly that
+ * scope (none for a desktop-local command), never the queue runner's, which may be another host's.
+ */
+export function captureRemoteCliBrowserScope(): {
+  bridged: boolean
+  /** Fires when the host behind the command is revoked. */
+  revoked?: AbortSignal
+  /** Fires only when the host's attachment ends. */
+  hostRevoked?: AbortSignal
+  run<T>(work: () => T): T
+} {
+  const active = scope.getStore()
+  return {
+    bridged: active !== undefined,
+    revoked: active?.revoked,
+    hostRevoked: active?.hostRevoked,
+    run: (work) => (active ? scope.run(active, work) : scope.exit(work))
+  }
+}
+
+/** Runs `work` in no host's scope, so long-lived resources it creates never inherit one. */
+export function runOutsideRemoteCliBrowserScope<T>(work: () => T): T {
+  return scope.exit(work)
+}
+
+/** Throws inside a bridged command once it was revoked or `webContentsId` stopped being admitted. */
+export function assertRemoteCliBrowserAccess(webContentsId?: number): void {
+  captureRemoteCliBrowserRevocation()(webContentsId)
 }
 
 /** Null outside a bridged command; inside one, the scoped workspace or a refusal. */

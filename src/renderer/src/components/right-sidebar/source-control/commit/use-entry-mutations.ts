@@ -102,29 +102,34 @@ export function useSourceControlEntryMutations({
       const runtimeEnvironmentId =
         activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
-      await requestEditorSaveQuiesce({
+      const releaseAutoSave = await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
         worktreePath,
         relativePath: filePath,
         runtimeEnvironmentId
       })
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await discardRuntimeGitPath(
-        {
-          // Why: route the discard by the repo OWNER host, not the focused runtime.
-          target: requireGitOwnerTarget(activeRepoTarget),
+      // Why finally: autosave of this file stays held, in every workspace, until git has finished.
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        await discardRuntimeGitPath(
+          {
+            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
+        notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId
-        },
-        filePath
-      )
-      notifyEditorExternalFileChange({
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        relativePath: filePath,
-        runtimeEnvironmentId
-      })
+          relativePath: filePath,
+          runtimeEnvironmentId
+        })
+      } finally {
+        releaseAutoSave()
+      }
     },
     [activeRepoTarget, activeWorktreeId, worktreePath]
   )
@@ -137,7 +142,7 @@ export function useSourceControlEntryMutations({
       const runtimeEnvironmentId =
         activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
-      await Promise.all(
+      const quiesced = await Promise.allSettled(
         filePaths.map((relativePath) =>
           requestEditorSaveQuiesce({
             worktreeId: activeWorktreeId,
@@ -147,24 +152,41 @@ export function useSourceControlEntryMutations({
           })
         )
       )
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await bulkDiscardRuntimeGitPaths(
-        {
-          // Why: route the discard by the repo OWNER host, not the focused runtime.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        filePaths
+      const releases = quiesced.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
       )
-      for (const relativePath of filePaths) {
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath,
-          runtimeEnvironmentId
-        })
+      const failed = quiesced.find((result) => result.status === 'rejected')
+      // Why: one path that can't be quiesced stops the whole discard; free the holds the rest took.
+      if (failed) {
+        for (const release of releases) {
+          release()
+        }
+        throw failed.reason
+      }
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        await bulkDiscardRuntimeGitPaths(
+          {
+            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePaths
+        )
+        for (const relativePath of filePaths) {
+          notifyEditorExternalFileChange({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath,
+            runtimeEnvironmentId
+          })
+        }
+      } finally {
+        for (const release of releases) {
+          release()
+        }
       }
     },
     [activeRepoTarget, activeWorktreeId, worktreePath]

@@ -22,7 +22,8 @@ import type { RpcAnyMethodDeclaration, RpcRequest } from '../../../src/main/runt
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
-  resolveBaselineReleaseRef
+  resolveBaselineReleaseRef,
+  releaseModuleExport
 } from './release-checkout'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
@@ -39,15 +40,6 @@ type HostBuild = {
   capabilities: readonly string[]
   knows: (method: string) => boolean
   parse: (method: string, params: unknown) => unknown
-}
-
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the baseline release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
 }
 
 function hostBuild(
@@ -84,16 +76,16 @@ beforeAll(async () => {
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/dispatcher-request-parsing.ts')
   ])
   const oldCatalog = Object.fromEntries(
-    Object.entries(member<Record<string, unknown>>(catalog, 'RPC_PARAMS_BY_METHOD')).filter(
-      ([method]) => !HOST_SCOPED_METHODS.includes(method)
-    )
+    Object.entries(
+      releaseModuleExport<Record<string, unknown>>(catalog, 'RPC_PARAMS_BY_METHOD')
+    ).filter(([method]) => !HOST_SCOPED_METHODS.includes(method))
   )
   oldHost = hostBuild(
-    member<readonly string[]>(protocol, 'RUNTIME_CAPABILITIES').filter(
+    releaseModuleExport<readonly string[]>(protocol, 'RUNTIME_CAPABILITIES').filter(
       (capability) => capability !== WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY
     ),
     oldCatalog,
-    member<ParseParams>(parsing, 'parseRpcRequestParams')
+    releaseModuleExport<ParseParams>(parsing, 'parseRpcRequestParams')
   )
   newHost = hostBuild(RUNTIME_CAPABILITIES, RPC_PARAMS_BY_METHOD, (request, method, meta) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the parser only reads `params` from the declaration.

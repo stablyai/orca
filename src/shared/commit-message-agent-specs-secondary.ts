@@ -84,16 +84,11 @@ export function buildSecondaryCommitMessageAgentSpecs({
       // Why: kimi-code accepts the generation prompt only via --prompt/-p (Claude's
       // --print is rejected). Deliver on argv so --prompt receives the text (#11669).
       promptDelivery: 'argv',
-      buildArgs: ({ prompt, model, thinkingLevel }) => [
+      // Why: Kimi Code has no --quiet/--thinking/--no-thinking; -p alone is headless (#14771).
+      buildArgs: ({ prompt, model }) => [
         '--prompt',
         prompt,
-        '--quiet',
-        ...(model && model !== 'default' ? ['--model', model] : []),
-        ...(thinkingLevel === 'on'
-          ? ['--thinking']
-          : thinkingLevel === 'off'
-            ? ['--no-thinking']
-            : [])
+        ...(model && model !== 'default' ? ['--model', model] : [])
       ],
       modelSource: 'static',
       models: [
@@ -102,12 +97,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
           // Why: Kimi resolves its managed model by provider/model; bare model
           // names are rejected by the CLI with "LLM not set".
           id: 'kimi-code/kimi-for-coding',
-          label: 'Kimi K2.6',
-          thinkingLevels: [
-            { id: 'on', label: 'On' },
-            { id: 'off', label: 'Off' }
-          ],
-          defaultThinkingLevel: 'on'
+          label: 'Kimi K2.6'
         }
       ],
       defaultModelId: 'default'

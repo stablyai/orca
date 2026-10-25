@@ -95,12 +95,9 @@ installFakeCli('gh', fakeGhSource)
 installFakeCli('claude', fakeClaudeSource)
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
+  }
 })
 
 test.afterAll(() => {
@@ -128,10 +125,19 @@ test.beforeAll(({ testRepoPath }) => {
 })
 
 test('starting a just-created GitHub issue launches Claude with its URL prefilled', async ({
-  orcaPage
+  orcaPage,
+  electronApp
 }) => {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
+  // Why: the gh preflight merges the login-shell PATH ahead of launchEnv, so the fake gh can lose to a real one.
+  await electronApp.evaluate(
+    ({ ipcMain }, created) => {
+      ipcMain.removeHandler('gh:createIssue')
+      ipcMain.handle('gh:createIssue', () => ({ ok: true, ...created }))
+    },
+    { number: ISSUE_NUMBER, url: ISSUE_URL }
+  )
 
   await orcaPage.evaluate(async () => {
     const store = window.__store

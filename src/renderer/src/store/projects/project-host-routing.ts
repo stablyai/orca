@@ -19,6 +19,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
+import type { ProjectHostSetupTarget } from '../../../../shared/project-host-setup-target'
 
 export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
@@ -93,4 +94,50 @@ export async function assertProjectHostSetupMutationRuntimeCapabilities(
     'The selected Orca server does not support explicit workspace run hosts yet. Update Orca on the server and try again.',
     15_000
   )
+}
+
+// Why: twins share `id`. A paired server's setups all carry its one `runtime:` hostId, so they
+// stay matched by id there, as before (the server's own by-id answer decides which one it was).
+export function isSameProjectHostSetup(a: ProjectHostSetup, b: ProjectHostSetup): boolean {
+  return a.id === b.id && a.hostId === b.hostId
+}
+
+export function upsertProjectHostSetup(
+  setups: readonly ProjectHostSetup[],
+  setup: ProjectHostSetup
+): ProjectHostSetup[] {
+  return setups.some((entry) => isSameProjectHostSetup(entry, setup))
+    ? setups.map((entry) => (isSameProjectHostSetup(entry, setup) ? setup : entry))
+    : [...setups, setup]
+}
+
+/**
+ * Where a setup edit or removal goes. This computer's catalog stamps every row with its real
+ * host, so a named host or a same-id twin goes on the wire; a paired server keeps the by-id
+ * request, because its rows' client-side host ids cannot name its twins.
+ */
+export async function prepareProjectHostSetupMutation<T extends ProjectHostSetupTarget>(
+  setups: readonly ProjectHostSetup[],
+  args: T
+): Promise<{ target: RuntimeClientTarget; hostArgs: T }> {
+  const setup = setups.find(
+    (entry) =>
+      entry.id === args.setupId && (args.hostId === undefined || entry.hostId === args.hostId)
+  )
+  if (!setup && args.hostId !== undefined) {
+    // Why: an id-only fallback could land on a same-id setup of another host.
+    throw new Error(`Project host setup not found on ${args.hostId}: ${args.setupId}`)
+  }
+  const target = setup ? getProjectSetupRuntimeTarget(setup.hostId) : { kind: 'local' as const }
+  await assertProjectHostSetupMutationRuntimeCapabilities(target)
+  if (!setup || target.kind === 'environment') {
+    return { target, hostArgs: { ...args, hostId: undefined } }
+  }
+  const twinned = setups.some(
+    (entry) => entry !== setup && entry.id === setup.id && entry.hostId !== setup.hostId
+  )
+  return {
+    target,
+    hostArgs: twinned || args.hostId !== undefined ? { ...args, hostId: setup.hostId } : args
+  }
 }

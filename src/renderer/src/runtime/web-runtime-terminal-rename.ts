@@ -1,7 +1,7 @@
 import type { TerminalTab, TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { setWebRuntimeTabProps } from './web-runtime-terminal-actions'
 

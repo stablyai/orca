@@ -3,8 +3,7 @@ _orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
 builtin unset ORCA_SHELL_FEATURES
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
 __orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
-# Why a plain variable: the channel is consumed and destroyed in these first
-# lines, so nothing this shell later spawns can see or inherit the selection.
+# Consume the feature channel before profiles so child processes cannot inherit the selection.
 __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
@@ -17,10 +16,7 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
-# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
-# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
-# treat each embedded newline as Enter and mangle the prompt into PS2
-# continuation. Modern readline defaults this on; force it for the rest.
+# Force bracketed paste on older readline so multiline startup prompts remain one literal paste.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 __orca_restore_agent_teams_path() {
   [[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
@@ -36,8 +32,7 @@ if [ -n "${ORCA_CLI_BIN_DIR:-}" ]; then
     *) export PATH="$ORCA_CLI_BIN_DIR${PATH:+:$PATH}" ;;
   esac
 fi
-# Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the Orca-managed config dir before the first prompt.
+# Restore the managed OpenCode config after user profiles may have replaced it.
 [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
 if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
   export XDG_DATA_HOME="${ORCA_DATA_ACCOUNT_DATA_HOME}"
@@ -110,7 +105,7 @@ if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
   function omp { __orca_omp "$@"; }
 fi
 
-# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
+# Preserve the managed CODEX_HOME after user profiles.
 [[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
 # Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
@@ -123,13 +118,23 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
     for __orca_codex_arg in "$@"; do
-      case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
+      case "$__orca_codex_arg" in
+        --no-daemon) __orca_codex_isolate=0 ;;
+        agents|queue|--remote|--remote=*) __orca_codex_isolate=0 __orca_codex_identity=0 ;;
+      esac
     done
+    if [[ "$__orca_codex_identity" != 0 ]]; then
+      [[ -z "${ORCA_TERMINAL_HANDLE:-}" || "${ORCA_TERMINAL_HANDLE}" == *"'"* ]] || set -- -c "shell_environment_policy.set.ORCA_TERMINAL_HANDLE='${ORCA_TERMINAL_HANDLE}'" "$@"
+      [[ -z "${ORCA_PANE_KEY:-}" || "${ORCA_PANE_KEY}" == *"'"* ]] || set -- -c "shell_environment_policy.set.ORCA_PANE_KEY='${ORCA_PANE_KEY}'" "$@"
+      [[ -z "${ORCA_WORKTREE_ID:-}" || "${ORCA_WORKTREE_ID}" == *"'"* ]] || set -- -c "shell_environment_policy.set.ORCA_WORKTREE_ID='${ORCA_WORKTREE_ID}'" "$@"
+      [[ -z "${ORCA_WORKSPACE_ID:-}" || "${ORCA_WORKSPACE_ID}" == *"'"* ]] || set -- -c "shell_environment_policy.set.ORCA_WORKSPACE_ID='${ORCA_WORKSPACE_ID}'" "$@"
+      [[ -z "${ORCA_USER_DATA_PATH:-}" || "${ORCA_USER_DATA_PATH}" == *"'"* ]] || set -- -c "shell_environment_policy.set.ORCA_USER_DATA_PATH='${ORCA_USER_DATA_PATH}'" "$@"
+    fi
     # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
     if [[ "$__orca_codex_isolate" != 0 ]]; then
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
@@ -164,10 +169,7 @@ if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" &&
 fi
 unset __orca_claude_binary
 
-# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
-# status when the foreground command exits — mirrors the zsh daemon wrapper.
-# Without this, bash users (default on most Linux distros) keep a stuck
-# 'working' spinner after the CLI exits without a Stop/SessionEnd hook.
+# OSC 133 C/D clears stale agent status when a CLI exits without a stop hook.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -214,22 +216,17 @@ __orca_osc133_preexec() {
     __bp_*) [[ -n "${__orca_in_prompt_command:-}" ]] && return 0 ;;
   esac
   __orca_run_user_debug_trap
-  # Why: a framework (bash-preexec/starship) may replace our DEBUG trap at the
-  # first prompt; __orca_osc133_epilogue re-takes it each prompt and stores the
-  # framework's trap here, so the framework's own preexec still runs while our
-  # command-start C survives its re-arm.
+  # Chain the framework trap captured before each prompt's lifecycle re-arm.
   if [[ -n "${__orca_chained_debug_trap:-}" ]]; then
     eval "$__orca_chained_debug_trap" || true
   fi
   [[ -z "${__orca_in_prompt_command:-}" ]] || return 0
-  # Why: a chained trap can invoke us more than once for a single command, so
-  # emit C only on the first fire (the __orca_in_command gate), and never for a
-  # prompt-time hook — ours or bash-preexec's __bp_* helpers.
+  # Emit C once per foreground command, excluding prompt hooks and repeated chained-trap calls.
   [[ -z "${__orca_in_command:-}" ]] || return 0
   printf "\033]133;C\007"
   __orca_in_command=1
 }
-# Why: adopt the latest user trap before Orca retakes lifecycle ownership.
+# Adopt the latest user trap before reclaiming lifecycle ownership.
 __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
@@ -435,8 +432,7 @@ fi
 unset __orca_debug_trap_spec __orca_debug_trap_command __orca_had_functrace
 unset -f __orca_normalize_prompt_command_part __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
 unset __orca_prompt_command_normalized
-# Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
-# commands as a foreground command and emits a fake C/D before the first prompt.
+# Arm DEBUG after setup so rcfile commands cannot emit a fake lifecycle before the first prompt.
 __orca_initial_prompt=1
 trap '__orca_osc133_preexec' DEBUG
 unset __orca_initializing_wrapper

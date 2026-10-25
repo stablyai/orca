@@ -262,10 +262,15 @@ export function getWorkspaceCleanupInactivityReasons(
 export function getPersistedWorkspaceCleanupActivityAt(workspace: {
   createdAt?: number
   lastActivityAt: number
+  lastTerminalUseAt?: number
 }): number {
   const lastActivityAt = Number.isFinite(workspace.lastActivityAt) ? workspace.lastActivityAt : 0
   const createdAt = Number.isFinite(workspace.createdAt) ? (workspace.createdAt ?? 0) : 0
-  return Math.max(lastActivityAt, createdAt)
+  // Written only by a sidebar-inputs host; absent on every other build.
+  const terminalUseAt = Number.isFinite(workspace.lastTerminalUseAt)
+    ? (workspace.lastTerminalUseAt ?? 0)
+    : 0
+  return Math.max(lastActivityAt, createdAt, terminalUseAt)
 }
 
 export function isWorkspaceOldForCleanup(

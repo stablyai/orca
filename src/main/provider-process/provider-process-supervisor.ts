@@ -42,17 +42,30 @@ const exitWithSpawnFailure = (error, thrown) => {
   try { require('node:fs').writeSync(2, ${JSON.stringify(PROVIDER_SPAWN_FAILURE_MARKER)} + JSON.stringify(report) + '\\n') } catch {}
   process.exit(127)
 }
+// Orca opens the report channel only when it will keep the group's identity. Linux children
+// inherit its fd, so /dev/null takes that slot and only this pid holds the channel.
+const reports = typeof process.send === 'function'
+const reportShield = reports ? require('node:fs').openSync('/dev/null', 'r') : null
 let child
 try {
   child = spawn(providerCommand, providerArgs, {
     cwd: spec.cwd,
     env: childEnv,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe', ...(reportShield === null ? [] : [reportShield])],
     detached: true
   })
 } catch (error) {
   // Node throws most spawn failures (ENOEXEC, ENOTDIR, ...) rather than emitting them.
   exitWithSpawnFailure(error, true)
+}
+// With the group's identity in Orca, a SIGKILL of this pid cannot orphan the group.
+if (reports) {
+  try { require('node:fs').closeSync(reportShield) } catch {}
+  const disconnect = () => { try { process.disconnect() } catch {} }
+  try {
+    if (child.pid) process.send({ pgid: child.pid }, disconnect)
+    else disconnect()
+  } catch { disconnect() }
 }
 let timer
 let ownerShutdownTimer
@@ -269,6 +282,8 @@ export function createProviderSpawnSpec(
   detached: boolean
   /** The child is the supervisor, whose SIGTERM stops the provider and then itself. */
   supervised: boolean
+  /** Appended after the three standard slots: the channel the supervisor reports its group on. */
+  groupReportStdio: [] | ['ipc']
 } {
   const childEnv = resolveProviderChildEnv(launch, baseEnv)
   const supervisor =
@@ -285,6 +300,7 @@ export function createProviderSpawnSpec(
     env: supervisor?.env ?? childEnv,
     cwd: launch.cwd ?? process.cwd(),
     detached: platform !== 'win32',
-    supervised: supervisor !== null
+    supervised: supervisor !== null,
+    groupReportStdio: supervisor ? ['ipc'] : []
   }
 }

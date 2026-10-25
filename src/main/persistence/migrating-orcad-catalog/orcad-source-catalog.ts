@@ -1,4 +1,4 @@
-import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { Store } from '../../persistence'

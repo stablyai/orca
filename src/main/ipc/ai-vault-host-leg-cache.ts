@@ -1,7 +1,7 @@
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
 } from '../../shared/ai-vault-session-depth'
@@ -14,19 +14,11 @@ type CachedHostLeg = {
   expiresAt: number
 }
 
-// Why: the merged result is only cacheable when every host answered, so one
-// flaky host used to force a full rescan of every healthy host on each panel
-// open. Legs are cached individually and the failing host is the only one
-// rescanned.
+// Cache healthy legs independently so one failing host cannot force every host to rescan.
 const cachedHostLegs = new Map<string, CachedHostLeg>()
-// Bumped on every invalidation. A leg scan that started before an invalidation
-// carries the old generation and must not write its (now stale) result back —
-// otherwise a delete's invalidation is silently undone by a scan that resolves
-// just after it.
+// Fence scans begun before invalidation so late results cannot resurrect deleted sessions.
 let cacheGeneration = 0
-// Why: an `unchanged` reply carries no rows, so without the last full list the
-// TTL cache could only hold the empty marker and fingerprint-less readers (tab
-// session lookup, other windows) would pay a full remote scan.
+// Retain rows behind unchanged replies for readers without fingerprints.
 const lastFullHostLegs = new Map<
   string,
   { depth: AiVaultSessionDepth; result: AiVaultListResult }
@@ -53,9 +45,7 @@ function scheduleHostLegExpiry(): void {
   expiryTimer.unref?.()
 }
 
-/** Serves one host's leg from the per-host TTL cache, and stores it only when
- * that host answered without a host issue — a failing host is retried on the
- * next open while its healthy neighbours stay cached. */
+/** Cache only healthy legs so failing hosts retry without rescanning their neighbors. */
 export async function scanHostLegWithCache(args: {
   cacheKey: string
   depth: AiVaultSessionDepth
@@ -71,15 +61,14 @@ export async function scanHostLegWithCache(args: {
     !args.force &&
     cached &&
     cached.expiresAt > now &&
-    aiVaultSessionDepthCovers(cached.depth, args.depth) &&
+    aiVaultCachedDepthServes(cached.depth, args.depth, args.scopePaths) &&
     (!cached.result.unchanged ||
       (cached.depth === args.depth && cached.result.fingerprint === args.afterFingerprint))
   ) {
     return truncateAiVaultListResult(cached.result, args.depth, args.scopePaths)
   }
   const result = await args.scan()
-  // A delete's invalidation landed while this leg was scanning; caching a
-  // pre-delete result would resurrect the deleted session for the TTL.
+  // A pre-delete scan must not repopulate the invalidated cache.
   if (startGeneration !== cacheGeneration) {
     return result
   }
@@ -96,7 +85,7 @@ export async function scanHostLegWithCache(args: {
     !args.force &&
     current &&
     current.expiresAt > Date.now() &&
-    aiVaultSessionDepthCovers(current.depth, args.depth) &&
+    aiVaultCachedDepthServes(current.depth, args.depth, args.scopePaths) &&
     (!current.result.unchanged ||
       (current.depth === args.depth && current.result.fingerprint === args.afterFingerprint))
   ) {
@@ -111,7 +100,6 @@ export async function scanHostLegWithCache(args: {
   return result
 }
 
-/** Returns the full list an `unchanged` reply stands for when one is known. */
 function rememberFullHostLeg(
   cacheKey: string,
   depth: AiVaultSessionDepth,
@@ -145,10 +133,7 @@ function pruneExpiredHostLegs(now: number): void {
   }
 }
 
-// Drops every cached host leg after a session is deleted so a non-force list
-// call within the TTL can't still serve the trashed session. Scan discovery
-// walks disk first, so a deleted file is never rediscovered — this only guards
-// the cached RESULT.
+// Drop cached results after deletion; disk discovery already excludes the deleted file.
 export function invalidateAiVaultHostLegCache(): void {
   cacheGeneration++
   cachedHostLegs.clear()

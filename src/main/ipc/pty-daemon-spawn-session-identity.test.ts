@@ -5,7 +5,6 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
-import { prewarmJcodeDaemon } from '../jcode/daemon-prewarm'
 import {
   buildJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY,
@@ -58,7 +57,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 vi.mock('../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
   awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
 }))
-vi.mock('../jcode/daemon-prewarm', () => ({ prewarmJcodeDaemon: vi.fn() }))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, recoveredAgentClaim, recoveredAgentSurface } = setupPtyIpcSuite()
@@ -70,7 +68,7 @@ describe('registerPtyHandlers', () => {
         mainWindow
       })
 
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
+      // Daemon spawns bypass LocalPtyProvider.buildSpawnEnv; main must inject host-local environment.
       it('materializes the full guard for a legacy daemon host', async () => {
         const env = await daemonSpawnAndGetEnv(
           {
@@ -126,7 +124,7 @@ describe('registerPtyHandlers', () => {
         })
       })
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
-        // Why: daemon reconnect keys live-shell survival on the sessionId; prefixing with worktreeId scopes sessions by worktree with a unique tail.
+        // Scope daemon reconnect identity by worktree while retaining a unique session tail.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -209,7 +207,7 @@ describe('registerPtyHandlers', () => {
         expect(daemonSpawn).not.toHaveBeenCalled()
       })
       it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
-        // Why: buildPtyHostEnv reads `baseEnv.X ?? process.env.X` so the agent-dir guard works whether Pi's env came over IPC or via daemon fork.
+        // Ambient Pi configuration must receive the same guard as explicit IPC environment.
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           PI_CODING_AGENT_DIR: '/ambient/pi/agent'
         })
@@ -224,7 +222,7 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/ambient/pi/agent')
       })
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
-        // Why: the handler clones baseEnv so IPC-provided env stays pristine; a regression would leak Orca host env back into the renderer's reused copy.
+        // Host injection must not mutate a renderer's reusable environment object.
         const daemonSpawn = setupDaemonAdapter()
         const argsEnv: Record<string, string> = { FOO: 'bar' }
         handlers.clear()
@@ -235,13 +233,12 @@ describe('registerPtyHandlers', () => {
           env: argsEnv
         })
         expect(argsEnv).toEqual({ FOO: 'bar' })
-        // Sanity: the spawn did receive the injected env, so the test isn't passing vacuously.
         const spawnEnv = daemonSpawn.mock.calls.at(-1)![0].env
         expect(spawnEnv.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnEnv).not.toBe(argsEnv)
       })
       it('rejects a caller-supplied sessionId that escapes userData via ..', async () => {
-        // Why: effectiveSessionId reaches filesystem side-effects, so a traversal payload must be refused before they run.
+        // Reject traversal before session identity reaches filesystem side effects.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -257,7 +254,7 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
       })
       it('sweeps per-PTY state when provider.spawn fails for a MINTED sessionId', async () => {
-        // Why: buildPtyHostEnv has filesystem side-effects, so a minted id's per-PTY state must be cleared if provider.spawn later fails.
+        // Failed spawns must clear filesystem state for newly minted IDs.
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
@@ -292,7 +289,7 @@ describe('registerPtyHandlers', () => {
         )
       })
       it('does NOT sweep per-PTY state on provider.spawn failure for CALLER-supplied sessionId', async () => {
-        // Why: a caller-supplied sessionId may refer to an existing PTY whose state must survive a retry/attach failure; only minted ids get swept.
+        // Caller-supplied IDs may own live PTYs; failed retries must not sweep them.
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
@@ -334,8 +331,6 @@ describe('registerPtyHandlers', () => {
     })
   })
 
-  // Pins main's host-env step (row 4, C5c-1): where the window (pty:spawn) and host (runtime
-  // controller) lanes build a daemon spawn's env differently today.
   describe('daemon host env: where the lanes differ today', () => {
     const { setupDaemonAdapter } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
@@ -389,8 +384,7 @@ describe('registerPtyHandlers', () => {
       expect(piClearPtyMock).toHaveBeenCalledTimes(c.swept ? 1 : 0)
     })
 
-    // TEMPORARY (row 7): an empty id (the host trims a blank one to it) skips the host's host env; the
-    // window refuses it.
+    // Current host/window difference: the host accepts an empty ID without host env; the window rejects it.
     it('an empty session id: the window refuses it; the host spawns without host env', async () => {
       const lanes = startLanes()
       await expect(lanes.spawn('window', { env: {}, sessionId: '' })).rejects.toThrow(
@@ -410,14 +404,13 @@ describe('registerPtyHandlers', () => {
       expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
     })
 
-    it('both daemon lanes stamp the pane identity from the spawn ids; only the window pre-warms jcode', async () => {
+    it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {
       const lanes = startLanes()
       const leafId = '11111111-2222-4333-8444-555555555555'
       const paneKey = `tab-1:${leafId}`
       const jcodeDir = shouldInjectJcodeRuntimeDir(process.platform)
         ? buildJcodeRuntimeDir(paneKey)
         : undefined
-      vi.mocked(prewarmJcodeDaemon).mockClear()
       for (const lane of ['window', 'host'] as const) {
         await lanes.spawn(lane, {
           env: { ORCA_PANE_KEY: 'stale-tab:stale-leaf' },
@@ -430,8 +423,6 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_TAB_ID).toBe('tab-1')
         expect(env[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(jcodeDir)
       }
-      // TEMPORARY (its own PR removes it): host daemon spawns don't pre-warm jcode yet.
-      expect(vi.mocked(prewarmJcodeDaemon)).toHaveBeenCalledTimes(jcodeDir ? 1 : 0)
     })
   })
 })

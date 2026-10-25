@@ -18,45 +18,38 @@ import {
   readMemoizedVersionAnswer
 } from './codex-hook-trust-memo'
 
-// Why bounded: a Codex launch waits only briefly, never for a cold derivation.
+// Cold hash derivation must not delay launches beyond this bound.
 export const CODEX_HOOK_LAUNCH_WAIT_MS = 3_000
-// Why retried soon: a timeout at a loaded boot must not cost status until a restart.
+// Retry boot-time failures without requiring an app restart.
 const PENDING_RETRY_MS = 60_000
 
 type KnownAnswer = {
-  /** The binary the answer is for. */
   fingerprint: string
   command: string
   answer: CodexHookAnswer
-  /** When a pending answer may be asked again. */
   retryAt?: number
 }
 
-// Why in-process: a saved record from an earlier process is only trusted after this one re-probed the version.
+// Re-probe persisted binary versions once per process before trusting their answers.
 const answers = new Map<string, KnownAnswer>()
 const derivations = new Map<string, Promise<CodexHookAnswer>>()
-// Why null until the app starts the lookup: only the app's main process may spawn Codex, once PATH
-// is hydrated; a lookup before that, or in another process such as the CLI, reads the memo.
+// Only app main may spawn Codex after PATH hydration; other callers read the memo.
 let appPathReady: Promise<unknown> | null = null
 
-/** App start, main process only: lets lookups ask Codex once `pathReady`, which never rejects, settles. */
+/** App main only; pathReady must settle without rejecting. */
 export function startCodexHookHashLookup(pathReady: Promise<unknown>): void {
   appPathReady = pathReady
   void sweepStaleCodexScratchHomes()
 }
 
-/**
- * Codex's answer about Orca's entry from `codexPath`: what this process
- * already knows, else asked of Codex in the app (its version first, then a
- * throwaway `hooks/list` for a new version). Never throws; one question per binary at a time.
- */
+/** Reuse known answers or query Codex in app main, deduplicated per binary. */
 export function lookupCodexHookAnswer(
   codexPath: string,
   command: string
 ): Promise<CodexHookAnswer> {
   const fingerprint = fingerprintCodex(codexPath)
   if (fingerprint === null) {
-    // Why not held back: a PATH still hydrating, or an install in progress, fixes it.
+    // Do not cache absence: PATH hydration or an install may make the binary available.
     return Promise.resolve(codexNotFound(codexPath))
   }
   const known = answers.get(codexBinaryKey(codexPath))
@@ -87,7 +80,7 @@ async function askCodexForHookHashes(
 ): Promise<CodexHookAnswer> {
   let answer: CodexHookAnswer
   try {
-    // Why re-probe a saved binary: a shim's bytes stay the same when the codex behind it updates.
+    // Shim bytes can stay unchanged when the underlying Codex updates.
     const codexVersion = await probeCodexVersion(codexPath)
     answer = codexVersion
       ? (readMemoizedVersionAnswer(codexVersion, command) ??
@@ -97,8 +90,7 @@ async function askCodexForHookHashes(
     answer = { kind: 'pending', failure: error instanceof Error ? error.message : String(error) }
   }
   if (answer.kind === 'pending') {
-    // Why held back even when it fails fast: the same bytes fail the same way, and a
-    // PATH hydrating at boot can fix it, so retry after the window, not on every spawn.
+    // Throttle repeated failures while allowing boot-time PATH issues to recover.
     return remember(codexPath, {
       fingerprint,
       command,
@@ -115,14 +107,14 @@ function remember(codexPath: string, known: KnownAnswer): CodexHookAnswer {
   return known.answer
 }
 
-/** Codex's answer about Orca's entry from the codex on PATH; asks Codex only in the app. Never throws. */
+/** Query the Codex on PATH only in app main. */
 export async function resolveCodexHookAnswer(): Promise<CodexHookAnswer> {
-  // Why wait for PATH: before it is hydrated, the codex a pane runs may not be found yet.
+  // Resolve the same hydrated PATH that panes use.
   await appPathReady
   return lookupCodexHookAnswer(resolveCodexCommand(), getManagedCommand(getManagedScriptPath()))
 }
 
-/** For status, without asking: this process's answer for the binary on PATH when it has hashes, else what the memo holds. */
+/** Read status from memory or disk without spawning Codex. */
 export function readKnownCodexHookAnswer(): CodexHookAnswer | null {
   const codexPath = resolveCodexCommand()
   const fingerprint = fingerprintCodex(codexPath)
@@ -142,7 +134,6 @@ export function readKnownCodexHookAnswer(): CodexHookAnswer | null {
   )
 }
 
-/** An answer asked for and not in yet. */
 export const CODEX_ANSWER_AWAITED: CodexHookAnswer = {
   kind: 'pending',
   failure: 'waiting for Codex to answer'
@@ -156,12 +147,12 @@ function codexNotFound(codexPath: string): CodexHookAnswer {
   }
 }
 
-/** The answer for a launch, waiting at most `waitMs` for one not known yet; null when none came in time. */
+/** Return null when the answer exceeds the launch wait budget. */
 export function resolveCodexHookAnswerForLaunch(waitMs: number): Promise<CodexHookAnswer | null> {
   return withTimeout<CodexHookAnswer | null>(resolveCodexHookAnswer(), waitMs, null)
 }
 
-/** Every hash set this process or the memo holds, for any version: what Orca may have approved its entry with. */
+/** Include all remembered versions to recognize Orca's earlier approvals. */
 export function readEveryKnownCodexHookHashes(): CodexHookHashes[] {
   return [
     ...[...answers.values()].flatMap(({ answer }) =>

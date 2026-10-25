@@ -1,5 +1,4 @@
-// What a continuation's send came to, read from its submission: the four dispatch states, never
-// collapsed into transport success (`StructuredAgentSessionContinuationOutcome`).
+// Preserve dispatch outcomes; transport success alone cannot prove continuation.
 
 import {
   readAgentSessionFailureFact,
@@ -17,7 +16,7 @@ export function refusedBy(
   sessionId: string,
   submission: ContinuationSubmission
 ): StructuredAgentSessionContinuationOutcome {
-  // A start the agent was refused files that refusal's code, which the failure guidance keys on.
+  // Failure guidance uses the typed start-refusal code.
   const refusal = readAgentSessionFailureFact(submission.rejection)?.refusal
   return {
     sessionId,
@@ -36,11 +35,9 @@ export function verdictOf(
     return refusedBy(sessionId, submission)
   }
   if (dispatch === 'pending') {
-    // Still pending after settlement gave up: handed off, never confirmed.
     return { sessionId, outcome: 'pending' }
   }
-  // `unknown`, or a peer that reported no state at all: delivery is unverifiable, so this claims
-  // neither success nor failure — and writes no note saying the agent was asked to continue.
+  // Missing/unknown peer state proves neither success nor failure; do not write a continuation note.
   return dispatch === 'accepted'
     ? { sessionId, outcome: 'continued' }
     : { sessionId, outcome: 'unknown' }

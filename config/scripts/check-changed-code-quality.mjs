@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -16,6 +17,14 @@ const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
   /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
+const JS_PLUGINS_CONFIG = 'config/oxlint-js-plugins.json'
+// The root scan no longer loads these plugins, so their suppressions belong to the JS plugins scan.
+const JS_PLUGIN_NAMES = JSON.parse(
+  readFileSync(new URL(`../../${JS_PLUGINS_CONFIG}`, import.meta.url), 'utf8')
+).jsPlugins.map((plugin) => plugin.name)
+const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
+  String.raw`\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\b(?:${JS_PLUGIN_NAMES.join('|')})\/`
+)
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
@@ -23,6 +32,12 @@ export const OXLINT_SCANS = [
     // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
     label: 'code quality',
     args: ['--report-unused-disable-directives-severity', 'warn']
+  },
+  {
+    // Why separate: any JS plugin makes Oxlint hand every file's AST to Node, which costs the
+    // default `oxlint` run several times its native time, so these rules run only in gates.
+    label: 'JS plugins',
+    args: ['--config', JS_PLUGINS_CONFIG]
   },
   {
     label: 'casting code quality',
@@ -64,14 +79,16 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
-      'src/renderer/src/components/use-task-page-github-issue-draft.ts',
+      'src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts',
       'src/renderer/src/components/use-task-page-jira-creation-state.ts'
     ])
   ],
   [
     'react-doctor(no-derived-state-effect)',
     new Set([
-      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
+      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts',
+      // The open-cycle reset effect predates this entry; it surfaced when its body changed.
+      'src/renderer/src/components/right-sidebar/useSourceControlAgentActionDialog.ts'
     ])
   ],
   [
@@ -144,7 +161,11 @@ function resolveBase(root, requestedBase) {
   throw new Error('Pass the pull request base SHA or make origin/main available locally.')
 }
 
-export function collectAddedLineRanges(root, requestedBase) {
+export function collectAddedLineRanges(
+  root,
+  requestedBase,
+  { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
+) {
   // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
   // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
   // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
@@ -153,23 +174,44 @@ export function collectAddedLineRanges(root, requestedBase) {
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
-  const changedFiles = splitNullDelimited(
-    runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
+  const changedEntries = splitNullDelimited(
+    runGit(root, ['diff', '--name-status', '--find-renames', '-z', comparisonBase, '--'])
   )
+  const changedFiles = []
+  const renamedSources = new Map()
+  for (let index = 0; index < changedEntries.length;) {
+    const status = changedEntries[index++]
+    const source = changedEntries[index++]
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const destination = changedEntries[index++]
+      changedFiles.push(destination)
+      if (status.startsWith('R') && includePath(source)) {
+        renamedSources.set(destination, source)
+      }
+    } else if (status !== 'D') {
+      changedFiles.push(source)
+    }
+  }
   const untrackedFiles = splitNullDelimited(
     runGit(root, ['ls-files', '--others', '--exclude-standard', '-z'])
   )
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(path.join(root, file))
-    ) {
+    if (!includePath(file) || !existsSync(path.join(root, file))) {
       continue
     }
-    const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
+    const source = renamedSources.get(file)
+    const paths = source ? [source, file] : [file]
+    const diff = runGit(root, [
+      'diff',
+      '--find-renames',
+      '--unified=0',
+      '--no-color',
+      comparisonBase,
+      '--',
+      ...paths
+    ])
     const ranges = parseAddedLineRanges(diff)
     if (ranges.length > 0) {
       rangesByFile.set(file, ranges)
@@ -178,11 +220,7 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(absolutePath)
-    ) {
+    if (!includePath(file) || !existsSync(absolutePath)) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
@@ -460,7 +498,10 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   }
   return (diagnostic.labels ?? []).some((label) =>
     diagnosticHighlightedLines(root, diagnostic.filename, label.span).some(
-      (line) => ANTI_SLOP_DISABLE_PATTERN.test(line) || REACT_DOCTOR_DISABLE_PATTERN.test(line)
+      (line) =>
+        ANTI_SLOP_DISABLE_PATTERN.test(line) ||
+        REACT_DOCTOR_DISABLE_PATTERN.test(line) ||
+        JS_PLUGIN_DISABLE_PATTERN.test(line)
     )
   )
 }
@@ -518,6 +559,24 @@ function runOxlintScan(root, scan, files) {
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
 }
 
+/** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
+export function runAstGrepScan(root, files) {
+  return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
+    filename: match.file,
+    code: `ast-grep(${match.ruleId})`,
+    message: match.message,
+    labels: [
+      {
+        span: {
+          line: match.range.start.line + 1,
+          offset: match.range.byteOffset.start,
+          length: match.range.byteOffset.end - match.range.byteOffset.start
+        }
+      }
+    ]
+  }))
+}
+
 export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
@@ -551,6 +610,17 @@ export function main(
       `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
     )
   }
+
+  const astGrepFindings = runAstGrepScan(root, files).filter((diagnostic) =>
+    diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+  )
+  for (const diagnostic of astGrepFindings) {
+    printDiagnostic(diagnostic, root)
+  }
+  failures += astGrepFindings.length
+  console.log(
+    `ast-grep: ${astGrepFindings.length} new finding(s) across ${files.length} changed file(s).`
+  )
 
   const missingSafety = findCastingDirectivesMissingSafety(root, rangesByFile)
   for (const diagnostic of missingSafety) {

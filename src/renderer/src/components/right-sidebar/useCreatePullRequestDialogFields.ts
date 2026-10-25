@@ -1,7 +1,7 @@
 import {
   getWorkspaceJiraIssueKey,
   prefixJiraReviewTitle
-} from '../../../../shared/jira-review-title'
+} from '../../../../shared/jira/jira-review-title'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,

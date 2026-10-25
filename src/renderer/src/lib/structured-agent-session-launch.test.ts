@@ -341,7 +341,12 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledOnce()
-    expect(mocks.launch).toHaveBeenCalledWith(intent, expect.any(Function))
+    expect(mocks.launch).toHaveBeenCalledWith(
+      intent,
+      expect.any(Function),
+      false,
+      expect.any(Function)
+    )
     expect(toast.message).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
   })
@@ -367,12 +372,14 @@ describe('startStructuredAgentLaunch', () => {
       'claude',
       undefined,
       undefined,
+      undefined,
       undefined
     )
     expect(mocks.createIntent).toHaveBeenNthCalledWith(
       2,
       worktreeId,
       'codex',
+      undefined,
       undefined,
       undefined,
       undefined

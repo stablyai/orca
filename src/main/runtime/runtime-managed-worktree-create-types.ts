@@ -14,9 +14,10 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type { RuntimeRepoSelector } from './runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
-  repoSelector: string
+  repoSelector: RuntimeRepoSelector
   name: string
   nameWasGenerated?: boolean
   navigation?: RuntimeNavigationTarget
@@ -71,6 +72,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgentArgs?: string | null
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
   startupExtraAgentArgs?: string
+  /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
+  startupSuppressUpdatePrompt?: boolean
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string

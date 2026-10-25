@@ -1,3 +1,4 @@
+import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
@@ -46,12 +47,12 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
           return disposition !== 'suppress'
         }
       })
+      retainOpenCodeWriterTopology(event, source, body)
       if (
         event &&
         event.hookEventName === 'SessionStart' &&
         isOpenCodeSharedServerPost(source, body)
       ) {
-        // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()
       }
       return {
@@ -74,7 +75,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
-    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
       onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
@@ -114,8 +115,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
-    // Why: a hook spooled a full second before a proven exit (stamps are whole seconds) describes
-    // the dead agent; replaying it would install an obsolete owner. A same-second one may not.
+    // Whole-second spool timestamps prove pre-exit ownership only with a full second of separation.
     if (exit && record.receivedAt + 1000 <= exit.at) {
       return
     }

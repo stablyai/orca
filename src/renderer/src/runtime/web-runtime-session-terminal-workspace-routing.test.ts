@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -62,10 +61,6 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -266,7 +261,7 @@ describe('web-runtime-session terminal workspace routing', () => {
 
   it('does not touch the host selection when the caller opted out of selecting', async () => {
     const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
+      activeWorktreeId: 'repo::/other',
       activeWorkspaceExecutionHostId: 'local'
     }
     stubSelectableWorkspaceStore(selection)
@@ -281,6 +276,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     })
 
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(selection.activeWorktreeId).toBe('repo::/other')
     expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })

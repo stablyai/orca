@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { Pressable, TextInput } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 
@@ -27,6 +28,42 @@ const textInput = (root: ReactTestInstance) =>
 const ask = { questions: [{ question: 'Pick?', options: [{ label: 'East' }], multiSelect: false }] }
 
 describe('MobileNativeChatPromptCard collapse', () => {
+  it.each([true, false])(
+    'shows only terminal navigation when answering requires it (%s)',
+    async (available) => {
+      const onAnswerInTerminal = vi.fn()
+      const onAnswerAsk = vi.fn(async () => true)
+      const onCancelAsk = vi.fn(async () => true)
+      const onDismissAsk = vi.fn()
+      let tree: ReactTestRenderer | null = null
+      await act(async () => {
+        tree = create(
+          createElement(MobileNativeChatPromptCard, {
+            ask,
+            requiresTerminal: true,
+            onAnswerAsk,
+            onCancelAsk,
+            onDismissAsk,
+            onAnswerInTerminal: available ? onAnswerInTerminal : undefined
+          })
+        )
+      })
+      const buttons = tree!.root.findAllByType(Pressable)
+      expect(buttons).toHaveLength(1)
+      expect(buttons[0]!.props.accessibilityLabel).toBe('Answer in terminal')
+      expect(buttons[0]!.props.disabled).toBe(!available)
+      expect(tree!.root.findAllByType(TextInput)).toHaveLength(0)
+      if (available) {
+        act(() => buttons[0]!.props.onPress())
+      }
+      expect(onAnswerInTerminal).toHaveBeenCalledTimes(available ? 1 : 0)
+      expect(onAnswerAsk).not.toHaveBeenCalled()
+      expect(onCancelAsk).not.toHaveBeenCalled()
+      expect(onDismissAsk).not.toHaveBeenCalled()
+      act(() => tree!.unmount())
+    }
+  )
+
   it('keeps a partly answered Ask mounted but hidden while collapsed', async () => {
     let tree: ReactTestRenderer | null = null
     const render = (collapsed: boolean) =>

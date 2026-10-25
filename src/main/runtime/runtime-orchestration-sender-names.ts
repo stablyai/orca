@@ -1,7 +1,7 @@
 // The runtime's answer to "what is this agent called", from its own records, for any send that
 // speaks for another agent: the mail lane today, a dispatched task next.
 
-import type { AgentMessageSender } from '../../shared/agent-session-message-source'
+import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
 import type { ConversationNameTab } from '../../shared/agent-row-conversation-name'
 import type { AgentStatusIpcPayload, AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'

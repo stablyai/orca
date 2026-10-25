@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -69,6 +70,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
     launchSource: 'orchestration',
+    suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
@@ -175,10 +177,11 @@ export function monitorWorkerSetup(args: {
       if (!evidence.changed) {
         return
       }
+      const dispatch = args.db.getDispatchContextById(args.dispatchId)
       const message = args.db.insertMessage({
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
-        to: `run:${args.runId}`,
+        to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
         subject: `Setup ${setupState} for worker ${args.dispatchId}`,
         type: 'status',
         priority: setupState === 'failed' ? 'high' : 'normal',

@@ -1,5 +1,4 @@
-// WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+// WebSocket transport letting mobile clients reach the Orca runtime over LAN (ws://); auth is per-device tokens, and E2EE runs above this layer.
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
@@ -30,8 +29,6 @@ const HEARTBEAT_INTERVAL_MS = 15_000
 export type WebSocketTransportOptions = {
   host: string
   port: number
-  tlsCert?: string
-  tlsKey?: string
   // Why: test-only override. Production uses HEARTBEAT_INTERVAL_MS.
   heartbeatIntervalMs?: number
   // Why: deterministic suspension tests must advance wall time independently from timer callbacks.
@@ -53,8 +50,6 @@ export type WebSocketTransportOptions = {
 export class WebSocketTransport implements RpcTransport {
   private readonly host: string
   private readonly port: number
-  private readonly tlsCert: string | undefined
-  private readonly tlsKey: string | undefined
   private readonly heartbeat: RemoteRuntimeServerHeartbeat
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
@@ -63,7 +58,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly requirePinnedPort: boolean
   private readonly fallbackLadder: readonly number[]
   private persistedFallbackBindFailed = false
-  private httpServer: HttpsServer | HttpServer | null = null
+  private httpServer: HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler: WebSocketConnectionCloseHandler | null = null
@@ -75,8 +70,6 @@ export class WebSocketTransport implements RpcTransport {
   constructor({
     host,
     port,
-    tlsCert,
-    tlsKey,
     heartbeatIntervalMs,
     heartbeatNow,
     preAuthTimeoutMs,
@@ -88,8 +81,6 @@ export class WebSocketTransport implements RpcTransport {
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
-    this.tlsCert = tlsCert
-    this.tlsKey = tlsKey
     this.heartbeat = new RemoteRuntimeServerHeartbeat(
       heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS,
       heartbeatNow,
@@ -199,20 +190,13 @@ export class WebSocketTransport implements RpcTransport {
     await this.tryListen(0)
   }
 
-  private createHttpServer(): HttpServer | HttpsServer {
-    // Why the 404: with no 'request' listener Node never answers plain HTTP, so it hung (#30100).
-    const requestListener = this.staticRoot
-      ? createStaticWebClientHandler(this.staticRoot)
-      : answerWithoutWebClient
-    return this.tlsCert && this.tlsKey
-      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
-      : createHttpServer(requestListener)
-  }
-
   // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.
   private async tryListen(port: number): Promise<void> {
     await assertPortNotShadowingListener(this.host, port)
-    const httpServer = this.createHttpServer()
+    // Why the 404: with no 'request' listener Node never answers plain HTTP, so it hung (#30100).
+    const httpServer = createHttpServer(
+      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+    )
 
     await new Promise<void>((resolve, reject) => {
       httpServer.once('error', reject)

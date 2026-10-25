@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { readCodexTurnId } from '../codex/codex-structured-thread-facts'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -97,6 +97,7 @@ async function stop(turnId?: string): Promise<void> {
   if (!stopped.ok) {
     throw new Error(JSON.stringify(stopped.refusal))
   }
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
 }
 
 /** Every end row written for turn-1, as a row or a lifecycle batch's mutation, in order. */

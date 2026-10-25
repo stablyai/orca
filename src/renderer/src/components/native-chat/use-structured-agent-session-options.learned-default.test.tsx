@@ -87,8 +87,7 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 const LOCAL = { kind: 'local' } as const
 const NOT_STARTED: { running: { fence: number } | null } = { running: null }
 const NO_HELD = {}
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-const NO_MUTATE = vi.fn() as unknown as StructuredAgentSessionMutate
+const NO_MUTATE: StructuredAgentSessionMutate = vi.fn()
 
 function renderChat(agent: string, sessionId: string, worktree: string) {
   const frames: Pill[] = []

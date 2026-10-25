@@ -148,12 +148,12 @@ describe('registerPtyHandlers', () => {
     write(mainWindowIpcEvent, { id: result.id, data: 'alive' })
     expect(mockProc.proc.write).toHaveBeenCalledWith('alive')
 
-    // Field failure (Discord #performance / #2836): a pane can render with a ptyId whose ownership is gone while the PTY lives, so keystrokes vanish silently.
+    // Missing ownership can silently drop keystrokes even while the PTY remains alive (#2836).
     deletePtyOwnership(result.id)
     write(mainWindowIpcEvent, { id: result.id, data: 'dropped' })
     expect(mockProc.proc.write).not.toHaveBeenCalledWith('dropped')
 
-    // pty:listSessions rebuilds ownership from provider sessions — the revival lever the frozen-pane e2e probes depend on.
+    // Session listing rebuilds ownership from the provider and restores input routing.
     await handlers.get('pty:listSessions')!(null, undefined)
     write(mainWindowIpcEvent, { id: result.id, data: 'revived' })
     expect(mockProc.proc.write).toHaveBeenCalledWith('revived')
@@ -329,8 +329,7 @@ describe('registerPtyHandlers', () => {
       snapshotKittyKeyboardFlags?: number
     }
 
-    // The reconciled boundary covers bytes the daemon's flags were proven
-    // BEFORE — publishing both would erase a negotiation the pane scanned live.
+    // Reconciled sequence is newer than proven flags; publishing both could erase later live negotiation.
     expect(reply.snapshotKittyKeyboardFlags).toBeUndefined()
     expect(reply.snapshotSeq).toBeUndefined()
   })
@@ -362,16 +361,13 @@ describe('registerPtyHandlers', () => {
       sessionId: 'pty-reattached'
     })
 
-    // Why: a reattached shell keeps the CODEX_HOME baked in at its original
-    // spawn, so re-recording it under the current selection would erase the only
-    // evidence that the pane is stale.
+    // Reattach retains its original CODEX_HOME; recording current selection would hide a stale-account pane.
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-fresh', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'real-home' }]
     ])
   })
   it('refreshes the WSL hook relay for the distro a reattached pane already owns', async () => {
-    // Why here and not only in the helper's unit test: nothing else catches pty.ts dropping the
-    // reattach call — the manager owns the hooks/platform gating this spy stands in for.
+    // Cover reattach wiring here; the relay manager's unit tests cannot detect a dropped call.
     const ensureForDistro = vi
       .spyOn(wslHookRelayManager, 'ensureForDistro')
       .mockImplementation(async () => {})

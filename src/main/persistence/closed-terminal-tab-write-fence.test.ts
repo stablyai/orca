@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { Store } from './loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   REPO_ID,

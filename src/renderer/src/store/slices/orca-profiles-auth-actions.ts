@@ -113,6 +113,10 @@ export const createOrcaProfilesAuthActions: StateCreator<
               description: result.auth.setupMessage
             }
           )
+        } else if (result.status === 'timed-out' && !alreadyConnected) {
+          toast.error(
+            translate('auto.store.slices.orca.profiles.signInTimedOut', 'Sign-in timed out')
+          )
         } else if (
           result.status === 'failed' &&
           !alreadyConnected &&

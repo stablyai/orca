@@ -2,6 +2,7 @@
 // Why: status comes from hooks (Claude, Codex, etc.) — never inferred from terminal titles;
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
@@ -34,7 +35,6 @@ export {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-field-normalization'
 export {
-  AGENT_STATUS_MAX_SUBAGENTS,
   agentSubagentsEqual,
   type AgentSubagentSnapshot,
   type AgentSubagentState
@@ -98,6 +98,10 @@ export type AgentStatusEntry = {
   /** When the main agent's current turn began, as the hook server stamped it. Absent from old hosts
    *  and writers without a turn clock; readers fall back to `stateStartedAt`. */
   turnStartedAt?: number
+  /** The host's turn-end stamp; see `AgentStatusIpcPayload.turnEndedAt`. */
+  turnEndedAt?: number
+  /** How the host identified that end; see `TurnEndDisposition`. */
+  turnEndDisposition?: TurnEndDisposition
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
@@ -159,9 +163,14 @@ export type AgentStatusEntry = {
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** The program's own OSC 7501 report (progress, message, blocks like sign-in), beside whichever
+   *  producer owns `state`. Never decides `state`; readers resolve it through
+   *  resolveProgramStatusPresentation. Live-only. */
+  programStatus?: ProgramStatusFacet
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
-   *  treat the row as stale immediately. Cleared by any accepted live event. */
+   *  treat the row as stale immediately. Cleared by any accepted live event. A host also
+   *  publishes it on a row older than the pane's current process: identity only, no status. */
   restoredUnconfirmed?: boolean
 } & AgentStatusRowFacets
 
@@ -261,6 +270,7 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
 // together; the clock rules themselves live in agent-status-freshness.ts.
 export {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt,
   agentStatusEvidenceObservedAt,
@@ -269,6 +279,25 @@ export {
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
+
+/** How the execution host identified the current turn end: `identified` (a verified new turn or
+ *  continuation, or a proven repeat of one) or `ambiguous` (a repeat it can't tell from a turn whose
+ *  opening it missed). Absent: legacy (old hosts, replays, unclassified agents). */
+export type TurnEndDisposition = 'identified' | 'ambiguous'
+
+export type HostTurnEndFacts = { turnEndedAt?: number; turnEndDisposition?: TurnEndDisposition }
+
+export function isTurnEndDisposition(value: unknown): value is TurnEndDisposition {
+  return value === 'identified' || value === 'ambiguous'
+}
+
+/** The host's turn-end facts of a row, for the copies that carry them. */
+export function pickHostTurnEnd(row: HostTurnEndFacts): HostTurnEndFacts {
+  return {
+    ...(row.turnEndedAt !== undefined ? { turnEndedAt: row.turnEndedAt } : {}),
+    ...(row.turnEndDisposition !== undefined ? { turnEndDisposition: row.turnEndDisposition } : {})
+  }
+}
 
 export function isAgentStatusState(value: unknown): value is AgentStatusState {
   return typeof value === 'string' && VALID_STATES.has(value)

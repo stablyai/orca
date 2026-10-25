@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { parseAst as ParseAstFn } from 'vite' with { 'resolution-mode': 'import' }
@@ -157,9 +159,23 @@ describe('function-initialized export let ban', () => {
   // several drive the banned shape on purpose.
   const files = scanSourceTree(join(repoRoot, 'src'))
 
-  it('scans a plausible number of files', () => {
-    // A broken root or extension list would make the guard silently vacuous.
-    expect(files.length).toBeGreaterThan(500)
+  it('scans shipped sources and excludes hazardous test fixtures', () => {
+    expect(
+      files.some(({ relativePath }) => relativePath === 'main/ipc/pty/delivery/debug.ts')
+    ).toBe(true)
+    const root = mkdtempSync(join(tmpdir(), 'orca-export-let-'))
+    try {
+      writeFileSync(join(root, 'bridge.ts'), 'export let bridge = () => {}')
+      writeFileSync(join(root, 'bridge.test.ts'), 'export let fixture = () => {}')
+
+      const offenders = scanSourceTree(root).flatMap(({ relativePath, source }) =>
+        findFunctionInitializedExportLets(relativePath, source)
+      )
+
+      expect(offenders).toEqual([{ name: 'bridge', line: 1 }])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('has no function-initialized export let in shipped code', () => {

@@ -13,6 +13,7 @@ const DEFAULT_POSIX_EXEC_PATH = '/usr/bin:/bin'
 export type ShellProcessReadiness = {
   executablePath: string
   foreground: boolean
+  ttyPath: string | null
 }
 
 export function parseDarwinExecutablePath(stdout: string): string | null {
@@ -45,16 +46,33 @@ export async function readShellProcessReadiness(
 ): Promise<ShellProcessReadiness | null> {
   const [executablePath, { stdout }] = await Promise.all([
     readExecutablePath(pid),
-    execFile('ps', ['-p', String(pid), '-o', 'stat='], {
+    execFile('ps', ['-p', String(pid), '-o', 'stat=,tty='], {
       encoding: 'utf8',
       timeout: PROCESS_READINESS_TIMEOUT_MS,
       maxBuffer: PS_MAX_BUFFER_BYTES
     })
   ])
-  const status = stdout.trim()
+  const [status, ttyName] = stdout.trim().split(/\s+/)
   return status && executablePath
-    ? { executablePath: await realpath(executablePath), foreground: status.includes('+') }
+    ? {
+        executablePath: await realpath(executablePath),
+        foreground: status.includes('+'),
+        ttyPath: ttyName && ttyName !== '?' && ttyName !== '??' ? `/dev/${ttyName}` : null
+      }
     : null
+}
+
+export async function listChildProcessIds(pid: number): Promise<number[]> {
+  const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid='], {
+    encoding: 'utf8',
+    timeout: PROCESS_READINESS_TIMEOUT_MS,
+    maxBuffer: PS_MAX_BUFFER_BYTES
+  })
+  return stdout
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([childPid, parentPid]) => childPid && parentPid === String(pid))
+    .map(([childPid]) => Number(childPid))
 }
 
 function shellExecutableCandidates(

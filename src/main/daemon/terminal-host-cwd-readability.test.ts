@@ -3,8 +3,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
 const { opendirMock } = vi.hoisted(() => ({ opendirMock: vi.fn() }))
-// Async on purpose: on macOS this read is what raises the TCC prompt, which holds the syscall for
-// as long as the user leaves the sheet up.
+// TCC directory enumeration can remain pending while a permission sheet is open.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   opendir: opendirMock
@@ -43,8 +42,7 @@ function createMockSubprocess(): SubprocessHandle {
   }
 }
 
-// #17696: only the daemon process can say whether TCC lets it enumerate the cwd, so its verdict
-// rides on the create result. A non-permission failure must never read as denial.
+// Only the daemon can measure its own cwd permissions; other failures must not imply denial.
 describe('TerminalHost cwd readability verdict', () => {
   let host: TerminalHost
   let platformDescriptor: PropertyDescriptor | undefined
@@ -85,7 +83,6 @@ describe('TerminalHost cwd readability verdict', () => {
     expect((await create('empty', '/work/empty')).cwdReadableByDaemon).toBe(true)
   })
 
-  // The #17696 shape: TCC refuses the daemon, and only a refusal may read as denial.
   it('reports EPERM on open as denied', async () => {
     opendirMock.mockImplementation(() => failWith('EPERM'))
     expect((await create('eperm', '/Users/alice/Documents/repo')).cwdReadableByDaemon).toBe(false)

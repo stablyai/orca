@@ -1,6 +1,6 @@
 /** The page's side of the verbs, over the real pair: what it sends, and what it refuses to send. */
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
@@ -26,6 +26,8 @@ import {
   type NativeVerbs
 } from './use-native-verbs'
 
+const mounted: ReactTestRenderer[] = []
+
 const held: { verbs: NativeVerbs | null } = { verbs: null }
 
 function Screen(): null {
@@ -44,7 +46,7 @@ function render(pair: BridgePortPair): ReactElement {
 async function mount(pair: BridgePortPair): Promise<NativeVerbs> {
   await pair.flush()
   act(() => {
-    create(render(pair))
+    mounted.push(create(render(pair)))
   })
   const verbs = held.verbs
   if (verbs === null) {
@@ -58,26 +60,39 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
   vi.useRealTimers()
 })
 
 describe('a page calling a native verb', () => {
   it('writes through the shell and hears whether the pasteboard took it', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ written: true }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
+    expect(verbs.granted).toBe(true)
     const written = verbs.writeClipboardText('copied')
     await pair.flush()
     await expect(written).resolves.toBe(true)
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.write', {
+      mime: 'text',
+      value: 'copied'
+    })
     // The whole point of the seam: it never reached the desktop's client.
     expect(pair.rpc.requests).toEqual([])
   })
 
   it('reads through the shell', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ value: 'pasteboard' }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
     const read = verbs.readClipboardText()
     await pair.flush()
     await expect(read).resolves.toBe('pasteboard')
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.read', { mime: 'text' })
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -116,12 +131,6 @@ describe('a shell that granted no native verbs', () => {
     // A rejection after a round trip and one that never left look the same to an `await`; only the
     // first would have put a request on the wire.
     expect(page.sent).toHaveLength(before)
-  })
-
-  it('says so before it is called, so a caller can choose its own fallback', async () => {
-    const pair = createFakeBridgePortPair()
-    const verbs = await mount(pair)
-    expect(verbs.granted).toBe(true)
   })
 })
 
@@ -253,30 +262,5 @@ describe('a code this page has never heard of', () => {
     const caught = await read
     expect(caught).toBeInstanceOf(NativeVerbError)
     expect(caught instanceof NativeVerbError && caught.reason).toBe('unreported')
-  })
-})
-
-describe('what the surface offers a screen', () => {
-  it('carries no capability flag with nothing behind it', async () => {
-    const pair = createFakeBridgePortPair({})
-    const verbs = await mount(pair)
-    // Pinned so an unread flag has to be added here on purpose. `canCaptureAudio` was one: four
-    // grants read and answered to nobody, where the fence that actually holds is the per-verb
-    // `ungranted` check every member already makes before a frame is sent. A flag no screen reads
-    // is a capability negotiation that exists only in this file.
-    expect(Object.keys(verbs).sort()).toEqual([
-      'canPickMedia',
-      'canReadClipboardText',
-      'canWriteClipboardText',
-      'granted',
-      'pickMedia',
-      'readAudio',
-      'readClipboardText',
-      'readMedia',
-      'releaseMedia',
-      'startAudio',
-      'stopAudio',
-      'writeClipboardText'
-    ])
   })
 })

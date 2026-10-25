@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type SwitchDependencies = {
   /** Committed mounts, not renders: what this file is about is what the user was shown. */
@@ -37,7 +37,7 @@ vi.mock('react-native', () => ({
 }))
 
 // The workspace route reads the desktop's connection to decide whether a server is reachable.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
 vi.mock('../transport/workspace-server', () => ({
@@ -161,11 +161,27 @@ const SWITCHES: readonly SwitchCase[] = [
   }
 ]
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 /** A synchronous `act` commits the first frame and its mount effects, and nothing async after it. */
 function renderFirstFrame(Route: ComponentType): ReactTestRenderer {
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   act(() => {
-    rendered.tree = create(createElement(Route))
+    rendered.tree = createTracked(createElement(Route))
   })
   if (rendered.tree === null) {
     throw new Error('the switch did not render')

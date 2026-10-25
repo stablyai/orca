@@ -10,6 +10,8 @@ import {
   structuredLaunchStates
 } from '@/lib/structured-agent-session-launch-registry'
 import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
+import { readStructuredAgentLaunchRecords } from '@/lib/structured-agent-session-launch-persistence'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import {
@@ -34,6 +36,7 @@ export function retirePurgedTabLaunches(
   }
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'agent-session') {
+      forgetUnlistedCreatedChat(worktreeId, tab.entityId)
       const target = structuredAgentSessionTargetForTab(s, tab)
       if (target) {
         retireStructuredAgentSessionReadOwner(tab.entityId, target)
@@ -83,6 +86,26 @@ export function cancelStructuredLaunchesForWorktrees(
         `agent-session:${launch.intent.sessionId}`
       )
       cancelledSessionIds.add(launch.intent.sessionId)
+    }
+  }
+  // A resume that publishes on commit has no tab or in-memory launch yet; its saved record names
+  // the workspace it will open in.
+  for (const record of readStructuredAgentLaunchRecords()) {
+    const worktreeId = record.surfaceAddress?.worktreeId
+    if (
+      record.executionHostId === 'local' &&
+      worktreeId &&
+      worktreeIdSet.has(worktreeId) &&
+      (!ownedByHost || ownedByHost(worktreeId, record.executionHostId)) &&
+      !cancelledSessionIds.has(record.sessionId)
+    ) {
+      markStructuredAgentSessionLaunchCancelledSilently(
+        worktreeId,
+        record.sessionId,
+        record.executionHostId
+      )
+      discardStructuredAgentSessionChatSends(record.sessionId)
+      cancelledSessionIds.add(record.sessionId)
     }
   }
   return cancelledSessionIds

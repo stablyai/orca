@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
+import {
+  foldToolMessages,
+  splitNativeChatBlocks
+} from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>

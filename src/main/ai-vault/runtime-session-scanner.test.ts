@@ -10,7 +10,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: mocks.listEnvironments
 }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 
@@ -33,12 +33,16 @@ describe('runtime AI Vault session scanner', () => {
   it('lists saved runtime environments as runtime execution hosts', () => {
     mocks.listEnvironments.mockReturnValue([
       { id: 'env-1', name: 'Server 1' },
-      { id: 'env-2', name: 'Server 2' }
+      { id: 'env-2', name: 'Server 2', connectionDependency: 'ssh-tunnel' }
     ])
 
     expect(getSavedRuntimeAiVaultHostInfos('/user-data')).toEqual([
       { environmentId: 'env-1', executionHostId: 'runtime:env-1' },
-      { environmentId: 'env-2', executionHostId: 'runtime:env-2' }
+      {
+        environmentId: 'env-2',
+        executionHostId: 'runtime:env-2',
+        connectionDependency: 'ssh-tunnel'
+      }
     ])
   })
 
@@ -68,13 +72,20 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
-  it('surfaces project scope truncation from the runtime transport bound', async () => {
+  it('caps forwarded project paths and reports scope truncation', async () => {
     const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
 
     const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
       scopePaths
     })
 
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.listSessions',
+      expect.objectContaining({ scopePaths: scopePaths.slice(0, 64) }),
+      undefined
+    )
     expect(scanResult.issues).toContainEqual(
       expect.objectContaining({
         kind: 'scope',

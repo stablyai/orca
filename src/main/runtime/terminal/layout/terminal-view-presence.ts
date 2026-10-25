@@ -50,10 +50,11 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
 
   /** Registered by terminal-RPC subscribe/multiplex streams: while a remote
    *  view subscriber is attached its xterm answers queries with view
-   *  authority and the model responder must stay silent. Returns an
-   *  idempotent release. */
-  registerRemoteTerminalViewSubscriber(ptyId: string): () => void {
-    return this.terminalViewSubscribers.registerRemote(ptyId)
+   *  authority and the model responder must stay silent. A stream that can
+   *  pause passes its pause read, since a paused stream drops what it would
+   *  answer. Returns an idempotent release. */
+  registerRemoteTerminalViewSubscriber(ptyId: string, isOutputPaused?: () => boolean): () => void {
+    return this.terminalViewSubscribers.registerRemote(ptyId, isOutputPaused)
   }
 
   /** A local daemon session main knows is live but has never ingested a byte
@@ -78,8 +79,9 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.terminalViewSubscribers.hasRaw(ptyId)
   }
 
+  /** Whether a remote view will receive this PTY's output now, and so answers its queries. */
   hasRemoteTerminalViewSubscriber(ptyId: string): boolean {
-    return this.terminalViewSubscribers.hasRemote(ptyId)
+    return this.terminalViewSubscribers.hasRemoteReceivingOutput(ptyId)
   }
 
   isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {

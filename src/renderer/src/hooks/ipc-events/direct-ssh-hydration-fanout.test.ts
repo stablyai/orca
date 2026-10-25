@@ -54,6 +54,7 @@ describe('direct SSH hydration fanout', () => {
               : Promise.resolve(connectingState(targetId))
           },
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},

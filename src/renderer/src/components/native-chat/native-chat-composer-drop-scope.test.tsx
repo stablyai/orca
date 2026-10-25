@@ -17,6 +17,7 @@ import {
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -35,7 +36,11 @@ const intake = vi.hoisted(() => {
     pick: vi.fn()
   }
 })
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ tabsByWorktree: {} }) } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((select: () => unknown) => select(), {
+    getState: () => ({ tabsByWorktree: {} })
+  })
+}))
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
@@ -51,7 +56,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 

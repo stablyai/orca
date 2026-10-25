@@ -15,6 +15,7 @@ import { PendingTerminalHandleRecoveryContextCache } from './pending-terminal-ha
 import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-records'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
+import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -22,6 +23,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     client,
     connState,
     sessionTabsRef,
+    setSessionTabs,
     activeSessionTabIdRef,
     terminalsRef,
     appliedSessionTabsRevisionRef,
@@ -147,6 +149,17 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     terminalGestureInputQueuesRef.current.clear()
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
+
+  useEffect(() => {
+    if (connState === 'connected') {
+      return
+    }
+    const revoked = withoutSessionTabHostOwnership(sessionTabsRef.current)
+    if (revoked !== sessionTabsRef.current) {
+      sessionTabsRef.current = revoked
+      setSessionTabs(revoked)
+    }
+  }, [connState, sessionTabsRef, setSessionTabs])
 
   const hostQueryReplyInputSupportedRef = useRef(false)
 

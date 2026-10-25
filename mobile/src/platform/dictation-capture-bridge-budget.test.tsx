@@ -244,7 +244,7 @@ describe('what one dictation spends of the bridge', () => {
     expect(spent.freeSlots).toBeLessThanOrEqual(2)
   }, 60_000)
 
-  it('spends four slots of sixty-four on the shipped drain', async () => {
+  it('keeps the shipped drain within the request budget', async () => {
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     await pair.flush()
@@ -270,8 +270,4 @@ describe('what one dictation spends of the bridge', () => {
       Math.ceil(SESSION_MS / DICTATION_CAPTURE_DRAIN_INTERVAL_MS) + 1
     )
   }, 60_000)
-
-  it('ships the batched drain, not the native event rate', () => {
-    expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBeGreaterThan(DICTATION_NATIVE_EVENT_INTERVAL_MS)
-  })
 })

@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
 import { useCallback, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'

@@ -217,11 +217,11 @@ export function configureDevUserDataPath(isDev: boolean): void {
   }
   const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
   if (overrideUserDataPath) {
-    // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
+    // Why: run-electron-vite-dev.mjs resolves a per-worktree (or shared orca-dev) profile here; repros also pass isolated ones.
     app.setPath('userData', overrideUserDataPath)
     return
   }
-  // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.
+  // Why: launches that bypass the dev runner still need a dev-only path, or they overwrite the packaged app's runtime pointer under userData and break the orca CLI.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 

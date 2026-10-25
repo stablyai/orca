@@ -6,6 +6,7 @@ import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
+import { isSmartTier } from './sidebar-list/sort-stamps'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -114,13 +115,25 @@ export function normalizeFolderWorkspaces(
         typeof raw.lastActivityAt === 'number' && Number.isFinite(raw.lastActivityAt)
           ? raw.lastActivityAt
           : 0,
+      ...(isSmartTier(raw.smartTier) &&
+      typeof raw.smartAt === 'number' &&
+      Number.isFinite(raw.smartAt)
+        ? { smartTier: raw.smartTier, smartAt: raw.smartAt }
+        : {}),
+      ...(typeof raw.lastTerminalUseAt === 'number' && Number.isFinite(raw.lastTerminalUseAt)
+        ? { lastTerminalUseAt: raw.lastTerminalUseAt }
+        : {}),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
       // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
       // PersistedState.folderWorkspaceDiffComments.
-      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
+      // Entries are validated where they are read (external-conversation-links.ts).
+      ...(Array.isArray(raw.externalConversations)
+        ? { externalConversations: raw.externalConversations }
+        : {})
     })
   }
   return workspaces.sort(

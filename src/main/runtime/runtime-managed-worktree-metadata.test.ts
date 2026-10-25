@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../shared/worktree/types'
 import { updateRuntimeManagedWorktreeMetadata } from './runtime-managed-worktree-metadata'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -15,12 +16,10 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
       instanceId: 'instance-1'
     } as unknown as ResolvedWorktree
     const setWorktreeMeta = vi.fn()
-    const setWorktreeMetaForHost = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update only reads these store members.
     const store = {
       getRepos: () => [],
-      setWorktreeMeta,
-      setWorktreeMetaForHost
+      setWorktreeMeta
     } as unknown as RuntimeStore
     const ports = {
       resolveWorktree: vi.fn(async () => worktree),
@@ -38,10 +37,10 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
       ports
     })
 
-    expect(setWorktreeMetaForHost).toHaveBeenCalledWith(worktree.id, 'ssh:build-box', {
-      comment: 'remote row only'
-    })
-    expect(setWorktreeMeta).not.toHaveBeenCalled()
+    expect(setWorktreeMeta).toHaveBeenCalledExactlyOnceWith(
+      hostWorktreeTarget({ id: worktree.id, hostId: 'ssh:build-box' }),
+      { comment: 'remote row only' }
+    )
   })
 
   describe('a folder workspace removed while its resolution was in flight (#22712)', () => {
@@ -57,14 +56,12 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
 
     function run(meta: Partial<WorktreeMeta> | undefined) {
       const setWorktreeMeta = vi.fn()
-      const setWorktreeMetaForHost = vi.fn()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update only reads these store members.
       const store = {
         getRepos: () => [folderRepo],
         getWorktreeMeta: () => meta,
         getWorktreeMetaForHost: () => meta,
-        setWorktreeMeta,
-        setWorktreeMetaForHost
+        setWorktreeMeta
       } as unknown as RuntimeStore
       const result = updateRuntimeManagedWorktreeMetadata({
         selector: `id:${worktree.id}`,
@@ -79,24 +76,24 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
           showWorktree: vi.fn(async () => worktree as unknown as Worktree)
         }
       })
-      return { result, setWorktreeMeta, setWorktreeMetaForHost }
+      return { result, setWorktreeMeta }
     }
 
     it('refuses to recreate the removed workspace as a blank row', async () => {
-      const { result, setWorktreeMeta, setWorktreeMetaForHost } = run(undefined)
+      const { result, setWorktreeMeta } = run(undefined)
 
       await expect(result).rejects.toThrow('selector_not_found')
       expect(setWorktreeMeta).not.toHaveBeenCalled()
-      expect(setWorktreeMetaForHost).not.toHaveBeenCalled()
     })
 
     it('still writes to a folder workspace that exists', async () => {
-      const { result, setWorktreeMetaForHost } = run({ instanceId: 'instance-1' })
+      const { result, setWorktreeMeta } = run({ instanceId: 'instance-1' })
 
       await result
-      expect(setWorktreeMetaForHost).toHaveBeenCalledWith(worktree.id, 'local', {
-        lastActivityAt: 2
-      })
+      expect(setWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktree.id, hostId: 'local' }),
+        { lastActivityAt: 2 }
+      )
     })
   })
 })

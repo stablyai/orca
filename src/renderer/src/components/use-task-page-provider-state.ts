@@ -1,4 +1,4 @@
-import type { TaskPageSourceAvailabilityModel } from './use-task-page-source-availability'
+import type { TaskPageSourceAvailabilityModel } from './task-page/use-task-page-source-availability'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { resolveVisibleTaskProvider } from '../../../shared/task-providers'
 import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page-localized-options'

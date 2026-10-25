@@ -2,7 +2,8 @@ import type { AgentType } from './agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode,
-  newChatPermissionMode
+  newChatPermissionModeForSettings,
+  type NewChatPermissionSettings
 } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
@@ -118,13 +119,17 @@ export function resolveStructuredLaunchSeedOptions(
 /** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
 export function structuredLaunchSeedOptions(
   settings:
-    | Pick<GlobalSettings, 'nativeChatSessionOptions' | 'nativeChatPermissionMode'>
+    | (Pick<
+        GlobalSettings,
+        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'
+      > &
+        NewChatPermissionSettings)
     | null
     | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
   const selection = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
-  const permissionMode = newChatPermissionMode(agent, settings?.nativeChatPermissionMode)
+  const permissionMode = newChatPermissionModeForSettings(agent, settings)
   return permissionMode
     ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
     : selection

@@ -339,7 +339,7 @@ describe('ZCode captured composer readiness', () => {
       ).rejects.toThrow(/timeout/)
     }, 15_000)
 
-    it('settles a tui-idle wait from the synthetic hook title Orca owns for ZCode', () => {
+    it('recognizes the synthetic idle title and hook title policy for ZCode', () => {
       expect(getSyntheticAgentTerminalTitle('zcode', 'done')).toBe('ZCode ready')
       expect(getSyntheticAgentTerminalTitle('zcode', 'waiting')).toBe('ZCode - action required')
       expect(shouldDriveSyntheticAgentTitleFromHook('zcode', 'working')).toBe(true)

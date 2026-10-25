@@ -4,6 +4,7 @@ import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../s
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type HoldDictationGestureOptions = {
   dictationStateRef: MutableRefObject<DictationState>
@@ -176,14 +177,14 @@ export function useHoldDictationGesture({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, true)
-    window.addEventListener('keyup', handleKeyUp, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    addAppKeyListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleBlur)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
       handleBlur()
-      window.removeEventListener('keydown', handleKeyDown, true)
-      window.removeEventListener('keyup', handleKeyUp, true)
+      removeAppKeyListener('keydown', handleKeyDown)
+      removeAppKeyListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }

@@ -1,10 +1,11 @@
+import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget,
   resolveExplicitFileLinkTargetPath
 } from '@/lib/explicit-file-link-target'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 
@@ -12,6 +13,8 @@ export type NativeChatFileLinkContext = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId: string | null
+  /** The chat's own tab (terminal or agent-session); editor opens place beside its group. */
+  sourceTabId?: string
 }
 
 export type NativeChatResolvedFileLink = {
@@ -39,26 +42,7 @@ export function findTerminalTabWorktreeId(
   tabsByWorktree: NativeChatFileLinkState['tabsByWorktree'],
   terminalTabId: string
 ): string | null {
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    // Why: tabsByWorktree stores TerminalTab records; unified tabs carry
-    // entityId, but the terminal owner lookup must use the backing tab id.
-    if (tabs.some((tab) => tab.id === terminalTabId)) {
-      return worktreeId
-    }
-  }
-  return null
-}
-
-function findStructuredTabWorktreeId(
-  unifiedTabsByWorktree: NativeChatFileLinkState['unifiedTabsByWorktree'],
-  tabId: string
-): string | null {
-  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
-    if (tabs.some((tab) => tab.id === tabId && tab.contentType === 'agent-session')) {
-      return worktreeId
-    }
-  }
-  return null
+  return chatWorkspaceByTabId(tabsByWorktree, terminalTabId)
 }
 
 /** The workspace that owns a native chat tab, independent of whether its directory is known. */
@@ -68,7 +52,7 @@ export function findNativeChatTabOwnerWorktreeId(
 ): string | null {
   return (
     findTerminalTabWorktreeId(state.tabsByWorktree, tabId) ??
-    findStructuredTabWorktreeId(state.unifiedTabsByWorktree, tabId)
+    chatWorkspaceByTabId(state.unifiedTabsByWorktree, tabId)
   )
 }
 
@@ -120,7 +104,8 @@ function resolveNativeChatFileLinkContextForOwner(
   return {
     worktreeId,
     worktreePath,
-    runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    runtimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
+    sourceTabId: terminalTabId
   }
 }
 

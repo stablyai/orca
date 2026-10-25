@@ -167,8 +167,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       })
     }
     syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
+    activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
     activeView,
     activityTerminalPortals,
@@ -179,6 +179,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    measurableBackgroundWorktreeIdsRef,
+    mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
@@ -252,11 +254,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         // Switch point: main decides whether the workspace gets its first tab.
         if (
           ORCA_LAYOUT_OWNER_IS_MAIN &&
-          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, (ids) =>
-            createTab(activeWorktreeId, undefined, undefined, {
-              pendingActivationSpawn: true,
-              ...(ids ? { id: ids.tabId, initialLeafId: ids.leafId } : {})
-            })
+          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>
+            createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
           )
         ) {
           return

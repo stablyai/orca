@@ -451,8 +451,7 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
-  // Why: only `api`/`auth` define --hostname, so the `mr` subcommands must take
-  // the self-hosted host through GITLAB_HOST or glab exits on an unknown flag.
+  // mr subcommands reject --hostname; route self-hosted instances through GITLAB_HOST.
   describe('mr subcommands against a self-hosted SSH host', () => {
     const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
 

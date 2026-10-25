@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import type { RpcClient } from '../transport/rpc-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
@@ -170,7 +170,6 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   // (force:false) so a tab tap is cheap; only an explicit refresh bypasses it.
   useEffect(() => {
     void loadSessions({ scope, force: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope handled by onSelectScope
   }, [loadSessions])
 
   const onSelectScope = useCallback(

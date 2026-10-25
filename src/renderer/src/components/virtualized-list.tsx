@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 
 // Small lists stay in natural flow; windowing pays off only at larger sizes.
 export const VIRTUALIZED_LIST_MIN_ROWS = 50
@@ -77,6 +77,8 @@ export function VirtualizedList<TRow>({
   renderRow,
   scrollElement,
   estimateRowHeightPx = VIRTUALIZED_LIST_ROW_HEIGHT_PX,
+  activeRowKey,
+  minimumRows = VIRTUALIZED_LIST_MIN_ROWS,
   announceListPosition = false,
   hasUnloadedRows
 }: {
@@ -90,6 +92,9 @@ export function VirtualizedList<TRow>({
   // Why: callers outside source control have their own row paddings; measureElement
   // still corrects, but a wrong estimate makes the initial scrollbar jump.
   estimateRowHeightPx?: number
+  // Why: keyboard-driven lists must mount and reveal selections outside the current window.
+  activeRowKey?: string
+  minimumRows?: number
   // Why: windowing hides the real row count and each row's place in it from assistive tech, so
   // opt in to say both. Virtualized path only — below the threshold this returns a bare fragment,
   // with no container to carry the roles, so small lists announce no list at all. Off by default:
@@ -101,7 +106,20 @@ export function VirtualizedList<TRow>({
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const virtualize = rows.length >= VIRTUALIZED_LIST_MIN_ROWS
+  const virtualize = rows.length >= minimumRows
+  const activeIndex =
+    activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey)
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const indexes = defaultRangeExtractor(range)
+      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
+        indexes.push(activeIndex)
+        indexes.sort((a, b) => a - b)
+      }
+      return indexes
+    },
+    [activeIndex]
+  )
 
   // Why: the list shares its scroller with headers and sibling lists, so the
   // virtualizer needs this list's offset inside that scroller. Measure on mount
@@ -132,6 +150,7 @@ export function VirtualizedList<TRow>({
     getScrollElement: () => scrollElement,
     estimateSize: () => estimateRowHeightPx,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
+    rangeExtractor,
     scrollMargin,
     // Why: crossing the threshold attaches the scroller for the first time and the virtualizer
     // writes its start offset back — from 0, scrolling the shared scroller to the top under the
@@ -144,6 +163,12 @@ export function VirtualizedList<TRow>({
       return row === undefined ? index : getRowKey(row)
     }
   })
+
+  useLayoutEffect(() => {
+    if (virtualize && scrollElement && activeIndex >= 0) {
+      virtualizer.scrollToIndex(activeIndex, { align: 'auto' })
+    }
+  }, [activeIndex, activeRowKey, scrollElement, virtualize, virtualizer])
 
   // Why not the window's count: the window is what AT must not be able to hear.
   const announcedSetSize = hasUnloadedRows ? -1 : rows.length

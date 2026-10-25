@@ -73,7 +73,7 @@ jobs:
   # Why: the app and the orcad template it ships must come from one commit, so resolve main once.
   resolve-main:
     if: github.repository == 'stablyai/orca'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       head_sha: ${{ steps.resolve.outputs.head_sha }}
@@ -94,10 +94,12 @@ jobs:
     needs: resolve-main
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: ${{ needs.resolve-main.outputs.head_sha }}
       build_template: true
+      fast_runners: true
 
   build-daily-mac:
     needs:
@@ -187,6 +189,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -388,7 +391,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_DAILY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-daily.
@@ -564,7 +567,7 @@ jobs:
   post-daily-e2e:
     needs: build-daily-mac
     if: ${{ needs.build-daily-mac.outputs.published == 'true' && needs.build-daily-mac.outputs.head_sha != '' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       actions: write
     steps:
@@ -601,6 +604,9 @@ jobs:
     # Only once the mac release is actually live: there is no release to upload
     # into otherwise, and the Windows workflow refuses to create one.
     if: needs.build-daily-mac.outputs.published == 'true'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:
@@ -609,3 +615,4 @@ jobs:
       ref: ${{ needs.build-daily-mac.outputs.head_sha }}
       version: ${{ needs.build-daily-mac.outputs.version }}
       orcad_template: true
+      fast_release: true

@@ -2,7 +2,7 @@ import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/ru
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
@@ -12,6 +12,7 @@ import type {
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../../../orchestration/types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 /** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
 export async function inspectWorkerTerminal(
@@ -114,10 +115,26 @@ export async function inspectWorkerTerminal(
         terminalHandle: effectiveHandle
       }
     }
+    // Switch point: main's rows carry the host's verdict; `connected` alone is the old word.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict === 'unverifiable') {
+      return {
+        terminal,
+        exact,
+        status: 'unverifiable',
+        reason: 'missing_liveness_verdict',
+        agentWait,
+        terminalHandle: effectiveHandle
+      }
+    }
     return {
       terminal,
       exact,
-      status: terminal.connected === false ? 'exited' : 'live',
+      status:
+        ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict
+          ? terminal.verdict
+          : terminal.connected === false
+            ? 'exited'
+            : 'live',
       agentWait,
       terminalHandle: effectiveHandle
     }

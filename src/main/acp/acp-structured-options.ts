@@ -1,6 +1,4 @@
-// What a running ACP agent reports about its own choices — config options (model, reasoning
-// effort), the older model list, and its `/` commands — as Orca's option and command surfaces.
-// Kept as the agent last reported it; nothing here is guessed or listed by Orca itself.
+import { abortSignalReason } from '../../shared/abort-signal-reason'
 
 import type {
   AgentSessionModelOption,
@@ -8,10 +6,7 @@ import type {
   AgentSessionOptionsResult,
   AgentSessionSlashCommand
 } from '../../shared/agent-session-wire'
-import { isAcpStructuredOptionKey } from './acp-structured-agent-definitions'
-import { AcpRpcError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
-import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
@@ -30,7 +25,6 @@ import {
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-/** How an Orca option key reaches the agent: a config option it declared, or the model method. */
 export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
@@ -63,11 +57,15 @@ export class AcpStructuredOptions {
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
-  // A loaded session keeps the model it ran; only a new one resolves the agent's own config.
+  // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
-  private readonly picked = new Set<string>()
+  readonly picked = new Set<string>()
+  /** Last successful Orca writes, distinct from agent-reported values. */
+  readonly applied = new Map<string, string>()
+  private initialChoice: Readonly<Record<string, string>> = {}
+  currentProof = new Set<string>()
+  writeRevision = 0
 
-  /** The session state a new, load or resume response reported. */
   adoptSession(
     response: {
       configOptions?: SessionConfigOption[] | null
@@ -78,9 +76,15 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
+    this.initialChoice = this.reported()
+    this.currentProof = new Set(Object.keys(this.initialChoice))
   }
 
-  /** Orca sent `key` to the session, or the chat's saved options hold a value for it. */
+  /** Native selection before any message changed this child. */
+  messageDefault(): Readonly<Record<string, string>> {
+    return this.initialChoice
+  }
+
   notePick(key: string): void {
     this.picked.add(key)
   }
@@ -113,7 +117,6 @@ export class AcpStructuredOptions {
     return this.commands
   }
 
-  /** Where a pick of `key` goes; null when the agent offers nothing for it. */
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'model') {
       const option = this.select('model')
@@ -129,11 +132,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /**
-   * The agent's models and what this session runs. A model's effort menu and default are catalog
-   * facts: the dialect's per-model menu when the agent advertises one, else the session's effort
-   * option for the model it runs now only. The session's current values are never a default.
-   */
+  /** Effort menus describe models; current session values never establish catalog defaults. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -163,7 +162,7 @@ export class AcpStructuredOptions {
       return {
         ...model,
         isDefault: false,
-        // An empty advertised menu is no menu: the running model keeps the one its session offers.
+        // Fall back to the running session's menu when the advertised menu is empty.
         ...(advertised && advertised.efforts.length > 0 ? advertised : sessionMenu)
       }
     })
@@ -178,9 +177,7 @@ export class AcpStructuredOptions {
     }
   }
 
-  /** With no model sent since a new session began, what it runs is the agent's own config
-   *  resolution: that scope's configured default. Null when that names no listed model; undefined
-   *  when this session can't say. */
+  /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
   configuredDefault(): AgentModelCatalogConfiguredChoice | null | undefined {
     const { models, current } = this.read()
     return unpickedSessionConfiguredChoice({
@@ -191,12 +188,10 @@ export class AcpStructuredOptions {
     })
   }
 
-  /** What this session's start hands the host once: its listing, with what it resolved. */
   startListing(): AgentModelCatalogLiveListing {
     return withLiveCatalogListing(this.read(), this.configuredDefault()).catalogListing
   }
 
-  /** The values the agent reports now, as the record's options would name them. */
   reported(): Readonly<Record<string, string>> {
     const { current } = this.read()
     return {
@@ -205,7 +200,7 @@ export class AcpStructuredOptions {
     }
   }
 
-  /** The session's mode is its `mode`-category select, whatever the agent names it. */
+  // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
   }
@@ -218,50 +213,67 @@ export class AcpStructuredOptions {
   }
 }
 
-/** Images go only where the agent's row offers them and its start advertised them. */
 export async function acpSessionAcceptsImages(session: {
-  spec: Pick<AcpLaunchSpec, 'imagePrompts'>
   connection: Pick<AcpStructuredConnection, 'initialize'>
 }): Promise<boolean> {
   return (
-    session.spec.imagePrompts === true &&
     (await session.connection.initialize()).agentCapabilities?.promptCapabilities?.image === true
   )
 }
 
-/** A running child's options, and whether a message to it may carry images. */
 export async function readAcpLiveOptions(
   session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions }
 ) {
   const acceptsImages = await acpSessionAcceptsImages(session)
-  // Only the start says what the config resolved: the session may have moved since.
+  // Only startup establishes config resolution; later reads may reflect changed picks.
   return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
 }
 
-/** Sends a pick and adopts the agent's answer, even one that lands after the wait gave up: that is
- *  still what the agent runs. The wait fails at `timeoutMs`, or once `signal` aborts. */
+/** Only the current, still-awaited write may establish reusable option proof. */
 export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: { agent: string; timeoutMs: number; signal?: AbortSignal }
+  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string; value: string }
 ): Promise<void> {
   const { agent, timeoutMs, signal } = bound
   if (signal?.aborted) {
-    return Promise.reject(new Error(`${agent} option write abandoned before it was sent`))
+    return Promise.reject(abortSignalReason(signal))
+  }
+  const revision = ++options.writeRevision
+  options.currentProof.delete(bound.key)
+  if (bound.key === 'model') {
+    options.currentProof.delete('effort')
+  }
+  const adopt = (apply: () => void): void => {
+    if (options.writeRevision !== revision) {
+      throw new Error(`${agent} option write was superseded`)
+    }
+    apply()
+    options.currentProof.add(bound.key)
+    options.applied.set(bound.key, bound.value)
   }
   const applied =
     write.method === 'config'
       ? connection
           .setConfigOption(write.configId, write.value)
-          .then((result) => options.adoptConfigOptions(result.configOptions))
-      : connection.setModel(write.modelId).then(() => options.adoptModel(write.modelId))
+          .then((result) => adopt(() => options.adoptConfigOptions(result.configOptions)))
+      : connection
+          .setModel(write.modelId)
+          .then(() => adopt(() => options.adoptModel(write.modelId)))
   return new Promise<void>((resolve, reject) => {
     const fail = (error: Error): void => {
+      if (options.writeRevision === revision) {
+        options.writeRevision += 1
+      }
       settle()
       reject(error)
     }
-    const onAbort = (): void => fail(new Error(`${agent} option write abandoned`))
+    const onAbort = (): void => {
+      if (signal) {
+        fail(abortSignalReason(signal))
+      }
+    }
     const timer = setTimeout(
       () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
       timeoutMs
@@ -276,42 +288,4 @@ export function writeAcpSessionOption(
       resolve()
     }, fail)
   })
-}
-
-/** Re-applies the chat's saved picks to the agent's new session; a pick it refuses is skipped and
- *  reported, never retried. */
-export async function restoreAcpSessionOptions(
-  connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
-  options: AcpStructuredOptions,
-  saved: Readonly<Record<string, string>> | undefined
-): Promise<string[]> {
-  const skipped: string[] = []
-  for (const [key, value] of Object.entries(saved ?? {})) {
-    if (!isAcpStructuredOptionKey(key)) {
-      continue
-    }
-    options.notePick(key)
-    if (options.reported()[key] === value) {
-      continue
-    }
-    const write = options.write(key, value)
-    try {
-      if (write?.method === 'config') {
-        options.adoptConfigOptions(
-          (await connection.setConfigOption(write.configId, value)).configOptions
-        )
-      } else if (write?.method === 'model') {
-        await connection.setModel(write.modelId)
-        options.adoptModel(write.modelId)
-      } else {
-        skipped.push(key)
-      }
-    } catch (error) {
-      if (!(error instanceof AcpRpcError)) {
-        throw error
-      }
-      skipped.push(key)
-    }
-  }
-  return skipped
 }

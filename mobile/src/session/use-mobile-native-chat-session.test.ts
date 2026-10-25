@@ -142,6 +142,15 @@ describe('useMobileNativeChatSession', () => {
         })
       }
       const requestsAtCap = sendRequest.mock.calls.length
+      expect(requestsAtCap).toBe(33)
+      expect(state?.hasMore).toBe(false)
+      expect(sendRequest).toHaveBeenLastCalledWith(
+        'nativeChat.readSession',
+        { agent: 'claude', sessionId: 'session', limit: 40, beforeOffset: 50 },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
+      await act(async () => state?.loadEarlier())
+      expect(sendRequest).toHaveBeenCalledTimes(33)
 
       await act(async () =>
         emit({
@@ -157,12 +166,11 @@ describe('useMobileNativeChatSession', () => {
       })
 
       expect(sendRequest).toHaveBeenCalledTimes(requestsAtCap + 1)
-      expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
-        agent: 'claude',
-        sessionId: 'session',
-        limit: 60,
-        beforeOffset: 500
-      })
+      expect(sendRequest).toHaveBeenLastCalledWith(
+        'nativeChat.readSession',
+        { agent: 'claude', sessionId: 'session', limit: 60, beforeOffset: 500 },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
     }
   )
 
@@ -293,11 +301,11 @@ describe('useMobileNativeChatSession', () => {
     )
     act(() => state?.loadEarlier())
 
-    expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
-      agent: 'claude',
-      sessionId: 'session',
-      limit: 100
-    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'nativeChat.readSession',
+      { agent: 'claude', sessionId: 'session', limit: 100 },
+      expect.objectContaining({ budgetSpansConnect: true })
+    )
   })
 
   it('clears hasMore when a replaced window is shorter than the initial page', async () => {
@@ -352,6 +360,44 @@ describe('useMobileNativeChatSession', () => {
 
     expect(state?.messages.some((entry) => entry.id === 'stale-page')).toBe(false)
     expect(state?.loadingEarlier).toBe(false)
+  })
+
+  it('lands a page across a same-cursor replay, and flags a refused page until the next tap', async () => {
+    const pages: ((response: unknown) => void)[] = []
+    const sendRequest = vi.fn(() => new Promise((resolve) => pages.push(resolve)))
+    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+    const snapshot = { type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 }
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData(snapshot)
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    const answer = (response: unknown) =>
+      act(async () => {
+        pages.at(-1)?.(response)
+        await Promise.resolve()
+      })
+
+    // A reconnect re-subscribes and replays the same newest window while the page is out.
+    act(() => state?.loadEarlier())
+    await act(async () => emit(snapshot))
+    await answer({
+      ok: true,
+      result: { messages: [message('older')], hasMore: true, beforeOffset: 40 }
+    })
+    expect(state?.messages.map((entry) => entry.id)).toEqual([
+      'older',
+      ...window.map((entry) => entry.id)
+    ])
+
+    act(() => state?.loadEarlier())
+    await answer({ id: 'x', ok: false, error: { code: 'refused', message: 'refused' } })
+    expect(state?.olderPages).toBe('failed')
+    expect(state?.loadingEarlier).toBe(false)
+    act(() => state?.loadEarlier())
+    expect(sendRequest).toHaveBeenCalledTimes(3)
+    expect(state?.olderPages).toBe('loading')
   })
 
   it('keeps the base snapshot authoritative when a live append arrives first', async () => {
@@ -432,11 +478,11 @@ describe('useMobileNativeChatSession', () => {
     act(() => state?.loadEarlier())
 
     // 70 rows held plus one page: a read of 100 would come back shorter than the list it replaces.
-    expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
-      agent: 'claude',
-      sessionId: 'session',
-      limit: 130
-    })
+    expect(sendRequest).toHaveBeenLastCalledWith(
+      'nativeChat.readSession',
+      { agent: 'claude', sessionId: 'session', limit: 130 },
+      expect.objectContaining({ budgetSpansConnect: true })
+    )
   })
 })
 
@@ -683,13 +729,21 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     await mountAt(client, 'session-a')
 
     await act(async () =>
-      emitFrame({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+      emitFrame({ type: 'appended', messages: [message('early-a'), message('early-b')] })
+    )
+    await act(async () =>
+      emitFrame({
+        type: 'snapshot',
+        messages: [message('early-b'), message('base-c')],
+        hasMore: true,
+        beforeOffset: 100
+      })
     )
 
     expect(renders.at(-1)).toMatchObject({
       status: 'ready',
       transcriptLoading: false,
-      ids: ['a-1']
+      ids: ['early-b', 'base-c']
     })
   })
 

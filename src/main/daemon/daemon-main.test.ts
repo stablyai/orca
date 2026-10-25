@@ -84,7 +84,6 @@ describe('startDaemon', () => {
     await daemon.shutdown()
     daemon = null
 
-    // Server should no longer accept connections
     const client = new DaemonClient({ socketPath, tokenPath })
     await expect(client.ensureConnected()).rejects.toThrow()
   })

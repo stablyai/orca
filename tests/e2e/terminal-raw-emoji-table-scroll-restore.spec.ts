@@ -21,6 +21,7 @@ import { scrollActiveTerminalToText } from './artificial-opencode-active-termina
 import { nodeTerminalCommand } from './terminal-node-command'
 
 type BrowserTerminalPane = {
+  id: number
   terminal: {
     cols: number
     rows: number
@@ -203,7 +204,7 @@ async function waitForActiveTerminalColumns(
     .poll(
       () =>
         page.evaluate(() => {
-          let pane: ReturnType<NonNullable<RawTableDebugWindow['getActiveTestPane']>> = null
+          let pane: BrowserTerminalPane | null = null
           try {
             pane = (window as RawTableDebugWindow).getActiveTestPane?.() ?? null
           } catch {

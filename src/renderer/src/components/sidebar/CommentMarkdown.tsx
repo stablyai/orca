@@ -6,6 +6,7 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
@@ -22,6 +23,7 @@ import {
 } from './comment-markdown-native-chat-file-links'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { rehypeWordFade } from './comment-markdown-word-fade'
+import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   splitMarkdownTopLevelBlocks,
@@ -32,6 +34,7 @@ import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
   remarkGitHubCallouts
 } from '@/lib/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -80,7 +83,13 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // plain-text renderer used whitespace-pre-wrap which preserved them. Adding
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkBreaks]
+const remarkPlugins = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkAutolinkLiteralProseBoundary,
+  remarkGitHubCallouts,
+  remarkBreaks
+]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -199,6 +208,14 @@ const commentMarkdownSanitizeSchema = {
   }
 }
 
+// Why: runs before remark-breaks so newlines inside the escaped HTML still break.
+const unknownHtmlAsTextRemarkPlugins = [
+  remarkUnknownHtmlAsText(
+    new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
+  ),
+  ...remarkPlugins
+]
+
 // Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
 // `<br />`). Parse it, then sanitize immediately before React renders it.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
@@ -243,6 +260,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
   fadeWords?: boolean
   extension?: CommentMarkdownExtension
+  /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
+  unknownHtmlAsText?: boolean
 }
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
@@ -283,6 +302,7 @@ const CommentMarkdown = React.memo(
       growing = false,
       fadeWords = false,
       extension,
+      unknownHtmlAsText = false,
       ...rest
     },
     ref
@@ -310,12 +330,13 @@ const CommentMarkdown = React.memo(
       [extension]
     )
     const activeRemarkPlugins = React.useMemo(() => {
+      const basePlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
       const plugins = fileLinkExists
-        ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
-        : remarkPlugins
+        ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
+        : basePlugins
       const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo])
+    }, [extension, fileLinkExists, githubRepo, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(content, growing)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {

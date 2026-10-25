@@ -11,6 +11,7 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 import { toast } from 'sonner'
+import { scheduleComposerCreateHandoff } from '@/lib/composer-create-handoff'
 
 import type { ComposerModel } from './composer-model'
 
@@ -22,6 +23,7 @@ type QuickSubmitActionInput = Pick<
   | 'isProjectGroupTarget'
   | 'isSubmissionCancelled'
   | 'linkedPR'
+  | 'linkedWorkItem'
   | 'name'
   | 'onCreated'
   | 'parsedLinkedIssueNumber'
@@ -38,6 +40,8 @@ type QuickSubmitActionInput = Pick<
   | 'sourceIntentBlocksCreate'
   | 'sparseError'
   | 'submitFolderTarget'
+  | 'taskSourceContext'
+  | 'telemetrySource'
 >
 
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
@@ -48,6 +52,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     isProjectGroupTarget,
     isSubmissionCancelled,
     linkedPR,
+    linkedWorkItem,
     name,
     onCreated,
     parsedLinkedIssueNumber,
@@ -63,13 +68,15 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     showProjectRequiredError,
     sourceIntentBlocksCreate,
     sparseError,
-    submitFolderTarget
+    submitFolderTarget,
+    taskSourceContext,
+    telemetrySource
   } = input
 
   const submitQuick = useCallback(
     async (requestedAgent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> => {
       if (isProjectGroupTarget) {
-        await submitFolderTarget(requestedAgent)
+        await submitFolderTarget(requestedAgent, options)
         return
       }
 
@@ -131,6 +138,33 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       setCreateError(null)
 
       setCreating(true)
+      const handoff = scheduleComposerCreateHandoff({
+        stagingRequest: {
+          repoId,
+          workspaceRunContext,
+          name: workspaceNameSeed,
+          ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
+          ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
+          setupDecision: setupDecision ?? 'inherit',
+          agent: requestedAgent,
+          pendingFirstAgentMessageRename: false,
+          note: '',
+          startupPlan: null,
+          quickPrompt: '',
+          quickTelemetry: null
+        },
+        // Why: closing (even under "Create more") keeps a later dismiss from cancelling this submit.
+        onHandOff: () => onCreated?.(),
+        isCancelled: isSubmissionCancelled,
+        reopenComposer: () =>
+          useAppStore.getState().openModal('new-workspace-composer', {
+            prefilledName: name,
+            initialRepoId: repoId,
+            linkedWorkItem,
+            taskSourceContext,
+            telemetrySource
+          })
+      })
       try {
         const smartGitHubSettlement = await settleComposerSubmit(
           resolvePendingSmartGitHubSubmit(),
@@ -145,16 +179,21 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           workspaceNameSeed,
           workspaceRunContext,
           repoId,
-          options
+          options,
+          handoff
         )
       } catch (error) {
         if (isSubmissionCancelled()) {
           return
         }
         const formattedError = formatWorkspaceCreateError(error)
+        if (handoff.fail(getWorkspaceCreateErrorToastMessage(formattedError))) {
+          return
+        }
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
       } finally {
+        handoff.dispose()
         setCreating(false)
       }
     },
@@ -165,6 +204,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       isProjectGroupTarget,
       isSubmissionCancelled,
       linkedPR,
+      linkedWorkItem,
       name,
       onCreated,
       parsedLinkedIssueNumber,
@@ -180,7 +220,9 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       showProjectRequiredError,
       sourceIntentBlocksCreate,
       sparseError,
-      submitFolderTarget
+      submitFolderTarget,
+      taskSourceContext,
+      telemetrySource
     ]
   )
 

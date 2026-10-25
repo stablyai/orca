@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -66,7 +69,18 @@ async function createRuntimeWithHookRows(
   const readRows = statusWiring
     ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
     : (): AgentStatusIpcPayload[] => rows
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  // Switch-on, main's layout answers which pane holds the PTY, so the runtime needs a store.
+  const store = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? partialRuntimeStore({
+        getRepos: () => [],
+        getRepo: () => undefined,
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        getProjects: () => [],
+        getSettings: () => ({})
+      })
+    : null
+  const runtime = new OrcaRuntimeService(store, undefined, {
     ...(statusWiring
       ? {
           onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus,
@@ -90,7 +104,7 @@ async function createRuntimeWithHookRows(
     folderWorkspace: null
   })
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
+    spawn: vi.fn(committingSpawn(runtime, async () => ({ id: PTY_ID }))),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -270,14 +284,79 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
-  it('lets a shell title retire a restored turn as done', async () => {
+  // The restored row lives as long as hydration keeps it (7 days); the 30-minute live window
+  // must not turn an unverifiable turn into a synthetic `done`.
+  it('keeps a restored turn older than the live freshness window unverifiable', async () => {
+    const now = Date.UTC(2026, 9, 17, 12)
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    try {
+      const receivedAt = now - AGENT_STATUS_STALE_AFTER_MS - 60_000
+      const agentStatus = await projectAgentStatus([
+        hookRow({
+          state: 'working',
+          prompt: 'refactor the parser',
+          toolName: undefined,
+          interactivePrompt: undefined,
+          receivedAt,
+          stateStartedAt: receivedAt,
+          restoredUnconfirmed: true
+        })
+      ])
+
+      expect(agentStatus).toEqual(
+        expect.objectContaining({
+          state: 'working',
+          restoredUnconfirmed: true,
+          updatedAt: receivedAt,
+          providerSession: PROVIDER_SESSION
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a newer confirmed row supersede an old restored turn even once stale', async () => {
+    const now = Date.UTC(2026, 9, 17, 12)
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    try {
+      const restoredAt = now - 2 * 60 * 60_000
+      const confirmedAt = now - 60 * 60_000
+      const agentStatus = await projectAgentStatus([
+        hookRow({
+          state: 'working',
+          toolName: undefined,
+          interactivePrompt: undefined,
+          receivedAt: restoredAt,
+          stateStartedAt: restoredAt,
+          restoredUnconfirmed: true
+        }),
+        hookRow({
+          state: 'done',
+          toolName: undefined,
+          interactivePrompt: undefined,
+          receivedAt: confirmedAt,
+          stateStartedAt: confirmedAt
+        })
+      ])
+
+      expect(agentStatus === undefined || agentStatus.state === 'done').toBe(true)
+      expect(agentStatus).not.toHaveProperty('restoredUnconfirmed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // STA-12043: the retired turn keeps its identity but no state, so no Done sits beside the shell.
+  it('lets a shell title retire a restored turn to identity only', async () => {
     const agentStatus = await projectAgentStatus(
       [hookRow({ state: 'working', interactivePrompt: undefined, restoredUnconfirmed: true })],
       (runtime) => observePaneTitle(runtime, 'bash')
     )
 
-    expect(agentStatus === undefined || agentStatus.state === 'done').toBe(true)
-    expect(agentStatus).not.toHaveProperty('restoredUnconfirmed')
+    expect(agentStatus).toEqual(
+      expect.objectContaining({ state: 'done', prompt: '', restoredUnconfirmed: true })
+    )
   })
 
   // #7970: a retained OSC 9999 row is the pane's own report and keeps precedence.
@@ -319,6 +398,151 @@ describe('headless hook agent-status projection (#11761)', () => {
 
     expect(agentStatus).toEqual(expect.objectContaining({ state: 'done', prompt: '' }))
     expect(agentStatus).not.toHaveProperty('toolName')
+  })
+
+  // A manual label change keeps the hook's transcript address (#20626).
+  it('keeps the hook transcript address after a manual rename drops the agent glyph', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'done',
+        prompt: '',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+    observePaneTitle(runtime, '✳ gate question')
+    const before = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const beforeTab = before.tabs[0]
+    if (beforeTab?.type !== 'terminal' || !beforeTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+    expect(beforeTab.agentStatus).toEqual(
+      expect.objectContaining({ providerSession: PROVIDER_SESSION })
+    )
+
+    await runtime.renameTerminal(beforeTab.terminal, 'ANSWER HERE: gate 004')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' && tab.title).toBe('ANSWER HERE: gate 004')
+    expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
+      expect.objectContaining({
+        agentType: 'claude',
+        providerSession: PROVIDER_SESSION
+      })
+    )
+  })
+
+  it('keeps a live working hook after a manual rename', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        prompt: 'Working on a release',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+    observePaneTitle(runtime, '⠋ Claude')
+    const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = tabs[0]
+    if (tab?.type !== 'terminal' || !tab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+    await runtime.renameTerminal(tab.terminal, 'Release review')
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const after = result.tabs[0]
+    expect(after?.type === 'terminal' ? after.agentStatus : undefined).toMatchObject({
+      state: 'working',
+      providerSession: PROVIDER_SESSION
+    })
+  })
+
+  // A rename is the tab's name, not process title evidence: the CLI status read keeps the agent.
+  it('keeps the terminal agent status running after the pane is renamed to a shell name', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        prompt: 'Working',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+    observePaneTitle(runtime, '⠋ Claude')
+    const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const handle = tabs[0]?.type === 'terminal' ? tabs[0].terminal : undefined
+    if (!handle) {
+      throw new Error('expected a live terminal handle')
+    }
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true
+    })
+
+    await runtime.renameTerminal(handle, 'bash')
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+  })
+
+  it('retires the renamed agent when its OSC title returns to the shell', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({ state: 'working', prompt: '', toolName: undefined, interactivePrompt: undefined })
+    ])
+    observePaneTitle(runtime, '✳ gate question')
+    const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = tabs[0]
+    if (tab?.type !== 'terminal' || !tab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+    await runtime.renameTerminal(tab.terminal, 'ANSWER HERE: gate 004')
+    observePaneTitle(runtime, 'bash')
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const after = result.tabs[0]
+    expect(after?.type === 'terminal' ? after.agentStatus : undefined).toMatchObject({
+      state: 'done',
+      prompt: ''
+    })
+  })
+
+  it('does not invent a transcript address for a renamed shell pane', async () => {
+    const runtime = await createRuntimeWithHookRows([])
+    observePaneTitle(runtime, 'zsh')
+    const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const initialTab = initial.tabs[0]
+    if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+
+    await runtime.renameTerminal(initialTab.terminal, 'notes')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus?.providerSession : undefined).toBeUndefined()
+  })
+
+  it('still has no transcript address when a renamed pane never reported a session', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'done',
+        prompt: '',
+        toolName: undefined,
+        interactivePrompt: undefined,
+        providerSession: undefined
+      })
+    ])
+    observePaneTitle(runtime, '✳ gate question')
+    const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const initialTab = initial.tabs[0]
+    if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+
+    await runtime.renameTerminal(initialTab.terminal, 'ANSWER HERE: gate 004')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus?.providerSession : undefined).toBeUndefined()
   })
 
   it('keeps a pending question visible even under a non-agent title', async () => {
@@ -411,6 +635,9 @@ describe('headless hook agent-status projection (#11761)', () => {
       payload: { state: 'working', prompt: 'prior pane', agentType: 'claude' }
     })
     expect(statusWiring.statusStore.getStatusSnapshot()).toHaveLength(1)
+
+    observePaneTitle(runtime, '✳ active agent')
+    await runtime.renameTerminal(terminal.handle, 'Custom title')
 
     runtime.onPtyExit(PTY_ID, 0)
 
@@ -608,4 +835,85 @@ describe('hook-driven session tabs republish (#11761)', () => {
     expect(events[0]!.tabs[0]!.agentStatus).toBeUndefined()
     unsubscribe()
   })
+})
+
+it.each(['✳ Claude', '✳ Claude next repaint'])(
+  'keeps a working hook when a preexisting idle interval repaints as %s',
+  async (repaintTitle) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_700_000_000_000)
+    const wiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], wiring)
+    try {
+      observePaneTitle(runtime, '✳ Claude')
+      vi.setSystemTime(Date.now() + 5_000)
+      wiring.statusStore.ingestTerminalStatus({
+        paneKey: PANE_KEY,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        connectionId: null,
+        payload: { state: 'working', prompt: 'current hook evidence', agentType: 'claude' }
+      })
+      const before = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(before.tabs[0]?.type === 'terminal' && before.tabs[0].agentStatus).toMatchObject({
+        state: 'working',
+        prompt: 'current hook evidence'
+      })
+      vi.setSystemTime(Date.now() + 123)
+      observePaneTitle(runtime, repaintTitle)
+      const after = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(wiring.statusStore.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+      expect(after.tabs[0]?.type === 'terminal' && after.tabs[0].agentStatus).toMatchObject({
+        state: 'working',
+        prompt: 'current hook evidence'
+      })
+    } finally {
+      wiring.statusStore.stop()
+      vi.useRealTimers()
+    }
+  }
+)
+
+it('keeps a real idle transition and later done hook authoritative after a working hook', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_700_000_000_000)
+  const wiring = makeAgentStatusStoreWiring()
+  const runtime = await createRuntimeWithHookRows([], wiring)
+  try {
+    const ingest = (state: 'working' | 'done'): void => {
+      wiring.statusStore.ingestTerminalStatus({
+        paneKey: PANE_KEY,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        connectionId: null,
+        payload: {
+          state,
+          prompt: state === 'working' ? 'current hook evidence' : '',
+          agentType: 'claude'
+        }
+      })
+    }
+    observePaneTitle(runtime, '✳ Claude')
+    vi.setSystemTime(Date.now() + 5_000)
+    ingest('working')
+    vi.setSystemTime(Date.now() + 123)
+    observePaneTitle(runtime, '⠋ Claude')
+    vi.setSystemTime(Date.now() + 123)
+    observePaneTitle(runtime, '✳ Claude')
+    const ended = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(ended.tabs[0]?.type === 'terminal' && ended.tabs[0].agentStatus).toMatchObject({
+      state: 'done',
+      prompt: ''
+    })
+    vi.setSystemTime(Date.now() + 123)
+    ingest('done')
+    const confirmed = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(confirmed.tabs[0]?.type === 'terminal' && confirmed.tabs[0].agentStatus).toMatchObject({
+      state: 'done',
+      updatedAt: Date.now()
+    })
+  } finally {
+    wiring.statusStore.stop()
+    vi.useRealTimers()
+  }
 })

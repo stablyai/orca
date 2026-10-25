@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import type { Store } from '../loading-store/store'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
@@ -14,8 +14,11 @@ import {
 import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
+// rollback build (switch-off) — delete with the switch-off code post-flip
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

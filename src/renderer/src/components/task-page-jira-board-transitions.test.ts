@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraStatus, JiraTransition } from '../../../shared/jira-types'
+import type { JiraIssue, JiraStatus, JiraTransition } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({

@@ -1,5 +1,4 @@
-// Grok 1.0.41, measured: Ctrl+C mid-turn fires `stop_cancelled` listing the finite tasks the turn
-// left running, and Ctrl+C at the idle prompt kills no background task.
+// Grok 1.0.41 captures show stop_cancelled retains live tasks and idle Ctrl+C leaves them running.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
@@ -105,7 +104,7 @@ describe('a Grok cancel never hides a running task', () => {
       })
       expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
 
-      // Why: the inference can win the settle race; the row cannot see the task behind a working main agent.
+      // Inference can win before inventory exposes tasks behind a working main agent.
       expect(pressCtrlC(server)).toBe(true)
       expect(row(server)).toMatchObject({
         state: 'done',

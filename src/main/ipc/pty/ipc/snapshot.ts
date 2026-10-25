@@ -2,7 +2,7 @@ import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { tryGetProviderForPty } from '../provider/registry'
 import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
-import type { PtyPendingDataDrainQueue } from '../../pty-pending-data-drain-queue'
+import type { PtyPendingDataDrainQueue } from '../delivery/pty-pending-data-drain-queue'
 import {
   getPtyRendererDeliveryDebugSnapshot,
   installPowerSignalBreadcrumbs,
@@ -57,7 +57,7 @@ export function installPtySnapshotIpcHandlers(deps: {
               scrollbackRows
             })
           : null
-        // Why: after a data gap main holds only the retained tail; returning it as a full snapshot would erase older scrollback.
+        // Main's retained tail cannot replace full history after a data gap.
         if (providerSnapshotRequired && !providerSnapshot) {
           return null
         }
@@ -69,10 +69,9 @@ export function installPtySnapshotIpcHandlers(deps: {
         if (!snapshot || typeof snapshot.seq !== 'number') {
           return snapshot
         }
-        // Why: the renderer's post-restore dedupe needs this pending-queue bound, or a stale baseline swallows new chunks whose seq sits below the snapshot counter.
+        // Include the pending-queue boundary so restore deduplication cannot swallow unseen live chunks.
         const pending = pendingData.get(args.id)
         if (pending && typeof pending.startSeq !== 'number') {
-          // Why: a seq-less backlog cannot be bounded — stay conservative.
           return snapshot
         }
         return {
@@ -88,7 +87,7 @@ export function installPtySnapshotIpcHandlers(deps: {
     }
   )
 
-  // Why: main owns side effects, so this replay restores title state only — never historical bells/completions (no-attention-replay rule, terminal-side-effect-authority.md).
+  // Restore title only; replay must not repeat historical attention effects (terminal-side-effect-authority.md).
   ipcMain.handle('pty:sideEffectSnapshot', (_event, args: { id: string }) => {
     if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
       return null

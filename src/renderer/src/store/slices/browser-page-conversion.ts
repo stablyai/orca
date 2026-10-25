@@ -52,7 +52,11 @@ export function planBrowserPageConversion(
   },
   pageId: string,
   target: BrowserPageConversionTarget,
-  options?: { leg?: BrowserPageConversionLeg }
+  options?: {
+    leg?: BrowserPageConversionLeg
+    /** The id main already holds the new page under. */
+    newPageId?: string
+  }
 ): BrowserPageConversionPlan | null {
   const oldPage = findPage(state.browserPagesByWorkspace, pageId)
   if (!oldPage) {
@@ -101,7 +105,7 @@ export function planBrowserPageConversion(
           // Why explicitly client-local: the document is read through a grant this desktop mints,
           // so the page never belongs to a remote runtime even when the worktree does.
           null,
-          undefined,
+          options?.newPageId,
           target.docLocation
         )
       : buildBrowserPage(
@@ -116,7 +120,8 @@ export function planBrowserPageConversion(
           // when it restores a worktree-owned remote page.
           'browserRuntimeEnvironmentId' in target
             ? target.browserRuntimeEnvironmentId
-            : (oldPage.browserRuntimeEnvironmentId ?? null)
+            : (oldPage.browserRuntimeEnvironmentId ?? null),
+          options?.newPageId
         )),
     ...(convertedFrom ? { convertedFrom } : {}),
     ...(convertedTo ? { convertedTo } : {})

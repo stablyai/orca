@@ -1,10 +1,6 @@
 import type { AgentStatusClearIpcPayload } from '../shared/agent-status-types'
 
-/**
- * Pane whose synthetic spinner a hook-status clear retires, or null to leave every spinner
- * running. Connection-scoped transient clears carry no pane key on purpose: losing an SSH
- * transport is not evidence that the remote PTY stopped working, so they must not idle it.
- */
+// Losing an SSH connection does not prove its PTY stopped; only pane-scoped clears stop spinners.
 export function getSyntheticTitleSpinnerPaneKeyToStop(
   clear: AgentStatusClearIpcPayload
 ): string | null {

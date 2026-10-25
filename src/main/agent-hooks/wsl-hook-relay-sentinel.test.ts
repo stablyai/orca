@@ -1,11 +1,8 @@
-// Sentinel wait for the WSL relay: consuming stdout until the READY sentinel,
-// handing trailing/subsequent bytes to the mux in wire order via the microtask
-// flush, and failing (kill + reject) on overflow, close, timeout, and NUL noise.
 import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
 import {
   MAX_STARTUP_BUFFER_BYTES,
   waitForWslRelaySentinel,
@@ -108,8 +105,7 @@ describe('waitForWslRelaySentinel', () => {
     const transport = await promise
     const received: string[] = []
     transport.onData((d) => received.push(d.toString('utf8')))
-    // A real stdout 'data' event is a macrotask; the queued pending flush is a
-    // microtask and must land ahead of any subsequent direct chunk.
+    // The queued microtask must flush before the next stdout macrotask.
     await new Promise<void>((resolve) => {
       setImmediate(() => {
         emitStdout(child, 'SECOND')
@@ -126,8 +122,7 @@ describe('waitForWslRelaySentinel', () => {
     const transport = await promise
     const received: string[] = []
     transport.onData((d) => received.push(d.toString('utf8')))
-    // Nothing dispatched synchronously at registration — a second handler could
-    // still be added this tick before the first envelope flushes.
+    // Allow remaining synchronous handler registration before dispatching the first frame.
     expect(received).toEqual([])
     await Promise.resolve()
     expect(received).toEqual(['DEFER'])
@@ -163,7 +158,7 @@ describe('waitForWslRelaySentinel', () => {
   it('strips NUL bytes from the stderr failure detail', async () => {
     const child = fakeChild()
     const settled = catchStartup(waitForWslRelaySentinel(child))
-    // wsl.exe without WSL_UTF8 emits UTF-16LE — "E_FAIL" as NUL-interleaved ASCII.
+    // Older wsl.exe emits NUL-padded UTF-16LE ASCII without WSL_UTF8.
     const nulLaden = Buffer.from('E_FAIL'.split('').flatMap((c) => [c.charCodeAt(0), 0]))
     emitStderr(child, nulLaden)
     child.emit('close', 1)
@@ -199,8 +194,7 @@ describe('waitForWslRelaySentinel', () => {
     const promise = waitForWslRelaySentinel(child)
     emitStdout(child, RELAY_SENTINEL)
     await promise
-    // Real pipes emit EPIPE on the stream after a failed write; without a
-    // listener Node surfaces that as an unhandled exception (CI flake).
+    // Real pipes emit asynchronous EPIPE after a failed write.
     expect(() => {
       child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
     }).not.toThrow()

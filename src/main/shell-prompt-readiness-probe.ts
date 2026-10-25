@@ -1,5 +1,6 @@
 import { createPtySlaveLineEditorProbe } from '../shared/pty-slave-line-discipline-echo'
 import {
+  listChildProcessIds,
   readShellProcessReadiness,
   resolveInstalledShellExecutablePaths,
   resolveShellExecutablePath
@@ -40,51 +41,77 @@ export function createShellPromptReadinessProbe(options: {
   let generation = 0
   let probesStarted = 0
 
+  const isStale = (scheduledGeneration: number): boolean =>
+    disposed || scheduledGeneration !== generation
+
+  const isExpectedShell = async (executablePath: string): Promise<boolean> => {
+    if (!expectedShellName || basename(executablePath).toLowerCase() !== expectedShellName) {
+      return false
+    }
+    const expectedPath = options.shellPath
+      ? await resolveShellExecutablePath(options.shellPath, shellCwd, options.shellPathEnv)
+      : null
+    if (!expectedPath) {
+      return false
+    }
+    if (executablePath === expectedPath) {
+      return true
+    }
+    // Profiles can exec another installed shell; accept only replacements found on this pane's PATH.
+    const installedPaths = await resolveInstalledShellExecutablePaths(
+      expectedShellName,
+      shellCwd,
+      options.shellPathEnv
+    )
+    return installedPaths.includes(executablePath)
+  }
+
+  // A pty relay exec'd over the shell (kiro-cli-term, #25586) runs it as a child on an inner pty.
+  const isRelayedShellAtPrompt = async (
+    relayPid: number,
+    scheduledGeneration: number
+  ): Promise<boolean> => {
+    for (const childPid of await listChildProcessIds(relayPid)) {
+      const child = await readShellProcessReadiness(childPid).catch(() => null)
+      if (isStale(scheduledGeneration)) {
+        return false
+      }
+      if (
+        !child?.foreground ||
+        !child.ttyPath ||
+        child.ttyPath === options.slavePath ||
+        !(await isExpectedShell(child.executablePath))
+      ) {
+        continue
+      }
+      if ((await createPtySlaveLineEditorProbe(child.ttyPath)?.()) === 'line-editor') {
+        return true
+      }
+    }
+    return false
+  }
+
   const probe = async (scheduledGeneration: number): Promise<void> => {
-    if (disposed || scheduledGeneration !== generation) {
+    if (isStale(scheduledGeneration)) {
       return
     }
     const shellPid = options.getShellPid()
-    if (!shellPid || (await lineEditorProbe()) !== 'line-editor') {
+    if (!shellPid) {
       return
     }
-    if (disposed || scheduledGeneration !== generation) {
+    const outerState = await lineEditorProbe()
+    if (isStale(scheduledGeneration)) {
       return
     }
-    const [shell, expectedPath] = await Promise.all([
-      readShellProcessReadiness(shellPid),
-      options.shellPath
-        ? resolveShellExecutablePath(options.shellPath, shellCwd, options.shellPathEnv)
-        : Promise.resolve(null)
-    ])
-    if (disposed || scheduledGeneration !== generation) {
+    const shell = await readShellProcessReadiness(shellPid)
+    if (isStale(scheduledGeneration) || !shell?.foreground) {
       return
     }
-    if (
-      !shell?.foreground ||
-      !expectedShellName ||
-      !expectedPath ||
-      basename(shell.executablePath).toLowerCase() !== expectedShellName
-    ) {
+    const ready = (await isExpectedShell(shell.executablePath))
+      ? outerState === 'line-editor'
+      : await isRelayedShellAtPrompt(shellPid, scheduledGeneration)
+    if (!ready || isStale(scheduledGeneration)) {
       return
-    }
-    if (shell.executablePath !== expectedPath) {
-      // Why widen past the launched path: a startup profile that `exec`s a second
-      // install of the same shell (Homebrew Bash over /bin/bash) keeps the pid but
-      // loses the wrapper's marker. Only installs this pane's own PATH resolves
-      // count, so a binary merely *named* bash/zsh outside it stays rejected.
-      const installedPaths = await resolveInstalledShellExecutablePaths(
-        expectedShellName,
-        shellCwd,
-        options.shellPathEnv
-      )
-      if (
-        disposed ||
-        scheduledGeneration !== generation ||
-        !installedPaths.includes(shell.executablePath)
-      ) {
-        return
-      }
     }
     disposed = true
     options.onPromptReady()

@@ -77,8 +77,7 @@ function WorkspaceKanbanLaneCardList({
       getWorktreeIds: () => items.map((item) => item.id),
       getMeasurements: () => virtualizer.measurementsCache
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- virtualizer is a stable instance (useVirtualizer holds it in useState), and getMeasurements reads measurementsCache off it live.
-  }, [itemIds, items, scrollRef])
+  }, [itemIds, items, scrollRef, virtualizer])
 
   return (
     <div

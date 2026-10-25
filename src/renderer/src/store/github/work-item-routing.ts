@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
@@ -7,7 +8,6 @@ import {
 } from '../../../../shared/task-source-context'
 import {
   getRepoExecutionHostId,
-  normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -21,11 +21,7 @@ import {
 } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { workItemsCacheKey } from './cache-identity'
-import {
-  findRepoForGitHubOwner,
-  getGitHubFocusedRepoOwnerHostId,
-  getRuntimeRepoTarget
-} from './repository-routing'
+import { findRepoForGitHubOwner, getRuntimeRepoTarget } from './repository-routing'
 
 export type GitHubWorkItemRequestContext = {
   repoId: string
@@ -49,7 +45,7 @@ export type GitHubWorkItemsListArgs = {
 export function settingsForGitHubRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (!repo) {
     return settings
   }
@@ -64,18 +60,15 @@ export function settingsForGitHubRepoOwner(
 function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
   activeRuntimeEnvironmentId: string | null
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId }
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
-      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+): RuntimeFocusSettings {
+  return settings ? { ...settings, activeRuntimeEnvironmentId } : { activeRuntimeEnvironmentId }
 }
 
 function settingsForGitHubTaskSource(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id'> | undefined,
   sourceContext: TaskSourceContext
-): AppState['settings'] {
+): RuntimeFocusSettings {
   const sourceHost = parseExecutionHostId(sourceContext.hostId)
   return withActiveRuntimeEnvironmentId(
     state.settings,
@@ -93,43 +86,52 @@ export function getWorkItemsCacheKeyForOwner(
   repoPath?: string
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
-  return workItemsCacheKey(
-    repoId,
-    limit,
-    query,
-    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined
-  )
+  // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
+  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
 }
 
 export function getGitHubWorkItemSourceHostId(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): ExecutionHostId | undefined {
   if (sourceContext?.provider === 'github') {
     return sourceContext.hostId
   }
-  return repo
-    ? (normalizeExecutionHostId(getGitHubFocusedRepoOwnerHostId(state.settings, repo)) ?? undefined)
-    : undefined
+  return repo ? getRepoExecutionHostId(repo) : undefined
+}
+
+/** The host whose row a fetch read, never the focused server: items carry it to their actions. */
+export function getGitHubWorkItemRowHostId(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  sourceContext?: TaskSourceContext | null
+): ExecutionHostId | undefined {
+  const sourceHostId = sourceContext?.provider === 'github' ? sourceContext.hostId : undefined
+  const rows = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  // Why not by id alone: a twin would resolve to whichever row is listed first.
+  const row =
+    rows.find((entry) => getRepoExecutionHostId(entry) === sourceHostId) ??
+    rows.find((entry) => entry.path === repoPath) ??
+    (rows.length === 1 ? rows[0] : undefined)
+  return row ? getRepoExecutionHostId(row) : sourceHostId
 }
 
 export function getGitHubWorkItemSourceCacheScope(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): string | undefined {
   if (sourceContext?.provider === 'github') {
     return getTaskSourceCacheScope(sourceContext)
   }
-  return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
+  return getGitHubWorkItemSourceHostId(repo, sourceContext)
 }
 
 export function getGitHubRepoSourceSettings(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (sourceContext?.provider === 'github') {
     return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
@@ -180,7 +182,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
+  const runtimeRepo = getRuntimeRepoTarget(state, { repoId, repoPath }, requestTarget)
   return {
     repoId,
     repoPath,

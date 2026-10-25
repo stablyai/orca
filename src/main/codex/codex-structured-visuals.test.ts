@@ -3,10 +3,11 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   adapterFor,
+  acquireReadyCodexForTest,
   fakeCodex,
   identityFor,
   THREAD_ID
@@ -27,12 +28,16 @@ const VISUALS: NativeChatVisualsLaunch = {
 const MANUAL = codexStructuredPermissionPolicy('ask')
 const YOLO = codexStructuredPermissionPolicy('full-access')
 
-type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number }
+type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number | null }
 
 function connectionAnswering(routes: Record<string, () => unknown>) {
   const calls: Call[] = []
   const request = vi.fn(
-    async (method: string, params?: Record<string, unknown>, options?: { timeoutMs?: number }) => {
+    async (
+      method: string,
+      params?: Record<string, unknown>,
+      options?: { timeoutMs?: number | null }
+    ) => {
       calls.push({ method, params, timeoutMs: options?.timeoutMs })
       const route = routes[method]
       return route ? route() : {}
@@ -156,7 +161,6 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
   })
 })
 
-/** A chat acquired through the launch its registration composes, over a shell env of `env`. */
 async function acquired(
   codex: ReturnType<typeof fakeCodex>,
   launch: {
@@ -188,11 +192,14 @@ async function acquired(
       resolveEnvironment: async () => launch.env ?? {},
       resolveCommand: () => 'codex',
       resolveLaunchArgs: () => [],
-      resolveRollout: async () => null,
       prepareVisuals: async () => launch.visuals ?? null
     })
   })
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
 }
 
 describe('a Codex chat acquisition with visuals', () => {
@@ -203,11 +210,15 @@ describe('a Codex chat acquisition with visuals', () => {
       const connection = codex.connections[0]!
       const methods = connection.calls.map((call) => call.method)
       const open = resumeThreadId ? 'thread/resume' : 'thread/start'
+      expect(methods[0]).toBe('initialize')
       expect(methods.indexOf('skills/extraRoots/set')).toBeLessThan(methods.indexOf(open))
       expect(methods.indexOf('config/read')).toBeLessThan(methods.indexOf(open))
       expect(connection.calls.find((call) => call.method === open)?.params).toMatchObject({
         ...MANUAL,
-        config: { 'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder] }
+        config: {
+          'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder],
+          [`shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`]: VISUALS.folder
+        }
       })
       expect(connection.launch.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
     }
@@ -218,9 +229,12 @@ describe('a Codex chat acquisition with visuals', () => {
     await acquired(codex, { env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    expect(methods[0]).toBe('thread/start')
+    expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    expect(connection.calls[0]?.params).not.toHaveProperty('config')
+    const config = connection.calls[1]?.params?.config
+    const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
+    expect(config).not.toHaveProperty(['sandbox_workspace_write.writable_roots'])
+    expect(config).not.toHaveProperty([scratchDirOverride])
     expect(connection.launch.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 })

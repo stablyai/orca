@@ -1,4 +1,4 @@
-import { describe } from 'vitest'
+import { describe, vi } from 'vitest'
 import { registerPtyConnectionHiddenAtlasRecoveryTests } from './pty-connection-hidden-atlas-recovery.spec'
 import { registerPtyConnectionHiddenBacklogReconciliationTests } from './pty-connection-hidden-backlog-reconciliation.spec'
 import { registerPtyConnectionHiddenOutputRestoreTests } from './pty-connection-hidden-output-restore.spec'
@@ -10,6 +10,13 @@ import { registerPtyConnectionStalledHiddenRestoreTests } from './pty-connection
 import { registerPtyConnectionDaemonSnapshotReplayTests } from './pty-connection-daemon-snapshot-replay.spec'
 import { registerPtyConnectionDeferredReattachLiveOutputTests } from './pty-connection-deferred-reattach-live-output.spec'
 import { registerPtyConnectionRemotePauseDropNoticeTests } from './pty-connection-remote-pause-drop-notice.spec'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 describe('pty-connection-hidden-atlas-recovery', registerPtyConnectionHiddenAtlasRecoveryTests)
 describe(

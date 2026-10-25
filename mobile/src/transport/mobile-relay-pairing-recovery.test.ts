@@ -6,7 +6,11 @@ import {
   resetMobileRelayPairingRecoveryForTests,
   settleMobileRelayPairingRecovery
 } from './mobile-relay-pairing-recovery'
-import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
+import {
+  RelayOuterError,
+  type connectMobileRelayForPairing,
+  type PairingCandidateClient
+} from './mobile-relay-physical-client'
 import type { HostProfile, PairingOffer, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -36,10 +40,9 @@ function response(result: unknown): RpcResponse {
   return { id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function installed(
-  journal: ReturnType<typeof journal>,
-  mode: 'authenticated-direct' | 'relay-basis'
-) {
+type TestJournal = ReturnType<typeof journal>
+
+function installed(journal: TestJournal, mode: 'authenticated-direct' | 'relay-basis') {
   return {
     v: 1 as const,
     reqId: journal.metadata.installReqId,
@@ -50,7 +53,7 @@ function installed(
 }
 
 function endpoints(
-  journal: ReturnType<typeof journal>,
+  journal: TestJournal,
   state: { state: 'not-found' } | { state: 'committed'; result: ReturnType<typeof installed> }
 ) {
   return {
@@ -90,8 +93,8 @@ function client(handler: (method: string, params: unknown) => Promise<RpcRespons
 }
 
 function dependencies(args: {
-  journal: ReturnType<typeof journal>
-  connectRelay: ReturnType<typeof vi.fn>
+  journal: TestJournal
+  connectRelay: typeof connectMobileRelayForPairing
   bundle?: MobileRelayCredentialBundle | null
   hosts?: HostProfile[]
 }) {
@@ -103,7 +106,7 @@ function dependencies(args: {
     clearJournal: vi.fn(async () => {}),
     claimJournal: vi.fn(async () => () => {}),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
-    writeCredentialBundle: vi.fn(async () => {}),
+    writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {}),
     loadHosts: vi.fn(async (): Promise<HostProfile[]> => args.hosts ?? []),
     savePairedHost: vi.fn(async () => {}),
     connectRelay: args.connectRelay,

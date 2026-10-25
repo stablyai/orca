@@ -36,6 +36,7 @@ export type NativeChatComposerFieldProps = {
   disabled: boolean
   hasPty: boolean
   canSend: boolean
+  unavailableHint?: string | undefined
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -127,6 +128,7 @@ export function NativeChatComposerField({
   disabled,
   hasPty,
   canSend,
+  unavailableHint,
   autocomplete,
   mentionFiles,
   activeSuggestion,
@@ -178,6 +180,9 @@ export function NativeChatComposerField({
   const compositionBaseRef = useRef('')
   const imageRow = useMemo(() => imageAttachments.map(({ id }) => id), [imageAttachments])
   const droppedDraftClearRef = useRef(false)
+  // The draft the editor last reported or was given. Why: a chip's node view renders the composer
+  // (flushSync) inside the editor's change, before onChange, with a draft the editor already passed.
+  const editorDraftRef = useRef<string | null>(null)
 
   // Browser owns the provisional value; React synchronizes drafts only between IME sessions.
   useLayoutEffect(() => {
@@ -193,10 +198,10 @@ export function NativeChatComposerField({
       return
     }
     droppedDraftClearRef.current = false
-    if (textarea.value === draft) {
-      return
+    if (draft !== editorDraftRef.current && textarea.value !== draft) {
+      textarea.value = draft
     }
-    textarea.value = draft
+    editorDraftRef.current = draft
   }, [draft, imeEnterGesture, textareaRef])
 
   const settleImeValue = (element: NativeChatComposerInput): void => {
@@ -284,7 +289,11 @@ export function NativeChatComposerField({
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
-              onChange={(input) => onDraftChange(input.value, input)}
+              onChange={(input) => {
+                const value = input.value
+                editorDraftRef.current = value
+                onDraftChange(value, input)
+              }}
               onKeyDownCapture={(event) => {
                 if (!imeEnterGesture.ownsKeyDown(event)) {
                   onKeyDown(event)
@@ -307,9 +316,9 @@ export function NativeChatComposerField({
                 compositionBaseRef.current = textareaRef.current!.value
                 imeEnterGesture.setComposing(true)
               }}
-              onCompositionEnd={() => {
+              onCompositionEnd={(event) => {
                 const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.setComposing(false)
+                imeEnterGesture.setComposing(false, event.data)
                 if (compositionWasActive) {
                   settleImeValue(textareaRef.current!)
                 }
@@ -329,7 +338,7 @@ export function NativeChatComposerField({
                       'components.native-chat.goal.placeholder',
                       'Describe your goal, define measurable outcomes for best results'
                     )
-                  : nativeChatComposerPlaceholder(hasPty, canSend, afterStop)
+                  : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // Editable content grows naturally; the 8lh cap (plus
@@ -339,7 +348,8 @@ export function NativeChatComposerField({
               className={cn(
                 'min-h-12 w-full bg-transparent px-2 py-1 text-sm text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
                 'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
-                'placeholder:text-chat-foreground-faint disabled:cursor-not-allowed disabled:opacity-50'
+                // Why: the editor is a contenteditable, which `:disabled` never matches.
+                'placeholder:text-chat-foreground-faint [&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
               )}
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">

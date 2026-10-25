@@ -278,7 +278,8 @@ describe('filterAiVaultSessions', () => {
         [
           {
             ...baseSession,
-            cwd: '/home/ada/repo/app'
+            cwd: '/home/ada/repo/app',
+            filePath: '//wsl$/Ubuntu/home/ada/.claude/projects/session-1.jsonl'
           }
         ],
         {

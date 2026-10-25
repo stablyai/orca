@@ -1,14 +1,21 @@
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
+import {
+  isHostTabPane,
+  notifyHostTabSplitRefused,
+  readHostPublishedSplitSourcePtyId
+} from '@/runtime/web-runtime-split-source-pty'
 import type { PtyTransport } from './pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { expectPaneToAppear } from '@/runtime/layout-owner-pane-intents'
-import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
-import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
+import {
+  splitPaneFirstSize,
+  splitPaneInMain,
+  splitServerPane,
+  type SplitInMainRequest
+} from './terminal-pane-split-in-main'
 
 type SplitArgs = {
   worktreeId: string
@@ -24,55 +31,35 @@ type SplitArgs = {
 }
 
 export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
-  const ptyId = args.paneTransports.get(args.pane.id)?.getPtyId() ?? null
-  if (
-    splitWebRuntimeTerminal(ptyId, args.direction, args.source, {
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      leafId: args.pane.leafId
-    })
-  ) {
+  const sourcePane = { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.pane.leafId }
+  // Why the host's binding: a pane whose attach is still in flight has no transport id yet.
+  const ptyId =
+    args.paneTransports.get(args.pane.id)?.getPtyId() ??
+    readHostPublishedSplitSourcePtyId(sourcePane)
+  if (splitWebRuntimeTerminal(ptyId, args.direction, args.source, sourcePane)) {
     return
   }
-  // Switch point: main writes the split; the window draws it from main's frame, with its cwd.
+  // Switch point: main writes the split and starts its terminal; main's frame draws the pane. A
+  // server workspace's handle-less pane goes to that server's main while its frames draw it.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const newLeafId = mintStablePaneId()
     const cwd = splitCwd(args, ptyId)
-    const forget = expectPaneToAppear(newLeafId, {
+    const asToday = (): void => splitLocally(args, () => cwd)
+    const request: SplitInMainRequest = {
+      worktreeId: args.worktreeId,
       tabId: args.tabId,
-      ...cwd,
-      telemetry: { source: args.source, direction: args.direction }
-    })
-    if (
-      sendLayoutCommandToOwner(
-        args.worktreeId,
-        {
-          type: 'splitPane',
-          tabId: args.tabId,
-          leafId: args.pane.leafId,
-          direction: args.direction,
-          newLeafId
-        },
-        {
-          // No frame is coming (the stream is down): the window draws main's pane itself.
-          apply: () => {
-            if (!layoutFramesFlowing()) {
-              forget()
-              splitLocally(args, () => cwd, newLeafId)
-            }
-          },
-          asToday: () => {
-            forget()
-            splitLocally(args, () => cwd)
-          },
-          unapplied: forget,
-          refused: forget
-        }
-      )
-    ) {
+      sourceLeafId: args.pane.leafId,
+      direction: args.direction,
+      cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
+      initialSize: splitPaneFirstSize(args.pane.terminal, args.direction),
+      telemetry: { source: args.source }
+    }
+    if (splitPaneInMain(request, asToday) || splitServerPane(request)) {
       return
     }
-    forget()
+  }
+  if (isHostTabPane(sourcePane)) {
+    notifyHostTabSplitRefused(sourcePane)
+    return
   }
   splitLocally(args, () => splitCwd(args, ptyId))
 }
@@ -98,15 +85,12 @@ function splitCwd(args: SplitArgs, ptyId: string | null): SplitCwd {
 }
 
 /** `cwd` is read only once a manager is there to split. */
-function splitLocally(args: SplitArgs, cwd: () => SplitCwd, leafId?: string): void {
+function splitLocally(args: SplitArgs, cwd: () => SplitCwd): void {
   const manager = args.getManager ? args.getManager() : args.manager
   if (!manager) {
     return
   }
-  const createdPane = manager.splitPane(args.pane.id, args.direction, {
-    ...cwd(),
-    ...(leafId ? { leafId } : {})
-  })
+  const createdPane = manager.splitPane(args.pane.id, args.direction, cwd())
   recordCreatedTerminalPaneSplit(createdPane, {
     source: args.source,
     direction: args.direction

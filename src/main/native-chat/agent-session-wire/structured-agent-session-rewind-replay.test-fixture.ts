@@ -35,7 +35,7 @@ export async function expectSupersededRewindReplay({
       ordinal: 0
     })
   )
-  recoverRewind.mockResolvedValueOnce({ ok: true, items: [] })
+  recoverRewind.mockResolvedValueOnce({ ok: true })
   expect(await host.rewind(caller, secondRequest)).toMatchObject({ ok: true })
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.operationId).toBe(
     secondRequest.envelope.clientOperationId

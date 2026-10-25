@@ -9,7 +9,6 @@ import {
   type WorktreeCreateIdempotencySupport
 } from './worktree-create-idempotency-policy'
 import { createWorktreeWithNameRetry } from './worktree-create-retry'
-import { AMBIGUOUS_RECONNECT_WAIT_MS } from './replay-on-ambiguous-delivery'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 
 type Attempt = { method: string; params: Record<string, unknown> }
@@ -17,7 +16,7 @@ type Attempt = { method: string; params: Record<string, unknown> }
 const IDEMPOTENT_CREATE_SUPPORT = {
   dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
 }
-const LEGACY_HOST_REPLAY_WINDOW_MS = getWorktreeCreateReplayWindowMs(IDEMPOTENT_CREATE_SUPPORT)
+const LEGACY_HOST_REPLAY_WINDOW_MS = 50_000
 
 // Drives the transport state a replay has to wait on. Production couples the two:
 // a socket close rejects the pending frame AND drops the client off 'connected'.
@@ -834,10 +833,9 @@ describe('createWorktreeWithNameRetry', () => {
     // The window is measured from a lower bound on when the host could have resolved, so
     // it has to leave the record room for the replay to still be in flight. Widening it
     // to the whole TTL would let the last replay land on a record that just expired.
-    expect(LEGACY_HOST_REPLAY_WINDOW_MS).toBeGreaterThan(0)
-    expect(LEGACY_HOST_REPLAY_WINDOW_MS).toBeLessThan(WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS)
+    expect(getWorktreeCreateReplayWindowMs({ dedupeTtlMs: 60_000 })).toBe(50_000)
     // A reconnect wait is clamped when a short advertisement leaves less time.
     const shortReplayWindowMs = getWorktreeCreateReplayWindowMs({ dedupeTtlMs: 20_000 })
-    expect(Math.min(AMBIGUOUS_RECONNECT_WAIT_MS, shortReplayWindowMs)).toBe(10_000)
+    expect(shortReplayWindowMs).toBe(10_000)
   })
 })

@@ -6,6 +6,9 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  topChromeSafeArea: {
+    backgroundColor: colors.bgPanel
+  },
   topChrome: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: 1,

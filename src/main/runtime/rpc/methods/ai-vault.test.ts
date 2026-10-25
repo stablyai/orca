@@ -599,7 +599,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ limit: undefined, unlimited: true }),
       expect.any(AbortSignal),
-      expect.objectContaining({ sent: expect.any(Function), work: expect.any(Function) })
+      expect.objectContaining({ work: expect.any(Function) })
     )
   })
 

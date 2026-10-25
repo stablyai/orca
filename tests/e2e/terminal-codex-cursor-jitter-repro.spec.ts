@@ -94,7 +94,7 @@ type RasterFrameInput = {
 }
 
 type CursorReproWindow = Window & {
-  __cursorReproOriginalPtyWrite?: (ptyId: string, data: string) => void
+  __cursorReproOriginalPtyWrite?: Window['api']['pty']['write']
   __cursorReproConptyDa1ReplyCount?: number
   __cursorReproRawChunks?: { id: string; data: string; at: number }[]
   __cursorReproRawUnsubscribe?: () => void
@@ -295,12 +295,12 @@ async function installPtyWriteDiagnostics(page: Page): Promise<void> {
     const reproWindow = window as CursorReproWindow
     if (!reproWindow.__cursorReproOriginalPtyWrite) {
       reproWindow.__cursorReproOriginalPtyWrite = window.api.pty.write.bind(window.api.pty)
-      window.api.pty.write = (ptyId, data) => {
+      window.api.pty.write = (ptyId, data, inputKind) => {
         if (data === da1Response) {
           reproWindow.__cursorReproConptyDa1ReplyCount =
             (reproWindow.__cursorReproConptyDa1ReplyCount ?? 0) + 1
         }
-        reproWindow.__cursorReproOriginalPtyWrite!(ptyId, data)
+        reproWindow.__cursorReproOriginalPtyWrite!(ptyId, data, inputKind)
       }
     }
     reproWindow.__cursorReproConptyDa1ReplyCount = 0

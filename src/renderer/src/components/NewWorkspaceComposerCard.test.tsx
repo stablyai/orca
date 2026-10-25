@@ -921,7 +921,7 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     return textarea as HTMLTextAreaElement
   }
 
-  it('sizes from the note value, so a PR prefill written straight to state still shows in full', () => {
+  it('applies content sizing to a note prefilled through props', () => {
     // #10575: the prefill never fires an input event, so nothing but the value can drive height.
     current = renderCard({
       advancedOpen: true,
@@ -931,7 +931,7 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     expect(findNoteTextarea(current.container).className).toContain('[field-sizing:content]')
   })
 
-  it('keeps a note past the height cap readable instead of clipping it', () => {
+  it('applies a height cap and scrolling classes to long notes', () => {
     current = renderCard({ advancedOpen: true, note: 'a'.repeat(4000) })
 
     const { className } = findNoteTextarea(current.container)

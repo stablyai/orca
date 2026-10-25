@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import { scheduleNextFrame } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
@@ -8,7 +8,7 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
 const REVEAL_FOCUS_FRAMES = 6
 const PENDING_FOCUS_MS = 1000
 
-const revealedComposerReclaims = new Map<string, () => void>()
+const revealedComposerReclaims = new Map<string, (onlyIfFocusUnclaimed?: boolean) => void>()
 const mountedComposers = new Set<RefObject<NativeChatComposerHandle | null>>()
 let pendingFocusRequest: { tabId: string | null; cancel: () => void } | null = null
 let focusRequestGeneration = 0
@@ -40,7 +40,7 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     }
   }
   const pending: { tabId: string | null; cancel: () => void } = { tabId: null, cancel }
-  let timeout: ReturnType<typeof setTimeout> | undefined
+  const timeout = setTimeout(cancel, PENDING_FOCUS_MS)
   pendingFocusRequest = pending
   document.addEventListener('pointerdown', cancel, true)
   document.addEventListener('keydown', cancelForNavigation, true)
@@ -50,8 +50,6 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
         return
       }
       pending.tabId = tabId
-      clearTimeout(timeout)
-      timeout = setTimeout(cancel, PENDING_FOCUS_MS)
       const reclaim = revealedComposerReclaims.get(tabId)
       if (reclaim) {
         cancel()
@@ -63,7 +61,15 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
 }
 
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
-export function requestNativeChatComposerFocus(tabId: string): void {
+export function requestNativeChatComposerFocus(
+  tabId: string,
+  options: { onlyIfFocusUnclaimed?: boolean } = {}
+): void {
+  if (options.onlyIfFocusUnclaimed) {
+    // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
+    revealedComposerReclaims.get(tabId)?.(true)
+    return
+  }
   captureNativeChatComposerFocusIntent().request(tabId)
 }
 
@@ -101,34 +107,51 @@ export function useNativeChatComposerRevealFocus({
   const explicitRef = useRef(false)
   const [reclaimCount, setReclaimCount] = useState(0)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     mountedComposers.add(composerRef)
     return () => {
       mountedComposers.delete(composerRef)
     }
   }, [composerRef])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!revealed || !composerReady) {
       return
     }
-    const reclaim = (): void => {
+    const reclaim = (onlyIfFocusUnclaimed = false): void => {
+      if (onlyIfFocusUnclaimed) {
+        const root = rootRef.current
+        const active = root?.ownerDocument.activeElement
+        if (root && (active === null || active === root.ownerDocument.body)) {
+          composerRef.current?.focus()
+        }
+        return
+      }
       claimedRef.current = false
       explicitRef.current = true
+      const active = rootRef.current?.ownerDocument.activeElement ?? null
+      const siblingComposer = [...mountedComposers].some(
+        (ownerRef) => ownerRef !== composerRef && ownerRef.current?.contains(active)
+      )
+      if (
+        (!shouldPreserveEditableFocus(active) || siblingComposer) &&
+        composerRef.current?.focus()
+      ) {
+        explicitRef.current = false
+      }
       setReclaimCount((count) => count + 1)
     }
     revealedComposerReclaims.set(tabId, reclaim)
     if (pendingFocusRequest?.tabId === tabId) {
       pendingFocusRequest.cancel()
-      claimedRef.current = false
-      explicitRef.current = true
+      reclaim()
     }
     return () => {
       if (revealedComposerReclaims.get(tabId) === reclaim) {
         revealedComposerReclaims.delete(tabId)
       }
     }
-  }, [composerReady, revealed, tabId])
+  }, [composerReady, composerRef, revealed, rootRef, tabId])
 
   useEffect(() => {
     if (!revealed || !composerReady) {

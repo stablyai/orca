@@ -1,4 +1,4 @@
-import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import { pasteMobileNativeChatImagePaths } from './native-chat/composer/mobile-native-chat-image-send'
 import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
 // The condition tracked here — a bracketed image paste left sitting on the agent's

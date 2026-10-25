@@ -4,8 +4,14 @@ import { enqueueWrite } from './primary-state-writes'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   notifyWorkspaceSessionWritten,
+  type WorkspaceSessionOperationListener,
   type WorkspaceSessionWriteListener
 } from './workspace-session-write-listeners'
+import { ptyBindingGenerationOf } from './pty-binding-generations'
+import type { PartitionEditorViews } from './layout-editor-views'
+
+/** Gets the domains a write changed; undefined when it may have changed any of them. */
+export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
@@ -23,6 +29,11 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'writeTimer'
   | 'writesFrozen'
   | 'workspaceSessionWriteListeners'
+  | 'workspaceSessionOperationListeners'
+  | 'stateWriteListeners'
+  | 'ptyBindingGenerations'
+  | 'layoutEditorViews'
+  | 'state'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -51,6 +62,37 @@ export class WriteSchedulingOperations {
       runtime.workspaceSessionWriteListeners.delete(listener)
     }
   }
+
+  /**
+   * Layout-owner builds: called once per durable mutation, after its partitions' write notices,
+   * with those partitions; listeners must not throw or block.
+   */
+  onWorkspaceSessionOperationEnded(listener: WorkspaceSessionOperationListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.workspaceSessionOperationListeners.add(listener)
+    return () => {
+      runtime.workspaceSessionOperationListeners.delete(listener)
+    }
+  }
+
+  /** A pane's binding generation in this process, for readers of its writes; see pty-binding-generations. */
+  getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
+    return ptyBindingGenerationOf(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
+  }
+
+  /** A partition's in-memory editor tab views, for the layout projection; see layout-editor-views. */
+  getLayoutEditorViews(hostId: ExecutionHostId): PartitionEditorViews | undefined {
+    return this[writeSchedulingOperationsContext].runtime.layoutEditorViews.get(hostId)
+  }
+
+  /** Called after each in-memory write that schedules a save; listeners must not throw or block. */
+  onStateWritten(listener: StateWriteListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.stateWriteListeners.add(listener)
+    return () => {
+      runtime.stateWriteListeners.delete(listener)
+    }
+  }
 }
 
 /** `writtenHostId` names the one session partition this save changed, if it changed only one. */
@@ -61,6 +103,9 @@ export function scheduleSave(
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  for (const listener of runtime.stateWriteListeners) {
+    listener(dirtyDomains)
+  }
   runtime.automationListProjectionCache = null
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {

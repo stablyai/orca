@@ -11,7 +11,6 @@ import {
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
@@ -220,6 +219,35 @@ describe('shared agent-hook-listener', () => {
       // Why: the lead's own last state was done, so with no working children
       // the pane settles back to done rather than a phantom working spinner.
       expect(stopped?.payload.state).toBe('done')
+    })
+
+    it('does not mint rows for agent-hook runs on the lead or inside a subagent', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      // Why: payloads captured from Claude Code 2.1.310; a hook run inside a subagent inherits its agent_type.
+      const leadHook = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'hook-agent-f91f48da-b4db-45e3-a8a1-3debdaa4f2f5',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/README.md' }
+      })
+      expect(leadHook?.payload.state).toBe('working')
+      expect(leadHook?.payload.subagents ?? []).toEqual([])
+
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aa34e9e23451d1f6b',
+        agent_type: 'general-purpose'
+      })
+      const childHook = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'hook-agent-5179ea04-58c0-440a-b861-04ead9f87aaa',
+        agent_type: 'general-purpose',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/README.md' }
+      })
+      expect(childHook?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aa34e9e23451d1f6b' })
+      ])
     })
 
     it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
@@ -509,7 +537,7 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
-    it('keeps a live child omitted by the background task snapshot cap', () => {
+    it('keeps a live child omitted by an inventory with an unreadable entry', () => {
       claudeEvent({
         hook_event_name: 'SubagentStart',
         agent_id: 'alive-after-cap',
@@ -517,15 +545,14 @@ describe('shared agent-hook-listener', () => {
       })
       const stop = claudeEvent({
         hook_event_name: 'Stop',
-        background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
-          id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
-          type: 'subagent',
-          status: 'running'
-        }))
+        background_tasks: [
+          { id: 'a0', type: 'subagent', status: 'running' },
+          { id: 'unreadable', status: 'running' }
+        ]
       })
 
-      // Why: the inventory was capped before this id, so omission cannot
-      // prove the lifecycle-tracked child finished or was killed.
+      // Why: an unreadable entry may be this id, so omission cannot prove
+      // the lifecycle-tracked child finished or was killed.
       expect(stop?.payload.subagents).toContainEqual(
         expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
       )
@@ -600,10 +627,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('does not resurrect persisted idle child rows after a restart', () => {
-      // Why: the roster tracks only working children now. A persisted idle
-      // snapshot (from a build that kept idle rows) is a finished child, so
-      // hydration must drop it — otherwise restart would re-pile the exact
-      // squatting rows this fix removes.
+      // Idle snapshots have no live confirmation after restart.
       seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
         {
           id: 'aprobe2-6d3cb5b52120b7bf',
@@ -612,7 +636,8 @@ describe('shared agent-hook-listener', () => {
           agentType: 'security-reviewer'
         }
       ])
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const resumed = claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      expect(resumed?.payload.subagents).toBeUndefined()
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [

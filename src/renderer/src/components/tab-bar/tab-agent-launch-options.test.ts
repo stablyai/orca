@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ALL_TUI_AGENTS } from '../../../../shared/tui-agent-display-names'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import { getAgentCatalog, getAgentLabel } from '../../lib/agent-catalog'
-import { agentKindForAgentType, agentTypeToIconAgent } from '../../lib/agent-status'
 import {
   buildTabAgentLaunchOptions,
+  buildTabAgentLaunchOptionsFromRows,
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
@@ -25,15 +22,6 @@ describe('tab agent launch options', () => {
     ])
   })
 
-  it('labels DeepSeek Build without offering it in the launch catalog', () => {
-    expect(getAgentLabel('dsb')).toBe('DeepSeek Build')
-    expect(agentTypeToIconAgent('dsb')).toBe('dsb')
-    expect(agentKindForAgentType('dsb')).toBe('other')
-    expect(isTuiAgent('dsb')).toBe(false)
-    expect(Object.hasOwn(TUI_AGENT_CONFIG, 'dsb')).toBe(false)
-    expect(ALL_TUI_AGENTS).not.toContain('dsb')
-    expect(getAgentCatalog().map((entry) => entry.id)).not.toContain('dsb')
-  })
   it('drops a disabled default agent instead of surfacing it first', () => {
     const ordered = orderTabLaunchAgents(
       'openclaude',
@@ -84,9 +72,11 @@ describe('tab agent launch options', () => {
   })
 
   it('ranks an exact alias above weaker prefix matches', () => {
-    const options = buildTabAgentLaunchOptions(['codex', 'copilot', 'codebuff'])
+    const options = buildTabAgentLaunchOptions(['codebuff', 'codex', 'copilot'], {
+      codebuff: 'codex-tools'
+    })
 
-    // "co" prefixes all three; "codex" exactly matches one and must lead.
+    // The weaker codex-tools prefix starts first, so exact codex must move ahead.
     expect(findMatchingTabAgentLaunchOptions('codex', options)[0]?.agent).toBe('codex')
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot', 'codebuff'])
@@ -111,4 +101,17 @@ describe('tab agent launch options', () => {
       expect.arrayContaining(['codex', 'copilot'])
     )
   })
+})
+
+it('projects the same CLI label, unavailable reason and stable chat ID as static rows', () => {
+  const unavailable = buildTabAgentLaunchOptionsFromRows([
+    { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' },
+    { kind: 'cli', agent: 'claude' }
+  ])
+  expect(unavailable).toMatchObject([
+    { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
+    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false }
+  ])
+  // Typing the agent's name and pressing Enter launches its CLI, not the disabled chat.
+  expect(findMatchingTabAgentLaunchOptions('claude', unavailable)[0]?.id).toBe('cli:claude')
 })

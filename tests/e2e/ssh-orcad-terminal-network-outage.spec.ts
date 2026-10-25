@@ -37,7 +37,7 @@ for (const { mode, ms, label } of OUTAGES) {
   test(`a managed pane answers typing again after a ${label} ${mode} network outage`, async (// oxlint-disable-next-line no-empty-pattern -- Owns its app launch through a restart session.
   {}, testInfo) => {
     test.setTimeout(ms + 10 * 60_000)
-    let proxy: FreezableTcpProxy | null = null
+    let proxy: FreezableTcpProxy | undefined
     try {
       await withManagedHost(testInfo, async (fixture) => {
         const { host } = fixture

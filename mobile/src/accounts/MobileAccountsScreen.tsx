@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
-import { useHostClient } from '../transport/client-context'
+import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
@@ -356,6 +356,9 @@ export function MobileAccountsScreen() {
           style={styles.iconButton}
           onPress={refresh}
           disabled={!client || refreshing || connState !== 'connected'}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh accounts"
         >
           {refreshing ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />

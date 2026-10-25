@@ -2,6 +2,7 @@
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
@@ -11,6 +12,7 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
+import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
@@ -100,6 +102,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
+  'connectors_disabled',
+  'external_conversation_not_found',
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
@@ -107,8 +111,10 @@ const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(CO
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
+  AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
+  'run_home_unreachable',
   'run_required',
   'stable_pane_required',
   'consumer_fenced',
@@ -117,6 +123,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'inject_rejected',
   'dispatch_not_found',
   'dispatch_run_mismatch',
+  'task_run_mismatch',
   'terminal_not_found',
   // A handle that names a live agent session with no terminal. Distinct from
   // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.
@@ -182,6 +189,10 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof TerminalSplitOutcomeError) {
+    // Keeps the code callers already match; the split's id rides in `data` for scripts.
+    return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
     error instanceof Error &&

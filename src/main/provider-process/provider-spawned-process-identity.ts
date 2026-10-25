@@ -1,6 +1,6 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
+import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 // What the lease records about a provider child: the process a later owner probe re-proves.
 

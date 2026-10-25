@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   createPageBackConsumers,
   type PageBackConsumers
@@ -38,11 +38,14 @@ function Screen({ claim }: { claim: (() => boolean) | null }): null {
   return null
 }
 
+const trees: ReactTestRenderer[] = []
+
 function render(claim: (() => boolean) | null): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
     tree = create(createElement(Screen, { claim }))
   })
+  trees.push(tree)
   return tree
 }
 
@@ -53,6 +56,15 @@ beforeEach(() => {
     publishClaim: (claimed) => page.claims.push(claimed),
     onUnclaimed: page.unclaimed
   })
+})
+
+afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  page.consumers = null
 })
 
 /**

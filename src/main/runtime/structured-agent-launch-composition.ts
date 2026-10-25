@@ -65,8 +65,11 @@ export type StructuredLaunchRequest = {
   permissionMode?: AgentChatPermissionMode
 }
 
+/** What the composition sets on a launch; an agent's part never does. */
+type ComposedLaunchFields = 'cwd' | 'env' | 'envToDelete' | 'commandEnv'
+
 export type StructuredAgentLaunchPart<L> = {
-  launch: Omit<L, 'cwd' | 'env' | 'envToDelete'>
+  launch: Omit<L, ComposedLaunchFields>
   /** The agent's environment, before the seal names the child. */
   env: Record<string, string>
   /** Inherited keys this agent's child must not keep; required, so an agent states even none. */
@@ -81,10 +84,12 @@ export type StructuredAgentLaunchPartResolver<L> = (
   identity: AgentSessionJournalIdentity
 ) => Promise<StructuredAgentLaunchPart<L>>
 
-export type ComposedStructuredLaunch<L> = Omit<L, 'cwd' | 'env' | 'envToDelete'> & {
+export type ComposedStructuredLaunch<L> = Omit<L, ComposedLaunchFields> & {
   cwd: string
   env: Record<string, string>
   envToDelete: string[]
+  /** See `SealedStructuredSessionChild`; absent from a read, which seals no child. */
+  commandEnv?: Record<string, string>
 }
 
 /** The child to spawn, sealed with the reservation's token. */
@@ -189,7 +194,13 @@ export function composeStructuredLaunch<L>(
       inheritedEnvToDelete,
       ...(cliRuntimeCommand ? { cliRuntimeCommand } : {})
     })
-    return { ...launch, cwd, env: child.env, envToDelete: child.envToDelete }
+    return {
+      ...launch,
+      cwd,
+      env: child.env,
+      envToDelete: child.envToDelete,
+      commandEnv: child.commandEnv
+    }
   }
 }
 

@@ -20,6 +20,7 @@ export {
   getWorktreeIdsWithStructuredChat
 } from './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
@@ -101,7 +102,7 @@ export function getVisibleWorktreeIds(): string[] {
   }
 
   const visibleIds = computeVisibleWorktreeIds(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     sortedIds,
     buildVisibleWorktreeOptionsFromState(state, repoMap)
   )

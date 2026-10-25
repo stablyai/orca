@@ -16,6 +16,7 @@ export function PhoneCarousel(): React.JSX.Element {
   const [tappingSlide, setTappingSlide] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Cleanup clears all four timers the schedule chain re-arms.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -68,7 +69,6 @@ export function PhoneCarousel(): React.JSX.Element {
       }, DWELL_MS)
     }
 
-    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: the first tap pulse is intentionally delayed until after the initial dwell.
     schedule(0)
 
     return () => {

@@ -12,11 +12,11 @@ vi.mock('@/lib/resolve-owner', async (importOriginal) => {
   const actual = await importOriginal<typeof ResolveOwnerModule>()
   return {
     ...actual,
-    runtimeEnvironmentIdForWorkspaceOwner: (
-      ...args: Parameters<typeof actual.runtimeEnvironmentIdForWorkspaceOwner>
+    runtimeEnvironmentIdUnlessTwin: (
+      ...args: Parameters<typeof actual.runtimeEnvironmentIdUnlessTwin>
     ) => {
       ownerLookup.calls += 1
-      return actual.runtimeEnvironmentIdForWorkspaceOwner(...args)
+      return actual.runtimeEnvironmentIdUnlessTwin(...args)
     }
   }
 })

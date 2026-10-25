@@ -24,7 +24,7 @@ import type {
   WorkspaceGroupBy,
   WorkspaceSortBy
 } from '../../../src/shared/workspace-view/workspace-view-options'
-import { sortWorktrees } from './workspace-list-ordering'
+import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 import { resolveWorktreeHostId } from './worktree-host-context-labels'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
@@ -191,7 +191,7 @@ export function buildMobileWorkspacePlan(
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
 ) {
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
-  const sorted = sortWorktrees(filtered, sortMode)
+  const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     filters.filterRepoIds.length > 0
       ? worktrees.filter((w) => filters.filterRepoIds.includes(w.repoId))

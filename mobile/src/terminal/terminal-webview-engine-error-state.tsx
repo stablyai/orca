@@ -26,7 +26,6 @@ export function useTerminalWebViewEngineErrorState(onEngineError?: (message: str
   const reportEngineError = useCallback(
     (message: string, fatal: boolean) => {
       onEngineError?.(message)
-      // eslint-disable-next-line no-console
       console.warn('[terminal-webview] engine error', message)
       if (fatal) {
         // Why: the first fatal report is the root cause; later cascades (e.g. the

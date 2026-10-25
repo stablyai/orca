@@ -11,7 +11,7 @@ import { nativeChatSemanticRowId, type NativeChatMessage } from './native-chat-t
 import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
+import { foldToolMessages } from './native-chat/tools/native-chat-tool-fold'
 import { foldSubagentItems } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 

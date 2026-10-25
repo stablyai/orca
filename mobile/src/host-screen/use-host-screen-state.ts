@@ -1,8 +1,7 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import { getCachedWorktrees } from '../cache/worktree-cache'
-import { createInitialHostRouteActionState } from '../host-route-action-state'
 import type { RpcClient } from '../transport/rpc-client'
 import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
@@ -10,8 +9,9 @@ import type { Worktree } from '../worktree/workspace-list-sections'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
+import type { ProjectGroup } from '../../../src/shared/project-group-types'
 
-export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
+export function useHostScreenState(hostId: string | undefined) {
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
@@ -23,7 +23,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
   const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
   const repoMetadataFetchedAtRef = useRef(0)
-  const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
@@ -74,13 +73,18 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
-  const [routeActionState, setRouteActionState] = useState(() =>
-    createInitialHostRouteActionState(action)
-  )
+  const [showNewWorktree, setShowNewWorktree] = useState(false)
+  // Why the ref too: the catalog poll reads it from callbacks that outlive this render.
+  const setNewWorktreeVisible = useCallback((visible: boolean) => {
+    newWorktreeModalVisibleRef.current = visible
+    setShowNewWorktree(visible)
+  }, [])
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   // Desktop's "Also show pinned worktrees in their original lists"; off by default.
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
+  // A feed-built list's project groups on a host with no window to publish them.
+  const [hostProjectGroups, setHostProjectGroups] = useState<readonly ProjectGroup[]>([])
 
   return {
     actionTarget,
@@ -88,6 +92,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     clientRef,
     confirmDelete,
     confirmRemoveHost,
+    hostProjectGroups,
     actionError,
     error,
     fetchRepoMetadataInFlightRef,
@@ -99,7 +104,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     hostPlatform,
     hostStoredDescriptor,
     lastKnownWorktrees,
-    newWorktreeModalRef,
     newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
@@ -107,7 +111,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     servedProjectSections,
     desktopRepos,
     repoMetadataFetchedAtRef,
-    routeActionState,
     search,
     serverNotice,
     serverWorkspaces,
@@ -115,6 +118,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setCatalogError,
     setConfirmDelete,
     setConfirmRemoveHost,
+    setHostProjectGroups,
     setActionError,
     setError,
     setHostLabelById,
@@ -128,7 +132,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setRepoHostIdByRepoId,
     setServedProjectSections,
     setDesktopRepos,
-    setRouteActionState,
+    setNewWorktreeVisible,
     setSearch,
     setServerNotice,
     setServerWorkspaces,
@@ -138,6 +142,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
+    showNewWorktree,
     showWorkspaceOptions,
     showPinnedInGroups,
     showSearch,

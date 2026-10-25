@@ -102,6 +102,7 @@ vi.mock('expo-router', () => ({
   }),
   usePathname: () => '/h/host-1',
   useNavigation: () => ({ setOptions: vi.fn() }),
+  useNavigationContainerRef: () => ({ getRootState: () => undefined }),
   useFocusEffect: () => {}
 }))
 vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
@@ -117,7 +118,7 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
 vi.mock('../app-update/use-wall-app-update', () => ({
   useWallAppUpdate: () => null
 }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => ({ client: null }) }))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => ({ client: null }) }))
 vi.mock('./use-page-host-snapshot', () => ({
   usePageHostSnapshot: () => ({
     snapshot: SNAPSHOT,

@@ -95,6 +95,15 @@ describe('a multi-variant reader', () => {
 
   it('takes the first declared variant that reads', () => {
     expect(reader({ worktrees: [{ id: 'w1' }] })).toMatchObject({ variant: 'rows' })
+    const overlapping = rpcResultVariants<'rows' | 'also-rows', unknown>([
+      workspaceRowsReader,
+      rpcResultVariant('also-rows', WORKSPACE_ROWS_SCHEMA)
+    ])
+    expect(overlapping({ worktrees: [{ id: 'w1' }] })).toMatchObject({
+      compatible: true,
+      variant: 'rows',
+      value: { worktrees: [{ id: 'w1' }] }
+    })
   })
 
   it('falls through to a later variant', () => {

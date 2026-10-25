@@ -19,7 +19,10 @@ const LEAF = {
   lastOscTitle: null
 }
 
-function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
+function pointerDeps(
+  db: OrchestrationDb,
+  writePty: (ptyId: string, data: string) => WriteSettlement
+) {
   return {
     mailboxOwner: { resolve: () => 'run:run-1' },
     deliveryTarget: { resolveTerminalHandle: () => 'term-1', deferForAbsenceProbe: () => false },
@@ -30,7 +33,6 @@ function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
     // These cases exercise staging and Enter phases, not the idle gate; the pane is settled.
     isAgentSettledForDelivery: () => true,
     getMessageWaiters: () => undefined,
-    getTabTitle: () => null,
     getCliCommand: () => 'orca' as const,
     getTerminalHandleForLeafKey: () => 'term-1',
     resolveSubmitTarget: () => ({
@@ -39,6 +41,7 @@ function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
       processIncarnation: 'inc-1'
     }),
     isLeafPtyProvenAbsent: async () => false,
+    isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),
     writePty
   }
@@ -201,6 +204,26 @@ describe('mailbox pointer staging watermark', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(writePty.mock.calls.length).toBeGreaterThan(0)
+    db.close()
+  })
+
+  // Why: a pointer left unsubmitted in Cursor's composer stacks up and rides along with the user's next prompt.
+  it('submits the pointer with Enter for a Cursor Agent pane', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
+    const writePty = vi.fn((_ptyId: string, _data: string) => WRITE_ACCEPTED)
+    const state = new OrchestrationMailboxPointerState()
+    const cursorLeaf = { ...LEAF, lastOscTitle: 'Cursor Agent' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps the staging path reads.
+    stageOrchestrationMailboxPointer({
+      ...stageArgs(db, state),
+      deps: pointerDeps(db, writePty),
+      leaf: cursorLeaf,
+      messages: [{ id: message.id, type: 'status', sequence: 1 }]
+    } as never)
+
+    await vi.waitFor(() => expect(writePty).toHaveBeenLastCalledWith('pty-1', '\r'))
+    expect(writePty.mock.calls[0]?.[1]).toContain('You have 1 orchestration message')
     db.close()
   })
 })

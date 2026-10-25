@@ -20,6 +20,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Likewise terminal.resetInputModes.
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
+    killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
     ackColdRestore: () => {},
     // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
     ackHiddenOutputRestoreApplied: () => {},
@@ -191,6 +192,8 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     removePortForward: () => Promise.resolve(null),
     listPortForwards: () => Promise.resolve([]),
+    listUnrestoredPortForwards: () => Promise.resolve([]),
+    removeSavedPortForward: () => Promise.resolve(),
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,

@@ -194,7 +194,7 @@ describe('screen rows', () => {
     expect(evaluate(block(match), ['done', '>'])).toBe('m')
   })
 
-  it('combines all, any and none on one row', () => {
+  it('combines all and any on one row', () => {
     const rows = [{ all: [{ regex: '\\)$' }], any: [{ contains: 'yes' }, { contains: 'no' }] }]
     expect(evaluate(block({ rows }), ['yes (y)'])).toBe('m')
     expect(evaluate(block({ rows }), ['maybe (m)'])).toBeNull()

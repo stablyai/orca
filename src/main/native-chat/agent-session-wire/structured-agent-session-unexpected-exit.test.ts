@@ -135,7 +135,7 @@ describe('provider-exit settlement', () => {
         observedAt
       }
     )
-    // Released, not latched: a later settle from this evidence finishes what this write left.
+    // Release without latching so later settlement can finish the failed write.
     expect(record.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
@@ -218,7 +218,6 @@ describe('provider-exit settlement', () => {
     )
 
     expect(session.child).toBeNull()
-    // The running row is revised to interrupted at exit receipt, never tombstoned.
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
       settlementId: `dead-generation:provider-exit:${SESSION}:7:${GENERATION}`,
       fence: 7,
@@ -237,7 +236,6 @@ describe('provider-exit settlement', () => {
             failure: { kind: 'providerExited' },
             tone: 'error'
           },
-          // The exit belongs to the turn it ended.
           turnScope: {
             kind: 'turn',
             turnItemId: agentJournalItemKey({
@@ -343,11 +341,15 @@ describe('provider-exit settlement', () => {
   it('settles a submission the dead child never acknowledged', async () => {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
     const session: StructuredAgentSessionChildExitSession = {
-      child: { generation: GENERATION, fence: 7, phase: 'ready' },
+      child: {
+        generation: GENERATION,
+        fence: 7,
+        phase: 'ready',
+        exitObservation: () => ({ heldSends: new Set(['client-1']) })
+      },
       journal: exitJournalDouble({
         items: () => [],
         appendLifecycleBatch,
-        // Handed to the child that exited, at its fence.
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending', fence: 7 }]
       })
     }
@@ -371,8 +373,7 @@ describe('provider-exit settlement', () => {
       acquisitionGeneration: GENERATION
     })
 
-    // Written at the exited child's own fence, before its release moves it, as is every row its
-    // settlement writes.
+    // Settle at the exited child’s fence before release advances it.
     expect(appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         fence: 7,
@@ -432,11 +433,40 @@ describe('provider-exit settlement', () => {
     await settleStructuredAgentSessionChildExit(context, event)
 
     expect(session.child).toBeNull()
-    // The death first, before anything is written; then the exit's own account, for the retry to
-    // write once the journal takes it.
+    // Publish death before writes, then retain the exit account for retry.
     expect(generationEnded).toHaveBeenCalledTimes(2)
     expect(generationEnded).toHaveBeenNthCalledWith(1, SESSION)
     expect(generationEnded).toHaveBeenLastCalledWith(SESSION, { restate: true })
     expect(log.scopes()).toEqual(['exit-lifecycle-barrier', 'exit-settlement'])
+  })
+
+  it('ignores an exit reported for an earlier generation at the same fence', async () => {
+    const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
+    const session: StructuredAgentSessionChildExitSession = {
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
+      journal: exitJournalDouble({ items: () => [], appendLifecycleBatch })
+    }
+    const { store } = mutableStore()
+    const context: StructuredAgentSessionChildExitContext<typeof session> = {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      store,
+      sessions: new Map([[SESSION, session]]),
+      flushLifecycle: async () => ({ ok: true }),
+      generationEnded: vi.fn(),
+      serialize: async (_sessionId, task) => task(),
+      now: () => 1
+    }
+    await settleStructuredAgentSessionChildExit(context, {
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'provider exited',
+      cause: 'unexpected-exit',
+      fence: 7,
+      acquisitionGeneration: 'generation-stale'
+    })
+
+    expect(store.getRecord().lease.claimStatus).toBe('live')
+    expect(session.child?.generation).toBe(GENERATION)
+    expect(appendLifecycleBatch).not.toHaveBeenCalled()
   })
 })

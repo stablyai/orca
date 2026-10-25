@@ -11,7 +11,7 @@ import {
   markHiddenRendererPty,
   setRendererPtyDeliveryInterest,
   unmarkHiddenRendererPty
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 import {
   _resetTerminalModelQueryAuthorityForTest,
   markNativeWindowsConptyPty
@@ -258,6 +258,36 @@ describe('reply ownership matrix', () => {
       '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\',
       '\x1b[?997;1n'
     ])
+  })
+
+  // #32944: a paired desktop pauses a background pane's stream, so the DA1 fish waits on reaches no xterm.
+  it('answers while the only remote view has paused its output, and yields once it resumes', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-paused')
+    let paused = true
+    const releasePaused = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => paused)
+
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+
+    paused = false
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    // A second, receiving view keeps authority even while the first pauses again.
+    paused = true
+    const releaseLive = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => false)
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    releaseLive()
+    releasePaused()
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(2)
   })
 
   it('keeps raw preview presence separate from terminal query authority', async () => {

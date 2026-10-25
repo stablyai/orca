@@ -1,4 +1,4 @@
-// The host's account of provider-reported child work, independent of display admission.
+// Track provider-reported work even when display admission rejects its records.
 
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
@@ -39,13 +39,17 @@ export class StructuredAgentSessionOpenChildWork {
     }
   }
 
-  /** Capture before asking the provider to Stop: a reused run string still gets a new token. */
+  /** Capture before Stop; reused run strings still require distinct lifetime tokens. */
   capture(sessionId: string, handleId: string): ChildWorkLifetimeToken | undefined {
     const session = this.sessions.get(sessionId)
     return session?.open.has(handleId) ? session.history.get(handleId)?.token : undefined
   }
 
-  matches(sessionId: string, handleId: string, captured: ChildWorkLifetimeToken | undefined): boolean {
+  matches(
+    sessionId: string,
+    handleId: string,
+    captured: ChildWorkLifetimeToken | undefined
+  ): boolean {
     return this.capture(sessionId, handleId) === captured
   }
 
@@ -89,7 +93,6 @@ export class StructuredAgentSessionOpenChildWork {
       child = { run, previous: new Set(), token: newToken(), closed: null }
       session.history.set(handleId, child)
     } else {
-      // A late start must not promote a run this session already superseded.
       if (run !== undefined && child.previous.has(run)) {
         return
       }
@@ -109,7 +112,7 @@ export class StructuredAgentSessionOpenChildWork {
       } else if (child.closed === 'terminal' && child.run !== undefined) {
         return
       } else if (child.closed === 'terminal') {
-        // Runless producers cannot distinguish a fresh start from an earlier one.
+        // Runless producers cannot distinguish fresh starts from earlier runs.
         child.token = newToken()
       }
     }
@@ -127,7 +130,7 @@ export class StructuredAgentSessionOpenChildWork {
     if (!session || !child || (run !== undefined && child.previous.has(run))) {
       return
     }
-    // An unseen ending may be the first evidence of a run whose start was missed.
+    // An ending may arrive before any evidence of its start.
     child.closed = 'terminal'
     session.open.delete(handleId)
   }

@@ -9,7 +9,7 @@ import {
   type WebGitLabRuntimeMethod
 } from '@/web/preload-api/web-gitlab-routes'
 import { mapRepoPathArg } from './runtime-repo-selector-params'
-import { hasRuntimeRpcErrorCode } from './runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 

@@ -96,7 +96,7 @@ describe('host prompt delivery and retirement', () => {
             notifyHiddenWorkspaces: true
           }),
           readWorkspaceLabels: () => ({}),
-          isWorkspaceHidden: () => false,
+          isWorkspaceMuted: () => false,
           dispatch: (event) => controller.dispatch(event),
           reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
           now: () => 42

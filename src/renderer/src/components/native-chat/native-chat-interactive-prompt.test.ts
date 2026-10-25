@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
@@ -107,6 +108,39 @@ describe('parseApprovalFromStatus', () => {
     const approval = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'Edit' } }))
     expect(approval?.title).toBe('Allow Edit?')
     expect(approval?.detail).toBeUndefined()
+  })
+
+  it('omits detail for an empty or non-string summary', () => {
+    for (const summary of ['', 42, null]) {
+      const approval = parseApprovalFromStatus(
+        JSON.stringify({ approval: { tool: 'Edit', summary } })
+      )
+      expect(approval?.title).toBe('Allow Edit?')
+      expect(approval?.detail).toBeUndefined()
+    }
+  })
+
+  describe('translated labels', () => {
+    afterEach(async () => {
+      await i18n.changeLanguage('en')
+    })
+
+    it('translates the title and buttons but keeps the tool, summary and keys', async () => {
+      await i18n.changeLanguage('ko')
+      expect(
+        parseApprovalFromStatus(
+          JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } }),
+          'opencode'
+        )
+      ).toEqual({
+        title: 'Bash을(를) 허용하시겠습니까?',
+        detail: 'rm -rf build',
+        options: [
+          { label: '허용', send: '\r' },
+          { label: '거부', send: ESC }
+        ]
+      })
+    })
   })
 })
 
@@ -238,6 +272,52 @@ describe('buildAskAnswerKeys', () => {
 
   it('is empty when nothing is answered', () => {
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('preview single-select: focuses the option number, notes free text, then commits with Enter', () => {
+    // #16865: Claude's preview selector only moves focus on a digit.
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'Layout?',
+            options: [
+              { label: 'Alpha', preview: '+--+' },
+              { label: 'Beta', preview: '|  |' }
+            ]
+          },
+          { question: 'Color?', options: [{ label: 'Red' }, { label: 'Blue' }] }
+        ]
+      })
+    )!
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [1] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' },
+      { raw: '2' },
+      { raw: '\r' }
+    ])
+    expect(
+      buildAskAnswerKeys(prompt, [{ indices: [1], other: 'wider' }, { indices: [0] }])
+    ).toEqual([
+      { raw: '2' },
+      { raw: 'n' },
+      { text: 'wider' },
+      { raw: '\r' },
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+    // Claude drops the pick on an unmoved first row, answering "(notes only)".
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'wider' }, { indices: [] }])).toEqual(
+      [
+        { raw: '2' },
+        { raw: '1' },
+        { raw: 'n' },
+        { text: 'wider' },
+        { raw: '\r' },
+        { raw: '\x1b[C' },
+        { raw: '\r' }
+      ]
+    )
   })
 })
 

@@ -98,11 +98,11 @@ export async function searchQuickOpenFilePaths(
       if (error instanceof RipgrepUnavailableError) {
         throw bundledRipgrepUnavailableError()
       }
-      // Why: a supersede that lands after the scan rejected still owes the caller a cancellation.
+      // Superseding aborts still owe cancellation after a scan rejection.
       if (args.signal?.aborted) {
         throw fileListingCancellationError(args.signal)
       }
-      // Why: one-off fork/exec pressure should not blank Quick Open until the query changes.
+      // Retry transient fork/exec pressure so Quick Open need not wait for another query.
       if (!(error instanceof RipgrepLaunchFailureError) || attempt > 0) {
         throw error
       }
@@ -142,8 +142,7 @@ function scanRipgrepPaths(args: {
         stdio: ['ignore', 'pipe', 'pipe']
       })
     } catch (error) {
-      // Why route through the classifier: a sync throw skips the 'error' handler, and ENOTDIR --
-      // a search root that is a file -- should read the same here as it does there.
+      // Classify synchronous failures too, including file-shaped roots returning ENOTDIR.
       void classifySynchronousRipgrepSpawnFailure(error, args.authorizedRootPath).then(
         reject,
         reject
@@ -223,13 +222,9 @@ function scanRipgrepPaths(args: {
         finish(new Error(`rg failed to start${error.code ? ` (${error.code})` : ''}`))
         return
       }
-      // Why the cwd check: spawn reports a missing cwd as ENOENT too, and blaming the binary
-      // for it tells the user to reinstall Orca over a workspace that simply moved.
-      // Why detach close first: a failed spawn emits error THEN close(code < 0), and close settles
-      // synchronously, so this probe would otherwise race it on a sub-millisecond margin -- two
-      // measurements disagreed on which wins. Detaching makes the verdict deterministic.
+      // ENOENT may mean missing cwd; detach close first so its synchronous failure cannot race the async probe.
       child.off('close', handleClose)
-      // Why catch: a failed probe must not strand the search; fall back to the prior verdict.
+      // A failed cwd probe must not strand the search; preserve the prior classification.
       void isRipgrepSpawnCwdUsable(args.authorizedRootPath)
         .catch(() => true)
         .then((usable) => {
@@ -239,8 +234,7 @@ function scanRipgrepPaths(args: {
         })
     }
     const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-      // Why before the unavailable check: classifyNativeLauncherExit treats any code above 2 as a
-      // broken install, and this code is 97 -- so checking second makes this branch dead.
+      // WSL missing-cwd code 97 would otherwise be classified as a broken install.
       if (isRipgrepMissingCwdExit(code)) {
         pathAccumulator.clear()
         finish(ripgrepMissingCwdError(args.authorizedRootPath))

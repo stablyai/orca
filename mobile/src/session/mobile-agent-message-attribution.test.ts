@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'
 

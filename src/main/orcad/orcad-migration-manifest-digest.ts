@@ -3,7 +3,7 @@ import {
   orcadMigrationManifestHashInput,
   serializeOrcadMigrationValue,
   type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 export function computeOrcadMigrationManifestSha256(
   manifest: Omit<OrcadMigrationManifest, 'manifestSha256'>

@@ -109,6 +109,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
                 canCreate: false,
                 blockedReason: 'needs_push' as const,
                 nextAction: 'push' as const,
+                reviewLookupOutcome: 'not_found' as const,
                 defaultBaseRef: primaryBranch,
                 head: branch
               }
@@ -119,6 +120,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
               canCreate: true,
               blockedReason: null,
               nextAction: null,
+              reviewLookupOutcome: 'not_found' as const,
               defaultBaseRef: primaryBranch,
               title: 'Create PR intent after switching worktrees',
               body: 'The intent flow should continue after navigation.',

@@ -15,10 +15,14 @@ export type AgentPaneConversation<Agent extends AgentType> = {
   providerSession: AgentProviderSessionMetadata
   refresh: boolean
   tabId: string
+  paneKey: string
   worktreeId: string
 }
 
-export type AiVaultTitleRequest = AgentPaneConversation<AiVaultSessionTitle['agent']>
+export type AiVaultTitleRequest = Omit<
+  AgentPaneConversation<AiVaultSessionTitle['agent']>,
+  'paneKey'
+>
 
 type RequestCandidate<Agent extends AgentType> = AgentPaneConversation<Agent> & {
   priority: number
@@ -68,6 +72,7 @@ function registerCandidate<Agent extends AgentType>(
     providerSession: args.providerSession,
     refresh: args.refresh,
     tabId,
+    paneKey: args.paneKey,
     worktreeId,
     priority
   })
@@ -86,7 +91,9 @@ function liveCandidate(entry: AgentStatusEntry): Parameters<typeof registerCandi
 }
 
 export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleRequest[] {
-  return collectAgentPaneConversations(state, isAiVaultTitleAgent)
+  return collectAgentPaneConversations(state, isAiVaultTitleAgent).map(
+    ({ paneKey: _paneKey, ...request }) => request
+  )
 }
 
 /** Each tab's conversation of an agent `isAgent` accepts: live agent, then sleeping, then retained. */

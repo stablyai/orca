@@ -4,8 +4,11 @@ import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
-import { createSshOperationAbortError, type SshExecOptions } from '../ssh/ssh-connection-utils'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
+import {
+  createSshOperationAbortError,
+  type SshExecOptions
+} from '../ssh/connection/ssh-exec-options'
 import { writeStringViaExecStdin } from '../ssh/ssh-exec-stdin-file-transfer'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { wrapWslCommandProcess } from './wsl-command-channel'

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -15,33 +15,47 @@ import {
   createSqliteTestStore,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { Store } from '../persistence/loading-store/store'
-import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
+import {
+  listOrcadMigrationCutoverChainForTarget,
+  listOrcadMigrationSourceCutovers,
+  writeOrcadMigrationSourceCutover
+} from './orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import { keepOrcadServerVersion, runOrcadDeltaMove } from './orcad-migration-delta-move'
-import { planOrcadDeltaMove } from './orcad-migration-delta-plan'
+import { orcadSourceStoreWithout, planOrcadDeltaMove } from './orcad-migration-delta-plan'
+import {
+  createOrcadMigrationManifest,
+  orcadMigrationCatalogIds
+} from './orcad-migration-manifest-export'
 import { latestOrcadMigrationInto } from './orcad-migration-rollback-mark'
+import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { retainOrcadMigrationSource } from './orcad-migration-source-retention'
 import { reconcileManagedOrcadSshTargets, visibleRepos } from './orcad-retained-source'
-import { SshConnectionStore } from './ssh-connection-store'
+import { SshConnectionStore } from './connection/ssh-connection-store'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
   return { state, deploy: vi.fn(), ensureTunnel: vi.fn() }
 })
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({}),
   getSshTargetRegistryStore: () => mocks.state.targetStore
 }))
-vi.mock('./orcad-runtime-deployment', () => ({ createManagedOrcadEnvironment: mocks.deploy }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensureTunnel }))
+vi.mock('../managed-server/lifecycle/orcad-runtime-deployment', () => ({
+  createManagedOrcadEnvironment: mocks.deploy
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensureTunnel
+}))
 
-const { convertSshTargetToManagedOrcad } = await import('./orcad-runtime-conversion')
+const { convertSshTargetToManagedOrcad } =
+  await import('../managed-server/lifecycle/orcad-runtime-conversion')
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -79,7 +93,7 @@ beforeEach(() => {
   sshStore = new SshConnectionStore(store as never)
   mocks.state.targetStore = sshStore
   destination = fakeOrcadMigrationDestination()
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const id = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))!
     if (!listEnvironments(path).some((entry) => entry.id === id)) {
@@ -123,12 +137,16 @@ async function convertedThenChangedOnOlderBuild(): Promise<void> {
     })
   ).resolves.toMatchObject({ outcome: 'converted' })
   store.addRepo(repo('repo-2', '/srv/tool'))
-  store.updateRepo('repo-1', { displayName: 'app-renamed' })
+  store.updateRepo(store.getRepo('repo-1')!, { displayName: 'app-renamed' })
   reconcileManagedOrcadSshTargets(userDataPath, store, now)
   expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeDefined()
 }
 
-function deltaMove(at: () => Date = now, census: 'exited' | 'live' = 'exited') {
+function deltaMove(
+  at: () => Date = now,
+  census: 'exited' | 'live' = 'exited',
+  connectDestination: () => Promise<typeof destination> = async () => destination
+) {
   const target = store.getSshTarget(TARGET.id)!
   return runOrcadDeltaMove({
     userDataPath,
@@ -136,9 +154,8 @@ function deltaMove(at: () => Date = now, census: 'exited' | 'live' = 'exited') {
     claims: sshStore.getOrcadRuntimeClaims(),
     target,
     environment: listEnvironments(userDataPath)[0]!,
-    destination,
+    connectDestination,
     censusHost: async () => ({ verdict: census, count: census === 'live' ? 1 : 0 }),
-    ensureTunnel: async () => {},
     runTargetLifecycle,
     now: at
   })
@@ -302,6 +319,25 @@ describe('moving what an older build added to a converted host', () => {
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })
 
+  it('refuses, unjournaled, a delta under the export cap that no request can carry', async () => {
+    await convertedThenChangedOnOlderBuild()
+    const baseline = JSON.stringify(
+      planOrcadDeltaMove(userDataPath, store, store.getSshTarget(TARGET.id)!).manifest
+    ).length
+    // Under the export cap, over the sealed-frame request budget: stage, state and abort all refuse.
+    store.updateRepo(store.getRepo('repo-2')!, {
+      displayName: 'x'.repeat(MAX_ORCAD_MIGRATION_MANIFEST_BYTES - 200 - baseline)
+    })
+    const plan = planOrcadDeltaMove(userDataPath, store, store.getSshTarget(TARGET.id)!)
+    expect(JSON.stringify(plan.manifest).length).toBeLessThanOrEqual(
+      MAX_ORCAD_MIGRATION_MANIFEST_BYTES
+    )
+
+    await expect(deltaMove()).rejects.toThrow(/\(orcad_migration_manifest_too_large\)$/)
+    expect(listOrcadMigrationSourceCutovers(userDataPath)).toHaveLength(1)
+    expect(destination.commits).toBe(1)
+  })
+
   it('fails the whole delta when the server already holds a colliding row', async () => {
     await convertedThenChangedOnOlderBuild()
     destination.stage.mockRejectedValueOnce(
@@ -391,6 +427,33 @@ describe('moving what an older build added to a converted host', () => {
     expect(lease.state).not.toBe('terminated')
   })
 
+  it('commits through the destination the tunnel hands back once it opens', async () => {
+    await convertedThenChangedOnOlderBuild()
+    const opened: string[] = []
+    // A re-pair while the tunnel opens: only the destination built after it can commit.
+    const result = await deltaMove(now, 'exited', async () => {
+      opened.push(listOrcadMigrationSourceCutovers(userDataPath).length === 2 ? 'journaled' : '?')
+      return destination
+    })
+    expect(result).toMatchObject({ outcome: 'moved' })
+    expect(opened).toEqual(['journaled'])
+    expect(destination.commits).toBe(2)
+  })
+
+  it('keeps a delta journaled and the host marked when the tunnel cannot open', async () => {
+    await convertedThenChangedOnOlderBuild()
+    await expect(
+      deltaMove(now, 'exited', async () => {
+        throw new Error('ssh: connection reset')
+      })
+    ).rejects.toThrow('connection reset')
+    expect(destination.commits).toBe(1)
+    expect(listOrcadMigrationSourceCutovers(userDataPath)).toHaveLength(2)
+    expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeDefined()
+    await expect(deltaMove()).resolves.toMatchObject({ outcome: 'moved' })
+    expect(destination.commits).toBe(2)
+  })
+
   it('resumes a delta whose commit lost contact, keeping the host marked meanwhile', async () => {
     await convertedThenChangedOnOlderBuild()
     const reconnect = loseContactAtDeltaCommit()
@@ -403,6 +466,44 @@ describe('moving what an older build added to a converted host', () => {
     expect(destination.commits).toBe(2)
     expect(listOrcadMigrationSourceCutovers(userDataPath)).toHaveLength(2)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
+  })
+
+  // Codex repro: an older build's delta exported the moved group its new row sits in.
+  it('resumes an older build’s interrupted delta that exported a moved group', async () => {
+    const group = store.createProjectGroup({
+      name: 'Apps',
+      parentPath: '/srv',
+      connectionId: TARGET.id,
+      createdFrom: 'manual'
+    })
+    store.moveProjectToGroup(store.getRepo('repo-1')!, group.id)
+    await convertedThenChangedOnOlderBuild()
+    store.moveProjectToGroup(store.getRepo('repo-2')!, group.id)
+    const reconnect = loseContactAtDeltaCommit()
+    await expect(deltaMove()).rejects.toThrow('socket closed')
+    const target = store.getSshTarget(TARGET.id)!
+    const [first, delta] = listOrcadMigrationCutoverChainForTarget(userDataPath, TARGET.id)
+    // The delta source an older build cut, which still exported every group a new row sits in.
+    const olderSource = orcadSourceStoreWithout(
+      store,
+      target,
+      orcadMigrationCatalogIds([first!.manifest.payload]),
+      first!.destinationEnvironmentId
+    )
+    const manifest = createOrcadMigrationManifest(olderSource, target, {
+      migrationId: delta!.migrationId,
+      destinationEnvironmentId: delta!.destinationEnvironmentId,
+      now: () => new Date(delta!.manifest.createdAt)
+    })
+    expect(manifest.payload.projectGroups.map((entry) => entry.id)).toEqual([group.id])
+    writeOrcadMigrationSourceCutover(userDataPath, {
+      ...delta!,
+      manifest,
+      manifestSha256: manifest.manifestSha256
+    })
+
+    reconnect()
+    await expect(deltaMove()).resolves.toMatchObject({ outcome: 'moved' })
   })
 
   it('backs out an interrupted delta the source has since outgrown, then moves afresh', async () => {
@@ -529,12 +630,12 @@ async function connectAgain(): Promise<void> {
   await resolveHostServerOnConnect(target, {
     ...hostServerDepsStub(),
     managedEnvironmentId: () => environmentId,
-    retainCommittedSource: (host) => {
+    retainCommittedSource: async (host) => {
       const head = listOrcadMigrationSourceCutovers(userDataPath).find(
         (journal) => journal.sshTargetId === host.id && !journal.sourceRetainedAt
       )
       if (head?.phase === 'destination-committed') {
-        retainOrcadMigrationSource(userDataPath, head.migrationId, now)
+        await retainOrcadMigrationSource(userDataPath, head.migrationId, store, now)
       }
     }
   })
@@ -557,7 +658,7 @@ describe('a retained source is never deleted', () => {
     [
       'a folder workspace on a folder-only host',
       () => {
-        store.removeProjectForHost('repo-1', `ssh:${TARGET.id}`)
+        store.removeProjectForHost({ id: 'repo-1', executionHostId: `ssh:${TARGET.id}` })
         const group = store.createProjectGroup({
           name: 'folders',
           parentPath: '/srv/folders',
@@ -674,7 +775,7 @@ describe('a delta move against a rollback of an update taken before it', () => {
 
   it('protects a folder-only delta the same way', async () => {
     await convertedThenChangedOnOlderBuild()
-    store.removeProjectForHost('repo-2', `ssh:${TARGET.id}`)
+    store.removeProjectForHost({ id: 'repo-2', executionHostId: `ssh:${TARGET.id}` })
     const group = store.createProjectGroup({
       name: 'folders',
       parentPath: '/srv/folders',

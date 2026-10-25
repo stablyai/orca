@@ -11,13 +11,14 @@ import {
 import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
 // Every remote command runs in a real local shell, so the host-side checks are the real ones.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({ env: undefined }))
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess } = await import('@orca/process-host')
-  const { sshCommandExitError } = await import('./ssh-relay-exec-command')
+  const { sshCommandExitError } = await import('./remote-exec/remote-exec-command')
   return {
     ...(await importOriginal<typeof ExecCommandModule>()),
     execCommand: async (_conn: unknown, command: string) => {
@@ -30,8 +31,10 @@ vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
   }
 })
 
-const { orcadActivationFenceRefusal } = await import('./orcad-activation-fence-hold')
-const { withOrcadActivationLock } = await import('./orcad-activation-lock')
+const { orcadActivationFenceRefusal } =
+  await import('../managed-server/activation/orcad-activation-fence-hold')
+const { withOrcadActivationLock } =
+  await import('../managed-server/activation/orcad-activation-lock')
 const { initOrcadHeldFenceTokenFile, ORCAD_HELD_FENCE_TOKENS_FILE_NAME } =
   await import('./orcad-held-fence-tokens')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
@@ -63,8 +66,11 @@ function hostWithFence(owner: string, held: ReturnType<typeof entry>[]) {
   initOrcadHeldFenceTokenFile(join(home, 'data', 'orca-data.json'))
   const store = join(home, 'data', ORCAD_HELD_FENCE_TOKENS_FILE_NAME)
   writeFileSync(store, JSON.stringify(held))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-  const options = { conn: {} as never, host: getRemoteHostPlatform('linux-x64'), remoteHome: home }
+  const options = {
+    conn: unusedOrcadHostTransport(),
+    host: getRemoteHostPlatform('linux-x64'),
+    remoteHome: home
+  }
   return { home, fence, store, options }
 }
 

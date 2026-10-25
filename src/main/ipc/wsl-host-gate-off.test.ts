@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeEnvironmentStatusSnapshots,
   resetRuntimeEnvironmentStatusOwners
-} from './runtime-environment-request-connections'
+} from './runtime-environments/runtime-environment-request-connections'
 import { encodePairingOffer } from '../../shared/pairing'
 import {
   addEnvironmentFromPairingCode,
@@ -58,8 +58,9 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: vi.fn()
 }))
 
-vi.mock('./runtime-environment-request-connections', async () => {
-  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+vi.mock('./runtime-environments/runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } =
+    await import('./runtime-environments/runtime-environments-ipc-test-harness')
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: mocks.connectionRequest,
     sendRemoteRuntimeSharedControlRequest: mocks.sharedControlRequest,
@@ -67,17 +68,19 @@ vi.mock('./runtime-environment-request-connections', async () => {
     getRemoteRuntimeSharedControlDiagnostics: vi.fn(() => null),
     reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
     retryRemoteRuntimeSharedControlConnectionsNow: vi.fn(),
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: mocks.ensureSharedControl,
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: vi.fn()
   })
 })
 
-import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
-import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
+import { registerRuntimeEnvironmentHandlers } from './runtime-environments/runtime-environments'
+import {
+  channelHandlerLookup,
+  pairingCode
+} from './runtime-environments/runtime-environments-ipc-test-harness'
 import { registerWslHostHandlers, WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handlers'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import { resolveManagedRuntimeEnvironment } from './runtime-environments/runtime-environment-managed-tunnel'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { getSavedRuntimeAiVaultHostInfos } from '../ai-vault/runtime-session-scanner'
 
@@ -215,7 +218,6 @@ describe('WSL hosts with the internal gate closed', () => {
     expect(registeredWslHostChannels().sort()).toEqual([...WSL_HOST_HANDLER_CHANNELS].sort())
     expect(store.onSettingsChanged).toHaveBeenCalledTimes(1)
 
-    // Registering again (another window) reuses the service and its one settings listener.
     mocks.handle.mockClear()
     startApp()
     expect(mocks.createFakeConnector).toHaveBeenCalledTimes(1)

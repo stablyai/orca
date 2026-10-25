@@ -6,11 +6,9 @@ import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
-import TaskItem from '@tiptap/extension-task-item'
+import { TaskItem } from '@tiptap/extension-list'
 import { RichMarkdownTable } from './rich-markdown-table'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
@@ -31,7 +29,7 @@ import {
 } from './rich-markdown-details-extension'
 import { createMarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
-import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
 import { DragSelectionGuard } from './drag-selection-guard'
 import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
@@ -90,7 +88,7 @@ export function createRichMarkdownExtensions({
       addNodeView() {
         // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
         // just because earlier edits shifted this block's document position.
-        return safeReactNodeViewRenderer(RichMarkdownCodeBlock, {
+        return ReactNodeViewRenderer(RichMarkdownCodeBlock, {
           update: positionStableNodeViewUpdate
         })
       }

@@ -55,7 +55,7 @@ describe('fields the launch fingerprint covers', () => {
     )
   })
 
-  it('separates two launches that reserved different panes', () => {
+  it('separates two launches that reserved different panes or sessions', () => {
     // The key is baked into the pane's env; replaying another pane's key strands the new reservation.
     expect(computeAgentLaunchFingerprint({ ...BASE, paneKey: PANE_KEY })).not.toBe(
       computeAgentLaunchFingerprint({ ...BASE, paneKey: OTHER_PANE_KEY })
@@ -63,6 +63,19 @@ describe('fields the launch fingerprint covers', () => {
     expect(computeAgentLaunchFingerprint({ ...BASE, paneKey: PANE_KEY })).not.toBe(
       computeAgentLaunchFingerprint(BASE)
     )
+    const sessionId = '11111111-1111-4111-8111-111111111111'
+    expect(computeAgentLaunchFingerprint({ ...BASE, sessionId })).not.toBe(
+      computeAgentLaunchFingerprint({ ...BASE, sessionId: '22222222-2222-4222-8222-222222222222' })
+    )
+    expect(computeAgentLaunchFingerprint({ ...BASE, sessionId })).not.toBe(
+      computeAgentLaunchFingerprint(BASE)
+    )
+  })
+
+  it('separates a retry that picked another surface, or none, from the first launch', () => {
+    const terminal = computeAgentLaunchFingerprint({ ...BASE, surface: 'terminal' })
+    expect(terminal).not.toBe(computeAgentLaunchFingerprint({ ...BASE, surface: 'chat' }))
+    expect(terminal).not.toBe(computeAgentLaunchFingerprint(BASE))
   })
 })
 
@@ -115,14 +128,5 @@ describe('compatibility with rows written before these fields existed', () => {
     expect(
       computeAgentLaunchFingerprint({ ...BASE, agentArgs: '--model opus', cwd: '/repo/packages/a' })
     ).toBe(beforePaneKey)
-  })
-
-  it('still matches when the caller sends only telemetry the digest excludes', () => {
-    const previousBuild = canonicalAgentSessionDigest({
-      method: 'agent.launch',
-      agent: BASE.agent,
-      target: BASE.target
-    })
-    expect(fingerprintOfWirePayload({ ...BASE, launchSource: 'quick_command' })).toBe(previousBuild)
   })
 })

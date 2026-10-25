@@ -24,6 +24,7 @@ import {
   RESTORED_AUTHORITY_TOKEN,
   RESTORED_AUTHORITY_TOKEN_HASH,
   TEST_FOLDER_WORKSPACE_KEY,
+  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -86,8 +87,15 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(
       {
         ...store,
+        // The worker's repo lives on the SSH target whose partition holds its session.
+        getRepos: () => [{ ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }],
+        getRepo: (id: string) =>
+          id === TEST_REPO_ID
+            ? { ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }
+            : undefined,
         getWorkspaceSession: (hostId?: string | null) =>
-          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession()
+          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession(),
+        getWorkspaceSessionHostIds: () => ['local', `ssh:${targetId}`]
       },
       undefined,
       {
@@ -540,6 +548,33 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe("cursor-agent '--force'")
     expect(spawnCall?.launchAgent).toBe('cursor')
     expect(spawnCall?.env).toMatchObject({ CURSOR_PROFILE: 'captured' })
+  })
+
+  // Why: workers and host-launched handoffs build their Codex command here (#15814, #18153).
+  it('skips the startup update prompt on the spawned command only when the launch asks', async () => {
+    const spawn = vi.fn(async (_options: { command?: string }) => ({ id: 'pty-bg' }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), disabledTuiAgents: [], agentCmdOverrides: {} })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      startupAgent: 'codex',
+      suppressStartupUpdatePrompt: true
+    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'codex' })
+
+    const [suppressed, ordinary] = spawn.mock.calls.map(([options]) => options.command)
+    expect(ordinary).not.toContain('check_for_update_on_startup')
+    expect(suppressed).toBe(
+      ordinary?.replace(/^codex/, "codex '-c' 'check_for_update_on_startup=false'")
+    )
   })
 
   it('resolves a startupAgent to the CLI binary on Windows, where `cursor` is the IDE', async () => {

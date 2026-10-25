@@ -4,7 +4,6 @@ import { laidOutCellBox, reportLaidOutCellBox } from './laid-out-cell-box'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
-import { fontPxForScale } from './text-scaling'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { handleMsg } from './host-message-router'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
@@ -33,7 +32,7 @@ describe('laidOutCellBox', () => {
   }
 
   it('reads the box xterm laid out at the current text scale, with its grid', () => {
-    const scope = scopeWithCell({ width: 29 / 3, height: 21 }, fontPxForScale(1.25))
+    const scope = scopeWithCell({ width: 29 / 3, height: 21 }, 16)
     expect(laidOutCellBox(scope)).toEqual({
       cellBox: { fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 },
       cols: 55,
@@ -44,7 +43,7 @@ describe('laidOutCellBox', () => {
   it('tells the host each new box once, and refits only a box that changed at a kept grid', () => {
     const posted: Record<string, unknown>[] = []
     const cell = { width: 29 / 3, height: 21 }
-    const scope = scopeWithCell(cell, fontPxForScale(1.25), posted)
+    const scope = scopeWithCell(cell, 16, posted)
     reportLaidOutCellBox(scope)
     reportLaidOutCellBox(scope)
     // A new grid with the same box tells the host nothing; the document holds that grid.
@@ -140,6 +139,10 @@ describe('a started document', () => {
         frame: { width: 427.5, height: 710 }
       })
       expect(scope.hostFrame).toEqual({ width: 427.5, height: 710 })
+      handleMsg(scope, { type: 'resize', cols: 54, rows: 47, frame: { width: 420, height: 700 } })
+      expect(scope.hostFrame).toEqual({ width: 420, height: 700 })
+      handleMsg(scope, { type: 'reflow', cols: 53, rows: 46, frame: { width: 410, height: 690 } })
+      expect(scope.hostFrame).toEqual({ width: 410, height: 690 })
     } finally {
       stopTerminalDocument(scope)
     }
@@ -149,7 +152,7 @@ describe('a started document', () => {
     const { scope, posted, built } = started({ start: () => ({ textScale: 1.25, shown: true }) })
     try {
       expect(built).toHaveLength(1)
-      expect(built[0].options.fontSize).toBe(fontPxForScale(1.25))
+      expect(built[0].options.fontSize).toBe(16)
       expect(posted[0]).toEqual({
         type: 'web-ready',
         cellBox: { fontScale: 1.25, cellWidth: (23 / 3) * (16 / 13), cellHeight: 15 * (16 / 13) }
@@ -258,7 +261,7 @@ describe('a started document', () => {
     }
   })
 
-  it('reports a renderer swap after context loss on the next render', async () => {
+  it('reports a changed cell width on the next render', async () => {
     const { scope, cell, posted, render, init } = started()
     try {
       init()

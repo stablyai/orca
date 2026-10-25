@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
+import { useRpcClientContext } from '../src/transport/client-context'
+import { useHostClient } from '../src/transport/host-client-hooks'
 import {
   useConnectionPathStatus,
   useReconnectAttempt
@@ -50,7 +51,7 @@ export default function NativeConnectionLogRoute() {
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((host) => host.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
-  const { desktopAppVersion } = useHostStatusGates({
+  const { desktopAppVersion, statusPending } = useHostStatusGates({
     hostId: selected?.id,
     client,
     connState: state
@@ -77,9 +78,13 @@ export default function NativeConnectionLogRoute() {
   const device = useMemo(
     () =>
       selected
-        ? createNativeDiagnosticsOperations(selected, clientContext, desktopAppVersion)
+        ? createNativeDiagnosticsOperations(
+            selected,
+            clientContext,
+            statusPending ? null : desktopAppVersion
+          )
         : null,
-    [selected, clientContext, desktopAppVersion]
+    [selected, clientContext, desktopAppVersion, statusPending]
   )
 
   return (

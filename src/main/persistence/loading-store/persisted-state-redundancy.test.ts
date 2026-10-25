@@ -2,7 +2,7 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 /**
  * The store file re-serializes in full on a 1s debounce and re-parses in full at launch, so every
  * byte it carries is paid for on both. Two kinds of byte were provably redundant on a 4.2 MB real

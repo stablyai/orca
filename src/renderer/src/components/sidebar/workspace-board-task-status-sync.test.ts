@@ -243,7 +243,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       updated: 0,
       skipped: 1,
       failed: 0,
-      messages: [{ kind: 'provider-error', issueIdentifier: 'ORC-1' }]
+      messages: [{ kind: 'owner-ambiguous', issueIdentifier: 'ORC-1' }]
     })
   })
 

@@ -11,6 +11,7 @@ import { createProcessHostDevRebuildPlugin } from './config/build-plugins/proces
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
 import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
@@ -21,6 +22,10 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'tldts',
   'smol-toml',
   'fflate',
+  // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
+  'unified',
+  'remark-parse',
+  'remark-gfm',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -338,23 +343,6 @@ export const electronViteConfig: UserConfig = {
   }
 }
 
-export default defineConfig(({ command }) => {
-  if (command !== 'serve') {
-    return electronViteConfig
-  }
-  // Electron Vite also uses Vite's build command for the development main process.
-  return {
-    ...electronViteConfig,
-    main: {
-      ...electronViteConfig.main,
-      build: {
-        ...electronViteConfig.main?.build,
-        minify: false,
-        sourcemap:
-          process.env.ORCA_DEV_MAIN_SOURCEMAPS === '0'
-            ? false
-            : electronViteConfig.main?.build?.sourcemap
-      }
-    }
-  }
-})
+export default defineConfig(({ command }) =>
+  command === 'serve' ? createDevServeConfig(electronViteConfig) : electronViteConfig
+)

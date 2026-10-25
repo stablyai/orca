@@ -3,15 +3,15 @@
  * descriptor the destination checks them against, and the source the blob sender reads from.
  */
 import { createHash } from 'node:crypto'
-import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration-blob-transfer'
-import { sameOrcadMigrationBlob } from '../../../shared/orcad-migration-blob-transfer'
+import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { sameOrcadMigrationBlob } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_BYTES,
   ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_KEY,
   ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_VERSION,
   parseOrcadMigrationTerminalRestoreHintsDocument,
   type OrcadMigrationTerminalRestoreHint
-} from '../../../shared/orcad-migration-terminal-restore-hints'
+} from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
 import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
 
 export type WslMoveRestoreHintsBlob = {

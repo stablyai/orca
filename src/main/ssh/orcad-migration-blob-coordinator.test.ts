@@ -7,12 +7,12 @@ import {
   ORCAD_MIGRATION_BLOB_CHUNK_BYTES,
   requiredMigrationBlobCapabilities,
   type OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationCatalogState,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogState,
+  OrcadMigrationManifest
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import {
   commitOrcadMigrationBlobs,

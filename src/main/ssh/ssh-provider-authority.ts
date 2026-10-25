@@ -4,7 +4,7 @@ import {
   advanceSshConnectionGeneration,
   isSshConnectionGenerationInCurrentSession,
   getSshConnectionGeneration
-} from './ssh-connection-generation'
+} from './connection/ssh-connection-generation'
 
 const authorityByTarget = new Map<string, DirectSshAuthority>()
 type ProviderRequestAbortRegistration = {

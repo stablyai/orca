@@ -17,6 +17,8 @@ vi.mock('../store', () => ({
     // "Don't Save" closes through the store, beside the controller's own projection.
     getState: () => ({
       ...store,
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       setActiveWorktree,
       markFileDirty: vi.fn(),
       clearEditorDraft: vi.fn(),
@@ -35,7 +37,7 @@ vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
 }))
 vi.mock('./editor/editor-autosave', async (importActual) => ({
   ...(await importActual<typeof EditorAutosaveModule>()),
-  requestEditorSaveQuiesce: vi.fn(async () => {})
+  requestEditorSaveQuiesce: vi.fn(async () => () => {})
 }))
 
 const { useTerminalEditorCloseFoundation } = await import('./use-terminal-editor-close-foundation')

@@ -1,7 +1,7 @@
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
-} from '../../../src/shared/agent-session-conversation-command'
+} from '../../../src/shared/agent-session/agent-session-conversation-command'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,

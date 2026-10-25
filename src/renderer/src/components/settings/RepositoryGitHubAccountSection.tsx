@@ -6,7 +6,7 @@ import type { GhAccountBindingInventory } from '../../../../shared/github/auth-t
 import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
-import { useAppStore } from '../../store'
+import { useAppStore } from '@/store/index'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
@@ -15,7 +15,7 @@ import {
   isGhAccountBindingEnforced,
   listRepositoryGhBindableAccounts,
   validateRepositoryGhAccountBinding
-} from './repository-github-account'
+} from './repository/identity/repository-github-account'
 
 type RepositoryGitHubAccountSectionProps = {
   repo: Repo

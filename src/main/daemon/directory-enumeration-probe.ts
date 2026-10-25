@@ -20,11 +20,7 @@ function outcomeForError(error: unknown): DirectoryEnumerationOutcome {
   return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'other'
 }
 
-/**
- * Why enumeration and not `access()`: macOS TCC can let `access(R_OK|X_OK)` succeed on a protected
- * folder while `opendir` still fails, which is exactly what a shell listing its cwd hits. One entry
- * is enough — the refusal lands on `opendir` or the first read, never later.
- */
+/** Probe enumeration because TCC can reject opendir even when access() succeeds. */
 export async function enumerateDirectoryOnce(path: string): Promise<DirectoryEnumerationOutcome> {
   let dir: Dir | undefined
   try {

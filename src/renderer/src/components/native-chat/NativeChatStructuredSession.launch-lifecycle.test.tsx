@@ -83,7 +83,7 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     install.observation = { kind: 'inactive' }
   })
 
-  it('puts Install in the composer slot until the host has the program, and keeps the draft', () => {
+  it('shows Install over a disabled composer until the host has the program', () => {
     const notInstalled: ManagedRuntimeInstallState = {
       agent: 'codex',
       revision: 1,
@@ -91,6 +91,7 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
       version: '1.3.0',
       installedVersion: null,
       installedCurrent: false,
+      downloadBytes: 111_500_000,
       source: null,
       operation: null
     }
@@ -98,26 +99,54 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
       install.observation = {
         kind: 'active',
         subject: { target: { kind: 'local' }, runtimeId: null, agent: 'codex' },
-        snapshot: state ? { kind: 'known', state } : { kind: 'unknown' }
+        snapshot: state ? { kind: 'known', state } : { kind: 'unknown' },
+        removable: false
       }
     }
     const draft = structuredAgentSessionDraftScopeKey('session-1')
     updateNativeChatComposerDraft(draft, { text: 'hello' }, 'immediate')
+    mocks.messages = []
     // Before the first answer the composer stays (its sends held) and Install doesn't flash.
     hostSays(null)
     const { rerender } = render(sessionView())
     expect(screen.getByTestId('structured-composer')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Install Codex' })).toBeNull()
+    expect(mocks.composerProps?.unavailableHint).toBeUndefined()
 
+    // A new chat gets the install message in its pane; the composer stays, disabled.
     hostSays(notInstalled)
     rerender(sessionView())
     expect(screen.getByRole('button', { name: 'Install Codex' })).toBeTruthy()
-    expect(screen.queryByTestId('structured-composer')).toBeNull()
+    expect(screen.getByText(/One-time 112 MB download/)).toBeTruthy()
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(mocks.composerProps?.unavailableHint).toBe('Install Codex to start chatting')
+
+    for (const lifecycle of ['pending', 'failed'] as const) {
+      mocks.launchLifecycle = lifecycle
+      mocks.launchResumes = true
+      rerender(<div key={lifecycle}>{sessionView()}</div>)
+      expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
+      expect(mocks.composerProps?.unavailableHint).toBe('Install Codex to continue')
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    }
+    mocks.launchLifecycle = null
+    hostSays({ ...notInstalled, available: false })
+    rerender(sessionView())
+    expect(mocks.composerProps?.unavailableHint).toBe('Codex is not available on this host.')
+    expect(screen.queryByRole('button', { name: /^Install/ })).toBeNull()
+    hostSays(notInstalled)
+
+    // With messages, Install is a strip above the composer instead.
+    mocks.messages = null
+    rerender(sessionView())
+    expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
+    expect(screen.queryByText(/One-time 112 MB download/)).toBeNull()
 
     hostSays({ ...notInstalled, revision: 2, installedVersion: '1.3.0', source: 'managed' })
     rerender(sessionView())
     expect(screen.getByTestId('structured-composer')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Install Codex' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Install/ })).toBeNull()
+    expect(mocks.composerProps?.unavailableHint).toBeUndefined()
     expect(readNativeChatComposerDraft(draft).text).toBe('hello')
   })
 

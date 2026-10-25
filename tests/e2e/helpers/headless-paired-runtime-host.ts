@@ -8,7 +8,11 @@ import { _electron as electron, type ElectronApplication } from '@stablyai/playw
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import {
+  cleanupE2EDaemons,
+  closeElectronAppForE2E,
+  stopServeElectronAppForE2E
+} from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
@@ -96,6 +100,8 @@ export async function launchHeadlessPairedRuntimeHost(
   options: {
     agentBrowserSocketParent?: string
     executablePath?: string
+    /** Host-only env seams (e.g. a forced-unavailable snapshot) the paired client must not inherit. */
+    extraEnv?: Record<string, string>
     /**
      * `mobile` makes `offer` a phone pairing (`orca serve --mobile-pairing`). It is the host's only
      * offer, so no desktop can pair to such a host: a desktop plus a direct phone is unsupported.
@@ -129,7 +135,7 @@ export async function launchHeadlessPairedRuntimeHost(
         ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
         ORCA_E2E_HEADLESS: '1'
       },
-      extraEnv: {},
+      extraEnv: options.extraEnv ?? {},
       userDataDir
     })
     if (agentBrowserSocketDir) {
@@ -151,14 +157,15 @@ export async function launchHeadlessPairedRuntimeHost(
         ],
         env: isolation.env
       })
-    app = await launchServeProcess()
+    const launchedApp = await launchServeProcess()
+    app = launchedApp
     const [offer] = await Promise.all([
-      readPairingOffer(app),
+      readPairingOffer(launchedApp),
       retryTransientMainEvaluate(() =>
-        app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+        launchedApp.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
       ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
     ])
-    let serveProcess = app
+    let serveProcess = launchedApp
     // Why: a failed relaunch leaves only the already-closed app, which dispose must not close again
     // (that throw would replace the launch error).
     let serveProcessOpen = true
@@ -177,7 +184,7 @@ export async function launchHeadlessPairedRuntimeHost(
             'restartServeProcess requires launchHeadlessPairedRuntimeHost({ pinnedServePort: true })'
           )
         }
-        await closeElectronAppForE2E(serveProcess)
+        await stopServeElectronAppForE2E(serveProcess)
         serveProcessOpen = false
         await restartOptions.betweenProcesses?.()
         const relaunched = await launchServeProcess()
@@ -186,6 +193,7 @@ export async function launchHeadlessPairedRuntimeHost(
         await readServeReadiness(relaunched, { requirePairingOffer: false })
       },
       dispose: async () => {
+        const socketDir = agentBrowserSocketDir
         await cleanupHeadlessHostResources([
           ...(serveProcessOpen
             ? [
@@ -198,10 +206,10 @@ export async function launchHeadlessPairedRuntimeHost(
           () => cleanupE2EDaemons(userDataDir),
           () => preserveProfileLogs(userDataDir),
           () => rmSync(userDataDir, PROFILE_REMOVAL),
-          ...(agentBrowserSocketDir
+          ...(socketDir
             ? [
                 () =>
-                  rmSync(agentBrowserSocketDir, {
+                  rmSync(socketDir, {
                     recursive: true,
                     force: true
                   })
@@ -211,17 +219,20 @@ export async function launchHeadlessPairedRuntimeHost(
       }
     }
   } catch (error) {
+    const launchedApp = app
+    const socketDir = agentBrowserSocketDir
     try {
       await cleanupHeadlessHostResources([
-        ...(app
-          ? [() => closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })]
+        ...(launchedApp
+          ? [
+              () =>
+                closeElectronAppForE2E(launchedApp, { cleanupDaemonsForUserDataDir: userDataDir })
+            ]
           : []),
         () => cleanupE2EDaemons(userDataDir),
         () => preserveProfileLogs(userDataDir),
         () => rmSync(userDataDir, PROFILE_REMOVAL),
-        ...(agentBrowserSocketDir
-          ? [() => rmSync(agentBrowserSocketDir, { recursive: true, force: true })]
-          : [])
+        ...(socketDir ? [() => rmSync(socketDir, { recursive: true, force: true })] : [])
       ])
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Headless runtime startup and cleanup failed')

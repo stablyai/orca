@@ -33,6 +33,7 @@ import { installTitleSpawnBell } from './title-spawn-bell'
 import { installAgentTaskCompleteNotify } from './agent-task-complete-notify'
 import { installPaneHostCapabilityFlags } from './pane-host-capability-flags'
 import { installPtyInputRecovery } from './pty-input-recovery'
+import { installAgentPreReadyTypedDraft } from './agent-pre-ready-typed-draft'
 import { installPtyInputForward } from './pty-input-forward'
 import { installPtyResizeGeometry } from './pty-resize-geometry'
 import { installSessionReconcileDispose } from './session-reconcile-dispose'
@@ -68,8 +69,6 @@ export function connectPanePty(
   )
   session.connectFrame = null
   session.connectFallbackTimer = null
-  session.startupGridSettleHandle = null
-  session.startupGridSettledForConnect = false
   session.connectStarted = false
   session.unregisterBacklogRecovery = null
   session.unregisterDocumentVisibilityRecovery = null
@@ -80,12 +79,14 @@ export function connectPanePty(
   session.cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   session.cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
   session.cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
+  session.flushRemoteProgramRedraw = (): void => {}
   session.resetRendererOrderedSeqForPtyExit = () => {}
   session.cleanupStartupDraftPasteTimers = (): void => {}
   session.unregisterE2ePtyDataInjection = (): void => {}
   session.startupInjectTimer = null
   session.agentTaskCompleteNotificationGraceTimer = null
   session.agentTaskCompleteNotificationMaxTimer = null
+  session.hookOwnedIdleAbsorbsBell = false
   session.agentTaskCompleteStatusUnsubscribe = null
   session.agentTaskCompleteSettingsUnsubscribe = null
   session.agentTaskCompleteNotificationGeneration = 0
@@ -187,6 +188,7 @@ export function connectPanePty(
   installAgentTaskCompleteNotify(session)
   installPaneHostCapabilityFlags(session)
   installPtyInputRecovery(session)
+  installAgentPreReadyTypedDraft(session)
   // Async reattach/exit callbacks can outlive the PaneManager that created
   // them. Keep their layout writes keyed by the durable leaf identity and
   // admit them only while this transport still owns the pane slot.

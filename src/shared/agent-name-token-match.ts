@@ -5,7 +5,7 @@
  * substrings. Substring matching mis-fired on worktree/cwd titles like
  * "opencode-blinker" (⊃ "opencode") or "openclaude" (⊃ "claude"), painting a
  * Codex/OpenClaude tab as the wrong agent whenever the title fell back to the
- * bare directory name. The boundary guard `(?<![\w./\\-])…(?![\w./\\-])` rejects
+ * bare directory name. The token boundaries reject
  * path separators (POSIX and Windows) and hyphenated compounds on both sides.
  */
 
@@ -38,7 +38,7 @@ const WINDOWS_EXECUTABLE_SUFFIX_RE = String.raw`(?:\.(?:exe|cmd|bat|ps1))`
 
 export function buildAgentNameRe(name: string): RegExp {
   return new RegExp(
-    `(?<![\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
+    `(?:^|[^\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
     'i'
   )
 }
@@ -47,7 +47,7 @@ const AGENT_NAME_RE_BY_NAME = new Map(AGENT_NAMES.map((name) => [name, buildAgen
 
 const ANY_LEGACY_AGENT_NAME_RE = new RegExp(
   AGENT_NAMES.map(
-    (name) => `(?<![\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`
+    (name) => `(?:^|[^\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`
   ).join('|'),
   'i'
 )
@@ -64,9 +64,9 @@ export function titleHasAnyLegacyAgentName(title: string): boolean {
 
 // Why: `android` contains `droid`; like the legacy names above, Droid must be
 // token-matched so Android terminal titles do not become agent status.
-export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
+export const DROID_AGENT_NAME_RE = /(?:^|[^\w./\\-])droid(?![\w./\\-])/i
 
 // Why: Hermes/agy are safe to token-match but unsafe as substrings because
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
-export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
-export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+export const HERMES_AGENT_NAME_RE = /(?:^|[^\w./\\-])hermes(?![\w./\\-])/i
+export const AGY_AGENT_NAME_RE = /(?:^|[^\w./\\-])agy(?![\w./\\-])/i

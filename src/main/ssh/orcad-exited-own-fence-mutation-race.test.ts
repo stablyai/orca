@@ -11,10 +11,11 @@ import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
 // The proof's remote commands run in a real local shell.
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess: run } = await import('@orca/process-host')
   return {
     ...(await importOriginal<typeof ExecCommandModule>()),
@@ -26,10 +27,12 @@ vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
 const { exitedOwnLockProof } = await import('./orcad-exited-own-lock')
 const { initOrcadHeldFenceTokenFile, ORCAD_HELD_FENCE_TOKENS_FILE_NAME } =
   await import('./orcad-held-fence-tokens')
-const { tryStealInstallLockCommand } = await import('./ssh-relay-install-lock-commands')
-const { serializedStateMutationCommand } = await import('./orcad-state-snapshot')
+const { tryStealInstallLockCommand } =
+  await import('../managed-server/install/remote-install-lock-commands')
+const { serializedStateMutationCommand } =
+  await import('../managed-server/host-state/orcad-state-snapshot')
 const { ORCAD_FENCE_LOST_EXIT, ORCAD_FENCE_LOST_MARKER } =
-  await import('./orcad-activation-fence-scope')
+  await import('../managed-server/activation/orcad-activation-fence-scope')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 
 const OWNER = '.orca-fence-owner'
@@ -69,8 +72,7 @@ async function fenceOfExitedHolder() {
   )
   const host = getRemoteHostPlatform('linux-x64')
   const proof = exitedOwnLockProof(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    { conn: {} as never, host },
+    { conn: unusedOrcadHostTransport(), host },
     { baseDir: dir, guardsStateMutation: true }
   )
   const token = await proof.find(lock)

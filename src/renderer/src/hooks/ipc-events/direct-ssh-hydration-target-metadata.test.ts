@@ -33,6 +33,7 @@ function stubWindow(ssh: SshApiStub): void {
       ssh: {
         ...ssh,
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},

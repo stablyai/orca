@@ -7,6 +7,8 @@ import { isClipboardTextTooLargeError } from '../../../../shared/clipboard-text'
 
 export type NativeChatComposerNoticeContent = {
   text: string
+  /** Inline presentation of the sentence when it contains navigation. */
+  content?: React.ReactNode
   /** Text from outside Orca (a host or system error), shown apart and copyable. */
   errorText?: string
 }
@@ -15,7 +17,7 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
   action?: { label: string; onClick: () => void; disabled?: boolean }
   onDismiss?: () => void
-} & ({ kind: 'error' | 'attachment' } | { kind: 'host'; tone: 'warning' | 'muted' })
+} & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 
 /** `headline` in Orca's words, with the error as written beside it. `localErrorIsOrcaWords`: an
  *  error raised in this window (not wrapped by main-process IPC) is already Orca's sentence. */

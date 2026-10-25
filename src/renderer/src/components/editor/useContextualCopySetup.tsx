@@ -10,8 +10,7 @@ export function useContextualCopySetup() {
   const setupCopy = useCallback(
     (
       editorInstance: editor.IStandaloneCodeEditor,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      _monaco: any,
+      _monaco: unknown,
       filePath: string,
       propsRef: React.MutableRefObject<{
         relativePath: string

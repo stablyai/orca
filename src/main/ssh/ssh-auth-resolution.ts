@@ -1,10 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
-import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
+import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
+import { readSshIdentityFileSync } from './ssh-identity-file-read'
+import { isAuthError } from './ssh-reconnect-error-classification'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
@@ -28,17 +30,16 @@ export function listDefaultIdentityFilePaths(): string[] {
   return [...DEFAULT_IDENTITY_PATHS]
 }
 
-export function findDefaultKeyFile(): PrivateKeyFile | undefined {
+/** Identity files one connect attempt could not use, by configured path, with the reason. */
+export type SkippedIdentityFiles = Map<string, string>
+
+export function findDefaultKeyFile(skipped?: SkippedIdentityFiles): PrivateKeyFile | undefined {
   for (const keyPath of DEFAULT_KEY_PATHS) {
-    const resolved = resolveSshConfigHomePath(keyPath)
-    try {
-      if (!existsSync(resolved)) {
-        continue
-      }
-      const contents = readFileSync(resolved)
-      return { path: keyPath, contents }
-    } catch {
-      continue
+    const key = existsSync(resolveSshConfigHomePath(keyPath))
+      ? readPrivateKey(keyPath, skipped)
+      : undefined
+    if (key) {
+      return key
     }
   }
   return undefined
@@ -118,19 +119,42 @@ export function resolveIdentityFilePaths(
   return resolved?.identityFile ?? []
 }
 
-function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
-  try {
-    const resolvedPath = resolveSshConfigHomePath(keyPath)
-    return { path: keyPath, contents: readFileSync(resolvedPath) }
-  } catch {
-    return undefined
+const MAX_WARNED_IDENTITY_FILE_PROBLEMS = 64
+const warnedIdentityFileProblems = new Set<string>()
+
+// Why: every reconnect and credential retry re-reads keys; one warning per path and problem is enough.
+function warnSkippedIdentityFileOnce(keyPath: string, problem: string): void {
+  const key = `${keyPath}\0${problem}`
+  if (warnedIdentityFileProblems.has(key)) {
+    return
   }
+  if (warnedIdentityFileProblems.size >= MAX_WARNED_IDENTITY_FILE_PROBLEMS) {
+    warnedIdentityFileProblems.clear()
+  }
+  warnedIdentityFileProblems.add(key)
+  console.warn(`[ssh] Skipping identity file "${keyPath}": ${problem}`)
 }
 
-function readPrivateKeys(keyPaths: string[]): PrivateKeyFile[] {
+function readPrivateKey(
+  keyPath: string,
+  skipped: SkippedIdentityFiles | undefined
+): PrivateKeyFile | undefined {
+  const read = readSshIdentityFileSync(resolveSshConfigHomePath(keyPath))
+  if (read.contents) {
+    skipped?.delete(keyPath)
+    return { path: keyPath, contents: read.contents }
+  }
+  if (read.problem) {
+    skipped?.set(keyPath, read.problem)
+    warnSkippedIdentityFileOnce(keyPath, read.problem)
+  }
+  return undefined
+}
+
+function readPrivateKeys(keyPaths: string[], skipped?: SkippedIdentityFiles): PrivateKeyFile[] {
   const keys: PrivateKeyFile[] = []
   for (const keyPath of keyPaths) {
-    const key = readPrivateKey(keyPath)
+    const key = readPrivateKey(keyPath, skipped)
     if (key) {
       keys.push(key)
     }
@@ -140,21 +164,36 @@ function readPrivateKeys(keyPaths: string[]): PrivateKeyFile[] {
 
 function resolveExplicitPrivateKeys(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
 ): PrivateKeyFile[] {
-  return readPrivateKeys(resolveExplicitPrivateKeyPaths(target, resolved))
+  return readPrivateKeys(resolveExplicitPrivateKeyPaths(target, resolved), skipped)
 }
 
 export function resolvePrivateKeys(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
 ): PrivateKeyFile[] {
   const keyPaths = resolveIdentityFilePaths(target, resolved)
   if (keyPaths.length > 0 || resolved || target.identityFile) {
-    return readPrivateKeys(keyPaths)
+    return readPrivateKeys(keyPaths, skipped)
   }
-  const defaultKey = findDefaultKeyFile()
+  const defaultKey = findDefaultKeyFile(skipped)
   return defaultKey ? [defaultKey] : []
+}
+
+/** Names the identity files auth had to skip, so a generic auth failure says which key and why. */
+export function withSkippedIdentityFileDetail(
+  error: unknown,
+  skipped: SkippedIdentityFiles
+): unknown {
+  if (!(error instanceof Error) || !isAuthError(error) || skipped.size === 0) {
+    return error
+  }
+  const detail = [...skipped].map(([keyPath, problem]) => `"${keyPath}" (${problem})`).join(', ')
+  error.message = `${error.message.replace(/\.$/, '')}. Orca skipped identity file ${detail}.`
+  return error
 }
 
 export function isUnencryptedPrivateKey(contents: Buffer): boolean {
@@ -168,9 +207,10 @@ export function isUnencryptedPrivateKey(contents: Buffer): boolean {
 
 export function resolveUnencryptedExplicitPrivateKeys(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: SshResolvedConfig | null,
+  skipped?: SkippedIdentityFiles
 ): PrivateKeyFile[] {
-  return resolveExplicitPrivateKeys(target, resolved).filter((key) =>
+  return resolveExplicitPrivateKeys(target, resolved, skipped).filter((key) =>
     isUnencryptedPrivateKey(key.contents)
   )
 }

@@ -17,7 +17,7 @@ import {
 } from '../../terminal-wait-tail-state'
 import { ownRetainedString } from '../../../../shared/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
-import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
+import { createTerminalAgentStatusProcessor } from '../../../../shared/terminal-agent-status-processor'
 import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
 
 import type { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
@@ -74,6 +74,17 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     }
   }
 
+  /** Runs a pending trailing-edge scan now, so a reader never judges blocked text its stamp lags. */
+  protected flushPendingWaitBlockedCheck(ptyId: string): void {
+    const state = this.waitBlockedCheckStateByPtyId.get(ptyId)
+    if (!state?.timer) {
+      return
+    }
+    clearTimeout(state.timer)
+    state.timer = null
+    this.runWaitBlockedCheck(ptyId, state, Date.now())
+  }
+
   protected runWaitBlockedCheck(ptyId: string, state: WaitBlockedCheckState, at: number): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
@@ -98,6 +109,13 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
       )
     ) {
       pty.waitBlockedAt = at
+      // Why: a trailing-edge stamp lands after onPtyData copied this PTY's stamp to its mirroring
+      // leaves, and a pane-backed wait reads the leaf's, so a blocker painted last went unstamped.
+      for (const leaf of this.getLeavesForPty(ptyId)) {
+        if (leaf.tailBuffer === pty.tailBuffer) {
+          leaf.waitBlockedAt = at
+        }
+      }
       this.recordAgentPromptPermissionObservation(ptyId)
     }
     state.lastAt = at
@@ -140,7 +158,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
   protected processAgentStatusOscForPty(ptyId: string, data: string): ProcessedAgentStatusChunk {
     let processor = this.agentStatusOscProcessorsByPtyId.get(ptyId)
     if (!processor) {
-      processor = createAgentStatusOscProcessor()
+      processor = createTerminalAgentStatusProcessor()
       this.agentStatusOscProcessorsByPtyId.set(ptyId, processor)
     }
     return processor(data)

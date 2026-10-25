@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { legacy7zaRelativePath, resolve7zaPath } from './resolve-7za-path.mjs'
@@ -26,13 +26,23 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     )
   })
 
-  it('prefers a real legacy binary over the downloaded toolset', async () => {
-    // Only meaningful if a transitive dep reintroduces the package.
-    const legacy = join(projectRoot, ...legacy7zaRelativePath())
-    if (!existsSync(legacy)) {
-      return
+  it('prefers an existing legacy file over the downloaded toolset', async () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'orca 7za legacy '))
+    const previous = process.env.ELECTRON_BUILDER_7ZIP_PATH
+    try {
+      delete process.env.ELECTRON_BUILDER_7ZIP_PATH
+      const legacy = join(scratch, ...legacy7zaRelativePath())
+      mkdirSync(dirname(legacy), { recursive: true })
+      writeFileSync(legacy, 'legacy binary fixture')
+      await expect(resolve7zaPath(scratch)).resolves.toBe(legacy)
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ELECTRON_BUILDER_7ZIP_PATH
+      } else {
+        process.env.ELECTRON_BUILDER_7ZIP_PATH = previous
+      }
+      rmSync(scratch, { recursive: true, force: true })
     }
-    await expect(resolve7zaPath(projectRoot)).resolves.toBe(legacy)
   })
 
   it('resolves an executable 7za that can extract an archive', async () => {

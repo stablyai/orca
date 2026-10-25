@@ -3,7 +3,7 @@
 // or env could list models the user's sessions cannot see.
 
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
@@ -31,10 +31,14 @@ export function codexModelCatalogDiscovery({
     listingNamesConfiguredModel: true,
     probe: createCodexModelCatalogProbe({
       resolveAccountKind: deps.resolveCodexAccountKind,
+      ...(deps.runCodexCatalogSession ? { runSession: deps.runCodexCatalogSession } : {}),
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {}),
-      resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
+      resolveEnvironment: environment.resolveBaseEnvironment,
+      resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
+      resolveEnv: () => deps.resolveAgentLaunchEnv?.('codex') ?? {},
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
     })
@@ -48,6 +52,7 @@ export function claudeListingDeps({
 }: StructuredAgentModelCatalogContext): ClaudeModelCatalogProbeDeps {
   return {
     resolveInheritedEnv: environment.resolveBaseEnvironment,
+    resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
     refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
     resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
@@ -62,7 +67,10 @@ export function claudeModelCatalogDiscovery(
     kind: 'probe',
     // Claude's settings or env can pick a model other than the one its listing recommends.
     listingNamesConfiguredModel: false,
-    probe: createClaudeModelCatalogProbe(claudeListingDeps(context))
+    probe: createClaudeModelCatalogProbe({
+      ...claudeListingDeps(context),
+      resolveLaunchArgs: () => context.deps.resolveLaunchArgs('claude')
+    })
   }
 }
 
@@ -77,6 +85,7 @@ export function acpModelCatalogDiscovery(
   return {
     kind: 'probe',
     listingNamesConfiguredModel: discovery.listingNamesConfiguredModel,
+    ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,

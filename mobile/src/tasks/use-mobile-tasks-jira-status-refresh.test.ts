@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { createElement, type SetStateAction } from 'react'
+import type { MobileJiraConnection } from './jira-mobile-connection'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -25,7 +26,16 @@ afterEach(() => {
 })
 
 function mountRefresh(client: RpcClient, clientRef: { current: RpcClient | null }) {
-  const setJiraConnection = vi.fn()
+  let connection: MobileJiraConnection = {
+    connected: false,
+    sites: [],
+    selection: null,
+    credentialError: null,
+    unavailableReason: null
+  }
+  const setJiraConnection = vi.fn((update: SetStateAction<MobileJiraConnection>) => {
+    connection = typeof update === 'function' ? update(connection) : update
+  })
   const jiraStatusRequestIdRef = { current: 0 }
   const holder: { refresh?: () => Promise<void> } = {}
   function Probe() {
@@ -54,6 +64,7 @@ function mountRefresh(client: RpcClient, clientRef: { current: RpcClient | null 
   })
   return {
     setJiraConnection,
+    connection: () => connection,
     refresh: async () => {
       if (!holder.refresh) {
         throw new Error('Jira refresh did not render')
@@ -79,12 +90,13 @@ describe('mobile Jira status host ownership', () => {
     client.sendRequest.mockResolvedValue({
       id: 'jira-test',
       ok: true,
-      result: { connected: false }
+      result: { connected: true }
     })
     const fixture = mountRefresh(client, { current: client })
     await fixture.refresh()
     expect(client.sendRequest).toHaveBeenCalledWith('jira.status')
     expect(fixture.setJiraConnection).toHaveBeenCalledTimes(1)
+    expect(fixture.connection().connected).toBe(true)
   })
 
   it('ignores an earlier explicit refresh that settles after a newer one', async () => {
@@ -100,6 +112,7 @@ describe('mobile Jira status host ownership', () => {
     earlier.answer({ id: 'earlier', ok: true, result: { connected: false } })
     await first
     expect(fixture.setJiraConnection).toHaveBeenCalledTimes(1)
+    expect(fixture.connection().connected).toBe(true)
   })
 
   it('ignores a previous host status that arrives after switching hosts', async () => {

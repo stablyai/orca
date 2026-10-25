@@ -63,14 +63,14 @@ describe('AutomationDetail enablement', () => {
   it('shows a paused record as a plain pause', async () => {
     const container = await render({ enabled: false })
 
-    expect(container.textContent).toContain('Paused')
+    expect(container.querySelector('[data-slot="badge"]')?.textContent).toBe('Paused')
     expect(notice(container)).toBeNull()
   })
 
   it('shows a running automation as enabled', async () => {
     const container = await render({ enabled: true })
 
-    expect(container.textContent).toContain('Enabled')
+    expect(container.querySelector('[data-slot="badge"]')?.textContent).toBe('Enabled')
     expect(notice(container)).toBeNull()
   })
 })

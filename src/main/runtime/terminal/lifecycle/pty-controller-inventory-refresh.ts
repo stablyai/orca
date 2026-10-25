@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './pty-worktree-refresh'
+import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import type * as PtyControllerContract from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -8,18 +8,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import {
-  PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { pruneOldestMapEntry } from '../../prune-oldest-map-entry'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import {
   createIncrementalResolvedWorktreeLookup,
   findResolvedWorktreeIdForPath,
-  inferWorktreeIdFromPtyId,
-  runtimeWorktreeIdsEqual
+  inferWorktreeIdFromPtyId
 } from '../../runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
@@ -31,8 +24,11 @@ import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bi
 import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
 
-export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
+export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithPtyControllerInventoryListing {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
@@ -52,48 +48,17 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         }
       }
     }
-    if (!this.ptyController?.listProcesses) {
-      return null
-    }
-    const inventoryGeneration = ++this.ptyControllerInventorySequence
-    const providerKey = getConnectionExecutionHostId(connectionId)
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
-    if (connectionId === undefined) {
-      this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
-    } else {
-      this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
-      pruneOldestMapEntry(this.ptyControllerInventoryGenerationByProvider, 512)
-    }
-    const listBudgetMs =
-      deadline === undefined
-        ? PTY_CONTROLLER_LIST_TIMEOUT_MS
-        : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
-    const providerListOpts = {
-      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS),
-      ...(inventoryOptions?.includeForegroundProcessEvidence === undefined
-        ? {}
-        : { includeForegroundProcessEvidence: inventoryOptions.includeForegroundProcessEvidence })
-    }
-    const processInventory =
-      connectionId === undefined && this.ptyController.listProcessesWithHostScope
-        ? this.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.ptyController
-            .listProcesses(connectionId === undefined ? undefined : providerKey, providerListOpts)
-            .then((processes) => ({ processes, hostIds: [providerKey] }))
-    const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
-    if (!sessionsResult.ok) {
+    const listing = await this.listPtyControllerInventory(
+      targetWorktreeId !== null,
+      deadline,
+      connectionId,
+      inventoryOptions
+    )
+    if (!listing) {
       return null
     }
-    const isCurrentInventory =
-      connectionId === undefined
-        ? this.ptyControllerAggregateInventoryGeneration === inventoryGeneration &&
-          ![...this.ptyControllerInventoryGenerationByProvider.values()].some(
-            (generation) => generation > inventoryGeneration
-          )
-        : this.ptyControllerInventoryGenerationByProvider.get(providerKey) ===
-            inventoryGeneration &&
-          this.ptyControllerAggregateInventoryGeneration <= inventoryGeneration
-    if (!isCurrentInventory) {
+    if (listing.stale) {
       if (targetWorktreeId !== null && !retryStale) {
         return this.refreshPtyWorktreeRecordsWithControllerInventory(
           resolvedWorktrees,
@@ -106,8 +71,8 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       }
       return null
     }
-    const sessions = sessionsResult.value.processes
-    const queriedHostIds = new Set<ExecutionHostId>(sessionsResult.value.hostIds)
+    const sessions = listing.processes
+    const queriedHostIds = new Set<ExecutionHostId>(listing.hostIds)
     if (connectionId === undefined) {
       for (const session of sessions) {
         const hostId = getPtyExecutionHost(session.id)
@@ -161,12 +126,13 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         persistedWorktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
         floatingPtyBindings.has(session.id) ||
         this.ptysById.get(session.id)?.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      const hasMigrationEvidence =
-        Boolean(session.worktreeId) &&
+      const hasMigrationEvidence = Boolean(
+        session.worktreeId &&
         !providerWorktree &&
-        Boolean(persistedWorktree) &&
-        Boolean(inferredWorktreeId) &&
-        runtimeWorktreeIdsEqual(session.worktreeId as string, inferredWorktreeId as string)
+        persistedWorktree &&
+        inferredWorktreeId &&
+        worktreeIdsEqual(session.worktreeId, inferredWorktreeId)
+      )
       // Why: an unresolved explicit provider owner remains authoritative unless the session id proves it was frozen before a persisted rename migration.
       const worktreeId = providerWorktree
         ? providerWorktree.id
@@ -182,26 +148,20 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         persistedSurface &&
         session.incarnationId &&
         persistedSurface.incarnationId === session.incarnationId &&
-        Boolean(worktreeId) &&
-        runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
+        !!worktreeId &&
+        worktreeIdsEqual(persistedSurface.worktreeId, worktreeId)
       this.adoptControllerTerminalHandle(
         session.id,
         controllerIdentity?.handle ?? session.terminalHandle,
         controllerIdentity?.incarnationId ?? session.incarnationId,
         { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
       )
-      if (
-        !targetWorktreeId ||
-        (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (!targetWorktreeId || (worktreeId && worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         selectedLivePtyIds.add(session.id)
       }
-      if (
-        targetWorktreeId &&
-        (!worktreeId || !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (targetWorktreeId && (!worktreeId || !worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         const receipt = this.restoredOrchestrationAuthorityByPtyId.get(session.id)
-        if (receipt && runtimeWorktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
+        if (receipt && worktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         continue
@@ -250,39 +210,39 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       }
       // An inventory can prove absence only for hosts that actually answered.
       if (!queriedHostIds.has(ptyHostId)) {
-        if (this.isSshOwnedPtyId(pty.ptyId) && this.ptyController.hasPty?.(pty.ptyId) == null) {
+        if (this.isSshOwnedPtyId(pty.ptyId) && this.ptyController?.hasPty?.(pty.ptyId) == null) {
           this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
         }
         continue
       }
-      if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
+      if (
+        !allLivePtyIds.has(pty.ptyId) &&
+        (this.mainDecidesLiveness(pty.worktreeId) || !this.leafExistsForPty(pty.ptyId))
+      ) {
         const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
         if (
           currentVerdict &&
           currentVerdict.observedAt > livenessObservationAtStart &&
           currentVerdict.verdict.status === 'unverifiable'
         ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
+          this.setPtyConnected(pty, false)
           continue
         }
-        const observed = this.ptyController.hasPty?.(pty.ptyId)
+        const observed = this.ptyController?.hasPty?.(pty.ptyId)
         if (observed === true) {
           // Why: an SSH spawn can become addressable before an overlapping relay list includes it.
           allLivePtyIds.add(pty.ptyId)
           if (
             !targetWorktreeId ||
-            (pty.worktreeId && runtimeWorktreeIdsEqual(pty.worktreeId, targetWorktreeId))
+            (pty.worktreeId && worktreeIdsEqual(pty.worktreeId, targetWorktreeId))
           ) {
             selectedLivePtyIds.add(pty.ptyId)
           }
-          pty.connected = true
-          pty.disconnectedAt = null
+          this.setPtyConnected(pty, true)
           this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
+        this.setPtyConnected(pty, false)
         pty.agentSessionOwners = []
         // Why: this list only enumerates registered providers, so a dropped relay
         // clears `connected` for every one of its PTYs at once. Only `false` here
@@ -306,7 +266,9 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
       terminalIdentityByPtyId: controllerIdentityByPtyId,
-      queriedHostIds
+      queriedHostIds,
+      // Switch point: main places live terminals itself and must skip ones being killed.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { exitingPtyIds: exitingPtyIdsOf(sessions) } : {})
     }
   }
 }

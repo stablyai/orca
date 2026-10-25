@@ -12,7 +12,10 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
-import type { RelayDeviceBinding, RelayRevokeOutboxItem } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutboxItem
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 
 export const DEFAULT_WS_PORT = 6768
 

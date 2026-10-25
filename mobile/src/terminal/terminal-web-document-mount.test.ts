@@ -6,6 +6,7 @@ import { terminalDocumentDouble } from './document/document-terminal-double.test
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
+import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
 
 /**
  * The page's mount, as a unit.
@@ -91,6 +92,15 @@ afterEach(() => {
 })
 
 describe('a stopped document takes its engines with it', () => {
+  it('loads the page symbol font from its bundled asset before starting the document', () => {
+    const terminal = mountTerminalWebDocument(plantHost(), () => {})
+    const style = document.getElementById('orca-terminal-document-style')?.textContent ?? ''
+    expect(style).toContain(`src:url('${terminalNerdFontUrl}') format('woff2')`)
+    expect(style).not.toContain('data:font/')
+    expect(style).toContain('unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD')
+    terminal.dispose()
+  })
+
   /**
    * `stopTerminalInit`'s set (ruling 22's disposal): a swap that never committed leaves the
    * committed terminal with nothing pointing at it, so `scope.term` alone is not every engine the
@@ -170,8 +180,12 @@ describe('the page keeps its own capture buffer', () => {
     const posted: Array<Record<string, unknown>> = []
     const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
 
-    window.dispatchEvent(new ErrorEvent('error', { message: 'first failure' }))
-    window.dispatchEvent(new ErrorEvent('error', { message: 'second failure' }))
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'first failure', error: new Error('first failure') })
+    )
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'second failure', error: new Error('second failure') })
+    )
 
     const messages = posted.filter((message) => message.type === 'error').map((m) => m.message)
     expect(messages[0]).toContain('captured: first failure')
@@ -182,11 +196,26 @@ describe('the page keeps its own capture buffer', () => {
     const nextHost = plantHost()
     const nextPosted: Array<Record<string, unknown>> = []
     const next = mountTerminalWebDocument(nextHost, (message) => nextPosted.push(message))
-    window.dispatchEvent(new ErrorEvent('error', { message: 'third failure' }))
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'third failure', error: new Error('third failure') })
+    )
     const nextMessages = nextPosted.filter((m) => m.type === 'error').map((m) => m.message)
     expect(nextMessages[0]).toContain('captured: third failure')
     expect(nextMessages[0]).not.toContain('first failure')
     next.dispose()
+  })
+
+  it("leaves a browser notice from elsewhere on the page out, so it can't fail a terminal", () => {
+    // The chat list's resize observer can make the browser raise its loop notice; no error is behind it.
+    const host = plantHost()
+    const posted: Array<Record<string, unknown>> = []
+    const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
+
+    const message = 'ResizeObserver loop completed with undelivered notifications.'
+    window.dispatchEvent(new ErrorEvent('error', { message }))
+
+    expect(posted.filter((m) => m.type === 'error')).toEqual([])
+    mounted.dispose()
   })
 })
 

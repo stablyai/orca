@@ -1,5 +1,7 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import { browserLoadErrorsEqual } from '../../../src/shared/browser-load-failure'
 
 export type TerminalRecord = {
   handle: string
@@ -10,6 +12,8 @@ export type TerminalRecord = {
   connected?: boolean
   /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
   orphaned?: boolean
+  /** From `terminal.list`; the host's own pane identity, which tab snapshots never carry. */
+  agentIdentity?: string
 }
 
 export type MobileTerminalSessionTab = {
@@ -21,6 +25,7 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  nativeChatIdentity?: unknown
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
@@ -58,6 +63,7 @@ type MobileSessionTabLike =
       browserPageId?: string | null
       url?: string
       loading?: boolean
+      loadError?: BrowserLoadError | null
       canGoBack?: boolean
       canGoForward?: boolean
       isActive?: boolean
@@ -68,6 +74,7 @@ type MobileSessionTabLike =
       title?: string
       sessionId?: string
       agent?: string
+      chatStatus?: unknown
       isActive?: boolean
     }
 
@@ -132,6 +139,8 @@ function mobileSessionTabEqual(
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
+        JSON.stringify(a.nativeChatIdentity ?? null) ===
+          JSON.stringify(b.nativeChatIdentity ?? null) &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
     case 'markdown':
@@ -157,25 +166,32 @@ function mobileSessionTabEqual(
         a.browserPageId === b.browserPageId &&
         a.url === b.url &&
         a.loading === b.loading &&
+        browserLoadErrorsEqual(a.loadError, b.loadError) &&
         a.canGoBack === b.canGoBack &&
         a.canGoForward === b.canGoForward
       )
     case 'agent-session':
-      return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
+      return (
+        b.type === 'agent-session' &&
+        a.sessionId === b.sessionId &&
+        a.agent === b.agent &&
+        JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
+      )
   }
 }
 
 // Reconcile a partial session snapshot against the last known record for the
 // same terminal. The snapshot owns live fields (title, activity); the known
 // theme only survives when the snapshot omits it, since lightweight snapshots
-// can drop it.
+// can drop it. The host pane identity survives the same way.
 function mergeTerminalSnapshotWithKnownRecord(
   snapshot: TerminalRecord,
   known: TerminalRecord
 ): TerminalRecord {
   return {
     ...snapshot,
-    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme,
+    agentIdentity: snapshot.agentIdentity ?? known.agentIdentity
   }
 }
 
@@ -273,7 +289,8 @@ export function terminalRecordsEqual(
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
         mobileTerminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
-        terminal.isActive === b[index]?.isActive
+        terminal.isActive === b[index]?.isActive &&
+        terminal.agentIdentity === b[index]?.agentIdentity
     )
   )
 }

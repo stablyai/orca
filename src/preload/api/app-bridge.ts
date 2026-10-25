@@ -13,6 +13,8 @@ import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../prelo
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
+  getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
+    ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
   isProfileStateSaveDelayed: (): Promise<boolean> =>
     ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {

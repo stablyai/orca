@@ -19,19 +19,16 @@ export {
   type ClaudePromptSettle
 } from './claude-prompt-registry'
 
-/** No card offers `cancel` any more; an older card's "Stop" option answers it as a dismissal. */
+/** Keep `cancel` for older cards; it now means dismissal. */
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const
 export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
 
-/** A card's own Cancel: an approval is dismissed (a tool's with the reply its Deny sends, a plan's
- *  asking Claude to wait for the user), and a question ends the way the chat's Stop does. Nothing
- *  on a card interrupts the turn and leaves the child running. */
+/** Questions require Stop; approvals can be dismissed without interrupting the session. */
 export const claudePromptCancelRoute: NonNullable<
   StructuredAgentSessionAdapterStop['routePromptCancel']
 > = ({ prompt }) => (prompt.kind === 'question' ? { kind: 'stop' } : { kind: 'dismiss' })
 
-/** Declines a request the user dismissed. A dismissed plan or question waits on the user: Claude is
- *  told to end its turn rather than revise or ask again. */
+/** Dismissed plans and questions ask Claude to wait rather than revise or ask again. */
 export function claudePromptDismissal(prompt: ClaudePendingPrompt): PermissionResult {
   return {
     behavior: 'deny',
@@ -171,8 +168,7 @@ function questionResponse(
   }
 }
 
-/** Builds Claude's reply without touching the prompt, so a reply that cannot be built refuses the
- *  answer before anything is recorded. */
+/** Validate the reply before committing the answer or mutating the pending prompt. */
 export function buildClaudePromptReply(
   prompt: ClaudePendingPrompt,
   response: AgentSessionPromptResponse

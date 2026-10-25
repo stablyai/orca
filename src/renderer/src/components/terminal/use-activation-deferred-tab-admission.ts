@@ -83,6 +83,12 @@ export function useActivationDeferredTabAdmission(
     // install a plan for the already-active worktree by mutating only refs —
     // neither other dep changes, and without this revision the tabs stay
     // unmounted until the user switches workspaces and back.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [activationDeferralPlanRevision, backgroundMountRevision, renderedActiveWorktreeId])
+  }, [
+    activationDeferralPlanRevision,
+    activationDeferredMountTabIdsByWorktreeRef,
+    backgroundMountRevision,
+    backgroundMountTabIdsByWorktreeRef,
+    renderedActiveWorktreeId,
+    setBackgroundMountRevision
+  ])
 }

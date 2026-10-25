@@ -10,13 +10,18 @@ const {
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
+const { adoptPackagedNativeBuildEntries } = require('./packaged-native-build-entries.cjs')
+const { runtimePackageExcludeFilter } = require('./packaged-windows-only-runtime-files.cjs')
+const {
+  NATIVE_BUILD_PACKAGES,
+  TRANSIENT_NATIVE_BUILD_ENTRY_FILTER
+} = require('./scripts/native-build-entry.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
-  '@electron-toolkit/utils',
   '@linear/sdk',
   '@orca/process-host',
   '@parcel/watcher',
@@ -220,11 +225,19 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 }
 
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
-  return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
-    from: packageDir,
-    to: join('node_modules', ...packageName.split('/')),
-    ...(packageName === '@orca/process-host' ? { filter: ['package.json', 'dist/**/*'] } : {})
-  }))
+  return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => {
+    const filter = [
+      ...(packageName === '@orca/process-host' ? ['package.json', 'dist/**/*'] : []),
+      // Why: another worktree can rename these away mid-copy, failing the walk with ENOENT.
+      ...(NATIVE_BUILD_PACKAGES[packageName] ? TRANSIENT_NATIVE_BUILD_ENTRY_FILTER : []),
+      ...runtimePackageExcludeFilter(packageName, electronPlatformName)
+    ]
+    return {
+      from: packageDir,
+      to: join('node_modules', ...packageName.split('/')),
+      ...(filter.length > 0 ? { filter } : {})
+    }
+  })
 }
 
 function listProcessHostModules(directory, extension, prefix = '') {
@@ -658,6 +671,8 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
 
 function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
+  // Before the node-pty prune, which judges build/Release.
+  adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
@@ -679,6 +694,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
+  WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,

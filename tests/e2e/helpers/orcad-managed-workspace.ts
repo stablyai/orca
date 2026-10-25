@@ -6,6 +6,7 @@
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './orca-app'
 import { createRestartSession } from './orca-restart'
+import type { LaunchOptions } from './orca-restart-launch-options'
 import { startOrcadConvertHost, type OrcadConvertHost } from './orcad-convert-host'
 import { seedRelayEraProfile, type RelayEraProfile } from './orcad-upgrade-profile'
 import { convertAndRetain } from './orcad-convert-flow'
@@ -14,6 +15,7 @@ import { waitForSessionReady, waitForStartupWorktreeRefresh } from './store'
 import { dismissTransientAnnouncement } from './ssh-config-host-picker'
 import { focusActiveTerminalInput } from './terminal'
 import { toRuntimeExecutionHostId } from '../../../src/shared/execution-host'
+import { getManagedOrcadSshTargetId } from '../../../src/shared/managed-orcad-execution-host'
 
 export const ORCAD_TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 
@@ -35,10 +37,12 @@ export type ManagedHostFixture = {
 /** A fresh Docker SSH host and profile for `body`, torn down whatever it throws. */
 export async function withManagedHost(
   testInfo: TestInfo,
-  body: (fixture: ManagedHostFixture) => Promise<void>
+  body: (fixture: ManagedHostFixture) => Promise<void>,
+  /** A writable template copy, for a spec that rebuilds it as an app update would. */
+  templatePath: string = ORCAD_TEMPLATE!
 ): Promise<void> {
   const host = startOrcadConvertHost('docker', testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE! })
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: templatePath })
   const fixture: ManagedHostFixture = { host, session, app: null }
   try {
     await body(fixture)
@@ -63,6 +67,8 @@ export type ManagedProfileOptions = {
   repoPath?: string
   /** Overrides the host's folder workspace, e.g. to keep /tmp outside every workspace. */
   folderPath?: string
+  /** Passed through to the relay-era seed, e.g. an unsaved editor draft. */
+  seed?: Pick<NonNullable<Parameters<typeof seedRelayEraProfile>[3]>, 'draftContent'>
   /** Runs on the profile-creating launch, before the SSH profile is seeded. */
   beforeSeed?: (page: Page) => Promise<void>
   /** Runs as soon as the converting launch starts, before the session is ready. */
@@ -82,10 +88,15 @@ export async function launchConvertedProfile(
   await options.beforeSeed?.(first.page)
   await session.close(first.app)
   fixture.app = null
-  const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-    repoPath: options.repoPath ?? host.remoteRepoPath,
-    folderPath: options.folderPath ?? host.remoteFolderPath
-  })
+  const seeded = seedRelayEraProfile(
+    session.userDataDir,
+    host.input,
+    {
+      repoPath: options.repoPath ?? host.remoteRepoPath,
+      folderPath: options.folderPath ?? host.remoteFolderPath
+    },
+    options.seed
+  )
   const { app, page } = await session.launch()
   fixture.app = app
   await options.onLaunch?.(page, seeded)
@@ -112,14 +123,15 @@ export async function launchManagedWorkspace(
 /** Quits the live launch and relaunches the same profile, waiting for startup to settle. */
 export async function relaunchManagedApp(
   fixture: ManagedHostFixture,
-  onLaunch?: (page: Page) => void | Promise<void>
+  onLaunch?: (page: Page) => void | Promise<void>,
+  launchOptions?: LaunchOptions
 ): Promise<Page> {
   if (!fixture.app) {
     throw new Error('No live launch to close')
   }
   await fixture.session.close(fixture.app)
   fixture.app = null
-  const { app, page } = await fixture.session.launch()
+  const { app, page } = await fixture.session.launch(launchOptions)
   fixture.app = app
   await onLaunch?.(page)
   await waitForSessionReady(page)
@@ -129,7 +141,7 @@ export async function relaunchManagedApp(
 
 export async function managedEnvironmentId(page: Page, targetId: string): Promise<string> {
   const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-    (entry) => entry.orcadDeployment?.sshTargetId === targetId
+    (entry) => getManagedOrcadSshTargetId(entry) === targetId
   )
   if (!environment) {
     throw new Error(`No managed server registered for ${targetId}`)

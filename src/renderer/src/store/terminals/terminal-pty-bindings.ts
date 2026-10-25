@@ -1,5 +1,8 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime-pty-id'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {

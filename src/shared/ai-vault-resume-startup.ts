@@ -14,7 +14,11 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
-import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv,
+  type AgentLaunchProfileSettings
+} from './tui-agent-launch-defaults'
 import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 import {
   quoteStartupArg,
@@ -25,6 +29,7 @@ import {
 import { getTuiAgentLaunchCommand, isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { findOptionOccurrence } from './command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from './opencode-launch-command'
+import { CLI_CONVERSATION_ADOPTING_AGENTS } from './structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from './global-settings-types'
 import { parseWslUncPath } from './wsl-paths'
 
@@ -46,9 +51,8 @@ export type AiVaultResumeStartup = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-export type AiVaultResumeLaunchSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
->
+export type AiVaultResumeLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  AgentLaunchProfileSettings
 
 /** The platform and live shell a resume line is written for, and the Codex home it pins. */
 export type AiVaultResumeHostShell = {
@@ -132,9 +136,8 @@ export function buildAiVaultLocalResumeStartup(
       cmdOverrides: resumeCommandOverrides(args),
       platform,
       shell: liveShell,
-      agentArgs:
-        args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+      agentArgs: args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings),
+      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
       resumeInLaunchCwd: true,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
@@ -217,8 +220,8 @@ export function buildAiVaultForkStartup(
     cmdOverrides: resumeCommandOverrides(args),
     platform,
     shell: liveShell,
-    agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
     fork: true
   })
@@ -249,7 +252,7 @@ export function resolveAiVaultCopiedSessionAgentArgs(
   const { platform, liveShell } = args.host
   const shell = resolveStartupShell(platform, liveShell)
   const configuredArgs = isTuiAgent(session.agent)
-    ? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs)
+    ? resolveTuiAgentLaunchArgs(session.agent, settings)
     : ''
   const configured = tokenizeStartupCommand(configuredArgs, shell)
   if (!configured.ok) {
@@ -283,22 +286,26 @@ export function resolveAiVaultCopiedSessionAgentArgs(
     .join(' ')
 }
 
-/** OpenCode copies are written to the local store, so the launch must not point elsewhere. */
+/** OpenCode copies are written to the local store, so the launch must not point elsewhere. Checked
+ *  before the copy exists, so every CLI whose chat could own the row's conversation is checked. */
 export function assertAiVaultCopiedSessionStoreAllowed(args: AiVaultResumeStartupArgs): void {
-  if (args.session.agent !== 'opencode' && args.session.agent !== 'opencode2') {
+  const row = args.session.agent
+  if (row !== 'opencode' && row !== 'opencode2') {
     return
   }
   const { platform, liveShell } = args.host
-  const command =
-    args.commandOverride?.trim() ||
-    args.settings?.agentCmdOverrides?.opencode ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, platform)
-  const parsed = tokenizeStartupCommand(
-    `${command} ${resolveTuiAgentLaunchArgs('opencode', args.settings?.agentDefaultArgs)}`,
-    resolveStartupShell(platform, liveShell)
-  )
-  if (!parsed.ok) {
-    throw new Error('This session cannot be opened in the CLI.')
+  for (const agent of CLI_CONVERSATION_ADOPTING_AGENTS[row]) {
+    const command =
+      (agent === row ? args.commandOverride?.trim() : undefined) ||
+      args.settings?.agentCmdOverrides?.[agent] ||
+      getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], platform)
+    const parsed = tokenizeStartupCommand(
+      `${command} ${resolveTuiAgentLaunchArgs(agent, args.settings)}`,
+      resolveStartupShell(platform, liveShell)
+    )
+    if (!parsed.ok) {
+      throw new Error('This session cannot be opened in the CLI.')
+    }
+    assertOpenCodeCopyUsesLocalStore(parsed.tokens.slice(1))
   }
-  assertOpenCodeCopyUsesLocalStore(parsed.tokens.slice(1))
 }

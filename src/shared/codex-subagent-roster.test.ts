@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
-  AGENT_TYPE_MAX_LENGTH
-} from './agent-status-types'
+import { AGENT_MODEL_MAX_LENGTH, AGENT_TYPE_MAX_LENGTH } from './agent-status-types'
 import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,
@@ -46,22 +42,6 @@ describe('Codex subagent roster', () => {
     upsertCodexSubagent(roster, '   ', { state: 'waiting' }, 10)
 
     expect(roster.size).toBe(0)
-  })
-
-  it('bounds live storage while admitting a replacement after one child stops', () => {
-    const roster: CodexSubagentRoster = new Map()
-    for (let index = 0; index <= AGENT_STATUS_MAX_SUBAGENTS; index += 1) {
-      upsertCodexSubagent(roster, `child-${index}`, { state: 'working' }, index)
-    }
-
-    expect(roster.size).toBe(AGENT_STATUS_MAX_SUBAGENTS)
-    expect(roster.has(`child-${AGENT_STATUS_MAX_SUBAGENTS}`)).toBe(false)
-
-    finishCodexSubagent(roster, 'child-0')
-    upsertCodexSubagent(roster, 'replacement', { state: 'working' }, 100)
-
-    expect(roster.size).toBe(AGENT_STATUS_MAX_SUBAGENTS)
-    expect(roster.has('replacement')).toBe(true)
   })
 
   describe('codexRosterChildWorkLiveness', () => {

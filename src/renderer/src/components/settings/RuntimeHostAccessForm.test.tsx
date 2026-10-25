@@ -40,7 +40,7 @@ describe('RuntimeHostAccessForm', () => {
   it('blocks accidental loopback and explains the recovery path', () => {
     const markup = renderForm('ws://127.0.0.1:6768')
     expect(markup).toContain('This link points back to this device')
-    expect(markup).toContain('I am using an SSH tunnel')
+    expect(markup).toContain('I reach this address through an SSH tunnel')
     expect(markup).toContain('disabled')
   })
 

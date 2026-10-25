@@ -47,7 +47,7 @@ function openHost(): void {
     adapter: startsWhenPublished(
       {
         acquire: async ({ fence, spawnToken }) => ({
-          providerChildPhase: 'starting' as const,
+          acquisitionGeneration: `generation-${fence}`,
           process: {
             hostId: 'local',
             pid: 4242,
@@ -64,7 +64,9 @@ function openHost(): void {
         }),
         closeSession,
         releaseAcquisition: async () => true,
-        dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
+        dispatch: async () => {
+          throw new Error('dispatch is not exercised by this test')
+        },
         cancelTurn: async () => ({ cancelled: false }),
         answerPrompt: async () => undefined,
         setOption: async () => undefined

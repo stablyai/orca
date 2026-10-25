@@ -30,11 +30,13 @@ import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quic
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
   groupId: string
+  isFocused: boolean
 }
 
 export function TabBarQuickCommandsButton({
   worktreeId,
-  groupId
+  groupId,
+  isFocused
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
@@ -185,7 +187,7 @@ export function TabBarQuickCommandsButton({
               )}
             >
               <Play className="size-3.5" />
-              <span className="text-[12px] font-medium">
+              <span className="text-[12px] font-medium @max-[480px]/tab-strip:hidden">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
                   'Command'
@@ -216,6 +218,7 @@ export function TabBarQuickCommandsButton({
   return (
     <>
       <TabBarQuickCommandsMenu
+        isFocused={isFocused}
         repoCommands={repoCommands}
         globalCommands={globalCommands}
         mostRecent={mostRecent}

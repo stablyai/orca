@@ -7,18 +7,20 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { cacheStableSurfaceRecoveryFailure } from './web-session-terminal-orphan-recovery-cache'
 import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-recovery-rpc-lane'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
-import { hasTerminalHandleRetirementProof } from './web-session-terminal-orphan-recovery-surface-index'
+import {
+  hasTerminalHandleRetirementProof,
+  isValidReadySurface,
+  terminalRowsBySurface
+} from './web-session-terminal-orphan-recovery-surface-index'
 import { isTerminalRecoverySnapshot } from './web-session-terminal-recovery-snapshot-validation'
 import {
   mergeRetainedTerminalSurfaces,
-  isValidReadySurface,
-  terminalRowsBySurface,
   type AnyRecoverySurface,
   type RecoverySurface
 } from './web-session-terminal-orphan-recovery-surface'

@@ -8,9 +8,9 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { isPaneOwnerRecoveryError, TerminalErrorToast } from './TerminalErrorToast'
+import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
-import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -37,6 +37,7 @@ export function TerminalPaneSurface({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
+    activeAgentId,
     activePane,
     activePaneCanContinueInNewSession,
     activePaneCanResumeInChat,
@@ -188,6 +189,7 @@ export function TerminalPaneSurface({
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}
+        agentId={activeAgentId}
         isActive={isActive}
         pane={activePane}
         tabId={tabId}
@@ -198,31 +200,21 @@ export function TerminalPaneSurface({
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}
+              agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={
-                isPaneOwnerUnverifiedError(visibleTerminalError)
-                  ? () => {
-                      const ptyId = activePane
-                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
-                        : null
-                      return requestTerminalPaneRecovery({
-                        tabId,
-                        ptyId,
-                        reason: 'reattach-unverifiable',
-                        // The user asking again is the new trigger that reopens
-                        // a reason an observed failure has closed.
-                        trigger: 'user'
-                      }).then((recovered) => {
-                        if (recovered) {
-                          dismissTerminalError()
-                        }
-                        return recovered
-                      })
-                    }
+                isPaneOwnerRecoveryError(visibleTerminalError)
+                  ? () =>
+                      Promise.resolve(
+                        paneTransportsRef.current.get(activePane.id)?.retryRecovery?.() ?? false
+                      )
                   : undefined
               }
+              onOpenNewTerminal={() => {
+                openTerminalBesideTab(tabId)
+              }}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`

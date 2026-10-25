@@ -2,12 +2,18 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  encryptBytes
+} from '../../../shared/e2ee-crypto'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
 } from '../../../shared/remote-runtime-memory-limits'
-import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime-request-frames'
+import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 function publicKeyToBase64(key: Uint8Array): string {

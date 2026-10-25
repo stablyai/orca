@@ -5,6 +5,13 @@ import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -79,7 +86,7 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
   })
 
   it('resumes a leaf whose ssh pty is gone while its target is connected', () => {
-    const record = makeRecord({ origin: 'worktree-sleep' })
+    const record = makeRecord({ origin: 'quit' })
     setStoreState({
       activeWorktreeId: 'wt-other',
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },

@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import type { AiVaultScanProgress } from '../../../../shared/ai-vault-scan-progress'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostScope } from '../../../../shared/execution-host'
 
@@ -73,12 +73,25 @@ function loadKey(scanKey: string): void {
     .catch(() => pendingLoads.delete(scanKey))
 }
 
-/** Live progress follows the request key; settled progress also needs the applied result's ID. */
+function useKeyProgress(
+  subscribe: (listener: () => void) => () => void,
+  local: boolean,
+  scanKey: string
+): AiVaultScanProgress | null {
+  const snapshot = useCallback(
+    () => (local ? (progressByKey.get(scanKey) ?? null) : null),
+    [local, scanKey]
+  )
+  return useSyncExternalStore(subscribe, snapshot)
+}
+
+type ScanPresentation = { progress: AiVaultScanProgress; agents: AiVaultScanProgress['agents'] }
+
+/** Retains one rendered snapshot; only the requested key can replace its facts. */
 export function useAiVaultScanProgress(
   executionHostScope: ExecutionHostScope,
-  scanKey: string,
-  appliedScanId: string | undefined
-): AiVaultScanProgress | null {
+  scanKey: string
+): (ScanPresentation & { active: boolean }) | null {
   const local = executionHostScope === LOCAL_EXECUTION_HOST_ID
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -91,18 +104,37 @@ export function useAiVaultScanProgress(
     },
     [local, scanKey]
   )
-  const snapshot = useCallback(() => {
-    const progress = local ? progressByKey.get(scanKey) : undefined
-    if (!progress) {
-      return null
-    }
-    return progress.stage === 'finding' ||
-      progress.stage === 'reading' ||
-      progress.scanId === appliedScanId
-      ? progress
-      : null
-  }, [appliedScanId, local, scanKey])
-  return useSyncExternalStore(subscribe, snapshot)
+  const [shown, setShown] = useState<
+    (ScanPresentation & { scanKey: string; discovering: boolean }) | null
+  >(null)
+  const own = useKeyProgress(subscribe, local, scanKey)
+  if (own && (own !== shown?.progress || scanKey !== shown?.scanKey)) {
+    const discovering =
+      !shown ||
+      (shown.discovering &&
+        shown.scanKey === scanKey &&
+        shown.progress.scanId === own.scanId &&
+        shown.progress.settledAt === null)
+    // Partial rosters cannot replace the displayed footprint or introduce transient empty sources.
+    const roster = shown?.agents ?? []
+    const additions = discovering
+      ? own.agents.filter((agent) => !roster.some((previous) => previous.agent === agent.agent))
+      : []
+    setShown({
+      scanKey,
+      progress: own,
+      discovering,
+      agents:
+        own.stage === 'finished'
+          ? own.agents
+          : [...roster, ...additions].map(
+              (agent) => own.agents.find((current) => current.agent === agent.agent) ?? agent
+            )
+    })
+  }
+  return local && shown
+    ? { ...shown, active: own === shown.progress && own.settledAt === null }
+    : null
 }
 
 export function resetAiVaultScanProgressStoreForTests(): void {

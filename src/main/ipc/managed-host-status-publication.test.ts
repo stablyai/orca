@@ -2,20 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), notify: vi.fn(), getState: vi.fn() }))
 
-vi.mock('./ssh-ipc-context', () => ({
+vi.mock('./ssh/ssh-ipc-context', () => ({
   connectionManager: { getState: mocks.getState },
   currentRuntime: { notifySshStateChanged: mocks.notify },
   getCurrentMainWindow: () => ({ isDestroyed: () => false, webContents: { send: mocks.send } }),
   persistedStore: null,
   portForwardManager: null
 }))
-vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
+vi.mock('../ssh/targets/ssh-target-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getSshTargetRegistryStore: () => null
 }))
 
 const { clearLaunchSessionNote, clearManagedServerNotes, publishHostServerStatus } =
-  await import('./runtime-environment-managed-tunnel')
+  await import('./runtime-environments/runtime-environment-managed-tunnel')
 const { clearSshHostServerStatus, getSshHostServerStatus, setSshHostServerStatus } =
   await import('../ssh/ssh-host-server-status')
 

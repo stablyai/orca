@@ -12,6 +12,10 @@ import type { CapturePaintHold } from './cdp-screenshot'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
 import { CdpPageInputCommands } from './cdp-page-input-commands'
 import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
+import {
+  assertRemoteCliPageAccess,
+  runUnderRemoteCliPageAdmission
+} from './remote-cli-page-admission'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -84,8 +88,7 @@ export class CdpWsProxy {
         this.wss = null
         this.httpServer?.close()
         this.httpServer = null
-        // Why: a bind failure happens after debugger attach; release it here
-        // because callers cannot safely call stop() on a failed start.
+        // Failed startup has no caller-owned cleanup, so release the attached debugger here.
         this.debuggerChannel.detachDebugger()
         reject(error)
       }
@@ -96,7 +99,9 @@ export class CdpWsProxy {
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
-          this.handleClientMessage(ws, data.toString())
+          runUnderRemoteCliPageAdmission(this.webContents.id, () =>
+            this.handleClientMessage(ws, data.toString())
+          )
         }
         const onClose = (): void => {
           detach()
@@ -160,7 +165,7 @@ export class CdpWsProxy {
   }
 
   private clearClientState(): void {
-    // Why: session and focus state belongs to one websocket and must not cross client replacement.
+    // Never carry session, focus, or capture state across client replacement.
     this.domFocusReplay.clear()
     this.pageCapture.clear()
     this.sessions.clear()
@@ -178,14 +183,24 @@ export class CdpWsProxy {
     }
     const clientId = msg.id
     this.responder.recordRequestSessionId(client, clientId, msg)
+    // Refuse every step of a revoked helper, including reads.
+    try {
+      assertRemoteCliPageAccess(this.webContents.id)
+    } catch (error) {
+      this.responder.sendError(
+        clientId,
+        error instanceof Error ? error.message : String(error),
+        client
+      )
+      return
+    }
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
       return
     }
     const effectiveSessionId = this.sessions.resolveDebuggerSessionId(msg.sessionId)
     this.domFocusReplay.invalidateForMethod(msg.method, effectiveSessionId)
-    // Why: an agent raising its page must not take the user's keyboard focus (#20595); the
-    // page needs no native focus to receive input, so these succeed without side effects.
+    // Acknowledge activation without taking the user's keyboard focus (#20595).
     if (msg.method === 'Page.bringToFront' || msg.method === 'Target.activateTarget') {
       this.responder.sendResult(clientId, {}, client)
       return
@@ -194,13 +209,12 @@ export class CdpWsProxy {
       this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
     }
-    // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
+    // Electron guest screenshots need a specialized path because raw CDP capture can hang.
     if (msg.method === 'Page.captureScreenshot') {
       void this.pageCapture.handleScreenshot(client, clientId, msg.params)
       return
     }
-    // Why: CDP Page.printToPDF is not available for Electron webview guests.
-    // Electron's native printToPDF path is the reliable equivalent.
+    // Native printToPDF replaces unsupported guest CDP printing.
     if (msg.method === 'Page.printToPDF') {
       void this.pageCapture.handlePrintToPdf(client, clientId, msg.params ?? {})
       return
@@ -223,25 +237,19 @@ export class CdpWsProxy {
       this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
-    // Why: a child frame's own session routes input to that frame without native focus; only
-    // the root session needs guest-direct delivery (docs/reference/agent-browser-focus-isolation.md).
-    // Why: Chromium routes main-session key and text input on a <webview> guest by the window's
-    // focus, and presses move that focus; see docs/reference/agent-browser-focus-isolation.md.
+    // Root-session input needs guest routing; frame sessions already target their frame.
     if (
       msg.method.startsWith('Input.') &&
       this.input.handle(client, clientId, msg.method, msg.params ?? {}, effectiveSessionId)
     ) {
       return
     }
-    // Why: agent-browser waits for network idle to detect navigation completion.
-    // Electron webview CDP subscriptions silently lapse after cross-process swaps.
-    // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
+    // Process swaps lose lifecycle subscriptions that agent-browser needs for network idle.
     if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
       void this.navigation.navigateWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
-    // Why: CDP Page.reload can destroy Electron webview targets during process swaps.
-    // Use the same direct webContents reload path as Orca's own browser.reload.
+    // Reload natively because CDP reload can destroy guest targets during process swaps.
     if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return

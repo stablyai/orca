@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 
 const hooks = readFileSync(new URL('../nsis/orca-installer-hooks.nsh', import.meta.url), 'utf8')
@@ -73,7 +73,10 @@ describe.runIf(process.platform === 'win32')(
     // Vitest's 30s default would otherwise cap the blocking spawn ahead of PROBE_TIMEOUT_MS.
     const PROBE_TEST_TIMEOUT_MS = PROBE_TIMEOUT_MS + 15_000
 
-    function runProbe(arch, prefix = '') {
+    const WARM_UP_TIMEOUT_MS = 150_000
+    const ARCHES = ['SysWOW64', 'System32']
+
+    function runProbe(arch, prefix = '', timeoutMs = PROBE_TIMEOUT_MS) {
       const { args, command } = readPowerShellProbe()
       if (!process.env.SystemRoot) {
         throw new Error('SystemRoot is required on Windows')
@@ -90,11 +93,21 @@ describe.runIf(process.platform === 'win32')(
           ORCA_BACKGROUND_LAUNCH: '1',
           PSExecutionPolicyPreference: 'Restricted'
         },
-        timeoutMs: PROBE_TIMEOUT_MS
+        timeoutMs
       })
     }
 
-    it.each(['SysWOW64', 'System32'])(
+    // A fresh runner's first Get-CimInstance outlasted the watchdog; warm it once per build.
+    beforeAll(
+      () => {
+        for (const arch of ARCHES) {
+          runProbe(arch, '', WARM_UP_TIMEOUT_MS)
+        }
+      },
+      ARCHES.length * WARM_UP_TIMEOUT_MS + 15_000
+    )
+
+    it.each(ARCHES)(
       '%s permits the real inline process query',
       { timeout: PROBE_TEST_TIMEOUT_MS },
       (arch) => {
@@ -105,7 +118,7 @@ describe.runIf(process.platform === 'win32')(
       }
     )
 
-    it.each(['SysWOW64', 'System32'])(
+    it.each(ARCHES)(
       '%s rejects a failed process query',
       { timeout: PROBE_TEST_TIMEOUT_MS },
       (arch) => {

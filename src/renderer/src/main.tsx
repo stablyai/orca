@@ -17,6 +17,7 @@ import {
 import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
+import { installAppKeyboardRouter } from './lib/app-keyboard-router'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
@@ -24,38 +25,17 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
+import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
+import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
-import { installSidebarShadowComparison } from './lib/sidebar-shadow/sidebar-shadow-comparison'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { workspaceActivityShadow } from './lib/sidebar-shadow/workspace-activity-shadow'
-import {
-  pairedServerHostsShadow,
-  pairedServerRowsShadow
-} from './lib/sidebar-shadow/paired-server-rows-shadow'
-import { desktopFactsShadow } from './lib/sidebar-shadow/desktop-facts-shadow'
-import { workspaceReviewShadow } from './lib/sidebar-shadow/workspace-review-shadow'
-import { sidebarTemporalShadow } from './lib/sidebar-shadow/sidebar-temporal-shadow'
-import { workspaceCreationsShadow } from './lib/sidebar-shadow/workspace-creations-shadow'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installAppKeyboardRouter()
 installAutomationHostDiagnostic()
-// Switch point: only a build where main produces the sidebar's inputs compares them.
-if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-  const disposeSidebarShadow = installSidebarShadowComparison([
-    workspaceActivityShadow,
-    pairedServerRowsShadow,
-    pairedServerHostsShadow,
-    desktopFactsShadow,
-    workspaceReviewShadow,
-    sidebarTemporalShadow,
-    workspaceCreationsShadow
-  ])
-  import.meta.hot?.dispose(disposeSidebarShadow)
-}
 
 if (
   import.meta.env.DEV &&
@@ -69,6 +49,7 @@ if (
 }
 
 applyDocumentTheme('system', { disableTransitions: false })
+registerBrowserClientPageGuestMessageHandler(handleGuestWindowCloseMessage)
 const browserClientPageRenderer = installBrowserClientPageRenderer()
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())
 

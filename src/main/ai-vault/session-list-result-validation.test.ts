@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { parseAiVaultListResult } from './session-list-result-validation'
 
 describe('parseAiVaultListResult', () => {
+  it('keeps host cwd aliases, and drops only malformed ones', () => {
+    const parsed = parseAiVaultListResult({
+      sessions: [
+        { ...validSession('aliased'), cwdAliases: ['/home/me/work/api'] },
+        { ...validSession('malformed'), cwdAliases: [42] }
+      ],
+      issues: [],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    })
+
+    expect(parsed.sessions.map((entry) => [entry.sessionId, entry.cwdAliases])).toEqual([
+      ['aliased', ['/home/me/work/api']],
+      ['malformed', undefined]
+    ])
+  })
+
   it('keeps valid sessions when another wire entry is malformed', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession(), { id: 42 }],
@@ -98,9 +114,6 @@ describe('parseAiVaultListResult', () => {
     })
   })
 
-  // #15036: a `kind` this build has never heard of used to fail the whole issue,
-  // and the fallback re-reported it as an unkinded entry — i.e. a newer host's
-  // whole-source failure came back to an older client as a skipped transcript.
   it('keeps an issue whose kind this build does not know, as its own kinded row', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession()],

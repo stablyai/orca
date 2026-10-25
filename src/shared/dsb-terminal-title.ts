@@ -13,7 +13,7 @@ import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 const DSB_TITLE_RE = /(?:^| - )deepseek build$/i
 // Why: DSB separates its spinner with " - "; a Claude task can end on the same suffix.
 const DSB_WORKING_TITLE_RE =
-  /^(?:⚠ Action Required - )?[\u2800-\u28ff]+\s+-\s+[\s\S]+?\s-\s+deepseek build$/i
+  /^(?:\u26A0 Action Required - )?[\u2800-\u28ff]+\s+-\s+[\s\S]+?\s-\s+deepseek build$/i
 const NATIVE_VENDOR_PREFIXES = [
   `${CLAUDE_IDLE} `,
   '. ',

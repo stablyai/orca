@@ -3,11 +3,13 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
+  dictationModelRowAction,
   deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
   isDictationReady,
   isDictationSetupRequiredError,
+  isSpeechlessServerError,
   isModelInFlight,
   setDictationConfig,
   type MobileSpeechModel,
@@ -21,6 +23,7 @@ function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
 function malformedFailure(error: { code?: string; message?: string }): RpcResponse {
+  // SAFETY: Intentionally omit RPC error fields to exercise older or malformed server replies.
   return { id: 'r', ok: false, error, _meta: { runtimeId: 'rt' } } as unknown as RpcResponse
 }
 
@@ -169,6 +172,26 @@ describe('rpc wrappers', () => {
     )
   })
 
+  it('maps a headless server with no speech to update guidance (#31174)', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'runtime_error',
+        message: 'speech_unavailable: this host has no speech services'
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update Orca on this server to use voice dictation.'
+    )
+  })
+
+  it('recognizes an old server refusing a dictation start', () => {
+    expect(isSpeechlessServerError('speech_unavailable: this host has no speech services')).toBe(
+      true
+    )
+    expect(isSpeechlessServerError('voice_dictation_disabled')).toBe(false)
+  })
+
   it('keeps unrelated speech model failures specific', async () => {
     const client = clientWith([
       malformedFailure({
@@ -186,6 +209,15 @@ describe('rpc wrappers', () => {
     const client = clientWith([malformedFailure({ code: 'internal_error' })])
 
     await expect(fetchDictationSetup(client)).rejects.toThrow('Failed to load dictation models')
+  })
+})
+
+describe('dictationModelRowAction', () => {
+  it('keeps on-device rows downloadable until they are ready', () => {
+    expect(dictationModelRowAction(model({ status: 'not-downloaded' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'error' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'downloading' }), '')).toBe('downloading')
+    expect(dictationModelRowAction(model({ status: 'ready' }), 'm1')).toBe('in-use')
   })
 })
 

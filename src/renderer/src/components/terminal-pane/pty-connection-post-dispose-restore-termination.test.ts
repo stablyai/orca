@@ -113,7 +113,7 @@ describe('connectPanePty', () => {
     })
 
     const pane = createPane(1)
-    captureCallbackTerminalWrites(pane)
+    const { writes } = captureCallbackTerminalWrites(pane)
 
     // Why a counting getter: the restore task's `.finally` reads isVisibleRef.current
     // on every re-arm, so read count is a direct, deterministic measure of how many
@@ -143,12 +143,16 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+    expect(writes).toContain('snapshot-state\r\n')
     disposable.dispose()
     const readsAtDispose = visibilityReads
-    await flushAsyncTicks(200)
-
-    // A terminated chain settles in a handful of turns; the self-feeding loop grew
-    // once per microtask turn and would blow past this by orders of magnitude.
-    expect(visibilityReads - readsAtDispose).toBeLessThan(50)
+    try {
+      await flushAsyncTicks(200)
+      expect(visibilityReads - readsAtDispose).toBeLessThan(50)
+    } finally {
+      // Stop a regressed re-arm loop after measuring it so failures can finish.
+      visible = false
+    }
   })
 })

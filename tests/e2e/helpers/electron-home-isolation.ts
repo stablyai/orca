@@ -31,7 +31,8 @@ type ElectronHomeIsolationOptions = {
 }
 
 export type ElectronHomeIsolation = {
-  env: NodeJS.ProcessEnv
+  // Playwright's electron.launch rejects unset (undefined) env entries.
+  env: Record<string, string>
   isolatedHome: string
   realHome: string
 }
@@ -57,9 +58,13 @@ function assertOverlayDoesNotReplaceIsolation(
   }
 }
 
-function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function definedEnvEntries(env: NodeJS.ProcessEnv): [string, string][] {
+  return Object.entries(env).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+}
+
+function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
+    definedEnvEntries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
   )
 }
 
@@ -96,7 +101,7 @@ export function createElectronHomeIsolation({
     realHome,
     env: {
       ...stripAmbientHomeAndCodexEnv(inheritedEnv),
-      ...launchEnv,
+      ...Object.fromEntries(definedEnvEntries(launchEnv)),
       ...extraEnv,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,

@@ -2,7 +2,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorkspaceJiraIssueKey,
   prefixJiraReviewTitle
-} from '../../../../../../shared/jira-review-title'
+} from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { operationGitContext } from '../listing/operation-target'

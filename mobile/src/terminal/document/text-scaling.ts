@@ -1,10 +1,10 @@
+import { getCellHeight, getCellWidth } from './cell-metrics'
 import { elementInRoot } from './document-host-seams'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
-import { applyFitScale, getCellHeight } from './fit-scale'
+import { applyFitScale } from './fit-scale'
 import { fitDimensionsFromCell } from '../terminal-grid-fit'
-import { getCellWidth } from './viewport-transform'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the
@@ -50,7 +50,7 @@ export function isIOSWebView() {
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
 const TERMINAL_FONT_FALLBACKS =
-  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
 // Why: change the real font size, then resize the grid to fit the viewport at
 // the new cell metrics so the text shows at its true size immediately. RN's

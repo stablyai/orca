@@ -19,6 +19,8 @@ import {
   type WorktreeAttention
 } from './smart-attention'
 import { smartSortPhase } from './smart-sort-phase'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-inputs-switch'
+import { compareSmartStamps, recentStamp } from './stamp-order'
 
 export type SortBy = WorkspaceSortBy
 
@@ -77,6 +79,41 @@ export function compareWorktreeSortLabel(
   )
 }
 
+function worktreeSortReads(
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+) {
+  return {
+    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
+    identity: getWorktreeHostIdentity,
+    repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
+    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
+    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
+    manualRank: (worktree: Worktree) => worktree.manualOrder ?? worktree.sortOrder
+  }
+}
+
+function buildStampComparator(
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+): (a: Worktree, b: Worktree) => number {
+  return buildWorkspaceRowComparator<Worktree>(sortBy, {
+    ...worktreeSortReads(repoMap, labels),
+    recentActivity: recentStamp,
+    compareSmart: compareSmartStamps
+  })
+}
+
+/** Sorts in place by the owning hosts' stamps, reading no clock: the order every stamp reader shares. */
+export function sortWorktreesByStamps<W extends Worktree>(
+  worktrees: W[],
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>
+): W[] {
+  return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
+}
+
 /**
  * Build a comparator for sorting worktrees based on the current sort mode.
  *
@@ -93,16 +130,13 @@ export function buildWorktreeComparator(
   attentionByWorktree: Map<string, WorktreeAttention>,
   labels?: WorktreeSortLabels
 ): (a: Worktree, b: Worktree) => number {
-  const label = (worktree: Worktree): string =>
-    labels?.get(worktree) ?? getWorktreeSortLabel(worktree)
+  // Switch point: Recent and Smart read the owning host's stamps, with no clock.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    return buildStampComparator(sortBy, repoMap, labels)
+  }
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
-    label,
-    identity: getWorktreeHostIdentity,
-    repoLabel: (worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
+    ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
-    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
-    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
-    manualRank: (worktree) => worktree.manualOrder ?? worktree.sortOrder,
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
@@ -171,10 +205,16 @@ export type SmartSortSources = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 }
 
+/** For stamp-sorted callers: the stamps need no live terminal or agent sources. */
+export const NO_LIVE_SMART_SORT_SOURCES: SmartSortSources = Object.freeze({
+  tabsByWorktree: {},
+  agentStatusByPaneKey: {},
+  runtimePaneTitlesByTabId: {},
+  ptyIdsByTabId: {}
+})
+
 export type WorktreeSortRanking<W extends Worktree> = {
   sorted: W[]
-  /** Smart only, and only once warm. */
-  attentionByWorktree: Map<string, WorktreeAttention> | null
   /** True when this sort found the live signal that latches Smart for the list's lifetime. */
   detectedLiveSmartSignal: boolean
 }
@@ -192,6 +232,11 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   const { worktrees, sortBy, now, sources } = args
   // Why precompute: the label tiebreaker runs on every comparison in every mode.
   const labels = buildWorktreeSortLabels(worktrees)
+  // Switch point: stamps need no cold phase, latch or attention map.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    worktrees.sort(buildStampComparator(sortBy, args.repoMap, labels))
+    return { sorted: worktrees, detectedLiveSmartSignal: false }
+  }
   let detectedLiveSmartSignal = false
 
   // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
@@ -207,7 +252,7 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
       detectedLiveSmartSignal = true
     } else {
       worktrees.sort((a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels))
-      return { sorted: worktrees, attentionByWorktree: null, detectedLiveSmartSignal: false }
+      return { sorted: worktrees, detectedLiveSmartSignal: false }
     }
   }
 
@@ -226,9 +271,5 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
         )
       : new Map<string, WorktreeAttention>()
   worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, labels))
-  return {
-    sorted: worktrees,
-    attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,
-    detectedLiveSmartSignal
-  }
+  return { sorted: worktrees, detectedLiveSmartSignal }
 }

@@ -71,7 +71,10 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Why: layouts are ~31% of a large listing and only the human CLI formatter
   // reads them. Absent means "include" so pre-flag clients keep rendering them.
-  includeVisualLayouts: z.boolean().optional()
+  includeVisualLayouts: z.boolean().optional(),
+  // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
+  // activation sweep); other hosts drop it, as they did before it existed.
+  placeUnshownLiveTerminals: z.boolean().optional()
 })
 
 export const TerminalResolveActive = z.object({
@@ -131,6 +134,11 @@ export const TerminalRename = TerminalHandle.extend({
   })
 })
 
+// An explicit empty string clears the pane; an omitted title must not clear it.
+export const TerminalSetPaneTitle = TerminalHandle.extend({
+  title: z.string()
+})
+
 export const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
@@ -187,6 +195,13 @@ export const TerminalSetViewerColors = z.object({
   colors: TerminalColorQueryReplyColorsParam
 })
 
+/** The provider session a terminal's launch resumes. */
+export const ResumeProviderSessionParam = z.object({
+  key: z.enum(['session_id', 'conversation_id']),
+  id: z.string().min(1).max(512),
+  transcriptPath: z.string().min(1).max(32_768).optional()
+})
+
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
@@ -207,13 +222,7 @@ export const TerminalCreateParams = z.object({
         .optional()
     })
     .optional(),
-  resumeProviderSession: z
-    .object({
-      key: z.enum(['session_id', 'conversation_id']),
-      id: z.string().min(1).max(512),
-      transcriptPath: z.string().min(1).max(32_768).optional()
-    })
-    .optional(),
+  resumeProviderSession: ResumeProviderSessionParam.optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
@@ -227,19 +236,51 @@ export const TerminalCreateParams = z.object({
   tabId: OptionalString,
   leafId: OptionalString,
   spawnIntent: SpawnIntentParam.optional(),
-  shell: WindowsShellOverrideParam.optional()
+  shell: WindowsShellOverrideParam.optional(),
+  // Layout-owner build: the window's own new tab, already written to main under `tabId`/`leafId`;
+  // main starts its first pane. Only a window sends it, and only to its own main process.
+  windowTab: z.literal(true).optional(),
+  cwd: OptionalString
 })
 
-export const TerminalSplit = TerminalHandle.extend({
-  direction: z
-    .unknown()
-    .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-    .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
-    .optional(),
-  command: OptionalString,
-  env: z.record(z.string(), z.string()).optional(),
-  telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
-})
+export const TerminalSplit = z
+  .object({
+    // Required unless `pane` names the source; the refinement keeps the handle's message.
+    terminal: OptionalString,
+    expectedIncarnationId: TerminalHandle.shape.expectedIncarnationId,
+    direction: z
+      .unknown()
+      .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
+      .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
+      .optional(),
+    command: OptionalString,
+    env: z.record(z.string(), z.string()).optional(),
+    telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
+    // A timed-out split's leaf id; sent only to hosts advertising TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY.
+    // Strict, unlike OptionalString: a stripped blank id would read as a fresh split.
+    retrySplit: z.string().min(1, 'Missing split id').optional(),
+    // Layout-owner build: a window names its own pane; main writes the split and starts it.
+    pane: z
+      .object({
+        worktreeId: requiredString('Missing worktree'),
+        tabId: requiredString('Missing tab'),
+        leafId: requiredString('Missing pane')
+      })
+      .optional(),
+    newLeafId: OptionalString,
+    cwd: OptionalString,
+    initialSize: z
+      .object({
+        cols: z.number().int().min(1).max(1000),
+        rows: z.number().int().min(1).max(500)
+      })
+      .optional()
+  })
+  .superRefine((params, ctx) => {
+    if (!params.terminal && !params.pane) {
+      ctx.addIssue({ code: 'custom', message: 'Missing terminal handle', path: ['terminal'] })
+    }
+  })
 
 export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')

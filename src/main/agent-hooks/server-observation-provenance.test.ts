@@ -82,7 +82,7 @@ describe('agent status observation provenance', () => {
     expect(lastObservation(seen).boundary).toBeUndefined()
   })
 
-  it('stamps main-parsed OSC 9999 rows as osc-origin snapshots', () => {
+  it('stamps terminal status ingestion as osc-origin snapshots', () => {
     const server = newServer()
     const seen = collectObservations(server)
 
@@ -138,10 +138,7 @@ describe('agent status observation provenance', () => {
     expect(lastObservation(seen).kind).toBe('identity-only')
   })
 
-  // Why: this is the whole point of stamping boundary from the listener's own classifier.
-  // `before_agent_start`, `BeforeAgent` and `agent.start` are NOT the two raw literals the
-  // retired-pane gate matches, so a second hand-written list here would report them as
-  // non-boundaries — exactly the defect PR #14626 fixed one instance of.
+  // Reuse provider boundary classification; raw event-name lists miss providers with different spellings.
   it.each([
     { source: 'claude', hookEventName: 'UserPromptSubmit', agentType: 'claude' },
     { source: 'pi', hookEventName: 'before_agent_start', agentType: 'pi' },
@@ -256,8 +253,7 @@ describe('agent status observation provenance', () => {
       const path = join(userDataPath, 'agent-hooks', 'last-status.json')
       expect(existsSync(path)).toBe(true)
       const file = readFileSync(path, 'utf8')
-      // Why: the sequencer that issued it dies with the process, so a stored copy could only
-      // rehydrate as an ordering claim from a dead authority.
+      // Process-local sequencing cannot remain ordering authority after restart.
       expect(file).not.toContain('observation')
       expect(JSON.parse(file).entries[PANE].observation).toBeUndefined()
     } finally {

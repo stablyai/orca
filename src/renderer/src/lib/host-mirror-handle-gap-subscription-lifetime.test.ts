@@ -9,6 +9,7 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
 // The retention suite that the reconciled verdict loop replaced carried one assertion the split
 // suites did not: the store subscription is held for exactly as long as something needs it.
@@ -43,11 +44,13 @@ let subscribeCalls: number
 function publishPaneAndPark(environmentId: string, tabId: string): void {
   const state = useAppStore.getState()
   const published = state.tabsByWorktree[WORKTREE_ID] ?? []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
-      [WORKTREE_ID]: [...published.filter((tab) => tab.id !== tabId), { id: tabId, title: tabId }]
+      [WORKTREE_ID]: [
+        ...published.filter((tab) => tab.id !== tabId),
+        makeTerminalTab({ id: tabId, worktreeId: WORKTREE_ID, title: tabId })
+      ]
     },
     terminalLayoutsByTabId: {
       ...state.terminalLayoutsByTabId,
@@ -58,16 +61,15 @@ function publishPaneAndPark(environmentId: string, tabId: string): void {
         ptyIdsByLeafId: { [`leaf-${tabId}`]: `remote:${environmentId}@@term_${tabId}` }
       }
     }
-  } as never)
+  })
   parkUntilHostMirrorHandleLands(environmentId, WORKTREE_ID, tabId, () => {})
 }
 
 /** Lands the pane's handle, which is what both releases a waiter and retires a verdict. */
 function landHandle(tabId: string): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: { ...useAppStore.getState().ptyIdsByTabId, [tabId]: [`pty-${tabId}`] }
-  } as never)
+  })
 }
 
 describe('host-mirror handle-gap store subscription lifetime', () => {
@@ -78,15 +80,14 @@ describe('host-mirror handle-gap store subscription lifetime', () => {
     unsubscribeCalls = 0
     subscribeCalls = 0
     const realSubscribe = useAppStore.subscribe.bind(useAppStore)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscriber is invoked with the store state pair; the narrowed listener type is what this suite asserts on.
-    vi.spyOn(useAppStore, 'subscribe').mockImplementation(((listener: never) => {
+    vi.spyOn(useAppStore, 'subscribe').mockImplementation((listener) => {
       subscribeCalls += 1
       const unsubscribe = realSubscribe(listener)
       return () => {
         unsubscribeCalls += 1
         unsubscribe()
       }
-    }) as never)
+    })
   })
 
   afterEach(() => {

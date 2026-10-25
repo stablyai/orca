@@ -12,7 +12,7 @@ export function hostServerDepsStub(
     managedEnvironmentId: () => null,
     ensureTunnel: vi.fn(async () => undefined),
     ensureServing: vi.fn(async () => ({ state: 'serving' as const })),
-    retainCommittedSource: vi.fn(),
+    retainCommittedSource: vi.fn(async () => {}),
     hasUnfinishedConversion: () => false,
     abandonConversion: vi.fn(async () => undefined),
     abandonDeploy: vi.fn(async () => undefined),
@@ -29,6 +29,7 @@ export function hostServerDepsStub(
     report: vi.fn(),
     autoUpdate: vi.fn(async () => ({ outcome: 'skipped' as const, reason: 'current' as const })),
     recordedUpdateFailure: () => null,
+    failedThisLaunch: () => true,
     recordUpdateFailure: vi.fn(),
     clearUpdateFailure: vi.fn(),
     ...overrides

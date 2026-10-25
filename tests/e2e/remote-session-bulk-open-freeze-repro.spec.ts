@@ -114,8 +114,8 @@ test('R1 paired remote bulk-open freeze oracle @freeze-repro', async ({
 }, testInfo) => {
   test.setTimeout(420_000)
   const host = await launchHeadlessPairedRuntimeHost()
-  let webClient: PairedWebClient | null = null
-  let desktopClient: PairedElectronClient | null = null
+  let webClient: PairedWebClient | undefined
+  let desktopClient: PairedElectronClient | undefined
   let disposeSessions: (() => Promise<void>) | null = null
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {

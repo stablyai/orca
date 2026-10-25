@@ -1,7 +1,12 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import { flushAsyncTicks } from './pty-connection-test-async'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
@@ -154,7 +159,8 @@ async function connectRemotePane(): Promise<{
   pane.terminal.cols = PANE_COLS
   pane.terminal.rows = PANE_ROWS
   const operations: { kind: 'resize' | 'write'; value: string }[] = []
-  pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+  pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+    data = terminalWriteText(data)
     operations.push({ kind: 'write', value: data })
     callback?.()
   })
@@ -226,17 +232,5 @@ describe('pushed remote snapshot replay grid', () => {
 
     expect(session.pane.terminal.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
     session.dispose()
-  })
-
-  it('only reproduces the host frame when it is parsed at the host grid', async () => {
-    const atHostGrid = await renderHeadlessBuffer([HOST_FRAME], HOST_COLS, HOST_ROWS)
-    const atPaneGrid = await renderHeadlessBuffer([HOST_FRAME], PANE_COLS, HOST_ROWS - 4)
-
-    // Why this is the user-visible failure: the alternate screen has no
-    // scrollback, so rows scrolled off by a shorter grid are gone for good and
-    // an idle TUI never repaints them.
-    expect(atHostGrid.filter((line) => line.startsWith('host row'))).toHaveLength(HOST_ROWS)
-    expect(atPaneGrid.filter((line) => line.startsWith('host row')).length).toBeLessThan(HOST_ROWS)
-    expect(atPaneGrid).not.toContain('host row 1')
   })
 })

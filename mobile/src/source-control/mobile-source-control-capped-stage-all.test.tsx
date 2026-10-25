@@ -110,10 +110,6 @@ async function runStageAll(
 }
 
 describe('mobile Stage All on a capped git.status', () => {
-  it('keeps didHitLimit from the host reply', () => {
-    expect(cappedStatus().didHitLimit).toBe(true)
-  })
-
   it('asks the host to stage every change instead of the capped rows', async () => {
     const sendGitRequest = vi.fn<SendGitCall>().mockResolvedValue({ ok: true, stagedScope: 'all' })
 

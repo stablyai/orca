@@ -6,6 +6,7 @@ import {
   buildDashboardBucketCounts,
   createDashboardBucketCountsCache
 } from './build-dashboard-bucket-counts'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AgentBucketCounts = Record<DashboardBucket, number>
 
@@ -51,7 +52,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   if (
     previous !== null &&
     previous.repos === s.repos &&
-    previous.worktreesByRepo === s.worktreesByRepo &&
+    selectWorktreesByRepo(previous) === selectWorktreesByRepo(s) &&
     previous.tabsByWorktree === s.tabsByWorktree &&
     previous.unifiedTabsByWorktree === s.unifiedTabsByWorktree &&
     previous.agentStatusByPaneKey === s.agentStatusByPaneKey &&
@@ -62,7 +63,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.ptyIdsByTabId === s.ptyIdsByTabId &&
     previous.runtimePaneTitlesByTabId === s.runtimePaneTitlesByTabId &&
     previous.paneForegroundAgentByPaneKey === s.paneForegroundAgentByPaneKey &&
-    previous.folderWorkspaces === s.folderWorkspaces &&
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(s) &&
     previous.acknowledgedAgentsByPaneKey === s.acknowledgedAgentsByPaneKey &&
     previous.agentStatusEpoch === s.agentStatusEpoch
   ) {
@@ -70,7 +71,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   }
   previousState = {
     repos: s.repos,
-    worktreesByRepo: s.worktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(s),
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     agentStatusByPaneKey: s.agentStatusByPaneKey,
@@ -81,7 +82,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
     paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
-    folderWorkspaces: s.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(s),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     agentStatusEpoch: s.agentStatusEpoch,
     settings: null
@@ -104,7 +105,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
     // Why Date.now() is read here and not a dep: idle-decay tracks agentStatusEpoch
     // ticks (carried in `state`), matching useDashboardData. That epoch doubles as the
     // cache generation, so a stale-boundary tick recounts every decayed bucket.
+    // oxlint-disable-next-line react/purity -- wall time is sampled per epoch tick, as explained above.
     return buildDashboardBucketCounts(state, Date.now(), cacheRef.current, state.agentStatusEpoch)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 }

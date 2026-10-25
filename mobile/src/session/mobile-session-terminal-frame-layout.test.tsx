@@ -67,25 +67,6 @@ function controller(
 }
 
 describe('the terminal frame on the page', () => {
-  it('reports its height when the session opens from the loading state', () => {
-    const heights: number[] = []
-    const notify = (frame: { height: number }): void => {
-      heights.push(frame.height)
-    }
-    let renderer: ReturnType<typeof create> | undefined
-    act(() => {
-      renderer = create(
-        createElement(MobileSessionActiveContent, { controller: controller(true, notify) })
-      )
-    })
-    act(() => {
-      renderer?.update(
-        createElement(MobileSessionActiveContent, { controller: controller(false, notify) })
-      )
-    })
-    expect(heights).toEqual([FRAME.height])
-  })
-
   it('stays one mounted frame across loading, a pending terminal and the terminal', () => {
     // A frame that remounts per branch reports again on every return; one that stays reports once.
     const heights: number[] = []

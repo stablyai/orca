@@ -1,9 +1,16 @@
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type {
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from '../../../../shared/agent-status-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
+  /** The host's stamp for the turn end this `done` reports; restatements keep it. */
+  turnEndedAt?: number
+  /** How the host identified that end (`TurnEndDisposition`). */
+  turnEndDisposition?: TurnEndDisposition
   /** Renderer-local boundary used only to reject a delayed cross-host completion. */
   localStateStartedAt?: number
 }
@@ -42,6 +49,16 @@ export type AgentCompletionCoordinatorOptions = {
   /** Fired once per confirmed exit (settled local absence, or the host's `exited` verdict). */
   onForegroundAgentExited?: (exited: RecognizedAgentProcess) => void
   isLive: () => boolean
+  /** How the hook lane identified the turn end a title edge (null: no title known) would announce:
+   *  `identified` it announces it; `ambiguous` the title lane keeps main's role; null not hook-owned. */
+  titleTurnEndEvidence?: (
+    title: string | null,
+    foregroundAgent: RecognizedAgentProcess['agent'] | null
+  ) => 'identified' | 'ambiguous' | null
+  /** An idle edge whose turn end the hook lane announces still ends this output burst. */
+  onHookOwnedTitleIdle?: () => void
+  /** Whether a hook snapshot's end is hook-owned on this pane (else main's behavior exactly). */
+  usesHookTurnEnds?: (snapshot: AgentCompletionStatusSnapshot) => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: a host that publishes foreground evidence with its inventory lets a
   // pane without agent evidence stay push-driven instead of scheduling
@@ -67,6 +84,8 @@ export type AgentCompletionCoordinator = {
   /** Another reader saw this agent in the foreground; lets the monitor confirm its exit. */
   observeForegroundAgentProcess: (process: RecognizedAgentProcess) => void
   hasPendingHookDoneCompletion: () => boolean
+  /** Whether a turn end observed now could be announced (live, with agent evidence, not re-arming). */
+  canAnnounceCompletion: () => boolean
   resetCompletionState: (options?: { requireFreshWorking?: boolean }) => void
   dispose: () => void
 }

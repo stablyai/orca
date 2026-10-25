@@ -750,4 +750,29 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
     expect(vi.getTimerCount()).toBe(1)
   })
+
+  it('paints the rest title at session_start so a branded Pi reads as ready before its first turn', async () => {
+    const harness = createHarness()
+    await harness.callHook('session_start', { reason: 'startup' })
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('drops a leftover needs-input marker when session_start replaces the session', async () => {
+    const harness = createHarness()
+    await harness.callHook('ui_prompt_start')
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+    await harness.callHook('session_start', { reason: 'switch' })
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([{ kind: 'omp' as const }, { processTitle: 'omp' }])(
+    'leaves OMP its native startup title so readiness waits out its setup wizard: %j',
+    async (options) => {
+      const harness = createHarness(options)
+      await harness.callHook('session_start', { reason: 'startup' })
+      expect(harness.titles).toEqual([])
+    }
+  )
 })

@@ -12,8 +12,8 @@ import {
   parseOrcadLaunchSshSession,
   writeOrcadLaunchSshSessionCommand
 } from './orcad-launch-ssh-session'
-import { orcadLaunchCommand } from './orcad-remote-launch'
-import { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
+import { orcadLaunchCommand } from '../managed-server/install/orcad-remote-launch'
+import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const mac = getRemoteHostPlatform('darwin-arm64')
@@ -261,6 +261,8 @@ describe('orcad launch command session record', () => {
   })
 
   it('still prints the detached PID last', () => {
-    expect(orcadLaunchCommand(mac, spec)).toMatch(/&& cat '[^']+\/\.orcad-pid'$/u)
+    const command = orcadLaunchCommand(mac, spec)
+    expect(command).toMatch(/^orcad_pid='[^']+\/\.orcad-pid';/u)
+    expect(command).toMatch(/&& cat "\$orcad_pid"$/u)
   })
 })

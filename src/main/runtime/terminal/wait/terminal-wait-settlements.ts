@@ -19,9 +19,12 @@ import {
 } from '../../tui-idle-evidence'
 import { leafTuiIdleEvidence, ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
+import { detectTerminalComposerDraft } from '../../../../shared/terminal-composer-draft'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
-import type { OrcaRuntimeWithDeliverPendingMessages } from '../../orchestration/mail/terminal-message-delivery'
+
+const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected abstract resolveWaiter(
@@ -31,10 +34,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected abstract removeWaiter(
     ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
   ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
-  protected abstract deliverPendingMessages(
-    ...args: Parameters<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
-  ): ReturnType<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
 
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
     const handle = this.issueHandle(leaf)
@@ -182,7 +181,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     // stream to go quiet, so wake just after the window could have elapsed. A pane that is
     // still producing output re-arms from its own fresher timestamp rather than spinning.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
+    const delay =
+      live?.ptyId && this.isPtyHoldingDelivery(live.ptyId)
+        ? DIALOG_HOLD_RECHECK_MS
+        : Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
       const current = this.leaves.get(leafKey)
@@ -211,7 +214,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
    */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live) {
+    if (!live || (live.ptyId && this.isPtyHoldingDelivery(live.ptyId))) {
       return false
     }
     const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
@@ -221,6 +224,21 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     return isTuiIdleReadyVerdict(
       evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    )
+  }
+
+  /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one. */
+  private isPtyHoldingDelivery(ptyId: string): boolean {
+    if (this.isPtyAwaitingUserInput(ptyId)) {
+      return true
+    }
+    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const state = this.readWholeScreenModel(ptyId)
+    return (
+      lastInputAt !== null &&
+      Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
+      !!state &&
+      detectTerminalComposerDraft(state.emulator.getCursorLineContext()) !== null
     )
   }
 
@@ -249,26 +267,5 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return title
     }
     return null
-  }
-
-  protected settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
   }
 }

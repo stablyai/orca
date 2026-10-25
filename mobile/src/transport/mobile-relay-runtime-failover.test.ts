@@ -90,6 +90,7 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
+  readonly probeAfterBackground = vi.fn()
 }
 
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
@@ -279,7 +280,9 @@ describe('relay runtime recovery without direct connectivity', () => {
   it('recovers when the credential bundle was unreadable at supervisor start', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const readBundle = vi
-      .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
+      .fn(async (): Promise<MobileRelayCredentialBundle | null> =>
+        bundleWith(2, Number.MAX_SAFE_INTEGER)
+      )
       .mockResolvedValueOnce(null)
     const deps = dependencies({ readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)

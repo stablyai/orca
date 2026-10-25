@@ -4,6 +4,7 @@
 
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
+  isKnownWorkspaceLayoutFrameType,
   readWorkspaceLayoutFramePosition,
   readWorkspaceLayoutStreamFrame,
   type WorkspaceLayoutChangeFrame,
@@ -11,6 +12,7 @@ import {
 } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+import { exposeLocalLayoutStreamE2EEnd } from './local-layout-stream-e2e-end'
 
 /** `lost`: the stream ended without a refusal and the client stopped. `refused`: the host answered
  *  that it will never serve this stream, so the client stopped. */
@@ -21,23 +23,41 @@ export type RuntimeLayoutStreamStatus =
 // An older host without the method, or a caller scope denied it: a retry gets the same answer.
 const REFUSAL_CODES = ['method_not_found', 'forbidden'] as const
 
+/** First wait before a lost stream reopens; it doubles to the cap until a snapshot comes. */
+const REOPEN_DELAY_MS = 1_000
+const REOPEN_DELAY_CAP_MS = 30_000
+/** Immediate resubscribes allowed before a frame applies cleanly; then the loss path's backoff. */
+const RESYNC_BUDGET = 3
+
 /**
- * Opens the stream once; `onFrame` gets a snapshot first, then that stream's changes. A local
- * stream ends only on close, document retirement or a refusal, so nothing reopens it. A remote
- * stream that drops reports `lost`; reopening it belongs to the connection's reconnect.
+ * Opens the stream; `onFrame` gets a snapshot first, then that stream's changes. A lost stream
+ * reports `lost`, then reopens after a backoff, and its snapshot replaces what the caller holds.
+ *
+ * A live stream that misses a frame resubscribes at once for a fresh snapshot: a records frame of
+ * another epoch or out of sequence, an unreadable frame, or one `onFrame` cannot apply.
  */
 export function subscribeRuntimeLayout(
   target: RuntimeClientTarget,
   params: { workspaces?: 'all' | string[] },
   onFrame: (frame: WorkspaceLayoutChangeFrame) => void,
   onStatus: (status: RuntimeLayoutStreamStatus) => void,
-  /** Each frame's stream position, an unreadable frame's too: a reply may name any frame. */
+  /** Each frame's stream position, a skipped frame's too: a reply may name any frame. A frame
+   *  that sends the stream back for a snapshot reports none; the snapshot's position covers it. */
   onPosition?: (seq: number) => void
 ): { close: () => void } {
   // Bumped whenever a stream is given up, so its late callbacks change nothing.
   let generation = 0
   let handle: { unsubscribe: () => void } | null = null
   let state: RuntimeLayoutStreamStatus['state'] = 'connecting'
+  let reopenTimer: ReturnType<typeof setTimeout> | null = null
+  let reopenDelay = REOPEN_DELAY_MS
+  /** The snapshot's epoch and the last position this stream applied, once a host sends epochs. */
+  let epoch: string | undefined
+  let lastSeq: number | undefined
+  /** Resubscribes since a records frame last applied cleanly. */
+  let resyncs = 0
+  /** The budget ran out: until a records frame applies cleanly, snapshots keep the backoff. */
+  let storm = false
 
   const setStatus = (status: RuntimeLayoutStreamStatus): void => {
     state = status.state
@@ -64,15 +84,56 @@ export function subscribeRuntimeLayout(
     }
     const refusal = REFUSAL_CODES.find((code) => hasRuntimeRpcErrorCode(error, code))
     stop(refusal ? { state: 'refused', code: refusal } : { state: 'lost' })
+    // Why: layout.apply still reaches main without the stream, so main's own changes would go
+    // unseen until a relaunch; a server's would until its connection is rebuilt.
+    if (!refusal) {
+      reopenTimer = setTimeout(() => {
+        reopenTimer = null
+        void open()
+      }, reopenDelay)
+      reopenDelay = Math.min(reopenDelay * 2, REOPEN_DELAY_CAP_MS)
+    }
+  }
+
+  // Before the snapshot the host itself is suspect, so the loss path's backoff applies.
+  const resync = (streamGeneration: number, reason: unknown): void => {
+    if (streamGeneration !== generation) {
+      return
+    }
+    // A frame that fails every time must not resubscribe without limit.
+    if (state !== 'live' || resyncs >= RESYNC_BUDGET) {
+      storm ||= resyncs >= RESYNC_BUDGET
+      lose(streamGeneration, reason)
+      return
+    }
+    resyncs += 1
+    console.warn('[workspace-layout] layout stream resubscribes:', reason)
+    release()
+    void open()
   }
 
   const receive = (streamGeneration: number, value: unknown): void => {
     if (streamGeneration !== generation) {
       return
     }
+    if (import.meta.env.MODE === 'e2e' && target.kind === 'local') {
+      exposeLocalLayoutStreamE2EEnd(value)
+    }
     const seq = readWorkspaceLayoutFramePosition(value)
     try {
-      deliver(streamGeneration, readWorkspaceLayoutStreamFrame(value))
+      const frame = readWorkspaceLayoutStreamFrame(value)
+      // A newer host's frame type is skipped; a malformed frame of a known type lost a change.
+      if (frame || isKnownWorkspaceLayoutFrameType(value)) {
+        deliver(streamGeneration, frame)
+      } else if (
+        state === 'live' &&
+        seq !== undefined &&
+        lastSeq !== undefined &&
+        seq === lastSeq + 1
+      ) {
+        // A skipped frame still holds its position, so the next one is no gap.
+        lastSeq = seq
+      }
     } finally {
       if (seq !== undefined && streamGeneration === generation) {
         onPosition?.(seq)
@@ -81,8 +142,8 @@ export function subscribeRuntimeLayout(
   }
 
   const deliver = (streamGeneration: number, frame: WorkspaceLayoutStreamFrame | null): void => {
-    // Null: a newer host's frame type or an unreadable frame; neither may change the cache.
     if (!frame) {
+      resync(streamGeneration, new Error('unreadable layout frame'))
       return
     }
     if (frame.type === 'end') {
@@ -90,9 +151,33 @@ export function subscribeRuntimeLayout(
       return
     }
     if (frame.type === 'snapshot') {
+      // During a resync storm the backoff keeps growing; a snapshot alone proves nothing.
+      if (!storm) {
+        reopenDelay = REOPEN_DELAY_MS
+      }
+      epoch = frame.epoch
+      lastSeq = frame.seq
       setStatus({ state: 'live' })
     } else if (state !== 'live') {
       // The host sends the snapshot first; a change before it has nothing to replace.
+      return
+    } else if (frame.type === 'records') {
+      if (frame.epoch !== epoch || lastSeq === undefined || frame.seq !== lastSeq + 1) {
+        resync(streamGeneration, new Error(`layout frame ${frame.seq} after ${lastSeq ?? 'none'}`))
+        return
+      }
+      lastSeq = frame.seq
+      try {
+        onFrame(frame)
+      } catch (error) {
+        resync(streamGeneration, error)
+        return
+      }
+      resyncs = 0
+      if (storm) {
+        storm = false
+        reopenDelay = REOPEN_DELAY_MS
+      }
       return
     }
     onFrame(frame)
@@ -120,7 +205,11 @@ export function subscribeRuntimeLayout(
   void open()
   return {
     close: () => {
-      if (state === 'connecting' || state === 'live') {
+      if (reopenTimer) {
+        clearTimeout(reopenTimer)
+        reopenTimer = null
+        stop({ state: 'closed' })
+      } else if (state === 'connecting' || state === 'live') {
         stop({ state: 'closed' })
       }
     }

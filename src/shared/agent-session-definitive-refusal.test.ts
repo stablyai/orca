@@ -9,16 +9,6 @@ describe('definitive agent-session create refusals', () => {
     expect(isDefinitiveAgentSessionCreateRefusal('agent_session_ownership_unknown')).toBe(false)
   })
 
-  it('leaves transport failures, timeouts and a missing code unknown', () => {
-    expect(isDefinitiveAgentSessionCreateRefusal('runtime_error')).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal('remote_runtime_unavailable')).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal('timeout')).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal('runtime_timeout')).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal(undefined)).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal(null)).toBe(false)
-    expect(isDefinitiveAgentSessionCreateRefusal('')).toBe(false)
-  })
-
   it('counts a method an old host never registered as definitive', () => {
     expect(isDefinitiveAgentSessionCreateRefusal('method_not_found')).toBe(true)
   })
@@ -37,5 +27,23 @@ describe('definitive agent-session create refusals', () => {
       'pending-admission'
     )
     expect(isDefinitiveAgentSessionCreateRefusal('structured_agent_session_unsupported')).toBe(true)
+  })
+
+  // Pins the RPC half (round-2 S5): transport and client-minted codes never allow a fallback.
+  it.each([
+    'runtime_error',
+    'timeout',
+    '',
+    'runtime_unavailable',
+    'remote_runtime_unavailable',
+    'runtime_timeout',
+    'runtime_manually_disconnected',
+    'runtime_rpc_queue_overloaded',
+    'method_not_supported',
+    'invalid_argument',
+    null,
+    undefined
+  ])('does not count %s as definitive', (code) => {
+    expect(isDefinitiveAgentSessionCreateRefusal(code)).toBe(false)
   })
 })

@@ -1,15 +1,29 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
-import { createBrowserMockApi, createTestStore } from '@/store/slices/browser-slice-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { createBrowserMockApi } from '@/store/slices/browser-slice-test-harness'
+import { createTestStoreDrawnFromMain } from '@/store/slices/browser-slice-drawn-from-main.test-fixture'
 import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
 import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
 import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 afterEach(() => vi.unstubAllGlobals())
 
-function createHarness() {
+async function createHarness() {
   const setAnnotationViewportBridge = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', {
     api: {
@@ -17,11 +31,19 @@ function createHarness() {
       browser: { ...createBrowserMockApi(vi.fn()).browser, setAnnotationViewportBridge }
     }
   })
-  const store = createTestStore()
+  const { store, main } = await createTestStoreDrawnFromMain()
   const pageId = store.getState().createBrowserTab('wt-1', 'https://example.com').activePageId
+  await main.settle()
   if (!pageId) {
     throw new Error('Expected browser page')
   }
+  // A layout-owner build's main opened the page's tab, and its frame drew the page.
+  expect(layoutApplyTestTransport.sentOfType('openBrowserTab')).toEqual(
+    ORCA_LAYOUT_OWNER_IS_MAIN ? [expect.objectContaining({ pageId })] : []
+  )
+  expect(Object.values(store.getState().browserPagesByWorkspace).flat()).toEqual([
+    expect.objectContaining({ id: pageId })
+  ])
   store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
   const ref = <T>(current: T) => ({ current })
   const cancelCapture = vi.fn()
@@ -71,7 +93,6 @@ function createHarness() {
     ...common,
     browserTabUrlRef: ref('https://example.com/'),
     addressBarValueRef: ref('https://example.com/'),
-    trackNextLoadingEventRef: ref(false),
     keepAddressBarFocusRef: ref(false),
     focusAddressBarNow: () => false
   })
@@ -107,8 +128,8 @@ function navigationEvent(
 }
 
 describe('browser annotation document boundaries', () => {
-  it('still accepts token-authenticated live target reports', () => {
-    const h = createHarness()
+  it('still accepts token-authenticated live target reports', async () => {
+    const h = await createHarness()
     const report = JSON.stringify({
       scrollX: 0,
       scrollY: 0,
@@ -135,8 +156,8 @@ describe('browser annotation document boundaries', () => {
     })
   })
 
-  it('retains the exact saved notes on actual same-URL loading-start, including untracked loads', () => {
-    const h = createHarness()
+  it('retains the exact saved notes on actual same-URL loading-start, including untracked loads', async () => {
+    const h = await createHarness()
     const saved = h.store.getState().browserAnnotationsByPageId[h.pageId]
     h.loading.handleDidStartLoading()
     expect(h.store.getState().browserAnnotationsByPageId[h.pageId]).toBe(saved)
@@ -148,8 +169,8 @@ describe('browser annotation document boundaries', () => {
     )
   })
 
-  it('retires geometry for full and same-document main-frame navigation but not subframes', () => {
-    const h = createHarness()
+  it('retires geometry for full and same-document main-frame navigation but not subframes', async () => {
+    const h = await createHarness()
     h.navigation.handleDidStartNavigation(
       navigationEvent('https://example.com/frame', false, false)
     )
@@ -163,8 +184,8 @@ describe('browser annotation document boundaries', () => {
     expect(h.store.getState().browserAnnotationMarkerIdsByPageId[h.pageId]).toBeUndefined()
   })
 
-  it('keeps geometry retired after redirects and away/back commits, including missed start events', () => {
-    const h = createHarness()
+  it('keeps geometry retired after redirects and away/back commits, including missed start events', async () => {
+    const h = await createHarness()
     const saved = h.store.getState().browserAnnotationsByPageId[h.pageId]
     h.loading.handleDidStartLoading()
     h.navigation.handleDidRedirectNavigation(navigationEvent('https://example.org/redirect'))

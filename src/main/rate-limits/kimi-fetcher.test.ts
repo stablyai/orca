@@ -4,10 +4,12 @@ import { setMainHttpClient } from '../network/http-client'
 
 const fetchMock = vi.fn()
 const fsState = vi.hoisted<{
+  config: string | null
   credentials: string | null
   readError: Error | null
   readPaths: string[]
 }>(() => ({
+  config: null,
   credentials: null,
   readError: null,
   readPaths: []
@@ -19,12 +21,13 @@ vi.mock('node:fs/promises', () => ({
     if (fsState.readError) {
       throw fsState.readError
     }
-    if (fsState.credentials === null) {
+    const contents = String(path).endsWith('config.toml') ? fsState.config : fsState.credentials
+    if (contents === null) {
       const error = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException
       error.code = 'ENOENT'
       throw error
     }
-    return fsState.credentials
+    return contents
   }
 }))
 
@@ -56,8 +59,8 @@ const USAGE_RESPONSE = {
 }
 
 // Built with `join` so the expectation matches the separator the fetcher emits on this platform.
-function hostCredentialsPath(kimiHome: string): string {
-  return join(kimiHome, 'credentials', 'kimi-code.json')
+function hostReadPaths(kimiHome: string, tokenName = 'kimi-code'): string[] {
+  return [join(kimiHome, 'config.toml'), join(kimiHome, 'credentials', `${tokenName}.json`)]
 }
 
 function freshCredentials(): string {
@@ -68,6 +71,7 @@ function freshCredentials(): string {
 describe('fetchKimiRateLimits', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    fsState.config = null
     fsState.credentials = null
     fsState.readError = null
     fsState.readPaths = []
@@ -185,7 +189,7 @@ describe('fetchKimiRateLimits', () => {
     const result = await fetchKimiRateLimits()
 
     expect(result.status).toBe('ok')
-    expect(fsState.readPaths).toEqual([hostCredentialsPath('/home/test/.kimi-code')])
+    expect(fsState.readPaths).toEqual(hostReadPaths('/home/test/.kimi-code'))
   })
 
   it('honors KIMI_CODE_HOME for the host home', async () => {
@@ -196,7 +200,7 @@ describe('fetchKimiRateLimits', () => {
     const result = await fetchKimiRateLimits()
 
     expect(result.status).toBe('ok')
-    expect(fsState.readPaths).toEqual([hostCredentialsPath('/custom/kimi-home')])
+    expect(fsState.readPaths).toEqual(hostReadPaths('/custom/kimi-home'))
   })
 
   it('ignores a blank KIMI_CODE_HOME instead of reading from the process cwd', async () => {
@@ -206,6 +210,40 @@ describe('fetchKimiRateLimits', () => {
 
     await fetchKimiRateLimits()
 
-    expect(fsState.readPaths).toEqual([hostCredentialsPath('/home/test/.kimi-code')])
+    expect(fsState.readPaths).toEqual(hostReadPaths('/home/test/.kimi-code'))
+  })
+
+  // Kimi Code 2.x on auth.kimi.ai writes this and stops rotating kimi-code.json (#24176).
+  it('reads the scoped OAuth slot and API base recorded in config.toml', async () => {
+    fsState.config = [
+      '[providers."managed:kimi-code"]',
+      'type = "kimi"',
+      'base_url = "https://api.kimi.ai/coding/v1"',
+      '',
+      '[providers."managed:kimi-code".oauth]',
+      'storage = "file"',
+      'key = "oauth/kimi-code-env-0e4f99c69cc27850"',
+      'oauth_host = "https://auth.kimi.ai"'
+    ].join('\n')
+    fsState.credentials = freshCredentials()
+    fetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(fsState.readPaths).toEqual(
+      hostReadPaths('/home/test/.kimi-code', 'kimi-code-env-0e4f99c69cc27850')
+    )
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.kimi.ai/coding/v1/usages')
+  })
+
+  it('derives the slot from the environment like the CLI, ignoring a stale oauth.key', async () => {
+    fsState.config = '[providers."managed:kimi-code".oauth]\nkey = "oauth/kimi-code-env-stale"'
+    fsState.credentials = freshCredentials()
+    fetchMock.mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    await fetchKimiRateLimits()
+
+    expect(fsState.readPaths).toEqual(hostReadPaths('/home/test/.kimi-code'))
   })
 })

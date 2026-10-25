@@ -39,12 +39,14 @@ function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[
 }
 
 function state(worktrees: Worktree[] = []): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hover helpers read only these fields.
   return {
     activeModal: 'none',
     activeWorkspaceExecutionHostId: worktrees[0]?.hostId ?? null,
     activeWorktreeId: worktrees[0]?.id ?? null,
     deleteFolderWorkspace: vi.fn(),
     deleteStateByWorktreeId: {},
+    folderWorkspaces: [],
     setActiveWorktree: vi.fn(),
     worktreesByRepo: { repo: worktrees }
   } as unknown as AppState

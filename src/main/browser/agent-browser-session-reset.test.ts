@@ -38,7 +38,6 @@ it.each(['EACCES', 'EIO', 'ENOTDIR'])('requires reset for %s', (code) => {
   expect(lstatSync).toHaveBeenCalledWith(socketPath)
 })
 
-// Windows and inherited socket directories both arrive as ownsSocketDirectory: false.
 it.each([
   { ownsSocketDirectory: false },
   { socketDirectory: undefined },

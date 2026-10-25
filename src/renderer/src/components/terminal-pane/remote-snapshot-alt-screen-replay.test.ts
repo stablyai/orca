@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
 import { buildMainModelSnapshotReplayWrites } from './terminal-snapshot-replay-paint'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import type { PtyReplayDataMeta } from './pty-transport-types'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
@@ -13,6 +18,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo } = vi.hoisted(
   () => ({
@@ -151,7 +157,8 @@ describe('remote snapshot replay onto a live alt screen', () => {
     const pane = createPane(1)
     const events: PaneEvent[] = []
     const parseCallbacks: (() => void)[] = []
-    pane.terminal.write.mockImplementation((chunk: string, callback?: () => void) => {
+    pane.terminal.write.mockImplementation((chunk: string | Uint8Array, callback?: () => void) => {
+      chunk = terminalWriteText(chunk)
       if (chunk.length > 0) {
         events.push(chunk)
       }
@@ -168,8 +175,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS

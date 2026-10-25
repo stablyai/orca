@@ -161,13 +161,3 @@ export function normalizeClaudeConfigDir(dir: string | null | undefined): string
   const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
 }
-
-export function isSameUsageWindow(
-  a: ProviderRateLimits['session'],
-  b: ProviderRateLimits['session']
-): boolean {
-  if (!a || !b) {
-    return a === b
-  }
-  return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
-}

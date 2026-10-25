@@ -22,7 +22,6 @@ export const FOLDER_WORKSPACE_INSTANCE_SEPARATOR =
 export const HEADLESS_RUNTIME_WINDOW_ID = importedValues.exportedHEADLESS_RUNTIME_WINDOW_ID
 export const HeadlessEmulator = importedValues.exportedHeadlessEmulator
 export const MAX_OSC_TITLE_CHARS = importedValues.exportedMAX_OSC_TITLE_CHARS
-export const MAX_QUICK_COMMANDS = importedValues.exportedMAX_QUICK_COMMANDS
 export const OrcaRuntimeService = importedValues.exportedOrcaRuntimeService
 export const OrchestrationDb = importedValues.exportedOrchestrationDb
 export const REVIEW_HEAD_FETCH_TIMEOUT_MS = importedValues.exportedREVIEW_HEAD_FETCH_TIMEOUT_MS
@@ -156,11 +155,8 @@ export const acknowledgeAgentPromptSubmit = setup.acknowledgeAgentPromptSubmit
 export { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 export {
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock
 } from './orca-runtime-test-mocks/setup.spec'
 export const MOCK_GIT_WORKTREES = setup.MOCK_GIT_WORKTREES

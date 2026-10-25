@@ -65,7 +65,7 @@ import {
   settle,
   setDocumentVisibility,
   tabIds
-} from './host-session-mirror-frame-ordering-harness'
+} from './host-session-mirror-frame-ordering-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearHostSessionMirrorHydration,

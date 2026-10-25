@@ -8,7 +8,7 @@ import {
   createEphemeralAgentSessionClaimSigner,
   loadAgentSessionClaimSigner,
   type AgentSessionClaimSigner
-} from '../runtime/agent-session-claim-identity'
+} from '../runtime/agent-session/ownership/agent-session-claim-identity'
 
 const namespace = { machine: 'm', principal: 'u', container: 'native', providerRoot: 'default' }
 const identity = canonicalizeAgentSessionIdentity('claude', { key: 'session_id', id: 'conv-1' })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
@@ -11,6 +11,7 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
 /**
  * The fourth eviction trigger: a PUBLISHED HANDLE ends the gap episode its verdict measured.
@@ -39,9 +40,10 @@ const initialAppStoreState = useAppStore.getState()
 
 /** Publishes the row AND the layout binding that makes the pane unverifiable rather than dead. */
 function publishRow(options: { handleLanded: boolean }): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
-    tabsByWorktree: { [WORKTREE]: [{ id: TAB_ID, title: 't', ptyId: null }] },
+    tabsByWorktree: {
+      [WORKTREE]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE, title: 't' })]
+    },
     terminalLayoutsByTabId: {
       [TAB_ID]: {
         root: { type: 'leaf', leafId: 'leaf-1' },
@@ -51,7 +53,7 @@ function publishRow(options: { handleLanded: boolean }): void {
       }
     },
     ptyIdsByTabId: options.handleLanded ? { [TAB_ID]: [PANE_PTY_ID] } : {}
-  } as unknown as AppState)
+  })
 }
 
 describe('handle-gap verdict, landed-handle eviction', () => {
@@ -102,27 +104,26 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     // Adopting an orphaned terminal re-keys `tabsByWorktree` without re-keying the record, so the
     // re-park hands the live wait a new worktree. Retraction evidence about the OLD one says
     // nothing about the wait that is actually running.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       tabsByWorktree: {
-        'wt-old': [{ id: TAB_ID, title: 't', ptyId: null }],
-        'wt-new': [{ id: TAB_ID, title: 't', ptyId: null }]
+        'wt-old': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-old', title: 't' })],
+        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
       },
       ptyIdsByTabId: {}
-    } as unknown as AppState)
+    })
     parkUntilHostMirrorHandleLands(ENV_ID, 'wt-old', TAB_ID, vi.fn())
     const replayAfterAdoption = vi.fn()
     parkUntilHostMirrorHandleLands(ENV_ID, 'wt-new', TAB_ID, replayAfterAdoption)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
-      tabsByWorktree: { 'wt-new': [{ id: TAB_ID, title: 't', ptyId: null }] }
-    } as unknown as AppState)
+      tabsByWorktree: {
+        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
+      }
+    })
     expect(replayAfterAdoption).not.toHaveBeenCalled()
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-    useAppStore.setState({ tabsByWorktree: {} } as unknown as AppState)
+    useAppStore.setState({ tabsByWorktree: {} })
     expect(replayAfterAdoption).toHaveBeenCalledTimes(1)
   })
 })

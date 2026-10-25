@@ -3,6 +3,7 @@
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
+import { colors } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/bridge-rpc-client'
 import {
   bootstrapShellPage,
@@ -20,6 +21,7 @@ import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-bou
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
+import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Named with its extension: this entry is the web build's and the provider it needs is the web
 // sibling's, which takes the page's client. The screens below still import `./client-context`
@@ -94,6 +96,8 @@ if (!container) {
   throw new Error('[orca-mobile-web-app] #root missing')
 }
 const target = document.documentElement
+target.style.setProperty('--muted-foreground', colors.textMuted)
+target.style.setProperty('--foreground', colors.textPrimary)
 stampPageMountState(target, 'started')
 
 bootstrapShellPage({
@@ -117,6 +121,7 @@ bootstrapShellPage({
       read: () => client.getShellSession()?.keyboardInset ?? 0,
       subscribe: client.onKeyboardInsetUpdate
     })
+    startBlurringOnKeyboardClose()
     // Scoped to the host `init` named: with none, no key is writable, which is the right answer
     // for a shell too old to say whose list this is.
     publishPageStorage(

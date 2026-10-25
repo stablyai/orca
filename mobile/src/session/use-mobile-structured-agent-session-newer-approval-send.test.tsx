@@ -83,10 +83,7 @@ async function sentDelivery(items: AgentJournalRenderItem[]): Promise<unknown> {
     renderer = create(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
-  const event = snapshotEvent()
-  if (event.type === 'snapshot') {
-    event.page.items = items
-  }
+  const event = snapshotEvent({ items })
   act(() => listener?.(event))
   await act(async () => {
     await hook!.sendWithOutcome('carry on')
@@ -149,10 +146,7 @@ async function afterStop(items: AgentJournalRenderItem[]): Promise<unknown> {
     renderer = create(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
-  const event = snapshotEvent()
-  if (event.type === 'snapshot') {
-    event.page.items = [RUNNING_TURN, ...items]
-  }
+  const event = snapshotEvent({ items: [...items, RUNNING_TURN] })
   act(() => listener?.(event))
   act(() => hook?.cancel())
   expect(hook?.turnIndicator.stopping).toBe(true)

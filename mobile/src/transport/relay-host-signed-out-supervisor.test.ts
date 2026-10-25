@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
-import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../src/shared/relay-host-close-reason'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import {
   dependencies,
@@ -24,13 +27,13 @@ describe('a signed-out desktop reaches the phone verdict', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  function supervisorOver(closeReason: string | null) {
+  function supervisorOver(closeReason: RelayHostCloseReason | null) {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeRelaySession('disconnected')),
       openRelay: vi.fn((_relay, _credential, _confirmReqId, onHostCloseReason) => {
         if (closeReason) {
-          onHostCloseReason?.(closeReason as never)
+          onHostCloseReason?.(closeReason)
         }
         return new FakeRelaySession(
           'disconnected',

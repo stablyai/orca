@@ -6,6 +6,14 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
+const { hostShellEnvironmentMock } = vi.hoisted(() => ({
+  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
+}))
+
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: hostShellEnvironmentMock
+}))
+
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
   status: 'SUCCESS',
@@ -94,6 +102,8 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.buckets).toEqual([
       {
         name: 'Gemini Models',
+        group: 'Gemini Models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 60,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
@@ -115,20 +125,36 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('probes the version, then runs the quota read with the resolved path and login-shell env', async () => {
-    const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }) })
+    const loginShellEnv = { PATH: '/Users/x/.local/bin:/usr/bin' }
+    const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }), env: loginShellEnv })
     await h.fetch()
 
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-    expect(h.runCommand.mock.calls[0]![0].args).toEqual(ANTIGRAVITY_VERSION_ARGS)
-    const spec = h.runCommand.mock.calls[1]![0]
-    expect(spec.program).toBe('/Users/x/.local/bin/agy')
-    expect(spec.args).toEqual(ANTIGRAVITY_USAGE_ARGS)
     // Why the login-shell PATH: agy installs to ~/.local/bin, which Electron's inherited PATH omits.
-    expect(spec.env).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
-    expect(spec.timeoutMs).toBeGreaterThan(0)
-    expect(h.resolveCommand).toHaveBeenCalledWith('agy', {
-      platform: 'darwin',
-      env: { PATH: '/Users/x/.local/bin:/usr/bin' }
+    // Why auto-update off: a due check spawns agy's updater, whose child flashes a Windows console.
+    const probeEnv = { PATH: '/Users/x/.local/bin:/usr/bin', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    expect(h.runCommand).toHaveBeenCalledTimes(2)
+    const [versionSpec, usageSpec] = h.runCommand.mock.calls.map(([spec]) => spec)
+    expect(versionSpec.args).toEqual(ANTIGRAVITY_VERSION_ARGS)
+    expect(versionSpec.env).toEqual(probeEnv)
+    expect(usageSpec.program).toBe('/Users/x/.local/bin/agy')
+    expect(usageSpec.args).toEqual(ANTIGRAVITY_USAGE_ARGS)
+    expect(usageSpec.env).toEqual(probeEnv)
+    expect(usageSpec.timeoutMs).toBeGreaterThan(0)
+    expect(h.resolveCommand).toHaveBeenCalledWith('agy', { platform: 'darwin', env: probeEnv })
+    // The login-shell env is a shared cache entry; the probe must not write into it.
+    expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
+  })
+
+  it('looks agy up in the env agent launches use, so a Git Bash login PATH cannot hide it', async () => {
+    // Why: Git Bash's login PATH is /c/...:/usr/bin, which win32 lookup cannot read (#31459).
+    const launchEnv = { PATH: '/c/Users/x/bin:/usr/bin;C:\\Users\\x\\AppData\\Local\\agy\\bin' }
+    hostShellEnvironmentMock.mockResolvedValueOnce(launchEnv)
+    const resolveCommand = vi.fn().mockResolvedValue(null)
+    await fetchAntigravityRateLimits({ resolveCommand, platform: 'win32' })
+
+    expect(resolveCommand).toHaveBeenCalledWith('agy', {
+      platform: 'win32',
+      env: { ...launchEnv, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
     })
   })
 
@@ -196,6 +222,45 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(result.error).toContain('did not answer in time')
+  })
+
+  it('cools down a read that reached agy\u2019s browser sign-in', async () => {
+    // Why pinned: agy 1.4.2 opens this OAuth page and waits 60 s, so Orca's 30 s kill lands first (#26484).
+    const result = await harness({
+      result: processResult({
+        timedOut: true,
+        stderr:
+          'Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth?...\n\nWaiting for authentication (timeout 60s)...\n'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.usageMetadata?.retryAtMs).toBe(1_700_000_000_000 + 60 * 60 * 1000)
+  })
+
+  it('keeps the reading when the browser sign-in completes within the read', async () => {
+    const result = await harness({
+      result: processResult({
+        stdout: USAGE_ENVELOPE,
+        stderr: 'Authentication required. Please visit the URL to log in:\n'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
+  })
+
+  it('does not cool down a signed-out read that fails fast without a browser', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stderr: "Error: authentication required. Run 'agy' to log in, then retry.\n"
+      })
+    }).fetch()
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
   })
 
   it('reports an unreadable payload as a parse failure carrying the exit code', async () => {

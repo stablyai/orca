@@ -1,6 +1,6 @@
 // Why: this channel keeps E2EE framing out of RPC handlers, which consume plaintext across transports.
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, encrypt, decrypt, decryptBytes } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, decrypt, decryptBytes } from '../../../shared/e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
   type DesktopMobileE2EEV2Context
@@ -14,7 +14,7 @@ import {
   type DeviceKeyResolution
 } from './mobile-e2ee-auth-validation'
 import { isMobileE2EEOutboundItemWithinLimit } from './mobile-e2ee-outbound-admission'
-import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'

@@ -11,12 +11,15 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
+  demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
@@ -24,6 +27,7 @@ import {
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -109,7 +113,7 @@ export function projectRuntimeMobileSessionTabs(
       continue
     }
     if (tab.type === 'agent-session') {
-      tabs.push(tab)
+      tabs.push(withStructuredChatStatus(tab, snapshot.worktree, getHookRowsForPane))
       continue
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
@@ -179,11 +183,11 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
-    const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
-      ownerAgent,
-      ownerOptions
-    )
+    const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
+    const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
+    // Why: the desktop's ranking over main's fresher live title; the window sends a generated
+    // name only while the desktop shows it, so it is passed as enabled.
+    const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =
@@ -239,20 +243,7 @@ export function projectRuntimeMobileSessionTabs(
       : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
         normalizedTabAgentStatus?.agentType != null
         ? {
-            agentStatus: {
-              state: 'done' as const,
-              prompt: '',
-              updatedAt: statusPty?.lastOscTitleEpochMs ?? normalizedTabAgentStatus.updatedAt,
-              stateStartedAt:
-                statusPty?.lastAgentStatusStartedAtEpochMs ??
-                normalizedTabAgentStatus.stateStartedAt,
-              paneKey: normalizedTabAgentStatus.paneKey,
-              stateHistory: [],
-              agentType: normalizedTabAgentStatus.agentType,
-              ...(normalizedTabAgentStatus.providerSession
-                ? { providerSession: normalizedTabAgentStatus.providerSession }
-                : {})
-            }
+            agentStatus: demoteRuntimeMobileAgentStatus(normalizedTabAgentStatus, statusPty)
           }
         : null
     // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
@@ -267,7 +258,8 @@ export function projectRuntimeMobileSessionTabs(
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
-        mobileStatusPty,
+        // Switch point: main's layout gives the pane a live leaf, whose terminal holds the status.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? (liveLeafPty ?? mobileStatusPty) : mobileStatusPty,
         tab,
         terminalHandle,
         retainedAgentStatus,

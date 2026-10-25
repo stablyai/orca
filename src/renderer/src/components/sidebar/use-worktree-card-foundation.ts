@@ -9,12 +9,9 @@ import {
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -162,8 +159,10 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
+  // Why no hostId: the host-qualified lookup scans every row, and this runs per card per write.
+  // The chip only reads status, so a twin falls back to the direct SSH state.
   const sshOwnerEnvironmentId = useAppStore((s) =>
-    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+    repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
@@ -205,16 +204,7 @@ export function useWorktreeCardFoundation({
     : null
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(
-        s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
-      )
-    )
-  })
+  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.

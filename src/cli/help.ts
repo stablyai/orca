@@ -88,6 +88,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
+  if (command === 'terminal set-pane-title' && flag === 'title') {
+    return '--title <text>         Custom title for one pane (pass "" to reset)'
+  }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }
@@ -178,8 +181,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration task-create' && flag === 'display-name') {
     return '--display-name <text> UI label shown for dispatched worker rows'
   }
-  // Why: the shared --agent help describes launching a TUI agent in a terminal,
-  // which is the wrong meaning here — this selects the account provider.
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }

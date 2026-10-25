@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  CodexAppServerFrameSizeError,
-  CodexAppServerRequestError,
-  openCodexAppServerConnection,
-  type CodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
@@ -59,9 +57,7 @@ describe('openCodexThread', () => {
     )
   })
 
-  // The regression this pins: an omitted policy falls back to the config.toml of the home Orca
-  // mirrors from the user's ~/.codex, and a resume inherits the policy it last ran with. With
-  // `approval_policy = "never"` there, an Ask chat would never prompt.
+  // Omitting policy can inherit approval_policy = never and suppress Ask prompts.
   it('sends Ask as an explicit policy on resume, not as absent fields', async () => {
     const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
       thread: { id: 'thread-existing' }
@@ -80,7 +76,6 @@ describe('openCodexThread', () => {
       sandbox: 'workspace-write',
       approvalsReviewer: 'user'
     })
-    // Absence is the bug, so assert the keys are carried, not merely that they are not Full access.
     expect(Object.keys(params)).toEqual(
       expect.arrayContaining(['approvalPolicy', 'sandbox', 'approvalsReviewer'])
     )
@@ -106,7 +101,7 @@ describe('openCodexThread', () => {
     })
   })
 
-  it('requests metadata-only state when resuming an existing thread', async () => {
+  it('resumes by ID without pinning a rollout path and requests metadata-only state', async () => {
     const request = vi.fn(async () => ({
       thread: { id: 'thread-1', path: '/history/thread-1.jsonl' },
       model: 'gpt-live'
@@ -115,7 +110,7 @@ describe('openCodexThread', () => {
     await expect(
       openCodexThread(
         connectionFor(request),
-        { cwd: '/workspace', resumeThreadId: 'thread-1', resumePath: '/history/thread-1.jsonl' },
+        { cwd: '/workspace', resumeThreadId: 'thread-1' },
         2_000
       )
     ).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-live' })
@@ -125,7 +120,6 @@ describe('openCodexThread', () => {
       {
         threadId: 'thread-1',
         cwd: '/workspace',
-        path: '/history/thread-1.jsonl',
         excludeTurns: true
       },
       { timeoutMs: 2_000 }
@@ -240,7 +234,6 @@ describe('openCodexThread', () => {
         2_000
       )
 
-      // A resume keeps the thread's own saved model, provider and effort, which naming one skips.
       expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
       expect(request).toHaveBeenLastCalledWith(
         'thread/start',
@@ -286,8 +279,6 @@ describe('openCodexThread', () => {
       }
     })
 
-    // Every other test here builds the error itself; this one sends Codex's raw JSON-RPC frame
-    // through the real connection, so a change to Orca's own error wording cannot hide the proof.
     it('recognizes the raw frame Codex sends, through the real connection', async () => {
       const fakeAppServer = String.raw`
         const readline = require('node:readline')

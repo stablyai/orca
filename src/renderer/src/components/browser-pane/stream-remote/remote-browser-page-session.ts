@@ -1,5 +1,6 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type {
@@ -59,6 +60,13 @@ export class RemoteBrowserPageSession {
     }
     const existingHandle = this.deps.readStoredHandle()
     if (existingHandle?.environmentId !== token.environmentId) {
+      // Switch point: a frame-drawn host tab has no handle, but its row id is the host's page id.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        const adopted = await this.adoptHostPage(token)
+        if (adopted !== undefined) {
+          return adopted
+        }
+      }
       return this.createRemotePage(token)
     }
     tokens.setRemotePage(existingHandle.remotePageId)
@@ -113,6 +121,38 @@ export class RemoteBrowserPageSession {
       clearTimeout(this.tabRefreshTimer)
       this.tabRefreshTimer = null
     }
+  }
+
+  /** The row's own id when the host runs that page; undefined when the host has none, so create. */
+  private async adoptHostPage(
+    token: RemoteBrowserOperationToken
+  ): Promise<string | null | undefined> {
+    const { tokens } = this.deps
+    const provisional = token.tabId
+    const probe = { ...token, remotePageId: provisional }
+    const release = (): void => {
+      if (tokens.remotePage === provisional) {
+        tokens.setRemotePage(null)
+      }
+    }
+    tokens.setRemotePage(provisional)
+    try {
+      // tabShow also starts a saved page the host has not opened yet.
+      if (!(await this.fetchTabInfo(probe)) || !tokens.isCurrent(probe)) {
+        release()
+        return null
+      }
+    } catch (error) {
+      release()
+      // Only a page the host truly lacks is created; a timeout must not duplicate a live page.
+      if (!isRemoteBrowserPageMissingError(error)) {
+        throw error
+      }
+      // A handle-less row has nothing to close.
+      return tokens.isCurrent(token) ? undefined : null
+    }
+    this.deps.writeStoredHandle({ environmentId: token.environmentId, remotePageId: provisional })
+    return provisional
   }
 
   private async createRemotePage(token: RemoteBrowserOperationToken): Promise<string | null> {

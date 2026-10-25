@@ -30,6 +30,8 @@ export type RuntimeBrowserCommandsFactory = (
 export type RuntimeBrowserCommandsFactoryOptions = {
   /** The provider creates pages against this runtime's client-host lease registry. */
   clientHosting?: boolean
+  /** Client pages live in this runtime's own registries, so they need no healthy engine. */
+  clientHostingWithoutEngine?: boolean
   /** The provider owns browser pages without a renderer window. */
   headless?: boolean
   /** Live health probe; failure must remove advertised capability. */
@@ -62,6 +64,9 @@ export function runtimeBrowserCommandsFactoryIsHeadless(): boolean {
 }
 
 export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
+  if (currentFactory && currentOptions.clientHostingWithoutEngine === true) {
+    return true
+  }
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
 }
 
@@ -83,17 +88,16 @@ export function setRuntimeBrowserUnavailableCause(
 }
 
 /**
- * The cause this process can prove. An installed factory outranks any recorded note: it
- * means resolution succeeded, so the failure is later and elsewhere — a dead provider, or
- * a renderer-backed factory with no window. Unknown beats guessing.
+ * The cause this process can prove. A healthy factory outranks any recorded note: the failure
+ * is a renderer-backed factory with no window. An unhealthy one keeps the resolver's note, since
+ * a factory serving only client pages stays installed when no engine resolved; with no note the
+ * engine started and later died. Unknown beats guessing.
  */
 export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause {
-  if (currentFactory) {
-    return runtimeBrowserCommandsFactoryIsAvailable()
-      ? { reason: 'desktop_window_unavailable' }
-      : { reason: 'provider_unhealthy' }
+  if (currentFactory && runtimeBrowserCommandsFactoryIsAvailable()) {
+    return { reason: 'desktop_window_unavailable' }
   }
-  return unavailableCause ?? { reason: 'unknown' }
+  return unavailableCause ?? { reason: currentFactory ? 'provider_unhealthy' : 'unknown' }
 }
 
 /**

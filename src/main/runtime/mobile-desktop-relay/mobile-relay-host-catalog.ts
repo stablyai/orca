@@ -14,7 +14,7 @@ import {
 } from '../../../shared/workspace-creator-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session-tab-activity'
-import { runtimeWorktreeIdentityKey } from '../runtime-worktree-path-identity'
+import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
@@ -86,7 +86,7 @@ export class MobileRelayHostCatalog {
         ...getWorkspaceSessionTabActivityIds(
           this.options.getWorkspaceSession(toRuntimeExecutionHostId(host.environmentId))
         )
-      ].map(runtimeWorktreeIdentityKey)
+      ].map(worktreeIdentityKey)
     )
     // Why: the desktop asks with background-removal support; a phone asking itself never sees these rows.
     return {
@@ -127,8 +127,7 @@ function stampDesktopSidebarView(
     desktopDeviceIds
   )
   const active =
-    typeof row.worktreeId === 'string' &&
-    sessionActivity.has(runtimeWorktreeIdentityKey(row.worktreeId))
+    typeof row.worktreeId === 'string' && sessionActivity.has(worktreeIdentityKey(row.worktreeId))
   if (!otherClient && !active) {
     return row
   }

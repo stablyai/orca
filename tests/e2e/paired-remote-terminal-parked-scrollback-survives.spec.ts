@@ -34,7 +34,7 @@ import { randomUUID } from 'node:crypto'
 
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -49,7 +49,7 @@ import {
 } from './helpers/paired-host-terminal'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
@@ -311,7 +311,7 @@ async function runParkRevealScenario(args: {
 
 async function runScenario(
   orcaPage: Page,
-  testInfo: Parameters<Parameters<typeof test>[1]>[1],
+  testInfo: TestInfo,
   clientName: string,
   parkKind: ParkKind
 ): Promise<ParkRevealOutcome> {

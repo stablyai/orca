@@ -1,15 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import {
-  getQuickCommandPreview,
-  MAX_QUICK_COMMANDS,
-  quickCommandMatchesRepo
-} from '../terminal/quick-commands'
+import { getQuickCommandPreview, quickCommandMatchesRepo } from '../terminal/quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -50,17 +46,29 @@ export function QuickCommandsSheet({
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<QuickCommandDraft | null>(null)
   const [saving, setSaving] = useState(false)
-  const savingRef = useRef(false)
+  const saveOwnerRef = useRef<symbol | null>(null)
+  const draftRevisionRef = useRef(0)
+  const editorGenerationRef = useRef(0)
 
-  const [wasVisible, setWasVisible] = useState(visible)
-  if (visible !== wasVisible) {
-    setWasVisible(visible)
-    if (visible) {
-      setView('list')
-      setQuery('')
-      setDraft(null)
+  const previousSurface = useRef({ visible, client, repoId })
+  useLayoutEffect(() => {
+    const contextChanged =
+      previousSurface.current.client !== client || previousSurface.current.repoId !== repoId
+    if (visible !== previousSurface.current.visible || contextChanged) {
+      draftRevisionRef.current += 1
+      editorGenerationRef.current += 1
+      previousSurface.current = { visible, client, repoId }
+      if (contextChanged) {
+        saveOwnerRef.current = null
+        setSaving(false)
+      }
+      if (visible || contextChanged) {
+        setView('list')
+        setQuery('')
+        setDraft(null)
+      }
     }
-  }
+  }, [visible, client, repoId])
 
   // Why: prompt bodies can total megabytes. Lowercase them once per settings
   // update instead of allocating the same search text on every keystroke.
@@ -84,11 +92,8 @@ export function QuickCommandsSheet({
   const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
 
   const openEditor = (command?: TerminalQuickCommand) => {
-    // Why: the host rejects full-list updates above this cap; existing rows
-    // must remain editable/deletable when creation is no longer possible.
-    if (!command && commands.length >= MAX_QUICK_COMMANDS) {
-      return
-    }
+    draftRevisionRef.current += 1
+    editorGenerationRef.current += 1
     setDraft(
       command
         ? quickCommandToDraft(command)
@@ -123,7 +128,7 @@ export function QuickCommandsSheet({
   }
 
   const handleSave = async () => {
-    if (!draft || savingRef.current) {
+    if (!draft || saveOwnerRef.current !== null) {
       return
     }
     const built = draftToQuickCommand(draft, agentPromptMaxLength)
@@ -131,17 +136,24 @@ export function QuickCommandsSheet({
       return
     }
     // Why: state cannot lock out a second tap until React commits the disabled UI.
-    savingRef.current = true
+    const saveOwner = Symbol()
+    saveOwnerRef.current = saveOwner
     setSaving(true)
+    const savedRevision = draftRevisionRef.current
+    const savedEditor = editorGenerationRef.current
     try {
       const ok = await persist({ type: 'upsert', command: built })
-      if (ok) {
+      if (ok && draftRevisionRef.current === savedRevision) {
         setView('list')
         setDraft(null)
+      } else if (ok && editorGenerationRef.current === savedEditor) {
+        setDraft((current) => (current ? { ...current, id: built.id } : current))
       }
     } finally {
-      savingRef.current = false
-      setSaving(false)
+      if (saveOwnerRef.current === saveOwner) {
+        saveOwnerRef.current = null
+        setSaving(false)
+      }
     }
   }
 
@@ -162,7 +174,10 @@ export function QuickCommandsSheet({
         ) : (
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            onPress={() => setView(view === 'agent' ? 'editor' : 'list')}
+            onPress={() => {
+              draftRevisionRef.current += 1
+              setView(view === 'agent' ? 'editor' : 'list')
+            }}
             accessibilityRole="button"
             accessibilityLabel="Back"
           >
@@ -189,7 +204,6 @@ export function QuickCommandsSheet({
           query={query}
           loading={loading}
           disabled={!ready}
-          canAdd={commands.length < MAX_QUICK_COMMANDS}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
@@ -208,11 +222,16 @@ export function QuickCommandsSheet({
           repoId={repoId}
           repoName={repoName}
           agentPromptMaxLength={agentPromptMaxLength}
-          onChange={(patch) =>
+          onChange={(patch) => {
+            draftRevisionRef.current += 1
             setDraft((current) => (current ? { ...current, ...patch } : current))
-          }
-          onOpenAgentPicker={() => setView('agent')}
+          }}
+          onOpenAgentPicker={() => {
+            draftRevisionRef.current += 1
+            setView('agent')
+          }}
           onCancel={() => {
+            draftRevisionRef.current += 1
             setView('list')
             setDraft(null)
           }}
@@ -224,6 +243,7 @@ export function QuickCommandsSheet({
         <QuickCommandAgentPicker
           selected={draft.agent}
           onSelect={(agent) => {
+            draftRevisionRef.current += 1
             setDraft((current) => (current ? { ...current, agent } : current))
             setView('editor')
           }}

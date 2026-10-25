@@ -5,8 +5,8 @@ import {
   agentVerdictDisplayMark
 } from '../../../src/shared/agent-main-agent-verdict'
 import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
-  AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
@@ -28,6 +28,8 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
     state: 'working',
     agentType: 'claude',
     prompt: '',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -47,6 +49,7 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), 0)).toBe('blocked')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), 0)).toBe('waiting')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), 0)).toBe('done')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unparsed rows can carry a future host state.
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
@@ -130,20 +133,30 @@ describe('agentDotState', () => {
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
-    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
+    const stale = 1_800_001
     // Active states past the staleness window read as idle…
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), stale)).toBe('idle')
     // …exactly at the threshold it is still fresh (decay is strictly past it).
-    expect(
-      agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
-    ).toBe('working')
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 1_800_000)).toBe('working')
     // 'done' never decays, and neither does its verdict.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
     expect(
       agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
     ).toBe('failed')
+  })
+
+  // The host advances updatedAt for a newer neutral title but keeps the evidence's own time.
+  it('ages a status by its evidence, not by a later title renewal, as desktop does', () => {
+    const now = 100 * 60 * 1000
+    const renewed = {
+      state: 'blocked' as const,
+      updatedAt: now,
+      evidenceObservedAt: now - 31 * 60 * 1000
+    }
+    expect(isAgentStatusFresh(renewed, now)).toBe(false)
+    expect(agentDotState(renewed, now)).toBe('idle')
   })
 })
 
@@ -196,12 +209,9 @@ describe('agentDisplayLabel', () => {
   })
 
   it('falls back to the decayed state label when stale', () => {
-    expect(
-      agentDisplayLabel(
-        row({ state: 'working', prompt: '', updatedAt: 0 }),
-        AGENT_STATUS_STALE_AFTER_MS + 1
-      )
-    ).toBe('Idle')
+    expect(agentDisplayLabel(row({ state: 'working', prompt: '', updatedAt: 0 }), 1_800_001)).toBe(
+      'Idle'
+    )
   })
 })
 

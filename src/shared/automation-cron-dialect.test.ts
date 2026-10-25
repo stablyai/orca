@@ -107,7 +107,7 @@ describe('cron day restriction (#15896)', () => {
 
   // The star test is per comma term, so a list that reaches a star anywhere is unrestricted.
   it('treats a day list containing a star term as a star', () => {
-    expect(matchingDaysOfMay2026('0 9 */3 * 1,5')).toEqual([1, 4, 22, 25])
+    expect(matchingDaysOfMay2026('0 9 2,*/3 * 1,5')).toEqual([1, 4, 22, 25])
   })
 
   it('normalizes Sunday from 0, from 7 and from the name', () => {

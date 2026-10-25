@@ -281,55 +281,6 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('muse')).toBe(true)
   })
 
-  it('recognizes Muse by its versioned muse-bin sibling binary', () => {
-    // Why: the `muse` launcher execs `muse-bin-<version>` (a 242MB sibling),
-    // so the live foreground process carries the versioned name — truncated
-    // to `muse-bin-1.0.3-R` in macOS comm output (verified on-device).
-    expect(recognizeAgentProcess('muse-bin-1.0.3-R2198.1')).toEqual({
-      agent: 'muse',
-      processName: 'muse-bin-1.0.3-r2198.1'
-    })
-    expect(recognizeAgentProcess('muse-bin-1.0.3-R')).toEqual({
-      agent: 'muse',
-      processName: 'muse-bin-1.0.3-r'
-    })
-    expect(recognizeAgentProcess('/Users/dev/.local/bin/muse-bin-1.0.3-R2198.1')).toEqual({
-      agent: 'muse',
-      processName: 'muse-bin-1.0.3-r2198.1'
-    })
-  })
-
-  it('does not recognize Muse headless exec commands as interactive agents', () => {
-    expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
-    expect(
-      recognizeAgentProcessFromCommandLine('muse exec --json "review this" > result.jsonl')
-    ).toBeNull()
-    // Why: a bare `exec` token dispatches as the subcommand even past `--`
-    // (verified: `muse -- resume` still resumes), so this errors instead of
-    // hosting a pane — never an interactive agent.
-    expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
-    // Why: a whole-prompt `muse 'exec'` takes the exec missing-prompt error
-    // path, not a TUI, so filtering it is correct.
-    expect(recognizeAgentProcessFromCommandLine("muse 'exec'")).toBeNull()
-    // Why: `muse resume` reopens the interactive TUI, so it still hosts a live session.
-    expect(recognizeAgentProcessFromCommandLine('muse resume')).toEqual({
-      agent: 'muse',
-      processName: 'muse'
-    })
-    // Why: `muse -- resume` still dispatches to the resume subcommand (verified
-    // against muse 1.0.3), which reopens the interactive TUI.
-    expect(recognizeAgentProcessFromCommandLine('muse -- resume')).toEqual({
-      agent: 'muse',
-      processName: 'muse'
-    })
-    // Why: the prompt is one quoted argv, so it never equals the bare `exec`
-    // token — this is the interactive pane Orca itself launches.
-    expect(recognizeAgentProcessFromCommandLine('muse -- "exec the release notes"')).toEqual({
-      agent: 'muse',
-      processName: 'muse'
-    })
-  })
-
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',
@@ -353,6 +304,16 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/home/dev/.kimi-code/bin/kimi', 'kimi')).toBe(true)
     expect(isRecognizedAgentType('kimi-code')).toBe(true)
+  })
+
+  // #31311: the npm install on Windows runs as node.exe, observed with this exact .bin shim path.
+  it('recognizes Kimi Code launched by its npm shim on Windows', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\dev\\proj\\node_modules\\.bin/../@moonshot-ai/kimi-code/dist/main.mjs --session session_1'
+      )
+    ).toEqual({ agent: 'kimi', processName: 'kimi' })
+    expect(recognizeAgentProcessFromCommandLine('node C:\\tools\\app\\dist\\main.mjs')).toBeNull()
   })
 
   it('recognizes Qwen Code by its installed qwen executable', () => {
@@ -442,6 +403,59 @@ describe('agent process recognition', () => {
     'node --require /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js /tmp/server.js',
     'node --eval "console.log(1)" /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'
   ])('does not recognize a Pi entrypoint lookalike or argument: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+  })
+
+  it("recognizes an older Claude Code's npm entrypoint, which a pnpm or yarn shim or npx runs", () => {
+    const windowsPath = String.raw`C:\Users\dev\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\cli.js`
+    for (const command of [
+      'node /Users/dev/Library/pnpm/global/5/node_modules/@anthropic-ai/claude-code/cli.js',
+      'node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js --resume abc',
+      `node.exe ${windowsPath}`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+        agent: 'claude',
+        processName: 'claude'
+      })
+    }
+  })
+
+  it('leaves a print-mode run of that entrypoint unrecognized, as it does the native binary', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js -p "summarize"'
+      )
+    ).toBeNull()
+  })
+
+  it.each([
+    'node /tmp/node_modules/@other/claude-code/cli.js',
+    'node /tmp/node_modules/@anthropic-ai/claude-code/dist/cli.js',
+    'node /tmp/server.js /tmp/node_modules/@anthropic-ai/claude-code/cli.js'
+  ])('does not recognize a Claude Code entrypoint lookalike or argument: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+  })
+
+  // Command lines captured from a live Windows Qwen Code 0.26.1 session (#17326).
+  it.each([
+    String.raw`"node"   "C:\Users\dev\AppData\Local\Temp\q\node_modules\.bin\\..\@qwen-code\qwen-code\cli-entry.js"`,
+    String.raw`"node"   "C:\Users\dev\AppData\Roaming\npm\\node_modules\@qwen-code\qwen-code\cli-entry.js"`,
+    String.raw`"C:\Program Files\nodejs\node.exe" --expose-gc C:\Users\dev\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\cli.js`,
+    String.raw`"C:\Users\dev\AppData\Local\qwen-code\qwen-code\node\node.exe" "C:\Users\dev\AppData\Local\qwen-code\qwen-code\bin\..\lib\cli-entry.js"`,
+    String.raw`C:\Users\dev\AppData\Local\qwen-code\qwen-code\node\node.exe --expose-gc C:\Users\dev\AppData\Local\qwen-code\qwen-code\lib\cli.js`,
+    'node /usr/local/lib/node_modules/@qwen-code/qwen-code/cli.js'
+  ])('recognizes a node-launched Qwen Code entrypoint: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+  })
+
+  it.each([
+    'node /tmp/node_modules/@qwen-code/qwen-code/fzfWorker.js',
+    'node /tmp/node_modules/@other/qwen-code/cli.js',
+    'node /tmp/not-qwen-code/lib/cli.js'
+  ])('does not recognize a Qwen Code entrypoint lookalike: %s', (command) => {
     expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
   })
 
@@ -614,6 +628,13 @@ describe('agent process recognition', () => {
   })
 
   it('does not recognize Muse headless exec runs as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine("muse 'exec'")).toBeNull()
+    for (const command of ['muse resume', 'muse -- resume', 'muse -- "exec the release notes"']) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+        agent: 'muse',
+        processName: 'muse'
+      })
+    }
     expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
     expect(
       recognizeAgentProcessFromCommandLine(

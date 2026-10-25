@@ -134,6 +134,7 @@ export const EXECUTION_HOST_METHODS = [
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
+  'preflight.refreshAgents',
   'hostedReview.create',
   'hostedReview.createStacked',
   'hostedReview.forBranch',

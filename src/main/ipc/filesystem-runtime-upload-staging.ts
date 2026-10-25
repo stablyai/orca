@@ -4,9 +4,10 @@ import {
   REMOTE_IMPORT_MAX_TOTAL_BYTES
 } from './runtime-import-limits'
 import { constants } from 'node:fs'
-import { lstat, open, readdir, realpath } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { lstat, open, readdir, realpath, type FileHandle } from 'node:fs/promises'
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { classifyImportSource } from './filesystem-import-source-stat'
+import { detectImageFileSignature, IMAGE_SIGNATURE_BYTES } from '../image-file-signature'
 import type {
   StagedExternalImportEntry,
   StagedExternalImportSource
@@ -25,13 +26,12 @@ export function stagedRuntimeUploadByteLength(source: StagedExternalImportSource
   )
 }
 
-/**
- * @param totalBytesBefore Bytes already staged by earlier sources in the same drop,
- *   so the total ceiling covers the whole drop rather than each source alone.
- */
+/** @param totalBytesBefore Earlier staged bytes in this drop; the ceiling spans all sources.
+ * @param options.nameExtensionlessImages Append a sniffed image suffix only in Orca-owned destinations. */
 export async function stageOneSourceForRuntimeUpload(
   sourcePath: string,
-  totalBytesBefore = 0
+  totalBytesBefore = 0,
+  options: { nameExtensionlessImages?: boolean } = {}
 ): Promise<StagedExternalImportSource> {
   const resolvedSource = resolve(sourcePath)
 
@@ -40,16 +40,28 @@ export async function stageOneSourceForRuntimeUpload(
     return classified.rejection
   }
   const sourceStat = classified.stat
+  const sourceName = basename(resolvedSource)
   try {
-    const entries = sourceStat.isDirectory()
-      ? await stageDirectoryEntries(resolvedSource, totalBytesBefore)
-      : [(await stageFileEntry(resolvedSource, '', { totalBytesBefore })).entry]
+    if (sourceStat.isDirectory()) {
+      return {
+        sourcePath,
+        status: 'staged',
+        name: sourceName,
+        kind: 'directory',
+        entries: await stageDirectoryEntries(resolvedSource, totalBytesBefore)
+      }
+    }
+    const staged = await stageFileEntry(resolvedSource, '', {
+      totalBytesBefore,
+      detectImageExtension: options.nameExtensionlessImages === true && extname(sourceName) === ''
+    })
     return {
       sourcePath,
       status: 'staged',
-      name: basename(resolvedSource),
-      kind: sourceStat.isDirectory() ? 'directory' : 'file',
-      entries
+      // Extensionless drag images need a suffix for agents to recognize their format.
+      name: staged.imageExtension ? `${sourceName}.${staged.imageExtension}` : sourceName,
+      kind: 'file',
+      entries: [staged.entry]
     }
   } catch (error) {
     if (error instanceof RuntimeUploadSymlinkError) {
@@ -119,12 +131,11 @@ async function stageDirectoryEntries(
 async function stageFileEntry(
   filePath: string,
   relativePath: string,
-  options: { rootRealPath?: string; totalBytesBefore: number }
-): Promise<{ entry: StagedExternalImportEntry; byteLength: number }> {
+  options: { rootRealPath?: string; totalBytesBefore: number; detectImageExtension?: boolean }
+): Promise<{ entry: StagedExternalImportEntry; byteLength: number; imageExtension?: string }> {
   const statResult = await lstat(filePath)
   const displayPath = normalizeRelativeUploadPath(relativePath)
-  // Why: a dropped file's relative path is '', so errors would name nothing.
-  // The entry keeps '' — only the message falls back to the file's own name.
+  // Keep the empty relative path in entries, but name the dropped file in errors.
   const displayName = displayPath || basename(filePath)
   if (statResult.isSymbolicLink()) {
     throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayName}'`)
@@ -154,9 +165,7 @@ async function stageFileEntry(
       openedStat.size,
       options.totalBytesBefore + openedStat.size
     )
-    // Why: bytes are read slice-by-slice at upload time, so staging records the
-    // identity the streamer re-checks rather than the body itself. Size alone
-    // would let a same-size replacement slip through between the two calls.
+    // Record identity for upload-time checks; size alone cannot detect same-size replacements.
     return {
       entry: {
         relativePath: displayPath,
@@ -166,11 +175,20 @@ async function stageFileEntry(
         deviceId: openedStat.dev,
         modifiedAtMs: openedStat.mtimeMs
       },
-      byteLength: openedStat.size
+      byteLength: openedStat.size,
+      imageExtension: options.detectImageExtension
+        ? await readImageExtension(fileHandle)
+        : undefined
     }
   } finally {
     await fileHandle.close()
   }
+}
+
+async function readImageExtension(fileHandle: FileHandle): Promise<string | undefined> {
+  const header = Buffer.alloc(IMAGE_SIGNATURE_BYTES)
+  const { bytesRead } = await fileHandle.read(header, 0, IMAGE_SIGNATURE_BYTES, 0)
+  return detectImageFileSignature(header.subarray(0, bytesRead))?.extension
 }
 
 async function assertRealPathInsideRoot(
@@ -180,7 +198,7 @@ async function assertRealPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
-  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  // ..name is valid; only .. and ../ paths escape.
   if (
     relativeToRoot !== '' &&
     (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))

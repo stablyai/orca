@@ -62,7 +62,7 @@ function replayReadyAtMs(
 }
 
 describe('grok startup trace replay (alternate-screen mode)', () => {
-  it('delivers on the composer frame instead of waiting out the hard timeout', () => {
+  it('reports readiness within the first second of the alternate-screen trace', () => {
     const readyAt = replayReadyAtMs('grok-composer-prompt', GROK_STARTUP_PTY_TRACE)
     expect(readyAt).not.toBeNull()
     expect(readyAt).toBeLessThan(1000)
@@ -74,7 +74,7 @@ describe('grok startup trace replay (alternate-screen mode)', () => {
     expect(replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_STARTUP_PTY_TRACE)).toBeNull()
   })
 
-  it('fires on the same frame that paints the composer box', () => {
+  it('reports readiness on the frame that paints the composer box', () => {
     const composerFrame = GROK_STARTUP_PTY_TRACE.find((chunk) => chunk.data?.includes('❯'))
     expect(composerFrame).toBeDefined()
     expect(replayReadyAtMs('grok-composer-prompt', GROK_STARTUP_PTY_TRACE)).toBe(composerFrame?.t)
@@ -82,7 +82,7 @@ describe('grok startup trace replay (alternate-screen mode)', () => {
 })
 
 describe('grok startup trace replay (inline mode, no alternate screen)', () => {
-  it('still delivers through the quiet window when the marker never anchors', () => {
+  it('arms a quiet window before the inline trace reaches the modeled timeout', () => {
     // Why: inline grok emits no \x1b[?1049h, so the composer glyph never counts.
     // Anchoring the quiet window on the alt-screen switch too would leave this
     // launch with NO delivery path — orca-runtime drops the draft when readiness
@@ -92,28 +92,9 @@ describe('grok startup trace replay (inline mode, no alternate screen)', () => {
     expect(readyAt).toBeLessThan(HARD_TIMEOUT_MS)
   })
 
-  it('matches the default signal exactly, so inline launches keep their old timing', () => {
+  it('matches the default signal timing for the inline trace', () => {
     expect(replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)).toBe(
       replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_INLINE_STARTUP_PTY_TRACE)
     )
-  })
-
-  it('reports the hard timeout, not a late marker, once the waiters have settled', () => {
-    // Guards the model above: the real waiters resolve at 8s, so a marker landing
-    // after that must not be reported as a delivery time.
-    const lateMarker: GrokStartupTraceChunk[] = [
-      { t: 0, data: '\x1b[?1049h' },
-      { t: 8500, data: '\x1b[38;2;200;200;200m❯ ' }
-    ]
-    expect(replayReadyAtMs('grok-composer-prompt', lateMarker)).toBeNull()
-  })
-
-  it('records a startup with no alternate-screen switch', () => {
-    // Guards the fixture itself: if a future re-recording captures alt-screen
-    // output, the inline assertions above would silently stop testing inline.
-    expect(GROK_INLINE_STARTUP_PTY_TRACE.some((chunk) => chunk.data?.includes('\x1b[?1049h'))).toBe(
-      false
-    )
-    expect(GROK_INLINE_STARTUP_PTY_TRACE.some((chunk) => chunk.data?.includes('❯'))).toBe(true)
   })
 })

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({
   createSupport: vi.fn(),
@@ -27,16 +29,32 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/runtime/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: mocks.hostPermission
 }))
+// Switch-on, main opens this machine's chats and its frames draw them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
-import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from './agent-session/structured-agent-session-provisional-tab'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from './structured-agent-session-host-admission'
+import { launchStructuredAgentFromNewTab } from './launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings
@@ -58,6 +76,32 @@ function pairedPlan(
 
 const localPlan = () => pairedPlan({ executionHostId: 'local' })
 
+/** The workspace's row names the paired server as its owner, whose layout draws its tabs. */
+function seedPairedServerWorkspace(): void {
+  const worktree: Worktree = {
+    id: WORKTREE,
+    repoId: 'repo-1',
+    path: '/srv/app',
+    head: 'abc',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: true,
+    displayName: 'app',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    hostId: 'runtime:server-1',
+    runtimeOwnerEnvironmentId: 'server-1'
+  }
+  useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+}
+
 /** Nothing of a chat exists on this machine: no tab, launch, record, queued prompt or intent. */
 function expectNoChatCommitted(): void {
   expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
@@ -69,7 +113,9 @@ function expectNoChatCommitted(): void {
   ).toBeNull()
 }
 
-beforeEach(() => {
+let main: TabsDrawnFromMain
+
+beforeEach(async () => {
   vi.clearAllMocks()
   mocks.hostPermission.mockResolvedValue({ kind: 'allowed' })
   localStorage.clear()
@@ -77,11 +123,17 @@ beforeEach(() => {
     activeWorktreeId: WORKTREE,
     activeWorkspaceExecutionHostId: null,
     unifiedTabsByWorktree: {},
+    worktreesByRepo: {},
     settings: INITIAL_SETTINGS
   })
+  main = await drawTabsFromMain(useAppStore)
 })
 
+afterEach(() => main.close())
+
 describe('a structured chat launch on a paired server', () => {
+  beforeEach(seedPairedServerWorkspace)
+
   it('opens only the terminal when the server declines, keeping the workspace selected', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({
@@ -105,7 +157,9 @@ describe('a structured chat launch on a paired server', () => {
       failureNotified: false
     })
     expect(onHostDeclined).toHaveBeenCalledOnce()
-    expect(mocks.toastInfo).toHaveBeenCalledOnce()
+    expect(mocks.toastInfo).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringContaining("can't run")
+    })
     expect(useAppStore.getState().activeWorktreeId).toBe(WORKTREE)
     expectNoChatCommitted()
   })
@@ -134,6 +188,65 @@ describe('a structured chat launch on a paired server', () => {
       })
     )
     expectNoChatCommitted()
+  })
+
+  it('uses actual discovery outcome for both decline callers, preserving failed-refresh and shell fallback', async () => {
+    const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
+    const plan = () => adoptAgentSessionLaunchVerdict({ ...localPlan(), worktreeId })
+    useAppStore.getState().clearLocalDetectedAgents()
+    const detect = vi.fn().mockResolvedValue([])
+    const refresh = vi.fn().mockRejectedValue(new Error('failed'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { preflight: { detectAgents: detect, refreshAgents: refresh } }
+    })
+    await useAppStore.getState().ensureNativeDetectedAgents()
+    mocks.createSupport.mockResolvedValue({ supported: false })
+    const openTerminal = vi.fn(() => ({ surface: { kind: 'host-published' as const } }))
+    const declined = () =>
+      launchStructuredAgentFromNewTab({ plan: plan(), worktreeId, openTerminal })
+    await expect(declined()?.structuredSettlement).resolves.toMatchObject({ kind: 'failed' })
+    const direct = () =>
+      beginDirectWorkItemStructuredLaunch({
+        plan: plan(),
+        primaryTabId: null,
+        beforeOpen: vi.fn(),
+        declinedTerminal: { agentArgs: '--model opus', launchSource: 'task_page' }
+      })
+    direct()
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(2))
+    // The action-first chat tab never swaps to a CLI terminal the host lacks.
+    const actionFirst = beginStructuredAgentSessionProvisionalLaunch({
+      plan: adoptAgentSessionLaunchVerdict({ ...plan(), prompt: '' }),
+      hooks: {},
+      focusIntent: { request: vi.fn(), cancel: vi.fn() }
+    })
+    expect(actionFirst?.tab).not.toBeNull()
+    await expect(actionFirst?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    expect(openTerminal).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    await useAppStore.getState().refreshDetectedAgents(worktreeId)
+    const inventory = useAppStore.getState().readLocalAgentInventory(worktreeId)
+    expect(inventory).toEqual({ state: 'failed', ids: [] })
+    await expect(declined()?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'fallback' }
+    })
+    direct()
+    await vi.waitFor(() => expect(mocks.launchAgentInNewTab).toHaveBeenCalledOnce())
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--model opus', prompt: 'fix the flaky test' })
+    )
+    const seedShell = vi.fn(() => ({ opened: true }))
+    await expect(
+      launchStructuredAgentFromNewTab({
+        plan: plan(),
+        worktreeId,
+        onHostDeclined: seedShell,
+        openTerminal
+      })?.structuredSettlement
+    ).resolves.toEqual({ kind: 'terminal' })
+    expect(seedShell).toHaveBeenCalledOnce()
   })
 
   it('opens nothing and says so once when the server cannot be reached', async () => {
@@ -215,7 +328,11 @@ describe('a structured chat launch on a paired server', () => {
         'claude'
       )
       expect(settlement).toEqual(expect.objectContaining({ kind: 'failed', notified: true }))
-      expect(mocks.toastError).toHaveBeenCalledTimes(1)
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Claude'), {
+        description: expect.stringMatching(
+          kind === 'unverified' ? /confirm the host's permissions for Claude/ : /older Orca/
+        )
+      })
       expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
       expectNoChatCommitted()
     }
@@ -265,7 +382,7 @@ describe('a structured chat launch on this machine', () => {
       delivered: true,
       failureNotified: false
     })
-    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' })
+    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' }, undefined)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
     expectNoChatCommitted()
@@ -415,6 +532,8 @@ describe('a structured chat launch on this machine', () => {
 })
 
 describe('a paired server that cannot resolve a new workspace yet', () => {
+  beforeEach(seedPairedServerWorkspace)
+
   it('keeps its terminal fallback, as before', async () => {
     mocks.createSupport.mockRejectedValue(new Error('selector_not_found'))
     const onHostDeclined = vi.fn(() => ({ opened: true }))
@@ -428,4 +547,29 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
     await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
     expect(onHostDeclined).toHaveBeenCalledOnce()
   })
+})
+
+it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+  seedPairedServerWorkspace()
+  for (const supported of [false, true]) {
+    mocks.toastError.mockClear()
+    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
+    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+    if (supported) {
+      mocks.createSupport
+        .mockResolvedValueOnce({ supported: true })
+        .mockResolvedValueOnce({ supported: false })
+    }
+    const onHostDeclined = vi.fn()
+    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
+    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    expect(onHostDeclined).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
+    if (!supported) {
+      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: false,
+        failureNotified: true
+      })
+    }
+  }
 })

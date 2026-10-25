@@ -189,7 +189,13 @@ export function withClosedServeBrowserTab(
   const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
   const applied = applyLayoutCommand(
     loaded.layout,
-    { type: 'closeTabs', workspace: worktreeId, tabIds: [saved.tabId], force: true },
+    {
+      type: 'closeTabs',
+      workspace: worktreeId,
+      // Why (STA-11998): closeTabs takes the tab-bar id, which a window-saved tab keeps apart.
+      tabIds: [savedBrowserTabEntryId(session, worktreeId, saved.tabId)],
+      force: true
+    },
     { mintId: randomUUID, mintLeafId: randomUUID, now: Date.now }
   )
   if (!applied.ok) {

@@ -7,7 +7,7 @@
 import type {
   AgentMessageSource,
   AgentMessageSender
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
 

@@ -1,6 +1,4 @@
-// The row a stale settle writes about why the turns it cut stopped: a death that names their owner,
-// or the replacement of the Orca runtime that held them. One row per proof, named by it, so a retry
-// after a partly written settle adds no second row.
+// Key notices by matching death/replacement proof so settlement retries cannot duplicate them.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
@@ -10,10 +8,9 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
-/** Which proof ends an item the settle found running or left `unverifiable`, if any does. */
 export type StaleCut = { by: 'death' } | { by: 'replaced'; fence: number } | null
 
 export function isUnverifiableTurn(item: AgentJournalRenderItem): boolean {
@@ -36,8 +33,7 @@ export function staleStopRow(
 } | null {
   const cuts = items.map(cutBy)
   const evidence = input.deathEvidence
-  // The death evidence is Orca's log text, never a sentence for a person: the row says only that
-  // the provider stopped, and how Orca ended when the provider died with it.
+  // Death diagnostics stay in logs; show only provider stop and associated Orca shutdown cause.
   if (evidence && cuts.some((cut) => cut?.by === 'death')) {
     return {
       kind: 'item',
@@ -55,7 +51,7 @@ export function staleStopRow(
   const fence = Math.max(...fences)
   return {
     kind: 'item',
-    // Named by the owner it explains, which every later runtime finds the same.
+    // Stable owner identity lets later runtimes find the same notice.
     identity: {
       provider: 'orca',
       clientMessageId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:replaced-${fence}`

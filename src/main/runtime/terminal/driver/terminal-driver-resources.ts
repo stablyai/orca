@@ -4,7 +4,7 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../runtime-account-controller'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
 import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser-tab-create-publication'
 import type { RuntimeStore } from '../../runtime-store-contract'
@@ -26,7 +26,7 @@ import type {
 
 import { RuntimeTerminalDriverController } from '../../runtime-terminal-driver-controller'
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 
 import { RuntimeBrowserDriverController } from '../../runtime-browser-driver-controller'
@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     repoId?: string
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
-  abstract getAuthoritativeWindow(): BrowserWindow
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
   protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
   protected abstract markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,

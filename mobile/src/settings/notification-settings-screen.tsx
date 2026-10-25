@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
@@ -27,40 +27,58 @@ export default function NotificationsScreen({
 }) {
   const insets = useSafeAreaInsets()
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const requestRevision = useRef(0)
   const [error, setError] = useState<string | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
 
   const refreshSettings = useCallback(async () => {
-    const [enabled, permission] = await Promise.all([
-      operations.preference(),
-      operations.permission()
-    ])
-    setPushEnabled(enabled.enabled)
-    setPermissionState(permission)
-    setError(null)
+    if (savingRef.current) {
+      return
+    }
+    const revision = ++requestRevision.current
+    try {
+      const [enabled, permission] = await Promise.all([
+        operations.preference(),
+        operations.permission()
+      ])
+      if (revision === requestRevision.current) {
+        setPushEnabled(enabled.enabled)
+        setPermissionState(permission)
+        setError(null)
+      }
+    } catch {
+      if (revision === requestRevision.current) {
+        setError('Could not load notification settings. Try again.')
+      }
+    }
   }, [operations])
 
   useFocusEffect(
     useCallback(() => {
-      void refreshSettings().catch(() =>
-        setError('Could not load notification settings. Try again.')
-      )
+      void refreshSettings()
+      return () => {
+        requestRevision.current += 1
+      }
     }, [refreshSettings])
   )
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        void refreshSettings().catch(() =>
-          setError('Could not load notification settings. Try again.')
-        )
+        void refreshSettings()
       }
     })
     return () => subscription.remove()
   }, [refreshSettings])
 
   const togglePush = async (value: boolean) => {
+    if (savingRef.current) {
+      return
+    }
+    savingRef.current = true
+    requestRevision.current += 1
     setError(null)
     setSaving(true)
     try {
@@ -71,6 +89,7 @@ export default function NotificationsScreen({
     } catch {
       setError('Could not save notification settings. Try again.')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }

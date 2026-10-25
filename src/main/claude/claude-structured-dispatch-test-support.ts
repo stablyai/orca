@@ -29,7 +29,7 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     reportedOptions: {},
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
-    restoreSkippedOptions: new Set(),
+    appliedInputOptions: new Map(),
     launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
@@ -46,6 +46,9 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
       proof: createClaudeInitProof(),
       account: undefined,
       resumesTranscript: false,
+      claudeConfigDir: '/claude-home',
+      cwd: '/work',
+      history: { leafUuid: null, covered: true, contextActivity: 0 },
       onLateRefusal: () => {}
     }
   }
@@ -55,7 +58,6 @@ export function userMessage(blocks: AgentJournalMessageItem['blocks']): AgentJou
   return { kind: 'message', role: 'user', blocks }
 }
 
-/** The child died. Nothing else retires a live waiter now that no deadline does. */
 export function childExited(session: ClaudeSession): void {
   retireClaudeDispatchWaiters(session)
 }

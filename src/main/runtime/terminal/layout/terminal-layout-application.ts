@@ -1,8 +1,35 @@
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
 import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import { PaneGridRecorder } from './pane-grid-recording'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  private paneGrids: PaneGridRecorder | null = null
+
+  /** Layout-owner build: remembers a resized terminal's grid on the pane showing it. */
+  protected notePaneGrid(ptyId: string, cols: number, rows: number): void {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return
+    }
+    this.paneGrids ??= new PaneGridRecorder({
+      sessions: () =>
+        (this.store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
+          const session = this.store?.getWorkspaceSession?.(hostId)
+          return session ? [session] : []
+        }),
+      apply: (command) => this.applyLayoutCommand(command)
+    })
+    this.paneGrids.record(ptyId, { cols, rows })
+  }
+
+  /** Layout-owner build: writes each grid still waiting out its burst; null when none waits. */
+  flushPaneGrids(): Promise<void> | null {
+    return this.paneGrids?.flush() ?? null
+  }
   protected abstract notifyTerminalResize(
     ptyId: string,
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
@@ -76,6 +103,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
         return { ok: false, reason: 'resize-failed' }
       }
       this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
+      this.notePaneGrid(ptyId, target.cols, target.rows)
     }
 
     // Why: remote desktop ownership is a fit hold for the host and passive

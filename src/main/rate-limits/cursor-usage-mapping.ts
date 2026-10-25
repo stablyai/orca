@@ -38,6 +38,12 @@ const cursorUsageSummarySchema = z
 type CursorPool = z.infer<typeof cursorPoolSchema>
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>
 
+const cursorCurrentPeriodSchema = z.object({
+  billingCycleStart: z.unknown(),
+  billingCycleEnd: z.unknown(),
+  planUsage: cursorPoolSchema
+})
+
 /** Accepts the raw dashboard body; an unrecognised shape maps to "nothing reported". */
 export function parseCursorUsageSummary(data: unknown): CursorUsageSummary {
   const parsed = cursorUsageSummarySchema.safeParse(data)
@@ -160,6 +166,34 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     planType: typeof membership === 'string' && membership.trim() ? membership.trim() : null,
     isUnlimited: summary.isUnlimited === true
   }
+}
+
+export type CursorCurrentPeriodUsage = CursorUsageMapping & { periodMinutes: number }
+
+export function mapCursorCurrentPeriodUsage(payload: unknown): CursorCurrentPeriodUsage | null {
+  const parsed = cursorCurrentPeriodSchema.safeParse(payload)
+  if (!parsed.success) {
+    return null
+  }
+  const startMs = parseCursorTimestampMs(parsed.data.billingCycleStart)
+  const endMs = parseCursorTimestampMs(parsed.data.billingCycleEnd)
+  if (
+    startMs === null ||
+    endMs === null ||
+    endMs <= startMs ||
+    !Number.isFinite(new Date(startMs).getTime()) ||
+    !Number.isFinite(new Date(endMs).getTime())
+  ) {
+    return null
+  }
+  const mapped = mapCursorUsageSummary({
+    billingCycleStart: startMs,
+    billingCycleEnd: endMs,
+    individualUsage: { plan: parsed.data.planUsage }
+  })
+  return mapped.monthly || mapped.buckets.length > 0
+    ? { ...mapped, periodMinutes: windowMinutesFor(startMs, endMs) }
+    : null
 }
 
 /**

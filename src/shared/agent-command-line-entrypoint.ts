@@ -124,9 +124,23 @@ export function findInterpreterEntrypointToken(
 }
 
 export function comparablePath(token: string): string {
-  return token
+  const path = token
     .trim()
     .replace(/^["']|["']$/g, '')
     .replace(/\\/g, '/')
     .toLowerCase()
+  // Why: npm's local `.bin` shims and Qwen's standalone launcher run `<dir>/../<script>` paths.
+  const prefix = /^\/*/.exec(path)?.[0] ?? ''
+  const segments: string[] = []
+  for (const segment of path.slice(prefix.length).split('/')) {
+    if (segment === '' || segment === '.') {
+      continue
+    }
+    if (segment === '..' && segments.length > 0 && segments.at(-1) !== '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return prefix + segments.join('/')
 }

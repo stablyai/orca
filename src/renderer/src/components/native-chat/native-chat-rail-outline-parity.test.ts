@@ -4,7 +4,7 @@ import {
   nativeChatTurnReplyPreviews,
   projectAgentSessionConversationOutline,
   truncateOutlinePreview
-} from '../../../../shared/agent-session-conversation-outline'
+} from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,

@@ -122,7 +122,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   }
 
   // Why: seed-derived agent status reflects historical state. Orchestration
-  // waiters (resolveTuiIdleWaiters, deliverPendingMessages) must only react
+  // waiters (resolveTuiIdleWaiters, mailbox pointer delivery) must only react
   // to LIVE transitions, so this helper writes leaf.lastAgentStatus only,
   // leaves lastAgentStatusObservedLive untouched, and never resolves waiters.
   // detectAgentStatusFromTitle wrap mirrors the live path so seeded and live
@@ -202,7 +202,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
               () => {
                 const paneKey =
                   this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
-                  pty.paneKey
+                  this.paneOfPty(pty).paneKey
                 return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
               },
               outputObservedAt

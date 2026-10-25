@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetLayoutOwnerPaneIntentsForTests,
-  expectPaneToAppear,
   expectPaneToClose,
   expectTabRowFields,
   holdTabPaneTree,
@@ -9,23 +8,16 @@ import {
   onTabPaneTreeRedraw,
   panesLeftAfterPendingCloses,
   requestTabPaneTreeRedraw,
-  takePaneAppearIntent,
   takePaneCloseIntent,
   takeTabRowFields
 } from './layout-owner-pane-intents'
-
-const telemetry = { source: 'keyboard', direction: 'vertical' } as const
 
 describe('layout-owner pane intents', () => {
   beforeEach(() => _resetLayoutOwnerPaneIntentsForTests())
 
   it('hands an intent out once, and only for its own tab', () => {
-    expectPaneToAppear('leaf-new', { tabId: 'tab-1', cwd: '/repo', telemetry })
     expectPaneToClose('tab-1', 'leaf-old', 'user')
 
-    expect(takePaneAppearIntent('tab-2', 'leaf-new')).toBeNull()
-    expect(takePaneAppearIntent('tab-1', 'leaf-new')).toMatchObject({ cwd: '/repo' })
-    expect(takePaneAppearIntent('tab-1', 'leaf-new')).toBeNull()
     expect(takePaneCloseIntent('tab-2', 'leaf-old')).toBeNull()
     expect(takePaneCloseIntent('tab-1', 'leaf-old')).toBe('user')
     expect(takePaneCloseIntent('tab-1', 'leaf-old')).toBeNull()
@@ -42,11 +34,11 @@ describe('layout-owner pane intents', () => {
 
   it('keeps only the newest intents', () => {
     for (let index = 0; index < 65; index += 1) {
-      expectPaneToAppear(`leaf-${index}`, { tabId: 'tab-1', telemetry })
+      expectPaneToClose('tab-1', `leaf-${index}`, 'exit')
     }
 
-    expect(takePaneAppearIntent('tab-1', 'leaf-0')).toBeNull()
-    expect(takePaneAppearIntent('tab-1', 'leaf-64')).not.toBeNull()
+    expect(takePaneCloseIntent('tab-1', 'leaf-0')).toBeNull()
+    expect(takePaneCloseIntent('tab-1', 'leaf-64')).toBe('exit')
   })
 
   it('hands out a new row’s fields once, until released', () => {

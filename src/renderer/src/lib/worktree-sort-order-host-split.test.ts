@@ -18,12 +18,12 @@ describe('splitWorktreeSortOrderByHost', () => {
   it('groups worktree ids by owner host, preserving relative order', () => {
     const groups = splitWorktreeSortOrderByHost(state, ['runtime-repo::wt-b', 'local-repo::wt-a'])
     expect(groups).toEqual([
-      { hostId: 'runtime:env-1', orderedIds: ['runtime-repo::wt-b'] },
-      { hostId: 'local', orderedIds: ['local-repo::wt-a'] }
+      { hostId: 'runtime:env-1', orderedIds: ['runtime-repo::wt-b'], rowHostIds: ['local'] },
+      { hostId: 'local', orderedIds: ['local-repo::wt-a'], rowHostIds: ['local'] }
     ])
   })
 
-  it('routes legacy worktrees without an explicit owner to the focused host', () => {
+  it('keeps legacy worktrees without an explicit owner local, whatever server is focused', () => {
     const groups = splitWorktreeSortOrderByHost(
       {
         settings: { activeRuntimeEnvironmentId: 'focused-env' },
@@ -32,6 +32,44 @@ describe('splitWorktreeSortOrderByHost', () => {
       },
       ['legacy::wt']
     )
-    expect(groups).toEqual([{ hostId: 'runtime:focused-env', orderedIds: ['legacy::wt'] }])
+    expect(groups).toEqual([{ hostId: 'local', orderedIds: ['legacy::wt'], rowHostIds: ['local'] }])
+  })
+
+  it('leaves out a twin and a row only a repo row places on a server', () => {
+    const groups = splitWorktreeSortOrderByHost(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        runtimeEnvironments: [{ id: 'hub-env' }],
+        runtimeEnvironmentCatalogHydrated: true,
+        repos: [
+          { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+          { id: 'twin', connectionId: null, executionHostId: 'local' },
+          { id: 'twin', connectionId: 'box', executionHostId: 'ssh:box' },
+          { id: 'stale-hub', connectionId: 'target', executionHostId: 'runtime:hub-env' },
+          { id: 'hub', connectionId: 'box', executionHostId: 'runtime:hub-env' }
+        ],
+        worktreesByRepo: {
+          'local-repo': [{ id: 'local-repo::wt-a', repoId: 'local-repo' }],
+          twin: [
+            { id: 'twin::wt', repoId: 'twin', hostId: 'local' },
+            { id: 'twin::wt', repoId: 'twin', hostId: 'ssh:box' }
+          ],
+          'stale-hub': [{ id: 'stale-hub::wt', repoId: 'stale-hub', hostId: 'ssh:target' }],
+          hub: [
+            {
+              id: 'hub::wt',
+              repoId: 'hub',
+              hostId: 'ssh:box',
+              runtimeOwnerEnvironmentId: 'hub-env'
+            }
+          ]
+        }
+      },
+      ['twin::wt', 'stale-hub::wt', 'hub::wt', 'local-repo::wt-a']
+    )
+    expect(groups).toEqual([
+      { hostId: 'runtime:hub-env', orderedIds: ['hub::wt'], rowHostIds: ['ssh:box'] },
+      { hostId: 'local', orderedIds: ['local-repo::wt-a'], rowHostIds: ['local'] }
+    ])
   })
 })

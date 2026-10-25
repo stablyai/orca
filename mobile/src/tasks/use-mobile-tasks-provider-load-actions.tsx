@@ -1,6 +1,5 @@
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
 import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   type GitHubIssueSourceError,
@@ -9,7 +8,10 @@ import {
   type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
+  taskPageToGitHubApiPage,
   useCallback
 } from './mobile-tasks-dependencies'
 import {
@@ -22,8 +24,7 @@ import {
   createGitHubTask,
   mapWithConcurrency,
   reconcileTeamSelection,
-  scopeGitHubTaskSearch,
-  taskTime
+  scopeGitHubTaskSearch
 } from './mobile-tasks-legacy-foundation'
 import {
   githubWorkItemCountRead,
@@ -133,7 +134,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     async (
       requestClient: RpcClient,
       queriedRepos: RepoSummary[],
-      before?: string
+      taskPage = 0
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
@@ -141,26 +142,23 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       sourceErrors: GitHubIssueSourceError[]
       sourceFallbacks: GitHubIssueSourceFallback[]
     }> => {
+      const perRepoLimit = getTaskPagePerRepoLimit(
+        queriedRepos.length,
+        PER_REPO_FETCH_LIMIT,
+        CROSS_REPO_DISPLAY_LIMIT
+      )
       const results = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            // `before` is the list's pagination cursor, and github.listWorkItems' params schema
-            // does not declare it, so the host has always dropped it. Sent verbatim anyway:
-            // removing it would change the bytes, and making the host honour the cursor is a
-            // product fix with its own recording, not part of this migration.
-            const pageParams = {
+            // Same paging as desktop's task page: numbered pages, the display budget split per repo.
+            const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
-              limit: PER_REPO_FETCH_LIMIT,
+              limit: perRepoLimit,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
-              before
-            }
-            const reply = await githubWorkItemSearchRead.request(
-              requestClient,
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
-              pageParams as RpcSendParams<'github.listWorkItems'>
-            )
+              page: taskPageToGitHubApiPage(taskPage)
+            })
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
             const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
@@ -208,10 +206,11 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
+        // Why: the host pages by issue number, so the merge must order the same way
+        // (desktop's sortWorkItemsByNumber) or rows reshuffle across page boundaries.
         items: results
           .flatMap((result) => result.items)
-          .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
-          .slice(0, CROSS_REPO_DISPLAY_LIMIT),
+          .sort((a, b) => b.source.number - a.source.number),
         failedCount: results.filter((result) => result.error).length,
         sourcesByRepoId,
         sourceErrors,
@@ -221,7 +220,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     [appliedQuery, githubKind]
   )
 
-  const countGitHubItems = useCallback(
+  const countGitHubItemPages = useCallback(
     async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
@@ -252,7 +251,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
           }
         }
       )
-      return counts.reduce((sum, count) => sum + count, 0)
+      return getWorkItemCountedTotalPages(
+        counts,
+        getTaskPagePerRepoLimit(queriedRepos.length, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT)
+      )
     },
     [appliedQuery, githubKind]
   )
@@ -261,7 +263,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,
-    countGitHubItems
+    countGitHubItemPages
   })
 }
 

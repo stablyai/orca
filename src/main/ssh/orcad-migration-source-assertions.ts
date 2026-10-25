@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto'
 import {
   serializeOrcadMigrationValue,
   type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { resolveOrcadMigrationFence } from './orcad-migration-source-fence'
 import { confirmOrcadMigrationTerminalsUnderFence } from './orcad-migration-terminal-gate'
-import { collectUntransferredDependentBlockers } from './ssh-target-orcad-dependents'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import { collectUntransferredDependentBlockers } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
 export function assertOrcadMigrationSourceUnchanged(
   context: { userDataPath: string; store: OrcadMigrationPreflightStore },

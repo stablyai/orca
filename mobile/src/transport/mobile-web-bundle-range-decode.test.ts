@@ -1,5 +1,6 @@
 import { gzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
+import gunzipVectors from '../../modules/orca-gzip-utf8-codec/tests/gunzip-vectors.json'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 
@@ -61,5 +62,28 @@ describe('decoding a bundle range', () => {
     expect(decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength + 100).byteLength).toBe(
       RAW.byteLength
     )
+  })
+
+  // The vectors the native codec's Kotlin and Swift tests run. Where their `native` answer is a
+  // refusal and `js` is not (bad CRC or length, trailing bytes), this pins fflate's leniency on
+  // the fallback path.
+  it('answers the shared gunzip vectors as fflate does', () => {
+    for (const vector of gunzipVectors) {
+      let actual: string | null
+      try {
+        actual = Buffer.from(
+          decodeMobileWebBundleRange(
+            RANGE,
+            Buffer.from(vector.gzipHex, 'hex'),
+            vector.outputLimit - 1
+          )
+        ).toString('hex')
+      } catch (error) {
+        expect(error, vector.name).toBeInstanceOf(MobileWebBundleFetchError)
+        expect(error, vector.name).toMatchObject({ refusal: 'range-undecodable' })
+        actual = null
+      }
+      expect(actual, vector.name).toBe(vector.js)
+    }
   })
 })

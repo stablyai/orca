@@ -1,11 +1,8 @@
-/**
- * Runs one browser command a managed SSH host forwarded, on this desktop, inside that host's scope:
- * an allowlisted method, against a workspace this desktop shows as the host's own, with every
- * workspace selector pinned to it. Every outcome is audit-logged; params are not, since they can
- * carry typed secrets.
- */
+// Audit outcomes and URL origins only; request parameters can contain secrets.
 import {
   DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+  DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL,
+  DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL,
   DESKTOP_BROWSER_BRIDGE_SCOPE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
@@ -36,27 +33,22 @@ export type DesktopBrowserBridgeAuditEntry = {
 export type DesktopBrowserBridgeExecutorDeps = {
   environmentId: string
   hostLabel: string
-  /**
-   * The workspace this desktop shows as owned by the environment's own machine for the named page
-   * and/or workspace, or null. A page that has not mounted yet is known only to the renderer.
-   */
+  /** Resolve host ownership via the renderer, which also knows unmounted pages. */
   resolveWorkspace(scope: {
     workspaceId: string | null
     page: string | null
   }): Promise<string | null>
-  /** The workspace a mounted page registered under, if it has mounted. */
   worktreeIdForPage(browserPageId: string): string | null
-  /** Records that a host drives this workspace's pages, so they lose programmatic clipboard reads. */
+  /** Host-driven workspaces lose programmatic clipboard reads. */
   markWorkspaceDriven(workspaceId: string): void
-  /** True when this host's desktop tabs browse through the host (SSH browser routing on for it). */
   isHostBrowsingRouted(): boolean
-  /** True only for a guest whose session is this host's prepared SSH route partition. */
+  /** Requires this host's prepared SSH route partition. */
   isGuestRoutedThroughHost(webContentsId: number): boolean
   dispatch(method: string, params: Record<string, unknown>): Promise<RpcResponse>
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
-// Why: a host may not pick the desktop page id, tab group, focus or browser profile of a new tab.
+// Hosts cannot choose a new tab's desktop identity, profile, group or focus.
 const TAB_CREATE_STRIPPED_PARAMS = [
   'page',
   'profileId',
@@ -78,8 +70,10 @@ class BridgeRefusal extends Error {
 export async function executeDesktopBrowserBridgeRequest(
   request: DesktopBrowserBridgeRequest,
   deps: DesktopBrowserBridgeExecutorDeps,
-  /** Aborted when the bridge detaches; a command not yet dispatched must then never run. */
-  signal?: AbortSignal
+  /** Command cancellation, deadline or bridge revocation; blocks queued dispatch. */
+  signal?: AbortSignal,
+  /** Attachment revocation only; per-command cancellation leaves this signal active. */
+  hostRevoked?: AbortSignal
 ): Promise<DesktopBrowserBridgeOutcome> {
   const audit: Omit<DesktopBrowserBridgeAuditEntry, 'outcome' | 'code'> = {
     environmentId: deps.environmentId,
@@ -104,7 +98,9 @@ export async function executeDesktopBrowserBridgeRequest(
       workspaceId,
       () => deps.dispatch(request.method, params),
       signal,
-      (webContentsId) => deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId)
+      (webContentsId) =>
+        deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
+      hostRevoked
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })
@@ -127,18 +123,18 @@ async function scopeRequest(
   request: DesktopBrowserBridgeRequest,
   deps: DesktopBrowserBridgeExecutorDeps
 ): Promise<{ params: Record<string, unknown>; workspaceId: string; page: string | null }> {
-  // Why again here: the desktop is the trust boundary, never what the host claims it checked.
+  // Enforce the method allowlist on the desktop rather than trusting the host.
   if (!isDesktopBrowserBridgeMethod(request.method)) {
     throw new BridgeRefusal(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
       `${request.method} cannot run on this desktop from an SSH host.`
     )
   }
-  // Why: an unrouted page egresses from this desktop, so a host could reach its loopback and LAN.
+  // Unrouted pages could expose the desktop's loopback and LAN to the host.
   if (!deps.isHostBrowsingRouted()) {
     throw new BridgeRefusal(
       DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
-      "This host's browser tabs browse from your desktop's own network, so its orca CLI cannot use them. Turn SSH browser routing back on for this host to allow it."
+      `This host's browser tabs browse from your desktop's own network, so its orca CLI cannot use them. Set ${DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL} to "SSH host" and, if this host is listed under "${DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL}", click "Use SSH host".`
     )
   }
   const params: Record<string, unknown> = { ...request.params }
@@ -151,7 +147,7 @@ async function scopeRequest(
     (request.method === 'browser.goto' || request.method === 'browser.tabCreate') &&
     !isWebNavigationUrl(params.url, request.method === 'browser.tabCreate')
   ) {
-    // Why: a bare path normalizes to file:// and loadURL skips the guest navigation guard.
+    // Bare paths become file: URLs, and loadURL bypasses the guest navigation guard.
     throw new BridgeRefusal(
       'invalid_argument',
       'An SSH host can open only http:// or https:// URLs in the desktop browser. Pass the full URL.'
@@ -181,7 +177,7 @@ async function scopeRequest(
   const workspaceId = await deps.resolveWorkspace({ workspaceId: requestedWorkspaceId, page })
   const mountedWorkspaceId = page ? deps.worktreeIdForPage(page) : null
   if (!workspaceId || (mountedWorkspaceId && mountedWorkspaceId !== workspaceId)) {
-    // Why the same refusal for a foreign page: an unknown and a forbidden page must look alike.
+    // Do not reveal whether a forbidden page exists.
     throw page
       ? new BridgeRefusal('browser_tab_not_found', `Browser page ${page} was not found`)
       : outOfScope()
@@ -208,21 +204,18 @@ function isWebNavigationUrl(value: unknown, optional: boolean): boolean {
   }
 }
 
-// Params that never reach agent-browser's argv: eval runs over CDP, fill writes through stdin.
+// These parameters bypass argv: eval uses CDP and fill uses stdin.
 const NON_ARGV_PARAMS: Readonly<Record<string, readonly string[]>> = {
   'browser.eval': ['expression'],
   'browser.fill': ['value']
 }
-// Params agent-browser receives as argv in fixed-size chunks, so every chunk start is an argument.
+// Each text chunk becomes a separate argv value and needs its own option check.
 const CHUNKED_ARGV_PARAMS: Readonly<Record<string, string>> = {
   'browser.type': 'input',
   'browser.keyboardInsertText': 'text'
 }
 
-/**
- * agent-browser reads its global options (such as --cdp) anywhere in argv, so a host value that
- * starts with "-" could repoint the command at another page's proxy. Refuse it rather than escape.
- */
+// agent-browser accepts global options anywhere in argv; leading dashes could redirect its CDP proxy.
 function assertNoOptionLikeArguments(method: string, params: Record<string, unknown>): void {
   const exempt = new Set(NON_ARGV_PARAMS[method] ?? [])
   const chunked = CHUNKED_ARGV_PARAMS[method]
@@ -249,7 +242,7 @@ const CTRL_OR_META = 2 | 4
 const SHIFT = 8
 const PASTE_MODIFIER_NAMES = new Set(['control', 'ctrl', 'meta', 'cmd', 'command', 'super', 'win'])
 
-// Why the input parser first: the key must be judged as the event the page receives, aliases and all.
+// Match the actual key event, including aliases.
 function isPasteChord(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false
@@ -261,7 +254,7 @@ function isPasteChord(value: unknown): boolean {
       (event.code === 'Insert' && (event.modifiers & SHIFT) !== 0)
     )
   }
-  // A spelling the parser cannot express falls back to the raw driver, so refuse it by name too.
+  // Unparsed spellings reach the raw driver; check their paste aliases too.
   const parts = value
     .toLowerCase()
     .split('+')
@@ -292,8 +285,8 @@ function urlOrigin(value: unknown): string | null {
   }
 }
 
-// Why: a user can open a desktop file in a routed tab; its document is still this desktop's file.
-// chrome-error: is Chromium's own load-failure page, which a host must be able to navigate away from.
+// Routed tabs can still display local files; those remain off-limits to hosts.
+// Allow chrome-error: so hosts can navigate away from failed loads.
 const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
   'http:',
   'https:',

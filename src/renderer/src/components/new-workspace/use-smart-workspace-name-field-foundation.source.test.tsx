@@ -78,6 +78,7 @@ describe('smart workspace explicit source connection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
     mocks.state.linearStatus = {
       connected: false,
       viewer: null,
@@ -160,7 +161,51 @@ describe('smart workspace explicit source connection', () => {
     expect(result.current.linearStatus.connected).toBe(false)
   })
 
-  it('retains focused runtime status and avoids a new status read without an override', async () => {
+  it("reads Linear on the selected repo's host, not the focused one (#32924)", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const fieldProps = { ...props(), repos: [serverRepo], repoId: serverRepo.id }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    await waitFor(() => expect(result.current.linearStatusChecked).toBe(true))
+    expect(mocks.readStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'linear', hostId: 'runtime:remote' })
+    )
+    expect(result.current.availableModes.some((mode) => mode.id === 'linear')).toBe(false)
+    expect(mocks.state.checkLinearConnection).not.toHaveBeenCalled()
+  })
+
+  it("holds a pasted Linear URL while the repo host's status is still loading", async () => {
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
+    mocks.readStatus.mockReturnValue(new Promise(() => {}))
+    const serverRepo: Repo = {
+      id: 'server-repo',
+      path: '/srv/app',
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:remote'
+    }
+    const searchProps = {
+      ...props(),
+      repos: [serverRepo],
+      repoId: serverRepo.id,
+      value: 'https://linear.app/acme/issue/ENG-1/title'
+    }
+    const { result } = renderHook(() => useWorkItemSourceSearch(searchProps))
+    await act(async () => {})
+    expect(result.current.linearStatusChecked).toBe(false)
+    expect(result.current.unresolvedLinearUrlIntent).toBe(true)
+  })
+
+  it('retains focused runtime status and avoids a new status read with no selected repo', async () => {
     mocks.state.linearStatus = { ...mocks.state.linearStatus, connected: true }
     const fieldProps = props()
     const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))

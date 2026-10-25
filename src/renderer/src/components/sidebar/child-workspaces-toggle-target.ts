@@ -18,6 +18,7 @@ import {
   getHostScopedWorktreeLineageInputs,
   getWorktreeLineageAncestors
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ChildWorkspacesToggleState = Pick<
   AppState,
@@ -91,7 +92,7 @@ export function getRenderedLineageChipKeys(state: AppState): Set<string> {
     )
   }
   const visibleWorktrees = computeVisibleWorktrees(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     [],
     buildVisibleWorktreeOptionsFromState(state, getRepoMapFromState(state))
   )

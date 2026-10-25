@@ -7,6 +7,7 @@ import { clearPaneTurnCacheState, type HookListenerState } from '../listener-sta
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
+import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
 
 /** Maps a Pi-family hook event (Pi, OMP, Prime) onto a pane status: lifecycle
  *  events become `working` / `done`, an ask tool becomes `blocked`, and OMP's
@@ -67,14 +68,19 @@ export function normalizePiCompatibleEvent(
   // no value of it can downgrade this to working without hiding a real prompt.
   const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
   const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+  const isOmpPlanReview = agentType === 'omp' && eventName === 'plan_review_requested'
+  const isOmpPlanReviewEnd = agentType === 'omp' && eventName === 'plan_review_resolved'
   const isPiUiPrompt =
     agentType === 'pi' && (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
   const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
+  // Why: Pi posts this only for a compaction between a finished reply and its settle.
+  const isPiCompactionStart = agentType === 'pi' && eventName === 'compaction_start'
 
   let stateName =
-    isPiCompatibleAsk || isOmpApprovalRequest
+    isPiCompatibleAsk || isOmpApprovalRequest || isOmpPlanReview
       ? 'blocked'
       : isOmpApprovalResolution ||
+          isPiCompactionStart ||
           eventName === 'before_agent_start' ||
           eventName === 'agent_start' ||
           eventName === 'tool_call' ||
@@ -89,13 +95,14 @@ export function normalizePiCompatibleEvent(
   if (isPiUiPrompt) {
     // Why: waiting uses the same orange question icon as Claude/Codex input prompts.
     stateName = 'waiting'
-  } else if (isPiUiPromptEnd) {
+  } else if (isPiUiPromptEnd || isOmpPlanReviewEnd) {
     stateName = hookPayload.is_idle === true ? 'done' : 'working'
   }
 
   if (
     !stateName ||
-    (stateName === 'working' && holdsOmpApproval(state, agentType, eventName, paneKey))
+    (stateName === 'working' && holdsOmpApproval(state, agentType, eventName, paneKey)) ||
+    (eventName === 'agent_end' && holdsOmpPlanReview(state, agentType, hookPayload, paneKey))
   ) {
     return null
   }
@@ -121,6 +128,8 @@ export function normalizePiCompatibleEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     subagents,
+    // Why: a compaction row and its settle carry one finish time, so the reply is announced once.
+    turnCompletedAt: hookPayload.turn_completed_at,
     // Why: the extension ends a run whose session was replaced; that is not a completed turn.
     ...(eventName === 'agent_end' && hookPayload.session_boundary === true
       ? { sessionBoundary: true }
@@ -130,6 +139,7 @@ export function normalizePiCompatibleEvent(
 
 const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
   'tool_approval_resolved',
+  'plan_review_resolved',
   'before_agent_start',
   'agent_start'
 ])
@@ -152,5 +162,25 @@ function holdsOmpApproval(
   const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
   return (
     previous?.agentType === 'omp' && previous.state === 'blocked' && previous.toolName !== 'ask'
+  )
+}
+
+/**
+ * Whether an open OMP plan review must survive this completion. A turn cannot end under the
+ * overlay, but the extension posts `agent_end` when the last async child of an earlier turn
+ * finishes, and only the review's own resolution (or a new session) ends this wait.
+ */
+function holdsOmpPlanReview(
+  state: HookListenerState,
+  agentType: 'pi' | 'omp' | 'prime-agent',
+  hookPayload: Record<string, unknown>,
+  paneKey: string
+): boolean {
+  if (agentType !== 'omp' || hookPayload.session_boundary === true) {
+    return false
+  }
+  const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+  return (
+    previous?.state === 'blocked' && parseOmpPlanReviewPrompt(previous.interactivePrompt) !== null
   )
 }

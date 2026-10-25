@@ -57,6 +57,8 @@ const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*
 const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
 )
+// fish queries XTVERSION at startup; a gated reply would reach the launched agent instead (#16489).
+const COOKED_ECHO_RISK_XTVERSION_PREFIX_RE = new RegExp('^\\u001bP>\\|[^\\u001b]*\\u001b\\\\')
 const QUERY_REPLY_PREFIX_RES = [
   CPR_OR_DSR_PREFIX_RE,
   DEVICE_ATTRIBUTES_PREFIX_RE,
@@ -110,6 +112,10 @@ function cookedEchoSafeReplyEnd(data: string, start: number): number {
   const osc = COOKED_ECHO_RISK_OSC_PREFIX_RE.exec(slice)
   if (osc?.[0]) {
     return start + osc[0].length
+  }
+  const xtversion = COOKED_ECHO_RISK_XTVERSION_PREFIX_RE.exec(slice)
+  if (xtversion?.[0]) {
+    return start + xtversion[0].length
   }
   return -1
 }

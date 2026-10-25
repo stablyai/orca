@@ -1,5 +1,4 @@
-// Reads a command line as a shell would, only as far as the resume guard needs: into commands,
-// each a list of words with their quotes removed. One pass, so a long terminal text stays linear.
+// One-pass tokenization for the resume guard’s limited shell syntax.
 
 const BLANKS = /[^\S\r\n]+/y
 // Unquoted text, or a redirection: `>&`, `<&` and `&>` do not end a command.
@@ -11,8 +10,7 @@ const CONTINUATION_MARKS = new Set(['\\', '`', '^'])
 
 type ShellToken = { word: string; continuesLine: boolean } | { separator: string }
 
-/** Each command of `text`, as its words. Outside quotes, `&&`, `||`, `;`, `|`, `&` and a line
- *  break end a command, even glued to a word (`cd /x&&claude`). */
+/** Split commands into unquoted words, including separators glued to words such as cd /x&&claude. */
 export function* shellCommands(text: string): Generator<string[]> {
   let words: string[] = []
   let continuesLine = false
@@ -81,7 +79,6 @@ function* shellTokens(text: string): Generator<ShellToken> {
   }
 }
 
-/** The index of the quote closing the one at `open`; a double quote escaped by `\` does not. */
 function closingQuote(text: string, open: number): number {
   const quote = text[open]!
   for (let at = text.indexOf(quote, open + 1); at !== -1; at = text.indexOf(quote, at + 1)) {
@@ -96,7 +93,6 @@ function closingQuote(text: string, open: number): number {
   return -1
 }
 
-/** The name a word runs as: its path's last name, lower-case. */
 export function commandName(word: string): string {
   return word.slice(Math.max(word.lastIndexOf('/'), word.lastIndexOf('\\')) + 1).toLowerCase()
 }
@@ -115,9 +111,7 @@ const LAUNCHERS = new Set([
   'wsl.exe'
 ])
 
-/** The index of the program a command runs: its first word past `VAR=x` prefixes and launchers
- *  (`env`, `exec`, `command`, `sudo`, `nohup`, `time`, `npx`, `bunx`, `pnpm dlx`, `wsl --`) with their
- *  options; -1 if none. */
+/** Skip environment assignments and known launchers to find the program; return -1 if absent. */
 export function commandProgramIndex(words: readonly string[]): number {
   let launched = false
   for (let index = 0; index < words.length; index += 1) {

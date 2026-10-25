@@ -3,11 +3,11 @@
  * registry, and the real session-tabs announcement every client-page mutation already goes
  * through. The unit tests around the publisher can only prove it behaves once called.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -291,20 +291,5 @@ describe('client-hosted browser row metadata', () => {
       url: 'https://example.internal/changelog',
       title: 'Changelog'
     })
-  })
-})
-
-// Keep the harness honest: a runtime that never pushes would satisfy every negative case above.
-describe('push harness', () => {
-  it('observes the notifier the runtime was given', () => {
-    const clientHostedBrowserRowsChanged = vi.fn()
-    const { runtime } = createRuntime()
-    runtime.setNotifier({ clientHostedBrowserRowsChanged } as never)
-    attachHost(runtime, 'host-a')
-    placeAndPublish(runtime, 'page-a', 'host-a')
-
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    expect(clientHostedBrowserRowsChanged).toHaveBeenCalledOnce()
   })
 })

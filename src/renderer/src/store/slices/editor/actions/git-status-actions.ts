@@ -10,7 +10,7 @@ import {
   createLoadingBranchCompareSummary,
   getKnownGitHead
 } from '../git/branch-compare-state'
-import { recordDroppedEditorFilesInLayoutOwner } from '../tabs/editor-tab-layout-owner'
+import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function createGitStatusActions(
@@ -138,15 +138,14 @@ export function createGitStatusActions(
         const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
 
         const prevBranchLineTotal = s.gitBranchLineTotalByWorktree[worktreeId] ?? null
-        // Why: an omitted field means "not computed on this pass" — soft-deadline
-        // miss, cooldown, old host — not "zero", so dropping it blanks a published
-        // chip between polls. Staleness is handled where it can be: the host
-        // carries its cache forward, and SourceControl hides any total whose
-        // mergeBase no longer matches the fork point. A capped listing skips the
-        // ranged diff outright, so nothing will refresh it — clear it there.
-        const nextBranchLineTotal = status.didHitLimit
-          ? null
-          : (status.branchLineTotal ?? prevBranchLineTotal)
+        // Omission preserves deferred totals; explicit unavailability clears only its own fork point.
+        const totalUnavailable =
+          status.branchLineTotalUnavailable !== undefined &&
+          status.branchLineTotalUnavailable === prevBranchLineTotal?.mergeBase
+        const nextBranchLineTotal =
+          status.didHitLimit || totalUnavailable
+            ? null
+            : (status.branchLineTotal ?? prevBranchLineTotal)
         const branchLineTotalUnchanged =
           prevBranchLineTotal === nextBranchLineTotal ||
           (prevBranchLineTotal !== null &&
@@ -249,9 +248,9 @@ export function createGitStatusActions(
           gitBranchChangesByWorktree: nextBranchChanges
         }
       })
-      // A resolved deleted-side conflict drops its placeholder record; main closes its tab.
+      // A resolved deleted-side conflict drops its placeholder record; main closes its tab, and its frame drops it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && filesBefore !== get().openFiles) {
-        recordDroppedEditorFilesInLayoutOwner(get(), filesBefore, worktreeId)
+        closeDroppedEditorFileTabsThroughLayoutOwner(get(), filesBefore, worktreeId)
       }
     },
     setConflictOperation: (worktreeId, operation) =>

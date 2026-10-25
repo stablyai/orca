@@ -1,8 +1,6 @@
 import { useAppStore } from '@/store'
-import {
-  getKnownExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { writeWorkspaceFileDragSourceIfResolved } from './workspace-file-drag'
 
@@ -13,8 +11,13 @@ export function writeWorkspaceFileDragSourceForWorkspace(
   workspaceId: string
 ): void {
   const state = useAppStore.getState()
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+  // Why: a drop reads or uploads the files from the source host, so a twin names none.
+  if (owner.kind === 'ambiguous') {
+    return
+  }
   const executionHostId = getKnownExecutionHostIdForWorktree(state, workspaceId)
-  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId)
+  const runtimeEnvironmentId = owner.environmentId
   const sourceExecutionHostId =
     executionHostId === 'local' && runtimeEnvironmentId
       ? toRuntimeExecutionHostId(runtimeEnvironmentId)

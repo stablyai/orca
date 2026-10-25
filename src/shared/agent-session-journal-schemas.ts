@@ -199,6 +199,7 @@ const MessageBody = z.object({
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
   command: z.object({ name: z.string().min(1) }).optional(),
+  skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
   // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()
@@ -301,7 +302,7 @@ export const AgentJournalProducerLinkageFields = {
 } as const
 
 /** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
- *  the row malformed. A reader places only `turn` with an id; anything else reads as `thread`. */
+ *  the row malformed. Unknown membership preserves content without claiming a turn boundary. */
 export const AgentJournalTurnScopeSchema = z.object({
   kind: z.string().min(1),
   turnItemId: z.string().min(1).optional()
@@ -317,6 +318,7 @@ export const AgentJournalRenderItemSchema = z.object({
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
   turnScope: AgentJournalTurnScopeSchema.optional(),
+  shortened: z.literal(true).optional(),
   ...AgentJournalProducerLinkageFields
 })
 

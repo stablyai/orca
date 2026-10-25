@@ -97,6 +97,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   },
+  pairedTerminalTabCloseIntentsByEnvironment: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
   activeTabTypeByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   browserUrlHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   workspaceDocHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
@@ -135,6 +139,12 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   // by the record's worktreeId. A project moved to another profile leaves them in the source profile
   // until its next load, whose deregistered-repo sweep takes them.
   closedTerminalTabTombstonesByTabId: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
+  // As closed-tab records: removing the workspace's session rows prunes them by worktreeId, and the
+  // terminals they name never move with a project.
+  closedTerminalPanesByPaneKey: {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   }

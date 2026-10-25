@@ -57,6 +57,7 @@ vi.mock('lucide-react-native', () =>
       'ChevronsUpDown',
       'ShieldQuestion',
       'ImagePlus',
+      'Plus',
       'Mic',
       'Square',
       'X',
@@ -74,9 +75,9 @@ vi.mock('../MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('../MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../MobileNativeChatComposerSuggestions', () => ({
-  MobileNativeChatComposerSuggestions: 'Suggestions',
-  composerSuggestionInsertText: () => ''
+vi.mock('../MobileNativeChatComposerMenu', () => ({
+  MobileNativeChatComposerMenu: 'Suggestions',
+  composerMenuInsertText: () => ''
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
@@ -135,7 +136,7 @@ vi.mock('../use-mobile-native-chat-session-option-controller', () => ({
     recordCommand: vi.fn()
   })
 }))
-vi.mock('../use-mobile-native-chat-file-search', () => ({
+vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
 vi.mock('../use-mobile-native-chat-composer-tray', () => ({

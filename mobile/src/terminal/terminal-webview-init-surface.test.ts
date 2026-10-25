@@ -123,7 +123,6 @@ describe('terminal WebView init surface replacement', () => {
     } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
     document.body.innerHTML = bodyMarkup()
-    // eslint-disable-next-line no-new-func
     new Function(TERMINAL_DOCUMENT_SCRIPT)()
   })
 

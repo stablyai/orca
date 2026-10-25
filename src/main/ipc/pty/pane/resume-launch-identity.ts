@@ -5,11 +5,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 
-/**
- * Record a fresh resume launch's provider session in the hook store, so every reader (phone tab
- * list, native chat, worktree ps) can address the transcript before the agent's first hook.
- * Both spawn choke points (renderer pty:spawn and the runtime controller) call this.
- */
+/** Both spawn entry points seed resume identity before the first hook so phone/chat/process readers can address its transcript. */
 export function seedResumeLaunchIdentityFromSpawn(args: {
   paneKey: string | null | undefined
   launchAgent: unknown
@@ -21,8 +17,7 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
   resumeArgvDropped: boolean
   result: PtySpawnResult
 }): void {
-  // Why: a reattached process already reported its own identity; an SSH pane's rows belong to
-  // its relay, which owns that host's status.
+  // Reattach already owns identity; SSH status rows belong to the relay.
   if (
     !args.paneKey ||
     args.resumeArgvDropped ||
@@ -32,12 +27,27 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
   ) {
     return
   }
+  seedResumeLaunchIdentity({
+    ...args,
+    paneKey: args.paneKey,
+    launchedAt: args.launchedAt.getTime()
+  })
+}
+
+/** Seed resumes typed into existing shell panes, including phone Session History; callers exclude SSH. */
+export function seedResumeLaunchIdentity(args: {
+  paneKey: string
+  launchAgent: unknown
+  resumeProviderSession: unknown
+  worktreeId: unknown
+  launchedAt: number
+}): void {
   const agent = args.launchAgent
   const providerSession = normalizeAgentProviderSession(args.resumeProviderSession)
   if (!providerSession || !isResumableTuiAgent(agent)) {
     return
   }
-  // Why: Pi-family resumes are addressed by transcript file, not id; without it the row is invalid.
+  // Pi-family resumes require transcript paths, not session IDs alone.
   if ((agent === 'pi' || agent === 'prime-agent') && !providerSession.transcriptPath) {
     return
   }
@@ -46,6 +56,6 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
     ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
     agentType: agent,
     providerSession,
-    launchedAt: args.launchedAt.getTime()
+    launchedAt: args.launchedAt
   })
 }

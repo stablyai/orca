@@ -15,7 +15,7 @@ const ROWS = 24
 const openUrlMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
-const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
 const runtimeSourceOwner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
 const sshSourceOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
 

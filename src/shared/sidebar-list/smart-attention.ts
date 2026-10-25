@@ -34,13 +34,6 @@ import { parsePaneKey } from '../stable-pane-id'
 export type SmartClass = 1 | 2 | 3 | 4 | 5
 
 /**
- * What surfaced a worktree into Class 1 (carried only for Class 1, the only class telemetry reports on).
- *   - `blocked` / `waiting`: hook entry in that state.
- *   - `title-heuristic`: no fresh hook entry; runtime pane title classified as `'permission'`.
- */
-export type AttentionCause = 'blocked' | 'waiting' | 'title-heuristic'
-
-/**
  * Per-worktree resolution computed once before sorting.
  *
  * `attentionTimestamp` by class:
@@ -49,13 +42,10 @@ export type AttentionCause = 'blocked' | 'waiting' | 'title-heuristic'
  *     falling back to the current `working` `stateStartedAt`.
  *   - Class 4: when the evidence was last observed, so the least-silent pane ranks first.
  *   - Class 5: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
- *
- * `cause` is set only when `cls === 1`; feeds the `smart_sort_class_1_promotion` telemetry event.
  */
 export type WorktreeAttention = {
   cls: SmartClass
   attentionTimestamp: number
-  cause?: AttentionCause
 }
 
 export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
@@ -129,12 +119,10 @@ export type PaneInput =
 export function resolveAttention(panes: PaneInput[], now: number): WorktreeAttention {
   let bestCls: SmartClass = 5
   let bestTs = 0
-  let bestCause: AttentionCause | undefined
 
   for (const pane of panes) {
     let cls: SmartClass
     let ts: number
-    let cause: AttentionCause | undefined
 
     if (pane.kind === 'hook') {
       const entry = pane.entry
@@ -150,7 +138,6 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
           ) {
             bestCls = 4
             bestTs = observedAt
-            bestCause = undefined
           }
         }
         continue
@@ -163,7 +150,6 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
       if (entry.state === 'blocked' || entry.state === 'waiting') {
         cls = 1
         ts = entry.stateStartedAt
-        cause = entry.state
       } else if (entry.state === 'done') {
         // Why: null covers a stopped `done` (not a completion) and idle session boundaries;
         // neither is attention. A failed `done` ranks here: it is news the user has not seen.
@@ -198,7 +184,6 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         cls = 1
         // Why now: title detector exposes no stateStartedAt; `now` pins it to the top of Class 1 until a hook event.
         ts = now
-        cause = 'title-heuristic'
       } else if (pane.status === 'working') {
         cls = 3
         ts = pane.worktreeLastActivityAt
@@ -212,13 +197,10 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
     if (cls < bestCls || (cls === bestCls && ts > bestTs)) {
       bestCls = cls
       bestTs = ts
-      bestCause = cause
     }
   }
 
-  return bestCls === 1 && bestCause
-    ? { cls: bestCls, attentionTimestamp: bestTs, cause: bestCause }
-    : { cls: bestCls, attentionTimestamp: bestTs }
+  return { cls: bestCls, attentionTimestamp: bestTs }
 }
 
 /**

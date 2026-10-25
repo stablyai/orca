@@ -1,6 +1,7 @@
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 /**
  * Shared fixtures for the tui-idle wait suites.
@@ -82,9 +83,13 @@ export function makeTuiIdleLeaf(overrides: Partial<RuntimeLeafRecord> = {}): Run
 }
 
 function makeStore(repoPath: string) {
+  // Kept, not dropped: layout-owner builds read a terminal's pane from this session.
+  let session: WorkspaceSessionState = getDefaultWorkspaceSession()
   return {
-    getWorkspaceSession: () => getDefaultWorkspaceSession(),
-    setWorkspaceSession: () => {},
+    getWorkspaceSession: () => session,
+    setWorkspaceSession: (next: WorkspaceSessionState) => {
+      session = next
+    },
     getRepos: () => [
       {
         id: 'repo-1',
@@ -116,17 +121,14 @@ export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeS
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; the wait path reads only the members defined above.
     makeStore(options.repoPath) as never
   )
-  runtime.setPtyController(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial controller double; the wait path calls only the members listed here.
-    {
-      spawn: async () => ({ id: 'fixture-pty' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: options.getForegroundProcess,
-      listProcesses: async () => [],
-      hasPty: () => true
-    } as never
-  )
+  runtime.setPtyController({
+    spawn: async () => ({ id: 'fixture-pty' }),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: options.getForegroundProcess,
+    listProcesses: async () => [],
+    hasPty: () => true
+  })
   return runtime
 }
 

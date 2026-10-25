@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationDestinationCatalog } from './orcad-migration-cutover-coordinator'
 
 type Catalog = OrcadMigrationDestinationCatalog
@@ -65,6 +65,18 @@ export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
         states.set(manifest.migrationId, 'absent')
       }
       return { ...view(manifest), aborted, ...(aborted ? {} : { durableAbsent: true as const }) }
+    }),
+    abortByReference: vi.fn<Catalog['abortByReference']>(async (manifest) => {
+      const identity = {
+        migrationId: manifest.migrationId,
+        manifestSha256: manifest.manifestSha256
+      }
+      if (stateOf(manifest) === 'committed') {
+        return { ...identity, state: 'committed', aborted: false }
+      }
+      const aborted = stateOf(manifest) === 'staged'
+      states.delete(manifest.migrationId)
+      return { ...identity, state: 'absent', aborted, durableAbsent: true }
     }),
     stageChunk: vi.fn<Catalog['stageChunk']>()
   }

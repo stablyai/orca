@@ -126,14 +126,14 @@ describe('worktree host identity golden bytes', () => {
 describe('host worktree target', () => {
   it('carries the row id and its concrete host', () => {
     const target = hostWorktreeTarget({ id: WORKTREE_ID, hostId: toSshExecutionHostId('box') })
-    expect(target).toEqual({ hostId: 'ssh:box', worktreeId: WORKTREE_ID })
+    expect(target).toEqual({ id: WORKTREE_ID, hostId: 'ssh:box' })
   })
 
   it('cannot be forged from a plain object or built without a host', () => {
     // @ts-expect-error only hostWorktreeTarget mints the brand
-    const forged: HostWorktreeTarget = { hostId: 'local', worktreeId: WORKTREE_ID }
+    const forged: HostWorktreeTarget = { id: WORKTREE_ID, hostId: 'local' }
     // @ts-expect-error an unqualified row has no host to scope to
     hostWorktreeTarget({ id: WORKTREE_ID, hostId: undefined })
-    expect(forged.worktreeId).toBe(WORKTREE_ID)
+    expect(forged.id).toBe(WORKTREE_ID)
   })
 })

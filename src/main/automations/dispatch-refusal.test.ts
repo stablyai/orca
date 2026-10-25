@@ -50,7 +50,6 @@ const makeRun = (id: string): AutomationRun => ({
   createdAt: 0
 })
 
-/** Records what the writer was asked to do, with `repeatSkip` standing in for a fold or not. */
 function makeRunWriter(foldsRepeat: boolean): {
   writer: AutomationRunWriter
   created: string[]
@@ -94,8 +93,6 @@ describe('recordUnevaluableAutomation', () => {
     expect(logged).toHaveBeenCalledTimes(1)
   })
 
-  // The record is retried every tick on purpose, so a repaired schedule resumes on its own.
-  // The fold is what keeps that from writing a row, and logging, once per tick forever.
   it('stays silent on a record it has already reported', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { writer, created } = makeRunWriter(true)

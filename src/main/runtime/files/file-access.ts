@@ -55,7 +55,7 @@ export class RuntimeFileAccess {
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
     await this.assertOpenTargetIsFile(filePath, target)
-    this.host.openFile(
+    await this.host.openFile(
       worktree.id,
       filePath,
       relativePath,

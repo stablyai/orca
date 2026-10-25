@@ -10,9 +10,7 @@ import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-pa
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import type SyncDatabase from '../sqlite/sync-database'
-
-type BindValue = SyncDatabase.BindValue
-type SqliteStatement = SyncDatabase.Statement
+import { rowsOf, rowsWithinBudget } from './transcript-opencode-row-budget'
 import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
@@ -48,30 +46,6 @@ function sessionExists(db: SyncDatabase, sessionId: string): boolean {
   )
 }
 
-function rowsOf<T>(statement: SqliteStatement, ...params: BindValue[]): T[] {
-  return rowsWithinBudget<T>(statement, { bytes: 0 }, ...params)
-}
-
-function rowsWithinBudget<T>(
-  statement: SqliteStatement,
-  budget: { bytes: number },
-  ...params: BindValue[]
-): T[] {
-  const rows: ReturnType<SqliteStatement['all']> = []
-  for (const row of statement.iterate(...params)) {
-    budget.bytes += Object.values(row).reduce<number>(
-      (size, value) => size + (typeof value === 'string' ? Buffer.byteLength(value) : 0),
-      0
-    )
-    if (rows.length >= 10000 || budget.bytes > 16 * 1024 * 1024) {
-      throw new Error('OpenCode transcript query exceeds its read limit')
-    }
-    rows.push(row)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each caller names the columns projected by its internal SQL query.
-  return rows as T[]
-}
-
 export function readOpenCodeTranscriptSignal(
   dbPath: string,
   sessionId: string,
@@ -86,7 +60,6 @@ export function readOpenCodeTranscriptSignal(
     if (!sessionExists(db, sessionId)) {
       return null
     }
-    // Aggregates without GROUP BY always yield exactly one row, so [0] is it.
     const visibility = zcodeVisibleMessageFilter(agent ?? 'opencode', 'data')
     const [messageRow] = rowsOf<{
       message_count: number
@@ -117,7 +90,8 @@ export function readOpenCodeTranscriptSignal(
     return {
       cwd: columnExists(db, 'session', 'directory')
         ? extractString(
-            asRecord(db.prepare('SELECT directory FROM session WHERE id = ?').get(sessionId))?.directory
+            asRecord(db.prepare('SELECT directory FROM session WHERE id = ?').get(sessionId))
+              ?.directory
           )
         : null,
       messageCount: messageRow?.message_count ?? 0,
@@ -150,7 +124,7 @@ export function readOpenCodeTranscriptPage(args: {
       return null
     }
     const limit = openCodeTranscriptPageLimit(args.limit)
-    // Rank only inside the query; wire cursors retain the stable storage row identity.
+    // Keep stable storage IDs on the wire; ranks exist only inside this query.
     const ranked = args.agent === 'zcode'
     const orderColumn = ranked ? 'ordered.transcript_order' : 'm.rowid'
     if (
@@ -169,9 +143,7 @@ export function readOpenCodeTranscriptPage(args: {
       ) AS transcript_order FROM message m WHERE session_id = ?
     )`
       : ''
-    // The upper bound is always bound: batching advances the cursor mid-page,
-    // so the statement cannot vary with `beforeMessageRowId`'s presence.
-    // MAX_SAFE_INTEGER is the "from the newest row" sentinel.
+    // Always bind an upper bound: batching advances it mid-page; MAX_SAFE_INTEGER starts at newest.
     const select = db.prepare(
       `${ordered} SELECT m.rowid AS message_rowid, ${orderColumn} AS transcript_order, m.id, m.time_created, m.time_updated, CASE WHEN length(CAST(m.data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN m.data ELSE NULL END AS data
          FROM message m ${ranked ? 'JOIN ordered ON ordered.storage_rowid = m.rowid' : ''}
@@ -201,7 +173,6 @@ export function readOpenCodeTranscriptPage(args: {
       if (rows.length === 0) {
         break
       }
-      // The (limit+1)th row is only a hasMore probe — never decoded.
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
       cursor = selected.at(-1)!.message_rowid
@@ -216,7 +187,7 @@ export function readOpenCodeTranscriptPage(args: {
       }
     }
     let retained = Math.min(limit, collected.length)
-    // A raw-row cursor cannot resume inside a reasoning/answer pair.
+    // Raw-row cursors cannot resume inside a reasoning/answer pair.
     while (
       retained < collected.length &&
       collected[retained].rowid === collected[retained - 1].rowid
@@ -303,7 +274,10 @@ function mapMessageRows(
         ? [{ message_id: row.id, time_updated: row.time_updated, data: null }]
         : partList
     )
-    const updated = partList.reduce((max, row) => (row.time_updated > max ? row.time_updated : max), 0)
+    const updated = partList.reduce(
+      (max, row) => (row.time_updated > max ? row.time_updated : max),
+      0
+    )
     for (const message of messages.toReversed()) {
       items.push({
         rowid: row.message_rowid,

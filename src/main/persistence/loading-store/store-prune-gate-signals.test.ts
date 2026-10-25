@@ -1,4 +1,5 @@
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * Drives the real `Store`, because the value of the prune gate is entirely in whether the shipping
  * write paths signal it. A mutation that unwires the call site survives any test that pokes the gate
@@ -9,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
 vi.mock('electron', () => ({
   app: {
@@ -78,17 +80,22 @@ describe('store signals to the worktree metadata prune gate', () => {
     } as unknown as WorkspaceSessionState)
     parkGate()
 
-    store.removeWorkspaceSessionStateForWorktree(WORKTREE_ID)
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' })
+    )
 
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
   })
 
   it('re-arms the gate when a metadata row is removed', () => {
     const store = createStore()
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'a', hostId: 'local' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'a',
+      hostId: 'local'
+    })
     parkGate()
 
-    store.removeWorktreeMeta(WORKTREE_ID)
+    removeWorktreeMetaRow(store, WORKTREE_ID, undefined)
 
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
   })
@@ -97,8 +104,14 @@ describe('store signals to the worktree metadata prune gate', () => {
     const store = createStore()
     parkGate()
 
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'a', hostId: 'local' })
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'b', hostId: 'local' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'a',
+      hostId: 'local'
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'b',
+      hostId: 'local'
+    })
 
     // Why this matters: the worktree listing itself stamps metadata on every scan, so a gate that
     // re-armed on ordinary writes would restore the storm it exists to stop (#17775).

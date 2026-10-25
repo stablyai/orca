@@ -1,5 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
@@ -30,6 +31,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PtyTransport } from '../pty-transport-types'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
+import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/program-status/protocol'
+import { readCachedRuntimeEnvironmentCapability } from '../../../runtime/runtime-rpc-client'
 
 /** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
@@ -52,7 +55,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.terminalOwnerUnresolved || session.connectionOwnerHydrating
       ? createUnresolvedOwnerPtyTransport(
           session.terminalOwnerUnresolved
-            ? 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+            ? ambiguousWorkspaceOwnerMessage(useAppStore.getState(), session.deps.worktreeId)
             : 'Workspace host is still loading. Retry when the project finishes hydrating.'
         )
       : session.unservedSshTargetId
@@ -125,6 +128,12 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
     skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
+    answerProgramStatusQueries: () =>
+      !session.runtimeEnvironmentId ||
+      readCachedRuntimeEnvironmentCapability(
+        session.runtimeEnvironmentId,
+        PROGRAM_STATUS_RUNTIME_CAPABILITY
+      ) === true,
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(

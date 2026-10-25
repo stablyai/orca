@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
 import {
   MAX_REPO_ICON_DATA_URL_BYTES,
+  repoIconFeedKey,
   type RepoIconDataUrlsReply
 } from '../../../shared/sidebar-list/repo-icon-data-urls-contract'
 import {
@@ -77,10 +78,22 @@ export class RepoIconDataUrls {
     return { icons: ids.map((id, index) => ({ id, dataUrl: dataUrls[index] })) }
   }
 
+  /** Each repo's icon id by `hostId|repoId`, which the feed publishes; repos without an image are absent. */
+  idsByRepo(): Record<string, string> {
+    return Object.fromEntries(
+      this.identifiedIcons().map(({ repo, id }) => [repoIconFeedKey(repo), id])
+    )
+  }
+
   private currentIcons(): Map<string, ImageRepoIcon> {
-    const icons = new Map<string, ImageRepoIcon>()
+    return new Map(this.identifiedIcons().map(({ icon, id }) => [id, icon]))
+  }
+
+  private identifiedIcons(): { repo: Repo; icon: ImageRepoIcon; id: string }[] {
+    const identified: { repo: Repo; icon: ImageRepoIcon; id: string }[] = []
     const idsBySrc = new Map<string, { source: string; id: string }>()
-    for (const { repoIcon } of this.options.repos()) {
+    for (const repo of this.options.repos()) {
+      const { repoIcon } = repo
       if (repoIcon?.type !== 'image') {
         continue
       }
@@ -90,11 +103,11 @@ export class RepoIconDataUrls {
       const id = known?.source === repoIcon.source ? known.id : repoIconId(repoIcon)
       if (id) {
         idsBySrc.set(repoIcon.src, { source: repoIcon.source, id })
-        icons.set(id, repoIcon)
+        identified.push({ repo, icon: repoIcon, id })
       }
     }
     this.idsBySrc = idsBySrc
-    return icons
+    return identified
   }
 
   private dataUrlFor(id: string, icon: ImageRepoIcon | undefined): Promise<string | null> {

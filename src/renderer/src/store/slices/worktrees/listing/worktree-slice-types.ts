@@ -73,16 +73,13 @@ export type RepoHostSummary = {
 
 export type WorktreeLineageUpdateResult = {
   target: RuntimeClientTarget
+  /** The written row's host as the store stamps it, so a same-id twin on another host stays put. */
+  hostId: ExecutionHostId
   lineage: WorktreeLineage | null
   updatedRemoteWorktree?: WorktreeWithLineage
 }
 
-export type HostedReviewLinkKey =
-  | 'linkedPR'
-  | 'linkedGitLabMR'
-  | 'linkedBitbucketPR'
-  | 'linkedAzureDevOpsPR'
-  | 'linkedGiteaPR'
+export type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review-links'
 
 export type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null

@@ -40,6 +40,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     const hadPendingOverflow = session.hiddenOutputRestorePendingOverflow
     const replayingSnapshot = session.hiddenOutputRestoreReplayingSnapshot
     session.hiddenOutputRestoreReplayingSnapshot = null
+    session.hiddenOutputRestoreUnhideSeq = null
     session.hiddenOutputRestoreGeneration += 1
     if (
       session.hiddenOutputSnapshotScrollRestore?.valid &&

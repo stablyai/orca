@@ -61,9 +61,15 @@ const TABS: MobileSessionTab[] = [
 
 const switched: MobileSessionTab[] = []
 
-function Probe({ terminalsLoaded }: { terminalsLoaded: boolean }): null {
+function Probe({
+  terminalsLoaded,
+  sessionTabs = TABS
+}: {
+  terminalsLoaded: boolean
+  sessionTabs?: MobileSessionTab[]
+}): null {
   useNotificationPaneNavigation({
-    sessionTabs: TABS,
+    sessionTabs,
     terminalsLoaded,
     switchSessionTab: (tab) => switched.push(tab)
   })
@@ -157,20 +163,13 @@ describe('the page pane hook', () => {
     expect(bridge.cleared).toHaveLength(2)
   })
 
-  it('takes the tap that arrived while it was applying the one before it', () => {
+  it('applies successive pane requests and names each value when clearing', () => {
     render(true)
     deliver(`tab-a:${LEAF}`)
     deliver(`tab-b:${LEAF}`)
     expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
     // Both are named back; the shell spends only the one its param still holds.
     expect(bridge.cleared.map((entry) => entry.value)).toEqual([`tab-a:${LEAF}`, `tab-b:${LEAF}`])
-  })
-
-  it('takes a different pane as its own request', () => {
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    deliver(`tab-b:${LEAF}`)
-    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
   })
 
   it('asks for nothing and applies nothing when the route carries no pane', () => {
@@ -184,13 +183,26 @@ describe('the page pane hook', () => {
     expect(bridge.cleared).toEqual([])
   })
 
-  it('consumes a request for a pane that has since closed, so no later render serves it', () => {
+  it('stays on the open tab for a pane that has since closed', () => {
     render(true)
     deliver(`gone:${LEAF}`)
     expect(switched).toEqual([])
-    // A re-render with nothing new delivered must not go looking for it again.
+    // A later render still finds no such pane.
     deliver('')
     expect(switched).toEqual([])
+  })
+
+  it('opens a pane missing from a list loaded before the push once a fresh list names it', () => {
+    const tree = render(true)
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: [TABS[0]!] }))
+    })
+    deliver(`tab-b:${LEAF}`)
+    expect(switched).toEqual([])
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: TABS }))
+    })
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
 
   it('does nothing at all when the page was opened on no pane', () => {

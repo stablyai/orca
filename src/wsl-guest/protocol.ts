@@ -1,4 +1,4 @@
-// Self-contained relay protocol — mirrors src/main/ssh/relay-protocol.ts
+// Self-contained relay protocol — mirrors src/main/ssh/remote-exec/remote-frame-protocol.ts
 // but has no Electron dependencies. Deployed standalone to remote hosts.
 
 import {
@@ -78,6 +78,10 @@ const HANDSHAKE_OPTIONAL_STRING_FIELDS: Readonly<
   'orca-relay-handshake-credential-mismatch': []
 }
 
+function isHandshakeType(value: unknown): value is HandshakeMessage['type'] {
+  return typeof value === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, value)
+}
+
 export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   const parsed: unknown = JSON.parse(payload.toString('utf-8'))
   if (typeof parsed !== 'object' || parsed === null) {
@@ -86,24 +90,18 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typeof/null guard directly above is exactly what makes this an index-able object; every read below still proves its own field.
   const msg = parsed as Record<string, unknown>
   const t = msg.type
-  const required =
-    typeof t === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, t)
-      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reached only when Object.hasOwn proved t is a key of this record, on the same line.
-        HANDSHAKE_STRING_FIELDS[t as HandshakeMessage['type']]
-      : null
-  if (required === null) {
+  if (!isHandshakeType(t)) {
     // Why typeof and not String(t): a peer-supplied `{ "type": { "toString": 1 } }` makes String()
     // itself throw "Cannot convert object to primitive value", replacing the one diagnostic this
     // line exists to produce.
     throw new Error(`Unknown handshake type: ${typeof t === 'string' ? t : typeof t}`)
   }
-  for (const field of required) {
+  for (const field of HANDSHAKE_STRING_FIELDS[t]) {
     if (typeof msg[field] !== 'string') {
       throw new Error(`Handshake field ${field} is not a string`)
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the required === null bail above already refused every t that is not one of the four keys.
-  for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t as HandshakeMessage['type']]) {
+  for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t]) {
     if (msg[field] !== undefined && typeof msg[field] !== 'string') {
       throw new Error(`Handshake field ${field} is not a string`)
     }
@@ -128,35 +126,9 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
 
-// ── Streaming constants (see docs/relay-file-stream-design.md) ─────
-
 export const STREAM_CHUNK_SIZE = 256 * 1024
 export const MAX_CONCURRENT_STREAMS = 16
-
-/** Max unacked fs.streamChunk frames in flight per stream when the client
- * requested `flowControl: 'ack'`. Bounds how many bulk bytes an interactive
- * pty.data frame can queue behind on the shared SSH channel (~1MB raw) while
- * keeping the pipe full across one ack round-trip on fast links. */
 export const STREAM_ACK_WINDOW_CHUNKS = 4
-
-/** Safety-valve poll interval for a pump stalled on acks: re-checks stream
- * abort/staleness so a client that vanished mid-stream cannot park the pump
- * (and its open file handle) forever. */
-export const STREAM_ACK_STALL_RECHECK_MS = 1_000
-
-// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
-
-/** Serialized-JSON size above which a streamable git response (diff family +
- * exec) is chunked onto the bulk lane instead of one JSON-RPC frame, so a large
- * diff cannot head-of-line-block interactive pty.data echo on the shared SSH
- * channel. Below this, single-frame is cheaper and avoids stream overhead. */
-export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
-
-/** Per-chunk size (UTF-8 bytes of the serialized result) for git response
- * streaming. Independent from STREAM_CHUNK_SIZE — this offset math is not
- * shared with fs streams, so tuning it here is cross-version safe as long as
- * the client reassembles by concatenation (it does not depend on chunk size). */
-export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
 
 /** Sentinel result returned in place of a large git response: the real payload
  * follows as git.responseChunk frames on the bulk lane. Old relays never emit

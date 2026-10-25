@@ -1,5 +1,7 @@
-import { spawn } from 'node:child_process'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { delimiter, win32 as pathWin32 } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
@@ -23,10 +25,6 @@ import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell
 // 5s binds there — but only for a profile that already blew the old budget, and
 // those users were otherwise stuck with a wrong PATH for the whole session.
 const SPAWN_TIMEOUT_MS = 10_000
-
-// ANSI escape sequences can leak into the captured output when the user's rc
-// files print banners or set colored prompts. Strip them before parsing.
-const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-regex
 
 // Why: the discriminator lets telemetry classify *why* hydration failed, not
 // just whether it did. Five resolve sites in this file each tag the result
@@ -100,7 +98,8 @@ export const resolveProfileLoadingFallbackShell = (): string | null =>
   configuredWindowsFallbackShell
 
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
-  const cleaned = stdout.replace(ANSI_RE, '')
+  // Why: rc-file banners and colored prompts can leak escapes into the captured output.
+  const cleaned = stripAnsiEscapeSequences(stdout)
   const first = cleaned.indexOf(DELIMITER)
   if (first === -1) {
     return []
@@ -188,23 +187,31 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
 
-    const child = spawn(shell, probe.args, {
-      // Why: inherit current env so the shell sees the same baseline, then let
-      // it layer its own rc files on top. Do NOT forward stdio — some shells
-      // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
-      // and we don't want that in Orca's console.
-      env: shellProbeEnv(),
-      stdio: ['ignore', 'pipe', 'ignore'],
-      detached: false,
-      windowsHide: true
-    })
+    let child: SpawnedProcess
+    try {
+      child = spawnProcess({
+        program: shell,
+        args: probe.args,
+        // Why: inherit current env so the shell sees the same baseline, then let
+        // it layer its own rc files on top. Do NOT forward stdio — some shells
+        // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
+        // and we don't want that in Orca's console.
+        env: shellProbeEnv(),
+        stdio: ['ignore', 'pipe', 'ignore'],
+        detached: false
+      })
+    } catch {
+      // Why: a synchronous throw (EPERM from a Store pwsh.exe) must reach the fallback shell.
+      resolve({ segments: [], ok: false, failureReason: 'spawn_error' })
+      return
+    }
 
     const cleanup = (): void => {
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
-      child.stdout.off('data', onStdoutData)
+      child.stdout?.off('data', onStdoutData)
       child.off('error', onError)
       child.off('close', onClose)
     }
@@ -246,7 +253,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       finish({ segments, ok: true, failureReason: 'none' })
     }
 
-    child.stdout.on('data', onStdoutData)
+    child.stdout?.on('data', onStdoutData)
     child.on('error', onError)
     child.on('close', onClose)
   })
@@ -295,7 +302,7 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     () => undefined,
     () => undefined
   )
-  cached = probe.then((result) => {
+  const hydration = probe.then((result) => {
     if (
       platform === 'win32' &&
       options.shellOverride === undefined &&
@@ -305,7 +312,14 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     }
     return result
   })
-  return cached
+  cached = hydration
+  // Why: a cached rejection would fail every later caller without re-probing.
+  hydration.catch(() => {
+    if (cached === hydration) {
+      cached = null
+    }
+  })
+  return hydration
 }
 
 export function configureWindowsShellPathHydration(

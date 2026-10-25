@@ -2,6 +2,14 @@ import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectNoWindowStart,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import {
   LEAF_2,
   leafIdForPane,
@@ -17,6 +25,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHibernationWakeTests(): void {
   let mockStoreState: StoreState
@@ -46,6 +55,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -65,6 +75,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
@@ -79,10 +95,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -105,6 +118,18 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       binding.noteVisibilityResume()
       await flushAsyncTicks()
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main to start the pane; the window attaches to what main binds.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        // One-shot: a second reveal asks again for nothing.
+        binding.noteVisibilityResume()
+        await flushAsyncTicks()
+        expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
+        return
+      }
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
       const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
         | { command?: string }
@@ -131,6 +156,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
@@ -144,8 +175,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'live'
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
       const binding = connectPanePty(...args)
       await flushAsyncTicks()
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
@@ -159,6 +189,14 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       binding.noteVisibilityResume()
       await flushAsyncTicks()
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main to start the pane; the window attaches to what main binds.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        return
+      }
       const resumeConnectOptions: { command?: string } | undefined =
         transport.connect.mock.calls.at(-1)?.[0]
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
@@ -177,6 +215,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
@@ -191,10 +235,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -216,6 +257,18 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(claimedProviderSessions).toEqual(new Set([claimKey]))
       await flushAsyncTicks()
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main to start the pane; the window attaches to what main binds.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        // One-shot: a second wake asks again for nothing.
+        binding.wakeHibernatedAgentIfArmed()
+        await flushAsyncTicks()
+        expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
+        return
+      }
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
       const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
         | { command?: string }
@@ -242,13 +295,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         isVisibleRef: { current: false }
       })
       const pane = createPane(2)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane binding exposes the wake hook this test drives.
-      const binding = connectPanePty(...args) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
+      const binding = connectPanePty(...args)
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -260,6 +308,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(createdTransportOptions[0]).not.toHaveProperty('replacesPtyId')
 
       const paneKey = `tab-restart-wake:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-restart-wake', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-restart-wake',
@@ -280,6 +334,20 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
       expect(binding.wakeHibernatedAgentIfArmed(new Set())).not.toBeNull()
       await flushAsyncTicks()
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main; its attach to main's terminal names no PTY to replace.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenCalledTimes(2)
+        expect(transport.connect.mock.calls[1]?.[0]).toMatchObject({
+          sessionId: 'pty-main',
+          attachOnlyView: true
+        })
+        expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('claimReplacedPtyId')
+        binding.dispose()
+        await flushAsyncTicks()
+        expect(window.api.pty.kill).not.toHaveBeenCalledWith('pty-replaced')
+        return
+      }
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
       expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('claimReplacedPtyId')
@@ -305,8 +373,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [createPane(2), manager, deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(createPane(2), manager, deps)
       connectPanePty(...args)
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       expect(onPtyExit).toBeTypeOf('function')
@@ -337,10 +404,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         startup: { command: 'codex', launchAgent: 'codex' },
         replacesPtyId: 'pty-replaced'
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [createPane(2), createManager(1), deps] as unknown as Parameters<
-        typeof connectPanePty
-      >
+      const args = mockPanePtyArgs(createPane(2), createManager(1), deps)
       // Closing the tab (or parking it) disposes the pane before its deferred connect runs.
       connectPanePty(...args).dispose()
       await flushAsyncTicks()
@@ -360,6 +424,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
@@ -374,10 +444,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
@@ -395,6 +462,14 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       onPtyExit?.('tab-pty')
       await flushAsyncTicks()
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main to start the pane; the window attaches to what main binds.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        return
+      }
       // Arming consumed the latched wake — the --resume spawned with no reveal and no second wake event.
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
       const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
@@ -425,13 +500,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         updatedAt: 1,
         origin: 'worktree-sleep'
       }
-      const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        deps as never
-      ) as unknown as {
-        wakeHibernatedAgentIfArmed: () => string | null
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(createPane(2), createManager(1), deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -443,6 +512,23 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
 
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The pane claims its session while main's start runs, asks main once, and leaves the
+        // record to main once the start settles.
+        const layoutApply = await mainLayoutApplyTransport()
+        layoutApply.answerWith('pending')
+        const claim = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
+        expect(binding.wakeHibernatedAgentIfArmed()).toBe(claim)
+        expect(binding.wakeHibernatedAgentIfArmed()).toBe(claim)
+        await flushAsyncTicks()
+        expect(layoutApply.sentOfType('startPane')).toHaveLength(1)
+        layoutApply.answerPending()
+        await layoutApply.settle()
+        await flushAsyncTicks()
+        expectNoWindowStart(transport, mockStoreState)
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        return
+      }
       expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
       const connectCallsAfterFirstWake = transport.connect.mock.calls.length
       expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
@@ -471,13 +557,15 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
       const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        createDeps({
-          consumeSuppressedPtyExit: vi.fn(() => true),
-          isVisibleRef: { current: false }
-        }) as never
-      ) as unknown as { wakeHibernatedAgentIfArmed: () => string | null }
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(1),
+          createDeps({
+            consumeSuppressedPtyExit: vi.fn(() => true),
+            isVisibleRef: { current: false }
+          })
+        )
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -488,6 +576,20 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       transport.connect.mockRejectedValueOnce(new Error('transient spawn failure'))
 
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-retry'
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main refuses the start: the wake re-arms, and the next wake asks main again.
+        const layoutApply = await mainLayoutApplyTransport()
+        layoutApply.answerWith({ refuse: 'pane_not_found' })
+        const claim = 'wt-1\0claude\0session_id\0sess-hibernated-retry'
+        expect(binding.wakeHibernatedAgentIfArmed()).toBe(claim)
+        await layoutApply.settle()
+        await flushAsyncTicks(20)
+        expect(binding.wakeHibernatedAgentIfArmed()).toBe(claim)
+        await layoutApply.settle()
+        expect(layoutApply.sentOfType('startPane')).toHaveLength(2)
+        expectNoWindowStart(transport, mockStoreState)
+        return
+      }
       expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
       await flushAsyncTicks(20)
       const connectCallsAfterFailure = transport.connect.mock.calls.length
@@ -514,12 +616,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
       const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
-      ) as unknown as {
-        wakeHibernatedAgentIfArmed: () => string | null
-      }
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
       await flushAsyncTicks()
 
       expect(binding.wakeHibernatedAgentIfArmed()).toBeNull()
@@ -537,6 +639,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        })
+      }
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
@@ -550,10 +658,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -566,6 +671,18 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       onPtyExit?.('tab-pty')
       await flushAsyncTicks()
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The wake asks main to start the pane; the window attaches to what main binds.
+        await expectWindowStartAskedMain(transport, paneKey)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        // One-shot: a later reveal asks again for nothing.
+        binding.noteVisibilityResume()
+        await flushAsyncTicks()
+        expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
+        return
+      }
       // No second reveal was needed: the foreground pane resumed its recorded session directly from the arm-time wake.
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
       const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
@@ -606,10 +723,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -653,9 +767,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         }
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       expect(userInputListeners.size).toBeGreaterThan(0)
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
@@ -685,7 +797,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const deps = createDeps()
       const pane = createPane(2)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
 

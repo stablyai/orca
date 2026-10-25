@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
+import {
+  holdBrowserAttachmentFiles,
+  takeBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
 
 const mocks = vi.hoisted(() => ({
   storeState: { tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] } },
@@ -36,6 +40,7 @@ import { useNativeChatExternalAttachments } from './use-native-chat-external-att
 import type { NativeChatPendingAttachmentChips } from './native-chat-session-attachment-drop'
 import type { AgentSessionAttachmentPathUploadResult } from '../../../../shared/agent-session-attachments'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import type { NativeChatStructuredAttachmentSession } from './native-chat-attachment-upload'
 
 type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
 
@@ -68,7 +73,7 @@ function Probe({
 }: {
   disabled: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips: NativeChatPendingAttachmentChips
   setNotice: (notice: string | null) => void
@@ -96,7 +101,7 @@ let root: Root | null = null
 async function renderProbe(args: {
   disabled?: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips?: NativeChatPendingAttachmentChips
   setNotice?: (notice: string | null) => void
@@ -160,6 +165,30 @@ afterEach(() => {
 })
 
 describe('useNativeChatExternalAttachments', () => {
+  it('keeps a failed paired chat from issuing an upload and says how to retry', async () => {
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const notice = 'Codex chat could not open. Use Retry in the chat, then attach the files again.'
+    const probe = await renderProbe({
+      structuredWorktreeId: 'folder-1',
+      structuredSession: {
+        sessionId: 'codex-1',
+        runtimeEnvironmentId: 'server-1',
+        sessionPending: true,
+        sessionPendingNotice: notice
+      },
+      attachResolvedPaths,
+      setNotice
+    })
+    await act(async () => {
+      await probe.latest().captureExternalDrop()(['/local/a.txt'])
+    })
+    expect(setNotice).toHaveBeenCalledWith(notice)
+    expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+    expect(mocks.uploadNativeChatSessionAttachmentPaths).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
   it('attaches local worktree paths unchanged', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()
@@ -333,6 +362,17 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
+  it('releases browser files a refused attach held, so none stay pinned in the page', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'remote' })
+    const file = new File(['a'], 'a.txt')
+    const [token] = holdBrowserAttachmentFiles([file])
+    const probe = await renderProbe({ attachResolvedPaths: vi.fn(), setNotice: vi.fn() })
+    await act(async () => {
+      probe.latest().attachExternalPaths([token!])
+    })
+    expect(takeBrowserAttachmentFile(token!)).toBeNull()
+  })
+
   it('ignores local attachment insertion while already disabled', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()
@@ -342,6 +382,15 @@ describe('useNativeChatExternalAttachments', () => {
 
     expect(mocks.resolveNativeChatAttachmentOwner).not.toHaveBeenCalled()
     expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('releases browser files a picker returns to an already disabled composer', async () => {
+    const [token] = holdBrowserAttachmentFiles([new File(['a'], 'a.txt')])
+    const probe = await renderProbe({ disabled: true, attachResolvedPaths: vi.fn() })
+
+    act(() => probe.latest().attachExternalPaths([token!]))
+
+    expect(takeBrowserAttachmentFile(token!)).toBeNull()
   })
 
   describe('a structured chat on a paired server', () => {
@@ -439,20 +488,33 @@ describe('useNativeChatExternalAttachments', () => {
       expect(mocks.stat).not.toHaveBeenCalled()
     })
 
-    it('refuses a captured drop if its destination changed before preparation finished', async () => {
+    it.each([null, 'env-1'])('fences captured results for %s', async (runtimeEnvironmentId) => {
       const chips = trackingChips()
+      const attachResolvedPaths = vi.fn()
+      const setNotice = vi.fn()
       const probe = await renderProbe({
         structuredWorktreeId: 'worktree-1',
-        structuredSession: session,
-        attachResolvedPaths: vi.fn(),
+        structuredSession: { ...session, runtimeEnvironmentId },
+        attachResolvedPaths,
+        setNotice,
         pendingChips: chips
       })
       let current = true
       const deliver = probe.latest().captureExternalDrop(() => current)
+      expect(deliver.preparationConsumer).toBe(runtimeEnvironmentId ? 'agent' : 'local-chat')
       current = false
       await act(async () => deliver(['/Users/me/notes.md']))
       expect(chips.begun).toEqual([])
       expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
+      expect(setNotice).toHaveBeenCalledWith(
+        'This workspace changed hosts while attaching — drop the files again.'
+      )
+      await probe.setDisabled(true)
+      setNotice.mockClear()
+      await act(async () => deliver(['/Users/me/notes.md']))
+      expect(setNotice).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
     })
 
     it('discards uploaded files if the captured drop destination changed during upload', async () => {

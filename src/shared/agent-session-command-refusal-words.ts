@@ -3,7 +3,7 @@
 
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureSay } from './agent-session-failure-copy'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import { joinSentences } from './sentence-joining'
 
 type ReasonWords = (

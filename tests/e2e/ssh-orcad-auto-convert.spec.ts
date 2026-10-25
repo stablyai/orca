@@ -29,6 +29,7 @@ import {
   readHostOrcadActivation
 } from './helpers/orcad-template-variant'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import {
   decommissionConvertedHost,
@@ -45,6 +46,7 @@ import {
   openPairedClientTab
 } from './helpers/paired-host-terminal'
 import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
@@ -103,7 +105,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       session.userDataDir,
       host.input,
       { repoPath: host.remoteRepoPath, folderPath: host.remoteFolderPath },
-      { terminalTab: true }
+      { terminalTab: true, parkedScrollback: true }
     )
     // No relay ever ran here, so the terminal gate must prove `exited` from an empty lease set.
     // This launch bypasses the fixture's log relay; keep the SSH lines a failed move explains itself by.
@@ -136,9 +138,27 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       .toMatchObject({ kind: 'managed' })
     await upgraded.page.screenshot({ path: testInfo.outputPath('relay-era-terminal-dialed.png') })
     await convertAndRetain(upgraded.page, session.userDataDir, seeded)
+    // #30126: the parked panes' history rode the snapshot channel; inlined, it overflowed the manifest.
+    const moved = findOrcadMigrationSourceCutoverForTarget(session.userDataDir, seeded.targetId)
+      ?.manifest.payload.dormantState
+    expect(moved?.workspaceSession?.localOnlyScrollbackByTabId).toBeUndefined()
+    expect(
+      Object.fromEntries(
+        (moved?.terminalScrollbackSnapshots ?? [])
+          .filter((snapshot) => snapshot.tabId === seeded.terminalTabId)
+          .map((snapshot) => [snapshot.leafId, snapshot.byteLength])
+      )
+    ).toEqual(
+      Object.fromEntries(
+        Object.entries(seeded.parkedScrollbackByLeafId).map(([leafId, buffer]) => [
+          leafId,
+          Buffer.byteLength(buffer)
+        ])
+      )
+    )
     const environment = (
       await upgraded.page.evaluate(() => window.api.runtimeEnvironments.list())
-    ).find((entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId)
+    ).find((entry) => getOrcadSshDeployment(entry)?.sshTargetId === seeded.targetId)
     if (!environment) {
       throw new Error('Converted host is missing from the environment catalog')
     }
@@ -246,7 +266,7 @@ test('a host whose sshd refuses TCP forwarding runs a managed server over the st
   expect(target?.orcadFence).toBeTruthy()
   expect(target).not.toHaveProperty('managedServerUnavailable')
   const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-    (entry) => entry.orcadDeployment?.sshTargetId === targetId
+    (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
   )
   expect(environment, 'a managed server registered for the host').toBeTruthy()
   // sshd refuses every forward, so this call can only have ridden a stdio bridge.
@@ -285,7 +305,7 @@ test('a host whose port 6768 another runtime holds still runs a managed server',
     .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
     .toMatchObject({ kind: 'managed' })
   const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-    (entry) => entry.orcadDeployment?.sshTargetId === targetId
+    (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
   )
   expect(environment, 'a managed server registered for the host').toBeTruthy()
   // The other listener drops every connection, so this call can only have reached orcad.
@@ -450,7 +470,7 @@ test('reconnect restores the managed host name after its conversion catalog fail
       state.healCatalogFault?.()
     })
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === seeded.targetId
     )
     if (!environment) {
       throw new Error('Managed host missing from main catalog')

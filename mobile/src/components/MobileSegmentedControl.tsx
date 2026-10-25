@@ -14,6 +14,8 @@ type Props<Value extends string> = {
   fill?: boolean
   /** The track; its default color suits a panel-colored row. */
   style?: StyleProp<ViewStyle>
+  /** Shown but not pickable, e.g. while the value it sets is locked. */
+  disabled?: boolean
 }
 
 /** A pick-one pill control; each segment reads as a radio button. */
@@ -27,6 +29,8 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
             key={segment.value}
             accessibilityRole="radio"
             aria-checked={active}
+            accessibilityState={{ disabled: props.disabled === true }}
+            disabled={props.disabled}
             accessibilityLabel={segment.label}
             testID={props.testIDPrefix ? `${props.testIDPrefix}${segment.value}` : undefined}
             onPress={() => props.onSelect(segment.value)}

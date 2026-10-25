@@ -49,13 +49,13 @@ export function SearchReplaceRow({
   return (
     <div className="flex flex-col gap-1" data-ignore-file-explorer-keys="true">
       <div className="flex items-center gap-1">
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm border border-border bg-input/50 px-1.5 focus-within:border-ring">
+        <div className="flex h-8 min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
           <Replace className="size-3.5 shrink-0 text-muted-foreground" />
           <ImeInput
             ref={inputRef}
             type="text"
             data-file-search-input="true"
-            className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+            className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
             aria-label={translate(
               'auto.components.right.sidebar.SearchReplace.inputLabel',
               'Replace'
@@ -119,7 +119,7 @@ export function SearchReplaceRow({
           </TooltipContent>
         </Tooltip>
       </div>
-      {error ? <p className="px-1 text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="px-1 text-2xs text-destructive">{error}</p> : null}
     </div>
   )
 }

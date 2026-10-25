@@ -11,7 +11,7 @@ import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-s
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
-} from './agent-session-provider-handle-transition'
+} from './agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 import type { ClaudeCommandCatalogProbe } from '../claude/claude-command-catalog-probe'
@@ -37,7 +37,6 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
-  onSessionIdle?: ClaudeStructuredSessionAdapterDeps['onSessionIdle']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
@@ -128,7 +127,6 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
-    ...(deps.onSessionIdle ? { onSessionIdle: deps.onSessionIdle } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),

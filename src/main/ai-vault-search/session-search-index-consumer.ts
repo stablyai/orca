@@ -16,7 +16,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   claude: true,
   qoder: true,
   codebuddy: true,
-  codex: false, // session_index.jsonl supplies titles.
+  codex: false, // session_index.jsonl can override titles.
   gemini: true,
   copilot: true,
   cursor: false, // Sibling chat metadata enriches the transcript.
@@ -40,27 +40,14 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   kiro: false // A .jsonl sidecar supplies messages.
 } satisfies Record<AiVaultAgent, boolean>
 
-/**
- * The search index as a consumer of the transcript reader.
- *
- * It keeps its own cursor in the `files` table and never consults the parse
- * cache: the two answer different questions and diverge the moment either
- * declines a read.
- *
- * Every refusal leaves the cursor where it was and writes what the next pass
- * needs on the row itself, because the row is the only thing that outlives this
- * read. A declined append is `due`: the index is behind on a span no append
- * reaches, so the file has to be read whole. A read that started and did not
- * commit is `failed`, counted, and stamped with the stat it failed at, which is
- * what stops an unreadable transcript being retried on every pass for ever.
- */
+/** Persist index progress independently: declined appends become due, failed reads retry against their stat. */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
   constructor(private readonly store: SessionSearchStore) {}
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+    // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.
     if (
-      start.mode === 'replace' &&
       SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
       (candidate.file.sidecar === undefined || candidate.file.sidecar === 'none') &&
       this.store.coversTranscript(candidate)
@@ -70,10 +57,7 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     if (start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
-        // This index never saw the span before `previousByteOffset`; appending
-        // here would leave a hole no later read can fill. A null cursor is the
-        // file a chunked read left half written, which no offset continues.
-        // Either way the next pass has to read this file from the start.
+        // A missing span or partial cursor requires a whole read; appending would preserve an index hole.
         this.store.setFileState(candidate.file.path, 'due')
         return null
       }
@@ -85,8 +69,6 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       start.identity
     )
     if (!write) {
-      // A closed store, a candidate outside the retention window, or a row that
-      // moved under this read. Only a row that exists has anything to record.
       this.store.setFileState(candidate.file.path, 'due')
       return null
     }
@@ -110,10 +92,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     try {
       this.write.add(message)
     } catch (error) {
-      // Never throws back into the reader: the channel would drop this consumer
-      // for the rest of the read and `finish` would never run. Failing here
-      // keeps the whole read on one path — the buffer is dropped and the file is
-      // re-read.
+      // Keep finish() reachable so failures are recorded; throwing would detach this consumer.
       this.failed = true
       this.write.discard()
       this.store.reportWriteFailure(error)
@@ -122,16 +101,14 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
 
   finish(outcome: TranscriptReadOutcome): void {
     if (outcome.cancelled) {
-      // Leaves the row as it was, which already says what the next pass owes;
-      // counting it as a failure would hold a healthy file out after three cancels.
+      // Cancellation must not count toward the failure limit for a healthy file.
       this.write.discard()
       return
     }
     const { candidate } = this.start
     let committed = false
     try {
-      // An incomplete read's rows are not the whole span, so the cursor must not
-      // move past them; the file is re-read whole instead.
+      // Incomplete streams cannot advance the index cursor.
       committed = !this.failed && !outcome.incomplete && this.write.commit(outcome)
     } catch (error) {
       this.store.reportWriteFailure(error)
@@ -142,17 +119,11 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writeCommitted(candidate)
       return
     }
-    // Counted against the stat it failed at, not merely recorded: a transcript
-    // the reader cannot open fails identically on every pass, and only a change
-    // to this stat can mean the file itself changed.
+    // Stamp and count repeated read failures so unchanged unreadable files can be held out.
     this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
   }
 }
 
-/**
- * Registers the index with the reader and returns the unregister function.
- * Nothing in production calls this yet: PR 3 owns when the index is live.
- */
 export function registerSessionSearchIndexConsumer(store: SessionSearchStore): () => void {
   return registerTranscriptConsumer(new SessionSearchIndexConsumer(store))
 }

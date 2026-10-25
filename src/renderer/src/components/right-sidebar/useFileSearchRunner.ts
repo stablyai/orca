@@ -14,8 +14,9 @@ import { searchRuntimeFiles } from '@/runtime/runtime-file-search-client'
 import { useAppStore } from '@/store'
 import {
   getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/worktree-runtime-owner'
+import { isTwinWorkspace } from '@/lib/resolve-owner'
 import type { SearchResult } from '../../../../shared/code-search-types'
 import type { FileSearchResultsQuery } from '@/store/slices/editor/types/file-search-worktree-state'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -46,11 +47,13 @@ export function useFileSearchRunner({
   cancelPendingSearch: () => void
 } {
   const runtimeEnvironmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const executionHostId = useAppStore((state) =>
     getExecutionHostIdForWorktree(state, activeWorktreeId)
   )
+  // Why: a workspace two hosts publish names no owner, so either host's results would mislead.
+  const ownerIsTwin = useAppStore((state) => isTwinWorkspace(state, activeWorktreeId))
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Why: runtime searches can finish out of order; ids keep stale results
   // from overwriting the newest query state.
@@ -85,7 +88,7 @@ export function useFileSearchRunner({
         searchTimerRef.current = null
       }
 
-      if (!worktreePath || !activeWorktreeId) {
+      if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
         updateActiveSearchState({ results: null, resultOwner: null, loading: false })
         return
       }
@@ -193,7 +196,14 @@ export function useFileSearchRunner({
         }
       }, SEARCH_DEBOUNCE_MS)
     },
-    [activeWorktreeId, updateActiveSearchState, worktreePath, executionHostId, runtimeEnvironmentId]
+    [
+      activeWorktreeId,
+      updateActiveSearchState,
+      worktreePath,
+      executionHostId,
+      runtimeEnvironmentId,
+      ownerIsTwin
+    ]
   )
 
   useEffect(

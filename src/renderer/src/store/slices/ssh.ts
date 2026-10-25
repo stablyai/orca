@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type {
   SshConnectionState,
   PortForwardEntry,
+  UnrestoredPortForward,
   EnrichedDetectedPort,
   SshTargetSummary
 } from '../../../../shared/ssh-types'
@@ -59,6 +60,8 @@ export type SshSlice = {
    *  objects. Spreading a Record produces a new reference that Zustand can diff
    *  by identity, whereas Map mutations are easy to get wrong. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
+  /** Saved forwards that aren't open, keyed by connection ID, so one that can't start stays removable. */
+  unrestoredPortForwardsByConnection: Record<string, UnrestoredPortForward[]>
   /** Detected remote listening ports after main-process enrichment, keyed by
    *  connection ID. Updated from SSH IPC snapshots and push events. */
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
@@ -70,6 +73,7 @@ export type SshSlice = {
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
+  setUnrestoredPortForwards: (targetId: string, forwards: UnrestoredPortForward[]) => void
   clearPortForwards: (targetId: string) => void
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
@@ -89,6 +93,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
+  unrestoredPortForwardsByConnection: {},
   detectedPortsByConnection: {},
 
   setSshConnectionState: (targetId, state) =>
@@ -155,6 +160,19 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         delete next[targetId]
       }
       return { portForwardsByConnection: next }
+    }),
+
+  setUnrestoredPortForwards: (targetId, forwards) =>
+    set((s) => {
+      const next = { ...s.unrestoredPortForwardsByConnection }
+      if (forwards.length > 0) {
+        next[targetId] = forwards
+      } else if (targetId in next) {
+        delete next[targetId]
+      } else {
+        return s
+      }
+      return { unrestoredPortForwardsByConnection: next }
     }),
 
   clearPortForwards: (targetId) =>

@@ -9,18 +9,35 @@ import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
 
 // git show <baseline>:src/shared/native-chat-tool-fold.ts | node config/scripts/native-chat-tool-pairing-benchmark.mjs
 const root = path.resolve(import.meta.dirname, '../..')
-async function load(source) {
+async function load(source, sourcefile = 'src/shared/native-chat-tool-fold.ts') {
   const built = await build({
     stdin: {
       contents: source,
-      sourcefile: 'native-chat-tool-fold.ts',
-      resolveDir: path.join(root, 'src/shared'),
+      sourcefile: path.basename(sourcefile),
+      resolveDir: path.dirname(path.join(root, sourcefile)),
       loader: 'ts'
     },
     bundle: true,
     write: false,
     platform: 'node',
-    format: 'esm'
+    format: 'esm',
+    plugins: [
+      {
+        name: 'relocated-current-pairing-dependencies',
+        setup(builder) {
+          builder.onResolve({ filter: /^\./ }, (args) => {
+            const target = path.resolve(args.resolveDir, args.path)
+            for (const name of ['native-chat-tool-pairs', 'native-chat-folded-tool-results']) {
+              const previous = path.join(root, 'src/shared', name)
+              if (target === previous || target === `${previous}.ts`) {
+                return { path: path.join(root, 'src/shared/native-chat/tools', `${name}.ts`) }
+              }
+            }
+            return undefined
+          })
+        }
+      }
+    ]
   })
   const code = built.outputFiles[0].text
   return {
@@ -32,7 +49,10 @@ async function load(source) {
 
 const loaded = {
   before: await load(readFileSync(0, 'utf8')),
-  after: await load(readFileSync(path.join(root, 'src/shared/native-chat-tool-fold.ts'), 'utf8'))
+  after: await load(
+    readFileSync(path.join(root, 'src/shared/native-chat/tools/native-chat-tool-pairs.ts'), 'utf8'),
+    'src/shared/native-chat/tools/native-chat-tool-pairs.ts'
+  )
 }
 const call = (callId) => ({ type: 'tool-call', name: 'Bash', input: {}, callId })
 const result = (callId) => ({ type: 'tool-result', output: 'done', callId })

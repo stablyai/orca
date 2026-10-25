@@ -3,13 +3,15 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import type { PortForwardEntry } from '../../../../shared/ssh-types'
+import type { PortForwardEntry, UnrestoredPortForward } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
+import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
+const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
 
 /** This client's forwards through an SSH host whose ports another endpoint scans. */
 export function SshForwardedPortsSection({
@@ -18,6 +20,10 @@ export function SshForwardedPortsSection({
   connectionId: string
 }): React.JSX.Element {
   const forwards = useAppStore((s) => s.portForwardsByConnection[connectionId] ?? NO_FORWARDS)
+  const unrestored = useAppStore(
+    (s) => s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED
+  )
+  const count = forwards.length + unrestored.length
   const connected = useAppStore(
     (s) => s.sshConnectionStates.get(connectionId)?.status === 'connected'
   )
@@ -40,9 +46,7 @@ export function SshForwardedPortsSection({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
           </span>
-          {forwards.length > 0 && (
-            <span className="ml-1 text-[10px] text-muted-foreground/60">{forwards.length}</span>
-          )}
+          {count > 0 && <span className="ml-1 text-[10px] text-muted-foreground/60">{count}</span>}
         </button>
         <Button
           type="button"
@@ -56,19 +60,28 @@ export function SshForwardedPortsSection({
         </Button>
       </div>
       {!collapsed &&
-        (forwards.length > 0 ? (
-          forwards.map((entry) => (
-            <SshForwardedPortRow
-              key={entry.id}
-              entry={entry}
-              onEdit={() => setDialogState({ mode: 'edit', entry })}
-              // Why the system browser: the forward listens on this machine, while the workspace's
-              // Orca browser may be the server's or routed through the SSH host.
-              onOpenInBrowser={() =>
-                void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))
-              }
-            />
-          ))
+        (count > 0 ? (
+          <>
+            {forwards.map((entry) => (
+              <SshForwardedPortRow
+                key={entry.id}
+                entry={entry}
+                onEdit={() => setDialogState({ mode: 'edit', entry })}
+                // Why the system browser: the forward listens on this machine, while the workspace's
+                // Orca browser may be the server's or routed through the SSH host.
+                onOpenInBrowser={() =>
+                  void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))
+                }
+              />
+            ))}
+            {unrestored.map((forward) => (
+              <SshUnrestoredPortRow
+                key={`${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`}
+                targetId={connectionId}
+                forward={forward}
+              />
+            ))}
+          </>
         ) : (
           <p className="py-1 text-xs text-muted-foreground">
             {translate(

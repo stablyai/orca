@@ -18,8 +18,9 @@ vi.mock('../provider-process/managed-provider-process', () => ({
     throw new Error('no spawn in this test')
   }
 }))
-vi.mock('../agent-cli-version-probe', () => ({
-  probeAgentCliVersion: async (input: { program: string }) => {
+vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  checkAgentCliVersion: async (input: { program: string }) => {
     spawned.commands.push(input.program)
     throw new Error('no spawn in this test')
   }
@@ -30,8 +31,15 @@ function context(): StructuredAgentModelCatalogContext {
     throw new Error('building a probe resolves nothing')
   }
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building a probe only captures resolvers; none of these deps is read until a probe runs.
-    deps: { stateDirectory: '/state' } as StructuredAgentModelCatalogContext['deps'],
+    deps: {
+      stateDirectory: '/state',
+      hostId: 'local',
+      claimKeyId: 'catalog-test',
+      resolveWorkspacePath: unused,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+      logger: { warn: vi.fn(), error: vi.fn() }
+    },
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
@@ -64,10 +72,10 @@ describe('the model catalog contract on every registration', () => {
       (registration) => registration.modelCatalog(context()).kind === 'probe'
     ).map((registration) => registration.definition.agent)
     expect(Object.keys(probes).sort()).toEqual([...listing].sort())
-    // Every agent registered today but OMP and Antigravity lists its models without a session.
+    // Every agent registered today but Antigravity lists its models before a chat.
     expect(listing.sort()).toEqual(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map((registration) => registration.definition.agent)
-        .filter((agent) => agent !== 'omp' && agent !== 'antigravity')
+        .filter((agent) => agent !== 'antigravity')
         .sort()
     )
   })
@@ -80,6 +88,15 @@ describe('the model catalog contract on every registration', () => {
     // Codex's `model/list` names it. Grok's session-free `currentModelId` can differ from what a
     // session runs, so Grok, like the rest, learns it from a chat with no pick.
     expect([...listingNamesConfiguredModel].sort()).toEqual(['codex'])
+  })
+
+  // OpenCode 2.x and OMP list in a session opened in the chat's folder, which a prewarm does not have.
+  it('marks the agents whose listing runs in a chat folder', () => {
+    const { listsInChatFolder } = registeredModelCatalogDiscovery(
+      STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      context()
+    )
+    expect([...listsInChatFolder].sort()).toEqual(['omp', 'opencode', 'opencode2'])
   })
 
   it('maps an ACP agent with no session-free listing to an unavailable registration', () => {
@@ -109,14 +126,15 @@ describe('the model catalog contract on every registration', () => {
     }
     const env = async () => ({ PATH: '/usr/bin' })
     const { probes } = registeredModelCatalogDiscovery(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a probe reads only the command, env and auth resolvers given here.
       deps: {
+        ...context().deps,
         stateDirectory: '/state',
+        resolveLaunchArgs: () => [],
         resolveClaudeCommand: () => resolveStructuredAgentCommand('claude', settings),
         resolveCodexCommand: (options) => resolveStructuredAgentCommand('codex', settings, options),
         resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
         resolveAgentCommandSettings: () => settings
-      } as StructuredAgentModelCatalogContext['deps'],
+      },
       environment: {
         resolveBaseEnvironment: env,
         resolveAgentEnvironment: env,
@@ -155,14 +173,15 @@ describe('the model catalog contract on every registration', () => {
       })
       const settings = { agentCmdOverrides: { grok: installed('grok'), pi: installed('pi') } }
       const { probes } = registeredModelCatalogDiscovery(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a probe reads only the command, env and auth resolvers given here.
         deps: {
+          ...context().deps,
           stateDirectory: '/state',
+          resolveLaunchArgs: () => [],
           resolveClaudeCommand: (options) => resolveCliCommand(installed('claude'), options),
           resolveCodexCommand: (options) => resolveCliCommand(installed('codex'), options),
           resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
           resolveAgentCommandSettings: () => settings
-        } as StructuredAgentModelCatalogContext['deps'],
+        },
         environment: {
           resolveBaseEnvironment: env,
           resolveAgentEnvironment: env,

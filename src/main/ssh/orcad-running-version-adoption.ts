@@ -5,11 +5,11 @@
  */
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadManagedDeferral } from '../../shared/orcad-managed-runtime'
-import { orcadActivationFenceRefusal } from './orcad-activation-fence-hold'
+import { orcadActivationFenceRefusal } from '../managed-server/activation/orcad-activation-fence-hold'
 import { OrcadActiveReadinessError, probeActiveOrcadReadiness } from './orcad-active-readiness'
-import type { OrcadActivationRecord } from './orcad-activation-record'
-import { readOrcadActivationRecord } from './orcad-activation-record-store'
-import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
+import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
+import { wakeStoppedManagedOrcad } from '../managed-server/lifecycle/orcad-managed-wake'
 import { resolveOrcadSlotIdentity, type OrcadSlotOptions } from './orcad-recovery-slot'
 
 export type OrcadRunningAdoption = {

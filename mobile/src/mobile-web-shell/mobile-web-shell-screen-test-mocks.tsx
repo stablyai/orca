@@ -9,16 +9,26 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
   return {
     'react-native': () => ({
       ActivityIndicator: 'ActivityIndicator',
-      Easing: { in: (fn: unknown) => fn, quad: 'quad' },
-      // Enough of it for the cover to mount, fade and unmount. What the fade looks like is not this
-      // test's business; that the cover is up until the page paints is, and that is the `visible` prop.
+      AccessibilityInfo: {
+        isReduceMotionEnabled: () => Promise.resolve(false),
+        addEventListener: () => ({ remove: () => {} })
+      },
+      Easing: { in: (fn: unknown) => fn, out: (fn: unknown) => fn, quad: 'quad' },
+      // Enough of it for the cover to mount, fade and unmount, and for the download bar's fill to be
+      // read. An animation lands at once: what the motion looks like is not this test's business.
       Animated: {
         View: 'Animated.View',
         Value: class {
-          setValue(): void {}
+          constructor(public value: number) {}
+          setValue(value: number): void {
+            this.value = value
+          }
         },
-        timing: () => ({
-          start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
+        timing: (value: { setValue: (next: number) => void }, config: { toValue: number }) => ({
+          start: (done?: (result: { finished: boolean }) => void) => {
+            value.setValue(config.toValue)
+            done?.({ finished: true })
+          },
           stop: () => {}
         })
       },
@@ -107,7 +117,11 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       // Read by the pop latch, which clears on the route this shell is mounted at changing.
       usePathname: () => dependencies.pathname,
       // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
-      useNavigation: () => ({ setOptions: dependencies.setScreenOptions }),
+      useNavigation: () => ({
+        setOptions: dependencies.setScreenOptions,
+        dispatch: dependencies.dispatch
+      }),
+      useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
       useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
     }),
     // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
@@ -150,7 +164,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
     // The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
     // client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
-    '../transport/client-context': () => ({
+    '../transport/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
     // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
@@ -172,6 +186,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     './use-mobile-web-shell-session': () => ({
       useMobileWebShellSession: () => ({
         state: dependencies.state,
+        downloadProgress: dependencies.downloadProgress,
         pageRoutes: dependencies.pageRoutes,
         routeGrants: dependencies.routeGrants,
         updateNotice: dependencies.updateNotice,

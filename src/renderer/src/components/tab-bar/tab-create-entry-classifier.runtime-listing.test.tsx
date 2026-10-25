@@ -157,5 +157,13 @@ describe('tab entry options over the real runtime listing', () => {
     await drainMicrotasks()
 
     expect(blockedIds(latestState(states))).not.toContain('loading')
+    expect(getTabEntryOptions('packages/app/package.json', latestState(states), 4)).toContainEqual({
+      id: 'existing-file:packages/app/package.json',
+      classification: {
+        kind: 'existing-file',
+        matchKind: 'exact-path',
+        relativePath: 'packages/app/package.json'
+      }
+    })
   })
 })

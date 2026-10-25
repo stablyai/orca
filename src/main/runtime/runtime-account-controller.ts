@@ -1,4 +1,5 @@
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import { retireAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { hasAppEnvironment } from '../../shared/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import type {
@@ -15,6 +16,11 @@ import type {
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
+import type {
+  HostAccountSignInChannel,
+  HostAccountSignInProvider,
+  HostAccountSignInStatus
+} from '../../shared/host-account-sign-in-types'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
@@ -89,7 +95,11 @@ export class RuntimeAccountController {
     if (this.services) {
       throw new Error('This host manages its own provider accounts.')
     }
+    const previous = this.hostLaunchEnv
     this.hostLaunchEnv = launchEnv
+    if (JSON.stringify(previous) !== JSON.stringify(launchEnv)) {
+      retireAtRestCommandContext()
+    }
     try {
       this.persistHostLaunchEnv?.(launchEnv)
     } catch (error) {
@@ -105,13 +115,27 @@ export class RuntimeAccountController {
   ): void {
     this.persistHostLaunchEnv = persist
     if (saved && !this.services) {
+      const previous = this.hostLaunchEnv
       this.hostLaunchEnv = saved
+      if (JSON.stringify(previous) !== JSON.stringify(saved)) {
+        retireAtRestCommandContext()
+      }
     }
   }
 
   /** The desktop-selected account env for a process `agent` starts here; empty when none. */
   hostLaunchEnvFor(agent: string | null | undefined): Readonly<Record<string, string>> {
     return hostAccountLaunchEnvFor(this.hostLaunchEnv, agent)
+  }
+
+  /** Null where the desktop that owns this host's accounts polls usage instead (a WSL host). */
+  usageRateLimits(): RateLimitService | null {
+    return this.services?.rateLimits ?? null
+  }
+
+  /** Refuses where no poller would read a saved key, so a save is never reported for nothing. */
+  requireUsageRateLimits(): RateLimitService {
+    return this.requireServices().rateLimits
   }
 
   getClaudeConfigDirectory(target: ClaudeAccountSelectionTarget): string | null {
@@ -230,6 +254,17 @@ export class RuntimeAccountController {
 
   cancelClaudeSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
     return this.requireServices().claudeAccounts.cancelSignIn(signIn)
+  }
+
+  /** Adds a host account whose login a client on another device finishes. */
+  async runHostSignIn(
+    provider: HostAccountSignInProvider,
+    channel: HostAccountSignInChannel
+  ): Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>> {
+    const { claudeAccounts, codexAccounts } = this.requireServices()
+    return provider === 'claude'
+      ? { claude: await claudeAccounts.addAccountWithPastedCode(channel) }
+      : { codex: await codexAccounts.addAccountWithDeviceCode(channel) }
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {

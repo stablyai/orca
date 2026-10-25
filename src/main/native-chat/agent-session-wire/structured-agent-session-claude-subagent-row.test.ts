@@ -1,7 +1,4 @@
-// A Claude background helper through the shipping adapter, host and child records: its saved row
-// stays working past its spawn result and its turn's end until its own end frame; and a helper the
-// store had no room for keeps the strip incomplete, and the agent past idle cleanup, until the
-// strip's Stop ends the agent.
+// Background helpers outlive spawn/turn results; unrecorded work must remain visible and resist idle eviction.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,8 +6,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { AGENT_STATUS_STORE_LIMITS } from '../../../shared/agent-status-store-contract'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { isSubagentBlock } from '../../../shared/native-chat-types'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
@@ -48,7 +43,6 @@ let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let claude: ReturnType<typeof fakeClaude>
 let records: ReturnType<typeof acpChildWorkStatusSink>
-/** The host's clock, which stamps every child's start and end. */
 let clock = NOW
 
 beforeEach(async () => {
@@ -65,7 +59,6 @@ beforeEach(async () => {
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
-      // A later child resumes the transcript the first one started.
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
@@ -94,7 +87,6 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
-    // The host's child records live in a real hook server's store, as in production.
     statusSink: records.sink,
     now: () => clock
   })
@@ -158,7 +150,7 @@ async function savedRows() {
 it("keeps a background helper's row working past its spawn result and its turn's end, until its own end", async () => {
   const connection = claude.connections[0]!
   await sendAndEcho(connection, 'Run it in the background.')
-  // Spawn, roster, task start, the spawn's "launched" result, and the parent turn's result.
+  // Replay through spawn and parent-turn completion, before the helper ends.
   for (const [index, captured] of RESUMED_BY_MESSAGE.filter(({ at }) => at <= 4_765).entries()) {
     frame(connection, { uuid: `launch-${index}`, ...captured.frame })
   }
@@ -171,7 +163,6 @@ it("keeps a background helper's row working past its spawn result and its turn's
   expect(activeStructuredAgentSessionTurnId(items)).toBeNull()
   expect(items.map((item) => readAgentJournalTurn(item.body)?.state)).toContain('completed')
 
-  // Its own progress, then its own completion.
   for (const [index, captured] of RESUMED_BY_MESSAGE.filter(
     ({ at }) => at > 4_765 && at <= 7_427
   ).entries()) {
@@ -184,38 +175,8 @@ it("keeps a background helper's row working past its spawn result and its turn's
   )
 })
 
-it("keeps an agent whose helper the store had no room for past idle cleanup, until the strip's Stop", async () => {
-  // Another session holds every child record the store has room for.
-  const busy = makeStructuredAgentStatusSubject(
-    { executionHostId: 'local', wslDistro: null, workspaceId: 'busy', workspaceKind: 'folder' },
-    'busy-session'
-  )
-  records.sink.publish(
-    {
-      sessionId: 'busy-session',
-      workspaceId: 'busy',
-      agent: 'claude',
-      status: 'working',
-      latestPrompt: 'Busy',
-      updatedAt: 1
-    },
-    busy
-  )
-  records.sink.publishChildWork?.(
-    busy,
-    Array.from({ length: AGENT_STATUS_STORE_LIMITS.children }, (_unused, index) => ({
-      type: 'live' as const,
-      observedAt: 1,
-      child: {
-        handle: { idKind: 'task_id' as const, id: `busy-${index}` },
-        kind: 'agent' as const,
-        residency: 'background' as const,
-        state: 'working' as const,
-        stoppable: true
-      }
-    })),
-    'claude'
-  )
+it("keeps an agent whose helper the store refused past idle cleanup, until the strip's Stop", async () => {
+  records.sink.publishChildWork = () => undefined
   const connection = claude.connections[0]!
   await sendAndEcho(connection, 'Run it in the background.')
   for (const [index, captured] of RESUMED_BY_MESSAGE.filter(({ at }) => at <= 3_349).entries()) {
@@ -228,7 +189,6 @@ it("keeps an agent whose helper the store had no room for past idle cleanup, unt
     return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
   }
 
-  // The turn that spawned it still runs: the strip's Stop leaves the agent and its turn alone.
   await stopStrip()
   expect(connection.closed).toBe(false)
   expect(strip()).toMatchObject({ incomplete: true })
@@ -263,12 +223,12 @@ it('keeps a helper working while its own shell runs and through its wake-up, end
   const strip = () =>
     host['backgroundTasks'].read(SESSION)?.children?.map((child) => child.providerId) ?? []
 
-  // The CLI calls the helper completed while the shell it started runs on.
+  // CLI completion does not end the helper while its spawned shell still runs.
   await replay(11_913)
   await eventually(async () => expect(await helper()).toMatchObject({ state: 'working' }))
   expect(strip()).toEqual(['agent-1', 'shell-1'])
 
-  // The shell ends, and the CLI starts the same run again under its spawn call.
+  // Restart the same helper run after its shell exits.
   await replay(44_460)
   await eventually(async () => expect(await helper()).toMatchObject({ state: 'working' }))
   expect(strip()).toEqual(['agent-1'])
@@ -279,12 +239,10 @@ it('keeps a helper working while its own shell runs and through its wake-up, end
       state: 'completed',
       tokens: 18_181,
       startedAt: start + 15,
-      // Its own end, not its first turn's, sets how long it ran.
       settledAt: start + 46_198
     })
   )
   expect(strip()).toEqual([])
-  // One saved row for the helper, revised in place across both runs.
   expect((await savedRows()).filter(({ id }) => id === 'agent-1')).toHaveLength(1)
 })
 
@@ -318,8 +276,7 @@ it('keeps a helper the next child resumes while it is still starting working, pa
   await eventually(async () =>
     expect(await savedRows()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
   )
-  // The next child reports the helper running again before its start returns, so before the host
-  // installs it and settles what the first child left.
+  // Inject helper activity before startup returns and before old-generation sweeping.
   const opened = claude.connections.push.bind(claude.connections)
   vi.spyOn(claude.connections, 'push').mockImplementation((connection) => {
     const initialize = connection.initializationResult

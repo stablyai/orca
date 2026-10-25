@@ -9,13 +9,15 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortProbe
 } from '../../shared/workspace-ports'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { killWorkspacePort, scanWorkspacePortProbes } from './workspace-port-ownership'
 
 export type WorkspacePortExecutionHostDeps = {
   /** Workspaces this host runs itself; the only processes Stop may signal here. */
   getLocalProbes: () => Promise<WorkspacePortProbe[]>
 }
+
+export const SSH_PORT_SCAN_UNSUPPORTED_REASON =
+  "Port detection isn't available for direct SSH hosts yet. Move this project to an Orca server on this host to see its ports."
 
 function unavailable(executionHostId: string, reason: string): WorkspacePortHostScanResult {
   return {
@@ -36,12 +38,10 @@ export async function scanWorkspacePortsOnExecutionHost(
   if (host?.kind === 'local') {
     return { ...(await scanWorkspacePortProbes(await deps.getLocalProbes())), executionHostId }
   }
-  // Why: this process serves no SSH host, so its listeners are unavailable, never "none".
+  // Why: this process serves no SSH host, so its listeners are unavailable, never "none". Not a
+  // dropped connection: the relay has no port scan, but an Orca server on the host scans as local.
   if (host?.kind === 'ssh') {
-    return unavailable(
-      executionHostId,
-      `Could not scan the SSH host: ${SSH_HOST_NOT_SERVED_MESSAGE}`
-    )
+    return unavailable(executionHostId, SSH_PORT_SCAN_UNSUPPORTED_REASON)
   }
   return unavailable(executionHostId, 'This workspace does not run on this server.')
 }

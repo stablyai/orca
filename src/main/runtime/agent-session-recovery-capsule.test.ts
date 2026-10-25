@@ -11,9 +11,9 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
 import {
   AgentSessionRecoveryCapsule,
-  AGENT_SESSION_RECOVERY_CAPSULE_FILE,
-  type AgentSessionResumeFailureInput
+  AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
+import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
 
 let directory: string
 let filePath: string
@@ -257,14 +257,12 @@ describe('durable restart offers', () => {
       NOW
     )
     await fileFailure()
-    const before = await readFile(filePath)
-
     expect(await capsule.dismiss([SESSION, 'second', 'missing'], NOW)).toBe(2)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' })])
     expect(await capsule.listFailed(NOW)).toEqual([])
-    // Nothing named, nothing rewritten.
+    const publish = vi.spyOn(durable, 'renameDurable')
     expect(await capsule.dismiss(['missing'], NOW)).toBe(0)
-    expect(await readFile(filePath)).not.toEqual(before)
+    expect(publish).not.toHaveBeenCalled()
     // Not a fence: the same chat may be offered again by a later teardown.
     await capsule.record([marker()], NOW)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])

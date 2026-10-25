@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import { buildStructuredJournalArchive } from './structured-worker-journal-archive'
-import { foldToolMessages, pairToolBlocks } from '../../../shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../shared/native-chat/tools/native-chat-tool-pairs'
 
 const STRUCTURED_ARCHIVE_MAX_BYTES = 262_144
 

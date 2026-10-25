@@ -10,7 +10,8 @@ import {
   SSH_HOST_NOT_SERVED_MESSAGE,
   SshHostNotServedError
 } from '../providers/ssh-host-not-served-error'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   checkoutBranch: vi.fn(),
