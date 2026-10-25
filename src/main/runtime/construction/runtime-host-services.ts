@@ -308,9 +308,13 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
         },
         ...target
       ),
-    cleanupRemovedFolderWorkspaceState: (worktreeId) => {
+    cleanupRemovedFolderWorkspaceState: (worktreeId): void | Promise<void> => {
       if (this.store) {
-        this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
+        // Returned, not voided: the controller awaits it at the end of the
+        // delete, so a forgotten folder workspace cannot report before the
+        // Codex pretrust deletion inside the purge has landed. Failures
+        // degrade inside the cleanup.
+        return this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
       // Folder ids are minted by this store and shared with no other host.
       this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)

@@ -40,16 +40,35 @@ import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
+<<<<<<< HEAD
 } from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
+=======
+} from '../../worktree-background-removal'
+import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local-worktree-removal'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
+import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup'
+import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
+import {
+  dropRemovedWorktreeProcessState,
+  pruneRemovedWorktreeSnapshots
+} from '../../worktree-removal-process-cleanup'
+import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
+>>>>>>> 738ffaefdd3 (fix(codex): await the pretrust cleanup before reporting a worktree removed)
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
+<<<<<<< HEAD
   prepareHostAgentTerminalLaunch
 } from '../terminal/launch/runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
+=======
+  withHostAccountLaunchEnv
+} from '../runtime-agent-terminal-startup'
+>>>>>>> 738ffaefdd3 (fix(codex): await the pretrust cleanup before reporting a worktree removed)
 
 export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected abstract resolveExplicitWorktreeIdScoped(
@@ -142,24 +161,31 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
   }
 
   // Host state every removal path drops once Git has let go of the checkout.
-  protected purgeRemovedWorktree(
+  // Resolves only after the Codex pretrust deletion landed, so a removal ack
+  // cannot precede the trust table purge.
+  protected async purgeRemovedWorktree(
     store: RuntimeStore,
     worktreeId: string,
     repoId: string,
     removalHostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     this.clearOptimisticReconcileToken(worktreeId)
-    this.removeWorktreeMetadataAndHistory(store, worktreeId, removalHostId)
+    const metadataAndHistory = this.removeWorktreeMetadataAndHistory(
+      store,
+      worktreeId,
+      removalHostId
+    )
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
     invalidateAuthorizedRootsCacheForRepo(store, repoId)
+    await metadataAndHistory
   }
 
-  removeWorktreeMetadataAndHistory(
+  async removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
     hostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
@@ -176,7 +202,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     if (!preservesSameIdOwner) {
       // Why: worktree IDs are path-derived and can be recreated; a stale Codex
       // pretrust entry must not pre-trust the next occupant of the path.
-      dropOrcaCreatedCodexPretrustForRemovedWorktree(worktreeId)
+      const pretrustDrop = dropOrcaCreatedCodexPretrustForRemovedWorktree(worktreeId)
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
@@ -200,6 +226,10 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       this.notifyMobileSessionTabsRemoved(worktreeId)
       dropRemovedWorktreeProcessState(worktreeId)
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'worktree-removal')
+      // Awaited last so every in-memory invalidation above stays synchronous,
+      // while callers holding the returned promise still wait for the entry
+      // deletion (failures degrade inside the helper, never fail the removal).
+      await pretrustDrop
     }
     const snapshotDirectory = store.getProfileStorageDirectory?.()
     if (snapshotDirectory) {
