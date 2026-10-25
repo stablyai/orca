@@ -6,7 +6,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import {
+  getVisibleUsageProvider,
+  isProviderConfigured,
+  isUsageEmptyState
+} from './status-bar-provider-visibility'
 import {
   getUsageProviderAccountsSectionId,
   usageRowSignInOpensSettings
@@ -110,7 +114,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const antigravityUsageConfigured =
     !remoteOwned &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, isProviderConfigured(antigravity))
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   // A remote owner's bars come from its snapshot alone; this viewer's setup says nothing about that host.
   const usageSettings = {
@@ -135,29 +139,29 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
-    isStatusBarItemAvailable('claude', detectedAgentIds)
+    isStatusBarItemAvailable('claude', detectedAgentIds, isProviderConfigured(claude))
   const showCodex =
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
-    isStatusBarItemAvailable('codex', detectedAgentIds)
+    isStatusBarItemAvailable('codex', detectedAgentIds, isProviderConfigured(codex))
   const showGemini =
     visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
+    isStatusBarItemAvailable('gemini', detectedAgentIds, isProviderConfigured(gemini))
   const showKimi =
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
-    isStatusBarItemAvailable('kimi', detectedAgentIds)
+    isStatusBarItemAvailable('kimi', detectedAgentIds, isProviderConfigured(kimi))
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, isProviderConfigured(antigravity))
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
-    isStatusBarItemAvailable('grok', detectedAgentIds)
+    isStatusBarItemAvailable('grok', detectedAgentIds, isProviderConfigured(grok))
   // Why: a Cursor session can come from the IDE alone, so PATH detection of
   // cursor-agent would hide a real meter from IDE-only users.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
@@ -276,6 +280,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     collapsedUsageProviders,
     compact,
     detectedAgentIds,
+    claude,
+    codex,
+    gemini,
+    kimi,
+    antigravity,
+    grok,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
     handleManageAccounts,
