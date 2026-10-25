@@ -12,7 +12,10 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { foldOpenFilesByOwnerTuple } from './workspace-session-openfile-tuple-dedupe'
+import {
+  foldOpenFilesByOwnerTuple,
+  persistActiveFileIdByWorktree
+} from './workspace-session-openfile-tuple-dedupe'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
@@ -163,26 +166,11 @@ export function buildEditorSessionData(
     ids.add(f.id)
   }
 
-  const activeFileEntries: [string, string][] = []
-  for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
-    if (!fileId) {
-      continue
-    }
-    // Why: the folded duplicate may be the row this pointer names; remap it to the retained row
-    // so the selection — and the 'editor' tab-type marker gated on it — survives persistence.
-    // Only remap when the id no longer names a retained row in this worktree: the same raw-path
-    // id can also be a live row here or in another worktree, and that pointer must stay put.
-    const retainedFileId = editFileIdsByWorktree[worktreeId]?.has(fileId)
-      ? fileId
-      : (retainedIdByRemovedId.get(worktreeId)?.get(fileId) ?? fileId)
-    if (editFileIdsByWorktree[worktreeId]?.has(retainedFileId)) {
-      activeFileEntries.push([worktreeId, retainedFileId])
-    }
-  }
-  const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
-    string,
-    string
-  >
+  const persistedActiveFileIdByWorktree = persistActiveFileIdByWorktree(
+    activeFileIdByWorktree,
+    editFileIdsByWorktree,
+    retainedIdByRemovedId
+  )
 
   const activeTabTypeEntries: [string, WorkspaceVisibleTabType][] = []
   for (const [worktreeId, tabType] of Object.entries(activeTabTypeByWorktree)) {

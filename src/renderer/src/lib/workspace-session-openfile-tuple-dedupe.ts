@@ -48,3 +48,30 @@ export function foldOpenFilesByOwnerTuple(files: readonly OpenFile[]): OwnerTupl
   }
   return { files: result, retainedIdByRemovedId }
 }
+
+/**
+ * Why: the folded duplicate may be the row an active-file pointer names; remap it to the retained
+ * row so the selection — and the 'editor' tab-type marker gated on it — survives persistence.
+ * Only remap when the id no longer names a retained row in that worktree: the same raw-path id
+ * can also be a live row here or in another worktree, and that pointer must stay put.
+ */
+export function persistActiveFileIdByWorktree(
+  activeFileIdByWorktree: Record<string, string | null>,
+  editFileIdsByWorktree: Readonly<Record<string, ReadonlySet<string>>>,
+  retainedIdByRemovedId: OwnerTupleFold['retainedIdByRemovedId']
+): Record<string, string> {
+  const activeFileEntries: [string, string][] = []
+  for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
+    if (!fileId) {
+      continue
+    }
+    const retainedFileId =
+      editFileIdsByWorktree[worktreeId]?.has(fileId) === true
+        ? fileId
+        : (retainedIdByRemovedId.get(worktreeId)?.get(fileId) ?? fileId)
+    if (editFileIdsByWorktree[worktreeId]?.has(retainedFileId) === true) {
+      activeFileEntries.push([worktreeId, retainedFileId])
+    }
+  }
+  return Object.fromEntries(activeFileEntries)
+}
