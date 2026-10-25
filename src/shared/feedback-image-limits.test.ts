@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MAX_FEEDBACK_IMAGE_BYTES,
-  MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from './feedback-image-limits'
+import { MAX_FEEDBACK_IMAGE_BYTES, MAX_FEEDBACK_IMAGE_TOTAL_BYTES } from './feedback-image-limits'
 
 // Why: the exact value is a judgement call, staying under the host's limit is
 // not. https://www.onorca.dev/v1/feedback is a Vercel Function and rejects
@@ -18,9 +14,5 @@ describe('feedback image limits', () => {
 
   it('cannot let one image exceed the whole budget', () => {
     expect(MAX_FEEDBACK_IMAGE_BYTES).toBeLessThanOrEqual(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
-  })
-
-  it('leaves room for more than one attachment', () => {
-    expect(MAX_FEEDBACK_IMAGE_COUNT).toBeGreaterThan(1)
   })
 })

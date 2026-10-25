@@ -20,7 +20,7 @@ import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../browser/browser-cookie-import'
+} from '../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost

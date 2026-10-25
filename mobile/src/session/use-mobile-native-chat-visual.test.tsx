@@ -1,7 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatVisualRead } from './mobile-native-chat-visual-read'
 
 const reads = vi.hoisted(() => {
@@ -21,9 +20,9 @@ import {
   useMobileNativeChatVisual,
   type MobileNativeChatVisualState
 } from './use-mobile-native-chat-visual'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read module is mocked; the client is only an identity here.
-const source = { client: {} as RpcClient, sessionId: 'session-1' }
+const source = { client: stubRpcClient(), sessionId: 'session-1' }
 
 let latest: { state: MobileNativeChatVisualState; retry: () => void } | null = null
 function Probe() {

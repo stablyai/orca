@@ -1,7 +1,7 @@
 /** Durable single-writer session records and their operation ledger, as rows in the host's chat
  *  journal database. */
 
-import { backfillAgentSessionPermissionModes } from './agent-session-permission-backfill'
+import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -21,11 +21,11 @@ import {
   settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
-} from './agent-session-operation-admission'
+} from './agent-session/ownership/agent-session-operation-admission'
 import {
   isAgentSessionClaimKeyVerifiable,
   retireAgentSessionClaimKey
-} from './agent-session-claim-key-retention'
+} from './agent-session/ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
@@ -39,7 +39,7 @@ import {
   evictAgentSessionOwner,
   proveAgentSessionOwner,
   type AgentSessionProcessIdentityCommit
-} from './agent-session-lease-transitions'
+} from './agent-session/ownership/agent-session-lease-transitions'
 import {
   settleFailedAgentSessionAcquisition,
   settleFailedAgentSessionPostAcquisitionAttachment,
@@ -49,18 +49,18 @@ import {
 import {
   renewAgentSessionLeases,
   type AgentSessionLeaseRenewal
-} from './agent-session-lease-renewal'
+} from './agent-session/ownership/agent-session-lease-renewal'
 import {
   applyAgentSessionRestartProbes,
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
-} from './agent-session-restart-reconciliation'
+} from './agent-session/ownership/agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
-} from './agent-session-reservation-admission'
+} from './agent-session/ownership/agent-session-reservation-admission'
 import { heldAgentSessionIds, type AgentSessionStoreState } from './agent-session-store-state'
 import {
   agentSessionVisibleTabIndex,

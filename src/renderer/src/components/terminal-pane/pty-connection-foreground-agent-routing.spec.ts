@@ -26,6 +26,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundAgentRoutingTests(): void {
   let mockStoreState: StoreState
@@ -96,7 +97,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
       await flushAsyncTicks()
@@ -130,19 +131,21 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       } as StoreState
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({
-          startup: {
-            command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            launchConfig: {
-              agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-              agentEnv: {}
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({
+            startup: {
+              command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+              launchConfig: {
+                agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+                agentEnv: {}
+              },
+              launchAgent: 'codex'
             },
-            launchAgent: 'codex'
-          },
-          restoredPtyIdByLeafId: {}
-        }) as never
+            restoredPtyIdByLeafId: {}
+          })
+        )
       )
 
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
@@ -184,9 +187,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -218,9 +223,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -253,12 +260,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({
-          tabId,
-          startup: { command: 'droid', launchAgent: 'droid' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({
+            tabId,
+            startup: { command: 'droid', launchAgent: 'droid' }
+          })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -299,9 +308,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -339,10 +350,12 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
-      ) as unknown as { sampleForegroundAgentOnFocus: () => void }
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } })
+        )
+      )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Captured transport options expose onPtySpawn as an optional PTY-id callback.
@@ -387,12 +400,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
       transportFactoryQueue.push(createMockTransport(ptyId))
       const binding = connectPanePty(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The pane fixture implements the terminal APIs exercised by this connection test.
-        createPane(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The manager fixture supplies this single pane and its connection callbacks.
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection dependency fixture supplies all APIs used by the test with the explicit startup override.
-        createDeps({ tabId, startup: { command: 'sleep 30 && claude' } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ tabId, startup: { command: 'sleep 30 && claude' } })
+        )
       )
       await vi.advanceTimersByTimeAsync(30_000)
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agent).not.toBe('claude')
@@ -423,7 +435,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
       transportFactoryQueue.push(createMockTransport(ptyId))
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps({ tabId })))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
@@ -467,10 +479,12 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'pi', launchAgent: 'pi' } }) as never
-      ) as unknown as { requestWindowsShiftEnterReconfirmation: () => void }
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, startup: { command: 'pi', launchAgent: 'pi' } })
+        )
+      )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Captured transport options expose onPtySpawn as an optional PTY-id callback.
@@ -530,9 +544,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(transport)
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ tabId, isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()

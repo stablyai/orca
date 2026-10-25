@@ -4,11 +4,8 @@
  * is unverifiable, never zero, so an update over live or uncounted terminals defers (D7).
  */
 import { getAppEnvironment } from '../../shared/app-environment'
-import { refreshManagedOrcadPairing } from '../../shared/runtime-environment-managed-orcad-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import {
-  getPreferredPairingOffer,
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
@@ -18,7 +15,6 @@ import type {
   OrcadManagedRollbackResult
 } from '../../shared/orcad-managed-runtime'
 import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
-import type { ServeReadiness } from '../server/serve-readiness'
 import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
 import { probeActiveOrcadReadiness } from './orcad-active-readiness'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
@@ -49,7 +45,7 @@ import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from './orcad-fenced-stop'
 import { findIncompleteManagedOrcadMigration } from '../managed-server/lifecycle/orcad-managed-migration-status'
 import { latestOrcadMigrationInto } from './orcad-migration-rollback-mark'
-import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
+import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
 
 type LifecycleArgs = { selector: string; signal?: AbortSignal }
 
@@ -65,20 +61,6 @@ export function withManagedOrcadLifecycle<T>(
     assertRuntimeEnvironmentNotReconciling(current.environment)
     return run(current)
   })
-}
-
-function refreshPairing(
-  userDataPath: string,
-  environment: KnownRuntimeEnvironment,
-  readiness: ServeReadiness,
-  localPort: number
-): KnownRuntimeEnvironment {
-  // Why the enrolled grant: a restarted orcad offers a new device once this one has paired, and
-  // taking it would change who this desktop is to the host (as WSL's #29042 found). Re-read: the
-  // census may have repaired a refused pairing since `environment` was read.
-  const enrolled = getPreferredPairingOffer(resolveEnvironment(userDataPath, environment.id))
-  const pairingCode = tunneledOrcadPairingCode(readiness, localPort, enrolled)
-  return refreshManagedOrcadPairing(userDataPath, environment.id, pairingCode)
 }
 
 /** A launched slot may bind another port than the forward in use, so forward anew. */
@@ -184,7 +166,7 @@ export async function runManagedOrcadUpdate(
     activeVersion: result.fullVersion,
     readiness
   })
-  const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+  const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
   if (started || result.outcome !== 'already-active') {
     await followLaunchedServerPort(userDataPath, environment.id)
   }
@@ -255,7 +237,7 @@ export function rollbackManagedOrcadEnvironment(
         { ...slot, remoteInstallDir: targetDir },
         { buildHash: targetBuildHash, fullVersion: result.target }
       )
-      const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+      const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
       await followLaunchedServerPort(userDataPath, environment.id)
       return {
         outcome: 'rolled-back',
@@ -285,7 +267,7 @@ export function recoverManagedOrcadEnvironment(
         return result
       }
       const updated = result.readiness
-        ? refreshPairing(userDataPath, environment, result.readiness, deployment.localPort)
+        ? refreshMaintainedOrcadPairing(userDataPath, environment.id, result.readiness)
         : environment
       if (result.activeVersion) {
         await followLaunchedServerPort(userDataPath, environment.id)

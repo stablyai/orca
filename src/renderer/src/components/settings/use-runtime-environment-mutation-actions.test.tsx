@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
@@ -11,6 +10,7 @@ const { toastSuccess, toastError } = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 import { useRuntimeEnvironmentMutationActions } from './use-runtime-environment-mutation-actions'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const verifyAndAddFromPairingCode = vi.fn()
 const remove = vi.fn()
@@ -41,8 +41,7 @@ afterEach(() => cleanup())
 function renderActions(connectEnvironment: () => Promise<boolean>, name = 'Studio over relay') {
   const view = renderHook(() =>
     useRuntimeEnvironmentMutationActions({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: addEnvironment reads no settings.
-      settings: {} as GlobalSettings,
+      settings: getDefaultSettings('/tmp'),
       allowLocalRuntime: false,
       mountedRef: { current: true },
       setAddServerFormOpen: vi.fn(),

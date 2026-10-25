@@ -30,6 +30,7 @@ export type AgentStartupPlanInputs = {
   isRemote: boolean
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs: boolean
+  suppressStartupUpdatePrompt?: boolean
 }
 
 /**
@@ -55,6 +56,8 @@ export function resolveAgentStartupPlanInputs(args: {
    *  right only where the Settings shell is the one the PTY gets. */
   shell: AgentStartupShell | undefined
   sessionOptions?: Record<string, SessionOptionValue> | undefined
+  /** Orca types into this launch after start (worker, automation, handoff), not a user. */
+  suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
   // A per-launch override wins over the Settings default; `null` is "no arguments", so this
@@ -91,6 +94,7 @@ export function resolveAgentStartupPlanInputs(args: {
     ...(sessionOptions ? { sessionOptions } : {}),
     // Why: session options are an explicit per-launch pick, so they outrank configured args —
     // without this the two spellings of the same flag both reach argv and the last one wins.
-    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions)
+    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
+    ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
   }
 }

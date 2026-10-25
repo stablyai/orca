@@ -16,11 +16,10 @@ import {
   probeRelayEndpointIncumbent,
   relayEndpointIncumbentProbeCommand
 } from './ssh-relay-endpoint-incumbent'
-import type { SshConnection } from '../connection/ssh-connection'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never dereferences the connection; the Windows path returns before using it.
-const connection = {} as SshConnection
+const connection = unusedSshConnection()
 
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
 const POSIX_HOST = getRemoteHostPlatform('linux-x64')

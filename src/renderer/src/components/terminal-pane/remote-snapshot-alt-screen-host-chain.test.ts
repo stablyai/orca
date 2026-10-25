@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
@@ -23,6 +23,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 // Why this suite: remote-snapshot-alt-screen-replay.test.ts hand-writes the replay meta, and
 // once fed a shape the host never sends. Here every input is produced by the real code:
@@ -175,10 +176,6 @@ type HostModules = {
   installMultiplexFlowControl: (build: HostConnection) => void
 }
 
-let hostModules: HostModules | null = null
-
-// Why a hook: the first load of the main runtime graph takes ~19s cold, and charged to the first
-// test it crossed the 30s test limit whenever the directory ran in parallel.
 async function loadHostModules(): Promise<HostModules> {
   const [runtime, publication, flowControl] = await Promise.all([
     vi.importActual<Pick<HostModules, 'OrcaRuntimeService'>>(
@@ -199,13 +196,13 @@ async function loadHostModules(): Promise<HostModules> {
   }
 }
 
+// Why module scope: collection has no per-hook timer for the main graph's slow cold load.
+const hostModules = await loadHostModules()
+
 /** Real host + client chain: returns what the remote transport hands the pane for the push. */
 async function publishHostRecovery(
   missed: string
 ): Promise<{ data: string; meta: PtyReplayDataMeta; published: HostSnapshot }> {
-  if (!hostModules) {
-    throw new Error('host modules are loaded in beforeAll')
-  }
   const {
     OrcaRuntimeService,
     sendSnapshotFrames,
@@ -336,10 +333,6 @@ async function publishHostRecovery(
 }
 
 describe('host-published recovery snapshot onto a live alt screen', () => {
-  beforeAll(async () => {
-    hostModules = await loadHostModules()
-  })
-
   beforeEach(async () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
@@ -383,8 +376,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS

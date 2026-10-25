@@ -9,7 +9,7 @@ import {
   readPersistedStateJson,
   testState,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'

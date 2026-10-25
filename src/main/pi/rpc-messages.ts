@@ -15,11 +15,20 @@ const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
 
+const PI_TEXT_CHANNELS: Partial<Record<string, 'assistant' | 'reasoning'>> = {
+  text_delta: 'assistant',
+  text_end: 'assistant',
+  thinking_delta: 'reasoning',
+  thinking_end: 'reasoning'
+}
+
 /** Pi does not name assistant messages; ordinals are local to this exact child. */
 export class PiRpcMessages {
   private ordinal = 0
   private active?: number
-  private readonly text = new Map<string, { index: number; channel: 'assistant' | 'reasoning' }>()
+  private readonly text = new Set<string>()
+  /** Highest block index streamed in this message; Pi already closed those not still open. */
+  private streamed = -1
   private readonly tools = new Map<string, AgentJournalToolCallItem>()
   // Closing events take these latest full fields; running journal rows retain only previews.
   private readonly whole = new BoundedMap<
@@ -47,6 +56,7 @@ export class PiRpcMessages {
   reset(): void {
     this.active = undefined
     this.text.clear()
+    this.streamed = -1
     this.tools.clear()
     this.whole.clear()
   }
@@ -64,24 +74,33 @@ export class PiRpcMessages {
     if (event.type === 'message_start') {
       this.active = ++this.ordinal
       this.text.clear()
+      this.streamed = -1
       return []
     }
     const events = this.context.live(event.usage ?? message?.usage, at)
     this.active ??= ++this.ordinal
     const update = event.assistantMessageEvent
-    if (
-      event.type === 'message_update' &&
-      update?.delta !== undefined &&
-      ['text_delta', 'thinking_delta'].includes(update.type)
-    ) {
-      const channel = update.type === 'text_delta' ? 'assistant' : 'reasoning'
+    const channel = update && PI_TEXT_CHANNELS[update.type]
+    if (event.type === 'message_update' && update && channel) {
       const index = update.contentIndex ?? 0
       const item = this.key(index, channel)
-      if (this.text.size >= 128 && !this.text.has(item)) {
-        throw new Error('Pi message stream capacity exceeded')
+      this.streamed = Math.max(this.streamed, index)
+      if (update.type.endsWith('_end')) {
+        // Pi ends each block before its message ends, so only concurrent blocks stay open.
+        events.push(
+          ...this.close(
+            item,
+            channel,
+            typeof update.content === 'string' ? update.content : undefined
+          )
+        )
+      } else if (update.delta !== undefined) {
+        if (this.text.size >= 128 && !this.text.has(item)) {
+          throw new Error('Pi message stream capacity exceeded')
+        }
+        this.text.add(item)
+        events.push({ type: 'text.delta', item: { id: item }, channel, text: update.delta })
       }
-      this.text.set(item, { index, channel })
-      events.push({ type: 'text.delta', item: { id: item }, channel, text: update.delta })
     }
     if (event.type === 'message_end' && message) {
       const content =
@@ -95,20 +114,19 @@ export class PiRpcMessages {
           return
         }
         const item = this.key(index, channel)
+        if (index <= this.streamed && !this.text.has(item)) {
+          return
+        }
         const text = channel === 'assistant' ? block.text : block.thinking
         if (text !== undefined) {
-          // A snapshot without deltas still opens the same message row.
-          if (!this.text.has(item) && text) {
-            events.push({ type: 'text.delta', item: { id: item }, channel, text })
-          }
-          events.push({ type: 'text.close', item: { id: item }, text })
-          this.text.delete(item)
+          events.push(...this.close(item, channel, text))
         }
       })
-      for (const item of this.text.keys()) {
+      for (const item of this.text) {
         events.push({ type: 'text.close', item: { id: item } })
       }
       this.text.clear()
+      this.streamed = -1
       this.active = undefined
     }
     return events
@@ -203,6 +221,21 @@ export class PiRpcMessages {
         body
       }
     ]
+  }
+
+  private close(
+    item: string,
+    channel: 'assistant' | 'reasoning',
+    text: string | undefined
+  ): ProviderTimelineEvent[] {
+    const events: ProviderTimelineEvent[] = []
+    // A snapshot without deltas still opens the same message row.
+    if (!this.text.has(item) && text) {
+      events.push({ type: 'text.delta', item: { id: item }, channel, text })
+    }
+    events.push({ type: 'text.close', item: { id: item }, text })
+    this.text.delete(item)
+    return events
   }
 
   private key(index: number, channel: string): string {

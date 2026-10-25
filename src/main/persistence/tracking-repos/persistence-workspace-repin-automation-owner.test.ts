@@ -5,7 +5,7 @@ import {
   testState,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 // Repinning moves automation ownership only when a live registration proves the prior capture’s source.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

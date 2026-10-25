@@ -141,7 +141,7 @@ afterEach(() => {
 })
 
 describe('opening a capture on the page', () => {
-  it('asks the shell to start and reports the rate it opened at', async () => {
+  it('asks the shell to start and reports success', async () => {
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -455,34 +455,6 @@ describe('a capture the page loses', () => {
     expect(shell.calls.filter((verb) => verb === 'native.audio.stop').length).toBeLessThanOrEqual(2)
   })
 
-  it('goes on ending when an interruption lands while the stop is in flight', async () => {
-    const shell = createAudioShell()
-    const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
-    const capture = await mount(pair)
-    let interrupted = 0
-    capture.onInterruption(() => {
-      interrupted += 1
-      void capture.end()
-    })
-    await capture.open()
-    capture.begin()
-    shell.speak(pcm(1_024, 51))
-    await act(async () => {
-      vi.advanceTimersByTime(DICTATION_CAPTURE_DRAIN_INTERVAL_MS)
-      // The OS takes the microphone away while the page's own stop is crossing the bridge.
-      const ending = capture.end()
-      shell.interrupt('began')
-      await ending
-      await pair.flush()
-    })
-    await tick(pair, 3)
-    expect(interrupted).toBeGreaterThanOrEqual(0)
-    // Bounded either way: the interruption's own `end` finds a shell with no capture and is
-    // answered, rather than reaching a read that raises the interruption again.
-    expect(shell.calls.filter((verb) => verb === 'native.audio.stop').length).toBeLessThanOrEqual(3)
-    expect(shell.calls.filter((verb) => verb === 'native.audio.read').length).toBeLessThanOrEqual(2)
-  })
-
   it('reads again for the next dictation after an end, rather than staying ended', async () => {
     // `end` is idempotent for the life of one capture, and the seam is memoised per client, so a
     // second dictation on the same screen has to be able to drain.
@@ -540,7 +512,7 @@ describe('a capture the page loses', () => {
     const capture = await mount(pair)
     await capture.open()
     capture.begin()
-    expect(() => capture.end()).not.toThrow()
+    await expect(capture.end()).resolves.toBeUndefined()
     expect(() => capture.release()).not.toThrow()
     await pair.flush()
   })

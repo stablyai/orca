@@ -4,11 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import {
-  closeTestStores,
-  createSqliteTestStore,
-  makeTerminalTab
-} from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { Store } from './store'
 
 const HOST_ID = 'ssh:target-1'

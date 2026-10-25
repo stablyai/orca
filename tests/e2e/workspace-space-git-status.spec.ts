@@ -89,7 +89,7 @@ test.describe('Workspace Space git status checks', () => {
             branch: worktree.branch,
             isMainWorktree: false,
             isRemote: false,
-            isSparse: worktree.isSparse,
+            isSparse: worktree.isSparse === true,
             canDelete: true,
             lastActivityAt: worktree.lastActivityAt,
             status: 'ok' as const,

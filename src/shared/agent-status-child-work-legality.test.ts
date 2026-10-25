@@ -104,7 +104,7 @@ describe('child-work legality matrix', () => {
 })
 
 describe('child-work descriptive fields', () => {
-  it('round-trips owner, residency, operation, last message and settle time', () => {
+  it('round-trips owner, residency, operation and last message', () => {
     const value = {
       ...live({
         parentChildWorkId: 'child-owner',

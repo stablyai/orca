@@ -31,6 +31,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
+    const forwardAudioState = (
+      event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>
+    ): void => {
+      const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserPageId) {
+        this.notifyAudioStateChanged(browserPageId, event.audible)
+      }
+    }
+    guest.on('audio-state-changed', forwardAudioState)
     const disposeDevToolsWindow = installGuestDevToolsWindowBehavior({
       guest,
       getKeybindings: () => this.settingsResolver?.().keybindings,
@@ -45,6 +54,16 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       disposePopupPolicy()
       disposeNavigationPolicy()
       disposeDevToolsWindow()
+      if (!guest.isDestroyed()) {
+        guest.off('audio-state-changed', forwardAudioState)
+      }
+    })
+  }
+
+  protected notifyAudioStateChanged(browserPageId: string, audible: boolean): void {
+    this.resolveRendererForBrowserTab(browserPageId)?.send('browser:audio-state-changed', {
+      browserPageId,
+      audible
     })
   }
 

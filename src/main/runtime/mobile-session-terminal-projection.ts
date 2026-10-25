@@ -57,7 +57,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
-      // As the window publishes them: tab-wide names describe a sole pane.
+      // As the window publishes them: tab-wide names and the launch agent describe a sole pane.
       const tabWide = leafIds.length === 1
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
@@ -89,7 +89,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
               : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-            ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
+            ...(tabWide && tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
             ...(layout ? { parentLayout: cloneTerminalLayoutSnapshot(layout) } : {}),
             ...(tab.color != null ? { color: tab.color } : {}),
             ...(tab.isPinned ? { isPinned: true } : {}),

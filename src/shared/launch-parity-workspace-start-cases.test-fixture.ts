@@ -113,13 +113,19 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     { terminalWindowsShell: 'wsl.exe' }
   ),
   // Fix checks submit after the agent is ready: the command carries no prompt, the window pastes it,
-  // and main's prompt-less Codex start is typed without waiting for the shell to be ready.
+  // and main's prompt-less Codex start is typed without waiting for the shell to be ready. The
+  // window's Enter must not pick Codex's "Update now", so only the typed command skips that prompt.
   start(
     'work item, submit after ready',
     'darwin',
     repo(POSIX_PATH),
     { kind: 'work-item', agent: 'codex', delivery: 'submit-after-ready', text: BOB },
-    { command: POSIX_CODEX, agentCommand: POSIX_CODEX, shellReady: false },
+    {
+      command:
+        "codex '-c' 'check_for_update_on_startup=false' '--dangerously-bypass-approvals-and-sandbox'",
+      agentCommand: POSIX_CODEX,
+      shellReady: false
+    },
     ZSH
   ),
   // The composer's note is an auto-submitted prompt on argv.

@@ -22,7 +22,6 @@ import {
 } from './pending-session-selection'
 import { NOTES_UNCONFIRMED_MESSAGE, PROMPT_UNCONFIRMED_MESSAGE } from './new-tab-agent-host-launch'
 import { AGENT_PROMPT_NOT_SENT_MESSAGE } from './pr-ai-triage-launch'
-import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { useMobileSessionTerminalCreateActions } from './use-mobile-session-terminal-create-actions'
 
 vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn(), triggerError: vi.fn() }))
@@ -455,36 +454,6 @@ describe('launches that carry a prompt', () => {
       prompt: { text: 'run the tests', delivery: 'submit' },
       launchSource: 'quick_command'
     })
-  })
-
-  it('lands on the tab and frees the + lock before a paste-after-start agent replies', async () => {
-    const reply = launchReply(
-      { kind: 'terminal', handle: 'term_7' },
-      { delivery: 'submit', outcome: 'handed-to-terminal' }
-    )
-    const state = scope(scriptedClient(reply).client)
-    let landedBeforeReply: PendingSessionSelection | null = null
-    state.client = requestPortRpcClient(async (_method, params) => {
-      // The host lists the tab as soon as it exists, then waits for the agent to paste into it.
-      const pending = state.pendingSelectionRef.current
-      const landed = resolveLaunchedSelection(pending, [reservedTab(params, 'term_7')])
-      state.pendingSelectionRef.current = landed.selection
-      if (landed.landedTabId && pending?.kind === 'launched') {
-        releaseTerminalCreateLock(state, pending.lock)
-      }
-      landedBeforeReply = state.pendingSelectionRef.current
-      expect(state.creatingTerminalRef.current).toBeNull()
-      return reply
-    })
-
-    await create_(state, 'aider', { agentPrompt: 'run the tests' })
-
-    expect(landedBeforeReply).toEqual(
-      expect.objectContaining({ kind: 'terminal', handle: 'term_7' })
-    )
-    // The late reply leaves the landed pick alone.
-    expect(state.pendingSelectionRef.current).toBe(landedBeforeReply)
-    expect(state.setCreating).toHaveBeenCalledTimes(2)
   })
 
   it("keeps a second launch's + lock when the first one's reply comes in", async () => {

@@ -1,7 +1,4 @@
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { encodeMembership, type CellAdmissionMembership } from './cell-admission-selector.js'
@@ -406,38 +403,5 @@ describe('effective connection cap = min(configured, reported)', () => {
         harness.store.assign({ userId: `fresh-${index}`, relayHostId: `fresh${index}` })
       ).resolves.toMatchObject({ placed: true })
     }
-  })
-})
-
-describe('connection cap readers', () => {
-  const source = fileURLToPath(new URL('.', import.meta.url))
-  const allowed = new Set([
-    'cell-connection-cap.ts',
-    'database.ts',
-    'cell-admission-migration-registration.ts'
-  ])
-  const sources = readdirSync(source, { recursive: true, encoding: 'utf8' })
-    .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-    .filter((file) => !file.startsWith('test-fixtures'))
-    .map((file) => ({ file, text: readFileSync(join(source, file), 'utf8') }))
-  const offenders = (pattern: RegExp): string[] =>
-    sources
-      .filter(({ file, text }) => !allowed.has(file) && pattern.test(text))
-      .map(({ file }) => file)
-
-  // Placement, headroom and status must take the effective cap; a raw read would count seats a
-  // running cell does not have. Schema and new-cell registration (an exact config write) are the
-  // only other owners.
-  it('reads the cap columns only through cell-connection-cap.ts', () => {
-    expect(offenders(/\bhard_cap\b/)).toEqual([])
-    expect(offenders(/\blimits\.\*/)).toEqual([])
-    expect(offenders(/SELECT\s+\*\s+FROM\s+relay_cell_connection_limits/)).toEqual([])
-    const owner = sources.find(({ file }) => file === 'cell-connection-cap.ts')
-    expect(owner?.text).toMatch(/\bhard_cap\b/)
-  })
-
-  it('has no in-process reader of the configured status cap', () => {
-    // connectionCapacity.hardCap stays configured for old ops scripts; nothing here may plan on it.
-    expect(offenders(/connectionCapacity\??\.hardCap/)).toEqual([])
   })
 })

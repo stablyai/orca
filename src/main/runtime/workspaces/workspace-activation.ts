@@ -173,6 +173,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     launchInputs?: {
       agentArgs?: string | null
       extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
       /** The existing workspace it starts in; absent is a new workspace of `repo`. */
@@ -189,6 +190,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
+      ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
       settings: this.store.getSettings(),

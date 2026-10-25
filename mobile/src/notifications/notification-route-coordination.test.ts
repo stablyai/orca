@@ -94,7 +94,7 @@ describe('notification route coordination', () => {
     })
   })
 
-  it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
+  it('returns no session target for a host-only notification', () => {
     expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
   })
 })

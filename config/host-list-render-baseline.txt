@@ -8,7 +8,7 @@
 1 src/renderer/src/components/settings/BrowserSessionCookiesSection.tsx
 1 src/renderer/src/components/settings/BrowserSshWorkspaceRoutingSetting.tsx
 1 src/renderer/src/components/settings/QuickCommandsToolbar.tsx
-1 src/renderer/src/components/settings/RepositoryHostSetupsSection.tsx
+1 src/renderer/src/components/settings/repository/execution/RepositoryHostSetupsSection.tsx
 1 src/renderer/src/components/sidebar/AddRemoteHostSshConfigPicker.tsx
 4 src/renderer/src/components/status-bar/SshStatusSegment.tsx
 1 src/renderer/src/components/status-bar/resource-usage-popover-body.tsx

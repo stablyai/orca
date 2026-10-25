@@ -166,7 +166,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     expect(onEvents).toHaveBeenNthCalledWith(2, [{ kind: 'overflow', absolutePath: '/repo' }])
   })
 
-  it('refreshes only after the child has resubscribed', async () => {
+  it("refreshes on the child's resubscription notification", async () => {
     const watch = installSuccessfulWatch()
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
     await watchFileExplorerInWatcherProcess('/repo', onEvents)

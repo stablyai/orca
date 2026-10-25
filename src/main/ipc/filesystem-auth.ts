@@ -12,23 +12,25 @@ import {
 
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
 /** Lazily share allowed roots across every check in one authorization. */
-type AllowedRootsSnapshot = { get: () => readonly string[] }
+type AllowedRootsSnapshot = { get: () => Promise<readonly string[]> }
 
 function createAllowedRootsSnapshot(
   store: RuntimeStore,
   extraRoots: readonly string[] = []
 ): AllowedRootsSnapshot {
-  let roots: readonly string[] | undefined
-  return { get: () => (roots ??= [...getAllowedRoots(store), ...extraRoots]) }
+  let roots: Promise<readonly string[]> | undefined
+  return {
+    get: () => (roots ??= getAllowedRoots(store).then((found) => [...found, ...extraRoots]))
+  }
 }
 
-export function isPathAllowed(
+export async function isPathAllowed(
   targetPath: string,
   store: RuntimeStore,
   allowedRoots?: AllowedRootsSnapshot
-): boolean {
+): Promise<boolean> {
   const resolvedTarget = resolve(targetPath)
-  return (allowedRoots?.get() ?? getAllowedRoots(store)).some((root) =>
+  return (await (allowedRoots?.get() ?? getAllowedRoots(store))).some((root) =>
     isDescendantOrEqual(resolvedTarget, root)
   )
 }
@@ -151,7 +153,7 @@ async function isPathAllowedIncludingRegisteredWorktrees(
   store: RuntimeStore,
   options: { canonicalSourcePath?: string; allowedRoots?: AllowedRootsSnapshot } = {}
 ): Promise<boolean> {
-  if (isPathAllowed(targetPath, store, options.allowedRoots)) {
+  if (await isPathAllowed(targetPath, store, options.allowedRoots)) {
     return true
   }
 
@@ -194,7 +196,7 @@ async function isPathAllowedByCanonicalAllowedRoot(
   if (!sourcePath) {
     return false
   }
-  for (const root of allowedRoots?.get() ?? getAllowedRoots(store)) {
+  for (const root of await (allowedRoots?.get() ?? getAllowedRoots(store))) {
     const resolvedRoot = resolve(root)
     if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
       continue

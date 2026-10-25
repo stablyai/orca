@@ -29,7 +29,7 @@ import {
 } from './rich-markdown-details-extension'
 import { createMarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
-import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
 import { DragSelectionGuard } from './drag-selection-guard'
 import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
@@ -88,7 +88,7 @@ export function createRichMarkdownExtensions({
       addNodeView() {
         // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
         // just because earlier edits shifted this block's document position.
-        return safeReactNodeViewRenderer(RichMarkdownCodeBlock, {
+        return ReactNodeViewRenderer(RichMarkdownCodeBlock, {
           update: positionStableNodeViewUpdate
         })
       }

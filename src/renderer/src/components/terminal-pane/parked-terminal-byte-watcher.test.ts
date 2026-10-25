@@ -268,7 +268,7 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('suppresses the completion OS notification when only terminal attention is on', async () => {
+  it('forwards completion to notification policy when only terminal attention is on', async () => {
     mockStoreState.settings = {
       ...mockStoreState.settings,
       experimentalTerminalAttention: true,

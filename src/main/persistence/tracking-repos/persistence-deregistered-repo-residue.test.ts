@@ -5,8 +5,8 @@ import {
   writeDataFile,
   readDataFile,
   makeRepo
-} from '../../persistence-test-harness'
-import { makeTerminalTab } from '../../persistence-session-fixtures'
+} from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 // Deregistered repos bypass missing-directory pruning, so residue needs its own sweep.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'

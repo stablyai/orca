@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import {
   buildMobileHostedReviewEligibilityLoadKey,
   renderedMobileHostedReviewEligibilityState,
@@ -13,14 +13,15 @@ import {
 import type { MobileCreatePrEligibilityState } from './mobile-create-pr-action'
 
 function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
+  overrides: Partial<MobileHostedReviewEligibilityReply> = {}
+): MobileHostedReviewEligibilityReply {
   return {
     provider: 'github',
     review: null,
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'main',
     title: 'feature',
     body: '',
@@ -179,7 +180,7 @@ describe('eligibility request ordering', () => {
   })
 
   it('does not let an older response overwrite the newest state', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -229,7 +230,7 @@ describe('eligibility request ordering', () => {
   })
 
   it('disables a ready snapshot in the render that changes its fetch key', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -272,8 +273,8 @@ describe('eligibility request ordering', () => {
     expect(renderedState).toMatchObject({ kind: 'loading', eligibility: ready })
   })
 
-  it('invalidates a request when its hook instance unmounts', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+  it('keeps remounted hook state separate from a prior instance’s pending request', async () => {
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {

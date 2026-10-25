@@ -11,7 +11,7 @@ import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-s
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
-} from './agent-session-provider-handle-transition'
+} from './agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 import type { ClaudeCommandCatalogProbe } from '../claude/claude-command-catalog-probe'

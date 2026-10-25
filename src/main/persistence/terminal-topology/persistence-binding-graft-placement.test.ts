@@ -1,11 +1,11 @@
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
-import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

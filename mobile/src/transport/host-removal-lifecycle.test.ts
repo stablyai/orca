@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
-const unregisterPushMock = vi.hoisted(() => vi.fn(async () => vi.fn()))
-const forgetUpdateFailuresMock = vi.hoisted(() => vi.fn(async () => undefined))
-const deletePageCacheMock = vi.hoisted(() => vi.fn(async () => undefined))
+const unregisterPushMock = vi.hoisted(() => vi.fn(async (_hostId: string) => vi.fn()))
+const forgetUpdateFailuresMock = vi.hoisted(() => vi.fn(async (_hostId: string) => undefined))
+const deletePageCacheMock = vi.hoisted(() => vi.fn(async (_hostId: string) => undefined))
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
@@ -29,7 +29,7 @@ describe('host removal lifecycle', () => {
   })
 
   it('closes the client only after metadata removal commits', async () => {
-    let commitRemoval: (() => void) | null = null
+    let commitRemoval: (() => void) | undefined
     removeHostMock.mockReturnValue(new Promise<void>((resolve) => (commitRemoval = resolve)))
     const closeHostClient = vi.fn()
     const removal = removeHostAndCloseClient('host-1', closeHostClient)

@@ -34,7 +34,7 @@ import { randomUUID } from 'node:crypto'
 
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -311,7 +311,7 @@ async function runParkRevealScenario(args: {
 
 async function runScenario(
   orcaPage: Page,
-  testInfo: Parameters<Parameters<typeof test>[1]>[1],
+  testInfo: TestInfo,
   clientName: string,
   parkKind: ParkKind
 ): Promise<ParkRevealOutcome> {

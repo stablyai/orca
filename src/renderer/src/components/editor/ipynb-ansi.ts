@@ -1,4 +1,7 @@
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import {
+  ANSI_INTRODUCER_PATTERN,
+  stripAnsiEscapeSequences
+} from '../../../../shared/ansi-escape-sequences'
 
 /** 0-15 index the themed ANSI palette; strings are explicit CSS colors. */
 export type AnsiColor = number | string
@@ -15,8 +18,6 @@ export type AnsiSegment = AnsiStyle & { text: string }
 
 // oxlint-disable-next-line no-control-regex -- matches the ESC byte that introduces SGR sequences.
 const SGR_PATTERN = /\u001b\[([0-9;]*)m/g
-// oxlint-disable-next-line no-control-regex -- introducers accepted by the SGR parser and shared ANSI stripping patterns.
-const ANSI_INTRODUCER_PATTERN = /[\u001b\u0090\u0098\u009b\u009d-\u009f]/
 
 function xterm256Color(index: number): AnsiColor {
   if (index < 16) {

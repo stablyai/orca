@@ -24,8 +24,7 @@ function restartedHost(stamp: string, listedByHost: () => Listed[]) {
       terminalPtyIncarnationsByPaneKey: { [`host-tab:${HEADLESS_LEAF_ID}`]: stamp }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,

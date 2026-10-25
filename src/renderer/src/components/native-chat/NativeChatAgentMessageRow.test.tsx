@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'

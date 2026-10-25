@@ -5,7 +5,7 @@ import {
   writeDataFile,
   readDataFile,
   symlinkDirectorySync
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync, mkdirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'

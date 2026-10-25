@@ -460,7 +460,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(rows.length).toBeGreaterThan(1)
   })
 
-  it('labels a folder workspace row with its display name, not a branch', async () => {
+  it('labels a branchless main worktree row with its display name', async () => {
     await renderPalette(
       makeRecentTabState({
         worktreesByRepo: {

@@ -106,7 +106,7 @@ export function ResourceUsageStatusSegment({
         align="end"
         sideOffset={8}
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
-        className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
+        className="flex h-[min(40rem,var(--radix-popover-content-available-height))] w-[26rem] max-w-[calc(100vw-2rem)] flex-col"
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
@@ -123,8 +123,12 @@ export function ResourceUsageStatusSegment({
               ? () => void controller.localPtyInventory.refreshSessions()
               : controller.refreshResources
         })}
-        <Tabs value={controller.selectedTab} onValueChange={controller.setSelectedTab}>
-          <div className="px-3 pt-1 pb-1">
+        <Tabs
+          value={controller.selectedTab}
+          onValueChange={controller.setSelectedTab}
+          className="min-h-0 flex-1"
+        >
+          <div className="shrink-0 px-3 pt-1 pb-1">
             <TabsList variant="line" size="sm">
               <TabsTrigger value="resources">
                 <Activity aria-hidden="true" className="size-3" />
@@ -141,7 +145,10 @@ export function ResourceUsageStatusSegment({
               </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="resources">
+          <TabsContent
+            value="resources"
+            className="flex min-h-0 flex-col data-[state=inactive]:hidden"
+          >
             {controller.actionError && (
               <p role="alert" className="px-3 py-2 text-xs text-destructive">
                 {controller.actionError}
@@ -159,7 +166,6 @@ export function ResourceUsageStatusSegment({
                 commitToneClass,
                 orphanCount
               })}
-            {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
             {renderResourceUsagePopoverBody({
               setPopoverBodyNode,
               unifiedRepos,
@@ -188,7 +194,7 @@ export function ResourceUsageStatusSegment({
             })}
             <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
           </TabsContent>
-          <TabsContent value="ptys">
+          <TabsContent value="ptys" className="min-h-0 data-[state=inactive]:hidden">
             <ResourcePtyPanel
               active={controller.ptyViewActive}
               inventory={controller.localPtyInventory}

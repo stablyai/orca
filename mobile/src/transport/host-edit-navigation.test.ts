@@ -119,7 +119,8 @@ describe('mobile host edit navigation', () => {
         {
           push: () => {
             throw error
-          }
+          },
+          replace: vi.fn()
         },
         'host-1'
       )

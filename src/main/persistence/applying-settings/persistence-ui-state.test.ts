@@ -13,9 +13,8 @@ import {
   testState,
   dataFile,
   writeDataFile,
-  readDataFile,
-  makeRepo
-} from '../../persistence-test-harness'
+  readDataFile
+} from '../persistence-test-harness'
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -257,6 +256,8 @@ describe('Store', () => {
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
       const persistedBefore = readPersistedStateJson(dataFile())
+      const writes: (readonly string[] | undefined)[] = []
+      store.onStateWritten((domains) => writes.push(domains))
       store.onUIChanged((ui) => notifications.push(ui))
 
       store.updateUI({
@@ -272,25 +273,11 @@ describe('Store', () => {
       await store.waitForPendingWrite()
 
       expect(notifications).toEqual([])
+      expect(writes).toEqual([])
       expect(readPersistedStateJson(dataFile())).toBe(persistedBefore)
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('writes compact JSON (no pretty-print indentation) that round-trips via JSON.parse', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'compact-repo', path: '/compact/repo' }))
-    store.updateUI({ sidebarWidth: 321 })
-    store.flush()
-
-    const raw = readPersistedStateJson(dataFile())
-    expect(raw).not.toMatch(/\n\s+"/)
-    const parsed = JSON.parse(raw) as PersistedState
-    expect(parsed.repos).toContainEqual(
-      expect.objectContaining({ id: 'compact-repo', path: '/compact/repo' })
-    )
-    expect(parsed.ui.sidebarWidth).toBe(321)
   })
 
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import {
+  runtimeEnvironmentStatusFromSnapshot,
+  type RuntimeHostStatusSnapshot
+} from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isDisconnectedRuntimeHostState,
@@ -41,10 +44,8 @@ function makeSnapshot(
 /** The entry shape `applyRuntimeHostStatusSnapshot` writes for a given snapshot. */
 function entryForSnapshot(snapshot: RuntimeHostStatusSnapshot) {
   return {
-    snapshot,
-    checkedAt: snapshot.checkedAt,
-    connectionGeneration: 4,
-    status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null
+    ...runtimeEnvironmentStatusFromSnapshot(snapshot),
+    connectionGeneration: 4
   }
 }
 
@@ -87,7 +88,7 @@ describe('mirror targets and host connection state agree on one host', () => {
     expect(mirrorTargets(entry)).toHaveLength(1)
   })
 
-  it('keeps the same target across verified -> unverifiable -> verified', () => {
+  it('keeps the same target across verified and unverifiable snapshots', () => {
     const verified = mirrorTargets(entryForSnapshot(makeSnapshot({ verification: 'verified' })))
     const unverifiable = mirrorTargets(
       entryForSnapshot(makeSnapshot({ verification: 'unavailable', sequence: 2 }))

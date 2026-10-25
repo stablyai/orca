@@ -206,14 +206,19 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         pass.parkingTimers.set(worktreeId, timer)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `controller` is rebuilt every render; the pass reads only the listed values and stable refs.
   }, [
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
+    parkedCaptureDoneRef,
     pendingStartupByTabId,
     pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
+    setEvictionExemptTerminalTabIds,
+    setForceParkedTerminalWorktreeIds,
+    setParkedTerminalWorktreeIds,
+    setTerminalParkingRevision,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,

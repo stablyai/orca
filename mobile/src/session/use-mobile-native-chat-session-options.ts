@@ -1,7 +1,7 @@
 import { appliedReportByScope, getScopedRecord } from './mobile-session-option-records'
 export { clearMobileSessionOptionRecordsForTests } from './mobile-session-option-records'
 import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   getAgentSessionOptionCatalog,

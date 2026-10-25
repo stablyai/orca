@@ -5,6 +5,14 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { AGENT_SESSION_METHODS } from './rpc/methods/agent-session'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../shared/project-runtime-repair-message'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProject,
+  storeProjectGroup,
+  storeRepo,
+  type PartialRuntimeStore
+} from './runtime-store-partial-fixture'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: async () => ({
@@ -18,11 +26,11 @@ vi.mock('../opencode/opencode-model-availability', () => ({
   resolveOpenCodeDirectModelExecutable: async () => 'opencode'
 }))
 
-const repo = { id: 'r', path: 'C:\\repo', kind: 'git', projectGroupId: 'g' }
-const share = { id: 's', path: '\\\\wsl$\\Ubuntu\\s', kind: 'git', projectGroupId: 'g' }
-const folder = { id: 'f', projectGroupId: 'g', folderPath: 'C:\\work' }
-const wsl = { kind: 'wsl', distro: 'Ubuntu' }
-const store = {
+const repo = storeRepo({ id: 'r', path: 'C:\\repo', kind: 'git', projectGroupId: 'g' })
+const share = storeRepo({ id: 's', path: '\\\\wsl$\\Ubuntu\\s', kind: 'git', projectGroupId: 'g' })
+const folder = storeFolderWorkspace({ id: 'f', projectGroupId: 'g', folderPath: 'C:\\work' })
+const wsl = { kind: 'wsl', distro: 'Ubuntu' } as const
+const store: PartialRuntimeStore = {
   // A WSL Terminal shell must not move the model check into WSL, as it did once.
   getSettings: () => ({
     disabledTuiAgents: [],
@@ -30,13 +38,17 @@ const store = {
     terminalWindowsWslDistro: 'Ubuntu'
   }),
   getProjects: () => [
-    { id: 'p', sourceRepoIds: ['r'], localWindowsRuntimePreference: wsl },
-    { id: 'q', sourceRepoIds: ['s'], localWindowsRuntimePreference: { kind: 'windows-host' } }
+    storeProject({ id: 'p', sourceRepoIds: ['r'], localWindowsRuntimePreference: wsl }),
+    storeProject({
+      id: 'q',
+      sourceRepoIds: ['s'],
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
   ],
   getRepo: (id: string) => [repo, share].find((entry) => entry.id === id),
   getRepos: () => [repo],
   getFolderWorkspaces: () => [folder],
-  getProjectGroups: () => [{ id: 'g' }]
+  getProjectGroups: () => [storeProjectGroup({ id: 'g' })]
 }
 const scope = { id: 'f', path: 'C:\\work', connectionId: null, repo: null, folderWorkspace: folder }
 const clientOperationId = `${Date.now()}-0123456789abcdef0123456789abcdef`
@@ -47,8 +59,7 @@ const setPlatform = (value: string) =>
   Object.defineProperty(process, 'platform', { configurable: true, value })
 beforeEach(() => {
   setPlatform('win32')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only the members above.
-  runtime = new OrcaRuntimeService(store as never)
+  runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: async () => scope,
     executionOwnerSupportsAgentSessionOperation: async () => true

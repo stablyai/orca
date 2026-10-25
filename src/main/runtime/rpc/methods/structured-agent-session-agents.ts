@@ -7,8 +7,8 @@
 // `agentSession.subscribeAvailability` — this host's health snapshot of its installed agents, as
 // complete replacements from the runtime's one shared resource. Negotiated separately.
 
-import type { AgentSessionAgentsResult } from '../../../../shared/agent-session-registered-agents'
-import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session-registered-agents'
+import type { AgentSessionAgentsResult } from '../../../../shared/agent-session/agent-session-registered-agents'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session/agent-session-registered-agents'
 import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame

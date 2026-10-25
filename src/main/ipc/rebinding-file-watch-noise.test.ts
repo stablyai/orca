@@ -71,16 +71,20 @@ describe('watchFileAcrossReplacement event filtering', () => {
     })
     await settle()
 
+    const watchesBeforeNoise = nativeEvents.length
     for (let read = 0; read < 50; read++) {
       nativeEvents.at(-1)?.()
     }
-    await settle()
+    // The rebind is the coalesced refresh having stat'ed the file, so the absence below is read after it.
+    await vi.waitFor(() => expect(nativeEvents.length).toBeGreaterThan(watchesBeforeNoise))
     expect(onChange).not.toHaveBeenCalled()
 
     writeFileSync(path, 'refs and more')
     for (let read = 0; read < 50; read++) {
       nativeEvents.at(-1)?.()
     }
+    // Noise backed the coalesce window off, so the write lands on its own schedule rather than a clock's.
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled(), { timeout: 5_000 })
     await settle()
     expect(onChange).toHaveBeenCalledOnce()
   })

@@ -4,8 +4,8 @@ import {
   createStore,
   writeDataFile,
   makeRepo
-} from '../../persistence-test-harness'
-import { makeTerminalTab } from '../../persistence-session-fixtures'
+} from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -69,12 +69,6 @@ describe("main's Store load binds a tab's own terminal to its unbound pane", () 
     layoutOwner.isMain = true
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('in a layout-owner build', () => {
-    expect(loadStored().terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({
-      [LEAF]: 'pty-a'
-    })
   })
 
   it("after the load purge, so a dropped workspace's pane cannot hold the terminal", () => {

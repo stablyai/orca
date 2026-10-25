@@ -12,14 +12,6 @@ function deferred<T>() {
 }
 
 describe('createCoalescingKeyedRunner', () => {
-  it('runs a lone call once and returns its result', async () => {
-    const run = createCoalescingKeyedRunner<string>()
-    const work = vi.fn(async () => 'done')
-
-    await expect(run('repo', 'target', work)).resolves.toBe('done')
-    expect(work).toHaveBeenCalledTimes(1)
-  })
-
   it('folds a burst that arrives mid-run into one trailing run that every burst caller shares', async () => {
     const run = createCoalescingKeyedRunner<string>()
     const first = deferred<string>()

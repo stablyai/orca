@@ -5,7 +5,7 @@
 // keeps the cached summaries and reconnects; a fresh snapshot merges over them.
 // Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
 
-import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session-workspace-sleep'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import {
   foldAgentSessionStatusEvent,

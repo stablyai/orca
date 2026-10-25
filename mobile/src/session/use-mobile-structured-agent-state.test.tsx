@@ -120,7 +120,7 @@ describe('useMobileStructuredAgentState older history', () => {
         type: 'snapshot',
         sessionId: 'session-1',
         fence: 1,
-        page: page(newest, true)
+        page: { ...page(newest, true), direction: 'tail' }
       })
     })
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
@@ -241,7 +241,7 @@ describe('useMobileStructuredAgentState live feed', () => {
         type: 'snapshot',
         sessionId: 'session-1',
         fence: 1,
-        page: { ...page([said(58), said(59)], false), liveCursor: cursorAt(59) }
+        page: { ...page([said(58), said(59)], false), direction: 'tail', liveCursor: cursorAt(59) }
       })
     )
     await act(async () => {

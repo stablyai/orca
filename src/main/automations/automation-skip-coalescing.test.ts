@@ -12,7 +12,7 @@ import {
   readPersistedStateJson,
   testState,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { AutomationService } from './service'
 
 vi.mock('electron', () => ({

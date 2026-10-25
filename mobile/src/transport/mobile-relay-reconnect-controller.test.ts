@@ -321,9 +321,10 @@ describe('relay reconnect controller', () => {
   it('resets backoff after an authenticated relay remains stable', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
-    const session = {
-      getFailure: () => new RelayOuterError(4408)
-    } as MobileRelayRpcSession
+    const session: Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'> = {
+      getFailure: () => new RelayOuterError(4408),
+      probeAfterBackground: () => {}
+    }
     const logical = {
       getActivePath: () => 'relay'
     } as StableLogicalRpcClient

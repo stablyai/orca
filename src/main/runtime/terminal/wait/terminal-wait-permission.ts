@@ -24,6 +24,8 @@ import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
 import { readTuiIdleHookTurn, type TuiIdleHookTurn } from '../../tui-idle-hook-lane'
+import { selectFreshExplicitAgentStatusRow } from '../../runtime-hook-agent-row-selection'
+import { isClaudeDialogHoldingPane } from '../../claude-open-dialog-hold'
 
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../stop/worktree-terminal-stop-targets'
 
@@ -184,22 +186,11 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   /** The pane's main-agent turn from the hook server's store, for tui-idle's hook lane. */
   protected readTuiIdleHookTurnForPty(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null {
     const pty = this.ptysById.get(ptyId)
-    if (!pty) {
+    const join = this.readHookRowJoinForPty(ptyId)
+    if (!pty || !join) {
       return null
     }
-    const handles = this.getExistingTerminalHandlesForPtyId(ptyId)
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    const ptyPaneKey = this.paneOfPty(pty).paneKey
-    if (ptyPaneKey) {
-      paneKeys.add(ptyPaneKey)
-    }
-    const readPane = this.getAgentStatusSnapshotForPaneFn
-    const hookRows = readPane
-      ? [...new Set([...paneKeys].flatMap((key) => readPane(key)))]
-      : this.getAgentStatusSnapshotFn?.()
-    if (!hookRows) {
-      return null
-    }
+    const { handles, paneKeys, hookRows } = join
     return readTuiIdleHookTurn({
       agent,
       handles,
@@ -215,6 +206,38 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       resolveBlockedText: (state, row) =>
         this.resolveTuiIdleHookBlockedText(ptyId, handles, state, row)
     })
+  }
+
+  protected isPtyAwaitingUserInput(ptyId: string): boolean {
+    const join = this.readHookRowJoinForPty(ptyId)
+    return isClaudeDialogHoldingPane({
+      row: join ? selectFreshExplicitAgentStatusRow(join) : null,
+      respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
+      readScreenLines: () => this.readLiveTerminalScreenLines(ptyId)
+    })
+  }
+
+  private readHookRowJoinForPty(ptyId: string): {
+    handles: string[]
+    paneKeys: Set<string>
+    hookRows: readonly AgentStatusIpcPayload[]
+  } | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return null
+    }
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const ptyPaneKey = this.paneOfPty(pty).paneKey
+    if (ptyPaneKey) {
+      paneKeys.add(ptyPaneKey)
+    }
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    const hookRows = readPane
+      ? [...new Set([...paneKeys].flatMap((key) => readPane(key)))]
+      : this.getAgentStatusSnapshotFn?.()
+    return hookRows
+      ? { handles: this.getExistingTerminalHandlesForPtyId(ptyId), paneKeys, hookRows }
+      : null
   }
 
   private resolveTuiIdleHookBlockedText(

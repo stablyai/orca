@@ -5,7 +5,6 @@ import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import {
   applyTerminalQuickCommandMutation,
-  MAX_QUICK_COMMANDS,
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
@@ -213,13 +212,6 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     const current = this.getTerminalQuickCommands()
-    if (
-      mutation.type === 'upsert' &&
-      !current.some((command) => command.id === mutation.command.id) &&
-      current.length >= MAX_QUICK_COMMANDS
-    ) {
-      throw new Error('Quick command limit reached')
-    }
     const next = applyTerminalQuickCommandMutation(current, mutation)
     this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
     return this.getTerminalQuickCommands()

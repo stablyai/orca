@@ -8,7 +8,7 @@ import type {
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'

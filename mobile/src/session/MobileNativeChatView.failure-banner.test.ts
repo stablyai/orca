@@ -80,7 +80,7 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     await render({ sendErrorMessage: 'Permission reply failed' })
 
     expect(banners()).toHaveLength(1)
-    expect(bannerText()).toContain('Permission reply failed')
+    expect(bannerText()).toBe('Permission reply failed')
   })
 
   it('does not duplicate the route banner when the composer rejects', async () => {
@@ -95,11 +95,10 @@ describe('MobileNativeChatView: send and read failure banners', () => {
 
     expect(onClearSendError).not.toHaveBeenCalled()
     expect(banners()).toHaveLength(1)
-    expect(bannerText()).toContain('Stop failed')
     expect(bannerText()).toBe('Stop failed')
   })
 
-  it('retires the route-owned banner once a send is accepted', async () => {
+  it('asks the route to clear its banner once a send is accepted', async () => {
     const onClearSendError = vi.fn()
     await render({ sendErrorMessage: 'Stop failed', onClearSendError })
 

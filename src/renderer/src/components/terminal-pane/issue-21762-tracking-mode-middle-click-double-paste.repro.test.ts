@@ -135,7 +135,7 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
     expect(pane.terminal.focus).not.toHaveBeenCalled()
   })
 
-  it('stops propagation and pastes directly to the PTY when the pane is not in mouse-tracking mode', () => {
+  it('stops propagation and focuses the pane when mouse tracking is disabled', () => {
     const pane = buildTrackedPane('none')
     const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
 

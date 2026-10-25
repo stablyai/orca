@@ -21,7 +21,7 @@ import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-age
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
-import { nativeChatTextWithFileReferences } from './mobile-native-chat-file-attachment'
+import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion

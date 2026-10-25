@@ -59,7 +59,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     setCommitMessageAgentEnvironmentResolvers() {}
   }
 }))
-vi.mock('../runtime/agent-session-claim-identity', () => ({
+vi.mock('../runtime/agent-session/ownership/agent-session-claim-identity', () => ({
   loadAgentSessionClaimSigner: () => null
 }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({

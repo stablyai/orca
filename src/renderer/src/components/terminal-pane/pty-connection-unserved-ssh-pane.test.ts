@@ -9,6 +9,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -160,8 +161,7 @@ describe('a pane on an unconverted SSH row', () => {
     await installTerminalTestGlobals()
     const { connectPanePty } = await import('./pty-connection')
     connectPane = (paneId, deps) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
-      connectPanePty(createPane(paneId) as never, createManager(paneId) as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(createPane(paneId), createManager(paneId), deps))
   })
 
   afterEach(async () => {
@@ -244,8 +244,7 @@ describe('a pane on an unconverted SSH row', () => {
   it('leaves recovery to the overlay when typed input cannot be delivered', async () => {
     const pane = createPane(1)
     const { connectPanePty } = await import('./pty-connection')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
-    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
     await flushAsyncTicks(10)
 
     vi.mocked(pane.terminal.onData).mock.calls[0]?.[0]('ls\r')

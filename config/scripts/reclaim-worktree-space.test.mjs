@@ -52,7 +52,7 @@ it('applies Electron, Vite and generated cleanup while retaining unacknowledged 
   )
 })
 
-it('leaves historical caches out of automatic invocations', async () => {
+it('includes generated cleanup and leaves historical test caches out of automatic invocations', async () => {
   const options = {
     ...(await fixture()),
     automatic: true,
@@ -61,11 +61,11 @@ it('leaves historical caches out of automatic invocations', async () => {
     excludeWorktree: '/dev-worktree'
   }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(3)
+  expect(options.execute).toHaveBeenCalledTimes(4)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
     'reclaim-release-test-caches'
   )
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
+  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).toContain(
     'reclaim-worktree-generated-files'
   )
   for (const [spec] of options.execute.mock.calls) {

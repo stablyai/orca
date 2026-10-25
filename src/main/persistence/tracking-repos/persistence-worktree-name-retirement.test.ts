@@ -3,7 +3,7 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -144,7 +144,7 @@ describe('worktree name retirement registry', () => {
     expect(store.mergeRetiredWorktreeNames(REPO, ['NAUTILUS'])).toBe(false)
   })
 
-  it('survives a reload so retirement outlives the workspace and the app session', async () => {
+  it('loads retired names from a persisted legacy map', async () => {
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: ['nautilus', 'seahorse'] }
     })
@@ -561,7 +561,7 @@ describe('worktree name retirement registry', () => {
     })
   })
 
-  it('ignores a hand-written watermark that outruns the names it claims', async () => {
+  it('ignores a negative persisted watermark', async () => {
     // Reject malformed watermarks so a hand-edited value cannot silence the whole name pool.
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: { exhaustedTiers: -3, names: ['nautilus'] } }

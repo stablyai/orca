@@ -18,9 +18,9 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
-import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
+import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session/ownership/agent-session-claim-key-retention'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -304,7 +304,7 @@ describe('acquisition path', () => {
 })
 
 describe('concurrent claims', () => {
-  it('lets exactly one of two concurrent reservations win and never spawns the loser', async () => {
+  it('grants exactly one of two concurrent reservations at the next fence', async () => {
     const store = await open()
     await establishOwner(store)
     const request = () =>

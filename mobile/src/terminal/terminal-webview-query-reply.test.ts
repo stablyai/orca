@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import { handleMsg } from './document/host-message-router'
 import { createTerminalDocumentScope } from './document/document-scope'
 import {
   enqueueTerminalDataReplyBoundary,
   forwardTerminalDataReply,
-  resetTerminalDataReplyAuthority,
-  resumeTerminalDataReplyAuthority
+  resetTerminalDataReplyAuthority
 } from './document/query-reply'
 
 type QueryReplyGate = {
   forward: (data: string) => void
   queueBoundary: (generation: number) => void
   reset: () => void
-  resume: () => void
+  clear: () => void
   setGeneration: (generation: number) => void
 }
 
@@ -24,9 +24,9 @@ type QueryReplyGate = {
  */
 function createQueryReplyGate(notify: (message: unknown) => void): {
   gate: QueryReplyGate
-  queuedBoundaries: Array<() => void>
+  queuedBoundaries: (() => void)[]
 } {
-  const queuedBoundaries: Array<() => void> = []
+  const queuedBoundaries: (() => void)[] = []
   const scope = createTerminalDocumentScope({ postToHost: notify })
   const gate: QueryReplyGate = {
     forward: (data) => forwardTerminalDataReply(scope, data),
@@ -40,7 +40,7 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
       }
     },
     reset: () => resetTerminalDataReplyAuthority(scope),
-    resume: () => resumeTerminalDataReplyAuthority(scope),
+    clear: () => handleMsg(scope, { type: 'clear' }),
     setGeneration: (next) => {
       scope.terminalGeneration = next
     }
@@ -59,7 +59,8 @@ describe('mobile terminal query replies', () => {
     gate.forward('\x1b[1;1R')
     expect(messages).toEqual([])
 
-    queuedBoundaries[0]?.()
+    expect(queuedBoundaries).toHaveLength(1)
+    queuedBoundaries[0]!()
     gate.forward('\x1b[2;2R')
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[2;2R' }])
   })
@@ -72,7 +73,8 @@ describe('mobile terminal query replies', () => {
     gate.setGeneration(2)
     gate.reset()
 
-    queuedBoundaries[0]?.()
+    expect(queuedBoundaries).toHaveLength(1)
+    queuedBoundaries[0]!()
     gate.forward('\x1b[1;1R')
     expect(messages).toEqual([])
   })
@@ -84,9 +86,9 @@ describe('mobile terminal query replies', () => {
     gate.reset()
     gate.queueBoundary(1)
 
-    // A clear drops all queued writes, including the replay boundary.
-    queuedBoundaries.length = 0
-    gate.resume()
+    expect(queuedBoundaries).toHaveLength(1)
+    gate.clear()
+    queuedBoundaries[0]!()
     gate.forward('\x1b[3;4R')
 
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])

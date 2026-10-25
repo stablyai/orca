@@ -77,7 +77,7 @@ export const SKILL_METHODS = [
       // Why: the executing runtime owns WSL project preferences. Remote callers
       // send worktree identity only; trusting their projectRuntime absence
       // would scan this host's native filesystem for a WSL-configured project.
-      const resolvedTarget = resolveDiscoveryTarget(params, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(params, runtime)
       return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
         refresh: params.refresh === true
@@ -91,7 +91,7 @@ export const SKILL_METHODS = [
     handler: async (params, { runtime }) =>
       previewSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
@@ -102,7 +102,7 @@ export const SKILL_METHODS = [
     handler: async (params, { runtime }) =>
       runSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
@@ -131,7 +131,7 @@ export const SKILL_METHODS = [
           'Publishing skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
         )
       }
-      const resolvedTarget = resolveDiscoveryTarget(params.target ?? {}, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(params.target ?? {}, runtime)
       if (resolvedTarget.kind !== 'native-host') {
         throw new AgentSkillSharingError(
           AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,

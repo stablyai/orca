@@ -25,7 +25,11 @@ import { publishHostDescriptor } from '../../../src/main/runtime/host-descriptor
 import type { RuntimeMetadata } from '../../../src/shared/runtime-bootstrap'
 import type { ExpectedRuntimeSource } from '../../../src/shared/runtime-rpc-envelope'
 import { sendRequest } from '../../../src/cli/runtime/transport'
-import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  releaseModuleExport
+} from './release-checkout'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
@@ -38,23 +42,14 @@ const SOURCE_B = '22222222-2222-4222-8222-222222222222'
 type Dispatcher = { dispatch(request: unknown): Promise<unknown> }
 type HostBuild = (effect: () => unknown) => Dispatcher
 
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the module exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
-}
-
 function hostBuildOf(
   dispatcher: Record<string, unknown>,
   core: Record<string, unknown>
 ): HostBuild {
-  const RpcDispatcher = member<
+  const RpcDispatcher = releaseModuleExport<
     new (options: { runtime: unknown; methods: unknown[] }) => Dispatcher
   >(dispatcher, 'RpcDispatcher')
-  const defineMethod = member<(declaration: Record<string, unknown>) => unknown>(
+  const defineMethod = releaseModuleExport<(declaration: Record<string, unknown>) => unknown>(
     core,
     'defineMethod'
   )

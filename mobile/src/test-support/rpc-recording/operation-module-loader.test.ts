@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterAll, describe, expect, it } from 'vitest'
 import { operationModuleLoader } from './operation-module-loader'
@@ -130,7 +130,7 @@ describe('the mounted module loader', () => {
         }
       `
     })
-    const { Screen } = modules.load<{ Screen: (props: { label: string }) => unknown }>(
+    const { Screen } = modules.load<{ Screen: (props: { label: string }) => ReactNode }>(
       'mobile/src/screen.tsx'
     )
     let rendered: ReturnType<typeof create> | undefined

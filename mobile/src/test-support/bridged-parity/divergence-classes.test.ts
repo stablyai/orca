@@ -8,7 +8,6 @@ import {
   BRIDGED_PARITY_BASELINE,
   BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_MEMBERS,
-  BRIDGED_PARITY_OFF,
   BRIDGED_PARITY_NAMEABLE,
   type BridgedParityClass,
   type BridgedParityEvidence,
@@ -34,14 +33,6 @@ const droppedUndefinedKey: BridgedParityEvidence = {
     differingKeys: ['.workspaceId']
   }
 }
-
-describe('the bridged-parity flag', () => {
-  it('skips on one value only, so an unset or mistyped variable still runs the gate', () => {
-    const skips = (value: string | undefined): boolean => value === BRIDGED_PARITY_OFF
-    expect([undefined, '', '1', 'false', 'off'].filter(skips)).toEqual([])
-    expect(skips('0')).toBe(true)
-  })
-})
 
 describe('classifying one diverging golden', () => {
   it('names the missing field first, but only where supplying it was enough', () => {

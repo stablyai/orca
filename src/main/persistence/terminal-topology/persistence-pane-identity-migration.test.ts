@@ -5,7 +5,7 @@ import {
   testState,
   workspaceRepos,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,7 +18,7 @@ import {
   TEST_LEAF_1,
   TEST_LEAF_2,
   makeBalancedLegacyPaneLayout
-} from '../../persistence-session-fixtures'
+} from '../persistence-session-fixtures'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

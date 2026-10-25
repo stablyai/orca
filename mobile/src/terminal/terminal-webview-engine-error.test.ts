@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const nativeWebViewMethods = vi.hoisted(() => ({
   postMessage: vi.fn<(message: string) => void>(),
@@ -49,10 +50,11 @@ function createTerminalWebViewRenderer(
   onEngineError = vi.fn(),
   props: Record<string, unknown> = {}
 ) {
-  let renderer: ReactTestRenderer | null = null
+  const mounted: { renderer?: ReactTestRenderer } = {}
   act(() => {
-    renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
+    mounted.renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
   })
+  const renderer = mounted.renderer
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }
@@ -61,15 +63,14 @@ function createTerminalWebViewRenderer(
 }
 
 function postWebViewMessage(renderer: ReactTestRenderer, payload: Record<string, unknown>) {
-  const webView = renderer.root.findByType('WebView')
+  const webView = findByHostType(renderer.root, 'WebView')
   act(() => {
     webView.props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
   })
 }
 
 function renderedText(renderer: ReactTestRenderer): string {
-  return renderer.root
-    .findAllByType('Text')
+  return findAllByHostType(renderer.root, 'Text')
     .flatMap((node) => node.props.children)
     .join(' ')
 }
@@ -238,7 +239,7 @@ describe('TerminalWebView engine errors', () => {
     })
     postWebViewMessage(renderer, { type: 'web-ready' })
     nativeWebViewMethods.postMessage.mockClear()
-    const webView = renderer.root.findByType('WebView')
+    const webView = findByHostType(renderer.root, 'WebView')
 
     act(() => {
       webView.props.onContentProcessDidTerminate({ nativeEvent: {} })

@@ -8,7 +8,7 @@ import {
   makeRepo,
   testState,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'

@@ -45,6 +45,14 @@ export class SessionNotFoundError extends Error {
   }
 }
 
+/** The process may still be alive, but no input can reach it through this PTY master. */
+export class SessionInputClosedError extends Error {
+  constructor(sessionId: string) {
+    super(`Session input closed: ${sessionId}`)
+    this.name = 'SessionInputClosedError'
+  }
+}
+
 export class TerminalSessionOwnerUnverifiedError extends Error {
   constructor(sessionId: string) {
     super(`Terminal session owner could not be verified: ${sessionId}`)

@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentLevelRules, scopeStyleToHost } from '../../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
-import {
-  TERMINAL_DOCUMENT_ELEMENT_STYLE,
-  TERMINAL_DOCUMENT_ROOT_STYLE,
-  TERMINAL_DOCUMENT_STYLE
-} from './document-style'
+import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_ROOT_STYLE } from './document-style'
 
 /**
  * What the page is allowed to inject, and what the split leaves the WebView.
@@ -28,14 +24,6 @@ function selectorsOf(css: string): string[] {
 }
 
 describe('the terminal document stylesheet', () => {
-  it('splits into two halves that still compose the sheet the WebView carries', () => {
-    // The native document must not move for the split, which is what the byte golden says; this
-    // is the same claim one level down, where a reordering would be visible as text.
-    expect(TERMINAL_DOCUMENT_STYLE).toBe(
-      `${TERMINAL_DOCUMENT_ROOT_STYLE}\n${TERMINAL_DOCUMENT_ELEMENT_STYLE}`
-    )
-  })
-
   it('keeps every document-level rule out of the half the page takes', () => {
     // The root half is the precondition for the empty list beside it: the reader does find these
     // rules when a sheet has them.

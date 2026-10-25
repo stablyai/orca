@@ -12,6 +12,7 @@ import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
 // Every remote command runs in a real local shell, so the host-side checks are the real ones.
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
@@ -64,8 +65,7 @@ function versionDirWithLock(owner: string, heldToken: string) {
       { token: heldToken, pid: EXITED_PID, host: hostname(), bootedAt, at: Date.now() }
     ])
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-  const target = { conn: {} as never, host: getRemoteHostPlatform('linux-x64') }
+  const target = { conn: unusedOrcadHostTransport(), host: getRemoteHostPlatform('linux-x64') }
   const proof = exitedOwnLockProof(target, {
     baseDir: join(home, '.orca-remote'),
     guardsStateMutation: false

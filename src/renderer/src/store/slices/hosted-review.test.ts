@@ -6,6 +6,7 @@ import { refreshHostedReviewCard } from './hosted-review-card-refresh'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { HostedReviewCreationEligibilityTimeoutError } from './hosted-review-cache-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
@@ -541,9 +542,10 @@ describe('hosted review slice', () => {
 
   it('creates a review for an unstamped local repo on this computer, not the focused server', async () => {
     mockApi.hostedReview.create.mockResolvedValueOnce({ ok: true, number: 1, url: 'u' })
-    const focused = { activeRuntimeEnvironmentId: 'env-win' }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice reads only the focus field of settings.
-    const store = makeStore(focused as AppState['settings'])
+    const store = makeStore({
+      ...getDefaultSettings('/tmp'),
+      activeRuntimeEnvironmentId: 'env-win'
+    })
 
     await store.getState().createHostedReview('/repo', {
       provider: 'github',

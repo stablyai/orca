@@ -10,7 +10,7 @@ import {
 // Pins what the hydration reads require and what they deliberately do not.
 
 describe('the runtime status', () => {
-  it('reads the recorded capability lists', () => {
+  it('reads the representative capability lists', () => {
     for (const capabilities of [['mobile.tasks.v1'], ['files.mutation-ownership.v1']]) {
       const parsed = taskRuntimeStatusSchema.safeParse({ capabilities })
       expect(parsed.success && parsed.data).toMatchObject({ capabilities })
@@ -50,7 +50,7 @@ describe('the persisted UI state', () => {
     })
   })
 
-  it('reads the recorded empty ui as an empty record, not as absent', () => {
+  it('reads the representative empty ui as an empty record, not as absent', () => {
     const parsed = taskUiStateSchema.safeParse({ ui: {} })
     expect(parsed.success && parsed.data).toEqual({})
   })
@@ -71,7 +71,7 @@ describe('the persisted UI state', () => {
 })
 
 describe('the two advisory probes', () => {
-  it('reads the recorded preflight and linear replies', () => {
+  it('reads the representative preflight and linear replies', () => {
     expect(taskPreflightSchema.safeParse({ glab: { installed: false } }).success).toBe(true)
     expect(taskLinearStatusSchema.safeParse({ connected: false }).success).toBe(true)
   })

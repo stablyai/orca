@@ -55,8 +55,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       proceedToNativeWindowClose(isQuitting)
     })
     return () => setWindowCloseRequestHandler(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-  }, [proceedToNativeWindowClose, queueEditorCloseRequests])
+  }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])
 
   // Why lazy: a `useRef(expr)` argument re-runs on every render and is thrown away, and this
   // walks every browser page and tab across all worktrees on a component that renders constantly.

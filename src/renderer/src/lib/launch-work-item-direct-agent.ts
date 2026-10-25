@@ -88,7 +88,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
   })
   if (startupPlan && args.promptDelivery === 'draft') {
     startupPlan.draftPrompt = args.draftContent

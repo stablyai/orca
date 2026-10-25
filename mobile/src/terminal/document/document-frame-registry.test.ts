@@ -24,9 +24,12 @@ describe('the document frame registry', () => {
       return frames.length
     })
 
-    const id = scheduleDocumentFrame(scope, () => {})
+    const callback = vi.fn()
+    const id = scheduleDocumentFrame(scope, callback)
+    expect(callback).not.toHaveBeenCalled()
     expect(scope.scheduledFrames).toEqual([id])
-    frames[0]!(0)
+    frames[0]!(123)
+    expect(callback).toHaveBeenCalledExactlyOnceWith(123)
     expect(scope.scheduledFrames).toEqual([])
     vi.restoreAllMocks()
   })

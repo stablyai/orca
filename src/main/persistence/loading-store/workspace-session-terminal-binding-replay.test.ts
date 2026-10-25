@@ -52,13 +52,21 @@ const bindingRecovery = {
 }
 
 describe('workspace session terminal binding replay', () => {
-  it('retains a restorable legacy tab binding when neither snapshot has a layout', () => {
+  it('retains only restorable legacy tab bindings when neither snapshot has a layout', () => {
     const prior = session('runtime-pty')
     const incoming = session(null)
 
     preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
 
     expect(incoming.tabsByWorktree.worktree[0]!.ptyId).toBe('runtime-pty')
+
+    const unavailable = session(null)
+    preserveMissingWorkspaceSessionTerminalBindings(unavailable, prior, {
+      ...bindingRecovery,
+      getTerminalLayoutLeafIds: () => new Set<string>(),
+      isRestorablePtyBinding: () => false
+    })
+    expect(unavailable.tabsByWorktree.worktree[0]!.ptyId).toBeNull()
   })
 
   it('does not retain a tab binding whose prior leaf was removed from the layout', () => {

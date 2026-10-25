@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'

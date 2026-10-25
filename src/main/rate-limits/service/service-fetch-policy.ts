@@ -4,6 +4,7 @@ import {
   MIN_REFETCH_MS,
   normalizeClaudeConfigDir,
   type ClaudeRuntimeAuthPreparation,
+  type ActiveRateLimitProvider,
   type ClaudeStatusLineRateLimits,
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits
@@ -58,8 +59,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
-    return this.isRetryAfterActive(limits)
+  // Why: Claude's Retry-After and agy's browser sign-in cooldown bind automated checks; user refreshes may pass.
+  protected shouldSkipAutomatedFetch(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits | null
+  ): boolean {
+    return (provider === 'claude' || provider === 'antigravity') && this.isRetryAfterActive(limits)
   }
 
   protected resolveClaudeFetchApply(

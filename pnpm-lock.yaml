@@ -184,7 +184,7 @@ patchedDependencies:
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: 2aa312c1b29d733bfd3e3ece2fbbb4eed7750384d7d9f91effd27318a75b7a95
+  node-pty@1.1.0: d3e7df08a1b7c11400cf9db039ece2b7c8a8d0ce4e2f79d81d52c10a67dc0440
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
@@ -231,7 +231,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=2aa312c1b29d733bfd3e3ece2fbbb4eed7750384d7d9f91effd27318a75b7a95)
+        version: 1.1.0(patch_hash=d3e7df08a1b7c11400cf9db039ece2b7c8a8d0ce4e2f79d81d52c10a67dc0440)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -13638,7 +13638,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=2aa312c1b29d733bfd3e3ece2fbbb4eed7750384d7d9f91effd27318a75b7a95):
+  node-pty@1.1.0(patch_hash=d3e7df08a1b7c11400cf9db039ece2b7c8a8d0ce4e2f79d81d52c10a67dc0440):
     dependencies:
       node-addon-api: 7.1.1
 

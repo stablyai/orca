@@ -169,7 +169,8 @@ export type AgentStatusEntry = {
   programStatus?: ProgramStatusFacet
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
-   *  treat the row as stale immediately. Cleared by any accepted live event. */
+   *  treat the row as stale immediately. Cleared by any accepted live event. A host also
+   *  publishes it on a row older than the pane's current process: identity only, no status. */
   restoredUnconfirmed?: boolean
 } & AgentStatusRowFacets
 

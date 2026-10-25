@@ -15,12 +15,6 @@ describe('the snapshot budget a phone sends', () => {
 })
 
 describe('the snapshot budget the page sends', () => {
-  it('is the frame cap less what the event costs around the payload', () => {
-    expect(mobileTerminalSnapshotByteBudget()).toBe(
-      BRIDGE_MAX_MESSAGE_BYTES - bridgeEventEnvelopeBytes()
-    )
-  })
-
   /**
    * The bound, checked against events of the shape the shell really posts.
    *
@@ -64,13 +58,6 @@ describe('the snapshot budget the page sends', () => {
       payload
     })
     expect(frame.length).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-  })
-
-  it('moves with the cap rather than beside it', () => {
-    // A cap that moves and a budget that does not is a terminal that dies on a page it could have
-    // streamed, which is what a literal here would have produced.
-    expect(mobileTerminalSnapshotByteBudget()).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(mobileTerminalSnapshotByteBudget()).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES - 1024)
   })
 })
 

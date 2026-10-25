@@ -7,6 +7,7 @@ import type { ConnectionState, RpcResponse } from '../transport/types'
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
 
 import { useMobilePrAiTriage, type MobilePrAiTriage } from './use-mobile-pr-ai-triage'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const LAUNCH_CAPABILITIES = [
   'agent.launch.v2',
@@ -45,8 +46,7 @@ function hostClient(launchReply: RpcResponse = LAUNCHED_WITHOUT_PROMPT): RpcClie
     }
     return launchReply
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reaches the client only through sendRequest.
-  return { sendRequest } as unknown as RpcClient
+  return stubRpcClient({ sendRequest })
 }
 
 describe('useMobilePrAiTriage', () => {

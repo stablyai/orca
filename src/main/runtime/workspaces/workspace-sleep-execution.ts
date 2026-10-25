@@ -1,4 +1,4 @@
-import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session-workspace-sleep'
+import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,

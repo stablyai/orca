@@ -26,6 +26,42 @@ pnpm install
 pnpm dev
 ```
 
+### Targeting Local Tests
+
+Use a test file or directory when you know the relevant suites. For dependency-based
+feedback, Vitest can select tests affected by your edits:
+
+```bash
+pnpm test:changed src/main/runtime --maxWorkers=2
+pnpm test --changed=origin/main --maxWorkers=2
+pnpm test src/shared/app-version.test.ts --maxWorkers=2
+```
+
+`test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
+also includes committed changes since the branch's merge base. Update that ref when
+you need a newer baseline. Both accept the same path filters and options as `pnpm test`.
+
+Local runs enable Vitest's [dependency recording](https://vitest.dev/config/experimental#experimental-recorddependencies).
+Ordinary test runs populate the cache; later changed-file runs read it instead of
+transforming every test's import graph. Records are separate for the Bun and Node
+projects. A test without a record always runs, so a cold cache runs everything in
+the requested scope. Start with a narrow path to avoid a full cold run. Keep Vite's
+local test cache between runs. Use `--experimental.recordDependencies=false` to
+return to Vitest's static import graph.
+
+This is local feedback, not a complete regression check. Vitest records loaded
+imports, including executed dynamic imports, but cannot infer arbitrary filesystem
+reads, subprocess inputs, or externalized module dependencies. Explicitly run tests
+for changed fixtures, generated files, CLI entry points, and other indirect inputs.
+After changing imports, run the affected suites before committing those changes so
+later edits use current records. Configuration, lockfile, patch, and workspace-package
+changes rerun every test within the requested scope. CI does not enable recording;
+the existing CI selection policy is unchanged.
+
+Vitest also supports [`related --run <source-files>`](https://vitest.dev/guide/cli#vitest-related)
+and dependency-aware watch mode. `pnpm test --changed` uses Git to provide the source
+inputs automatically and exits after one run.
+
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:
 

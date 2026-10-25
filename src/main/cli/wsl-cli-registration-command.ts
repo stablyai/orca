@@ -20,12 +20,12 @@ export function buildWslCliInstallCommand(
   status: CliInstallStatus & { commandPath: string; launcherPath: string }
 ): string {
   const bridgePath = getBridgePathFromCommandPath(status.commandPath)
-  const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
+  const commandDirectory = getPosixDirname(status.commandPath)
+  const legacyCommandPath = `${commandDirectory}/${LEGACY_WSL_COMMAND_NAME}`
   return [
     // Runs under sh; Ubuntu 20.04 dash lacks pipefail, and no pipeline here needs it.
     'set -eu',
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL status sets pathDirectory to dirname(commandPath) whenever commandPath is set, and the caller requires commandPath.
-    `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(status.pathDirectory as string)}`,
+    `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(commandDirectory)}`,
     `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(getPosixDirname(bridgePath))}`,
     buildRegistrationLockPrelude(status.commandPath),
     `command_tmp=${quotePosixShellDoubleQuotedApostrophe(`${status.commandPath}.tmp`)}.$$`,

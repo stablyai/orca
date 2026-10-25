@@ -54,6 +54,9 @@ export const ANTIGRAVITY_VERSION_ARGS: readonly string[] = ['--version']
 /** Why bound it: the probe runs before every quota read, so a wedged CLI must not stall the cycle. */
 export const ANTIGRAVITY_VERSION_TIMEOUT_MS = 5_000
 
+/** Why: each read that reaches agy's interactive sign-in opens a browser page (#26484). */
+export const ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS = 60 * 60 * 1000
+
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 

@@ -147,7 +147,7 @@ async function createHostTerminal(
     hostTabId,
     sinkPath,
     terminal: result.tab.terminal,
-    webTabId: toWebTerminalSurfaceTabId(hostTabId, { environmentId, worktreeId })
+    webTabId: toWebTerminalSurfaceTabId(hostTabId)
   }
 }
 

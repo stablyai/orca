@@ -2,7 +2,7 @@ import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { tryGetProviderForPty } from '../provider/registry'
 import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
-import type { PtyPendingDataDrainQueue } from '../../pty-pending-data-drain-queue'
+import type { PtyPendingDataDrainQueue } from '../delivery/pty-pending-data-drain-queue'
 import {
   getPtyRendererDeliveryDebugSnapshot,
   installPowerSignalBreadcrumbs,

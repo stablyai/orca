@@ -10,7 +10,8 @@ import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
 import {
   hostSnapshotAffirmsAgentSessions,
-  hostSnapshotAffirmsClientHostedPages
+  hostSnapshotAffirmsClientHostedPages,
+  hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../store/slices/editor'
@@ -143,8 +144,11 @@ export function prepareWebSessionTabsSnapshotBrowser(
     ...new Map(mirroredEditorTabs.map((entry) => [entry.file.id, entry.file])).values()
   ]
   const mirroredFileRecords = new Set(mirroredOpenFiles)
+  // A host that has not published this worktree yet proves nothing about its editor tabs.
+  const reconcilesEditorFiles =
+    reconcilesNonAgentTabs && hostSnapshotAffirmsWorktreeContents(snapshot)
   const removedEditorFileIds = new Set(
-    (reconcilesNonAgentTabs ? worktreeOpenFiles : [])
+    (reconcilesEditorFiles ? worktreeOpenFiles : [])
       .filter(
         (file) =>
           file.runtimeEnvironmentId === environmentId &&

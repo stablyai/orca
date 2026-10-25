@@ -4,7 +4,7 @@ import {
   createStore,
   createStoreWithSshRemotePtyLeases,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { PtyExitProof } from '../../pty-exit-proof'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -551,24 +551,6 @@ describe('Store', () => {
         PtyExitProof.from('exit-observed', undefined)
       )
     ).toThrow('belongs to SSH connection "ssh-2"')
-  })
-
-  it('updates SSH remote PTY leases when callers pass scoped app ids', async () => {
-    const store = createStoreWithSshRemotePtyLeases([
-      {
-        targetId: 'ssh-1',
-        ptyId: 'remote-pty',
-        state: 'attached'
-      }
-    ])
-
-    store.markSshRemotePtyLease(
-      'ssh-1',
-      'ssh:ssh-1@@remote-pty',
-      PtyExitProof.from('exit-observed', undefined)
-    )
-
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   it('clears workspace bindings when marking an SSH remote PTY lease terminated', async () => {

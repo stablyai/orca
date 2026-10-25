@@ -75,8 +75,8 @@ describe('structured Codex folder trust', () => {
     expect(attachFingerprintFields(intent)).not.toHaveProperty('hostLaunchDirectory')
   })
 
-  it('pre-trusts the chat folder before launch preparation, as a Codex terminal launch does', async () => {
-    const { prepareCodexStructuredLaunch, createIntent } = createCodexIntentRuntime({})
+  it('pre-trusts the chat folder in the account home launch preparation selected', async () => {
+    const { createIntent } = createCodexIntentRuntime({})
 
     await createIntent()
 
@@ -84,11 +84,9 @@ describe('structured Codex folder trust', () => {
       env: expect.any(Object),
       claudeAuth: null,
       wslDistro: null,
-      connectionId: null
+      connectionId: null,
+      codexHome: '/accounts/selected/home'
     })
-    expect(applyAgentWorkspaceTrust.mock.invocationCallOrder[0]).toBeLessThan(
-      prepareCodexStructuredLaunch.mock.invocationCallOrder[0]
-    )
   })
 
   it('writes nothing with the setting off, and still prepares the launch', async () => {

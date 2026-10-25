@@ -548,14 +548,13 @@ describe('OrcaRuntimeService', () => {
     )
     const activateWorktree = vi.fn()
     const worktreesChanged = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
-    } as never)
+    })
     runtime.setNotifier({
       worktreesChanged,
       reposChanged: vi.fn(),
@@ -591,7 +590,6 @@ describe('OrcaRuntimeService', () => {
     }
     const activateWorktree = vi.fn()
     const resumeSleepingAgents = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -614,7 +612,7 @@ describe('OrcaRuntimeService', () => {
           }
         }
       })
-    } as never)
+    })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),

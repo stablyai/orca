@@ -28,6 +28,12 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import {
+  partialRuntimeStore,
+  storeWorktreeMeta,
+  type PartialRuntimeStore
+} from './runtime-store-partial-fixture'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/home/me/fileLoc'
@@ -49,7 +55,7 @@ const OTHER_SPELLING_ROW = {
 }
 
 function makeRuntime(options: { connectionId?: string } = {}): OrcaRuntimeService {
-  const metaById: Record<string, Record<string, unknown>> = {}
+  const metaById: Record<string, WorktreeMeta> = {}
   const repos = [
     {
       id: REPO_ID,
@@ -60,13 +66,13 @@ function makeRuntime(options: { connectionId?: string } = {}): OrcaRuntimeServic
       ...options
     }
   ]
-  const store = {
+  const store: PartialRuntimeStore = {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
-      metaById[id] = { ...metaById[id], ...meta }
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...storeWorktreeMeta(), ...metaById[id], ...meta }
       return metaById[id]
     },
     getAllWorktreeLineage: () => ({}),
@@ -80,8 +86,7 @@ function makeRuntime(options: { connectionId?: string } = {}): OrcaRuntimeServic
     }),
     getProjects: () => []
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the repo, meta, lineage and settings reads a worktree listing makes; the rest of Store is unreached.
-  return new OrcaRuntimeService(store as never)
+  return new OrcaRuntimeService(partialRuntimeStore(store))
 }
 
 function gitLists(worktrees: GitWorktreeInfo[]): void {

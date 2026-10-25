@@ -2,7 +2,7 @@ import {
   closeTestStores,
   createStore as createFreshStore,
   testState
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 // Identical repo/path IDs across hosts require host-scoped metadata and lineage writes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

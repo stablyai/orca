@@ -154,8 +154,12 @@ describe('useRetiredWorktreeNames', () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
 
+    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
     probe.rerender({ repoId: 'repo-2', refreshKey: 'a' })
     expect(probe.names).toEqual([])
+    await probe.settle(2, { 'repo-2': ['seahorse'] })
+    await probe.settle(1, { 'repo-1': ['nautilus', 'marlin'] })
+    expect(probe.names).toEqual(['seahorse'])
   })
 
   it('reports nothing without a selected repo, and asks the host nothing', () => {

@@ -515,7 +515,15 @@ describe.each(([APPLY, MOVE, SAVE] as const).map((name) => [name, WRITERS[name]]
     it.each(WORKSPACE_LAYOUT_PROFILES.map((profile) => [profile.name, profile] as const))(
       '%s: the same session, key order aside, as its load normalizes nothing',
       (_name, profile) => {
-        for (const call of write(profile).flat()) {
+        const calls = write(profile).flat()
+        const skipsPatch =
+          profile.name === 'empty profile'
+            ? writer !== SAVE
+            : writer === MOVE
+              ? profile.hostId !== LOCAL_EXECUTION_HOST_ID
+              : writer === SAVE && profile.hostId.startsWith('runtime:')
+        expect(calls.length === 0).toBe(skipsPatch)
+        for (const call of calls) {
           expect(recordsDiffering(call.stored, call.before)).toEqual([])
           expect(stableJson(call.patched)).toBe(stableJson(call.full))
         }

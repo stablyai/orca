@@ -156,6 +156,7 @@ describe('orchestration RPC methods', () => {
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
         launchSource: 'orchestration',
+        suppressStartupUpdatePrompt: true,
         title: `worker-${task.id}`,
         surfaceOwner: false
       })

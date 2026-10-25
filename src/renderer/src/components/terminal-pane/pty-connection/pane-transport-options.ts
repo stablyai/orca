@@ -1,19 +1,63 @@
 import { useAppStore } from '@/store'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
+import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
+import { mainStartsPane } from './main-starts-pane'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { IpcPtyTransportOptions } from '../pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+/** A split waiting on its inherited cwd, or remounted with handed-off keys; it holds keys as before. */
+export function isDeferredSplitInputHold(session: ConnectPanePtySession): boolean {
+  return Boolean(session.deps.cwdPromise || session.deps.preconnectInput?.length)
+}
+
+/**
+ * Startup work the shell runs after it binds: a startup command, an agent resume (sleeping record or
+ * live status entry), or a launch main picks for a pane it starts, unseen here.
+ */
+export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
+  return paneHasKnownStartupWork(session) || mainStartsPane(session)
+}
+
+function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
+  const state = useAppStore.getState()
+  return Boolean(
+    session.paneStartup ||
+    session.getSleepingRecordForPane(state) ||
+    findColdRestoreResumeSource(session, state)
+  )
+}
+
+/**
+ * Plain shells and deferred splits hold keys typed before their PTY binds (a first spawn can wait
+ * seconds on the host). Why not panes with startup work: held keys would flush ahead of it, so a
+ * typed prompt would run as a shell command or corrupt the launch line; agent panes keep them as
+ * a draft instead (agent-pre-ready-typed-draft.ts).
+ */
+function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
+  if (isDeferredSplitInputHold(session)) {
+    // Why not mainStartsPane: a deferred split keeps holding under the layout-owner build, as before.
+    return !paneHasKnownStartupWork(session)
+  }
+  return !paneHasStartupWork(session)
+}
+
 /** The spawn/attach options a pane hands its PTY transport. */
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
+  const holdsInput = holdsInputUntilConnect(session)
   return {
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
-      ? { bufferInputUntilConnect: true }
+    ...(holdsInput
+      ? {
+          bufferInputUntilConnect: true,
+          // Why: a resume source can land between mount and bind; keys must not flush ahead of it.
+          releasePreconnectInput: () => holdsInputUntilConnect(session)
+        }
       : {}),
-    ...(session.deps.preconnectInput?.length
+    // Why gated: a seed alone arms the transport hold, which would flush ahead of startup work.
+    ...(holdsInput && session.deps.preconnectInput?.length
       ? { preconnectInput: session.deps.preconnectInput }
       : {}),
     ...(session.deps.onPreconnectInput

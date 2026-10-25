@@ -8,7 +8,7 @@ import type {
   AgentSessionDeathEvidence,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { assertFence, withLease } from './agent-session-lease-transitions'
+import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
 /**

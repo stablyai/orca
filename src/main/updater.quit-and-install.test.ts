@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   nativeUpdaterMock,
@@ -231,10 +232,8 @@ describe('updater', () => {
   it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
     vi.useFakeTimers()
     const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
-    const mainWindow = { webContents: { send: vi.fn() } }
     const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater only reads the mocked webContents.send in this lifecycle test.
-    setupAutoUpdater(mainWindow as never, { onBeforeQuit, onBeforeQuitFailure: 'abort' })
+    setupAutoUpdater(updaterMainWindow(vi.fn()), { onBeforeQuit, onBeforeQuitFailure: 'abort' })
     quitAndInstall()
     await vi.advanceTimersByTimeAsync(2_600)
     expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()

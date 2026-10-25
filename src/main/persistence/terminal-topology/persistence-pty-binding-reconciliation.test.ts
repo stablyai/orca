@@ -5,14 +5,14 @@ import {
   testState,
   workspaceRepos,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 
-import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

@@ -170,7 +170,6 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   // (force:false) so a tab tap is cheap; only an explicit refresh bypasses it.
   useEffect(() => {
     void loadSessions({ scope, force: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope handled by onSelectScope
   }, [loadSessions])
 
   const onSelectScope = useCallback(

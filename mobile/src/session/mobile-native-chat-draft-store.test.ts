@@ -29,63 +29,80 @@ describe('mobile native-chat draft store', () => {
     return null
   }
 
+  function currentState(): DraftState {
+    if (!state) {
+      throw new Error('chat draft harness is not mounted')
+    }
+    return state
+  }
+
+  function sendOrigin(text: string): NonNullable<ReturnType<DraftState['captureSendOrigin']>> {
+    const origin = currentState().captureSendOrigin(text)
+    if (!origin) {
+      throw new Error('chat draft has no send origin')
+    }
+    return origin
+  }
+
   async function mount(tabId: string): Promise<void> {
     await act(async () => {
       renderer = create(createElement(Harness, { tabId }))
     })
   }
 
-  it('clears the composer at send time, before the RPC settles', async () => {
+  it('clears unchanged drafts and preserves newer edits with the same text', async () => {
     await mount('a')
-    act(() => state?.setComposerText('ping'))
-    const origin = state?.captureSendOrigin('ping')
+    act(() => currentState().setComposerText('ping'))
+    const origin = sendOrigin('ping')
     act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'ping')
-      }
+      currentState().clearDraftForSend(origin, 'ping')
     })
-    expect(state?.composerText).toBe('')
+    expect(currentState().composerText).toBe('')
+
+    act(() => currentState().setComposerText('ping'))
+    const editedOrigin = sendOrigin('ping')
+    act(() => currentState().setComposerText('ping'))
+    act(() => currentState().clearDraftForSend(editedOrigin, 'ping'))
+    expect(currentState().composerText).toBe('ping')
   })
 
   it('keeps a typed draft after the chat screen unmounts and remounts', async () => {
     await mount('a')
-    act(() => state?.setComposerText('half-written prompt'))
+    act(() => currentState().setComposerText('half-written prompt'))
     act(() => renderer?.unmount())
 
     await mount('a')
-    expect(state?.composerText).toBe('half-written prompt')
+    expect(currentState().composerText).toBe('half-written prompt')
   })
 
   it('keeps each tab its own draft across a remount', async () => {
     await mount('a')
-    act(() => state?.setComposerText('for a'))
+    act(() => currentState().setComposerText('for a'))
     act(() => renderer?.unmount())
 
     await mount('b')
-    expect(state?.composerText).toBe('')
-    act(() => state?.setComposerText('for b'))
+    expect(currentState().composerText).toBe('')
+    act(() => currentState().setComposerText('for b'))
     act(() => renderer?.unmount())
 
     await mount('a')
-    expect(state?.composerText).toBe('for a')
+    expect(currentState().composerText).toBe('for a')
   })
 
   it('lets an old send clear its unchanged scope after another tab was edited', async () => {
     await mount('a')
-    act(() => state?.setComposerText('for a'))
-    const origin = state?.captureSendOrigin('for a')
-    const oldClear = state?.clearDraftForSend
+    act(() => currentState().setComposerText('for a'))
+    const origin = sendOrigin('for a')
+    const oldClear = currentState().clearDraftForSend
     act(() => renderer?.unmount())
     await mount('b')
-    act(() => state?.setComposerText('for b'))
+    act(() => currentState().setComposerText('for b'))
     act(() => {
-      if (origin) {
-        oldClear?.(origin, 'for a')
-      }
+      oldClear(origin, 'for a')
     })
-    expect(state?.composerText).toBe('for b')
+    expect(currentState().composerText).toBe('for b')
     act(() => renderer?.unmount())
     await mount('a')
-    expect(state?.composerText).toBe('')
+    expect(currentState().composerText).toBe('')
   })
 })

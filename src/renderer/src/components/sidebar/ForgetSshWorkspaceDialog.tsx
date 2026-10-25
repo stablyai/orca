@@ -19,9 +19,16 @@ import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
+import {
+  readWorktreeDeleteIdentities,
+  resolveWorktreeBatchDeleteTargets
+} from './worktree-delete-request'
+import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string
+  worktreeDeleteIdentities?: unknown
   displayName: string
   resolution: SshWorkspaceForgetResolution
 }
@@ -75,6 +82,26 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       resolution.kind === 'not-ssh' ? null : toSshExecutionHostId(resolution.targetId)
   }
 
+  // Why (STA-11912): a replacement at the same host and id must not inherit this confirmation.
+  const selectedIdentities = readWorktreeDeleteIdentities(modalData.worktreeDeleteIdentities)
+  const isSelectedWorkspaceCurrent = (): boolean => {
+    if (selectedIdentities.length !== 1) {
+      return false
+    }
+    const state = useAppStore.getState()
+    const targets = resolveWorktreeBatchDeleteTargets(selectedIdentities, (id, hostId) =>
+      getWorktreeOnHostFromState(state, id, hostId)
+    )
+    return targets?.length === 1
+  }
+  const refuseReplacedSelection = (): void => {
+    showWorkspaceListChangedToast()
+    if (mountedRef.current) {
+      setBusy(null)
+    }
+    closeModal()
+  }
+
   const done = (): void => {
     if (mountedRef.current) {
       setBusy(null)
@@ -85,6 +112,10 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   // Reconnect the SSH target, then run the normal remote worktree removal.
   const handleReconnectAndDelete = async (): Promise<void> => {
     if (resolution.kind !== 'disconnected') {
+      return
+    }
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
       return
     }
     const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
@@ -105,9 +136,30 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       )
       return
     }
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
+      return
+    }
     // Close before the delete toast fires so the two don't overlap.
     closeModal()
-    void runWorktreeDeleteWithToast(removalTarget, displayName, { confirmedDiscards })
+    void runWorktreeDeleteWithToast(removalTarget, displayName, {
+      confirmedDiscards,
+      assertBeforeDispatch: () => {
+        if (!isSelectedWorkspaceCurrent()) {
+          throw new Error(
+            translate(
+              'auto.components.sidebar.delete.worktree.flow.workspaceListChanged',
+              'Workspace list changed'
+            )
+          )
+        }
+      }
+    }).then((deleted) => {
+      // Why: the refusal's error state is keyed by id and host, which the replacement row shares.
+      if (!deleted && !isSelectedWorkspaceCurrent() && removalTarget.executionHostId) {
+        useAppStore.getState().clearWorktreeDeleteState(worktreeId, removalTarget.executionHostId)
+      }
+    })
     if (mountedRef.current) {
       setBusy(null)
     }
@@ -115,6 +167,10 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
   // Remove Orca's records only — never touches remote files, worktrees, or branches.
   const handleForget = async (): Promise<void> => {
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
+      return
+    }
     const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setBusy('forget')
     try {

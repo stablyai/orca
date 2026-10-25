@@ -7,6 +7,7 @@ import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { disposeTerminalHostSessions } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
+import { writeSessionInput } from './session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session-claim'
@@ -156,7 +157,7 @@ export class TerminalHost {
   }
 
   write(sessionId: string, data: string): void {
-    getAliveTerminalHostSession(this.sessions, sessionId).write(data)
+    writeSessionInput(getAliveTerminalHostSession(this.sessions, sessionId), data)
   }
 
   closeStartupQueryAuthority(sessionId: string): number {

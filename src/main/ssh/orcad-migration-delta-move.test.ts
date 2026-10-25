@@ -15,7 +15,7 @@ import {
   createSqliteTestStore,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { Store } from '../persistence/loading-store/store'
 import {

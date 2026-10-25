@@ -34,21 +34,38 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
       continue
     }
     const text = 'question' in raw && typeof raw.question === 'string' ? raw.question : ''
-    const options = parseOptions('options' in raw ? raw.options : undefined)
+    const rawOptions = 'options' in raw ? raw.options : undefined
+    const options = parseOptions(rawOptions)
     if (text || options.length > 0) {
+      const multiSelect =
+        'multiSelect' in raw
+          ? raw.multiSelect === true
+          : ('multiple' in raw && raw.multiple === true) || ('multi' in raw && raw.multi === true)
       questions.push({
         question: text,
         header: 'header' in raw && typeof raw.header === 'string' ? raw.header : undefined,
-        multiSelect:
-          'multiSelect' in raw
-            ? raw.multiSelect === true
-            : ('multiple' in raw && raw.multiple === true) ||
-              ('multi' in raw && raw.multi === true),
-        options
+        multiSelect,
+        options,
+        ...(!multiSelect && askOptionsHavePreview(rawOptions) ? { hasPreviews: true } : {})
       })
     }
   }
   return questions.length > 0 ? { questions } : null
+}
+
+/** Claude only switches a single-select to its preview layout for a non-blank preview. */
+export function askOptionsHavePreview(rawOptions: unknown): boolean {
+  return (
+    Array.isArray(rawOptions) &&
+    rawOptions.some(
+      (option) =>
+        option &&
+        typeof option === 'object' &&
+        'preview' in option &&
+        typeof option.preview === 'string' &&
+        option.preview.trim().length > 0
+    )
+  )
 }
 
 function parseOptions(raw: unknown): AskOption[] {

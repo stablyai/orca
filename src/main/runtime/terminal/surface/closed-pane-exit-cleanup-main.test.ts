@@ -135,8 +135,7 @@ for (const host of ['no window', 'a window'] as const) {
       await close(harness.runtime)
 
       // The relaunch reattaches the closed pane's live terminal; no pane holds it any more.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same fixture store the first run wrote.
-      const relaunched = new OrcaRuntimeService(harness.runtime['store'] as never)
+      const relaunched = new OrcaRuntimeService(harness.runtime['store'])
       relaunched.setPtyController({
         write: () => true,
         kill: () => true,

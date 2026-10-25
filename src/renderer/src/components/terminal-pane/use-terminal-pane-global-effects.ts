@@ -182,8 +182,18 @@ export function useTerminalPaneGlobalEffects({
 
     wasVisibleRef.current = false
     wasWorktreeActiveRef.current = isWorktreeActive
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isChatViewMode, isWorktreeActive, rendererVisible])
+  }, [
+    isActive,
+    isChatViewMode,
+    isWorktreeActive,
+    rendererVisible,
+    applyPendingFollowOutputRequests,
+    captureViewportPositions,
+    isActiveRef,
+    isVisibleRef,
+    managerRef,
+    withSuppressedScrollTracking
+  ])
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null

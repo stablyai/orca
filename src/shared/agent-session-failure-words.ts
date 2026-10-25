@@ -15,7 +15,7 @@ import {
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,

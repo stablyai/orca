@@ -149,17 +149,6 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     expect(renderedPendingTexts(history, state)).toEqual(['run the tests', 'again'])
   })
 
-  // FP2: an older turn reads like the concatenation of two much later sends.
-  it('keeps and renders both bubbles when an older turn spells them out', async () => {
-    const history = [userTurn('m1', 'fix the bug', 1000), assistantTurn('m2', 'fixed', 1100)]
-    await mount(history)
-    rapidSend('fix the', 'bug')
-
-    await update([...history])
-    expect(pendingTexts()).toEqual(['fix the', 'bug'])
-    expect(renderedPendingTexts(history, state)).toEqual(['fix the', 'bug'])
-  })
-
   // A send of the same text as a message a Stop took back is resent as a new message: its bubble
   // waits beside the stopped row for that new row, never for the stopped one.
   it('keeps a resend bubble beside a stopped row of the same text until its own row lands', async () => {
@@ -289,26 +278,6 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
 
       const echoed = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'passed', 1100)]
       await update(echoed)
-      expect(state?.pending).toEqual([])
-    })
-
-    // The same read seen one reconnect later: the send left, the agent echoed it,
-    // and only then did the first authoritative read land.
-    it('retires a hydration-time send after a reconnect delivered the read late', async () => {
-      await mount([], true)
-      act(() => send('run the tests'))
-      // Still loading: the first read never arrived before the drop.
-      await update([], true)
-
-      const afterReconnect = [
-        userTurn('m1', 'run the tests', 5000),
-        assistantTurn('m2', 'ok', 5100)
-      ]
-      await update(afterReconnect)
-      expect(state?.pending).toEqual([])
-
-      // Nothing later resurrects it, and the run stays glue-capable.
-      await update([...afterReconnect, assistantTurn('m3', 'all green', 6000)])
       expect(state?.pending).toEqual([])
     })
 

@@ -36,7 +36,7 @@ const SNAPSHOT: AgentSessionSubscribeEvent = {
     window: {
       oldest: { epoch: 'epoch-1', sequence: 1 },
       newest: { epoch: 'epoch-1', sequence: 1 },
-      nextCursor: { epoch: 'epoch-1', sequence: 2 }
+      nextCursor: { epoch: 'epoch-1', sequence: 1 }
     },
     liveCursor: { epoch: 'epoch-1', sequence: 1 },
     hasOlder: false,

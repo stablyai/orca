@@ -17,6 +17,7 @@ import { registerShellMarkdownAliases } from './monaco-languages/register-shell-
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerTypstLanguage } from './monaco-languages/register-typst'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { registerZigLanguage } from './monaco-languages/register-zig'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
@@ -87,6 +88,7 @@ runMonacoSetupSteps([
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['Lean language registration', () => registerLeanLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
+  ['Zig language registration', () => registerZigLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],

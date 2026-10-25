@@ -55,7 +55,7 @@ describe('reportWindowSaveDrift', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
-  it('reports a tab the save added, dropped, renamed or moved', () => {
+  it('reports tabs the save added or dropped and their group order', () => {
     const logPath = join(logDir!, 'divergence.jsonl')
 
     const next = session([{ id: 'tab-b', title: 'renamed' }, { id: 'tab-c' }])

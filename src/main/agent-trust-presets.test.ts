@@ -422,6 +422,22 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
+  it('writes the managed-account CODEX_HOME the launch runs on (#27235)', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const accountHome = join(testState.userDataDir, 'codex-accounts', 'acct-1', 'home')
+    try {
+      await markCodexProjectTrusted(
+        workspace,
+        getLocalCodexTrustConfigFiles(testState.fakeHomeDir, accountHome)
+      )
+      expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]\ntrust_level = "trusted"`
+      )
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('preserves existing config keys and updates an existing project block', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const realpath = realpathSync.native(workspace)

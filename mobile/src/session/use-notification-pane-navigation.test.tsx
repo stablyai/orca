@@ -163,20 +163,13 @@ describe('the page pane hook', () => {
     expect(bridge.cleared).toHaveLength(2)
   })
 
-  it('takes the tap that arrived while it was applying the one before it', () => {
+  it('applies successive pane requests and names each value when clearing', () => {
     render(true)
     deliver(`tab-a:${LEAF}`)
     deliver(`tab-b:${LEAF}`)
     expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
     // Both are named back; the shell spends only the one its param still holds.
     expect(bridge.cleared.map((entry) => entry.value)).toEqual([`tab-a:${LEAF}`, `tab-b:${LEAF}`])
-  })
-
-  it('takes a different pane as its own request', () => {
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    deliver(`tab-b:${LEAF}`)
-    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
   })
 
   it('asks for nothing and applies nothing when the route carries no pane', () => {

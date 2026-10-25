@@ -38,8 +38,6 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
@@ -51,6 +49,10 @@ import {
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const ENV_B = 'env-b'
@@ -220,9 +222,9 @@ async function publish(subscription: RuntimeSubscription, result: unknown): Prom
 
 function seedRemoteMirrorState(): void {
   const runtimeEnvironments = [
-    { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A },
-    { id: ENV_B, createdAt: 200, pairingRevision: REVISION_B }
-  ] as PublicKnownRuntimeEnvironment[]
+    publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: REVISION_A }),
+    publicRuntimeEnvironment({ id: ENV_B, createdAt: 200, pairingRevision: REVISION_B })
+  ]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {
@@ -231,9 +233,9 @@ function seedRemoteMirrorState(): void {
       workspaceSessionReady: true,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId: new Map([
-        [ENV_A, { status: { runtimeId: 'runtime-a' }, connectionGeneration: 1 }],
-        [ENV_B, { status: { runtimeId: 'runtime-b' }, connectionGeneration: 2 }]
-      ]) as AppState['runtimeStatusByEnvironmentId']
+        [ENV_A, connectedRuntimeStatus('runtime-a', 1)],
+        [ENV_B, connectedRuntimeStatus('runtime-b', 2)]
+      ])
     },
     true
   )

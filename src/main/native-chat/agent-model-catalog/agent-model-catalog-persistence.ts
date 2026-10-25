@@ -10,6 +10,7 @@ import {
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
@@ -24,8 +25,7 @@ export type AgentModelCatalogPersistence = {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a non-null `typeof === 'object'` value is indexable by string key.
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+  return isRecord(value) ? value : null
 }
 
 function text(value: unknown): string | null {

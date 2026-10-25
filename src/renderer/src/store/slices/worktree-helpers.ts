@@ -1,6 +1,9 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
-import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
+import type {
+  CreateWorktreeCallOptions,
+  CreatedWorktreeResult
+} from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -11,7 +14,6 @@ import type {
 } from '../../../../shared/worktree/base-ref-drift-types'
 import type {
   CreateSparseCheckoutRequest,
-  CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   SetupDecision
 } from '../../../../shared/worktree/create-types'
@@ -221,7 +223,7 @@ export type WorktreeSlice = {
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
     options?: CreateWorktreeCallOptions
-  ) => Promise<CreateWorktreeResult>
+  ) => Promise<CreatedWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */

@@ -19,7 +19,7 @@ const fakes = vi.hoisted(() => ({
     onBinary(value: Uint8Array): void
     onError(error: Error): void
   },
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   close: vi.fn()
 }))
 
@@ -70,11 +70,11 @@ async function confirmResume() {
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onAuthenticated()
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-  const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
+  const request: {
     id: string
     method: string
     params: unknown
-  }
+  } = JSON.parse(fakes.sendText.mock.calls[0]![0])
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: request.id,
@@ -95,12 +95,12 @@ async function confirmResume() {
     })
   )
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
-  const capabilityRequest = JSON.parse(fakes.sendText.mock.calls[1]![0] as string) as {
+  const capabilityRequest: {
     id: string
     method: string
     deviceToken: string
     params: { clientCapabilities?: string[] }
-  }
+  } = JSON.parse(fakes.sendText.mock.calls[1]![0])
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
@@ -142,7 +142,7 @@ describe('mobile relay RPC session', () => {
     const listener = vi.fn()
     session.subscribe('runtime.clientEvents.subscribe', {}, listener)
     await Promise.resolve()
-    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    const request: { id: string } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: request.id,
@@ -259,9 +259,9 @@ describe('mobile relay RPC session', () => {
     const terminalListener = vi.fn()
     session.subscribe('terminal.subscribe', { terminal: 'term-1' }, terminalListener)
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const terminalRequest = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
+    const terminalRequest: {
       id: string
-    }
+    } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: terminalRequest.id,
@@ -288,7 +288,7 @@ describe('mobile relay RPC session', () => {
     const onBinaryFrame = vi.fn()
     session.subscribe('browser.screencast', {}, vi.fn(), { onBinaryFrame })
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const browserRequest = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    const browserRequest: { id: string } = JSON.parse(fakes.sendText.mock.calls[0]![0])
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: browserRequest.id,

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
-import { defaultExclude, defineConfig } from 'vitest/config'
+import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
 import { UNIT_INCLUDE, UNIT_EXCLUDE, UNIT_SETUP_FILES } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
@@ -131,6 +131,15 @@ export default defineConfig({
   ...transforms,
   test: {
     ...testOptions,
+    experimental: { recordDependencies: !process.env.CI },
+    forceRerunTriggers: [
+      ...configDefaults.forceRerunTriggers,
+      '**/pnpm-lock.yaml',
+      '**/pnpm-workspace.yaml',
+      '**/config/**',
+      '**/patches/**',
+      '**/src/packages/**'
+    ],
     sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {

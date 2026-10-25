@@ -4,7 +4,6 @@ export const GEMINI_SILENT_WORKING = '\u23f2' // ⏲
 export const GEMINI_IDLE = '\u25c7' // ◇
 export const GEMINI_PERMISSION = '\u270b' // ✋
 
-// eslint-disable-next-line no-control-regex -- intentional unicode range
 export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 
 // Why: Claude Code 2.1.228 swapped its busy title spinner from braille to

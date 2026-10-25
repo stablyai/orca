@@ -13,7 +13,7 @@ const relay = {
 describe('mobile relay resume director', () => {
   it('uses a bounded POST body and never puts the bearer in the URL', async () => {
     const fetchImpl = vi.fn(
-      async () =>
+      async (_url: string, _init: RequestInit) =>
         new Response(
           JSON.stringify({
             v: 1,
@@ -32,7 +32,7 @@ describe('mobile relay resume director', () => {
     expect(url).toBe('https://relay.onorca.dev/v1/resolve')
     expect(url).not.toContain('A'.repeat(43))
     expect(init).toMatchObject({ method: 'POST' })
-    expect(JSON.parse(init!.body as string)).toEqual({
+    expect(JSON.parse(String(init.body))).toEqual({
       v: 1,
       relayHostId: relay.relayHostId,
       resumeToken: 'A'.repeat(43)

@@ -6,7 +6,7 @@ import {
   makeRepo,
   makeProject,
   makeProjectHostSetup
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'

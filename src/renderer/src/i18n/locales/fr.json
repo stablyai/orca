@@ -3553,11 +3553,7 @@
             "downloadOpenWithDefaultApp": "Téléchargez et ouvrez avec l'application par défaut",
             "downloadOpenFailed": "Échec du téléchargement de « {{value0}} ».",
             "openInThisGroup": "Ouvrir dans ce groupe",
-            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe",
-            "fileInOtherWorkspace": "Ce fichier se trouve dans {{value0}}",
-            "fileInAnotherWorkspace": "Ce fichier se trouve dans un autre espace de travail",
-            "openInOwningWorkspace": "Ouvrir là-bas",
-            "openedHereReadOnly": "Ouvert ici en lecture seule"
+            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Ouvrir l'Analyseur d'espace disque",
@@ -16104,7 +16100,6 @@
           "6c4f1a8d2e": "Les détails de la vérification sont indisponibles."
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "Lecture seule",
           "fb8331694e": "Ouvrir l'aperçu sur le côté",
           "4157f3cbf3": "Ouvrir l'aperçu Markdown",
           "269ce4842b": "Copier le chemin relatif",
@@ -19518,7 +19513,9 @@
           "switchToChatView": "Continuer dans l’interface de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fermer les autres"
+          "closeOthers": "Fermer les autres",
+          "muteTab": "Couper le son de l'onglet",
+          "unmuteTab": "Réactiver le son de l'onglet"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fermer les autres"

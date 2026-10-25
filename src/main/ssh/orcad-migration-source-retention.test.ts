@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { Repo } from '../../shared/repo-types'
 import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
   listOrcadMigrationSourceCutovers,

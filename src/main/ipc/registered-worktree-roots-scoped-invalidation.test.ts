@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
 
-const mocks = vi.hoisted(() => ({ graph: vi.fn(), stat: vi.fn(), realpath: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  graph: vi.fn<(repo: Repo) => Promise<{ path: string }[]>>(),
+  stat: vi.fn(),
+  realpath: vi.fn()
+}))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path, statSync: mocks.stat }))
 vi.mock('node:fs/promises', () => ({ stat: mocks.stat, realpath: mocks.realpath }))
 vi.mock('../repo-worktrees', () => ({
@@ -44,8 +48,7 @@ function fixture(): Store {
 }
 
 function listedRepoPaths(): string[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this file installs the listRepoWorktreeGraph mock, so every call's first argument is the Repo it was handed.
-  return mocks.graph.mock.calls.map((call) => (call[0] as Repo).path)
+  return mocks.graph.mock.calls.map((call) => call[0].path)
 }
 
 describe('authorized-roots invalidation scope', () => {

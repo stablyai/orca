@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: the relative time clock advances from a wall-clock interval, which is an external timer rather than render-derived state. */
 import { useEffect, useState } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { translate } from '@/i18n/i18n'

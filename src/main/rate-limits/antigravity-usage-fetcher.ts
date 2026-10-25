@@ -1,11 +1,12 @@
 import { runProcess } from '@orca/process-host'
 import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { hostShellEnvironment } from '../runtime/structured-agent-shell-environment'
 import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_PROBE_ENV,
+  ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS,
   ANTIGRAVITY_USAGE_ARGS,
   ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
   ANTIGRAVITY_USAGE_TIMEOUT_MS,
@@ -15,7 +16,10 @@ import {
 } from './antigravity-usage-command'
 import { parseAntigravityUsageStdout, stdoutShowsModelTurn } from './antigravity-usage-response'
 
-import { classifyAntigravityUsageFailure } from './antigravity-usage-error'
+import {
+  classifyAntigravityUsageFailure,
+  stderrShowsInteractiveSignIn
+} from './antigravity-usage-error'
 
 const FAILURE_REASONS: Partial<Record<UsageRateLimitFailureKind, string>> = {
   'rate-limited':
@@ -118,10 +122,9 @@ export async function fetchAntigravityRateLimits(
   const run = options.runCommand ?? runProcess
   const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
   const platform = options.platform ?? process.platform
-  const resolveEnvironment = options.resolveEnvironment ?? (() => resolveLoginShellEnvironment())
+  const resolveEnvironment = options.resolveEnvironment ?? (() => hostShellEnvironment())
 
-  // Why the login shell's env: agy installs to ~/.local/bin, which is on the user's PATH but not on
-  // the PATH an Electron app inherits from the window server or a desktop launcher.
+  // Why the env agent launches use: agy lives on the login-shell or saved Windows PATH, not Electron's.
   const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
   const program = await resolve(command, { platform, env })
@@ -175,6 +178,28 @@ export async function fetchAntigravityRateLimits(
     return failed(spawnFailureMessage(error), 'cli-unavailable', now())
   }
 
+  const reading = parseAntigravityUsageStdout(result.stdout)
+  // Why: a completed browser sign-in still yields a reading; only a failed read cools down.
+  if (
+    !reading &&
+    (result.timedOut || result.code !== 0) &&
+    stderrShowsInteractiveSignIn(result.stderr)
+  ) {
+    const at = now()
+    return {
+      ...unavailable(
+        'Antigravity usage is not available. Sign in with `agy`; Orca checks again within an hour, or when you refresh.',
+        'missing-credentials',
+        at
+      ),
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        failureKind: 'missing-credentials',
+        retryAtMs: at + ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS
+      }
+    }
+  }
   if (result.timedOut) {
     return failed(
       'Antigravity usage is not available. The Antigravity CLI did not answer in time.',
@@ -183,7 +208,6 @@ export async function fetchAntigravityRateLimits(
     )
   }
 
-  const reading = parseAntigravityUsageStdout(result.stdout)
   // Why the successful read is checked first: a real reading can never be evidence of a prompt, so
   // ordering it ahead of the turn check makes a false latch impossible.
   if (!reading && stdoutShowsModelTurn(result.stdout)) {

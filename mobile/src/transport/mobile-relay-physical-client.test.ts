@@ -7,7 +7,7 @@ const fakes = vi.hoisted(() => ({
   },
   start: vi.fn(),
   handleMessage: vi.fn(),
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   dispose: vi.fn()
 }))
 
@@ -102,7 +102,7 @@ describe('mobile relay physical pairing client', () => {
     fakes.channelOptions!.onAuthenticated()
     const responsePromise = client.sendRequest('status.get')
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string)
+    const request = JSON.parse(fakes.sendText.mock.calls[0]![0])
     expect(request).toEqual({
       id: 'relay-pair-1',
       deviceToken: 'device-token',

@@ -24,6 +24,10 @@ export type SubprocessHandle = {
   /** POSIX slave path for reading line discipline; absent for ConPTY. */
   slavePath?: string
   write(data: string): void
+  /** True once writes can no longer reach the PTY while the child may still be running. */
+  isInputClosed?(): boolean
+  /** Fires once when input closes for a reason other than child exit. */
+  onInputClosed?(cb: (reason: string) => void): void
   resize(cols: number, rows: number): void
   /** Omit pause when the handle cannot apply PTY backpressure. */
   pause?(): void

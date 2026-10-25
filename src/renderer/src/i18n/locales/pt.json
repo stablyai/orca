@@ -12206,7 +12206,6 @@
           "759463a221": "Não é possível abrir o diretório: {{value0}}"
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "Somente leitura",
           "fb8331694e": "Abrir Pré-visualização ao Lado",
           "4157f3cbf3": "Abrir Pré-visualização de Markdown",
           "269ce4842b": "Copiar Caminho Relativo",
@@ -15522,11 +15521,7 @@
             "downloadOpenWithDefaultApp": "Baixar e abrir com o aplicativo padrão",
             "downloadOpenFailed": "Falha ao baixar '{{value0}}'.",
             "openInThisGroup": "Abrir neste grupo",
-            "openInThisGroupRefused": "Não foi possível abrir {{value0}} neste grupo",
-            "fileInOtherWorkspace": "Este arquivo está em {{value0}}",
-            "fileInAnotherWorkspace": "Este arquivo está em outro espaço de trabalho",
-            "openInOwningWorkspace": "Abrir lá",
-            "openedHereReadOnly": "Aberto aqui como somente leitura"
+            "openInThisGroupRefused": "Não foi possível abrir {{value0}} neste grupo"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Retomar",
@@ -19941,7 +19936,9 @@
           "switchToChatView": "Alternar para visualização de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fechar Outras"
+          "closeOthers": "Fechar Outras",
+          "muteTab": "Silenciar Aba",
+          "unmuteTab": "Reativar Som da Aba"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fechar Outras"

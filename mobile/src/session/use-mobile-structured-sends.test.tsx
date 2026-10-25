@@ -52,11 +52,7 @@ function userRow(clientMessageId: string, text: string, sequence: number): Agent
 }
 
 function journal(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
-  const event = snapshotEvent({ submissions })
-  if (event.type === 'snapshot') {
-    event.page.items = items
-  }
-  return event
+  return snapshotEvent({ items, submissions })
 }
 
 describe('a structured send in the open chat', () => {

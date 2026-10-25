@@ -7,11 +7,11 @@ import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
-} from './use-mobile-native-chat-image-attachments'
+} from './native-chat/composer/use-mobile-native-chat-image-attachments'
 import {
   useMobileNativeChatFileAttachments,
   type MobileNativeChatFileAttachments
-} from './use-mobile-native-chat-file-attachments'
+} from './native-chat/composer/use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 

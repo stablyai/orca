@@ -10,6 +10,7 @@ import {
   type PairedUiState
 } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { isWorkspaceHostScope } from '../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../core'
 import { isHostOwnPhone } from '../host-own-phone'
 import {
@@ -26,7 +27,10 @@ import {
 
 import { TerminalQuickCommandsUpdate } from '../../../../shared/rpc-contract/terminal-quick-command-params'
 import { AgentLaunchSettingsMutation } from '../../../../shared/rpc-contract/agent-launch-settings-params'
-import { projectTerminalQuickCommandsForClient } from './terminal-quick-command-long-prompt-capability'
+import {
+  assertTerminalQuickCommandMutationReadableForClient,
+  projectTerminalQuickCommandsForClient
+} from './terminal-quick-command-client-capabilities'
 
 function uiForCaller(
   state: PersistedUIState,
@@ -120,12 +124,19 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.updateTerminalQuickCommands',
     permission: 'settings-write',
     params: TerminalQuickCommandsUpdate,
-    handler: (params, ctx) => ({
-      terminalQuickCommands: projectTerminalQuickCommandsForClient(
-        ctx.runtime.updateClientTerminalQuickCommands(params.mutation),
+    handler: (params, ctx) => {
+      assertTerminalQuickCommandMutationReadableForClient(
+        ctx.runtime.getClientTerminalQuickCommands(),
+        params.mutation,
         ctx
       )
-    })
+      return {
+        terminalQuickCommands: projectTerminalQuickCommandsForClient(
+          ctx.runtime.updateClientTerminalQuickCommands(params.mutation),
+          ctx
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
@@ -161,9 +172,12 @@ export const CLIENT_UI_METHODS = [
         isHostOwnPhone(context) && params.hideWorkspacesFromOtherDevices !== undefined
           ? { hideWorkspacesFromOtherDevices: params.hideWorkspacesFromOtherDevices }
           : {}
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: UiUpdate is checked key-for-key against PersistedUIState (ui-state-schema-parity-checks.ts); only optionality differs.
+      // Why: the wire schema keeps workspaceHostScope a plain string for older clients; drop unknown scopes.
+      const { workspaceHostScope, ...uiUpdates } = omitPairingLocalUiFields(params)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: keys match PersistedUIState (ui-state-schema-parity-checks.ts); wider wire values such as host-id lists are not narrowed here.
       const updates = {
-        ...omitPairingLocalUiFields(params),
+        ...uiUpdates,
+        ...(isWorkspaceHostScope(workspaceHostScope) ? { workspaceHostScope } : {}),
         ...ownPhoneFilter
       } as Partial<PersistedUIState>
       return { ui: uiForCaller(context.runtime.updateUIState(updates), context) }

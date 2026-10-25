@@ -55,7 +55,7 @@ export function pathMutationHoldKeys(
   target: EditorPathMutationTarget
 ): Set<string> {
   const keys = new Set(
-    getOpenFilesForExternalFileChange(state.openFiles, target, state).map((file) =>
+    getOpenFilesForExternalFileChange(state.openFiles, target).map((file) =>
       editorFileHoldKey(state, file)
     )
   )

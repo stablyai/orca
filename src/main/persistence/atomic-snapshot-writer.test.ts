@@ -85,13 +85,15 @@ describe('AtomicSnapshotWriter', () => {
     }
     for (let depth = 0; depth < 8; depth += 1) {
       const writer = new AtomicSnapshotWriter(() => file)
-      let second: Promise<void> | null = null
+      const scheduled = Promise.withResolvers<void>()
+      let second: Promise<void> | undefined
       renameHook.afterRename = () =>
         nested(depth, () => {
           second = writer.write(() => `second ${depth}`)
+          scheduled.resolve()
         })
       await writer.write(() => `first ${depth}`)
-      await vi.waitFor(() => expect(second).not.toBeNull())
+      await scheduled.promise
       await second
       await writer.waitForPendingWrite()
       expect(readFileSync(file, 'utf8')).toBe(`second ${depth}`)

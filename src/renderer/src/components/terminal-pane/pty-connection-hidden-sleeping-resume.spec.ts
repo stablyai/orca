@@ -25,6 +25,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 type HiddenPaneBinding = {
   noteVisibilityResume: () => void
@@ -108,12 +109,8 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
   }
 
   function connectPane(deps: ReturnType<typeof buildPaneConnectionDeps>): HiddenPaneBinding {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [createPane(2), createManager(2), deps] as unknown as Parameters<
-      typeof connectPanePty
-    >
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty returns the PanePtyBinding, which has both methods.
-    return connectPanePtyRef!(...args) as unknown as HiddenPaneBinding
+    const args = mockPanePtyArgs(createPane(2), createManager(2), deps)
+    return connectPanePtyRef!(...args)
   }
 
   function setHostLiveness(isLive: boolean | null): void {

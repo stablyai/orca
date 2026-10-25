@@ -3,7 +3,7 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 // Re-adoption must repair automation targets and persisted host filters alongside workspace ownership.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

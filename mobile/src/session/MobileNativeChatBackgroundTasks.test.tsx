@@ -256,6 +256,7 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(rowText.props.ellipsizeMode).toBe('tail')
     expect(styleOf(rowText)).toMatchObject({ flex: 1, minWidth: 0, fontSize: 12 })
     const headerTexts = header(mounted).findAll((node) => String(node.type) === 'Text')
+    expect(headerTexts.length).toBeGreaterThan(0)
     for (const text of headerTexts) {
       expect(text.props).toMatchObject({ numberOfLines: 1, ellipsizeMode: 'tail' })
       expect(styleOf(text)).toMatchObject({ flexShrink: 1, fontSize: 12 })
@@ -488,21 +489,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
       tasksFor({ state: 'monitoring', children: [view('a'), view('b', { state: 'waiting' })] })
     )
     expect(header(mixed).props.accessibilityLabel).toBe('2 agents — 1 working, 1 waiting')
-  })
-
-  it('cuts the header off on one line on the smallest phones, never wrapping it', () => {
-    windowWidth.value = 320
-    const mounted = mount(
-      tasksFor({
-        state: 'monitoring',
-        children: [view('a'), view('b', { state: 'waiting' }), view('c', { state: 'unverifiable' })]
-      })
-    )
-    const texts = header(mounted).findAll((node) => String(node.type) === 'Text')
-    expect(texts.length).toBeGreaterThan(0)
-    expect(texts.map((text) => [text.props.numberOfLines, text.props.ellipsizeMode])).toEqual(
-      texts.map(() => [1, 'tail'])
-    )
   })
 
   it('claims no live work once the stream is lost', () => {

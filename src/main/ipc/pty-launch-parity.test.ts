@@ -41,7 +41,7 @@ import {
   HOST_TAB_ID,
   type HostLaunchCase
 } from './pty-launch-parity-host.test-cases'
-import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { isHiddenRendererPty } from './pty/delivery/pty-hidden-delivery-gate'
 import { ptySizes } from './pty/delivery/visibility-state'
 import { agentSessionOwners } from './pty/pane/agent-session-owners'
 import {
@@ -745,6 +745,7 @@ describe('launch facts outside the tables', () => {
       ORCA_PANE_KEY: `${tabId}:${leafId}`,
       ORCA_TAB_ID: tabId
     })
+    expect(env.ORCA_AGENT_PANE).toBe(`${tabId}:${leafId}`) // SSH relays skip local env builders
   })
 })
 

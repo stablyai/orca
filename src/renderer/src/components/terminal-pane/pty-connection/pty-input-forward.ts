@@ -92,6 +92,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    if (session.captureAgentPreReadyInput?.(data, wasUserInput)) {
+      session.clearPendingTerminalInputIntent()
+      return
+    }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
     const intent = session.pendingTerminalInputIntentFor(data)
@@ -314,24 +318,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
   session.pendingForegroundGridDriftCheckRaf = null
   session.lastForegroundGridDriftCheckAt = Number.NEGATIVE_INFINITY
-  session.readProposedTerminalGrid = (): { cols: number; rows: number } | null => {
-    try {
-      const proposed = session.pane.fitAddon.proposeDimensions()
-      if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
-        return null
-      }
-      return proposed
-    } catch {
-      return null
-    }
-  }
-  session.terminalGridDriftedFromFit = (): boolean => {
-    const proposed = session.readProposedTerminalGrid()
-    return Boolean(
-      proposed &&
-      (session.pane.terminal.cols !== proposed.cols || session.pane.terminal.rows !== proposed.rows)
-    )
-  }
   session.scheduleForegroundGridDriftCheck = (force = false): void => {
     if (
       session.disposed ||

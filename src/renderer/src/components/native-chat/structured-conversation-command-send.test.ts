@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'

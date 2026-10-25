@@ -12,18 +12,19 @@ import {
   createStore,
   dataFile,
   makeRepo,
+  readPersistedState,
   readPersistedStateJson,
   testState,
   workspaceRepos,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import {
   makeTerminalTab,
   TEST_LEAF_1,
   TEST_LEAF_2,
   makeSessionWithTerminalBuffers,
   makeSessionWithBrowserHistory
-} from '../../persistence-session-fixtures'
+} from '../persistence-session-fixtures'
 
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
 import { Store } from '../loading-store/store'
@@ -104,7 +105,7 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
-  it('patches workspace session without replacing unchanged slices', async () => {
+  it('preserves unchanged slice contents when patching workspace session', async () => {
     const store = await createStore()
     const tabsByWorktree = {
       wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
@@ -316,12 +317,7 @@ describe('Store', () => {
     })
 
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const stillPublished = JSON.parse(readPersistedStateJson(dataFile())) as {
-      workspaceSession: {
-        terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
-      }
-    }
+    const stillPublished = readPersistedState(dataFile())
     expect(
       stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
         ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]

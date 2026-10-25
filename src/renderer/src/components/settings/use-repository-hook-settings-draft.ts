@@ -6,7 +6,7 @@ import {
   getHookSettingsDraft,
   type HookSettingsPolicyDraft,
   type LocalHookName
-} from './repository-hook-settings-draft'
+} from './repository/execution/repository-hook-settings-draft'
 
 export function useRepositoryHookSettingsDraft({
   repo,

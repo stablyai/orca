@@ -87,8 +87,7 @@ function savedPaneHost(ptyId: string, opts: { windowed?: boolean; splitPtyId?: s
       }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController(hostController(host, TEST_WORKTREE_PATH, TEST_WORKTREE_ID))
   const graph = {
     tabs: [
@@ -219,12 +218,11 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
       }
     })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       getFolderWorkspaces: () => [makeFolderWorkspace()],
       getProjectGroups: () => [makeFolderProjectGroup()]
-    } as never)
+    })
     runtime.setPtyController(
       hostController(host, TEST_FOLDER_WORKSPACE_PATH, TEST_FOLDER_WORKSPACE_KEY)
     )

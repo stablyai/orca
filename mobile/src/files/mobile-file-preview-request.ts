@@ -132,10 +132,14 @@ function settlePreviewSend(
   interpret: (reply: RpcResponse) => RpcAcceptedResult<unknown>
 ): MobileFilePreviewOutcome {
   const verdict = interpret(reply)
-  return verdict.accepted
-    ? { accepted: true, payload: verdict.value }
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-      { accepted: false, refusal: (reply as RpcFailure).error }
+  if (verdict.accepted) {
+    return { accepted: true, payload: verdict.value }
+  }
+  // The skip policy declines only a refusal; an ok reply is accepted or throws as incompatible.
+  if (reply.ok) {
+    throw new Error('Preview reply was neither accepted nor refused')
+  }
+  return { accepted: false, refusal: reply.error }
 }
 
 export async function loadMobileFilePreview(

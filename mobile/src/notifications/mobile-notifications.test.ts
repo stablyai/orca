@@ -137,7 +137,7 @@ function client() {
 beforeEach(() => vi.clearAllMocks())
 
 describe('subscribeToDesktopNotifications', () => {
-  it('never presents an OS banner for socket alert or replay events', async () => {
+  it('catches up on ready and ignores socket alert events', async () => {
     const rpc = client()
     subscribeToDesktopNotifications(rpc as never, 'host-1')
     rpc.emit({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })

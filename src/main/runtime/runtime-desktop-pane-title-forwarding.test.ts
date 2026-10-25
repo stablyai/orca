@@ -21,13 +21,11 @@ const SINGLE_ROOT: TerminalPaneLayoutNode = { type: 'leaf', leafId: HEADLESS_LEA
 
 // #30386: a desktop host's window owns its layout, so a client's pane rename must reach the window.
 function desktopHostRuntime() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: window routing only checks that the mocked desktop window is not destroyed.
-  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements every method these paths call; it is the shared runtime spec fixture.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.attachWindow(1)
   const setPaneTitle = vi.fn(() => true)
   const renameTerminal = vi.fn()

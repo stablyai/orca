@@ -22,7 +22,7 @@ import {
   stage,
   type EncodedBlob
 } from './persistence-orcad-migration-shell-history-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { createStore, testState } from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

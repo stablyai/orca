@@ -16,6 +16,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
   let mockStoreState: StoreState
@@ -87,10 +88,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const manager = createManager(1)
-        const binding = connectPanePty(pane as never, manager as never, deps as never) as {
-          syncProcessTracking: () => void
-          dispose: () => void
-        }
+        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
         await flushAsyncTicks(6)
         expect(capturedDataCallback.current).not.toBeNull()
         return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
@@ -128,9 +126,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             onPtySpawn?: (ptyId: string) => void
           }
           transportOptions.onPtySpawn?.('pty-id')
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installTerminalTestGlobals installs getMainBufferSnapshot as a vi.fn mock.
-          const getMainBufferSnapshot = window.api.pty
-            .getMainBufferSnapshot as unknown as ReturnType<typeof vi.fn>
+          const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
           const firstSnapshot = createDeferred<{
             data: string
             cols: number
@@ -289,9 +285,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             onPtySpawn?: (ptyId: string) => void
           }
           transportOptions.onPtySpawn?.('pty-id')
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installTerminalTestGlobals installs getMainBufferSnapshot as a vi.fn mock.
-          const getMainBufferSnapshot = window.api.pty
-            .getMainBufferSnapshot as unknown as ReturnType<typeof vi.fn>
+          const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
           getMainBufferSnapshot.mockResolvedValue({
             data: 'hidden reveal snapshot\r\n',
             cols: 100,
@@ -330,9 +324,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             onPtySpawn?: (ptyId: string) => void
           }
           transportOptions.onPtySpawn?.('pty-id')
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installTerminalTestGlobals installs getMainBufferSnapshot as a vi.fn mock.
-          const getMainBufferSnapshot = window.api.pty
-            .getMainBufferSnapshot as unknown as ReturnType<typeof vi.fn>
+          const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
           getMainBufferSnapshot.mockResolvedValue({
             data: 'restored snapshot\r\n',
             cols: 100,
@@ -453,9 +445,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             onPtySpawn?: (ptyId: string) => void
           }
           transportOptions.onPtySpawn?.('pty-id')
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installTerminalTestGlobals installs getMainBufferSnapshot as a vi.fn mock.
-          const getMainBufferSnapshot = window.api.pty
-            .getMainBufferSnapshot as unknown as ReturnType<typeof vi.fn>
+          const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
           // Visible prompt echo metered in main's cumulative seq domain.
           dataCallback('$ node frame-script.mjs\r\n', { seq: 2_315, rawLength: 25 })
           // Pane hides mid-stream; main drops the hidden frame and marks restore.

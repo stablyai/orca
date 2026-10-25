@@ -79,7 +79,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     }
     return composedActions
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spread creators together supply every AgentStatusSlice action; state fields are added below.
   const actions = {
     ...createAgentStatusAuthorityActions(runtime),
     ...createAgentStatusCleanupActions(runtime),
@@ -92,7 +91,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusProgramStatusActions(runtime),
     ...createAgentStatusRecoveryActions(runtime),
     ...createAgentStatusRetentionActions(runtime)
-  } as AgentStatusSlice
+  }
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
     recordAgentProviderSession: actions.recordAgentProviderSession,

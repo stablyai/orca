@@ -4,7 +4,7 @@
 // page's certificate failure, a dirty markdown draft's document version, and the publication
 // epoch and version.
 
-import { defaultAgentChatLabel } from '../../agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../agent-session/agent-session-chat-label'
 import { resolveTerminalTabTitle } from '../../tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,

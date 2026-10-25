@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -21,30 +22,7 @@ function snapshot(
   fence: number,
   activity?: AgentSessionTurnActivity
 ): AgentSessionSubscribeEvent {
-  const newest = items.length
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence,
-    ...(activity ? { activity } : {}),
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: newest },
-        nextCursor: { epoch: 'epoch-1', sequence: newest + 1 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: newest },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return { ...snapshotEvent({ items, fence }), ...(activity ? { activity } : {}) }
 }
 
 /** What the one live indicator row reads, resolved off the session journal. */

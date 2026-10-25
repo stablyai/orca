@@ -104,7 +104,7 @@ describe("source control's status Retry while the host is unreachable", () => {
     expect(retryControls(rendered)).toHaveLength(0)
   })
 
-  it('still renders natively and re-dials this host', () => {
+  it('offers Retry when a reconnect callback is available and dispatches this host', () => {
     const forceReconnect = vi.fn(() => Promise.resolve())
     doubles.forceReconnect = forceReconnect
     const [retry] = retryControls(render())

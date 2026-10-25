@@ -3547,11 +3547,7 @@
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
             "openInThisGroup": "このグループで開く",
-            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした",
-            "fileInOtherWorkspace": "このファイルは {{value0}} にあります",
-            "fileInAnotherWorkspace": "このファイルは別のワークスペースにあります",
-            "openInOwningWorkspace": "そこで開く",
-            "openedHereReadOnly": "ここでは読み取り専用で開いています"
+            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "ホストが利用不可",
@@ -15944,7 +15940,6 @@
           "6c4f1a8d2e": "チェック詳細を利用できません。"
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "読み取り専用",
           "fb8331694e": "プレビューを横に開く",
           "4157f3cbf3": "Markdown プレビューを開く",
           "269ce4842b": "相対パスをコピー",
@@ -19412,7 +19407,9 @@
           "switchToChatView": "チャット UI で続ける"
         },
         "BrowserTab": {
-          "closeOthers": "その他を閉じる"
+          "closeOthers": "その他を閉じる",
+          "muteTab": "タブをミュート",
+          "unmuteTab": "タブのミュートを解除"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "その他を閉じる"

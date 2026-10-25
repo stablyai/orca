@@ -21,6 +21,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionSplitSpawnTests(): void {
   const { notifyCodexPaneBoundForStaleSweep } = ptyConnectionTestMocks
@@ -66,11 +67,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
 
-      const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps() as never
-      )
+      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -114,7 +111,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       })
       setFitOverride('pty-fit', 'mobile-fit', 49, 20)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -157,7 +154,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         pane.terminal.cols = 80
         pane.terminal.rows = 24
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         runNextFrame()
         await flushAsyncTicks()
 
@@ -237,8 +234,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         mockStoreState.repos[0].executionHostId = 'runtime:env-1'
         mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane, manager and deps doubles implement every member connectPanePty reads on this startup path.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
       if (scenario === 'metrics') {
         applyOrDeferPaneMetricOptions(args[0], { fontSize: 24 }, false)
       }
@@ -352,8 +348,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const primaryCwd = createDeferred<string>()
       const sharedTransportsRef = { current: new Map() }
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane, manager and dependency doubles implement every member reached by fresh split connection.
-      const mainArgs = [
+      const mainArgs = mockPanePtyArgs(
         mainPane,
         manager,
         createDeps({
@@ -363,10 +358,9 @@ export function registerPtyConnectionSplitSpawnTests(): void {
           paneTransportsRef: sharedTransportsRef,
           updateTabPtyId: updateStoreTabPtyId
         })
-      ] as unknown as Parameters<typeof connectPanePty>
+      )
       connectPanePty(...mainArgs)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sibling uses the same checked fixture shape with its own command and transport.
-      const issueArgs = [
+      const issueArgs = mockPanePtyArgs(
         issuePane,
         manager,
         createDeps({
@@ -375,7 +369,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
           paneTransportsRef: sharedTransportsRef,
           updateTabPtyId: updateStoreTabPtyId
         })
-      ] as unknown as Parameters<typeof connectPanePty>
+      )
       connectPanePty(...issueArgs)
 
       await flushAsyncTicks(20)
@@ -417,22 +411,26 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
       const sharedTransportsRef = { current: new Map() }
       connectPanePty(
-        createPane(1) as never,
-        createManager(2) as never,
-        createDeps({ paneTransportsRef: sharedTransportsRef }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(2),
+          createDeps({ paneTransportsRef: sharedTransportsRef })
+        )
       )
       connectPanePty(
-        createPane(2) as never,
-        createManager(2) as never,
-        createDeps({
-          startup: { command: 'bash setup-runner.sh' },
-          paneTransportsRef: sharedTransportsRef
-        }) as never
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(2),
+          createDeps({
+            startup: { command: 'bash setup-runner.sh' },
+            paneTransportsRef: sharedTransportsRef
+          })
+        )
       )
 
       const remountDeps = createDeps()
       const remountPane = createPane(1)
-      connectPanePty(remountPane as never, createManager(2) as never, remountDeps as never)
+      connectPanePty(...mockPanePtyArgs(remountPane, createManager(2), remountDeps))
 
       setupSpawn.resolve('pty-setup')
       mainSpawn.resolve('pty-main')
@@ -467,7 +465,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const pane = createPane(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await flushAsyncTicks()
 
       expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
@@ -509,7 +507,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         startup: { command: 'codex resume provider-session' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await flushAsyncTicks(4)
       if (!onDataHandler || parseCallbacks.length === 0) {
         throw new Error('expected replay and terminal input handlers')
@@ -554,7 +552,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const deps = createDeps({ replayingPanesRef })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       expect(onDataHandler).toBeDefined()
       if (!onDataHandler) {
@@ -597,7 +595,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         return { dispose: vi.fn() }
       })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       const send = registered.onData
       if (!send) {
         throw new Error('expected onData handler to be registered')

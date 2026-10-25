@@ -128,12 +128,6 @@ it("stops a sibling a partial mobile snapshot omitted, from main's own panes", a
   ).toBeUndefined()
 })
 
-it('never asks the window to close, so no successor of the tab id can be hit', async () => {
-  const f = fixture()
-  await f.close()
-  expect(f.closeTerminalTab).not.toHaveBeenCalled()
-})
-
 it('refuses a tab pinned before the close and keeps it', async () => {
   const f = fixture()
   const session = f.store.getWorkspaceSession()

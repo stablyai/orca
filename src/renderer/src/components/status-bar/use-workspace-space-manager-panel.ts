@@ -151,8 +151,12 @@ export function useWorkspaceSpaceManagerPanel() {
         }
       )
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Extracted state setters keep their original stable identities.
-    [removeWorkspaceSpaceWorktrees]
+    [
+      removeWorkspaceSpaceWorktrees,
+      setInspectedWorktreeId,
+      setSelectedIds,
+      setTreemapZoomWorktreeId
+    ]
   )
 
   const deleteWorktrees = useCallback(

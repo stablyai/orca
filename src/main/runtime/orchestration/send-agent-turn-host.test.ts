@@ -2,7 +2,7 @@
 // host's own admission: a fingerprint over other fields than the send carries is refused there.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   createQueuedMessageTestRig,

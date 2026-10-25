@@ -95,8 +95,7 @@ export function useOmniboxBrowserHistory({
   )
   const prepared = useMemo(
     () => (history ? prepareBrowserHistoryEntries(history) : null),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Snapshot per menu open; a background navigation must not reshuffle rows mid-keystroke.
-    [enabled]
+    [history]
   )
   const deferredQuery = useDeferredValue(query)
   const deferredRows = useMemo(() => matchRows(prepared, deferredQuery), [deferredQuery, prepared])

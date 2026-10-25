@@ -18,7 +18,7 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session-wire'
-import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import { readAgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = {

@@ -81,7 +81,6 @@ import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../../shared/terminal-input'
-import { MAX_QUICK_COMMANDS } from '../../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -136,7 +135,6 @@ export const exportedFOLDER_WORKSPACE_INSTANCE_SEPARATOR = FOLDER_WORKSPACE_INST
 export const exportedHEADLESS_RUNTIME_WINDOW_ID = HEADLESS_RUNTIME_WINDOW_ID
 export const exportedHeadlessEmulator = HeadlessEmulator
 export const exportedMAX_OSC_TITLE_CHARS = MAX_OSC_TITLE_CHARS
-export const exportedMAX_QUICK_COMMANDS = MAX_QUICK_COMMANDS
 export const exportedOrcaRuntimeService = OrcaRuntimeServiceConstructor
 export const exportedOrchestrationDb = RuntimeOrchestrationDb
 export const exportedREVIEW_HEAD_FETCH_TIMEOUT_MS = REVIEW_HEAD_FETCH_TIMEOUT_MS

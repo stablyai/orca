@@ -78,6 +78,10 @@ const HANDSHAKE_OPTIONAL_STRING_FIELDS: Readonly<
   'orca-relay-handshake-credential-mismatch': []
 }
 
+function isHandshakeType(value: unknown): value is HandshakeMessage['type'] {
+  return typeof value === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, value)
+}
+
 export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   const parsed: unknown = JSON.parse(payload.toString('utf-8'))
   if (typeof parsed !== 'object' || parsed === null) {
@@ -86,24 +90,18 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typeof/null guard directly above is exactly what makes this an index-able object; every read below still proves its own field.
   const msg = parsed as Record<string, unknown>
   const t = msg.type
-  const required =
-    typeof t === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, t)
-      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reached only when Object.hasOwn proved t is a key of this record, on the same line.
-        HANDSHAKE_STRING_FIELDS[t as HandshakeMessage['type']]
-      : null
-  if (required === null) {
+  if (!isHandshakeType(t)) {
     // Why typeof and not String(t): a peer-supplied `{ "type": { "toString": 1 } }` makes String()
     // itself throw "Cannot convert object to primitive value", replacing the one diagnostic this
     // line exists to produce.
     throw new Error(`Unknown handshake type: ${typeof t === 'string' ? t : typeof t}`)
   }
-  for (const field of required) {
+  for (const field of HANDSHAKE_STRING_FIELDS[t]) {
     if (typeof msg[field] !== 'string') {
       throw new Error(`Handshake field ${field} is not a string`)
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the required === null bail above already refused every t that is not one of the four keys.
-  for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t as HandshakeMessage['type']]) {
+  for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t]) {
     if (msg[field] !== undefined && typeof msg[field] !== 'string') {
       throw new Error(`Handshake field ${field} is not a string`)
     }

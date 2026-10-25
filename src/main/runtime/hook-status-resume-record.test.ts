@@ -38,10 +38,7 @@ function makeRuntime() {
       return { ok: true, result: {} }
     }
   )
-  const runtime = new OrcaRuntimeService(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-    Object.assign(runtimeStore, { applyLayoutCommand }) as never
-  )
+  const runtime = new OrcaRuntimeService(Object.assign(runtimeStore, { applyLayoutCommand }))
   // No window holds any tab.
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, getSession, applyLayoutCommand }
@@ -145,8 +142,7 @@ describe('main records a held pane’s resume record from its hook status', () =
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+    const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
       getAgentProviderSessionSnapshot: () => rows
     })
 

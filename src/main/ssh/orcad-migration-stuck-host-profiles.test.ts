@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { SshRemotePtyLease, SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
   fenceOrcadMigrationSource,

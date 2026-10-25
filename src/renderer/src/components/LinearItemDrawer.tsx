@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
@@ -63,6 +62,7 @@ export default function LinearItemDrawer({
 
   // Why: the list view may not include the full description. Re-fetch
   // the issue by ID and its comments to populate the drawer.
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: resets drafts as it starts the fenced IPC fetch for a new issue id.
   useEffect(() => {
     if (!issue) {
       setFullIssue(null)
@@ -128,7 +128,6 @@ export default function LinearItemDrawer({
 
   // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
   // pointer-events: none on body when overlays transition.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!issue?.id) {
       return

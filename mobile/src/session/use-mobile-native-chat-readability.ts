@@ -64,10 +64,7 @@ export function useMobileNativeChatReadability(
           return
         }
         const accepted = nativeChatRepoListRead.interpret(response)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const repos = accepted.accepted
-          ? ((accepted.value as MobileRuntimeRepoSummary[]) ?? [])
-          : []
+        const repos: MobileRuntimeRepoSummary[] = accepted.accepted ? accepted.value : []
         const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
         const repo = repos.find((candidate) => candidate.id === repoId)
         setState({

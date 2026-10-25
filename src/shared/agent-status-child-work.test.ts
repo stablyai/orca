@@ -93,10 +93,11 @@ describe('AgentChildWorkRecord', () => {
   })
 
   it('parses a copied record with outcome, tokens, timing and bounded invocation history', () => {
-    const parsed = parseAgentChildWorkRecord({ ...child(), revision: 7 })
+    const value = { ...child(), revision: 7 }
+    const parsed = parseAgentChildWorkRecord(value)
 
     expect(parsed).toEqual({ ...child(), revision: 7 })
-    expect(parsed).not.toBe(child())
+    expect(parsed).not.toBe(value)
     expect(parsed?.parent).not.toBe(parent)
   })
 

@@ -49,10 +49,11 @@ export function createModelLink(writeInput: (text: string) => Promise<unknown>) 
   let live: Connection | null = null
   const zombies: Connection[] = []
   let counter = 0
-  const initialMode: ModelLinkMode = 'pass'
+  // Why a call: a typed const still narrows to 'pass', which would type both fields as 'pass'.
+  const initialMode = (): ModelLinkMode => 'pass'
   const link = {
-    toHost: initialMode,
-    toClient: initialMode,
+    toHost: initialMode(),
+    toClient: initialMode(),
     /** Drops individual acks on an otherwise healthy connection. */
     ackLoss: 0,
     unreachable: false,

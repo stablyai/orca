@@ -3,7 +3,7 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 // Repo IDs can repeat across execution hosts; row deletion must preserve sibling registrations.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

@@ -1,7 +1,7 @@
 import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
-import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'

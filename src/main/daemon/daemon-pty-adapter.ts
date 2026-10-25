@@ -177,6 +177,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           kind: 'transientFact',
           fact: event.payload
         })
+      } else if (event.event === 'inputClosed') {
+        // Kept per incarnation: the report can land before its own spawn reply.
+        this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
         const pendingOperations = new Set([

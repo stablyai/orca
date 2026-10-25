@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
   SessionOptionDescriptor,

@@ -5,7 +5,7 @@ import {
   testState,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 // Workspace SSH pins override local automation types; capture the target generation to reject host replacement.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

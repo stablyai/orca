@@ -6,7 +6,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
-import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { isHiddenRendererPty } from './pty/delivery/pty-hidden-delivery-gate'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

@@ -1,5 +1,6 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { SkillDiscoveryResult } from '../../src/shared/skills'
+import type { Repo } from '../../src/shared/repo-types'
 import { test, expect } from './helpers/orca-app'
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -191,7 +192,10 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       throw new Error('window.__store is not available')
     }
     const state = store.getState()
-    const existingRepo = state.repos[0] ?? {
+    if (!state.settings) {
+      throw new Error('settings are not loaded')
+    }
+    const existingRepo: Repo = state.repos[0] ?? {
       id: 'setup-guide-repo-a',
       path: '/tmp/setup-guide-repo-a',
       displayName: 'setup-guide-repo-a',
@@ -199,7 +203,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       addedAt: Date.now(),
       kind: 'git'
     }
-    const primaryRepo = {
+    const primaryRepo: Repo = {
       ...existingRepo,
       kind: 'git',
       hookSettings: {
@@ -260,7 +264,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
         activeRuntimeEnvironmentId: null,
         defaultTuiAgent: 'codex',
         notifications: {
-          ...state.settings?.notifications,
+          ...state.settings.notifications,
           enabled: true,
           agentTaskComplete: true
         }
@@ -304,7 +308,18 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
         ]
       },
       tabsByWorktree: {
-        [secondaryWorktree.id]: [{ id: 'setup-guide-terminal-tab', title: 'Terminal' }]
+        [secondaryWorktree.id]: [
+          {
+            id: 'setup-guide-terminal-tab',
+            ptyId: null,
+            worktreeId: secondaryWorktree.id,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: Date.now()
+          }
+        ]
       },
       terminalLayoutsByTabId: {
         'setup-guide-terminal-tab': {
@@ -313,7 +328,9 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
             direction: 'horizontal',
             first: { type: 'leaf', leafId: 'setup-guide-left' },
             second: { type: 'leaf', leafId: 'setup-guide-right' }
-          }
+          },
+          activeLeafId: null,
+          expandedLeafId: null
         }
       },
       setupGuideSidebarDismissed: false,

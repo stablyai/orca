@@ -119,7 +119,7 @@ describe('host credential cleanup', () => {
 
   it('clears a timed-out pending entry when the native delete later succeeds', async () => {
     vi.useFakeTimers()
-    let resolveDelete: (() => void) | null = null
+    let resolveDelete: (() => void) | undefined
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -132,7 +132,7 @@ describe('host credential cleanup', () => {
     expect(deleteCredential).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(3_000)
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-1'])
-    expect(resolveDelete).not.toBeNull()
+    expect(resolveDelete).toBeDefined()
 
     resolveDelete?.()
     await vi.waitFor(async () => {
@@ -141,7 +141,7 @@ describe('host credential cleanup', () => {
   })
 
   it('joins a concurrently observed delete instead of stacking native calls', async () => {
-    let resolveDelete: (() => void) | null = null
+    let resolveDelete: (() => void) | undefined
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -233,7 +233,7 @@ describe('host credential cleanup', () => {
   })
 
   it('clears the fallback handle once the native delete finally succeeds', async () => {
-    let resolveDelete: (() => void) | null = null
+    let resolveDelete: (() => void) | undefined
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {

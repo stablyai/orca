@@ -3,8 +3,8 @@ import {
   createStore,
   registerWorkspaceRepos,
   testState
-} from '../../persistence-test-harness'
-import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+} from '../persistence-test-harness'
+import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'

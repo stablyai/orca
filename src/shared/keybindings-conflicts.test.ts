@@ -92,6 +92,8 @@ describe('keybindings', () => {
       })
     ).toContain('view.tasks')
     expect(findKeybindingActionsForBinding('Mod+F', 'darwin')).not.toContain('editor.find')
+    // A German '+' key types Mod+Plus without Shift, the same chord as zoom.in's Mod+Shift+Plus.
+    expect(findKeybindingActionsForBinding('Mod+Plus', 'linux')).toContain('zoom.in')
   })
 
   it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {

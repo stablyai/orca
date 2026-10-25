@@ -1,4 +1,4 @@
-import { closeTestStores, testState, createStore } from '../../persistence-test-harness'
+import { closeTestStores, testState, createStore } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { findTerminalTabIdForLeaf } from './terminal-topology-membership'
 
-import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

@@ -30,12 +30,14 @@ const fruit = {
 
 let tree: ReactTestRenderer
 
-function render(prompt: AskPrompt, onAnswer = vi.fn(async () => true)): typeof onAnswer {
+function render(
+  prompt: AskPrompt,
+  onAnswer = vi.fn(async () => true),
+  onCancel = vi.fn(async () => true)
+): typeof onAnswer {
   vi.useFakeTimers()
   act(() => {
-    tree = create(
-      createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel: async () => true })
-    )
+    tree = create(createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel }))
   })
   return onAnswer
 }
@@ -43,6 +45,15 @@ function render(prompt: AskPrompt, onAnswer = vi.fn(async () => true)): typeof o
 function press(label: string): void {
   const row = tree.root.find((node) => node.props.label === label)
   act(() => row.props.onPress())
+}
+
+async function submit(): Promise<void> {
+  const button = tree.root.find(
+    (node) =>
+      isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Submit').length > 0
+  )
+  expect(button.props.disabled).toBe(false)
+  await act(async () => button.props.onPress())
 }
 
 async function passAutoAdvanceBeat(): Promise<void> {
@@ -84,6 +95,12 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()
+    const input = tree.root.find((node) => isHost(node, 'TextInput'))
+    act(() => input.props.onChangeText('  custom answer  '))
+    await passAutoAdvanceBeat()
+    expect(onAnswer).not.toHaveBeenCalled()
+    await submit()
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'custom answer' }])
   })
 
   it('waits for Submit on a multi-select question', async () => {
@@ -93,6 +110,8 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()
+    await submit()
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
   })
 
   it('holds its choices while an answer is being delivered', async () => {
@@ -113,7 +132,12 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
   })
 
   it('sends nothing when the question is cancelled before the pick moves on', async () => {
-    const onAnswer = render({ questions: [indent] })
+    const onCancel = vi.fn(async () => true)
+    const onAnswer = render(
+      { questions: [indent] },
+      vi.fn(async () => true),
+      onCancel
+    )
 
     press('Spaces')
     const cancel = tree.root.find(
@@ -121,6 +145,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Cancel').length > 0
     )
     await act(async () => cancel.props.onPress())
+    expect(onCancel).toHaveBeenCalledExactlyOnceWith()
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()

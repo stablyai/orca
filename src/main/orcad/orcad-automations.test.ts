@@ -2,7 +2,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { closeTestStores, createStore, makeRepo, testState } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  makeRepo,
+  testState
+} from '../persistence/persistence-test-harness'
 import type { AutomationService } from '../automations/service'
 import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
 

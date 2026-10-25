@@ -1,7 +1,7 @@
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
-import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
@@ -18,19 +18,17 @@ import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import {
+  CLIENT_LOCAL_FILE_TARGET,
+  resolveHostWorkspaceFile,
+  type HostWorkspaceFile
+} from './terminal-host-workspace-file'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
 import { openHtmlFileInBrowser } from './terminal-html-file-browser-open'
 import { showOpenInGroupRefusedToast } from './terminal-file-open-in-group-toast'
-import {
-  dismissFileInOtherWorkspaceHint,
-  showFileInOtherWorkspaceHint
-} from './terminal-file-other-workspace-hint'
-import {
-  otherWorkspaceViewFields,
-  siblingWorkspaceLink
-} from './terminal-file-other-workspace-owner'
-import { resolveTerminalLinkFileOwner } from './terminal-file-link-owner-resolution'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 
 export {
@@ -91,7 +89,6 @@ export function openDetectedFilePath(
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
   )
   const isCurrentOpen = reserveDetectedFilePathOpenTurn()
-  dismissFileInOtherWorkspaceHint()
   // Why: capture at activation; focus may move while the host resolves the path.
   const linkIntent = captureEditorOpenLinkIntent(
     useAppStore.getState(),
@@ -112,9 +109,13 @@ export function openDetectedFilePath(
   }
 
   void (async () => {
-    const sourceContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-    const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(sourceContext.target)
-    if (!sourceContext.sourceHostResolved) {
+    let statResult
+    let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
+    let hostWorkspaceFile: HostWorkspaceFile | null = null
+    let hostGrantId: string | null = null
+    let clientLocal = false
+    if (!fileContext.sourceHostResolved) {
       // Why: with no owner the host is unknown — refuse rather than touch this machine's files.
       deps.onOpenFailure?.({
         verdict: 'unverifiable',
@@ -126,7 +127,7 @@ export function openDetectedFilePath(
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(
         mappedFilePath,
         useAppStore.getState(),
-        sourceContext
+        fileContext
       )
       if (worktreeRootLink) {
         if (refuseExplicitNonEditorRoute()) {
@@ -145,15 +146,33 @@ export function openDetectedFilePath(
       }
     }
 
-    let owner
     try {
-      owner = await resolveTerminalLinkFileOwner({
-        fileContext: sourceContext,
-        worktreeId,
-        worktreePath,
-        filePath: mappedFilePath,
-        terminalHandle: deps.terminalHandle
-      })
+      const linkOwner = await resolveHostWorkspaceFile(
+        fileContext,
+        mappedFilePath,
+        deps.terminalHandle
+      )
+      if (linkOwner?.kind === 'grant') {
+        hostGrantId = linkOwner.grantId
+        mappedFilePath = linkOwner.absolutePath
+        statResult = { isDirectory: false, escapesWorktree: true }
+      } else if (linkOwner?.kind === 'client') {
+        clientLocal = true
+        fileContext = {
+          ...fileContext,
+          target: CLIENT_LOCAL_FILE_TARGET,
+          connectionId: undefined
+        }
+        statResult = { isDirectory: linkOwner.isDirectory, escapesWorktree: false }
+      } else if (linkOwner) {
+        hostWorkspaceFile = linkOwner
+        // Why: the host already stat'ed the path inside the workspace that holds it; open it there.
+        ;({ worktreeId, worktreePath, absolutePath: mappedFilePath } = hostWorkspaceFile)
+        fileContext = { ...fileContext, worktreeId, worktreePath }
+        statResult = { isDirectory: hostWorkspaceFile.isDirectory, escapesWorktree: false }
+      } else {
+        statResult = await statUserOpenedPath(fileContext, mappedFilePath)
+      }
     } catch (error) {
       if (isCurrentOpen() && deps.onOpenFailure) {
         // Why: loss of contact with the host is not evidence the file is gone.
@@ -168,9 +187,6 @@ export function openDetectedFilePath(
     if (!isCurrentOpen()) {
       return
     }
-    const { fileContext, stat: statResult, hostWorkspaceFile, hostGrantId, clientLocal } = owner
-    let otherWorkspaceOwner: RuntimeWorkspaceFileRoute | null = null
-    ;({ worktreeId, worktreePath, filePath: mappedFilePath } = owner)
 
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
     // Why: a remote workspace's hint and rows promise Orca before the path resolves, and an
@@ -241,8 +257,10 @@ export function openDetectedFilePath(
       }
     }
 
+    const store = useAppStore.getState()
+    let targetWorktreeId = worktreeId
     const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
-    const targetExecutionHostId =
+    let targetExecutionHostId =
       hostWorkspaceFile?.executionHostId ??
       (runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
@@ -255,27 +273,35 @@ export function openDetectedFilePath(
       if (maybeRelative !== null && maybeRelative.length > 0 && !statResult.escapesWorktree) {
         relativePath = maybeRelative
       }
-    } else if (hostGrantId === null && !clientLocal && !hostWorkspaceFile) {
-      const sibling = siblingWorkspaceLink(targetExecutionHostId, mappedFilePath, worktreeId)
-      otherWorkspaceOwner = sibling.view
-      if (sibling.openInOwner) {
-        ;({ worktreeId, relativePath } = sibling.openInOwner)
+    } else if (
+      hostGrantId === null &&
+      !isFloatingWorkspaceId(worktreeId) &&
+      store.openFiles.some(
+        (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
+      )
+    ) {
+      // Why: early resolution is only needed to avoid an existing sibling-tab collision.
+      const siblingRoute = findWorkspaceFileRoute(store, targetExecutionHostId, mappedFilePath)
+      if (siblingRoute) {
+        targetWorktreeId = siblingRoute.worktreeId
+        targetExecutionHostId = siblingRoute.executionHostId
+        relativePath = siblingRoute.relativePath
       }
     }
 
     if (
       explicitGroupRequest &&
-      !isExplicitEditorScopeKept(linkIntent, worktreeId, targetExecutionHostId, clientLocal)
+      !isExplicitEditorScopeKept(linkIntent, targetWorktreeId, targetExecutionHostId, clientLocal)
     ) {
       // Why: refuse before activating the destination or touching editor state.
       refuseExplicitNonEditorRoute()
       return
     }
 
-    if (worktreeId) {
+    if (targetWorktreeId) {
       // Why: the route may name a folder-workspace key, and the same worktree id can exist
       // on several hosts — dispatch by workspace shape and keep the resolved host.
-      activateAndRevealWorkspace(worktreeId, {
+      activateAndRevealWorkspace(targetWorktreeId, {
         providesInitialSurface: true,
         executionHostId: targetExecutionHostId
       })
@@ -285,11 +311,10 @@ export function openDetectedFilePath(
       {
         filePath: mappedFilePath,
         relativePath,
-        worktreeId: worktreeId || '',
+        worktreeId: targetWorktreeId || '',
         runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
-        // Why: a tab's owner must match its workspace's to be editable; this one is this computer's,
-        // or another workspace's, which "Open there" edits under its own owner.
-        ...(clientLocal ? { readOnly: true } : otherWorkspaceViewFields(otherWorkspaceOwner)),
+        // Why: a tab's owner must match its workspace's to be editable; this one is this computer's.
+        ...(clientLocal && targetWorktreeId === worktreeId ? { readOnly: true } : {}),
         // Why: the grant is the only authority to read a host file outside its workspaces.
         ...(hostGrantId !== null ? { readOnly: true, terminalArtifactGrantId: hostGrantId } : {}),
         // Why: absolute SSH paths outside the worktree otherwise look identical
@@ -306,14 +331,6 @@ export function openDetectedFilePath(
     )
     if (!opened) {
       refuseExplicitNonEditorRoute()
-    } else if (otherWorkspaceOwner && isCurrentOpen()) {
-      showFileInOtherWorkspaceHint({
-        fileId: opened.fileId,
-        filePath: mappedFilePath,
-        owner: otherWorkspaceOwner,
-        runtimeEnvironmentId: runtimeOwnerId,
-        position: { line, column }
-      })
     }
   })()
 }

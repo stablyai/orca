@@ -638,11 +638,15 @@ describe('applyWebSessionTabsSnapshot host-invariant editor dedup', () => {
       buildOwnedEditorFileId('/repo/README.md', WT, null),
       '/repo/README.md'
     ]
+    // An older peer republishes its mirror as its own row; this build no longer publishes mirrors.
+    const olderPeerFile: OpenFile = { ...ownedFile, mirroredFromRuntimeSession: undefined }
     const published = buildMobileSessionTabSnapshots(
       makePublisherState({
-        openFiles: [ownedFile],
+        openFiles: [olderPeerFile],
         unifiedTabsByWorktree: {
-          [WT]: ids.flatMap((id) => stateWithVariant(id, ownedFile).unifiedTabsByWorktree[WT] ?? [])
+          [WT]: ids.flatMap(
+            (id) => stateWithVariant(id, olderPeerFile).unifiedTabsByWorktree[WT] ?? []
+          )
         }
       })
     )[0]

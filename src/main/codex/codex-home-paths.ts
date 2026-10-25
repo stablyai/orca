@@ -48,11 +48,17 @@ export function getOrcaManagedCodexHomePath(): string {
 }
 
 /** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
-export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
-  return [
+export function getLocalCodexTrustConfigFiles(
+  agentHome: string,
+  launchCodexHome?: string | null
+): string[] {
+  const files = [
     join(getOrcaManagedCodexHomePath(), 'config.toml'),
+    // Managed accounts launch on their own CODEX_HOME, the only config that launch reads (#27235).
+    ...(launchCodexHome ? [join(launchCodexHome, 'config.toml')] : []),
     join(agentHome, '.codex', 'config.toml')
   ]
+  return [...new Set(files)]
 }
 
 export function getCodexSessionBackfillStateDirPath(): string {

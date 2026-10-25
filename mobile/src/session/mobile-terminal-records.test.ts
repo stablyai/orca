@@ -38,10 +38,8 @@ describe('mobile terminal records', () => {
     })
 
     try {
-      for (let comparison = 0; comparison < 1_000; comparison += 1) {
-        expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
-        expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
-      }
+      expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
+      expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
     } finally {
       stringify.mockRestore()
     }

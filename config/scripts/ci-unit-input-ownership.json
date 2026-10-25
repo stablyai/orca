@@ -74,14 +74,6 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/main/runtime/terminal/surface/pty-pane-copy-census.test.ts",
-      "inputs": ["src/", "config/", "tests/"],
-      "emptyEnv": [],
-      "sourceClosureSha256": "41e08b2565eab4ce9732f08e105cf7b7f7a8fe38a4d49c004eebe482c4bc9022",
-      "reason": "The TypeScript project census reads repository source and compiler configuration through ts.sys. Directory ownership includes future files; dependency and lockfile changes retain global full fallback.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
-    },
-    {
       "file": "src/shared/doc-preview-scheme.ts",
       "inputs": [],
       "emptyEnv": [],

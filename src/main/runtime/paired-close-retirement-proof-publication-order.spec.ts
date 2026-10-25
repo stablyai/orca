@@ -93,7 +93,6 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     retirePersistedSurface: () => Promise<void>
   } {
     let session = makePersistedSession()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store stub carries the four members this publication-order suite drives; the rest of Store is unreached.
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
       withDurableRuntimeStore({

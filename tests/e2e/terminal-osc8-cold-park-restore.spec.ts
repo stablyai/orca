@@ -132,6 +132,9 @@ test('restores and opens an OSC 8 link after its terminal is cold-parked', async
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const tabId = await getActiveTabId(orcaPage)
+  if (!tabId) {
+    throw new Error('No active terminal tab')
+  }
   const ptyId = await waitForActivePanePtyId(orcaPage)
   await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
 

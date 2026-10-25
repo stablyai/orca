@@ -128,8 +128,8 @@ export function useWorktreeJumpPaletteQuickActions({
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
     [
+      activeGroupSnapshotRef,
       deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
       openBrowserUrlAction,

@@ -133,7 +133,6 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         manager.setActivePane(paneId, { focus: true })
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
@@ -166,7 +165,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       tabId,
       updateTabPtyId,
       updateTabTitle,
-      worktreeId
+      worktreeId,
+      setTerminalErrorsByPaneId
     ]
   )
 
@@ -255,13 +255,15 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
     panePtyLayoutBindings,
-    readyRestartPtyIds
+    readyRestartPtyIds,
+    managerRef,
+    paneTransportsRef,
+    tabId
   ])
 
   return { handleRestartExitedPane, handleCloseExitedPane }

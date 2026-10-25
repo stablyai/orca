@@ -27,11 +27,38 @@ import {
 
 skipUnlessManagedDockerHost()
 
+/** Whether the active pane's grid is the one its container proposes, i.e. no fit is pending. */
+function terminalGridSettled(page: Page, tabId: string): Promise<boolean> {
+  return page.evaluate((tabId) => {
+    const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()
+    let proposed: { cols: number; rows: number } | undefined
+    try {
+      proposed = pane?.fitAddon.proposeDimensions()
+    } catch {
+      return false
+    }
+    return Boolean(
+      pane &&
+      proposed &&
+      pane.terminal.cols === proposed.cols &&
+      pane.terminal.rows === proposed.rows
+    )
+  }, tabId)
+}
+
 async function terminalLinkPoint(
   page: Page,
   tabId: string,
   link: string
 ): Promise<{ x: number; y: number }> {
+  // Why: a link opened beside the terminal narrows it, and the refit lands frames later; a point
+  // read from the old grid clicks a different cell once the terminal reflows.
+  await expect
+    .poll(() => terminalGridSettled(page, tabId), {
+      timeout: 10_000,
+      message: 'the terminal never refit to its pane'
+    })
+    .toBe(true)
   return page.evaluate(
     ({ tabId, link }) => {
       const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()

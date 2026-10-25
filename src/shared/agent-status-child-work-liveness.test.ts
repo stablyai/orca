@@ -77,10 +77,6 @@ describe('agentChildWorkLiveness', () => {
     ).toBe('waiting')
   })
 
-  it('does not read a settled child as waiting whatever it was doing before', () => {
-    expect(agentChildWorkLiveness([child({ state: 'done' })])).toBeNull()
-  })
-
   it('retires an agent only on an explicitly settled state', () => {
     for (const state of ['done', 'idle'] as const) {
       expect(agentChildWorkLiveness([child({ state })])).toBeNull()

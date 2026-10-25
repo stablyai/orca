@@ -2,6 +2,7 @@ import type { AgentSessionPromptResponse } from '../../shared/agent-session-ques
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   type CodexPendingPrompt,
   type CodexPromptClaim,
@@ -17,6 +18,7 @@ export {
 export {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry,
   isCodexPromptMethod,
@@ -65,6 +67,9 @@ export function prepareCodexPromptAnswer(
     if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
       throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
     }
+    if (prompt.offeredDecisions && !prompt.offeredDecisions.some((d) => d === response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} did not offer ${response.optionId}`)
+    }
     return { kind: 'decision', decision: response.optionId }
   }
   const entry =
@@ -91,13 +96,28 @@ export function prepareCodexPromptAnswer(
   return { kind: 'answer', questionId, answer }
 }
 
+/** Mirrors the reply Codex's own TUI sends for an MCP tool-call approval. */
+function codexMcpElicitationReply(decision: CodexApprovalDecision): Record<string, unknown> {
+  if (decision === 'accept' || decision === 'acceptForSession') {
+    return {
+      action: 'accept',
+      content: null,
+      _meta: decision === 'acceptForSession' ? { persist: 'session' } : null
+    }
+  }
+  // Only accept and cancel are offered; the reason separates a user cancel from an interruption.
+  return { action: 'cancel', content: null, _meta: { codex_approval_cancellation_reason: 'user' } }
+}
+
 /** Accumulate answers until Codex's single reply can include every question. */
 export function applyCodexPromptAnswer(
   prompt: CodexPendingPrompt,
   prepared: CodexPreparedAnswer
 ): Record<string, unknown> | null {
   if (prepared.kind === 'decision') {
-    return { decision: prepared.decision }
+    return prompt.method === CODEX_MCP_ELICITATION_METHOD
+      ? codexMcpElicitationReply(prepared.decision)
+      : { decision: prepared.decision }
   }
   prompt.answers.set(prepared.questionId, prepared.answer)
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {

@@ -10,6 +10,7 @@ import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/work
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { defersToMainPaneStart } from './main-pane-start-request'
 import { findTerminalTabForPane } from './terminal-tab-id'
+import { isDeferredSplitInputHold } from './pane-transport-options'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
@@ -52,6 +53,10 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       }
       if (!wakeWaitStarted) {
         wakeWaitStarted = true
+        // Why: keys typed into a slept shell must not run in the shell a later wake reattaches.
+        if (!isDeferredSplitInputHold(session)) {
+          session.transport.abandonPreconnectInput?.()
+        }
         recordPtyConnectDiagnostic(
           `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR WAKE (deliberate sleep)`
         )

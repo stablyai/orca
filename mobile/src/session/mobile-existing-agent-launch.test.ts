@@ -10,7 +10,6 @@ import {
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch,
-  supportsMobileExistingAgentLaunch,
   AGENT_LAUNCH_TAB_CLOSED_MESSAGE
 } from './mobile-existing-agent-launch'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
@@ -93,15 +92,6 @@ function launch(
   })
 }
 
-describe('supportsMobileExistingAgentLaunch', () => {
-  it('requires the replay ledger, not just agent.launch', () => {
-    expect(supportsMobileExistingAgentLaunch(LAUNCH_CAPABILITIES)).toBe(true)
-    expect(supportsMobileExistingAgentLaunch(['agent.launch.v2'])).toBe(false)
-    expect(supportsMobileExistingAgentLaunch([])).toBe(false)
-    expect(supportsMobileExistingAgentLaunch(undefined)).toBe(false)
-  })
-})
-
 describe('reserveMobileAgentLaunch', () => {
   // The host's schema accepting these, and an older one dropping them, is pinned host-side
   // (agent-launch-params.test.ts) and through the real dispatcher (agent-launch-mobile-replay).
@@ -151,13 +141,16 @@ describe('reserveMobileAgentLaunch', () => {
 })
 
 describe('launchAgentInExistingWorkspace', () => {
-  it('sends nothing to a host without the launch capabilities', async () => {
-    const { client, sendRequest } = scriptedClient(launched({}))
-    await expect(launch(client, { hostCapabilities: ['agent.launch.v2'] })).resolves.toEqual({
-      kind: 'unsupported'
-    })
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
+  it.each([['agent.launch.v2'], [], undefined])(
+    'sends nothing to a host without the launch capabilities: %s',
+    async (hostCapabilities) => {
+      const { client, sendRequest } = scriptedClient(launched({}))
+      await expect(launch(client, { hostCapabilities })).resolves.toEqual({
+        kind: 'unsupported'
+      })
+      expect(sendRequest).not.toHaveBeenCalled()
+    }
+  )
 
   it('launches through agent.launchReplay into the existing workspace with the prompt', async () => {
     const { client, sendRequest } = scriptedClient(

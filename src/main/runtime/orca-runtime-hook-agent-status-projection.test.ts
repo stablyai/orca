@@ -9,6 +9,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { committingSpawn } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -70,17 +71,16 @@ async function createRuntimeWithHookRows(
     : (): AgentStatusIpcPayload[] => rows
   // Switch-on, main's layout answers which pane holds the PTY, so the runtime needs a store.
   const store = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? {
+    ? partialRuntimeStore({
         getRepos: () => [],
         getRepo: () => undefined,
         getAllWorktreeMeta: () => ({}),
         getWorktreeMeta: () => undefined,
         getProjects: () => [],
         getSettings: () => ({})
-      }
+      })
     : null
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create and list paths read only repos, settings and the session bindPaneFirst adds.
-  const runtime = new OrcaRuntimeService(store as never, undefined, {
+  const runtime = new OrcaRuntimeService(store, undefined, {
     ...(statusWiring
       ? {
           onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus,
@@ -347,14 +347,16 @@ describe('headless hook agent-status projection (#11761)', () => {
     }
   })
 
-  it('lets a shell title retire a restored turn as done', async () => {
+  // STA-12043: the retired turn keeps its identity but no state, so no Done sits beside the shell.
+  it('lets a shell title retire a restored turn to identity only', async () => {
     const agentStatus = await projectAgentStatus(
       [hookRow({ state: 'working', interactivePrompt: undefined, restoredUnconfirmed: true })],
       (runtime) => observePaneTitle(runtime, 'bash')
     )
 
-    expect(agentStatus === undefined || agentStatus.state === 'done').toBe(true)
-    expect(agentStatus).not.toHaveProperty('restoredUnconfirmed')
+    expect(agentStatus).toEqual(
+      expect.objectContaining({ state: 'done', prompt: '', restoredUnconfirmed: true })
+    )
   })
 
   // #7970: a retained OSC 9999 row is the pane's own report and keeps precedence.

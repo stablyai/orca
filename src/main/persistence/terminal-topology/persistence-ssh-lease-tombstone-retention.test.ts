@@ -2,13 +2,13 @@ import {
   closeTestStores,
   createStoreWithSshRemotePtyLeases,
   testState
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
 import { PtyExitProof } from '../../pty-exit-proof'
 
 vi.mock('electron', () => ({

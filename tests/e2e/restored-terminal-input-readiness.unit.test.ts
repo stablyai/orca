@@ -57,7 +57,7 @@ describe('restored terminal input readiness', () => {
   it('retries after replay drops the first full input payload', async () => {
     let content = ''
     let attempts = 0
-    const input = vi.fn((data: string) => {
+    const input = vi.fn((data: string, _wasUserInput?: boolean) => {
       attempts += 1
       if (attempts >= 2) {
         content = data

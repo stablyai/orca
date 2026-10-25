@@ -3,7 +3,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
-import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
+import { assertRuntimeStatusCompatible, isRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
@@ -25,6 +25,15 @@ type RuntimeCompatibilityCacheEntry = {
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
+
+/** A pending probe by default; an observed status is proof of itself. */
+function compatibilityEntry(
+  status: RuntimeStatus | null = null,
+  provenCompatible = status !== null
+): RuntimeCompatibilityCacheEntry {
+  const statusCheckedAt = status ? Date.now() : null
+  return { check: Promise.resolve(), failedAt: null, provenCompatible, status, statusCheckedAt }
+}
 
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
@@ -98,13 +107,7 @@ export async function ensureRuntimeEnvironmentCompatible(
   if (cached) {
     return cached.check
   }
-  const entry: RuntimeCompatibilityCacheEntry = {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: false,
-    status: null,
-    statusCheckedAt: null
-  }
+  const entry = compatibilityEntry()
   const check = (async () => {
     const response = await callRuntimeEnvironmentWithRevision({
       environmentId,
@@ -198,6 +201,12 @@ export function clearRecentRuntimeCompatibilityFailure(
     // Why: a saved endpoint can reconnect to a different runtime version; its predecessor's
     // positive capability verdict must not route a structured request to the replacement.
     runtimeCompatibilityChecks.delete(trimmed)
+    // Why (STA-11921): the host publishes a probe's answer before settling it, so the detached
+    // probe never records it; the published answer is the proof synchronous readers need.
+    const answersPendingProbe = cached.failedAt === null && !cached.provenCompatible
+    if (observedStatus && answersPendingProbe && isRuntimeStatusCompatible(observedStatus)) {
+      rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(observedStatus))
+    }
   }
 }
 
@@ -215,13 +224,7 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
   if (!trimmed) {
     return
   }
-  rememberRuntimeEnvironmentCompatibility(trimmed, {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: true,
-    status: null,
-    statusCheckedAt: null
-  })
+  rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(null, true))
 }
 
 export async function getRuntimeEnvironmentStatus(
@@ -229,13 +232,7 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
-  const entry: RuntimeCompatibilityCacheEntry = {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: false,
-    status: null,
-    statusCheckedAt: null
-  }
+  const entry = compatibilityEntry()
   // Why: publish the in-flight probe before awaiting so concurrent cold-cache
   // capability lookups coalesce onto this one status.get (via the cache-hit path
   // in runtimeEnvironmentSupportsCapability) instead of each firing their own.
@@ -316,7 +313,8 @@ export async function runtimeEnvironmentSupportsCapability(
   const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
   const supported = status.capabilities?.includes(capability) === true
   const resolved = runtimeCompatibilityChecks.get(trimmed)
-  if (!supported && resolved?.status === status) {
+  // Why runtimeId: a status publication may have replaced the entry with its own copy.
+  if (!supported && resolved?.status?.runtimeId === status.runtimeId) {
     resolved.statusCheckedAt = null
   }
   return supported

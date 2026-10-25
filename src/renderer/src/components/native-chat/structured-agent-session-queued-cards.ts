@@ -11,7 +11,7 @@ import type {
 import {
   readAgentMessageSource,
   type AgentMessageSource
-} from '../../../../shared/agent-session-message-source'
+} from '../../../../shared/agent-session/agent-session-message-source'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
 

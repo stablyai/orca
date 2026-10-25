@@ -188,7 +188,6 @@ describe.skipIf(!benchEnabled)('terminal multiplex parsed-credit benchmark', () 
         }
       })
     )
-    // eslint-disable-next-line no-console -- opt-in benchmark evidence
     console.table(rows)
   })
 })

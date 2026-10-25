@@ -65,14 +65,13 @@ export function useMobileSourceControlOpeners(params: Params) {
     (filePath: string, area: MobileReviewRouteArea) => {
       triggerSelection()
       router.push(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder only emits the declared /h/[hostId]/review/[worktreeId] route.
         buildMobileReviewFileRoute({
           hostId,
           worktreeId,
           worktreeName: name,
           filePath,
           area
-        }) as Parameters<typeof router.push>[0]
+        })
       )
     },
     [hostId, name, router, worktreeId]

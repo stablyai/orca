@@ -40,7 +40,7 @@ import {
 } from './use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import {
   MobileNativeChatComposer,
   type MobileNativeChatStructuredComposer

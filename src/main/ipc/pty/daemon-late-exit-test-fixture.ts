@@ -164,8 +164,8 @@ export async function startLateExitHarness() {
     },
     id: PTY_ID,
     deliverProviderExit: (event: { id: string; code: number; incarnationId?: string }) => {
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: exit listeners may unsubscribe while receiving the event.
-      for (const listener of [...harness.adapter['exitListeners']]) {
+      // Why: exit listeners may unsubscribe while receiving the event.
+      for (const listener of Array.from(harness.adapter['exitListeners'])) {
         listener(event)
       }
     },

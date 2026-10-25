@@ -5,7 +5,7 @@ import {
   writeDataFile,
   readDataFile,
   makeRepo
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,7 +14,7 @@ import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
 
-import { makeTerminalTab, TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { makeTerminalTab, TEST_LEAF_1 } from '../persistence-session-fixtures'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -427,12 +427,26 @@ describe('Store', () => {
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {},
-      migrationUnsupportedPtyEntries: {}
+      migrationUnsupportedPtyEntries: {
+        'stale-pty': {
+          ptyId: 'stale-pty',
+          tabId: 'tab-stale',
+          paneKey: makePaneKey('tab-stale', TEST_LEAF_1),
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 123
+        }
+      }
     })
 
     const store = await createStore()
 
     expect(store.getRepos()).toHaveLength(1)
+    store.flush()
+    expect(readDataFile()).toMatchObject({
+      migrationUnsupportedPtyEntries: [],
+      legacyPaneKeyAliasEntries: []
+    })
   })
 
   it('remaps persisted agent acknowledgement pane keys when terminal leaves migrate to UUIDs', async () => {

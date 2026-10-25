@@ -11,7 +11,9 @@ import {
   disablePlugin,
   enablePlugin,
   getConfigEnablement,
+  installOrcaStatusContent,
   parseHermesConfig,
+  removeOrcaStatusContent,
   updateConfigContent
 } from './hermes-config-yaml'
 import {
@@ -96,7 +98,7 @@ export class HermesHookService {
       }
     }
 
-    const next = updateConfigContent(parsed.content, enablePlugin)
+    const next = installOrcaStatusContent(parsed.content)
     if (next.content === null) {
       return {
         agent: 'hermes',
@@ -119,7 +121,7 @@ export class HermesHookService {
     const remotePluginDir = `${remoteRoot}/.hermes/plugins/${HERMES_PLUGIN_NAME}`
     try {
       const existing = await readTextFileRemote(sftp, remoteConfigPath)
-      const next = updateConfigContent(existing, enablePlugin)
+      const next = installOrcaStatusContent(existing)
       if (next.content === null) {
         return {
           agent: 'hermes',
@@ -131,7 +133,9 @@ export class HermesHookService {
       }
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/plugin.yaml`, getPluginManifest())
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/__init__.py`, getPluginInitSource())
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      if (next.content !== existing) {
+        await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      }
       return {
         agent: 'hermes',
         state: 'installed',
@@ -162,7 +166,7 @@ export class HermesHookService {
         detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
       }
     }
-    const next = updateConfigContent(parsed.content, disablePlugin)
+    const next = removeOrcaStatusContent(parsed.content)
     if (next.content === null) {
       return {
         agent: 'hermes',

@@ -1,5 +1,6 @@
 import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import {
@@ -360,6 +361,7 @@ export function ClientHostedBrowserPagePane({
           webviewRef={webviewRef}
           guestGeneration={pageHostGeneration}
         />
+        <BrowserLinkStatusBubble browserPageId={browserTab.id} />
         {showFailureOverlay ? (
           <ClientHostedBrowserLoadFailure
             browserTab={browserTab}

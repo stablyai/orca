@@ -200,7 +200,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     const textarea = pane?.container.querySelector(
       '.xterm-helper-textarea'
     ) as HTMLTextAreaElement | null
-    if (!textarea) {
+    if (!pane || !textarea) {
       throw new Error('No xterm helper textarea to receive keyboard input')
     }
     textarea.focus()
@@ -650,8 +650,10 @@ test.describe('Terminal Shortcuts', () => {
                   : null
             const manager = tabId ? window.__paneManagers?.get(tabId) : null
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-            const terminalText = pane?.terminal.buffer.active
-              .translateBufferLineToString(pane.terminal.buffer.active.cursorY, true)
+            const activeBuffer = pane?.terminal.buffer.active
+            const terminalText = activeBuffer
+              ?.getLine(activeBuffer.baseY + activeBuffer.cursorY)
+              ?.translateToString(true)
               .trim()
             const visibleText = pane?.container.textContent ?? ''
             return {

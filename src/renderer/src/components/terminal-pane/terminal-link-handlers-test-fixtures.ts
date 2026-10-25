@@ -8,13 +8,6 @@ export type TerminalLinkStoreSettings = {
   activeRuntimeEnvironmentId?: string | null
 }
 
-export type TerminalLinkOpenFile = {
-  id?: string
-  filePath: string
-  worktreeId: string
-  readOnly?: boolean
-}
-
 export type TerminalLinkStoreState = {
   settings: TerminalLinkStoreSettings | undefined
   setActiveWorktree: Mock
@@ -24,7 +17,7 @@ export type TerminalLinkStoreState = {
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
-  openFiles: TerminalLinkOpenFile[]
+  openFiles: { filePath: string; worktreeId: string }[]
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<
     string,
@@ -42,7 +35,6 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
-  repos?: { id: string; displayName: string }[]
 }
 
 export type TerminalLinkTestDoubles = {

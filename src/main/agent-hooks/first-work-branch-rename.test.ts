@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -54,6 +54,7 @@ import {
   noUpstreamError,
   workingEvent
 } from './first-work-branch-rename-test-harness'
+import { FIRST_WORK_GENERATION_RETRY_DELAYS_MS } from './first-work-generation-backoff'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const REMOTE_REPO_BASE: Repo = {
@@ -68,10 +69,21 @@ function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}) {
   return makeBranchRenameDeps(vi.fn, overrides)
 }
 
+let clockMs = 0
+function elapseGenerationBackoff(): void {
+  clockMs += Math.max(...FIRST_WORK_GENERATION_RETRY_DELAYS_MS)
+}
+
 describe('maybeAutoRenameBranchOnFirstWork', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     resetFirstWorkBranchRenameState()
     vi.clearAllMocks()
+    clockMs = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => clockMs)
     resolveLocalGitUsernameMock.mockResolvedValue('you')
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)
     prepareLocalEnvMock.mockResolvedValue({ ok: true })
@@ -169,6 +181,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       }
       expect(observe).toHaveBeenCalledTimes(callsBeforeOutput)
 
+      elapseGenerationBackoff()
       items.pop()
       feed.publish('session', journal)
       items.push(turn)
@@ -476,6 +489,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(onRenamed).not.toHaveBeenCalled()
 
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
@@ -533,8 +547,30 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: true })
     )
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
+  })
+
+  it('backs off a generation that keeps hitting a usage limit, then recovers (#9705)', async () => {
+    const error = "You've hit your session limit · resets 2pm"
+    generateBranchNameMock.mockResolvedValue({ success: false, error })
+    const { deps, onRenamed, setRenameError } = makeDeps()
+    for (let minute = 0; minute < 60; minute++) {
+      clockMs = minute * 60_000
+      for (let event = 0; event < 5; event++) {
+        await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      }
+    }
+    // 300 working events over an hour; attempts only at minutes 0, 1 (+30s), 3 (+2m) and 33 (+30m).
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(4)
+    expect(onRenamed).not.toHaveBeenCalled()
+    expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, error, null)
+
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'fix-auth' })
+    clockMs = 63 * 60_000
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
   it('does not raise the failure badge when generation is canceled by the user', async () => {

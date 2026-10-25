@@ -1,5 +1,9 @@
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import type { CreateWorktreeArgs } from '../../../../../../shared/worktree/create-types'
+import type {
+  CreateWorktreeArgs,
+  CreateWorktreeResult
+} from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
@@ -14,6 +18,8 @@ export type CreateWorktreeCallOptions = {
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
   startupDraft?: string
+  /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
+  hostAgentLaunch?: HostAgentLaunch
   setupOnly?: boolean
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
@@ -27,6 +33,15 @@ export type CreateWorktreeCallOptions = {
     expectedRefHead?: string
   }
 }
+
+export type HostAgentLaunch = {
+  agent: TuiAgent
+  prompt?: string
+  launchSource?: string
+}
+
+/** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run. */
+export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?: true }
 
 /** Everything `createWorktree` received, packed once so both transports read from the same record.
  *  The per-attempt fields live on `WorktreeCreateAttempt` instead. */
@@ -118,7 +133,8 @@ export function buildLocalWorktreeCreateArgs(
 
 export function buildRuntimeWorktreeCreateParams(
   request: WorktreeCreateRequest,
-  attempt: WorktreeCreateAttempt
+  attempt: WorktreeCreateAttempt,
+  hostAgentLaunch?: HostAgentLaunch
 ): Record<string, unknown> {
   const { startup, options } = request
   return {
@@ -131,16 +147,29 @@ export function buildRuntimeWorktreeCreateParams(
       ? { creationId: request.creationId }
       : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
-    ...(startup
-      ? {
-          startupCommand: startup.command,
-          ...(startup.env ? { startupEnv: startup.env } : {}),
-          ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
-          ...(startup.startupCommandDelivery
-            ? { startupCommandDelivery: startup.startupCommandDelivery }
-            : {}),
-          activate: true
-        }
-      : {})
+    ...(hostAgentLaunch
+      ? buildHostAgentLaunchParams(hostAgentLaunch)
+      : startup
+        ? {
+            startupCommand: startup.command,
+            ...(startup.env ? { startupEnv: startup.env } : {}),
+            ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
+            ...(startup.startupCommandDelivery
+              ? { startupCommandDelivery: startup.startupCommandDelivery }
+              : {}),
+            activate: true
+          }
+        : {})
+  }
+}
+
+// Why: the host carries `startupPrompt` in the launch line or sends it after readiness, as the
+// desktop plan did, and refuses an agent it has disabled.
+function buildHostAgentLaunchParams(launch: HostAgentLaunch): Record<string, unknown> {
+  return {
+    startupAgent: launch.agent,
+    ...(launch.prompt ? { startupPrompt: launch.prompt } : {}),
+    ...(launch.launchSource ? { launchSource: launch.launchSource } : {}),
+    activate: true
   }
 }

@@ -102,6 +102,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  /** When a replacement process took over this PTY id; earlier hooks describe its predecessor. */
+  providerGenerationResetAtEpochMs?: number
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
@@ -114,6 +116,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** Wall clock for the recorded title; absent on older or unobserved records. */
+  titleObservedAtEpochMs?: number | null
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */
   manualTitle?: string | null
   lastOutputAt: number | null

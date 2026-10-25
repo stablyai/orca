@@ -15,7 +15,7 @@ import {
   readDataFile,
   testState,
   writeDataFile
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
 describe('host-qualified worktree metadata', () => {

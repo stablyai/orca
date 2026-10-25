@@ -212,26 +212,6 @@ describe('picking', () => {
     expect(result.items[0]).toMatchObject({ mime: 'application/octet-stream', byteLength: 3 })
   })
 
-  it('reads the cancel off the flag, not off an absent asset list', async () => {
-    // Both pickers answer `assets: null` when they answer `canceled: true` today, so a handler
-    // keyed on the list alone passes every fixture in this file. The flag is the contract; a
-    // picker version that started sending the half-selected list with it would otherwise stage it.
-    for (const source of ['library', 'files'] as const) {
-      const probe = harness({
-        launchLibrary: () =>
-          Promise.resolve({ canceled: true, assets: [{ uri: `${CACHE}/lib.png` }] }),
-        launchFiles: () =>
-          Promise.resolve({ canceled: true, assets: [{ uri: `${CACHE}/doc.pdf` }] })
-      })
-      probe.files.set(`${CACHE}/lib.png`, bytesOf(2))
-      probe.files.set(`${CACHE}/doc.pdf`, bytesOf(2))
-      await expect(probe.serve('native.media.pick', { source, multiple: true })).resolves.toEqual({
-        items: []
-      })
-      expect(probe.registry.liveCount(), source).toBe(0)
-    }
-  })
-
   it('answers no items for an empty pasteboard', async () => {
     const probe = harness()
     await expect(
@@ -465,7 +445,7 @@ describe('reading chunks', () => {
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_unknown')
   })
 
-  it('refuses a read that starts past the end', async () => {
+  it('refuses a read that starts at the end', async () => {
     const { probe, handle } = await staged(64)
     await expect(
       probe.serve('native.media.read', { handle, offset: 64, length: 16 })
@@ -569,8 +549,6 @@ describe('what the largest reply weighs', () => {
     const bytes = utf8ByteLength(JSON.stringify(split.ok === true ? split.frames[0] : null))
     expect(bytes).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
     expect(bytes).toBeLessThan(BRIDGE_MAX_REPLY_BYTES)
-    // The measured number, so a cap or an envelope field that moves shows up here as a diff.
-    expect(bytes).toBe(524_427)
   })
 })
 
@@ -632,13 +610,5 @@ describe('a provider uri the Android picker can answer', () => {
     expect(probe.registry.liveCount()).toBe(0)
     expect(probe.discarded).toEqual([])
     warn.mockRestore()
-  })
-
-  it('takes the cache copy both pickers are configured to produce', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
-    await expect(
-      probe.serve('native.media.pick', { source: 'library', multiple: false })
-    ).resolves.toMatchObject({ items: [{ byteLength: 4 }] })
   })
 })

@@ -4,7 +4,7 @@
 
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 
 export type DrawnChatLabel = { tabId: string; label: string }
 

@@ -43,8 +43,7 @@ it('gives a restored pane one handle: none before its adoption registers, then t
       terminalPtyIncarnationsByPaneKey: { [`${TAB}:${HEADLESS_LEAF_ID}`]: 'inc-restored' }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(harness.runtimeStore as never)
+  const runtime = new OrcaRuntimeService(harness.runtimeStore)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,

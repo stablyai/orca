@@ -21,7 +21,7 @@ import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-r
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
-} from '../../runtime/agent-session-operation-admission'
+} from '../../runtime/agent-session/ownership/agent-session-operation-admission'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   classifyJournalOpenFailure,

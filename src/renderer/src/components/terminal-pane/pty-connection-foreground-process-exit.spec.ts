@@ -16,6 +16,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundProcessExitTests(): void {
   let mockStoreState: StoreState
@@ -67,12 +68,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         isVisibleRef: { current: visible }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty returns the pane binding, which exposes sampleForegroundAgentOnFocus.
-      const binding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        deps as never
-      ) as unknown as { sampleForegroundAgentOnFocus: () => void }
+      const binding = connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
       return { cacheKey: makePaneKey(tabId, LEAF_1), binding }

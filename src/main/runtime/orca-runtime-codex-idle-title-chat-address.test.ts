@@ -72,10 +72,17 @@ function layoutStore(): RuntimeStore {
 
 async function codexPaneAfterOutput(
   rows: AgentStatusIpcPayload[],
-  frames: string[],
+  frames: (string | (() => void))[],
   /** The host's verdict when a title drops the agent marker, as the hook server reports it. */
   presence: 'live' | 'exited' = 'live'
 ): Promise<unknown> {
+  const checkHookAgentPresence = async () => {
+    if (presence === 'exited') {
+      // As the hook server's ended-process reconcile: only resume identity survives.
+      rows.splice(0, rows.length, ...rows.map((row) => ({ ...row, providerSessionOnly: true })))
+    }
+    return presence
+  }
   // Switch-on, main binds the pane in its layout before the terminal registers, so it needs a store.
   const runtime = new OrcaRuntimeService(
     ORCA_LAYOUT_OWNER_IS_MAIN ? layoutStore() : null,
@@ -83,7 +90,7 @@ async function codexPaneAfterOutput(
     {
       getAgentStatusSnapshot: () => rows,
       getAgentProviderSessionRowsForPane: () => rows,
-      checkHookAgentPresence: async () => presence
+      checkHookAgentPresence
     }
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService defines this protected method; the spy only stubs workspace resolution.
@@ -111,6 +118,10 @@ async function codexPaneAfterOutput(
     title: 'Terminal'
   })
   for (const frame of frames) {
+    if (typeof frame === 'function') {
+      frame()
+      continue
+    }
     runtime.onPtyData(PTY_ID, frame, Date.now())
     // The presence recheck a dropped marker starts settles before the next frame.
     await new Promise((resolve) => setImmediate(resolve))
@@ -180,6 +191,31 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
     const agentStatus = await codexPaneAfterOutput(
       [codexRow({ state: 'done' })],
       [title('⠋ repo'), title('Reply with hi | repo'), programState('idle'), title('zsh')],
+      'exited'
+    )
+
+    expect(agentStatus).toBeUndefined()
+  })
+
+  // #32030: with Codex titles off, the pre-launch shell title is the newest title the first hook sees.
+  const firstTurnUnderShellTitle = (rows: AgentStatusIpcPayload[]) => [
+    title('zsh'),
+    programState('idle'),
+    () => rows.push(codexRow({ state: 'working', evidenceObservedAt: Date.now() + 1 }))
+  ]
+
+  it('addresses a first turn reported after the pre-launch shell title', async () => {
+    const rows: AgentStatusIpcPayload[] = []
+    const agentStatus = await codexPaneAfterOutput(rows, firstTurnUnderShellTitle(rows))
+
+    expect(agentStatus).toMatchObject({ agentType: 'codex', providerSession: PROVIDER_SESSION })
+  })
+
+  it('retires that row when the agent exits without a shell title repaint', async () => {
+    const rows: AgentStatusIpcPayload[] = []
+    const agentStatus = await codexPaneAfterOutput(
+      rows,
+      [...firstTurnUnderShellTitle(rows), '\x1b]133;D;0\x07$ '],
       'exited'
     )
 

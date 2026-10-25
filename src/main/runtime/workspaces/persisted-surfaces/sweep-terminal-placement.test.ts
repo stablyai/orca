@@ -106,8 +106,7 @@ describe('main places the swept workspace’s live terminals, layout-owner build
   it('the sweep’s listing places before it lists, so it names the placed terminal’s pane', async () => {
     const { runtime } = await hostWith([session('pty-swept')])
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only `runtime` from its context.
-    const context = { runtime } as never
+    const context = { runtime }
     const listing = await terminalListHandler()(
       {
         worktree: `id:${SWEPT}`,
@@ -127,8 +126,7 @@ describe('main places the swept workspace’s live terminals, layout-owner build
   it('a listing that does not ask places nothing', async () => {
     const { store, runtime } = await hostWith([session('pty-swept')])
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only `runtime` from its context.
-    const context = { runtime } as never
+    const context = { runtime }
     await terminalListHandler()(
       { worktree: `id:${SWEPT}`, limit: 200, requireFreshPtyLiveness: true },
       context

@@ -3,7 +3,8 @@ import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
-import { makeRepo, makeTerminalTab } from '../../persistence-test-harness'
+import { makeRepo } from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { planTerminalLeafMove } from './terminal-leaf-move'
 import {
   closeMoveTestStores,

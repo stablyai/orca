@@ -3,6 +3,10 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
+  buildPosixScrubSafeEnvRestoreLines,
+  buildWindowsScrubSafeEnvRestoreLines
+} from '../../shared/agent-hook-scrub-safe-env'
+import {
   buildPosixCursorReplayGuardLines,
   buildWindowsCursorReplayGuardLines
 } from '../agent-hooks/cursor-replay-guard'
@@ -37,6 +41,8 @@ export function getManagedScript(
       'setlocal',
       // Permission hooks fail closed on empty stdout, including skip paths.
       'echo {}',
+      // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard reads it.
+      ...buildWindowsScrubSafeEnvRestoreLines(),
       // Refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       // Guard abandoned stdin before any skip path can drain it.
@@ -62,6 +68,8 @@ export function getManagedScript(
     '#!/bin/sh',
     // Permission hooks fail closed on empty stdout, including skip paths.
     'printf "{}\\n"',
+    // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard or spool reads it.
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
     ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),

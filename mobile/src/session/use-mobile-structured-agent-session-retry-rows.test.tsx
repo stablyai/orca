@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
@@ -33,29 +34,7 @@ function retry(sequence: number, attempt: number): AgentJournalRenderItem {
 }
 
 function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
-  const newest = items.length
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: newest },
-        nextCursor: { epoch: 'epoch-1', sequence: newest + 1 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: newest },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return snapshotEvent({ items })
 }
 
 // Module scope: the harness assigns these, which a test body's own `let` would narrow to null.

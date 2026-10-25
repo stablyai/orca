@@ -6,6 +6,7 @@ import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
+  getPreferredLoopbackRuntimePort,
   KnownRuntimeEnvironmentSchema,
   RuntimeAccessEndpointSchema,
   RuntimeSshAccessLinkSchema,
@@ -124,12 +125,30 @@ function isCurrentEntry(
   environment: PersistedRuntimeEnvironment,
   entry: RuntimeEnvironmentSidecarEntry
 ): boolean {
+  return currentEntry(environment, entry) !== undefined
+}
+
+/** The entry as of `environment`, or none when it is bound to a different store state. */
+function currentEntry(
+  environment: PersistedRuntimeEnvironment,
+  entry: RuntimeEnvironmentSidecarEntry
+): RuntimeEnvironmentSidecarEntry | undefined {
   const binding = runtimeEnvironmentSidecarBinding(environment)
   const matches = (candidate: z.infer<typeof SidecarBindingSchema> | undefined): boolean =>
     candidate?.createdAt === binding.createdAt &&
     candidate.pairingRevision === binding.pairingRevision &&
     candidate.preferredEndpointId === binding.preferredEndpointId
-  return matches(entry.binding) || matches(entry.pendingBinding)
+  if (matches(entry.binding)) {
+    return entry
+  }
+  if (!matches(entry.pendingBinding)) {
+    return undefined
+  }
+  // A rebind stopped after its store write: the stored endpoint already names the new tunnel port.
+  const localPort = getPreferredLoopbackRuntimePort(environment)
+  return entry.orcadDeployment && localPort !== null
+    ? { ...entry, orcadDeployment: { ...entry.orcadDeployment, localPort } }
+    : entry
 }
 
 /**
@@ -141,21 +160,22 @@ export function overlayRuntimeEnvironmentSidecar(
   entry: RuntimeEnvironmentSidecarEntry | undefined
 ): KnownRuntimeEnvironment {
   const base = KnownRuntimeEnvironmentSchema.parse(environment)
-  if (!entry || !isCurrentEntry(environment, entry)) {
+  const current = entry && currentEntry(environment, entry)
+  if (!current) {
     return base
   }
   const basePairingRevision = environment.pairingRevision ?? environment.createdAt
-  const access = entry.sshAccess
+  const access = current.sshAccess
   const pairingRevision = Math.max(
     basePairingRevision,
-    entry.pairingRevisionFloor ?? basePairingRevision
+    current.pairingRevisionFloor ?? basePairingRevision
   )
   const { endpoint, ...link } = access ?? {}
   const overlaid = KnownRuntimeEnvironmentSchema.safeParse({
     ...environment,
     ...(pairingRevision !== basePairingRevision ? { pairingRevision } : {}),
-    ...(entry.runtimeId !== undefined
-      ? { runtimeId: environment.runtimeId ?? entry.runtimeId }
+    ...(current.runtimeId !== undefined
+      ? { runtimeId: environment.runtimeId ?? current.runtimeId }
       : {}),
     ...(access && endpoint
       ? {
@@ -165,12 +185,12 @@ export function overlayRuntimeEnvironmentSidecar(
           preferredEndpointId: endpoint.id
         }
       : {}),
-    ...(entry.pendingSshAccessOperation
-      ? { pendingSshAccessOperation: entry.pendingSshAccessOperation }
+    ...(current.pendingSshAccessOperation
+      ? { pendingSshAccessOperation: current.pendingSshAccessOperation }
       : {}),
-    ...(entry.orcadDeployment ? { orcadDeployment: entry.orcadDeployment } : {}),
-    ...(entry.orcadMigratedAt ? { orcadMigratedAt: entry.orcadMigratedAt } : {}),
-    ...(entry.reconciliation ? { reconciliation: entry.reconciliation } : {})
+    ...(current.orcadDeployment ? { orcadDeployment: current.orcadDeployment } : {}),
+    ...(current.orcadMigratedAt ? { orcadMigratedAt: current.orcadMigratedAt } : {}),
+    ...(current.reconciliation ? { reconciliation: current.reconciliation } : {})
   })
   return overlaid.success ? overlaid.data : base
 }
@@ -254,5 +274,5 @@ export function readCurrentRuntimeEnvironmentSidecarEntry(
     )
   }
   const entry = sidecar.entries[environment.id]
-  return entry && isCurrentEntry(environment, entry) ? entry : undefined
+  return entry && currentEntry(environment, entry)
 }

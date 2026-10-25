@@ -176,14 +176,11 @@ const agentCommands = Object.fromEntries(
 ) as Partial<Record<TranscriptProvider, string>>
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      GROK_HOME: fakeGrokHome,
-      OMP_CODING_AGENT_DIR: fakeOmpHome
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    GROK_HOME: fakeGrokHome,
+    OMP_CODING_AGENT_DIR: fakeOmpHome
+  }
 })
 
 test.afterAll(() => {

@@ -178,7 +178,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
         },
         getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
         getPtyTitleObservedAtEpochMs: (ptyId) =>
-          ptyId ? (this.ptysById.get(ptyId)?.lastOscTitleEpochMs ?? null) : null
+          ptyId ? (this.ptysById.get(ptyId)?.lastOscTitleEpochMs ?? null) : null,
+        getPtyProcessStartedAtEpochMs: (ptyId) => this.terminalRunFacts.readProcessStartedAt(ptyId)
       }
     )
   }

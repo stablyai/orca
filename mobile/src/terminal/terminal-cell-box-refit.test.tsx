@@ -84,7 +84,7 @@ afterEach(() => {
 })
 
 describe('a new cell box for the open terminal', () => {
-  it('refits the PTY to the grid the new box fits, as after a renderer swap', async () => {
+  it('updates the viewport grid and requests a resubscribe after a changed cell box', async () => {
     const harness = refitHarness(7.8)
     harness.report(HANDLE)
     await act(async () => {
@@ -105,7 +105,7 @@ describe('a new cell box for the open terminal', () => {
     expect(harness.viewportRef.current).toEqual({ cols: 55, rows: 47 })
   })
 
-  it('leaves the PTY alone when a new frame width holds the same grid, as sub-pixel jitter does', async () => {
+  it('keeps the subscription when frame jitter holds the same grid', async () => {
     const harness = refitHarness(23 / 3)
     harness.layOut(427.3)
     await act(async () => {

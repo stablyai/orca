@@ -3,12 +3,12 @@ import type {
   BrowserCookieImportSummary
 } from '../../../../shared/browser-workspace-types'
 import { browserSessionRegistry } from '../../browser-session-registry'
-import { summarizePartitionSkips } from '../../browser-cookie-partition-summary'
-import { removeTransplantableCookies } from '../../browser-cookie-import-clear'
-import { openCookieClearStore } from '../../browser-cookie-clear-store'
-import { writeImportedCookies, type SourceCookieToWrite } from '../../browser-cookie-import-write'
+import { summarizePartitionSkips } from '../browser-cookie-partition-summary'
+import { removeTransplantableCookies } from '../browser-cookie-import-clear'
+import { openCookieClearStore } from '../browser-cookie-clear-store'
+import { writeImportedCookies, type SourceCookieToWrite } from '../browser-cookie-import-write'
 import { deriveUrl } from '../sources/browser-cookie-validation'
-import { diag } from '../../browser-cookie-import-diagnostics'
+import { diag } from '../browser-cookie-import-diagnostics'
 import type { ChromiumImportContext } from './import-context'
 
 export async function finalizeChromiumCookieImport(

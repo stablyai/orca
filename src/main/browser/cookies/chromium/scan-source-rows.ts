@@ -4,19 +4,19 @@ import {
   isNonTransplantableCookieDomain,
   normalizeCookieImportDomain,
   importedDomainScope
-} from '../../browser-cookie-import-policy'
-import { prepareStagedCookiesForImport } from '../../browser-cookie-staged-import'
+} from '../browser-cookie-import-policy'
+import { prepareStagedCookiesForImport } from '../browser-cookie-staged-import'
 import {
   chromiumTimestampToUnix,
   buildChromiumCookieInsertParams
-} from '../../browser-cookie-sqlite'
+} from '../sources/browser-cookie-sqlite'
 import { databaseSameSite } from '../sources/browser-cookie-validation'
 import {
   buildUndecryptableWarning,
   cookieEncryptionVersion,
   decryptCookieValueRaw
-} from '../../browser-cookie-decryption'
-import { diag } from '../../browser-cookie-import-diagnostics'
+} from '../sources/browser-cookie-decryption'
+import { diag } from '../browser-cookie-import-diagnostics'
 import type { ChromiumImportContext } from './import-context'
 
 /** Build one accepted-row set for live writes and scoped staged replay. */

@@ -8,7 +8,7 @@ import {
   agentMessageSendersShown,
   type AgentMessageSender,
   type AgentMessageSource
-} from '../../../../shared/agent-session-message-source'
+} from '../../../../shared/agent-session/agent-session-message-source'
 import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel

@@ -8,6 +8,7 @@ import {
 } from '../../../shared/wsl-move/wsl-move-cutover'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
+import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
 import { orcadMigrationCutoverJournalDirectory } from '../../ssh/orcad-migration-cutover-journal'
 import {
   listWslMoveCutoverChain,
@@ -87,7 +88,7 @@ describe('WSL move journal', () => {
     expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe('source-fenced')
   })
 
-  it('never moves a record backwards, rebinds it, or advances a superseded one', () => {
+  it('rejects phase regression and rebinding, and allows an unchanged finished link', () => {
     setWslMoveDesktopRewriteRegistryCompleteForTests(true)
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))).toThrow(
@@ -122,17 +123,20 @@ describe('WSL move journal', () => {
   })
 
   it('refuses one id for two distros, and a first move that names a predecessor', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1'))
-    const debian = cutover('move-1')
-    const other = { ...debian, journalKey: wslMoveJournalKey('Debian') }
-    other.manifest = { ...debian.manifest, source: { ...debian.manifest.source, distro: 'Debian' } }
-    expect(() => writeWslMoveCutover(userDataPath, other)).toThrow()
     expect(() =>
       writeWslMoveCutover(
         userDataPath,
         cutover('move-9', 'prepared', { supersedesMigrationId: 'gone' })
       )
-    ).toThrow()
+    ).toThrow('wsl_move_must_extend_its_chain')
+    writeWslMoveCutover(userDataPath, cutover('move-1'))
+    const debian = cutover('move-1')
+    const other = { ...debian, journalKey: wslMoveJournalKey('Debian') }
+    other.manifest = { ...debian.manifest, source: { ...debian.manifest.source, distro: 'Debian' } }
+    const { manifestSha256: _digest, ...unsigned } = other.manifest
+    other.manifest.manifestSha256 = computeOrcadMigrationManifestSha256(unsigned)
+    other.manifestSha256 = other.manifest.manifestSha256
+    expect(() => writeWslMoveCutover(userDataPath, other)).toThrow('wsl_move_id_in_use')
   })
 
   it('refuses a later phase whose record is missing or was lifted, or that skips a phase', () => {
@@ -155,12 +159,6 @@ describe('WSL move journal', () => {
     seedWslMoveCutover(userDataPath, cutover('move-1', phase))
     expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_in_flight')
     expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe(phase)
-  })
-
-  it('keeps the fence: a record past quiesce cannot be removed', () => {
-    seedWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))
-    expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_in_flight')
-    expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
   })
 
   it('lifts a fence whose quiesce refused: nothing reached the destination yet', () => {

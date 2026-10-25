@@ -48,7 +48,6 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -57,6 +56,10 @@ import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/sl
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from './web-runtime-wake-terminal-respawn'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'
@@ -177,15 +180,13 @@ function hostTerminalSnapshot(snapshotVersion: number): RuntimeMobileSessionTabs
 }
 
 function runtimeStatusMap(connectionGeneration: number): AppState['runtimeStatusByEnvironmentId'] {
-  return new Map([
-    [ENV, { status: { runtimeId: 'runtime-a' }, connectionGeneration }]
-  ]) as AppState['runtimeStatusByEnvironmentId']
+  return new Map([[ENV, connectedRuntimeStatus('runtime-a', connectionGeneration)]])
 }
 
 function seedRemoteMirrorState(connectionGeneration: number): void {
   const runtimeEnvironments = [
-    { id: ENV, createdAt: 100, pairingRevision: REVISION }
-  ] as PublicKnownRuntimeEnvironment[]
+    publicRuntimeEnvironment({ id: ENV, createdAt: 100, pairingRevision: REVISION })
+  ]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {

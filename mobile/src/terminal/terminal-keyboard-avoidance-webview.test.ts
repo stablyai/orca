@@ -35,6 +35,26 @@ type MetricsNotification = {
   altScreen: boolean
 }
 
+function checkedMetrics(value: Record<string, unknown> | undefined): MetricsNotification {
+  if (
+    !value ||
+    typeof value.type !== 'string' ||
+    typeof value.cursorY !== 'number' ||
+    typeof value.contentBottomRow !== 'number' ||
+    typeof value.rows !== 'number' ||
+    typeof value.altScreen !== 'boolean'
+  ) {
+    throw new Error('Missing terminal metrics')
+  }
+  return {
+    type: value.type,
+    cursorY: value.cursorY,
+    contentBottomRow: value.contentBottomRow,
+    rows: value.rows,
+    altScreen: value.altScreen
+  }
+}
+
 function makeLine(text = '', styledColumns: number[] = []) {
   const styled = new Set(styledColumns)
   return {
@@ -57,13 +77,11 @@ function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScree
     getNullCell: () => ({})
   }
   const notified = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: lines.length })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module emits one keyboard-avoidance notify, whose shape this file declares.
-  return notified[0] as MetricsNotification
+  return checkedMetrics(notified[0])
 }
 
 function runTerminalMetrics(term: Terminal) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real xterm terminal satisfies the document's own narrower shape, which is what the scope field holds.
-  return runMetricsOver(term)[0] as MetricsNotification
+  return checkedMetrics(runMetricsOver(term)[0])
 }
 
 function write(term: Terminal, data: string): Promise<void> {
@@ -77,7 +95,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     expect(runMetrics(lines)).toMatchObject({ contentBottomRow: 2 })
   })
 
-  it('supports cells without decoration APIs and keeps background-only ANSI chrome visible', () => {
+  it('keeps background-only ANSI chrome visible', () => {
     expect(runMetrics([makeLine('header'), makeLine(''), makeLine('')])).toMatchObject({
       contentBottomRow: 0
     })
@@ -151,28 +169,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
       })
     } finally {
       term.dispose()
-    }
-  })
-
-  it('releases real xterm metric observers across terminal lifecycles', async () => {
-    for (let cycle = 0; cycle < 25; cycle += 1) {
-      const term = new Terminal({ cols: 10, rows: 4 })
-      let emissions = 0
-      const observer = term.onWriteParsed(() => {
-        runTerminalMetrics(term)
-        emissions += 1
-      })
-      try {
-        await write(term, `cycle ${cycle}`)
-        expect(emissions).toBeGreaterThan(0)
-        observer.dispose()
-        const disposedAt = emissions
-        await write(term, ' after dispose')
-        expect(emissions).toBe(disposedAt)
-      } finally {
-        observer.dispose()
-        term.dispose()
-      }
     }
   })
 

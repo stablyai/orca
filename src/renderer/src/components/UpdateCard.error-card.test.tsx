@@ -214,7 +214,7 @@ describe('UpdateCard Windows signature failures', () => {
   })
 
   // An install failure now carries the updater's own text, so it can reach these branches too.
-  it('routes a signature verdict raised during install to the security-stop card', () => {
+  it('omits generic restart advice for a signature verdict', () => {
     const message =
       'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
     renderAfterAvailableStatus()
@@ -353,7 +353,7 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(screen.getByRole('button', { name: 'Show Package' })).toBeTruthy()
   })
 
-  it('drives the copy action through the real preload surface', async () => {
+  it('copies the install command returned by the updater API', async () => {
     renderAfterAvailableStatus()
     showPackageRecovery()
 

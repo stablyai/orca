@@ -173,10 +173,10 @@ it('keeps offline no-storage initialization stamped', () => {
   updateAgentHookSettingsFromProfileState(location, true)
   const authority = new ProfileStateSqliteAuthority(location.databaseFile, location.profileId)
   try {
-    expect(
-      JSON.parse(authority.readSerializedState() ?? 'null').settings
-        .uiLanguagePortugueseMigrationApplied
-    ).toBe(true)
+    expect(JSON.parse(authority.readSerializedState() ?? 'null').settings).toMatchObject({
+      agentStatusHooksEnabled: true,
+      uiLanguagePortugueseMigrationApplied: true
+    })
   } finally {
     authority.close()
   }

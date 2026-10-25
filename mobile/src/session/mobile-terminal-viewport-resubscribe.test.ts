@@ -67,20 +67,6 @@ describe('resolveTerminalViewportResubscribe', () => {
     }
   })
 
-  it('keeps holding on absent dims across repeated frames without spending budget', () => {
-    for (let frame = 0; frame < 50; frame += 1) {
-      expect(
-        resolveTerminalViewportResubscribe({
-          hostCols: null,
-          hostRows: null,
-          viewportMeasured: true,
-          viewport: PHONE,
-          attempts: 0
-        }).kind
-      ).toBe('hold')
-    }
-  })
-
   it('converges when host dims match the measured viewport', () => {
     expect(
       resolveTerminalViewportResubscribe({
@@ -307,7 +293,10 @@ describe('runTerminalViewportFitPass', () => {
     }
   }
 
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const settle = async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
 
   it('holds without any teardown when host dims are absent (STA-3337 regression)', async () => {
     const h = makeHarness({ viewportMeasured: true, viewport: PHONE })

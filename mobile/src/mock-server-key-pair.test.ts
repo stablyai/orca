@@ -9,6 +9,18 @@ import { loadOrCreateMockServerKeyPair } from '../scripts/mock-server-key-pair'
 
 const temporaryDirectories: string[] = []
 
+// Why: this file runs under Node, but the program's RN libs type a timer handle as a number.
+function unrefTimer(timer: unknown): void {
+  if (
+    typeof timer === 'object' &&
+    timer !== null &&
+    'unref' in timer &&
+    typeof timer.unref === 'function'
+  ) {
+    timer.unref()
+  }
+}
+
 type ConcurrentCreator = {
   ready: Promise<void>
   locked: Promise<void>
@@ -75,7 +87,7 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
     resolveClosed = resolve
   })
   const timeout = setTimeout(() => child.kill(), 5_000)
-  timeout.unref()
+  unrefTimer(timeout)
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString()
     if (stdout.includes('READY\n')) {

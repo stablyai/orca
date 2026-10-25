@@ -3687,11 +3687,7 @@
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
             "openInThisGroup": "Open in this group",
-            "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
-            "fileInOtherWorkspace": "This file is in {{value0}}",
-            "fileInAnotherWorkspace": "This file is in another workspace",
-            "openInOwningWorkspace": "Open there",
-            "openedHereReadOnly": "Opened here as read-only"
+            "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -7306,7 +7302,9 @@
               "description": "Optional override. Orca otherwise uses the key OpenCode saved when you ran /connect, then OPENCODE_API_KEY.",
               "label": "OpenCode Go API key",
               "placeholder": "Leave blank to use the key saved by /connect or OPENCODE_API_KEY",
-              "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts."
+              "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts.",
+              "checking": "Checking…",
+              "unavailable": "Status unavailable"
             }
           },
           "remoteScopeLocalAccountsKeptHostPicker": "Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.",
@@ -16274,7 +16272,6 @@
           "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "Read-only",
           "fb8331694e": "Open Preview to the Side",
           "4157f3cbf3": "Open Markdown Preview",
           "269ce4842b": "Copy Relative Path",
@@ -19705,7 +19702,9 @@
           "switchToChatView": "Continue in Chat UI"
         },
         "BrowserTab": {
-          "closeOthers": "Close Others"
+          "closeOthers": "Close Others",
+          "muteTab": "Mute Tab",
+          "unmuteTab": "Unmute Tab"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others"

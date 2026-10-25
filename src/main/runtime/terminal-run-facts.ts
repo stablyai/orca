@@ -16,6 +16,8 @@ export type TerminalSpawnCommit = Parameters<typeof spawnCommitBindingOrigin>[0]
   id: string
   incarnationId?: string
   coldRestore?: object
+  /** Taken before the spawn, or a fast process's first report would read as older than it. */
+  spawnRequestedAt?: number
 }
 
 /** A cold restore starts a new process for a pane that had one, so it is never fresh. */
@@ -25,6 +27,14 @@ type TerminalRunRecord = {
   incarnationId: string | null
   spawnOrigin: TerminalRunSpawnOrigin
   firstUserInputAt: number | null
+  /** When main committed a process it started (spawn, split or cold restore); null for one it
+   *  attached to, whose start main never saw. */
+  processStartedAt: number | null
+}
+
+// Why not the binding origin: a split outranks a reattach there, but only an attach keeps a process.
+function startedNewProcess(commit: TerminalSpawnCommit): boolean {
+  return commit.isReattach !== true && commit.agentSessionEnsure?.disposition !== 'adopted'
 }
 
 /** Main's per-process facts about one PTY run, keyed by the incarnation they describe. */
@@ -83,6 +93,11 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.set(commit.id, {
       incarnationId,
       spawnOrigin: origin === 'spawn' && commit.coldRestore !== undefined ? 'cold-restore' : origin,
+      processStartedAt: sameProcess
+        ? (previous?.processStartedAt ?? null)
+        : startedNewProcess(commit)
+          ? (commit.spawnRequestedAt ?? Date.now())
+          : null,
       firstUserInputAt: sameProcess
         ? (previous?.firstUserInputAt ?? null)
         : pending?.incarnationId === incarnationId
@@ -132,6 +147,17 @@ export class TerminalRunFactsRegister {
       freshSpawn: run.spawnOrigin === 'spawn' || run.spawnOrigin === 'split',
       firstUserInputAt: run.firstUserInputAt
     }
+  }
+
+  /** When the PTY's current process was started by main; null when main attached to it instead,
+   *  so evidence older than that may still describe it. A run older than the PTY's live process
+   *  only understates that start, so callers may omit the incarnation. */
+  readProcessStartedAt(ptyId: string, incarnationId?: string | null): number | null {
+    const run = this.runsByPtyId.get(ptyId)
+    if (!run || (run.incarnationId && incarnationId && run.incarnationId !== incarnationId)) {
+      return null
+    }
+    return run.processStartedAt
   }
 
   delete(ptyId: string): void {

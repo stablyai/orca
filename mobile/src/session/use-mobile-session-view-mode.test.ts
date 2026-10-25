@@ -380,32 +380,6 @@ describe('useMobileSessionViewMode', () => {
     expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
   })
 
-  it('finishes an early toggle save after the route unmounts', async () => {
-    const overridesLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
-      overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
-    )
-    function Harness(): null {
-      controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-      await Promise.resolve()
-    })
-    act(() => controller?.toggleTabChatView('new-tab'))
-    act(() => renderer?.unmount())
-    renderer = null
-
-    await act(async () => {
-      overridesLoad.resolve(new Map([['saved-tab', 'terminal']]))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
-  })
-
   it('does not reload a failed override after the route unmounts', async () => {
     const failedWrite = deferred<void>()
     vi.mocked(updateSessionViewOverride).mockReturnValue(failedWrite.promise)

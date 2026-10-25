@@ -1,7 +1,7 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
-import { spawnProcess } from '@orca/process-host'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -203,7 +203,11 @@ function runHookProcess(
     const timeout = setTimeout(() => {
       child.stdin.destroy()
       child.kill('SIGKILL')
-      reject(new Error(`hook did not finish with stdin ${stdin}d`))
+      reject(
+        new Error(
+          `hook did not finish with stdin ${stdin}d: ${executable} ${args.join(' ').slice(0, 200)}`
+        )
+      )
     }, 10_000)
     child.on('error', (error) => {
       clearTimeout(timeout)
@@ -273,6 +277,20 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise
 }
 
 describe('Windows managed hook stdin structure', () => {
+  // A fresh runner's first encoded-PowerShell launch took 5-15s; the per-hook bound detects stdin hangs, not cold start.
+  beforeAll(async () => {
+    if (process.platform !== 'win32') {
+      return
+    }
+    const warm = await runProcess({
+      program: 'cmd.exe',
+      args: ['/d', '/c', wrapWindowsHookCommand('C:\\missing\\orca-hook.cmd')],
+      env: hookEnvironment(),
+      timeoutMs: 55_000
+    })
+    expect(warm, 'encoded PowerShell warm-up').toMatchObject({ code: 0, timedOut: false })
+  }, 60_000)
+
   it('exits immediately when Orca env is missing and keeps drain for other failures', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)

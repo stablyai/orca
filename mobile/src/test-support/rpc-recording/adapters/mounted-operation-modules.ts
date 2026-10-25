@@ -89,7 +89,7 @@ import type { MountedOperationModule } from '../mounted-operation-module'
 /**
  * Every domain's mount adapters, paired with the file each one lives in. The register lives inside
  * the seam it registers, so adding a domain edits no engine file and moves no existing golden;
- * `adapter-seam.test.ts` checks each pairing names the file that declares it.
+ * `adapter-seam.test.ts` checks that the registered filenames match the adapter directory.
  */
 export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   {

@@ -7,7 +7,10 @@ import {
 } from '../execution-host'
 import { taskSourceCacheScopeHostId } from '../task-source-context'
 
-type RuntimeFocusSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+export type RuntimeFocusSettings =
+  | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  | null
+  | undefined
 
 export function getGitHubRepoCacheKey(
   repoPath: string,

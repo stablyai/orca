@@ -6,6 +6,8 @@ import { ResourcePtyList } from './ResourcePtyList'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import type { useResourcePtyActions } from './use-resource-pty-actions'
 
+const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
+
 type Props = Omit<Parameters<typeof buildResourcePtyRows>[0], 'sessions'> & {
   active: boolean
   inventory: ReturnType<typeof useResourceSessionInventory>
@@ -37,14 +39,17 @@ export function ResourcePtyPanel({
             runtimePaneTitlesByTabId,
             sessions
           })
-        : [],
+        : EMPTY_PTY_ROWS,
     [active, sessions, bindings, worktrees, repos, projectGroups, runtimePaneTitlesByTabId]
   )
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
-  const unbound = rows.filter((row) => row.binding === 'unbound').length
+  const unbound = useMemo(
+    () => rows.reduce((count, row) => count + Number(row.binding === 'unbound'), 0),
+    [rows]
+  )
   return (
-    <div className="flex h-[420px] flex-col">
-      <div className="space-y-2 border-b border-border px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 space-y-2 border-b border-border px-3 py-2">
         <div className="text-xs text-muted-foreground">
           {inventory.observedAt === null
             ? translate('resourceManager.pty.thisComputer', 'This computer')
@@ -75,7 +80,7 @@ export function ResourcePtyPanel({
         )}
       </div>
       {inventory.sessionsError && (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
+        <div role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
           {translate(
             'resourceManager.pty.failed',
             'Unverifiable: local terminals could not be refreshed. Last-observed terminals are shown.'

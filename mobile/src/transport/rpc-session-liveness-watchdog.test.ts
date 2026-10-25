@@ -112,7 +112,7 @@ describe('RpcSessionLivenessWatchdog', () => {
 
   it('does not charge a scheduler-stalled probe window', () => {
     let now = 0
-    let callback: (() => void) | null = null
+    let callback: (() => void) | undefined
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',

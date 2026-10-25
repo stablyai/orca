@@ -1,7 +1,5 @@
 import { joinPath } from '@/lib/path'
-import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
-import type { AppState } from '@/store/types'
 import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
@@ -144,8 +142,7 @@ export function normalizeAutoSaveDelayMs(value: unknown): number {
 
 export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
-  target: EditorPathMutationTarget,
-  catalog?: AppState
+  target: EditorPathMutationTarget
 ): OpenFile[] {
   if (target.indexedOpenFiles) {
     return target.indexedOpenFiles.matches(openFiles)
@@ -154,7 +151,7 @@ export function getOpenFilesForExternalFileChange(
   const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
-    if (openFileOwnerWorktreeId(file, catalog) !== target.worktreeId) {
+    if (file.worktreeId !== target.worktreeId) {
       return false
     }
     if (

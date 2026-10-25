@@ -1,8 +1,3 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the sibling
-   pending-split-close specs, not shipped code, and it falls outside the *.test / *.spec / tests
-   glob set this rule is already switched off for. The calls have to live in one shared module:
-   `vi.mock` is registered per importing spec, so the alternative is copying all twelve into every
-   spec, where they would drift apart. */
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'

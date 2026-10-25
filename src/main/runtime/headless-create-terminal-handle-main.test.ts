@@ -67,5 +67,14 @@ it.each([
   })
 
   unsubscribe()
-  expect(created.tab).toMatchObject({ status: 'ready' })
+  expect(created.tab).toMatchObject({
+    status: 'ready',
+    terminal: expect.stringMatching(/^term_/)
+  })
+  if (!created.tab.terminal) {
+    throw new Error('expected a terminal handle')
+  }
+  await expect(runtime.showTerminal(created.tab.terminal)).resolves.toMatchObject({
+    ptyId: 'pty-new'
+  })
 })

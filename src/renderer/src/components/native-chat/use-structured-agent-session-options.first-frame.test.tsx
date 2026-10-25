@@ -34,7 +34,6 @@ import {
   preloadHostModelCatalogSnapshots,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/host-model-catalog-snapshots'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -113,8 +112,7 @@ function renderNewChat(args: {
       fence: null,
       turnId: null,
       unloadedTurnRevisions: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-      mutate: vi.fn() as unknown as StructuredAgentSessionMutate,
+      mutate: vi.fn(),
       launch: {
         kind: 'new',
         heldOptions: {},

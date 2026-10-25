@@ -116,10 +116,7 @@ describe.each([
     expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
   })
 
-  it.each(FILE_URL_TAP_CASES)('OSC resolver accepts file URL: $name', ({ uri, expected }) => {
-    if (expected === null) {
-      return
-    }
+  it.each(FILE_URL_TAP_CASES)('resolves or rejects OSC file URL: $name', ({ uri, expected }) => {
     expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
   })
 })

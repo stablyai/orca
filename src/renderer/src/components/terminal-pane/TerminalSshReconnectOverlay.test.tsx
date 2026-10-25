@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { useAppStore } from '@/store'
@@ -315,25 +315,40 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
 
-  it('suppresses a second connect while one is already in flight for the same target', async () => {
-    const connect = vi.fn().mockReturnValue(new Promise(() => {}))
+  it('suppresses a second connect before shared target banners repaint', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const connect = vi.fn().mockReturnValue(pending.promise)
     installSshConnect(connect)
-    const user = userEvent.setup()
 
     render(
-      <TerminalSshReconnectOverlay
-        targetId="ssh-target-1"
-        targetLabel="devbox"
-        status="disconnected"
-      />
+      <>
+        <TerminalSshReconnectOverlay
+          targetId="ssh-target-1"
+          targetLabel="devbox"
+          status="disconnected"
+        />
+        <TerminalSshReconnectOverlay
+          targetId="ssh-target-1"
+          targetLabel="devbox"
+          status="disconnected"
+        />
+      </>
     )
 
-    await user.click(screen.getByRole('button', { name: 'Connect' }))
-
-    // Why: N surfaces share one connection; a second dial on a passphrase-gated
-    // target means a second credential prompt.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Connecting…/ })).toBeDisabled())
-    expect(connect).toHaveBeenCalledTimes(1)
+    const buttons = screen.getAllByRole('button', { name: 'Connect' })
+    try {
+      act(() => {
+        for (const button of buttons) {
+          fireEvent.click(button)
+        }
+      })
+      expect(connect).toHaveBeenCalledExactlyOnceWith({ targetId: 'ssh-target-1' })
+      for (const button of screen.getAllByRole('button', { name: /Connecting…/ })) {
+        expect(button).toBeDisabled()
+      }
+    } finally {
+      await act(async () => pending.resolve(undefined))
+    }
   })
 
   it('publishes the returned SSH state so deferred terminal reattach can resume', async () => {

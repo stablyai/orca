@@ -76,7 +76,6 @@ export function useFileDuplicate({
         // in degenerate scenarios.
         const MAX_RETRIES = 10
         let retries = 0
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
             operationGuard.assertCurrent()

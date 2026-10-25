@@ -127,7 +127,14 @@ beforeEach(() => {
 
 describe('picking media from inside the shell', () => {
   it('reads every chunk of every item in order and releases each as it finishes', async () => {
-    const shell = libraryShell(2)
+    const shell = createMediaTestShell({
+      staged: {
+        library: [
+          { bytes: stagedTestBytes(THREE_CHUNKS) },
+          { bytes: new Uint8Array(THREE_CHUNKS).fill(0xa5) }
+        ]
+      }
+    })
     const pair = pairFor(shell)
     const picker = await mount(pair)
 
@@ -135,7 +142,7 @@ describe('picking media from inside the shell', () => {
 
     expect(images.map((image) => image.base64)).toEqual([
       encodeTestBase64(stagedTestBytes(THREE_CHUNKS)),
-      encodeTestBase64(stagedTestBytes(THREE_CHUNKS))
+      encodeTestBase64(new Uint8Array(THREE_CHUNKS).fill(0xa5))
     ])
     expect(shell.calls).toEqual([
       'pick library multiple',
