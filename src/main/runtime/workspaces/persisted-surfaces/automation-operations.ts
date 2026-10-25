@@ -175,6 +175,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
+    this.orchestrationStructuredMailboxPointerDelivery.clearPendingBatches()
     this._orchestrationDb = db
     this.bindMailHandBack(db)
     this.ensureOrchestrationFederationRelay()
