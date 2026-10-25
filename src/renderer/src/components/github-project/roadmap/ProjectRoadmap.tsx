@@ -10,6 +10,7 @@ import { ProjectTitleCell } from '../cells/ProjectCellIdentity'
 import { ProjectItemsEmptyState } from '../view/ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
+import { loadCollapsedGroups, saveCollapsedGroups } from '../collapsed-groups'
 import { groupRows, sortRows } from '../../../../../shared/github/projects/project-group-sort'
 import {
   buildRoadmapTicks,
@@ -52,6 +53,7 @@ export default function ProjectRoadmap({
   const intlLocale = useIntlLocale()
   const t = useTranslate()
   const view = table.selectedView
+  const scopeKey = `${table.project.id}:${view.id}`
   const prefersReducedMotion = usePrefersReducedMotion()
   const locale = intlLocale
   // Map the viewer’s local calendar date to UTC midnight to match the grid’s UTC-day coordinates.
@@ -72,7 +74,26 @@ export default function ProjectRoadmap({
     return () => clearTimeout(timer)
   }, [todayMs])
   const [zoom, setZoom] = useState<RoadmapZoom>(loadRoadmapZoom)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  const persistedCollapsed = useMemo(() => loadCollapsedGroups(scopeKey), [scopeKey])
+  const [collapsedByScope, setCollapsedByScope] = useState<
+    Readonly<Record<string, ReadonlySet<string> | undefined>>
+  >({})
+  const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
+
+  const toggleGroup = useCallback(
+    (groupKey: string): void => {
+      setCollapsedByScope((previous) => {
+        const currentCollapsed = previous[scopeKey] ?? persistedCollapsed
+        const next = new Set(currentCollapsed)
+        if (!next.delete(groupKey)) {
+          next.add(groupKey)
+        }
+        saveCollapsedGroups(scopeKey, next)
+        return { ...previous, [scopeKey]: next }
+      })
+    },
+    [persistedCollapsed, scopeKey]
+  )
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const source = useMemo(() => resolveRoadmapDateSource(view, table.rows), [view, table.rows])
@@ -200,15 +221,7 @@ export default function ProjectRoadmap({
                       groupFieldName={view.groupByFields[0].name}
                       expanded={expanded}
                       bandWidth={bandWidth}
-                      onToggle={() =>
-                        setCollapsed((previous) => {
-                          const next = new Set(previous)
-                          if (!next.delete(group.key)) {
-                            next.add(group.key)
-                          }
-                          return next
-                        })
-                      }
+                      onToggle={() => toggleGroup(group.key)}
                     />
                   ) : null}
                   {expanded
