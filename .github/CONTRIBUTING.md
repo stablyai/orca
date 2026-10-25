@@ -78,14 +78,16 @@ pnpm test src/shared/app-version.test.ts --maxWorkers=2
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
 also includes committed changes since the branch's merge base. Update that ref when
 you need a newer baseline. Both accept the same path filters and options as `pnpm test`.
+When Git reports no changed files at all, the launcher exits before starting Vitest.
 
 Local runs enable Vitest's [dependency recording](https://vitest.dev/config/experimental#experimental-recorddependencies).
 Ordinary test runs populate the cache; later changed-file runs read it instead of
 transforming every test's import graph. Records are separate for the Bun and Node
-projects. A test without a record always runs, so a cold cache runs everything in
-the requested scope. Start with a narrow path to avoid a full cold run. Keep Vite's
-local test cache between runs. Use `--experimental.recordDependencies=false` to
-return to Vitest's static import graph.
+projects and live in each checkout's `node_modules/.vite`. A test without a record
+runs when at most 100 such tests are in scope, which records them. Beyond that, as in
+a new worktree, unrecorded tests are selected with Vitest's static import graph
+instead of running all of them. Keep Vite's local test cache between runs. Use
+`--experimental.recordDependencies=false` to use the static import graph for every test.
 
 This is local feedback, not a complete regression check. Vitest records loaded
 imports, including executed dynamic imports, but cannot infer arbitrary filesystem
@@ -94,7 +96,12 @@ for changed fixtures, generated files, CLI entry points, and other indirect inpu
 After changing imports, run the affected suites before committing those changes so
 later edits use current records. Configuration, lockfile, patch, and workspace-package
 changes rerun every test within the requested scope. CI does not enable recording;
-the existing CI selection policy is unchanged.
+the existing CI selection policy is unchanged. The static graph has the same blind spots
+and also misses dynamic imports with computed specifiers, so the first changed-file run
+in a new worktree is a little less complete than later ones.
+
+`pnpm build:packages` (which `pnpm test` runs first) skips compiling workspace packages
+when their sources, build script, and compiler are unchanged and `dist` is intact.
 
 Vitest also supports [`related --run <source-files>`](https://vitest.dev/guide/cli#vitest-related)
 and dependency-aware watch mode. `pnpm test --changed` uses Git to provide the source
