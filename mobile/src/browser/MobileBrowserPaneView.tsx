@@ -10,8 +10,9 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { Linking } from 'react-native'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
@@ -135,6 +136,17 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
+        {/\.pdf(\?|#|$)/i.test(tab.url) ? (
+          <MobileBrowserToolbarIconButton
+            disabled={controlsDisabled}
+            label="Open PDF externally"
+            onPress={() => {
+              void Linking.openURL(tab.url)
+            }}
+          >
+            <ExternalLink size={15} color={buttonColor(!controlsDisabled)} />
+          </MobileBrowserToolbarIconButton>
+        ) : null}
         <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
