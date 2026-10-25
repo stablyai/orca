@@ -57,7 +57,11 @@ function ServerUpdateRow({
   disabled: boolean
   onUpdate: () => void
 }): React.JSX.Element {
-  const canUpdate = entry.phase === 'available' || entry.phase === 'failed'
+  const canUpdate =
+    entry.phase === 'available' ||
+    entry.phase === 'failed' ||
+    entry.phase === 'not-confirmed' ||
+    entry.phase === 'verify-after-restart'
   const help = entryHelp(entry)
   return (
     <div className="space-y-2 px-3 py-3">
@@ -71,12 +75,14 @@ function ServerUpdateRow({
         </div>
         {canUpdate ? (
           <Button type="button" variant="outline" size="xs" onClick={onUpdate} disabled={disabled}>
-            {entry.phase === 'failed'
-              ? translate('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-              : translate(
-                  'auto.components.settings.RemoteServerUpdateDialog.update',
-                  'Update this server'
-                )}
+            {entry.phase === 'not-confirmed' || entry.phase === 'verify-after-restart'
+              ? translate('updates.checkRemoteAgain', 'Check again')
+              : entry.phase === 'failed'
+                ? translate('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+                : translate(
+                    'auto.components.settings.RemoteServerUpdateDialog.update',
+                    'Update this server'
+                  )}
           </Button>
         ) : null}
       </div>
@@ -115,7 +121,11 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
   const eligible = entries.filter(
-    (entry) => entry.phase === 'available' || entry.phase === 'failed'
+    (entry) =>
+      entry.phase === 'available' ||
+      entry.phase === 'failed' ||
+      entry.phase === 'not-confirmed' ||
+      entry.phase === 'verify-after-restart'
   )
   const allCurrent =
     entries.length > 0 &&
@@ -143,7 +153,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
 
   useEffect(() => {
     if (open) {
-      void refresh()
+      void refresh(useAppStore.getState().remoteServerUpdateCheckOptions ?? undefined)
     }
   }, [open, refresh])
 

@@ -1,3 +1,4 @@
+import type { AppUpdateSlice } from './slices/app-update'
 import type { RepoSlice } from './repos/repo-state'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
@@ -95,6 +96,7 @@ export type AppState = RepoSlice &
   FeedbackDraftSlice &
   TaskCreationDraftsSlice &
   RemoteServerUpdatesSlice &
+  AppUpdateSlice &
   TerminalQuickCommandHostsSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &

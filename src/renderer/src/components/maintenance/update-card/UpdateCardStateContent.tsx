@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import type {
   ChangelogData,
@@ -30,8 +31,14 @@ export function UpdateCardStateContent({
   onUpdate,
   onInstallRetry,
   onDismiss,
-  onCollapse
+  onCollapse,
+  includeRemotes,
+  includeRemoteUpdates,
+  updateDisabled
 }: {
+  updateDisabled?: boolean
+  includeRemotes?: ReactNode
+  includeRemoteUpdates?: boolean
   status: UpdateStatus
   changelog: ChangelogData | null
   errorCard: UpdateErrorCardModel | null
@@ -150,7 +157,10 @@ export function UpdateCardStateContent({
       onMediaError={onMediaError}
       onMediaLoad={onMediaLoad}
       onUpdate={onUpdate}
+      updateDisabled={updateDisabled}
       onClose={onDismiss}
+      includeRemotes={includeRemotes}
+      includeRemoteUpdates={includeRemoteUpdates}
       externallyManaged={status.externallyManaged}
     />
   ) : (
@@ -158,7 +168,10 @@ export function UpdateCardStateContent({
       version={status.version}
       releaseUrl={releaseUrl}
       onUpdate={onUpdate}
+      updateDisabled={updateDisabled}
       onClose={onDismiss}
+      includeRemotes={includeRemotes}
+      includeRemoteUpdates={includeRemoteUpdates}
       externallyManaged={status.externallyManaged}
     />
   )

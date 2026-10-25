@@ -1,3 +1,4 @@
+import { createAppUpdateSlice } from './slices/app-update'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -138,6 +139,7 @@ export const useAppStore = create<AppState>()(
           ...createFeedbackDraftSlice(...a),
           ...createTaskCreationDraftsSlice(...a),
           ...createRemoteServerUpdatesSlice(...a),
+          ...createAppUpdateSlice(...a),
           ...createTerminalQuickCommandHostsSlice(...a),
           ...createStructuredSessionLaunchDirectorySlice(...a),
           ...createStructuredChatSleptAtSlice(...a),

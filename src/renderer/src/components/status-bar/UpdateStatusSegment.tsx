@@ -1,3 +1,5 @@
+import { appUpdateStageLabel } from '../maintenance/update-card/AppUpdateProgress'
+import { remoteUpdateNeedsAttention } from '../../../../shared/app-update-batch'
 import React from 'react'
 import { AlertCircle, CheckCircle2, Clock3, Download, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,11 +16,17 @@ export function UpdateStatusSegment({
   compact: boolean
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const batch = useAppStore((s) => s.appUpdateBatch)
   const status = useAppStore((s) => s.updateStatus)
   const collapsed = useAppStore((s) => s.updateCardCollapsed)
   const setCollapsed = useAppStore((s) => s.setUpdateCardCollapsed)
 
-  if (status.state !== 'downloading' && status.state !== 'downloaded' && status.state !== 'error') {
+  if (
+    !batch &&
+    status.state !== 'downloading' &&
+    status.state !== 'downloaded' &&
+    status.state !== 'error'
+  ) {
     return null
   }
 
@@ -27,6 +35,26 @@ export function UpdateStatusSegment({
       ? status.recovery
       : null
   const segment = (() => {
+    if (batch) {
+      const warning =
+        batch.stage === 'attention' ||
+        batch.stage === 'recovery' ||
+        batch.remotes.some(remoteUpdateNeedsAttention) ||
+        status.state === 'error'
+      const label = warning
+        ? translate('updates.updateNeedsAttention', 'Update needs attention')
+        : translate('updates.updatingOrca', 'Updating Orca')
+      return {
+        icon: warning ? (
+          <AlertCircle className="size-3 text-destructive" />
+        ) : (
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+        ),
+        label,
+        tooltip: appUpdateStageLabel(batch),
+        ariaLabel: `${label}. ${translate('updates.clickToExpand', 'Click to expand.')}`
+      }
+    }
     if (status.state === 'downloading') {
       const pct = Math.max(0, Math.min(100, Math.round(status.percent)))
       return {

@@ -41,7 +41,10 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
           (status.version !== undefined && previousStatus.version === undefined) ||
           (status.recovery?.kind === 'linux-package-install' &&
             previousStatus.recovery?.kind !== 'linux-package-install'))
-      if (status.state !== previousStatus.state || errorBecameActionable) {
+      if (
+        !get().appUpdateBatch &&
+        (status.state !== previousStatus.state || errorBecameActionable)
+      ) {
         // Quiet check failures start collapsed so the status bar can still disclose them.
         update.updateCardCollapsed =
           status.state === 'error' &&
@@ -95,6 +98,11 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       }),
     updateCardCollapsed: false,
     setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),
+    includeRemotesInAppUpdate: false,
+    setIncludeRemotesInAppUpdate: async (include) => {
+      await window.api.ui.set({ includeRemotesInAppUpdate: include })
+      set({ includeRemotesInAppUpdate: include })
+    },
     updateReassuranceSeen: false,
     markUpdateReassuranceSeen: () => {
       void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)

@@ -1,3 +1,4 @@
+import { createAppUpdateSlice } from './app-update'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -114,6 +115,7 @@ export function createTestStore() {
         ...createFeedbackDraftSlice(...a),
         ...createTaskCreationDraftsSlice(...a),
         ...createRemoteServerUpdatesSlice(...a),
+        ...createAppUpdateSlice(...a),
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),

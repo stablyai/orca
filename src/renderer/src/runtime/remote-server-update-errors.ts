@@ -1,3 +1,4 @@
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { translate } from '@/i18n/i18n'
 
 export function remoteServerUpdateErrorMessage(error: unknown): string {
@@ -51,4 +52,8 @@ export function remoteServerUpdateErrorMessage(error: unknown): string {
     default:
       return message
   }
+}
+
+export function isRemoteUpdateProtocolRefusal(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'protocol_version_mismatch'
 }

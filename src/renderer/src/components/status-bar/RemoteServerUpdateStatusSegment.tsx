@@ -9,11 +9,17 @@ export function RemoteServerUpdateStatusSegment({
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const appBatch = useAppStore((state) => state.appUpdateBatch)
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const entries = [...entryMap.values()]
-  const failed = entries.filter((entry) => entry.phase === 'failed').length
+  const failed = entries.filter(
+    (entry) =>
+      entry.phase === 'failed' ||
+      entry.phase === 'not-confirmed' ||
+      entry.phase === 'verify-after-restart'
+  ).length
   const updated = entries.filter((entry) => entry.phase === 'updated').length
   const updateCohort = entries.filter((entry) =>
     ['queued', 'checking-update', 'downloading', 'restarting', 'updated', 'failed'].includes(
@@ -21,7 +27,7 @@ export function RemoteServerUpdateStatusSegment({
     )
   )
 
-  if (!running && failed === 0 && updated === 0) {
+  if (appBatch || (!running && failed === 0 && updated === 0)) {
     return null
   }
 

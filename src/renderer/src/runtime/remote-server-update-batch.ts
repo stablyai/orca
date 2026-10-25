@@ -17,5 +17,9 @@ export async function runRemoteServerUpdateBatch(
       }
     }
   )
-  await Promise.all(workers)
+  const results = await Promise.allSettled(workers)
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') {
+    throw failure.reason
+  }
 }

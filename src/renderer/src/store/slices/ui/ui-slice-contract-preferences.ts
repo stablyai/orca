@@ -199,6 +199,8 @@ export type UISlicePersistence = {
   // Ephemeral disclosure state; setUpdateStatus initializes it when the phase or error actionability changes.
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
+  includeRemotesInAppUpdate: boolean
+  setIncludeRemotesInAppUpdate: (include: boolean) => Promise<void>
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
   /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */

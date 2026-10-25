@@ -205,6 +205,7 @@ export const UiUpdateFields = z
     releaseChannelOverride: z.custom<ReleaseChannel>(isReleaseChannel).nullable().optional(),
     notificationPermissionRequested: z.boolean().optional(),
     updateReassuranceSeen: z.boolean().optional(),
+    includeRemotesInAppUpdate: z.boolean().optional(),
     osc52ClipboardDefaultOnNoticePending: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),

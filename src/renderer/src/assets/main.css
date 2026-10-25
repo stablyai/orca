@@ -3451,3 +3451,16 @@ html.native-shell .app-layout {
     transition: transform var(--reference-title-duration) linear 400ms;
   }
 }
+
+.app-update-progress [data-slot='progress-indicator'] {
+  width: 40%;
+  animation: skill-update-slide 1.4s ease-in-out infinite;
+}
+.app-update-progress[data-paused] [data-slot='progress-indicator'] {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-update-progress [data-slot='progress-indicator'] {
+    animation: none;
+  }
+}

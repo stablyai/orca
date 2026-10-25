@@ -5,7 +5,10 @@ import {
   getRemoteServerUpdaterSnapshot,
   installRemoteServerUpdater
 } from '../../remote-server-updater'
-import { UpdaterCheckParams } from '../../../../shared/rpc-contract/updater-params'
+import {
+  UpdaterCheckParams,
+  UpdaterInstallParams
+} from '../../../../shared/rpc-contract/updater-params'
 
 export const UPDATER_METHODS = [
   defineMethod({
@@ -29,7 +32,8 @@ export const UPDATER_METHODS = [
   defineMethod({
     name: 'updater.install',
     permission: 'host-admin',
-    params: null,
-    handler: (_params, { runtime }) => installRemoteServerUpdater(runtime.getRuntimeId())
+    params: UpdaterInstallParams,
+    handler: (params, { runtime }) =>
+      installRemoteServerUpdater(runtime.getRuntimeId(), params?.expectedTargetVersion)
   })
 ]

@@ -48,3 +48,30 @@ describe('remote server updater adapter', () => {
     ])
   })
 })
+
+it('atomically refuses an unapproved downloaded version while preserving legacy installs', () => {
+  const snapshot = {
+    appVersion: '1.5.0',
+    runtimeId: 'runtime-3',
+    support: { installMode: 'interactive', automatic: true, reason: 'available' },
+    status: { state: 'downloaded', version: '1.7.0' }
+  } as const
+  const install = vi.fn(() => ({
+    accepted: true as const,
+    fromVersion: '1.5.0',
+    targetVersion: '1.7.0',
+    runtimeId: 'runtime-3'
+  }))
+  configureRemoteServerUpdater({
+    getSnapshot: () => snapshot,
+    check: () => snapshot,
+    download: () => snapshot,
+    install
+  })
+  expect(() => installRemoteServerUpdater('runtime-3', '1.6.0')).toThrow(
+    'remote_update_requested_version_unavailable'
+  )
+  expect(install).not.toHaveBeenCalled()
+  expect(installRemoteServerUpdater('runtime-3', '1.7.0').targetVersion).toBe('1.7.0')
+  expect(installRemoteServerUpdater('runtime-3').accepted).toBe(true)
+})

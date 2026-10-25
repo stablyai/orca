@@ -327,3 +327,24 @@ describe('UI IPC', () => {
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
   })
 })
+
+it('accepts update checkpoints only from the primary renderer and awaits durable persistence', async () => {
+  handleMock.mockClear()
+  setTrustedUIRendererWebContentsId(17)
+  const store = { ...makeStore(), flushPendingOrThrowAsync: vi.fn(async () => undefined) }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The IPC fixture supplies every store operation invoked by these handlers.
+  registerUIHandlers(store as never)
+  const handler = handleMock.mock.calls.find(([channel]) => channel === 'ui:set')?.[1]
+  if (!handler) {
+    throw new Error('Missing UI update handler')
+  }
+  await expect(handler(makeUIEvent({ id: 42 }), { appUpdateBatch: null })).rejects.toThrow(
+    'primary Orca window'
+  )
+  expect(store.updateUI).not.toHaveBeenCalled()
+  await handler(makeUIEvent(), { appUpdateBatch: null })
+  expect(store.flushPendingOrThrowAsync).toHaveBeenCalledOnce()
+  store.flushPendingOrThrowAsync.mockRejectedValueOnce(new Error('disk full'))
+  await expect(handler(makeUIEvent(), { appUpdateBatch: null })).rejects.toThrow('disk full')
+  setTrustedUIRendererWebContentsId(null)
+})

@@ -1,3 +1,4 @@
+import type { AppUpdateBatch } from './app-update-batch'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
@@ -151,6 +152,8 @@ export type PersistedUIState = {
   notificationPermissionRequested?: boolean
   /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
+  includeRemotesInAppUpdate?: boolean
+  appUpdateBatch?: AppUpdateBatch | null
   /** Per-paneKey "row visited" timestamps that mute seen inline-agent rows; persisted because rows survive restart, else acked rows return bold. Renderer-owned via ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** Per-paneKey "Clear completed" cutoffs hiding activity events stamped at or before the cutoff; persisted so cleared rows stay cleared across restart. Renderer-owned via ui:set. */

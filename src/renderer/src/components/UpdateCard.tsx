@@ -1,3 +1,5 @@
+import { IncludeRemotes } from './maintenance/update-card/IncludeRemotes'
+import { AppUpdateProgress } from './maintenance/update-card/AppUpdateProgress'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../shared/update-status-types'
@@ -26,7 +28,25 @@ export function UpdateCard(): React.JSX.Element | null {
   const setCollapsed = useAppStore((state) => state.setUpdateCardCollapsed)
   const reassuranceSeen = useAppStore((state) => state.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((state) => state.markUpdateReassuranceSeen)
+  const batch = useAppStore((state) => state.appUpdateBatch)
+  const checkingRemotes = useAppStore((state) => state.appUpdateCandidatesChecking)
+  const includeRemotes = useAppStore((state) => state.includeRemotesInAppUpdate)
+  const discoverRemotes = useAppStore((state) => state.discoverAppUpdateRemotes)
+  const startAppUpdate = useAppStore((state) => state.startAppUpdate)
+  const restoreAppUpdate = useAppStore((state) => state.restoreAppUpdate)
   const hasStartedDownload = useRef(false)
+  useEffect(() => {
+    void restoreAppUpdate()
+  }, [restoreAppUpdate])
+  const availableVersion =
+    status.state === 'available' && !status.externallyManaged && status.source !== 'local'
+      ? status.version
+      : null
+  useEffect(() => {
+    if (availableVersion) {
+      void discoverRemotes(availableVersion).catch(console.error)
+    }
+  }, [availableVersion, discoverRemotes])
   const dismissAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
@@ -76,12 +96,12 @@ export function UpdateCard(): React.JSX.Element | null {
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
   useEffect(() => {
-    if (status.state === 'downloaded' && hasStartedDownload.current) {
+    if (status.state === 'downloaded' && hasStartedDownload.current && !batch) {
       void window.api.updater.quitAndInstall().catch((error) => {
         setInstallError(String((error as Error)?.message ?? error))
       })
     }
-  }, [status.state])
+  }, [status.state, batch])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -104,19 +124,28 @@ export function UpdateCard(): React.JSX.Element | null {
   )
   const cachedVersion = versionRef.current
   if (
-    !isUpdateCardVisible({
-      status,
-      dismissedVersion,
-      cachedVersion,
-      updateUserInitiatedCycle,
-      autoDismissed,
-      collapsed
-    })
+    batch
+      ? collapsed
+      : !isUpdateCardVisible({
+          status,
+          dismissedVersion,
+          cachedVersion,
+          updateUserInitiatedCycle,
+          autoDismissed,
+          collapsed
+        })
   ) {
     return null
   }
 
   const handleUpdate = (): void => {
+    if (includeRemotes && availableVersion) {
+      if (!reassuranceSeen) {
+        markReassuranceSeen()
+      }
+      void startAppUpdate().catch(console.error)
+      return
+    }
     hasStartedDownload.current = true
     if (!reassuranceSeen) {
       markReassuranceSeen()
@@ -199,6 +228,7 @@ export function UpdateCard(): React.JSX.Element | null {
     }
     event.preventDefault()
     if (
+      batch ||
       status.state === 'downloading' ||
       status.state === 'downloaded' ||
       status.state === 'error'
@@ -209,8 +239,11 @@ export function UpdateCard(): React.JSX.Element | null {
     }
   }
 
-  const cardContent = (
+  const stateContent = (
     <UpdateCardStateContent
+      includeRemotes={availableVersion ? <IncludeRemotes /> : undefined}
+      includeRemoteUpdates={includeRemotes}
+      updateDisabled={includeRemotes && checkingRemotes}
       status={status}
       changelog={changelog}
       errorCard={errorCard}
@@ -229,12 +262,23 @@ export function UpdateCard(): React.JSX.Element | null {
     />
   )
 
+  const cardContent = batch ? (
+    <AppUpdateProgress
+      onCollapse={handleCollapseWithAnimation}
+      recoveryContent={status.state === 'error' ? stateContent : undefined}
+    />
+  ) : (
+    stateContent
+  )
+
   const animationClass = prefersReducedMotion
     ? ''
     : exiting
       ? 'animate-update-card-exit'
       : 'animate-update-card-enter'
   const showReassurance =
+    !batch &&
+    !includeRemotes &&
     !reassuranceSeen &&
     ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
   return (
@@ -264,7 +308,11 @@ export function UpdateCard(): React.JSX.Element | null {
       )}
       <Card
         role="complementary"
-        aria-label={getUpdateCardAriaLabel(status)}
+        aria-label={
+          batch
+            ? translate('updates.updatingOrca', 'Updating Orca')
+            : getUpdateCardAriaLabel(status)
+        }
         aria-live="polite"
         tabIndex={-1}
         onKeyDown={handleKeyDown}

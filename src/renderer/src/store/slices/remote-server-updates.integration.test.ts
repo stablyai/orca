@@ -80,6 +80,12 @@ describe('remote server updates mixed inventory', () => {
       }
       return statusResult(selector, null, false)
     })
+    call.mockImplementation(async (args: { selector: string; method: string }) => {
+      if (args.method === 'status.get') {
+        return getStatus(args)
+      }
+      throw new Error('unexpected updater call')
+    })
     vi.stubGlobal('window', {
       api: {
         updater: { getVersion: vi.fn(async () => '1.5.0') },
@@ -150,21 +156,25 @@ describe('remote server updates mixed inventory', () => {
   })
 
   it('checks and retains the selected perf channel for the update batch', async () => {
-    call.mockImplementation(async ({ selector }: { selector: string }) => ({
-      id: `check-${selector}`,
-      ok: true,
-      result: {
-        appVersion: '1.5.0',
-        runtimeId: `${selector}-runtime`,
-        support: {
-          installMode: 'supervised-headless-serve' as const,
-          automatic: true,
-          reason: 'available' as const
-        },
-        status: { state: 'available' as const, version: '1.6.0-rc.1.perf', changelog: null }
-      },
-      _meta: { runtimeId: `${selector}-runtime` }
-    }))
+    call.mockImplementation(async ({ selector, method }: { selector: string; method: string }) =>
+      method === 'status.get'
+        ? getStatus({ selector })
+        : {
+            id: `check-${selector}`,
+            ok: true,
+            result: {
+              appVersion: '1.5.0',
+              runtimeId: `${selector}-runtime`,
+              support: {
+                installMode: 'supervised-headless-serve' as const,
+                automatic: true,
+                reason: 'available' as const
+              },
+              status: { state: 'available' as const, version: '1.6.0-rc.1.perf', changelog: null }
+            },
+            _meta: { runtimeId: `${selector}-runtime` }
+          }
+    )
     const createSlice = createRemoteServerUpdatesSlice as unknown as StateCreator<TestState>
     const store = create<TestState>()((...args) => ({
       ...createSlice(...args),
@@ -174,7 +184,7 @@ describe('remote server updates mixed inventory', () => {
 
     await store.getState().refreshRemoteServerUpdates(options)
 
-    expect(call).toHaveBeenCalledTimes(2)
+    expect(call.mock.calls.filter(([args]) => args.method === 'updater.check')).toHaveLength(2)
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'updater.check', params: options })
     )

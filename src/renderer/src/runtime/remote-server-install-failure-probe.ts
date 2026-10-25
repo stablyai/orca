@@ -20,7 +20,7 @@ type InstallFailureProbeTransport = {
 export async function readRemoteServerInstallFailure(
   environmentId: string,
   transport: InstallFailureProbeTransport,
-  install: RemoteServerUpdateInstallResult,
+  install: Pick<RemoteServerUpdateInstallResult, 'runtimeId'>,
   runtime: RuntimeStatus,
   timeoutMs?: number
 ): Promise<string | null> {

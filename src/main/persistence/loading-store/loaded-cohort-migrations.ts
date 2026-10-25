@@ -14,6 +14,17 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
+  migrateIncludeRemotes(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    if (typeof state.ui?.includeRemotesInAppUpdate === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      ui: { ...state.ui, includeRemotesInAppUpdate: !fileExistedOnLoad }
+    }
+  }
+
   migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.tabSwitchKeybindingSeed
     if (existing === 'pending' || existing === 'done') {

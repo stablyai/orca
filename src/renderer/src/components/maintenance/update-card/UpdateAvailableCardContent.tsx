@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/update-status-types'
 import { Button } from '../../ui/button'
@@ -29,6 +30,8 @@ export function UpdateAvailableRichContent({
   onMediaLoad,
   onUpdate,
   onClose,
+  includeRemotes,
+  updateDisabled = false,
   externallyManaged = false
 }: {
   release: NonNullable<ChangelogData['release']>
@@ -40,6 +43,9 @@ export function UpdateAvailableRichContent({
   onMediaLoad: () => void
   onUpdate: () => void
   onClose: () => void
+  updateDisabled?: boolean
+  includeRemotes?: ReactNode
+  includeRemoteUpdates?: boolean
   externallyManaged?: boolean
 }): React.JSX.Element {
   const showMedia =
@@ -104,10 +110,17 @@ export function UpdateAvailableRichContent({
       {externallyManaged ? (
         <ExternallyManagedNote />
       ) : (
-        <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onUpdate}
+          disabled={updateDisabled}
+          className="w-full cursor-pointer"
+        >
           {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
         </Button>
       )}
+      {!externallyManaged && includeRemotes}
     </div>
   )
 }
@@ -117,12 +130,18 @@ export function UpdateAvailableSimpleContent({
   releaseUrl,
   onUpdate,
   onClose,
+  includeRemotes,
+  updateDisabled = false,
+  includeRemoteUpdates = false,
   externallyManaged = false
 }: {
   version: string
   releaseUrl?: string
   onUpdate: () => void
   onClose: () => void
+  updateDisabled?: boolean
+  includeRemotes?: ReactNode
+  includeRemoteUpdates?: boolean
   externallyManaged?: boolean
 }): React.JSX.Element {
   return (
@@ -150,7 +169,9 @@ export function UpdateAvailableSimpleContent({
         <ExternallyManagedNote />
       ) : (
         <p className="text-xs leading-relaxed text-muted-foreground">
-          {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
+          {includeRemoteUpdates
+            ? translate('updates.remoteDisconnectNotice', 'Remote tabs may briefly disconnect.')
+            : translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
         </p>
       )}
       {releaseUrl && (
@@ -167,11 +188,13 @@ export function UpdateAvailableSimpleContent({
           variant="default"
           size="sm"
           onClick={onUpdate}
+          disabled={updateDisabled}
           className="mt-0.5 w-full cursor-pointer"
         >
           {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
         </Button>
       )}
+      {!externallyManaged && includeRemotes}
     </div>
   )
 }

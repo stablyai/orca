@@ -39,6 +39,12 @@ export function getRemoteServerUpdatePhaseLabel(phase: RemoteServerUpdatePhase):
         'auto.components.settings.RemoteServerUpdateStatus.restarting',
         'Restarting…'
       )
+    case 'ready':
+      return translate('updates.remote.ready', 'Ready')
+    case 'not-confirmed':
+      return translate('updates.remote.notConfirmed', 'Not confirmed')
+    case 'verify-after-restart':
+      return translate('updates.remote.verifyAfterRestart', 'Verify after app restart')
     case 'updated':
       return translate('auto.components.settings.RemoteServerUpdateStatus.updated', 'Updated')
     case 'failed':
@@ -55,6 +61,7 @@ function phaseIcon(phase: RemoteServerUpdatePhase): React.JSX.Element {
       return <Loader2 className="animate-spin" />
     case 'downloading':
       return <Download />
+    case 'ready':
     case 'current':
     case 'updated':
       return <CheckCircle2 />
@@ -62,6 +69,8 @@ function phaseIcon(phase: RemoteServerUpdatePhase): React.JSX.Element {
       return <Wrench />
     case 'offline':
       return <ServerOff />
+    case 'not-confirmed':
+    case 'verify-after-restart':
     case 'failed':
       return <AlertCircle />
     case 'available':

@@ -1,52 +1,18 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-server-update'
 import { isListedRemoteServer } from '../../../../shared/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { remoteServerUpdateTransportForRevision } from '@/runtime/remote-server-update-transport'
 import {
   checkingRemoteServerUpdateEntry,
+  confirmRemoteServerUpdate,
   inspectRemoteServerUpdate,
   runRemoteServerUpdate,
-  type RemoteServerUpdateEntry,
-  type RemoteServerUpdateTransport
+  type RemoteServerUpdateEntry
 } from '@/runtime/remote-server-update-coordinator'
 import { runRemoteServerUpdateBatch } from '@/runtime/remote-server-update-batch'
 
 const MAX_CONCURRENT_REMOTE_SERVER_UPDATES = 2
-
-function callRemoteUpdater<TResult>(
-  environmentId: string,
-  method: string,
-  params?: unknown,
-  timeoutMs = 15_000
-): Promise<TResult> {
-  return window.api.runtimeEnvironments
-    .call({ selector: environmentId, method, params, timeoutMs })
-    .then((response) => unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>))
-}
-
-const transport: RemoteServerUpdateTransport = {
-  getRuntimeStatus: (environmentId, timeoutMs) =>
-    window.api.runtimeEnvironments
-      .getStatus({ selector: environmentId, timeoutMs })
-      .then((response) => unwrapRuntimeRpcResult<RuntimeStatus>(response)),
-  getUpdaterStatus: (environmentId, timeoutMs) =>
-    callRemoteUpdater<RemoteServerUpdaterSnapshot>(
-      environmentId,
-      'updater.getStatus',
-      undefined,
-      timeoutMs
-    ),
-  check: (environmentId, options) =>
-    callRemoteUpdater<RemoteServerUpdaterSnapshot>(environmentId, 'updater.check', options),
-  download: (environmentId) =>
-    callRemoteUpdater<RemoteServerUpdaterSnapshot>(environmentId, 'updater.download'),
-  install: (environmentId) => callRemoteUpdater(environmentId, 'updater.install'),
-  wait: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
-}
 
 export type RemoteServerUpdatesSlice = {
   remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
@@ -55,7 +21,7 @@ export type RemoteServerUpdatesSlice = {
   remoteServerUpdatesRunning: boolean
   remoteServerUpdateDialogOpen: boolean
   remoteServerUpdatesLastCheckedAt: number | null
-  setRemoteServerUpdateDialogOpen: (open: boolean) => void
+  setRemoteServerUpdateDialogOpen: (open: boolean, options?: UpdateCheckOptions) => void
   refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
   startRemoteServerUpdates: (environmentIds?: readonly string[]) => Promise<void>
 }
@@ -73,14 +39,22 @@ export const createRemoteServerUpdatesSlice: StateCreator<
   remoteServerUpdateDialogOpen: false,
   remoteServerUpdatesLastCheckedAt: null,
 
-  setRemoteServerUpdateDialogOpen: (open) =>
+  setRemoteServerUpdateDialogOpen: (open, options) =>
     set({
       remoteServerUpdateDialogOpen: open,
-      ...(open ? {} : { remoteServerUpdateCheckOptions: null })
+      ...(open
+        ? options
+          ? { remoteServerUpdateCheckOptions: options }
+          : {}
+        : { remoteServerUpdateCheckOptions: null })
     }),
 
   refreshRemoteServerUpdates: async (options) => {
-    if (get().remoteServerUpdatesChecking || get().remoteServerUpdatesRunning) {
+    if (
+      get().appUpdateBatch ||
+      get().remoteServerUpdatesChecking ||
+      get().remoteServerUpdatesRunning
+    ) {
       return
     }
     const checkOptions = options
@@ -116,7 +90,9 @@ export const createRemoteServerUpdatesSlice: StateCreator<
           const entry = await inspectRemoteServerUpdate(
             environment,
             clientVersion,
-            transport,
+            remoteServerUpdateTransportForRevision(
+              environment.pairingRevision ?? environment.createdAt
+            ),
             checkOptions
           )
           set((state) => {
@@ -133,14 +109,17 @@ export const createRemoteServerUpdatesSlice: StateCreator<
   },
 
   startRemoteServerUpdates: async (environmentIds) => {
-    if (get().remoteServerUpdatesRunning) {
+    if (get().appUpdateBatch || get().remoteServerUpdatesRunning) {
       return
     }
     const selected = new Set(environmentIds ?? [])
     const checkOptions = get().remoteServerUpdateCheckOptions
     const entries = [...get().remoteServerUpdates.values()].filter(
       (entry) =>
-        (entry.phase === 'available' || entry.phase === 'failed') &&
+        (entry.phase === 'available' ||
+          entry.phase === 'failed' ||
+          entry.phase === 'not-confirmed' ||
+          entry.phase === 'verify-after-restart') &&
         (selected.size === 0 || selected.has(entry.environmentId))
     )
     if (entries.length === 0) {
@@ -158,9 +137,22 @@ export const createRemoteServerUpdatesSlice: StateCreator<
         entries,
         MAX_CONCURRENT_REMOTE_SERVER_UPDATES,
         async (entry) => {
+          if (entry.phase === 'not-confirmed' || entry.phase === 'verify-after-restart') {
+            const confirmed = await confirmRemoteServerUpdate(
+              entry,
+              remoteServerUpdateTransportForRevision(entry.pairingRevision)
+            )
+            set((state) => ({
+              remoteServerUpdates: new Map(state.remoteServerUpdates).set(
+                entry.environmentId,
+                confirmed
+              )
+            }))
+            return
+          }
           await runRemoteServerUpdate(
             entry,
-            transport,
+            remoteServerUpdateTransportForRevision(entry.pairingRevision),
             (progress) => {
               set((state) => {
                 const next = new Map(state.remoteServerUpdates)

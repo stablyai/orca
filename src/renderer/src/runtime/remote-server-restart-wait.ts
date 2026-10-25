@@ -1,3 +1,4 @@
+import { isRemoteUpdateProtocolRefusal } from './remote-server-update-errors'
 import { hasReachedAppVersion } from '../../../shared/app-version'
 import type {
   RemoteServerUpdateInstallResult,
@@ -65,7 +66,10 @@ export async function waitForReplacementRuntime(
             )
           : null
       probed = true
-    } catch {
+    } catch (error) {
+      if (isRemoteUpdateProtocolRefusal(error)) {
+        throw error
+      }
       // A refused connection is expected while the server process is being replaced.
     }
     // Why: thrown outside the try so the loop's own catch cannot swallow the reason we came for.

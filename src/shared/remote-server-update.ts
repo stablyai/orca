@@ -1,5 +1,7 @@
 import type { UpdateStatus } from './update-status-types'
 
+export const REMOTE_SERVER_PINNED_UPDATE_CAPABILITY = 'updater.target-version.v1' as const
+
 export const REMOTE_SERVER_UPDATE_CAPABILITY = 'updater.remote-control.v1' as const
 
 export type RemoteServerUpdateInstallMode =

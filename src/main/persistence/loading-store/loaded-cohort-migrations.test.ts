@@ -41,3 +41,22 @@ describe('onboarding language experiment', () => {
     expect(migration.migrateTelemetry(upgraded, true)).toEqual(upgraded)
   })
 })
+
+describe('Include remotes default cohort', () => {
+  it('enables new profiles, excludes existing profiles, and preserves either explicit choice on reload', () => {
+    for (const existed of [true, false]) {
+      const runtime = { loadNeedsSave: false }
+      const migration = new LoadedCohortMigrationOperations(runtime)
+      const profile = migration.migrateIncludeRemotes(getDefaultPersistedState('/test'), existed)
+      expect(profile.ui.includeRemotesInAppUpdate).toBe(!existed)
+      expect(runtime.loadNeedsSave).toBe(true)
+      expect(migration.migrateIncludeRemotes(profile, true).ui.includeRemotesInAppUpdate).toBe(
+        !existed
+      )
+      profile.ui.includeRemotesInAppUpdate = existed
+      expect(migration.migrateIncludeRemotes(profile, true).ui.includeRemotesInAppUpdate).toBe(
+        existed
+      )
+    }
+  })
+})

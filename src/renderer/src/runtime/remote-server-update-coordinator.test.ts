@@ -164,6 +164,7 @@ describe('remote server update execution', () => {
       'checking-update',
       'downloading',
       'downloading',
+      'ready',
       'restarting',
       'updated'
     ])
@@ -272,7 +273,7 @@ describe('remote server update execution', () => {
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 2, pollIntervalMs: 1 } }
     )
     expect(sameRuntime).toMatchObject({
-      phase: 'failed',
+      phase: 'not-confirmed',
       error: 'The server did not reconnect on the updated version.'
     })
   })
@@ -357,7 +358,7 @@ describe('remote server update execution', () => {
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 6, pollIntervalMs: 1 } }
     )
     expect(result).toMatchObject({
-      phase: 'failed',
+      phase: 'not-confirmed',
       error: 'The server did not reconnect on the updated version.'
     })
   })
@@ -401,5 +402,49 @@ describe('remote server update execution', () => {
     }
     await running
     expect(peak).toBe(2)
+  })
+})
+
+it('defers typed protocol refusal until the app restarts, without reporting a confirmed update', async () => {
+  const { RuntimeRpcCallError } = await import('./runtime-rpc-result')
+  const downloaded: RemoteServerUpdaterSnapshot = {
+    ...availableSnapshot,
+    status: { state: 'downloaded', version: '1.5.0' }
+  }
+  const result = await runRemoteServerUpdate(
+    { ...availableEntry(), phase: 'ready' },
+    transport({
+      getUpdaterStatus: async () => downloaded,
+      getRuntimeStatus: async () => {
+        throw new RuntimeRpcCallError({
+          id: 'status.get',
+          ok: false,
+          error: { code: 'protocol_version_mismatch', message: 'This client needs to be updated.' }
+        })
+      }
+    }),
+    () => undefined
+  )
+  expect(result.phase).toBe('verify-after-restart')
+})
+
+it('allows a retry after the server explicitly rejects a changed pinned target', async () => {
+  const result = await runRemoteServerUpdate(
+    { ...availableEntry(), phase: 'ready', supportsPinnedInstall: true },
+    transport({
+      getUpdaterStatus: async () => ({
+        ...availableSnapshot,
+        status: { state: 'downloaded', version: '1.5.0' }
+      }),
+      install: async () => {
+        throw new Error('remote_update_requested_version_unavailable')
+      }
+    }),
+    () => undefined,
+    { freezeTarget: true }
+  )
+  expect(result).toMatchObject({
+    phase: 'failed',
+    error: 'The server updater did not offer the requested Orca version.'
   })
 })

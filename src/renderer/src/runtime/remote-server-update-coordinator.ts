@@ -1,11 +1,23 @@
 import {
+  DEFAULT_REMOTE_SERVER_UPDATE_TIMING,
+  installPreparedRemoteServerUpdate
+} from './remote-server-update-installation'
+export {
+  DEFAULT_REMOTE_SERVER_UPDATE_TIMING,
+  installPreparedRemoteServerUpdate,
+  confirmRemoteServerUpdate
+} from './remote-server-update-installation'
+import {
   compareAppVersions,
   hasReachedAppVersion,
   isPerfPrereleaseAppVersion,
   isPrereleaseAppVersion,
   isValidAppVersion
 } from '../../../shared/app-version'
-import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../../../shared/remote-server-update'
+import {
+  REMOTE_SERVER_UPDATE_CAPABILITY,
+  REMOTE_SERVER_PINNED_UPDATE_CAPABILITY
+} from '../../../shared/remote-server-update'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
@@ -17,7 +29,6 @@ import {
 } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../shared/update-status-types'
-import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
@@ -30,12 +41,17 @@ export type RemoteServerUpdatePhase =
   | 'queued'
   | 'checking-update'
   | 'downloading'
+  | 'ready'
+  | 'not-confirmed'
+  | 'verify-after-restart'
   | 'restarting'
   | 'updated'
   | 'failed'
 
 export type RemoteServerUpdateEntry = {
   environmentId: string
+  pairingRevision?: number
+  supportsPinnedInstall?: boolean
   name: string
   phase: RemoteServerUpdatePhase
   currentVersion: string | null
@@ -61,7 +77,10 @@ export type RemoteServerUpdateTransport = {
     options: UpdateCheckOptions
   ) => Promise<RemoteServerUpdaterSnapshot>
   download: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
-  install: (environmentId: string) => Promise<RemoteServerUpdateInstallResult>
+  install: (
+    environmentId: string,
+    expectedTargetVersion?: string
+  ) => Promise<RemoteServerUpdateInstallResult>
   wait: (milliseconds: number) => Promise<void>
   now?: () => number
 }
@@ -72,15 +91,12 @@ export type RemoteServerUpdateTiming = {
   pollIntervalMs: number
 }
 
-export const DEFAULT_REMOTE_SERVER_UPDATE_TIMING: RemoteServerUpdateTiming = {
-  operationTimeoutMs: 10 * 60 * 1000,
-  reconnectTimeoutMs: 3 * 60 * 1000,
-  pollIntervalMs: 500
-}
-
 export type RemoteServerUpdateRunOptions = {
   checkOptions?: UpdateCheckOptions
   timing?: RemoteServerUpdateTiming
+  freezeTarget?: boolean
+  prepareOnly?: boolean
+  beforeInstall?: (entry: RemoteServerUpdateEntry) => Promise<void>
 }
 
 export function checkingRemoteServerUpdateEntry(
@@ -88,6 +104,7 @@ export function checkingRemoteServerUpdateEntry(
 ): RemoteServerUpdateEntry {
   return {
     environmentId: environment.id,
+    pairingRevision: environment.pairingRevision ?? environment.createdAt,
     name: environment.name,
     phase: 'checking',
     currentVersion: null,
@@ -129,6 +146,7 @@ export async function inspectRemoteServerUpdate(
   const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
   const statusFields = {
     currentVersion,
+    supportsPinnedInstall: status.capabilities?.includes(REMOTE_SERVER_PINNED_UPDATE_CAPABILITY),
     runtimeId: status.runtimeId,
     liveTabCount: status.liveTabCount,
     liveLeafCount: status.liveLeafCount,
@@ -206,6 +224,9 @@ export async function runRemoteServerUpdate(
   }
   onProgress(next)
   try {
+    if (entry.phase === 'ready') {
+      return await installPreparedRemoteServerUpdate(entry, transport, onProgress, options)
+    }
     const inferredCheckOptions = {
       includePrerelease:
         entry.targetVersion !== null && isPrereleaseAppVersion(entry.targetVersion),
@@ -240,6 +261,9 @@ export async function runRemoteServerUpdate(
       throw new Error('remote_update_status_unavailable')
     }
 
+    if (options.freezeTarget && available.status.version !== entry.targetVersion) {
+      throw new Error('remote_update_requested_version_unavailable')
+    }
     next = {
       ...next,
       phase: 'downloading',
@@ -264,31 +288,14 @@ export async function runRemoteServerUpdate(
       throw new Error('remote_update_download_incomplete')
     }
 
-    const install = await transport.install(entry.environmentId)
-    next = {
-      ...next,
-      phase: 'restarting',
-      targetVersion: install.targetVersion,
-      progress: null
+    if (options.freezeTarget && downloaded.status.version !== entry.targetVersion) {
+      throw new Error('remote_update_requested_version_unavailable')
     }
+    next = { ...next, phase: 'ready', progress: null }
     onProgress(next)
-
-    const replacement = await waitForReplacementRuntime(
-      entry.environmentId,
-      transport,
-      install,
-      timing
-    )
-    next = {
-      ...next,
-      phase: 'updated',
-      currentVersion: replacement.appVersion?.trim() ?? '',
-      runtimeId: replacement.runtimeId,
-      liveTabCount: replacement.liveTabCount,
-      liveLeafCount: replacement.liveLeafCount
-    }
-    onProgress(next)
-    return next
+    return options.prepareOnly
+      ? next
+      : await installPreparedRemoteServerUpdate(next, transport, onProgress, options, downloaded)
   } catch (error) {
     next = {
       ...next,

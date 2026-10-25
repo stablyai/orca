@@ -85,8 +85,18 @@ export function registerUIHandlers(
     return store.getUI()
   })
 
-  ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
+  ipcMain.handle('ui:set', async (event, args: Partial<PersistedUIState>) => {
+    if (
+      Object.hasOwn(args, 'appUpdateBatch') &&
+      event.sender.id !== trustedUIRendererWebContentsId
+    ) {
+      throw new Error('Only the primary Orca window can coordinate app updates.')
+    }
     store.updateUI(args)
+    // Persist the recovery checkpoint before a remote can restart.
+    if (Object.hasOwn(args, 'appUpdateBatch')) {
+      await store.flushPendingOrThrowAsync()
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {

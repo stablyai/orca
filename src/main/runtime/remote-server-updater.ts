@@ -54,6 +54,18 @@ export function downloadRemoteServerUpdater(runtimeId: string): RemoteServerUpda
   return adapter.download(runtimeId)
 }
 
-export function installRemoteServerUpdater(runtimeId: string): RemoteServerUpdateInstallResult {
+export function installRemoteServerUpdater(
+  runtimeId: string,
+  expectedTargetVersion?: string
+): RemoteServerUpdateInstallResult {
+  if (expectedTargetVersion) {
+    const snapshot = adapter.getSnapshot(runtimeId)
+    if (
+      snapshot.status.state !== 'downloaded' ||
+      snapshot.status.version !== expectedTargetVersion
+    ) {
+      throw new Error('remote_update_requested_version_unavailable')
+    }
+  }
   return adapter.install(runtimeId)
 }

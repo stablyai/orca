@@ -622,7 +622,7 @@ import {
   TerminalUnsubscribe,
   TerminalUpdateViewport
 } from './terminal-viewport-schemas-params'
-import { UpdaterCheckParams } from './updater-params'
+import { UpdaterCheckParams, UpdaterInstallParams } from './updater-params'
 import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
@@ -1425,7 +1425,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.check': UpdaterCheckParams,
   'updater.download': null,
   'updater.getStatus': null,
-  'updater.install': null,
+  'updater.install': UpdaterInstallParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,
