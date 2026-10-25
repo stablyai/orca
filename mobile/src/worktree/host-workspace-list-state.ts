@@ -1,4 +1,8 @@
-import { isConnectionOutage, type ConnectionVerdict } from '../transport/connection-health'
+import {
+  isConnectionDialing,
+  isConnectionOutage,
+  type ConnectionVerdict
+} from '../transport/connection-health'
 import type { ConnectionState } from '../transport/types'
 
 export type HostWorkspaceListStateInput = {
@@ -22,15 +26,23 @@ export function selectHostWorkspaceListState(
     sectionCount,
     catalogError
   } = input
+  // The auth banner owns refused pairings.
+  if (connectionVerdict.kind === 'auth-failed') {
+    return null
+  }
   // An outage with nothing cached must say so; a spinner there never ends (STA-11382).
   if (
     displayCount === 0 &&
-    (connState === 'disconnected' || isConnectionOutage(connectionVerdict))
+    (isConnectionOutage(connectionVerdict) ||
+      (connState === 'disconnected' && !isConnectionDialing(connectionVerdict)))
   ) {
     return 'unreachable'
   }
   const pending =
-    connState === 'connecting' || connState === 'handshaking' || connState === 'reconnecting'
+    connState === 'connecting' ||
+    connState === 'handshaking' ||
+    connState === 'reconnecting' ||
+    connState === 'disconnected'
   if (
     (pending && displayCount === 0) ||
     (connState === 'connected' && !worktreesLoaded && displayCount === 0 && !catalogError)

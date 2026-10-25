@@ -22,7 +22,7 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
-  return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
+  return isConnectionOutage(v) || v.kind === 'auth-failed'
 }
 
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {

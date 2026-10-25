@@ -145,6 +145,11 @@ export function isConnectionOutage(
   return verdict.kind === 'warning' || verdict.kind === 'unreachable'
 }
 
+// A normal label ending in an ellipsis is a dial still in progress.
+export function isConnectionDialing(verdict: ConnectionVerdict): boolean {
+  return verdict.kind === 'normal' && verdict.label.endsWith('…')
+}
+
 export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
   if (isConnectionOutage(verdict) && verdict.hint) {
     return `${verdict.label} — ${verdict.hint}`

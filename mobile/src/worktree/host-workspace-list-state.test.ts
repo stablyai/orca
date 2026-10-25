@@ -77,6 +77,27 @@ describe('selectHostWorkspaceListState', () => {
     ).toBe('unreachable')
   })
 
+  it('keeps spinning through a relay redial and leaves a refused pairing to its banner', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'normal', label: 'Connecting via Relay…' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('loading')
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBeNull()
+  })
+
   it('renders nothing while disconnected with cached rows', () => {
     expect(
       selectHostWorkspaceListState(
