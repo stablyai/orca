@@ -46,6 +46,10 @@ type EventContext = KeyboardHandlersDeps & {
   observedEnterKeydownTimeStamps: Runtime['observedEnterKeydownTimeStamps']
 }
 
+/**
+ * Builds the window-level keydown/keyup handlers that run terminal shortcuts and Orca-encoded
+ * input before xterm sees the event.
+ */
 export function createTerminalKeyboardEventHandlers(context: EventContext) {
   const {
     tabId,
@@ -90,6 +94,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     getKeyboardSplitTelemetrySource
   } = context
 
+  /** Resolves a keydown to a terminal shortcut or PTY input, claiming it from xterm when handled. */
   const onKeyDown = (e: KeyboardEvent): void => {
     // Why: replace stale state only for this physical key so rollover cannot
     // disarm a still-held native-only chord before its Kitty keyup arrives.
@@ -229,6 +234,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       isInsideNativeChatCover(e.target) &&
       (action.type === 'toggleSearch' ||
         action.type === 'selectAll' ||
+        (action.type === 'sendInput' && action.selectAllChord === true) ||
         action.type === 'copySelection' ||
         keybindingMatchesAction('chat.find', e, shortcutPlatform, keybindings))
     ) {

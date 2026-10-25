@@ -13,6 +13,11 @@ import {
 } from './terminal-option-shortcut-policy'
 import type { OptionKeyLocationState } from '../../lib/keyboard-layout/option-key-location-state'
 import type { TerminalOptionKittyRelease } from './terminal-option-kitty-release'
+import {
+  encodeTerminalSelectAllKittyKeyDown,
+  selectAllKittyRelease,
+  shouldForwardSelectAllToKittyApp
+} from './terminal-kitty-select-all'
 
 export type { MacOptionAsAlt } from './terminal-option-shortcut-policy'
 
@@ -64,6 +69,8 @@ export type TerminalShortcutAction =
       data: string
       optionKittyRelease?: TerminalOptionKittyRelease
       consumeOptionKeyUp?: boolean
+      // Why: a select-all forwarded to a kitty app is still a select-all for the native chat cover.
+      selectAllChord?: boolean
     }
   | { type: 'trackNativeOptionDeadKey' }
   | { type: 'switchInputSource' }
@@ -121,8 +128,21 @@ export function resolveTerminalShortcutAction(
 
   // Why: held select-all and copy keydowns must remain claimed until keyup so
   // Kitty event reporting cannot encode their repeat or release into the PTY.
+  // The exception is a macOS kitty TUI, which owns Cmd+A (select its input):
+  // terminal-first already lets xterm encode it, so orca-first sends the same bytes.
   if (matches('terminal.selectAll')) {
-    return { type: 'selectAll' }
+    const kittyFlags = getKittyKeyboardFlagsActivePane?.() ?? 0
+    const data = shouldForwardSelectAllToKittyApp(isMac, kittyFlags)
+      ? encodeTerminalSelectAllKittyKeyDown(event, kittyFlags, layoutCharacterForCode)
+      : null
+    if (!data) {
+      return { type: 'selectAll' }
+    }
+    // The release tracker owes the app the matching keyup when it asked for event types.
+    const optionKittyRelease = selectAllKittyRelease(kittyFlags)
+    return optionKittyRelease
+      ? { type: 'sendInput', data, optionKittyRelease, selectAllChord: true }
+      : { type: 'sendInput', data, selectAllChord: true }
   }
 
   if (matches('terminal.copySelection')) {

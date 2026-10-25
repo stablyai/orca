@@ -4,8 +4,13 @@ import {
   optionKittyPrimaryCharacterFallback,
   resolveTerminalKittyPrimaryCodePoint
 } from './terminal-kitty-csi-u-encoding'
+import { withoutKittyLockModifiers } from './terminal-kitty-select-all'
 
-export type TerminalOptionKittyRelease = { flags: number }
+export type TerminalOptionKittyRelease = {
+  flags: number
+  // Why: a press encoded without lock modifiers (forwarded Cmd+A) needs a release that matches it.
+  ignoreLockModifiers?: boolean
+}
 
 type OptionKeyboardEvent = {
   key: string
@@ -16,6 +21,8 @@ type OptionKeyboardEvent = {
   metaKey: boolean
   repeat?: boolean
   getModifierState?: (key: string) => boolean
+  capsLock?: boolean
+  numLock?: boolean
 }
 
 type PendingRelease =
@@ -25,13 +32,24 @@ type PendingRelease =
       getCurrentFlags: () => number
       layoutCharacterForCode?: (code: string, shifted: boolean) => string | undefined
       primaryCodePoint: number
+      ignoreLockModifiers: boolean
     }
   | { type: 'consumeNativeDeadKey' }
 
+/** Identifies a physical key so its keyup settles the release armed by its press. */
 function keyIdentity(event: Pick<OptionKeyboardEvent, 'key' | 'code'>): string {
   return event.code || event.key
 }
 
+/** Drops CapsLock/NumLock from the event when the armed press was encoded without them. */
+function withoutLockModifiers(event: OptionKeyboardEvent, ignore: boolean): OptionKeyboardEvent {
+  return ignore ? withoutKittyLockModifiers(event) : event
+}
+
+/**
+ * Tracks keydowns Orca encoded itself (bypassing xterm) so the matching keyup sends exactly one
+ * kitty release when the app asked for event types, and consumes native dead-key keyups.
+ */
 export function createTerminalOptionKittyReleaseTracker(): {
   arm: (
     event: OptionKeyboardEvent,
@@ -56,10 +74,14 @@ export function createTerminalOptionKittyReleaseTracker(): {
       if ((release.flags & KITTY_REPORT_EVENT_TYPES) === 0) {
         return
       }
-      const primaryCodePoint = resolveTerminalKittyPrimaryCodePoint(event, {
-        layoutCharacterForCode,
-        primaryCharacterFallback: optionKittyPrimaryCharacterFallback(event)
-      })
+      const ignoreLockModifiers = release.ignoreLockModifiers === true
+      const primaryCodePoint = resolveTerminalKittyPrimaryCodePoint(
+        withoutLockModifiers(event, ignoreLockModifiers),
+        {
+          layoutCharacterForCode,
+          primaryCharacterFallback: optionKittyPrimaryCharacterFallback(event)
+        }
+      )
       if (primaryCodePoint === undefined) {
         return
       }
@@ -68,7 +90,8 @@ export function createTerminalOptionKittyReleaseTracker(): {
         sendInput,
         getCurrentFlags,
         layoutCharacterForCode,
-        primaryCodePoint
+        primaryCodePoint,
+        ignoreLockModifiers
       })
     },
     armNativeDeadKey: (event) => armPending(event, { type: 'consumeNativeDeadKey' }),
@@ -84,13 +107,16 @@ export function createTerminalOptionKittyReleaseTracker(): {
       }
       const flags = record.getCurrentFlags()
       if ((flags & KITTY_REPORT_EVENT_TYPES) !== 0) {
-        const data = encodeTerminalOptionKittyEvent(event, {
-          flags,
-          type: 'release',
-          layoutCharacterForCode: record.layoutCharacterForCode,
-          primaryCharacterFallback: optionKittyPrimaryCharacterFallback(event),
-          primaryCodePoint: record.primaryCodePoint
-        })
+        const data = encodeTerminalOptionKittyEvent(
+          withoutLockModifiers(event, record.ignoreLockModifiers),
+          {
+            flags,
+            type: 'release',
+            layoutCharacterForCode: record.layoutCharacterForCode,
+            primaryCharacterFallback: optionKittyPrimaryCharacterFallback(event),
+            primaryCodePoint: record.primaryCodePoint
+          }
+        )
         if (data) {
           record.sendInput(data)
         }
