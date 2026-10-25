@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   copilot: vi.fn<(path: string, home: string) => void>(),
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
+  kimi: vi.fn<(path: string, kimiHome: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
@@ -28,7 +29,8 @@ vi.mock('./agent-trust-presets', () => ({
   markCodexProjectTrusted: mocks.codex,
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
-  markAntigravityWorkspaceTrusted: mocks.antigravity
+  markAntigravityWorkspaceTrusted: mocks.antigravity,
+  markKimiWorkspaceTrusted: mocks.kimi
 }))
 vi.mock('./codex/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
@@ -102,6 +104,21 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }
+  })
+
+  it("writes Kimi trust under the launch env's KIMI_CODE_HOME, else its ~/.kimi-code", async () => {
+    vi.stubEnv('KIMI_CODE_HOME', '')
+    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent', KIMI_CODE_HOME: '/kimi/custom' }
+    })
+    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, '/kimi/custom')
+    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' }
+    })
+    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, join('/home/agent', '.kimi-code'))
+    vi.unstubAllEnvs()
   })
 
   it('contains a rejected or throwing write so the launch proceeds', async () => {

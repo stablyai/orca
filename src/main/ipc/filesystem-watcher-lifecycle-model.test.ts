@@ -9,7 +9,7 @@ const { handleMock, statMock, subscribeMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
-vi.mock('./parcel-watcher-process', () => ({
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: subscribeMock,
   disposeWatcherProcess: vi.fn()
 }))

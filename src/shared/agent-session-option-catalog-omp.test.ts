@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
-import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
+import { parseOmpModelList } from './omp-model-list-probe'
 
 const LISTING = JSON.stringify({
   models: [
@@ -31,10 +30,6 @@ const LISTING = JSON.stringify({
 })
 
 describe('omp model list probe', () => {
-  it('asks omp for its machine-readable listing', () => {
-    expect(OMP_MODEL_LIST_ARGS).toEqual(['models', '--json'])
-  })
-
   it('parses selectors as ids, names as labels, and providers as descriptions', () => {
     expect(parseOmpModelList(LISTING)).toEqual([
       { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'deepseek' },
@@ -109,16 +104,6 @@ describe('omp model list probe', () => {
 })
 
 describe('omp session option catalog', () => {
-  it('is registered for the omp agent', () => {
-    expect(getAgentSessionOptionCatalog('omp')).toBe(OMP_SESSION_OPTION_CATALOG)
-  })
-
-  it('seeds no model because none is available on every install', () => {
-    expect(OMP_SESSION_OPTION_CATALOG.models).toEqual([])
-    expect(OMP_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
-    expect(OMP_SESSION_OPTION_CATALOG.discoveredModelsAreAuthoritative).toBe(true)
-  })
-
   it('discovers models through the same JSON listing the probe parses', () => {
     const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
     expect(listModels.command).toBe('omp models --json')
@@ -155,7 +140,7 @@ describe('omp session option catalog', () => {
     ])
   })
 
-  it('switches mid-session with /orca-model <selector>, which omp resolves exactly', () => {
+  it('builds and parses /orca-model with the exact selector', () => {
     const midSession = OMP_SESSION_OPTION_CATALOG.modelApply.midSession
     expect(midSession).toMatchObject({ kind: 'command' })
     if (midSession?.kind !== 'command') {

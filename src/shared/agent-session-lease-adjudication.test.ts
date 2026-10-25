@@ -97,7 +97,7 @@ describe('acquisition compare-and-swap', () => {
     expect(acquire(held, MATCHED)).toEqual({ decision: 'granted', nextFence: 8 })
   })
 
-  it('refuses the loser of a concurrent swap: only one caller sees the pre-state fence', () => {
+  it('refuses a cached fence after the lease advances to a reservation', () => {
     const before = lease({ ownerProcess: null, claimStatus: 'released', reservedSpawnToken: null })
     const winner = acquire(before, MATCHED)
     expect(winner).toEqual({ decision: 'granted', nextFence: 8 })
@@ -195,9 +195,11 @@ describe('acquisition compare-and-swap', () => {
 
 describe('restart reconciliation', () => {
   it('keeps a surviving terminal owner an older build recorded conflicted; nothing re-adopts it', () => {
+    const normalized = normalizeLegacyHandoffLease({ ...lease(), runtimeKind: 'tui' })
+    expect(normalized).toMatchObject({ runtimeKind: 'native', claimStatus: 'conflicted' })
     expect(
       adjudicateAgentSessionRestart({
-        lease: normalizeLegacyHandoffLease({ ...lease(), runtimeKind: 'tui' }),
+        lease: normalized,
         probe: MATCHED,
         observedAt: 9_000
       })

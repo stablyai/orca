@@ -86,7 +86,7 @@ async function desktopCatalog(): Promise<{ repos: readonly Repo[]; rows: Project
   let repos: readonly Repo[] = []
   let rows: ProjectCatalogRows = { projects: [], projectHostSetups: [] }
   for (const host of PROJECT_SECTION_PARITY_HOSTS) {
-    const catalog = await fetchRepoCatalogForTarget(host.target)
+    const catalog = await fetchRepoCatalogForTarget(host.target, repos)
     const result = mergeFetchedRepoCatalog(catalog, repos)
     const reconciled = reconcileSupersededSshRepos(result.repos, { pendingSshRepoReadoptions: [] })
     const finalized = applyManualRepoOrder(reconciled.repos, [])

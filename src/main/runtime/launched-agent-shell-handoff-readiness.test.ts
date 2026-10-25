@@ -98,10 +98,9 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
     await vi.advanceTimersByTimeAsync(3_000)
     expect(pane.settled).not.toHaveBeenCalled()
 
+    // Claude's composer marker answers once it draws, ahead of the quiet window.
     pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS - 100)
-    expect(pane.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(100)
     expect(pane.settled).toHaveBeenCalledWith('pty-1')
   })
 

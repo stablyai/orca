@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
@@ -351,7 +351,9 @@ describe('ArtifactsPage', () => {
     }
     view.rerender(<ArtifactsPage />)
     expect(await screen.findByRole('button', { name: /Account B/ })).toBeInTheDocument()
-    resolveRefresh()
+    await act(async () => {
+      resolveRefresh()
+    })
 
     await waitFor(() =>
       expect(screen.queryByText('Sign in to Orca again to load artifacts.')).not.toBeInTheDocument()
@@ -391,7 +393,9 @@ describe('ArtifactsPage', () => {
     }
     view.rerender(<ArtifactsPage />)
     expect(await screen.findByRole('button', { name: /Account B/ })).toBeInTheDocument()
-    resolveRefresh()
+    await act(async () => {
+      resolveRefresh()
+    })
 
     await waitFor(() =>
       expect(screen.queryByText('Sign in to Orca again to load artifacts.')).not.toBeInTheDocument()
@@ -415,28 +419,30 @@ describe('ArtifactsPage', () => {
     }
     mocks.rpc.mockResolvedValueOnce({ status: 'ok', value: { artifacts: [] } })
     view.rerender(<ArtifactsPage />)
-    resolveFirst({
-      status: 'ok',
-      value: {
-        artifacts: [
-          {
-            artifact: {
-              byteSize: 1,
-              createdAt: '2026-08-01T12:00:00.000Z',
-              deletedAt: null,
-              expiresAt: '2026-09-01T12:00:00.000Z',
-              originalFileName: 'account-a-secret.html',
-              renderedContentType: 'text/html',
-              slug: 'account-a-secret',
-              sourceContentType: 'text/html',
-              title: 'Account A secret',
-              updatedAt: '2026-08-02T12:00:00.000Z',
-              version: 1
-            },
-            shareUrl: 'https://share.onorca.dev/a/account-a-secret'
-          }
-        ]
-      }
+    await act(async () => {
+      resolveFirst({
+        status: 'ok',
+        value: {
+          artifacts: [
+            {
+              artifact: {
+                byteSize: 1,
+                createdAt: '2026-08-01T12:00:00.000Z',
+                deletedAt: null,
+                expiresAt: '2026-09-01T12:00:00.000Z',
+                originalFileName: 'account-a-secret.html',
+                renderedContentType: 'text/html',
+                slug: 'account-a-secret',
+                sourceContentType: 'text/html',
+                title: 'Account A secret',
+                updatedAt: '2026-08-02T12:00:00.000Z',
+                version: 1
+              },
+              shareUrl: 'https://share.onorca.dev/a/account-a-secret'
+            }
+          ]
+        }
+      })
     })
 
     await screen.findByText('No shared artifacts')
@@ -472,7 +478,9 @@ describe('ArtifactsPage', () => {
       value: { artifacts: [artifactListItem('Shared slug B', 'shared-slug')] }
     })
     view.rerender(<ArtifactsPage />)
-    resolveDelete({ status: 'ok', value: undefined })
+    await act(async () => {
+      resolveDelete({ status: 'ok', value: undefined })
+    })
 
     expect(await screen.findByRole('button', { name: /Shared slug B/ })).toBeInTheDocument()
   })
@@ -497,9 +505,11 @@ describe('ArtifactsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await deleteFirstArtifactFromDrawerMenu()
     await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
-    resolveRefresh({
-      status: 'ok',
-      value: { artifacts: [artifactListItem('Delete me', 'delete-me')] }
+    await act(async () => {
+      resolveRefresh({
+        status: 'ok',
+        value: { artifacts: [artifactListItem('Delete me', 'delete-me')] }
+      })
     })
 
     await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
@@ -521,7 +531,7 @@ describe('ArtifactsPage', () => {
     expect(mocks.confirm).not.toHaveBeenCalled()
   })
 
-  it('persists the skip preference only when the confirmation is accepted', async () => {
+  it('supplies the confirmation callback that persists the skip preference', async () => {
     mocks.confirm.mockResolvedValue(true)
     mocks.rpc.mockResolvedValue({
       status: 'ok',

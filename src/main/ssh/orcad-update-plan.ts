@@ -35,6 +35,9 @@ type OrcadUpdateDecision =
     }
   | { action: 'defer'; code: OrcadUpdateDeferCode; reason: string }
 
+/** `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. */
+export type OrcadUpdateForce = boolean | 'live-terminals'
+
 export type OrcadUpdateDeferCode =
   | 'orcad_update_terminals_running'
   | 'orcad_update_terminal_census_unavailable'
@@ -56,7 +59,7 @@ export function planOrcadUpdate(input: {
   census: OrcadTerminalCensus
   /** The candidate's daemon protocol and the older ones it can still attach to. */
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  force?: boolean
+  force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
     return {
@@ -103,7 +106,7 @@ export function planOrcadUpdate(input: {
     }
   }
   if (liveSessions === null) {
-    if (!input.force) {
+    if (input.force !== true) {
       return {
         action: 'defer',
         code: 'orcad_update_terminal_census_unavailable',

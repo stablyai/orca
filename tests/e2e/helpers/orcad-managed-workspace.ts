@@ -36,10 +36,12 @@ export type ManagedHostFixture = {
 /** A fresh Docker SSH host and profile for `body`, torn down whatever it throws. */
 export async function withManagedHost(
   testInfo: TestInfo,
-  body: (fixture: ManagedHostFixture) => Promise<void>
+  body: (fixture: ManagedHostFixture) => Promise<void>,
+  /** A writable template copy, for a spec that rebuilds it as an app update would. */
+  templatePath: string = ORCAD_TEMPLATE!
 ): Promise<void> {
   const host = startOrcadConvertHost('docker', testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE! })
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: templatePath })
   const fixture: ManagedHostFixture = { host, session, app: null }
   try {
     await body(fixture)

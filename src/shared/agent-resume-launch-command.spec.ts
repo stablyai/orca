@@ -544,7 +544,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchCommand).toBe(`claude '--model' 'sonnet' '--resume' '${SESSION_ID}'`)
   })
 
-  it('still launches exotic custom commands that the tokenizer rejects', () => {
+  it('builds a resume command for a custom command the tokenizer rejects', () => {
     const restored = buildAgentResumeStartupPlan({
       agent: 'claude',
       providerSession,
@@ -556,7 +556,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchCommand.endsWith(`'--resume' '${SESSION_ID}'`)).toBe(true)
   })
 
-  it('does not change other agents', () => {
+  it('retains Gemini args while appending its resume identity', () => {
     const restored = buildAgentResumeStartupPlan({
       agent: 'gemini',
       providerSession,

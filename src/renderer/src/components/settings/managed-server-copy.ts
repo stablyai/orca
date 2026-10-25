@@ -57,6 +57,14 @@ export function terminalCensusLabel(terminals: OrcadManagedRuntimeStatus['termin
   )
 }
 
+/** Copy for Update anyway; it states only what the forced update was verified to keep. */
+export function forceUpdateMessage(): string {
+  return translate(
+    'auto.components.settings.managedServers.row.forceUpdate',
+    'Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.'
+  )
+}
+
 export function conversionBlockerLabel(blocker: OrcadMigrationBlocker): string {
   switch (blocker.code) {
     case 'orcad_migration_target_not_found':

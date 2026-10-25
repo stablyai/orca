@@ -20,6 +20,9 @@ export type TerminalOutputFrameChunk = {
   opcode?: TerminalStreamOpcode
 }
 
+/** `span` only for subscribers that decode OutputSpan (the multiplex); `text` is the opcode-1 encoding every client reads. */
+export type TerminalOutputFrameEncoding = 'span' | 'text'
+
 export const TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS = 8 * 1024
 const MAX_UTF8_BYTES_PER_CODE_UNIT = 3
 
@@ -49,16 +52,22 @@ export function exceedsTerminalStreamChunkBytes(data: string): boolean {
 
 export function* iterateTerminalOutputFrameChunks(
   data: string,
-  meta?: TerminalOutputMeta
+  meta: TerminalOutputMeta | undefined,
+  encoding: TerminalOutputFrameEncoding
 ): Generator<TerminalOutputFrameChunk> {
   const rawLength = meta?.rawLength ?? data.length
-  if (meta?.transformed || rawLength !== data.length) {
+  const isSpan = meta?.transformed === true || rawLength !== data.length
+  if (isSpan && encoding === 'span') {
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
       bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
       displayLength: data.length,
       seq: meta?.seq
     }
+    return
+  }
+  if (isSpan && !data) {
+    // Why: a fully stripped span has no text, and a text frame has no field for its raw length.
     return
   }
   if (!exceedsTerminalStreamChunkBytes(data)) {
@@ -69,9 +78,8 @@ export function* iterateTerminalOutputFrameChunks(
     }
     return
   }
-  const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
-  // Unreachable past the OutputSpan branch above (rawLength === data.length there), but kept
-  // as defence in depth: it is the only shape that can carry a seq the chunk offsets can't map.
+  const canPreserveChunkSeq = typeof meta?.seq === 'number' && !isSpan
+  // A span sent as text: chunk offsets can't map back to its raw sequence.
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
   let chunkStart = 0

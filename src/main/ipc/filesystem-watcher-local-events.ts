@@ -6,7 +6,7 @@ import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-wat
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {

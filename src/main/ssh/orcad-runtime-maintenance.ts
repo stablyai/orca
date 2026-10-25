@@ -11,6 +11,7 @@ import {
 } from '../../shared/runtime-environments'
 import type {
   OrcadManagedDeployResult,
+  OrcadManagedPastLiveTerminals,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult
 } from '../../shared/orcad-managed-runtime'
@@ -36,6 +37,7 @@ import {
 import type { OrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { readRemoteOrcadBuildHash } from '../managed-server/install/orcad-remote-build-hash'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
+import type { OrcadUpdateForce } from './orcad-update-plan'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
@@ -79,16 +81,26 @@ export async function followLaunchedServerPort(
 
 export function updateManagedOrcadEnvironment(
   userDataPath: string,
-  args: LifecycleArgs & { force?: boolean }
+  args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
 ): Promise<OrcadManagedDeployResult> {
-  const intent = args.force ? 'force' : 'update'
+  const { pastLiveTerminals } = args
+  // Update anyway keeps Update's version admission even if a caller also passed force.
+  const intent = args.force && !pastLiveTerminals ? 'force' : 'update'
   return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
-    const admitRecord = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
+    const admitIntent = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
+    // Checked under the host fence: another desktop may have activated a build since the confirm.
+    const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
+      ? (record, candidateVersion) =>
+          record.active !== pastLiveTerminals.incumbentVersion
+            ? "This host's server changed since the update was confirmed. Review it and update again."
+            : admitIntent(record, candidateVersion)
+      : admitIntent
+    const force: OrcadUpdateForce | undefined = pastLiveTerminals ? 'live-terminals' : args.force
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
       await resolveLinkedOrcadContext(managed.environment, managed.deployment, args.signal),
-      { ...args, admitRecord }
+      { signal: args.signal, force, admitRecord }
     )
     // Only a landed Update re-enables the connect's attempts; a failed retry stays remembered.
     if (result.outcome !== 'deferred') {
@@ -104,7 +116,7 @@ export async function runManagedOrcadUpdate(
   { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
   context: OrcadRemoteContext,
   args: {
-    force?: boolean
+    force?: OrcadUpdateForce
     signal?: AbortSignal
     localOrcadDir?: string
     admitRecord?: OrcadDeployOptions['admitRecord']

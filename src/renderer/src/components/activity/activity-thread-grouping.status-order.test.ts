@@ -284,7 +284,7 @@ import { formatShortTimeAgo } from '@/lib/short-time-ago'
       }
     )
 
-    it("heads a group of user's Stops with the interrupted glyph", () => {
+    it('classifies a group of user Stops as interrupted', () => {
       const groups = statusGroups('cancellation', 'cancellation')
 
       expect(groups).toHaveLength(1)

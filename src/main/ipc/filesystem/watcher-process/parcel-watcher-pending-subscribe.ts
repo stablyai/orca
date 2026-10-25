@@ -1,8 +1,8 @@
-import { WatcherProcessFailure } from '../../parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   PendingWatcherProcessSubscribe,
   WatcherProcessSubscriptionRecord
-} from '../../parcel-watcher-process-subscription'
+} from './parcel-watcher-process-subscription'
 
 export function installPendingSubscribeControls(
   record: WatcherProcessSubscriptionRecord,

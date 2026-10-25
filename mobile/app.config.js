@@ -13,6 +13,9 @@ const APS_ENVIRONMENT =
 
 module.exports = ({ config }) => ({
   ...config,
+  // `expo run` installs a dev-client build cached for the current native fingerprint instead of
+  // rebuilding; scripts/native-client.mjs populates the cache.
+  buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
   ios: {
     ...config.ios,
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }

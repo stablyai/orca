@@ -242,11 +242,13 @@ describe('activity thread grouping', () => {
       makeActivityResult({
         entries: {
           [PANE_KEY]: makeWorkingEntryWithoutHistory(),
-          [PANE_KEY_2]: makeWorkingEntryWithoutHistory()
-        }
+          [PANE_KEY_2]: { ...makeWorkingEntryWithoutHistory(), paneKey: PANE_KEY_2 }
+        },
+        tabs: [makeTabWithIds('tab-1', 'wt-1'), makeTabWithIds('tab-2', 'wt-1')]
       })
     )
 
+    expect(threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY, PANE_KEY_2])
     expect(buildActivityThreadGroups(threads, 'none')).toEqual([{ key: 'all', label: '', threads }])
   })
 })

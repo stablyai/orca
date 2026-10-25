@@ -95,7 +95,7 @@ describe('TerminalWorkbenchContainer', () => {
     expect(node.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('re-parks once the phone stops driving the page', () => {
+  it('mounts parked after the phone driver is cleared', () => {
     setDriverForBrowserPage(PAGE_ID, { kind: 'mobile', clientId: 'client-1' })
     expect(mountWorkbench(false).className).not.toContain('hidden')
     cleanup()

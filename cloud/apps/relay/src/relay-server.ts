@@ -410,6 +410,8 @@ export function createRelayServer(
       ? new CellAdmitEffectiveWriter({
           write: async (mode) =>
             await assignments.recordCellAdmitEffective({ cellId: config.cellId, cellIncarnation, mode }),
+          claimTrip: async (slots) =>
+            await assignments.claimDeadManTripSlot({ cellId: config.cellId, cellIncarnation, slots }),
           databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
           now: options.now ?? Date.now
         })
@@ -424,7 +426,12 @@ export function createRelayServer(
         }
         appliedAdmitMode = admitMode
         // A booted cell runs db defaults until its first flag read, so it writes nothing until then.
-        admitEffective?.tick(admitMode, options.cellFlags?.().flags.admitMode === 'reserve')
+        const held = reserveDeadMan?.pendingTrip()
+        admitEffective?.tick(
+          admitMode,
+          options.cellFlags?.().flags.admitMode === 'reserve',
+          held ? { slots: held.slots, permit: () => reserveDeadMan?.permit(held.generation) } : null
+        )
       }, RESERVE_MODE_WATCH_MS)
     : null
   reserveSweepTimer?.unref()

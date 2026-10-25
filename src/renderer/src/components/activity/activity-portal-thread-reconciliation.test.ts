@@ -7,7 +7,7 @@ import {
 
 const thread = (tabId: string, leafId: string): ActivityPortalThreadRef => ({
   paneKey: `${tabId}:${leafId}`,
-  worktree: { id: `wt-${tabId}` },
+  worktree: { id: tabId === 'tab-c' ? 'wt-other' : 'wt-shared' },
   tab: { id: tabId }
 })
 

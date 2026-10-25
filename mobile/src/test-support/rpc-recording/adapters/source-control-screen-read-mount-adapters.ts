@@ -170,8 +170,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           throw new Error(`Unknown branch diff action: ${name}`)
         },
-        // The highlighted lines are a rendering of the diff, not an observation of the reply, so the
-        // preview is projected by what it is and how much it carried.
+        // Observe displayed diff content without coupling the recording to syntax highlighting.
         state: () => ({ preview: projectBranchDiffPreview(openers?.branchDiffPreview) }),
         dispose: hook.unmount
       }
@@ -208,7 +207,16 @@ function projectBranchDiffPreview(preview: MobileBranchDiffPreviewState | null):
     return 'unopened'
   }
   if (preview.kind === 'ready') {
-    return { kind: 'ready', lines: preview.lines.length, truncated: preview.truncated }
+    return {
+      kind: 'ready',
+      lines: preview.lines.map(({ kind, text, oldLineNumber, newLineNumber }) => ({
+        kind,
+        text,
+        oldLineNumber,
+        newLineNumber
+      })),
+      truncated: preview.truncated
+    }
   }
   return preview.kind === 'error'
     ? { kind: 'error', message: preview.message }

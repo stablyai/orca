@@ -3,7 +3,7 @@ import { isWslPath } from '../wsl'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
 import { WatcherChildCapacityError } from './filesystem/watcher-process/parcel-watcher-child-registry'
-import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 import type {
   LocalWatcherInstallResult,
   LocalWatcherInstallToken

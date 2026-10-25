@@ -133,6 +133,16 @@ export const PR_E2E_SOURCE_ROUTES = [
           file
         ))
   },
+  {
+    id: 'ssh.orcad-update-anyway',
+    specs: ['tests/e2e/ssh-orcad-update-anyway.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status))|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
+          file
+        ))
+  },
   // COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
   {
     id: 'ssh.orcad-legacy-relay-bridge',

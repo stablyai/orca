@@ -12,7 +12,9 @@ const { statMock, subscribeMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('fs/promises', () => ({ stat: statMock }))
-vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscribeMock }))
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
+  subscribeViaWatcherProcess: subscribeMock
+}))
 
 import { createLocalWatcher } from './filesystem-watcher-local-events'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
