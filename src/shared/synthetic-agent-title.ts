@@ -19,7 +19,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'droid',
   'hermes',
   'devin',
-  'zcode'
+  'zcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -80,6 +81,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     idleLabel: 'ZCode ready',
     // Captured zcode-composer-ready.txt has no OSC 0/1/2; synthesize every state for tui-idle detection.
     // Its endlessly repainting ASCII banner also prevents quiescence detection.
+    synthesizeWorkingTitle: true
+  },
+  kiro: {
+    workingLabel: 'Kiro',
+    permissionLabel: 'Kiro - action required',
+    idleLabel: 'Kiro ready',
+    // Why every state, like ZCode: Kiro sets OSC titles only before its first paint, never through a
+    // turn (`kiro-2-27-1-v3-turn.txt`), so without this an idle pane loses its agent identity.
     synthesizeWorkingTitle: true
   }
 }
