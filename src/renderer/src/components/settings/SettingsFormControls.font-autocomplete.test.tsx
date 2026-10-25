@@ -134,6 +134,33 @@ describe('FontAutocomplete', () => {
     expectOptionsToBePortaled()
   })
 
+  it('renders each option name in its own typeface and leaves the input in the UI font', async () => {
+    const fonts = ['Arial', 'Fira Code', 'Georgia']
+
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('Arial')
+      return <FontAutocomplete value={value} suggestions={fonts} onChange={setValue} />
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+    await act(async () => {
+      getInput().focus()
+    })
+
+    const optionFamilies = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="option"]')
+    ).map((option) => option.querySelector<HTMLElement>('span')?.style.fontFamily ?? '')
+
+    const primaryFamilies = optionFamilies.map((family) =>
+      family.split(',')[0]?.replaceAll('"', '')
+    )
+
+    expect(primaryFamilies).toEqual(fonts)
+    expect(getInput().style.fontFamily).toBe('')
+  })
+
   it('bounds the portaled list to the available popover height', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Cascadia Mono')
