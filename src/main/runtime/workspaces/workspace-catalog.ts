@@ -8,6 +8,7 @@ import { RESOLVED_WORKTREE_CACHE_TTL_MS } from '../orca-runtime-postlude'
 import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
 import {
   resolveLocalProjectRuntimeForRepo,
+  getLocalProjectWorktreeGitOptionsForRuntime,
   resolveLocalProjectRuntimesForRepos
 } from '../../project-runtime-git-options'
 import {
@@ -170,7 +171,14 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           ok: true,
           worktrees: await withUnregisteredRemovalCheckouts(
             repo.id,
-            withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
+            withoutInFlightWorktreeCreates(repo.id, scan.worktrees),
+            this.store
+              ? getLocalProjectWorktreeGitOptionsForRuntime(
+                  repo,
+                  projectRuntimeByRepoId?.get(repo.id) ??
+                    resolveLocalProjectRuntimeForRepo(this.store, repo)
+                )
+              : {}
           )
         }
       : scan

@@ -16,8 +16,7 @@ import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
-  waitForPendingWorktreeRemoval,
-  type BackgroundWorktreeRemovalJob
+  waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
 import {
   projectPendingWorktreeRemovals,
@@ -66,9 +65,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-function startFailingRemoval(
-  job: Pick<BackgroundWorktreeRemovalJob, 'cleanupPushTargetRemote'> = {}
-): Promise<unknown> {
+function startFailingRemoval(): Promise<unknown> {
   return startBackgroundWorktreeRemoval({
     removal: {
       worktreeId,
@@ -81,8 +78,7 @@ function startFailingRemoval(
     run: async () => {
       throw new Error(GIT_ERROR)
     },
-    publish: () => {},
-    ...job
+    publish: () => {}
   })
 }
 
@@ -139,42 +135,18 @@ describe('a delete that fails after Git dropped the registration', () => {
       mainWorktree,
       { ...leftoverRow(), removalError: undefined }
     ])
-    const cleanupPushTargetRemote = vi.fn(async () => {})
-    await expect(startFailingRemoval({ cleanupPushTargetRemote })).rejects.toThrow(GIT_ERROR)
+    await expect(startFailingRemoval()).rejects.toThrow(GIT_ERROR)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
     expect(deleteBranchOfUnregisteredWorktree).not.toHaveBeenCalled()
-    expect(cleanupPushTargetRemote).not.toHaveBeenCalled()
   })
 
-  it('runs the Git side of the delete when it fails: the recorded branch and the push-target remote', async () => {
-    const cleanupPushTargetRemote = vi.fn(async () => {})
-    await expect(startFailingRemoval({ cleanupPushTargetRemote })).rejects.toThrow(GIT_ERROR)
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(deleteBranchOfUnregisteredWorktree).toHaveBeenCalledWith('/work/repo', checkout, {
-      name: 'feature',
-      head: 'abc'
-    })
-    expect(cleanupPushTargetRemote).toHaveBeenCalledTimes(1)
+  it('does not delete the branch while the failed checkout is still on disk', async () => {
+    await failRemoval()
+    expect(deleteBranchOfUnregisteredWorktree).not.toHaveBeenCalled()
     expect(await readdir(checkout)).toEqual(['node_modules'])
     expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
-  })
-
-  it('keeps the failed row and its error when that bookkeeping fails', async () => {
-    vi.mocked(deleteBranchOfUnregisteredWorktree).mockRejectedValue(new Error('branch locked'))
-    const cleanupPushTargetRemote = vi.fn(async () => {
-      throw new Error('remote busy')
-    })
-    await expect(startFailingRemoval({ cleanupPushTargetRemote })).rejects.toThrow(GIT_ERROR)
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(cleanupPushTargetRemote).toHaveBeenCalledTimes(1)
-    expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
-    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toMatchObject([
-      { worktreeId, failure: { message: GIT_ERROR } }
-    ])
   })
 
   it('clears the record as before when the checkout is gone', async () => {
@@ -267,24 +239,24 @@ describe('a delete that fails after Git dropped the registration', () => {
     expect(retryFailedWorktreeRemoval(worktreeId, 'ssh:box', vi.fn())).toBeUndefined()
   })
 
-  it('ends at the next listing once the checkout is deleted outside Orca', async () => {
+  it('retains pending branch cleanup after the checkout is deleted outside Orca', async () => {
     await failRemoval()
     await rm(checkout, { recursive: true })
-
-    expect(await listRows()).toEqual([mainWorktree])
-    await vi.waitFor(async () =>
-      expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
-    )
+    expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
+    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toMatchObject([
+      { worktreeId }
+    ])
   })
 
-  it('ends at startup once the checkout is deleted outside Orca', async () => {
+  it('retains pending cleanup at startup after the owner removes the folder', async () => {
     await failRemoval()
     _resetPendingWorktreeRemovalsForTests()
     await rm(checkout, { recursive: true })
-
     await loadWorktreeRemovalRecords(join(directory, 'profile'))
-
-    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
+    expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
+    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toMatchObject([
+      { worktreeId }
+    ])
   })
 
   it('ends at startup once its repo is removed from Orca, leaving the files', async () => {

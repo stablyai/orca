@@ -74,7 +74,8 @@ export async function executeWorktreeRemoval(
       args.worktreeId,
       worktreePath,
       registeredWorktrees,
-      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId),
+      localWorktreeGitOptions
     )
   ) {
     return { removing: true }

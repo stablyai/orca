@@ -1,3 +1,7 @@
+import {
+  cleanupLocalOrphanedWorktreeDirectory,
+  isProvenLocalWorktreeRemovalLeftover
+} from '../local-orphaned-worktree-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -9,12 +13,14 @@ import {
 import { resolveWorktreeRemovalMetadata } from '../worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import { listWorktreesStrict } from '../git/worktree'
-import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { finishUnregisteredWorktreeRemoval } from '../git/worktree-removal'
 import { getErrorCode, normalizeLocalBranchRef } from '../git/worktree-operation-options'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+import {
+  findRegisteredDeletableWorktree,
+  assertWorktreeDoesNotContainRegisteredWorktree
+} from '../worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
   differentCheckoutAtPathError
@@ -51,6 +57,11 @@ export function interruptedLocalWorktreeRemovalJob(
   record: WorktreeRemovalRecord,
   host: InterruptedWorktreeRemovalHost
 ): BackgroundWorktreeRemovalJob {
+  let localOptions: RuntimeLocalWorktreeRemovalFinishArgs['localOptions'] | undefined
+  const getLocalOptions = () => {
+    const repo = host.store.getRepo(record.repoId)
+    return (localOptions ??= repo ? getLocalProjectWorktreeGitOptions(host.store, repo) : {})
+  }
   const resolveRemovedPushTarget = () =>
     resolveWorktreeRemovalMetadata(
       host.store,
@@ -59,11 +70,13 @@ export function interruptedLocalWorktreeRemovalJob(
       LOCAL_EXECUTION_HOST_ID
     )?.pushTarget
   return {
+    getLocalOptions,
     run: async (stopSignal) => {
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,
         store: host.store,
+        localOptions: getLocalOptions(),
         stopSignal,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
@@ -90,25 +103,13 @@ export function interruptedLocalWorktreeRemovalJob(
       host.onRemoved(record)
       return result
     },
-    publish: () => host.publish(record.repoId),
-    cleanupPushTargetRemote: async () => {
-      const repo = host.store.getRepo(record.repoId)
-      if (repo) {
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          record.worktreeId,
-          resolveRemovedPushTarget(),
-          host.store,
-          getLocalProjectWorktreeGitOptions(host.store, repo)
-        )
-      }
-    }
+    publish: () => host.publish(record.repoId)
   }
 }
 
 type InterruptedLocalWorktreeRemovalArgs = Pick<
   RuntimeLocalWorktreeRemovalFinishArgs,
-  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval'
+  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval' | 'localOptions'
 > & {
   store: RuntimeStore
   record: WorktreeRemovalRecord
@@ -121,7 +122,7 @@ type InterruptedLocalWorktreeRemovalArgs = Pick<
  * Finishes a removal a quit or crash interrupted, or a failed one whose folder the user removed.
  * What is left comes from Git and disk, not the record: a checkout Git registers is deleted by Git
  * with the recorded choices, or only unregistered when its `.git` is gone; a folder Git no longer
- * registers is refused, never deleted; with the folder gone, the rest of the delete finishes.
+ * registers needs orphan-link proof before cleanup; with the folder gone, the delete finishes.
  */
 async function finishInterruptedLocalWorktreeRemoval(
   args: InterruptedLocalWorktreeRemovalArgs
@@ -132,7 +133,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     console.warn(`[worktrees] dropping removal of ${record.worktreePath}: its repo is gone`)
     return {}
   }
-  const localOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  const { localOptions } = args
   const finishArgs: RuntimeLocalWorktreeRemovalFinishArgs = {
     store,
     removedPushTarget: args.removedPushTarget,
@@ -179,7 +180,12 @@ async function finishInterruptedLocalWorktreeRemoval(
   }
   // Before the teardown, so a refused folder keeps its terminals and watchers.
   if (!deletable) {
-    await assertUnregisteredCheckoutGone(record.worktreePath, worktrees)
+    assertWorktreeDoesNotContainRegisteredWorktree(record.worktreePath, worktrees)
+    if (
+      !(await isProvenLocalWorktreeRemovalLeftover(repo.path, record.worktreePath, localOptions))
+    ) {
+      await assertUnregisteredCheckoutGone(record.worktreePath, worktrees, localOptions)
+    }
   }
   const gate = await args.acquireWatcherRemoval(record.worktreePath)
   if (args.stopPtys) {
@@ -201,7 +207,24 @@ async function finishInterruptedLocalWorktreeRemoval(
       record.worktreePath,
       record.deleteBranch && record.branch ? { name: record.branch, head: record.head } : null,
       // Again after the teardown's waits: a folder may have appeared at the path meanwhile.
-      () => assertUnregisteredCheckoutGone(record.worktreePath),
+      async () => {
+        const current = await listWorktreesStrict(repo.path, localOptions)
+        if (current.some((row) => areWorktreePathsEqual(row.path, record.worktreePath))) {
+          throw differentCheckoutAtPathError(record.worktreePath)
+        }
+        assertWorktreeDoesNotContainRegisteredWorktree(record.worktreePath, current)
+        if (
+          await isProvenLocalWorktreeRemovalLeftover(repo.path, record.worktreePath, localOptions)
+        ) {
+          await cleanupLocalOrphanedWorktreeDirectory(
+            repo.path,
+            record.worktreePath,
+            localOptions,
+            args.closeWatchers
+          )
+        }
+        await assertUnregisteredCheckoutGone(record.worktreePath, [], localOptions)
+      },
       localOptions
     )
     removed = true

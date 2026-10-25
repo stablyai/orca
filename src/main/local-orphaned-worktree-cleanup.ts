@@ -1,3 +1,5 @@
+import { listWorktreesStrict } from './git/worktree'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import {
   getLocalWorktreePathAccess,
@@ -5,6 +7,7 @@ import {
   toLocalWorktreeRuntimePath
 } from './local-worktree-filesystem'
 import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
@@ -29,6 +32,14 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
     )
   ) {
     await closeWatchers(path)
+    const current = await listWorktreesStrict(repoPath, options)
+    assertWorktreeDoesNotContainRegisteredWorktree(path, current)
+    if (
+      current.some((row) => areWorktreePathsEqual(row.path, path)) ||
+      !(await isProvenLocalWorktreeRemovalLeftover(repoPath, path, options))
+    ) {
+      throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+    }
     await removeLocalWorktreePath(path, options).catch(() => {})
   } else {
     console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
@@ -36,4 +47,19 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   if (!(await isWorktreePathMissing(runtimePath, access.statPath))) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
+}
+
+export function isProvenLocalWorktreeRemovalLeftover(
+  repoPath: string,
+  path: string,
+  options: LocalWorktreeFilesystemOptions = {}
+): Promise<boolean> {
+  const access = getLocalWorktreePathAccess(options)
+  return canSafelyRemoveOrphanedWorktreeDirectory(
+    toLocalWorktreeRuntimePath(path, options),
+    toLocalWorktreeRuntimePath(repoPath, options),
+    CLIENT_REMOVAL_HOME,
+    access.statPath,
+    access.readPath
+  )
 }

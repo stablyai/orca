@@ -1,3 +1,4 @@
+import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
@@ -13,17 +14,15 @@ import {
   finishedWorktreeRemovals,
   pendingWorktreeRemovals,
   persistWorktreeRemovalRecords,
-  setWorktreeRemovalRecordsDirectory,
-  worktreeCheckoutExists
+  setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
 
 export type BackgroundWorktreeRemovalJob = {
+  getLocalOptions?: () => LocalWorktreeFilesystemOptions
   /** Abort only the checkout delete on orderly quit. */
   run: (stopSignal: AbortSignal) => Promise<RemoveWorktreeResult>
   /** Publish on acceptance and after removing the pending entry. */
   publish: () => void
-  /** Clean the push-target remote even when Git partially fails. */
-  cleanupPushTargetRemote?: () => Promise<void>
 }
 
 type RemovalSettlement = {
@@ -48,7 +47,7 @@ export async function loadWorktreeRemovalRecords(
   for (const record of await readWorktreeRemovalRecords(directory)) {
     if (record.failure) {
       // Removed repos have no listing to clear a failed-removal record.
-      if (hasRepo(record.repoId) && (await worktreeCheckoutExists(record.worktreePath))) {
+      if (hasRepo(record.repoId)) {
         failedWorktreeRemovals.set(record.worktreeId, record)
       } else {
         droppedFailure = true
@@ -159,13 +158,13 @@ export function retryFailedWorktreeRemoval(
     return waitForPendingWorktreeRemoval(worktreeId, hostId)
   }
   const { failure: _failure, ...record } = failed
-  const settlement = addPendingRemoval(record)
   const job = jobFor(record)
+  const settlement = addPendingRemoval(record)
   const leftoverOnly: BackgroundWorktreeRemovalJob = {
     ...job,
     run: async (stopSignal) => {
       // A newly registered checkout at this path needs a fresh delete, not the leftover's recorded choices.
-      if (await isCheckoutRegistered(record)) {
+      if (await isCheckoutRegistered(record, job.getLocalOptions?.())) {
         throw differentCheckoutAtPathError(record.worktreePath)
       }
       return job.run(stopSignal)
@@ -240,7 +239,14 @@ async function settleBackgroundWorktreeRemoval(
     console.warn(`[worktrees] background removal of ${record.worktreePath} failed`, error)
     settle = (settlement) => settlement.reject(error)
     // Git may drop registration before file deletion fails; keep the leftover listed for an explicit retry.
-    failure = await failureLeftByGit(record, error, job.cleanupPushTargetRemote)
+    try {
+      failure = await failureLeftByGit(record, error, job.getLocalOptions?.())
+    } catch {
+      failure = {
+        message: error instanceof Error ? error.message : String(error),
+        failedAt: Date.now()
+      }
+    }
   } finally {
     // A resumed job that ended before taking its own gate still holds the fence loading gave it.
     releaseStartupRemovalFence(record.worktreeId)

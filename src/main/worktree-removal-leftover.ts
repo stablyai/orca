@@ -1,32 +1,41 @@
-import { lstat } from 'node:fs/promises'
-import { join } from 'node:path'
+import {
+  getLocalWorktreePathAccess,
+  toLocalWorktreeRuntimePath,
+  type LocalWorktreeFilesystemOptions
+} from './local-worktree-filesystem'
+import { isProvenLocalWorktreeRemovalLeftover } from './local-orphaned-worktree-cleanup'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { listWorktreesStrict } from './git/worktree'
 import { getErrorCode } from './git/worktree-operation-options'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
-import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
+import { getPathOps } from './worktree-removal-home-guard'
 import {
   failedWorktreeRemovals,
   persistWorktreeRemovalRecords,
   worktreeCheckoutExists
 } from './worktree-removal-table'
-import {
-  assertWorktreeDoesNotContainRegisteredWorktree,
-  canSafelyRemoveOrphanedWorktreeDirectory
-} from './worktree-removal-safety'
+import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 
 /** Absent .git or a proven orphan marker can identify a leftover; live or foreign registrations cannot. */
 export async function isUnregisteredRemovalLeftover(
   repoPath: string,
-  worktreePath: string
+  worktreePath: string,
+  localOptions: LocalWorktreeFilesystemOptions = {}
 ): Promise<boolean> {
+  const runtimePath = toLocalWorktreeRuntimePath(worktreePath, localOptions)
   try {
-    await lstat(join(worktreePath, '.git'))
+    await getLocalWorktreePathAccess(localOptions).statPath(
+      getPathOps(runtimePath).join(runtimePath, '.git')
+    )
   } catch (error) {
-    return getErrorCode(error) === 'ENOENT'
+    const code = getErrorCode(error)
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return true
+    }
+    throw error
   }
-  return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
+  return isProvenLocalWorktreeRemovalLeftover(repoPath, worktreePath, localOptions)
 }
 
 export function differentCheckoutAtPathError(worktreePath: string): Error {
@@ -35,11 +44,11 @@ export function differentCheckoutAtPathError(worktreePath: string): Error {
   )
 }
 
-export async function isCheckoutRegistered(record: {
-  repoPath: string
-  worktreePath: string
-}): Promise<boolean> {
-  return (await listWorktreesStrict(record.repoPath)).some((worktree) =>
+export async function isCheckoutRegistered(
+  record: { repoPath: string; worktreePath: string },
+  localOptions: LocalWorktreeFilesystemOptions = {}
+): Promise<boolean> {
+  return (await listWorktreesStrict(record.repoPath, localOptions)).some((worktree) =>
     areWorktreePathsEqual(worktree.path, record.worktreePath)
   )
 }
@@ -53,20 +62,22 @@ export function unregisteredFolderRefusal(worktreePath: string): Error {
 /** Name nested worktrees before asking the user to remove an unregistered folder. */
 export async function assertUnregisteredCheckoutGone(
   worktreePath: string,
-  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[] = []
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[] = [],
+  localOptions: LocalWorktreeFilesystemOptions = {}
 ): Promise<void> {
-  if (await worktreeCheckoutExists(worktreePath)) {
+  if (await worktreeCheckoutExists(worktreePath, localOptions)) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
     throw unregisteredFolderRefusal(worktreePath)
   }
 }
 
-/** Registered paths use normal deletion; otherwise require the folder gone before retrying recorded cleanup. */
+/** Retry proven orphan links; unknown folders must be removed by their owner first. */
 export async function retryFailedRemovalUnlessRegistered(
   worktreeId: string,
   worktreePath: string,
   registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
-  retry: () => Promise<RemoveWorktreeResult> | undefined
+  retry: () => Promise<RemoveWorktreeResult> | undefined,
+  localOptions: LocalWorktreeFilesystemOptions = {}
 ): Promise<boolean> {
   if (registeredWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, worktreePath))) {
     if (failedWorktreeRemovals.delete(worktreeId)) {
@@ -76,7 +87,16 @@ export async function retryFailedRemovalUnlessRegistered(
   }
   const failed = failedWorktreeRemovals.get(worktreeId)
   if (failed) {
-    await assertUnregisteredCheckoutGone(failed.worktreePath, registeredWorktrees)
+    assertWorktreeDoesNotContainRegisteredWorktree(failed.worktreePath, registeredWorktrees)
+    if (
+      !(await isProvenLocalWorktreeRemovalLeftover(
+        failed.repoPath,
+        failed.worktreePath,
+        localOptions
+      ))
+    ) {
+      await assertUnregisteredCheckoutGone(failed.worktreePath, registeredWorktrees, localOptions)
+    }
   }
   return retry() !== undefined
 }

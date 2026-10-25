@@ -21,7 +21,7 @@ import {
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
-import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
+import { recoverLocalWorktreeRemoval } from '../local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -169,6 +169,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
   // request that asked for it times out; other views read the host's `removing` marker meanwhile.
   void startBackgroundWorktreeRemoval({
+    getLocalOptions: () => localOptions,
     removal: {
       worktreeId: args.target.id,
       repoId: repo.id,
@@ -182,8 +183,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       args.onRemoved()
       return result
     },
-    publish: () => args.publish(),
-    cleanupPushTargetRemote: () => cleanupRemovedWorktreePushTarget(args)
+    publish: () => args.publish()
   })
   return { removing: true, ...acceptedFields }
 }
@@ -224,7 +224,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
-      const recovered = await recoverLocalWindowsWorktreeRemoval({
+      const recovered = await recoverLocalWorktreeRemoval({
         error,
         force: args.force,
         canonicalWorktreePath: canonicalPath,

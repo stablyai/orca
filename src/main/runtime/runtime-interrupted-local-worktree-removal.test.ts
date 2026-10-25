@@ -226,8 +226,8 @@ describe('finishing an interrupted worktree removal after a restart', () => {
       expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
       expect(removeHostTree).not.toHaveBeenCalled()
       expect(await isRegistered(worktreePath)).toBe(false)
-      // The merged branch goes with the registration, as the delete asked.
-      expect(await git(['branch', '--list', 'feature'])).toBe('')
+      // A failed filesystem deletion preserves the branch.
+      expect(await git(['branch', '--list', 'feature'])).toContain('feature')
       expect(purged).toEqual([])
       expect(records).toMatchObject([{ failure: { message: refusal } }])
       expect(await listedRows()).toEqual([{ path: worktreePath, removalError: refusal }])
@@ -267,7 +267,7 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('mine\n')
     expect(removeHostTree).not.toHaveBeenCalled()
     // Git let go of the checkout, so the recorded branch delete runs (merged only); no files.
-    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(await git(['branch', '--list', 'feature'])).toContain('feature')
     expect(purged).toEqual([])
     expect(records).toMatchObject([{ failure: { message: refusal } }])
     expect(await listedRows()).toEqual([{ path: worktreePath, removalError: refusal }])

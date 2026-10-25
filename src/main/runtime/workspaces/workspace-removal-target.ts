@@ -1,3 +1,4 @@
+import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
@@ -106,16 +107,23 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
     const hostId = parseExecutionHostId(options.hostId)?.id
     const allowUnverifiedPtyStop = options.allowUnverifiedPtyStop === true
-    return retryFailedRemovalUnlessRegistered(target.id, target.path, registeredWorktrees, () =>
-      retryFailedWorktreeRemoval(target.id, hostId, (record) =>
-        interruptedLocalWorktreeRemovalJob(record, {
-          ...this.localRemovalJobHost(store),
-          stopPtys: () =>
-            this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
-              allowUnverifiedStop: allowUnverifiedPtyStop
-            })
-        })
-      )
+    const repoId = splitWorktreeId(target.id)?.repoId
+    const repo = repoId ? store.getRepo(repoId) : undefined
+    return retryFailedRemovalUnlessRegistered(
+      target.id,
+      target.path,
+      registeredWorktrees,
+      () =>
+        retryFailedWorktreeRemoval(target.id, hostId, (record) =>
+          interruptedLocalWorktreeRemovalJob(record, {
+            ...this.localRemovalJobHost(store),
+            stopPtys: () =>
+              this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
+                allowUnverifiedStop: allowUnverifiedPtyStop
+              })
+          })
+        ),
+      repo ? getLocalProjectWorktreeGitOptions(store, repo) : {}
     )
   }
 

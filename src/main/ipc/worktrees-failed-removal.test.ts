@@ -163,7 +163,7 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     vi.mocked(worktreeCheckoutExists).mockResolvedValue(true)
   })
 
-  it('removes the push-target remote Orca added when Delete fails partway', async () => {
+  it('preserves the push-target remote until a partial Delete can finish', async () => {
     const [main] = mockKnownFeatureWorktree()
     const pushTarget = {
       remoteName: 'pr-contributor-orca',
@@ -186,9 +186,12 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     await expect(remove({ worktreeId: featureId })).rejects.toThrow(/Operation not permitted/)
     await _settlePendingWorktreeRemovalsForTests()
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'remove', pushTarget.remoteName], {
-      cwd: '/workspace/repo'
-    })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['remote', 'remove', pushTarget.remoteName],
+      {
+        cwd: '/workspace/repo'
+      }
+    )
     expect(await listFeature()).toMatchObject({
       removalError: expect.stringMatching(/Operation not permitted/)
     })

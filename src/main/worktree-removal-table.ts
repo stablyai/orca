@@ -1,4 +1,8 @@
-import { lstat } from 'node:fs/promises'
+import {
+  getLocalWorktreePathAccess,
+  toLocalWorktreeRuntimePath,
+  type LocalWorktreeFilesystemOptions
+} from './local-worktree-filesystem'
 import { getErrorCode } from './git/worktree-operation-options'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { writeWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
@@ -27,9 +31,14 @@ export function persistWorktreeRemovalRecords(): Promise<void> {
 }
 
 /** Unreadable counts as present: only a checkout proven gone ends a failed delete. */
-export async function worktreeCheckoutExists(worktreePath: string): Promise<boolean> {
+export async function worktreeCheckoutExists(
+  worktreePath: string,
+  localOptions: LocalWorktreeFilesystemOptions = {}
+): Promise<boolean> {
   try {
-    await lstat(worktreePath)
+    await getLocalWorktreePathAccess(localOptions).statPath(
+      toLocalWorktreeRuntimePath(worktreePath, localOptions)
+    )
     return true
   } catch (error) {
     const code = getErrorCode(error)

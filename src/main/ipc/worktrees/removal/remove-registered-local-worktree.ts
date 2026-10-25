@@ -12,7 +12,7 @@ import {
 } from '../../../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
-import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
+import { recoverLocalWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
@@ -160,6 +160,7 @@ export async function removeRegisteredLocalWorktree(
   }
   // After acceptance, deletion must survive request cancellation; other views observe the host's removing marker.
   void startBackgroundWorktreeRemoval({
+    getLocalOptions: () => localWorktreeGitOptions,
     removal: {
       worktreeId: args.worktreeId,
       repoId,
@@ -177,8 +178,7 @@ export async function removeRegisteredLocalWorktree(
       })
       return result
     },
-    publish: () => runtime.publishWorktreeRemovalChange(repoId),
-    cleanupPushTargetRemote: cleanupPushTarget
+    publish: () => runtime.publishWorktreeRemovalChange(repoId)
   })
   return { removing: true }
 }
@@ -234,7 +234,7 @@ async function finishLocalWorktreeRemoval({
       )
     } catch (error) {
       // Git for Windows may deregister before recursive filesystem deletion fails.
-      const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
+      const recoveredRemovalResult = await recoverLocalWorktreeRemoval({
         error,
         force: args.force ?? false,
         canonicalWorktreePath,

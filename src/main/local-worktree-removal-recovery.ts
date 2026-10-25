@@ -6,8 +6,10 @@ import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
+import { isProvenLocalWorktreeRemovalLeftover } from './local-orphaned-worktree-cleanup'
+import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 
-type LocalWindowsRemovalRecoveryArgs = {
+type LocalRemovalRecoveryArgs = {
   error: unknown
   force: boolean
   canonicalWorktreePath: string
@@ -19,7 +21,7 @@ type LocalWindowsRemovalRecoveryArgs = {
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
-  LocalWindowsRemovalRecoveryArgs,
+  LocalRemovalRecoveryArgs,
   'error' | 'force' | 'closeWatcher'
 >
 
@@ -104,42 +106,62 @@ async function removeRequiredGitWorktreeRegistration(
   return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
 }
 
-export async function recoverLocalWindowsWorktreeRemoval(
-  args: LocalWindowsRemovalRecoveryArgs
+export async function recoverLocalWorktreeRemoval(
+  args: LocalRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
   // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
-  if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
+  if (!(await isRecoverableFilesystemRemovalFailure(args))) {
     return undefined
   }
 
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   try {
+    if (!(await isRecoverableFilesystemRemovalFailure(args))) {
+      return undefined
+    }
     await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
-  return removeRequiredGitWorktreeRegistration(args, args.force)
+  await verifyGitWorktreeRegistrationRemoved(
+    args.repoPath,
+    args.localWorktreeGitOptions,
+    args.canonicalWorktreePath,
+    args.force
+  )
+  return preservedBranchResult(args.registeredWorktree, args.deleteBranch)
 }
 
-async function isRecoverableWindowsFilesystemRemovalFailure(
-  args: LocalWindowsRemovalRecoveryArgs
+async function isRecoverableFilesystemRemovalFailure(
+  args: LocalRemovalRecoveryArgs
 ): Promise<boolean> {
-  if (process.platform !== 'win32' || typeof args.error !== 'object' || args.error === null) {
+  if (typeof args.error !== 'object' || args.error === null) {
     return false
   }
 
+  let worktrees: GitWorktreeInfo[]
   try {
-    const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
-    // Localized error text cannot prove removal started; require the Git row to be absent.
-    return !worktrees.some((worktree) =>
-      areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath)
-    )
+    worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
   } catch {
     return false
   }
+  if (
+    worktrees.some((worktree) => areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath))
+  ) {
+    return false
+  }
+  assertWorktreeDoesNotContainRegisteredWorktree(args.canonicalWorktreePath, worktrees)
+  return (
+    process.platform === 'win32' ||
+    isProvenLocalWorktreeRemovalLeftover(
+      args.repoPath,
+      args.canonicalWorktreePath,
+      args.localWorktreeGitOptions
+    )
+  )
 }
 
 export async function removeStaleLocalWorktreeRegistration(

@@ -22,7 +22,7 @@ export type WorktreeRemovalRecord = {
   deleteBranch: boolean
   force: boolean
   requestedAt: number
-  /** Git dropped registration; branch/remote cleanup ran, but the folder remains. */
+  /** Git dropped registration but the folder remains; branch cleanup is still pending. */
   failure?: WorktreeRemovalFailure
 }
 

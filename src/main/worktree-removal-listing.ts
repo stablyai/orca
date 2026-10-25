@@ -1,3 +1,4 @@
+import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
@@ -19,7 +20,8 @@ const NO_PENDING_REMOVALS: PendingWorktreeRemovals = new Map()
 /** Keep unregistered removal leftovers visible until the folder disappears or a different checkout replaces it. */
 export async function withUnregisteredRemovalCheckouts(
   repoId: string,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  localOptions: LocalWorktreeFilesystemOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   const unlisted = [...pendingWorktreeRemovals.values(), ...failedWorktreeRemovals.values()].filter(
     (record) =>
@@ -33,9 +35,16 @@ export async function withUnregisteredRemovalCheckouts(
   let droppedFailure = false
   for (const record of unlisted) {
     const failed = failedWorktreeRemovals.get(record.worktreeId) === record
+    const checkoutExists = await worktreeCheckoutExists(record.worktreePath, localOptions)
     if (
-      (await worktreeCheckoutExists(record.worktreePath)) &&
-      (!failed || (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)))
+      (failed && !checkoutExists) ||
+      (checkoutExists &&
+        (!failed ||
+          (await isUnregisteredRemovalLeftover(
+            record.repoPath,
+            record.worktreePath,
+            localOptions
+          ).catch(() => true))))
     ) {
       leftovers.push({
         path: record.worktreePath,
