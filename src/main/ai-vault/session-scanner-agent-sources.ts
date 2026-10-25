@@ -20,7 +20,7 @@ import {
   kiroTranscriptPathForMetadata
 } from './session-scanner-kiro-parser'
 import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
+import { isOmpConversationDirectory } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
   codexHomeSessionsDir,
@@ -67,9 +67,6 @@ const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
-// Skip worker artifacts below workspace depth; OMP lists only top-level conversations (#9330).
-const skipOmpArtifactDirs = (name: string, depth: number): boolean =>
-  depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
 
 /** Shared discovery rules constrain which paths the delete validator accepts. */
 export type AiVaultAgentSource = {
@@ -236,13 +233,13 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ]),
     extensions: ['.jsonl'],
     // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
-    directoryPredicate: skipOmpArtifactDirs
+    directoryPredicate: isOmpConversationDirectory
   },
   omp: {
     rootDirs: (options, wslHomeDirs) =>
       ompSessionsRootDirs({ ompSessionsDir: options.ompSessionsDir, wslHomeDirs }),
     extensions: ['.jsonl'],
-    directoryPredicate: skipOmpArtifactDirs
+    directoryPredicate: isOmpConversationDirectory
   },
   'prime-agent': {
     rootDirs: (options, wslHomeDirs) =>

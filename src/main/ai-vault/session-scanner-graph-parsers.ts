@@ -1,5 +1,5 @@
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './session-scanner-omp-title'
-import { isOmpWrittenRecord } from './omp-written-record'
+import { isOmpWrittenRecord } from './session-scanner-omp-written-record'
 import {
   remoteSessionContentLines,
   type RemoteSessionContent
@@ -228,10 +228,8 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
     accumulator.title = null
   }
   updateTimeline(accumulator, extractString(record.timestamp))
-  // Pi folds them too: an OMP title can precede the record that proves OMP wrote the transcript.
-  if (accumulator.agent === 'omp' || accumulator.agent === 'pi') {
-    state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
-  }
+  // Fold before the writer is known: an OMP title can precede the record that proves OMP wrote it.
+  state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
   if (accumulator.agent === 'omp' && state.ompTitle) {
     accumulator.title = state.ompTitle.title
   }
@@ -284,10 +282,7 @@ export function createMessageGraphSessionResumeState(
     }),
     ompTitle: null
   })
-  // Only OMP has this task-artifact layout; a Pi-scanned transcript can turn out to be OMP's.
-  return agent === 'omp' || agent === 'pi'
-    ? withOmpSubagentTranscriptCount(state, file.path)
-    : state
+  return withOmpSubagentTranscriptCount(state, file.path)
 }
 
 function createMessageGraphResumeState(state: MessageGraphParseState): ResumableSessionParseState {
