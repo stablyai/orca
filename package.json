@@ -95,6 +95,8 @@
     "start": "pnpm run build:packages && pnpm run ensure:electron-runtime && electron-vite preview",
     "dev": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs",
     "dev-stable-name": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs --stable-name",
+    "dev:fresh": "pnpm run build:packages && node config/scripts/dev-fresh-profile.mjs",
+    "dev:seed-profile": "node config/scripts/dev-profile-seed.mjs",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
     "build:wsl-guest": "pnpm run build:packages && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/build-wsl-guest.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",

@@ -51,7 +51,8 @@ export async function reclaimWorktreeSpace({
       'reclaim-electron-dists.mjs',
       'reclaim-dev-electron-bundles.mjs',
       'reclaim-vite-caches.mjs',
-      'reclaim-worktree-generated-files.mjs'
+      'reclaim-worktree-generated-files.mjs',
+      'reclaim-dev-worktree-profiles.mjs'
     ]
     if (!automatic && testsStopped) {
       scripts.unshift('reclaim-release-test-caches.mjs')
