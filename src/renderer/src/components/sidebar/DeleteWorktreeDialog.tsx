@@ -317,8 +317,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         className="max-w-md"
         onOpenAutoFocus={(event) => {
           // Unsaved edits must not be discarded by Enter; retain Radix’s default focus.
+          // Unprompted too: a stray Enter typed elsewhere must not confirm a delete nobody asked for.
           if (
             isMainWorktree ||
+            modalData.unprompted === true ||
             collectRemovalUnsavedFiles(useAppStore.getState, unsavedTargets).length > 0
           ) {
             return

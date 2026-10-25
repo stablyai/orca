@@ -7,6 +7,7 @@ import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import type { LastTabAutoDeleteTrigger } from '@/lib/last-tab-auto-delete/last-tab-auto-delete-candidate'
 
 type TerminalOverlaySlotProps = {
   terminalTabId: string
@@ -24,7 +25,11 @@ type TerminalOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   /** Read when a close is requested; the returned reaction runs once it lands. */
-  captureEmptiedReaction: () => () => void
+  /** A null trigger closes without making the workspace an auto-delete candidate. */
+  captureEmptiedReaction: (
+    trigger: LastTabAutoDeleteTrigger | null,
+    terminalTabId: string
+  ) => () => void
 }
 
 export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -79,12 +84,15 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         closeTerminalTab(terminalTabId, {
           reason: 'pty-exit',
           lifecyclePtyId: ptyId,
-          onClosed: captureEmptiedReaction()
+          // Why: a code-less exit (remote terminal gone) is not proof the process ended.
+          onClosed: captureEmptiedReaction(exitCode === undefined ? null : 'exit', terminalTabId)
         })
       }}
       onCloseTab={() => {
         // Use the guarded close path so pinned terminals still require confirmation.
-        closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
+        closeTerminalTab(terminalTabId, {
+          onClosed: captureEmptiedReaction('close', terminalTabId)
+        })
       }}
     />
   )

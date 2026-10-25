@@ -1177,6 +1177,25 @@
             }
           }
         }
+      },
+      "last": {
+        "tab": {
+          "auto": {
+            "delete": {
+              "last": {
+                "tab": {
+                  "auto": {
+                    "delete": {
+                      "queue": {
+                        "kept": "Se conservó el espacio de trabajo: vuelve a tener pestañas o se desactivó la eliminación automática."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -10237,6 +10256,22 @@
             "omp": "OMP",
             "nodeDistMirror": "espejo",
             "nodeDistNodejs": "nodejs"
+          },
+          "last": {
+            "tab": {
+              "auto": {
+                "delete": {
+                  "search": {
+                    "3684b9708d": "Eliminar el espacio de trabajo al cerrar su última pestaña",
+                    "b3c70b70de": "Ejecuta la eliminación normal del espacio de trabajo cuando cerrar una pestaña lo deja vacío.",
+                    "de1a617f26": "última pestaña",
+                    "d1510d050c": "salir",
+                    "a798135810": "automático",
+                    "ad36681f93": "quitar"
+                  }
+                }
+              }
+            }
           }
         },
         "git": {
@@ -13119,6 +13154,21 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
+        },
+        "LastTabAutoDeleteSettings": {
+          "3ee0224127": "Desactivado",
+          "5c40d319f9": "Cuando lo cierro",
+          "b5728ff9e4": "Cuando lo cierro o su proceso termina",
+          "32dac2fdaf": "También cuando un proceso termina en un espacio de trabajo en segundo plano",
+          "487076ea0d": "Eliminar el espacio de trabajo al cerrar su última pestaña",
+          "08de07fd0a": "Ejecuta la eliminación normal del espacio de trabajo cuando cerrar una pestaña lo deja vacío.",
+          "08f6a8b79d": "Usa la misma confirmación que al eliminar desde la barra lateral. Con las opciones de terminación, una eliminación puede empezar sin pulsar ninguna tecla, pero un espacio de trabajo con cambios sin confirmar siempre pregunta antes. El espacio de trabajo principal nunca se elimina.",
+          "a5c235b455": "Omitir espacios de trabajo fijados",
+          "61fb0b6bd1": "Conserva los espacios de trabajo fijados al cerrar su última pestaña.",
+          "4fcf8e43fb": "Omitir espacios de trabajo de carpeta",
+          "c27462f864": "Conserva los espacios de trabajo de carpeta al cerrar su última pestaña. Sus archivos permanecen en el disco en cualquier caso.",
+          "c9b7aeaf31": "Omitir espacios de trabajo SSH",
+          "f486c0aeac": "Conserva los espacios de trabajo en hosts SSH al cerrar su última pestaña."
         }
       },
       "right": {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
+import { DURABLE_DELETION_PREFERENCE_KEYS } from '../../shared/worktree-deletion-preferences'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
@@ -182,11 +183,9 @@ export function registerSettingsHandlers(
       notifyListeners: true,
       originWebContentsId: event.sender.id
     }
-    const result =
-      'alwaysForceDeleteWorktrees' in sanitizedArgs ||
-      'alwaysForceDeletePreservedBranches' in sanitizedArgs
-        ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
-        : store.updateSettings(sanitizedArgs, updateOptions)
+    const result = DURABLE_DELETION_PREFERENCE_KEYS.some((key) => key in sanitizedArgs)
+      ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
+      : store.updateSettings(sanitizedArgs, updateOptions)
     if (
       'experimentalAgentDashboardPopout' in sanitizedArgs &&
       before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout

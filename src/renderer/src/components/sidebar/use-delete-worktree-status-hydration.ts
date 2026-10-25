@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { resolveWorktreeGitStatusTarget } from '@/lib/worktree-git-status-target'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
@@ -58,24 +55,17 @@ export function useDeleteWorktreeStatusHydration({
         setStatusByIdentity((current) => new Map(current).set(identity, existingStatus))
         continue
       }
-      const owner = target.hostId
-        ? findRepoForHost(repos, target.repoId, { hostId: target.hostId })
-        : undefined
-      const ownerTarget = target.hostId
-        ? ipcOrRuntimeTargetForHostId(target.hostId)
-        : runtimeTargetForWorkspaceOwner(currentState, { workspaceId: target.id })
-      if (!ownerTarget) {
+      const statusTarget = resolveWorktreeGitStatusTarget({ ...currentState, repos }, target)
+      if (!statusTarget) {
         setStatusByIdentity((current) => new Map(current).set(identity, null))
         continue
       }
       void getRuntimeGitStatus(
         {
-          target: ownerTarget,
+          target: statusTarget.target,
           worktreeId: target.id,
           worktreePath: target.path,
-          connectionId: target.hostId
-            ? (owner?.connectionId ?? undefined)
-            : (getConnectionId(target.id) ?? undefined)
+          connectionId: statusTarget.connectionId
         },
         { admissionTier: 'background', includeLineStats: false, signal: controller.signal }
       )

@@ -259,21 +259,21 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
-  it('flushes the preserved-branch deletion preference before returning', async () => {
-    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+  it.each([
+    { alwaysForceDeletePreservedBranches: true },
+    { deleteWorkspaceOnLastTabClose: 'off' as const }
+  ])('flushes the deletion preference %o before returning', async (update) => {
     store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
     registerSettingsHandlers(store as never)
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
     if (typeof handler !== 'function') {
       throw new Error('Missing settings:set handler')
     }
-    await expect(
-      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
-    ).rejects.toThrow('Disk full')
-    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
-      { alwaysForceDeletePreservedBranches: true },
-      { notifyListeners: true, originWebContentsId: 1 }
-    )
+    await expect(handler(settingsInvokeEvent, update)).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(update, {
+      notifyListeners: true,
+      originWebContentsId: 1
+    })
   })
 
   it('persists Active Server only through the dedicated preference channel', () => {

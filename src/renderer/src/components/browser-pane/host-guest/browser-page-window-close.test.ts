@@ -41,7 +41,19 @@ describe('window.close() from a browser page', () => {
     closeFrom('page-a', { back: false, forward: false })
     expect(dispatchMock).toHaveBeenCalledWith({
       type: 'close',
-      target: { kind: 'tab', worktreeId: 'wt-1', tabId: 'tab-1' }
+      target: { kind: 'tab', worktreeId: 'wt-1', tabId: 'tab-1' },
+      autoDeleteEligible: false
+    })
+  })
+
+  it('never lets a page script delete the workspace, even without a resolved Orca tab', () => {
+    seedTab('page-f')
+    storeState.value.unifiedTabsByWorktree = {}
+    closeFrom('page-f', { back: false, forward: false })
+    expect(dispatchMock).toHaveBeenCalledWith({
+      type: 'close',
+      target: { kind: 'browser-source', sourceId: 'page-f' },
+      autoDeleteEligible: false
     })
   })
 

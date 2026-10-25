@@ -2,6 +2,8 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { subscribeToPtyExit } from './pty-dispatcher'
@@ -108,6 +110,11 @@ export function startParkedPtyWatcher(args: {
     // Why: the empty entry prevents a pending pinned-close confirmation from restarting the dead PTY.
     entry.disposersByPtyId.get(ptyId)?.()
     entry.disposersByPtyId.delete(ptyId)
+    const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId, {
+      trigger: 'exit',
+      hostId: resolveParkedTabHostId(worktreeId, tab.id, pane),
+      leaveIfEmpty: false
+    })
     closeTerminalTab(tab.id, {
       captureRecentlyClosed: false,
       hostCloseReason: 'pty-exit',
@@ -117,6 +124,7 @@ export function startParkedPtyWatcher(args: {
         if (parkedWatchersByTabId.get(tab.id) === entry) {
           parkedWatchersByTabId.delete(tab.id)
         }
+        whenEmptied()
       },
       onCancel: () => {}
     })
@@ -141,6 +149,20 @@ export function startParkedPtyWatcher(args: {
     unsubscribeExit()
     disposeWatcher()
   })
+}
+
+function resolveParkedTabHostId(
+  worktreeId: string,
+  tabId: string,
+  pane: ParkedTerminalPaneCapture
+): ExecutionHostId | undefined {
+  return (
+    pane.workspaceOwner?.executionHostId ??
+    useAppStore
+      .getState()
+      .unifiedTabsByWorktree[worktreeId]?.find((unified) => unified.entityId === tabId)
+      ?.executionHostId
+  )
 }
 
 // Shutdown, suppressed restart and committed sleep markers preserve state for wake/restart. Remote host-sleep dispositions never reach this sidecar, so no environment ID is needed.

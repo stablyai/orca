@@ -96,6 +96,7 @@ type MockStoreState = {
   markUnverifiedPtyLoss: ReturnType<typeof vi.fn>
   isPtyShutdownPending: ReturnType<typeof vi.fn>
   suppressedPtyExitIds: Record<string, true>
+  unifiedTabsByWorktree: Record<string, { entityId: string }[]>
 }
 
 let mockStoreState: MockStoreState
@@ -161,7 +162,8 @@ describe('terminal-parked-tab-watchers', () => {
       updateTabTitle: vi.fn(),
       markUnverifiedPtyLoss: vi.fn(),
       isPtyShutdownPending: vi.fn(() => false),
-      suppressedPtyExitIds: {}
+      suppressedPtyExitIds: {},
+      unifiedTabsByWorktree: {}
     }
     ;(globalThis as { window?: unknown }).window = { api: { pty: { write: ptyWrite } } }
     clearTerminalProviderSnapshotCapabilities()

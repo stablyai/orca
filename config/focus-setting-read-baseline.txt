@@ -123,7 +123,6 @@
 1 src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx
 1 src/renderer/src/components/sidebar/SidebarTaskNavButton.tsx
 2 src/renderer/src/components/sidebar/use-add-repo-host-selection.ts
-1 src/renderer/src/components/sidebar/use-delete-worktree-status-hydration.ts
 1 src/renderer/src/components/sidebar/use-sidebar-host-scope-options.ts
 1 src/renderer/src/components/sidebar/use-visible-workspace-kanban-worktree-ids.ts
 1 src/renderer/src/components/sidebar/use-workspace-kanban-board-projection.ts
@@ -244,6 +243,7 @@
 1 src/renderer/src/lib/web-runtime-worktree-terminal-after-wake.ts
 4 src/renderer/src/lib/workspace-browser-tab-open.ts
 1 src/renderer/src/lib/worktree-activation.ts
+1 src/renderer/src/lib/worktree-git-status-target.ts
 1 src/renderer/src/lib/worktree-jump-navigation.ts
 1 src/renderer/src/lib/worktree-runtime-owner.ts # a setup terminal with no row spawns on the focused runtime
 17 src/renderer/src/runtime/runtime-jira-client.ts

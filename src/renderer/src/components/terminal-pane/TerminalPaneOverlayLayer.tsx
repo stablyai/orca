@@ -12,6 +12,7 @@ import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-togg
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
+import type { LastTabAutoDeleteTrigger } from '@/lib/last-tab-auto-delete/last-tab-auto-delete-candidate'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
@@ -67,7 +68,14 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)
 
   const captureEmptiedReaction = useCallback(
-    () => captureWorkspaceEmptiedReaction(worktreeId),
+    (trigger: LastTabAutoDeleteTrigger | null, terminalTabId: string) =>
+      captureWorkspaceEmptiedReaction(worktreeId, {
+        ...(trigger ? { trigger } : { autoDeleteEligible: false }),
+        hostId: useAppStore
+          .getState()
+          .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === terminalTabId)
+          ?.executionHostId
+      }),
     [worktreeId]
   )
 
