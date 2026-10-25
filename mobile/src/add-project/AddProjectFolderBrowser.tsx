@@ -22,7 +22,7 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
   const requestRef = useRef(0)
 
   const browse = useCallback(
-    async (path: string) => {
+    async (path: string, fallbackPath?: string) => {
       const request = ++requestRef.current
       setLoading(true)
       setError('')
@@ -34,6 +34,11 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
           setListing(next)
         }
       } catch (caught) {
+        // A missing start folder (e.g. a fresh host without ~/orca/projects) falls back to one that exists.
+        if (fallbackPath && request === requestRef.current) {
+          void browse(fallbackPath)
+          return
+        }
         // Keep the last listing so a folder that refuses to open does not strand the user.
         if (request === requestRef.current) {
           setError(caught instanceof Error ? caught.message : String(caught))
@@ -48,7 +53,8 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
   )
 
   useEffect(() => {
-    void browse(startPath.trim() || '~')
+    const start = startPath.trim() || '~'
+    void browse(start, start === '~' ? undefined : '~')
     return () => {
       requestRef.current += 1
     }
