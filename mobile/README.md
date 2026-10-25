@@ -15,9 +15,15 @@ The Node commands `pnpm rpc:diff` and `pnpm rpc:record` use a development depend
 
 - Node.js 24+
 - pnpm
-- Xcode and/or Android Studio tooling for simulator or device builds
+- Xcode 27.1+ for iOS builds, or Android Studio tooling for Android builds
+- iOS 16.4+ on iPhone or iPad (Expo SDK 58's minimum)
 - Expo Go on your phone, or a development client build when native modules are needed
 - Phone and desktop on the same LAN when testing a physical phone
+
+The app uses Expo SDK 58 and its generated scene lifecycle. After changing SDK versions or native
+modules, rebuild the development client; a JavaScript update cannot update the installed native
+runtime. Keep the React Native text-input and WebView patches when updating their packages: they
+preserve composition/dictation behavior and reject messages from embedded subframes.
 
 ## Start Desktop Orca
 

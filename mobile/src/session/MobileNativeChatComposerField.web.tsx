@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   copyLayer: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   copy: {
     maxHeight: undefined

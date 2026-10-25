@@ -205,7 +205,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     overflow: 'hidden'
   },
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   terminalPaneHidden: {
     opacity: 0

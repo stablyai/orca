@@ -1,6 +1,5 @@
+import { type ViewInstance, Platform } from 'react-native'
 import { useCallback, useRef, useState } from 'react'
-import type { View } from 'react-native'
-import { Platform } from 'react-native'
 import { loadHosts } from '../transport/host-store'
 import {
   startDiagnosticFetchTimeout,
@@ -16,7 +15,7 @@ export function useTroubleshootDiagnostics() {
   const diagnosticRunRef = useRef(0)
   const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
 
-  const rootRef = useCallback((node: View | null): void => {
+  const rootRef = useCallback((node: ViewInstance | null): void => {
     if (node !== null) {
       return
     }

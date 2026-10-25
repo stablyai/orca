@@ -28,7 +28,7 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
 
 const styles = StyleSheet.create({
   page: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,

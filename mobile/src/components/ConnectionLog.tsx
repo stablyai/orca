@@ -1,5 +1,5 @@
+import { type ScrollViewInstance, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRef } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
@@ -39,7 +39,7 @@ function formatTime(ts: number, baseTs: number): string {
 }
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
-  const scrollRef = useRef<ScrollView | null>(null)
+  const scrollRef = useRef<ScrollViewInstance | null>(null)
 
   if (entries.length === 0) {
     return null

@@ -1,5 +1,5 @@
+import { type ViewInstance, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
 import { loadPageMermaid } from './mermaid-page-engine'
@@ -26,7 +26,7 @@ export type MermaidDiagramProps = {
  * already inside the generation the phone downloaded.
  */
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
-  const hostRef = useRef<View>(null)
+  const hostRef = useRef<ViewInstance>(null)
   // The source that failed, rather than a flag: a flag would need clearing from the effect that
   // renders the next one, and a render the component has already failed is the only thing the
   // fallback is about.

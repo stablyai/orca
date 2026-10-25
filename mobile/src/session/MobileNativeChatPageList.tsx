@@ -1,3 +1,10 @@
+import type {
+  ScrollViewInstance,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  StyleProp,
+  ViewStyle
+} from 'react-native'
 import {
   Fragment,
   useCallback,
@@ -10,13 +17,6 @@ import {
   type ReactElement,
   type Ref
 } from 'react'
-import type {
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  ScrollView,
-  StyleProp,
-  ViewStyle
-} from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
@@ -51,6 +51,29 @@ type Listen = (type: string, listener: () => void, options: AddEventListenerOpti
 type Scroller = MobileNativeChatScrollNode & {
   addEventListener: Listen
   removeEventListener: Listen
+}
+
+function isPageScroller(node: unknown): node is Scroller {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    'scrollTop' in node &&
+    typeof node.scrollTop === 'number' &&
+    'scrollHeight' in node &&
+    typeof node.scrollHeight === 'number' &&
+    'clientHeight' in node &&
+    typeof node.clientHeight === 'number' &&
+    'getBoundingClientRect' in node &&
+    typeof node.getBoundingClientRect === 'function' &&
+    'getAttribute' in node &&
+    typeof node.getAttribute === 'function' &&
+    'querySelectorAll' in node &&
+    typeof node.querySelectorAll === 'function' &&
+    'addEventListener' in node &&
+    typeof node.addEventListener === 'function' &&
+    'removeEventListener' in node &&
+    typeof node.removeEventListener === 'function'
+  )
 }
 /** What a scrolling reader sees below them, held until they rest. */
 type Held = {
@@ -105,10 +128,10 @@ export function MobileNativeChatPageList({
   onScroll,
   onNearTop
 }: Props): ReactElement {
-  const scroll = useRef<ScrollView>(null)
+  const scroll = useRef<ScrollViewInstance>(null)
   const scroller = useCallback((): Scroller | null => {
-    const node: Scroller | null | undefined = scroll.current?.getScrollableNode()
-    return node ?? null
+    const node: unknown = scroll.current?.getScrollableNode()
+    return isPageScroller(node) ? node : null
   }, [])
 
   // A change below a scrolling reader would push the line they read, and putting it back mid-fling
@@ -293,8 +316,13 @@ export function MobileNativeChatPageList({
   // Changes no commit makes (an image loading, an inner box settling): the same rule, inner boxes first.
   useEffect(() => {
     const s = scroller()
-    const content: Element | null | undefined = scroll.current?.getInnerViewNode()
-    if (!s || !content || typeof ResizeObserver === 'undefined') {
+    const content: unknown = scroll.current?.getInnerViewNode()
+    if (
+      !s ||
+      typeof Element === 'undefined' ||
+      !(content instanceof Element) ||
+      typeof ResizeObserver === 'undefined'
+    ) {
       return
     }
     const observer = new ResizeObserver(() => {

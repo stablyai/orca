@@ -1,5 +1,5 @@
+import { type ViewInstance, StyleSheet, View } from 'react-native'
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
 import { Navigator, usePathname } from 'expo-router'
 import { colors } from '../theme/mobile-theme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
@@ -125,7 +125,7 @@ function StackScreen({
   onSettled: () => void
   children: ReactNode
 }) {
-  const ref = useRef<View>(null)
+  const ref = useRef<ViewInstance>(null)
   const transparent = isOverlayPageRoute(usePathname())
   // Where an interrupted slide stopped, so a pop during a push leaves from there and not from 0.
   const stoppedAt = useRef<string | null>(null)
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   screen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase
   },
   transparent: {

@@ -1,8 +1,8 @@
+import type { TextInputInstance } from 'react-native'
 // The region between the transcript and the composer, built outside the chat view: the session's
 // running child work, then its queued-draft cards, and the composer ref a card's Edit focuses.
 
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from './MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
@@ -13,7 +13,7 @@ import { useMobileNativeChatQueuedEditFocus } from './use-mobile-native-chat-que
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
-  composerInputRef?: RefObject<TextInput | null>
+  composerInputRef?: RefObject<TextInputInstance | null>
 }
 
 export type ComposerTrayProps = {

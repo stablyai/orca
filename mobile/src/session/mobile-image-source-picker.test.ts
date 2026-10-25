@@ -40,7 +40,7 @@ function fileFactory(
 ) {
   const close = vi.fn()
   const chunks = [bytes]
-  const readBytes = vi.fn(() => {
+  const readBytes = vi.fn(async () => {
     if (options?.readError) {
       throw options.readError
     }

@@ -1,5 +1,5 @@
+import type { TextInputInstance } from 'react-native'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 
 const COPIED_STYLES = [
   'fontFamily',
@@ -24,7 +24,7 @@ const COPIED_STYLES = [
 /** Web sibling: a textarea keeps whatever height it was given, so measure the text in a hidden copy
  *  (resizing the live field would clamp its scrolling ancestors in WebKit) and render at that height. */
 export function useTextInputContentHeight(
-  input: RefObject<TextInput | null>,
+  input: RefObject<TextInputInstance | null>,
   value: string
 ): number | undefined {
   const [height, setHeight] = useState<number>()

@@ -57,7 +57,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       StyleSheet: {
         create: (styles: unknown) => styles,
         // The real values, so a case that reads them off the cover reads something.
-        absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
+        absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
       },
       Text: 'Text',
       View: 'View',

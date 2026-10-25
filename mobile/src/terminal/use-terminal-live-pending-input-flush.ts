@@ -1,5 +1,5 @@
+import type { TextInputInstance } from 'react-native'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
@@ -17,7 +17,7 @@ import {
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void

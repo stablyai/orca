@@ -42,7 +42,11 @@ describe('the document frame registry', () => {
       next += 1
       return next
     })
-    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => cancelled.push(id))
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      if (id !== null && id !== undefined) {
+        cancelled.push(id)
+      }
+    })
 
     const first = scheduleDocumentFrame(scope, () => {})
     const second = scheduleDocumentFrame(scope, () => {})

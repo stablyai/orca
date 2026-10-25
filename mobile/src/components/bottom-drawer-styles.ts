@@ -3,18 +3,18 @@ import { colors, spacing } from '../theme/mobile-theme'
 
 export const bottomDrawerStyles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000
   },
   root: {
     flex: 1
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)'
   },
   backdropPressable: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   anchor: {
     flex: 1,

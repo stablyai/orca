@@ -1,5 +1,5 @@
+import { type ViewInstance, Keyboard, Platform } from 'react-native'
 import { useRef, useCallback } from 'react'
-import { Keyboard, Platform, type View } from 'react-native'
 import { useClipboardReader, useClipboardWriter } from '../platform/clipboard'
 import { newTabRepoListRead, type MobileRuntimeRepoSummary } from './mobile-session-read-operations'
 import {
@@ -76,7 +76,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     [stopAccessoryRepeat]
   )
   const setMobileSessionRootRef = useCallback(
-    (node: View | null): void => {
+    (node: ViewInstance | null): void => {
       if (node !== null) {
         return
       }

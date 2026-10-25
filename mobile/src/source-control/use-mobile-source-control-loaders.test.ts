@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { View } from 'react-native'
+import type { ViewInstance } from 'react-native'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
@@ -126,7 +126,7 @@ function pendingCount(calls: PendingCall[], method: string): number {
 const IGNORE_ACTION_ERROR = (): void => {}
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `setRootRef` compares the node against null and returns; it reads no member of it.
-const ROOT_NODE = {} as View
+const ROOT_NODE = {} as ViewInstance
 
 describe('useMobileSourceControlLoaders branch compare', () => {
   let renderer: ReactTestRenderer | null = null

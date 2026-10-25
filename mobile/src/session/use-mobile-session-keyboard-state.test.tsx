@@ -54,7 +54,8 @@ const router: RouteHandoff = {
   push: () => {},
   reload: () => {},
   replace: () => {},
-  setParams: () => {}
+  setParams: () => {},
+  setTransitionMode: () => {}
 }
 
 function Harness(): null {

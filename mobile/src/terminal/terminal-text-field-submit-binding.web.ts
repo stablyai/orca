@@ -1,4 +1,4 @@
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
@@ -16,7 +16,7 @@ import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input
  * left alone, which is how an interrupted composition survives here as it does natively.
  */
 export function bindTerminalTextFieldSubmit(
-  node: TextInput | null,
+  node: TextInputInstance | null,
   onSubmit: () => void,
   onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
 ): () => void {
