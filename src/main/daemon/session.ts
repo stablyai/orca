@@ -1,16 +1,16 @@
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline } from './session-output-pipeline'
+import { createSessionOutputPipeline, createSessionStartupIngress } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
-import type { SessionOptions } from './session-options'
+import type { SessionOptions, NativeSetupWrite } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
 import type {
   SessionState,
@@ -21,6 +21,7 @@ import type {
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
+  readonly initialAttachToken: symbol | undefined
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
@@ -59,6 +60,9 @@ export class Session {
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
     this.output = pipeline.output
+    this.initialAttachToken = opts.initialClient
+      ? this.output.attachClient(opts.initialClient)
+      : undefined
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
     this.termination = new SessionTerminationController({
@@ -73,19 +77,16 @@ export class Session {
       subprocess: this.subprocess,
       responderParser: this.output.responderParser,
       shellReadySupported: opts.shellReadySupported,
+      nativeSetupToken: opts.nativeSetupToken,
       ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
+      acceptStartupIngress: (data, removed) =>
+        removed ? this.startupIngress.interruptPaintedText() : this.startupIngress.accept(data)
     })
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.recoveryBarrier.accept(emission)
-    })
+    this.startupIngress = createSessionStartupIngress(opts, this.subprocess, this.recoveryBarrier)
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
       if (!this._disposed) {
@@ -137,13 +138,16 @@ export class Session {
     return this.subprocess.terminateOwnedTree()
   }
 
-  write(data: string): void {
+  write(data: string, setup?: NativeSetupWrite): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
 
-    // Contain cooked query echoes and preserve input order through the post-ready flush window.
-    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
+    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
+    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
+    // Why the queue: keep queuing during the post-ready flush-gate window ('ready' but not yet
+    // flushed); a direct write would race fresh input ahead of the buffered startup command.
+    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data, setup)) {
       return
     }
 

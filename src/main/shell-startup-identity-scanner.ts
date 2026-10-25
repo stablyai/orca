@@ -33,7 +33,8 @@ function isPossibleMarker(candidate: string): boolean {
 
 export function scanForShellStartupIdentity(
   state: ShellStartupIdentityScanState,
-  data: string
+  data: string,
+  emit?: (data: string, removed?: boolean) => void
 ): ShellStartupIdentityScanResult {
   let pending = state.heldBytes + data
   let output = ''
@@ -58,6 +59,9 @@ export function scanForShellStartupIdentity(
       if (/^\d+$/.test(pidText)) {
         const shellPid = Number(pidText)
         const markerLength = SHELL_STARTUP_IDENTITY_PREFIX.length + terminator + 1
+        emit?.(output)
+        emit?.('', true)
+        emit?.(candidate.slice(markerLength))
         return {
           output: output + candidate.slice(markerLength),
           shellPid: Number.isSafeInteger(shellPid) && shellPid > 0 ? shellPid : null
@@ -68,5 +72,6 @@ export function scanForShellStartupIdentity(
     pending = candidate.slice(1)
   }
 
+  emit?.(output)
   return { output, shellPid: null }
 }

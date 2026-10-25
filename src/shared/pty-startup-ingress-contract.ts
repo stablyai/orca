@@ -33,6 +33,7 @@ export type PtyIngressSourceSpan = {
 export type PtyStartupIngressOperation =
   | { kind: 'data'; chunk: PtyIngressSourceSpan }
   | { kind: 'close-query' }
+  | { kind: 'boundary' }
   | { kind: 'snapshot' }
   | { kind: 'teardown' }
   | { kind: 'expire' }

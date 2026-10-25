@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
@@ -77,14 +78,14 @@ export function activateLocalPtySession(args: {
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
-  getOptions().onSpawned?.(id, incarnationId)
+  getOptions().onSpawned?.(id, incarnationId, nativeSetupCompletionToken(spawn.env))
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
     if (emission.transformed || sequenceChars !== emission.data.length) {
-      getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, true)
+      getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, true, emission.rawEndSeq)
     } else {
-      getOptions().onData?.(id, emission.data, Date.now())
+      getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, false, emission.rawEndSeq)
     }
     for (const cb of dataListeners) {
       cb(
@@ -206,7 +207,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        nativeSetupToken: nativeSetupCompletionToken(spawn.env)
       }
     )
   }

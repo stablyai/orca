@@ -46,10 +46,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    ;(
-      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
-    ).setupCompletionTokenByPtyId.set('pty-setup', 'token-live')
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'token-live' }
+    })
 
     const waiting = runtime.waitForSetupTerminalCompletion(handle)
     runtime.onPtyData(
@@ -72,16 +71,16 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    ;(
-      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
-    ).setupCompletionTokenByPtyId.set('pty-fast-setup', 'token-fast')
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'token-fast' }
+    })
     runtime.onPtyData(
       'pty-fast-setup',
       '__ORCA_SETUP_COMPLETE__:wrong:9\r\n__ORCA_SETUP_COMPLETE__:token-fast:0\r\n$',
       100
     )
 
+    runtime.onPtyData('pty-fast-setup', 'output after completion\n'.repeat(10_000), 101)
     await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode: 0 })
   })
 
@@ -113,25 +112,19 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    ;(
-      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
-    ).setupCompletionTokenByPtyId.set('pty-cancelled-setup', 'token-cancelled')
-    const unsubscribe = vi.fn()
-    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'token-cancelled' }
+    })
     const controller = new AbortController()
 
     const waiting = runtime.waitForSetupTerminalCompletion(handle, controller.signal)
-    expect(runtime.subscribeToTerminalData).toHaveBeenCalledWith(
-      'pty-cancelled-setup',
-      expect.any(Function)
-    )
 
     const reason = new Error('cancelled')
     controller.abort(reason)
 
     await expect(waiting).rejects.toBe(reason)
-    expect(unsubscribe).toHaveBeenCalledOnce()
+    runtime.onPtyData('pty-cancelled-setup', '__ORCA_SETUP_COMPLETE__:token-cancelled:19\r\n', 100)
+    await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode: 19 })
   })
 
   it('keeps observing after an uncertain setup terminal status', async () => {
@@ -144,10 +137,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    ;(
-      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
-    ).setupCompletionTokenByPtyId.set('pty-uncertain-setup', 'token-uncertain')
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'token-uncertain' }
+    })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle,
       condition: 'exit',

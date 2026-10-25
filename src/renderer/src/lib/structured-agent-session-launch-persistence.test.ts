@@ -1,14 +1,22 @@
+import {
+  parseDesktopCreateLaunchRecord,
+  validRecord
+} from './structured-agent-session-launch-record'
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   hasStructuredAgentLaunchCancellationTombstonePersisted,
+  deleteStructuredAgentLaunchRecord,
+  desktopCreateIdentityKey,
+  readStructuredAgentLaunchRecords,
   readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchCancellationTombstoneSessionIds,
   retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
   retireStructuredAgentLaunchCancellationTombstonePersisted,
   writeStructuredAgentLaunchRecord,
+  writeStructuredAgentLaunchRecords,
   markStructuredAgentLaunchCancelledPersisted,
   structuredAgentLaunchRecordFor
 } from './structured-agent-session-launch-persistence'
@@ -22,6 +30,82 @@ function reload(): void {
 }
 
 describe('structured agent launch persistence', () => {
+  it('reloads a frozen outer create as unknown, indexes one canonical record, and retires every alias without making it a strict create', () => {
+    localStorage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    const sessionId = 'codex_11111111_2222_4333_8444_555555555555'
+    const params = {
+      agent: 'codex',
+      operationId: '1790000000123-0123456789abcdef0123456789abcdef',
+      sessionId,
+      paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      surface: 'chat',
+      createIdentity: { instanceId: '94d38a16-e9db-4e86-b81d-334788958124' },
+      target: { kind: 'create-worktree', create: { repo: 'repo', name: 'task', activate: true } },
+      prompt: { text: 'immutable A', delivery: 'submit' }
+    }
+    const record = parseDesktopCreateLaunchRecord({
+      sessionId,
+      executionHostId: SERVER,
+      agent: 'codex',
+      lifecycle: 'pending',
+      desktopCreate: { params }
+    })
+    expect(record).toBeDefined()
+    if (!record) {
+      throw new Error('valid outer record missing')
+    }
+    expect(Object.isFrozen(record.desktopCreate.params.target)).toBe(true)
+    expect(Object.isFrozen(record.desktopCreate.params.prompt)).toBe(true)
+    expect(validRecord(record)).toBe(false)
+    for (const key of ['clientOperationId', 'payloadFingerprint', 'expectedRuntimeFence']) {
+      expect(key in record).toBe(false)
+    }
+    expect(
+      parseDesktopCreateLaunchRecord({ ...record, clientOperationId: 'strict' })
+    ).toBeUndefined()
+    expect(
+      parseDesktopCreateLaunchRecord({
+        ...record,
+        desktopCreate: { params: { ...params, operationId: undefined } }
+      })
+    ).toBeUndefined()
+    expect(
+      validRecord({
+        ...record,
+        desktopCreate: null,
+        clientOperationId: 'strict',
+        payloadFingerprint: 'fp',
+        expectedRuntimeFence: null
+      })
+    ).toBe(false)
+    writeStructuredAgentLaunchRecord(record)
+    expect(
+      JSON.parse(localStorage.getItem('orca:structuredAgentLaunches:v1') ?? '[]')
+    ).toHaveLength(1)
+    reload()
+    const restored = readStructuredAgentLaunchRecord(sessionId)
+    const identityKey = desktopCreateIdentityKey(SERVER, params.createIdentity.instanceId)
+    expect(restored).toMatchObject({ lifecycle: 'visibility-unknown', desktopCreate: { params } })
+    expect(readStructuredAgentLaunchRecord(identityKey)).toBe(restored)
+    expect(readStructuredAgentLaunchRecord(`desktop-pane:${SERVER}:${params.paneKey}`)).toBe(
+      restored
+    )
+    expect(
+      readStructuredAgentLaunchRecord(
+        desktopCreateIdentityKey('local', params.createIdentity.instanceId)
+      )
+    ).toBeUndefined()
+    expect(readStructuredAgentLaunchRecords()).toHaveLength(1)
+    deleteStructuredAgentLaunchRecord(sessionId)
+    expect(readStructuredAgentLaunchRecord(identityKey)).toBeUndefined()
+    expect(
+      readStructuredAgentLaunchRecord(`desktop-pane:${SERVER}:${params.paneKey}`)
+    ).toBeUndefined()
+    reload()
+    expect(readStructuredAgentLaunchRecords()).toEqual([])
+  })
+
   beforeEach(() => {
     localStorage.clear()
     resetStructuredAgentLaunchPersistenceForTests()
@@ -261,4 +345,87 @@ describe('structured agent launch persistence', () => {
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('stale_remote')).toBe(false)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('fresh_remote')).toBe(true)
   })
+})
+
+it('loads once and serializes canonical records with linear work for N/10N ordinary and sparse outer owners', () => {
+  const counts: number[][] = []
+  for (const size of [10, 100]) {
+    for (const outer of [false, true]) {
+      localStorage.clear()
+      resetStructuredAgentLaunchPersistenceForTests()
+      const rows = Array.from({ length: size }, (_, i) => ({
+        sessionId: `codex_${i}`,
+        agent: 'codex',
+        lifecycle: 'pending',
+        clientOperationId: `operation-${i}`,
+        payloadFingerprint: 'fp',
+        expectedRuntimeFence: null
+      }))
+      const sparse = parseDesktopCreateLaunchRecord({
+        sessionId: 'codex_11111111_2222_4333_8444_555555555555',
+        executionHostId: 'local',
+        agent: 'codex',
+        lifecycle: 'pending',
+        desktopCreate: {
+          params: {
+            agent: 'codex',
+            operationId: '1790000000123-0123456789abcdef0123456789abcdef',
+            sessionId: 'codex_11111111_2222_4333_8444_555555555555',
+            paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+            surface: 'chat',
+            createIdentity: { instanceId: '94d38a16-e9db-4e86-b81d-334788958124' },
+            target: { kind: 'create-worktree', create: { repo: 'repo', name: 'task' } }
+          }
+        }
+      })
+      if (!sparse) {
+        throw new Error('outer fixture invalid')
+      }
+      localStorage.setItem(
+        'orca:structuredAgentLaunches:v1',
+        JSON.stringify([...rows, ...(outer ? [sparse, sparse] : [])])
+      )
+      const parse = vi.spyOn(JSON, 'parse')
+      let visits = 0
+      const iterator = Map.prototype[Symbol.iterator]
+      const walk = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* (
+        this: Map<unknown, unknown>
+      ) {
+        for (const entry of iterator.call(this)) {
+          if (
+            entry[1] &&
+            typeof entry[1] === 'object' &&
+            'sessionId' in entry[1] &&
+            'lifecycle' in entry[1]
+          ) {
+            visits++
+          }
+          yield entry
+        }
+        return undefined
+      })
+      const write = vi.spyOn(localStorage, 'setItem')
+      try {
+        const loaded = readStructuredAgentLaunchRecords()
+        expect(loaded).toHaveLength(size + Number(outer))
+        for (let i = 0; i < 10; i++) {
+          expect(readStructuredAgentLaunchRecords()).toHaveLength(loaded.length)
+        }
+        writeStructuredAgentLaunchRecords(loaded)
+        expect(parse).toHaveBeenCalledTimes(2)
+        expect(write).toHaveBeenCalledTimes(1)
+        const expected = 12 * (size + (outer ? 4 : 0))
+        expect(visits).toBeLessThanOrEqual(expected)
+        counts.push([size, Number(outer), visits])
+      } finally {
+        parse.mockRestore()
+        walk.mockRestore()
+        write.mockRestore()
+      }
+      expect(
+        JSON.parse(localStorage.getItem('orca:structuredAgentLaunches:v1') ?? '[]')
+      ).toHaveLength(size + Number(outer))
+    }
+  }
+  console.info('canonical load/read/serialize record visits', JSON.stringify(counts))
 })

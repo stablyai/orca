@@ -24,7 +24,7 @@ restoreUserDataPathAfterEach()
 
 describe('ensureShellReadyWrappersAt', () => {
   it('keeps required wrapper paths aligned with generated files', () => {
-    const root = '/tmp/orca-shell-ready'
+    const root = '/tmp/orca-shell-ready:posix'
     expect(getRequiredShellReadyWrapperPaths(root)).toEqual(
       buildLocalShellReadyWrapperFiles(root).map(([path]) => path)
     )
@@ -183,7 +183,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const init = config.args?.[2] ?? ''
     expect(init).toContain('--on-event fish_prompt')
     // Why `builtin`: a user-defined printf function would swallow the marker.
-    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready\\007"')
+    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready:fish\\007"')
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
@@ -291,7 +291,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
     expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready:posix\\007"')
     // Why: add-zle-hook-widget aborts its chain on a non-zero earlier hook (e.g. oh-my-zsh vi-mode); don't register the marker through it.
     expect(zshenv).not.toContain('add-zle-hook-widget line-init')
     // Why: re-source guard — skip re-capturing when already the bound widget so the prior chain survives a second source.

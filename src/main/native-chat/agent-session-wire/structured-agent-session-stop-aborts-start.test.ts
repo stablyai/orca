@@ -71,10 +71,12 @@ it('writes no request for an empty unpublished acquisition', async () => {
   })
   const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
   await expect(rig.host.attach(CALLER, hostTestAttachParams(fence))).rejects.toThrow(
-    "couldn't restart"
+    'stopped while starting'
   )
   await eventually(() => expect(stopping).toBeDefined())
-  await stopping
+  expect(await stopping).toMatchObject({ ok: true, value: { cancelled: false } })
+  expect(rig.starts).toHaveBeenCalledOnce()
+  expect(rig.dispatch).not.toHaveBeenCalled()
   expect(
     (await rig.host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
   ).toEqual([])

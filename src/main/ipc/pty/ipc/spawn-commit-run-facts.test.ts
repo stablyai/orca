@@ -60,7 +60,7 @@ async function commit(
     () => 'committed',
     () => 'discarded'
   )
-  return { outcome, facts, stops }
+  return { outcome, facts, stops, runtime }
 }
 
 describe('renderer spawn commit: run facts', () => {
@@ -71,9 +71,22 @@ describe('renderer spawn commit: run facts', () => {
   })
 
   it('records a committed spawn and lets it supersede a landed stop no exit pinned', async () => {
-    const { outcome, facts, stops } = await commit(vi.fn().mockResolvedValue(true))
+    const { outcome, facts, stops, runtime } = await commit(
+      vi.fn().mockResolvedValue(true),
+      (ctx) => {
+        ctx.metadataLeafId = 'leaf-1'
+        ctx.spawnEnv = { ORCA_SETUP_COMPLETION_TOKEN: 'native:ipc-run-facts' }
+      }
+    )
 
     expect(outcome).toBe('committed')
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      PTY_ID,
+      'wt-1',
+      null,
+      expect.objectContaining({ setupCompletionToken: 'native:ipc-run-facts' }),
+      expect.any(Boolean)
+    )
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(true)
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })

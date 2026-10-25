@@ -329,29 +329,31 @@ describe('adopting a provider conversation on create', () => {
     }
   )
 
-  it('still releases acquisition on an import write failure, and leaves the conversation open', async () => {
+  it('still releases acquisition on an attachment failure, and leaves the conversation open', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-write-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'valid source')
-    vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems').mockRejectedValueOnce(
-      new Error('disk write failed')
-    )
     const sessionAdapter = adapter()
-    await expect(attach(transcriptPath, sessionAdapter)).rejects.toThrow('disk write failed')
+    await expect(
+      attach(transcriptPath, sessionAdapter, async () => {
+        throw new Error('disk write failed')
+      })
+    ).rejects.toThrow('disk write failed')
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(sessionAdapter.releaseAcquisition).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves the conversation writable when the import fails after acquiring', async () => {
+  it('leaves the conversation writable when the import fails before acquiring', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-host-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'valid source')
     store = await openTestAgentSessionRecordStore(root)
+    const sessionAdapter = adapter()
     const host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
-      adapter: adapter(),
+      adapter: sessionAdapter,
       journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
@@ -364,6 +366,8 @@ describe('adopting a provider conversation on create', () => {
       .attach({ callerKey: 'client-1' }, attachParams(transcriptPath))
       .catch(() => null)
     expect(attached?.ok).not.toBe(true)
+    expect(sessionAdapter.acquire).not.toHaveBeenCalled()
+    expect(sessionAdapter.releaseAcquisition).not.toHaveBeenCalled()
 
     const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
     const sent = await host.send(

@@ -20,7 +20,7 @@ export function restorePersistedStructuredLaunchState(
   sessionId: string
 ): StructuredLaunchState | undefined {
   const record = getPersistedStructuredAgentLaunchRecord(sessionId)
-  if (!record) {
+  if (!record || record.desktopCreate) {
     return undefined
   }
   let intent: StructuredAgentSessionLaunchIntent

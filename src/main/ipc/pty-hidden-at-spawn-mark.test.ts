@@ -109,6 +109,7 @@ describe('registerPtyHandlers', () => {
           'pre-spawn prompt\x1b[c',
           expect.any(Number),
           'pre-spawn prompt\x1b[c'.length,
+          undefined,
           undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)

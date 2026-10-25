@@ -1,3 +1,4 @@
+import { holdInFlightWorktreeCreate } from '../worktree-create-in-flight'
 // The production wiring of the idle-edge mail redrive: the host the runtime installs must report
 // every status change to the runtime's mail redrive. The integration test installs its own callback,
 // so without this nothing pins the line that connects the two in the real app.
@@ -23,6 +24,34 @@ const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 
 describe("the runtime's own structured host install", () => {
+  it('makes raw recorded locations join preparation and then the actual prepared setup hold', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.ensureStructuredAgentSessionHost()
+    const workspaceId = 'repo-setup::/tmp/orca-31255-preparing'
+    const setupHold = installed.deps?.setupHold
+    if (!setupHold) {
+      throw new Error('missing setup admission')
+    }
+    expect(setupHold(workspaceId)).toBeNull()
+    const releasePreparation = await holdInFlightWorktreeCreate(
+      'repo-setup',
+      '/tmp/orca-31255-preparing'
+    )
+    let acquired = false
+    const waiting = setupHold(workspaceId)?.then(() => {
+      acquired = true
+    })
+    const releaseSetup = runtime.workspaceSetupAgentStarts.hold(workspaceId)
+    releasePreparation()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(acquired).toBe(false)
+    releaseSetup(null)
+    await waiting
+    expect(acquired).toBe(true)
+    expect(setupHold(workspaceId)).toBeNull()
+  })
+
   it('reports every session status change to the mail redrive', async () => {
     const runtime = new OrcaRuntimeService()
     const redrive = vi

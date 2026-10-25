@@ -96,10 +96,16 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     data: string,
     at: number,
     sequenceChars = data.length,
-    transformed = false
+    transformed = false,
+    providerSeq?: number
   ): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
+    const claim = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    if (claim?.setupObservation && (data.length > 0 || sequenceChars > 0 || transformed)) {
+      claim.previousSetupObservation?.noteGap()
+    }
+    this.setupCompletionTokenByPtyId.get(ptyId)?.scan(data, sequenceChars, transformed, providerSeq)
     this.scanProviderModeTrackers(ptyId, data)
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd

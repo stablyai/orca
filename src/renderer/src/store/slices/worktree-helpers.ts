@@ -242,7 +242,10 @@ export type WorktreeSlice = {
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this
    *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
-  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
+  removePendingWorktreeCreation: (
+    creationId: string,
+    options?: { cleanupVm?: boolean; reason?: 'completed' }
+  ) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>

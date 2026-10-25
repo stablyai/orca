@@ -1,3 +1,10 @@
+import {
+  worktreeInitialSurfaceWorkspace,
+  sequenceWorktreeSetupAgent,
+  worktreeSetupPlatform,
+  worktreeOwnerSurfacing,
+  appendWorktreeTerminalFailure
+} from './runtime-worktree-initial-surface'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
@@ -8,7 +15,6 @@ import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -16,10 +22,7 @@ import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningArgs
-} from './runtime-worktree-terminal-provisioning'
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
 type Ports = {
   canSpawn: boolean
@@ -85,7 +88,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
+    const platform = worktreeSetupPlatform(
+      setup,
+      process.platform === 'win32' ? 'windows' : 'posix'
+    )
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
@@ -125,7 +131,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         telemetry: sequencedStartup.telemetry,
         // Switch point: a start main could not make stays in its pane, showing why.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
-        ...ownerSurfacing(shouldActivate)
+        ...worktreeOwnerSurfacing(shouldActivate)
       })
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
@@ -139,18 +145,52 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
-      warning = appendFailure(warning, worktree.path, 'startup', error)
+      warning = appendWorktreeTerminalFailure(warning, worktree.path, 'startup', error)
     }
+  }
+
+  let surfaceError: unknown
+  try {
+    const initialized = await request.initializeSurface?.({
+      ...worktreeInitialSurfaceWorkspace(worktree, repo, {
+        startupTerminalHandle,
+        startupTerminalTabId,
+        startupTerminalPaneKey,
+        startupTerminalPtyId,
+        warning
+      }),
+      ...(setup?.waitForAgentStartup
+        ? {
+            sequenceTerminalCommand: (command: string) => {
+              const sequenced = sequenceWorktreeSetupAgent(setup, command)
+              wrappedSetupCommand = sequenced.setupCommand
+              return { command: sequenced.startupCommand, env: sequenced.startupEnv }
+            }
+          }
+        : {})
+    })
+    if (initialized?.outcome.kind === 'terminal' && !startupTerminalHandle) {
+      startupTerminalHandle = initialized.outcome.handle
+      startupTerminalPaneKey = initialized.outcome.paneKey ?? null
+      didSpawnStartup = true
+    }
+  } catch (error) {
+    // Setup still runs when agent initialization fails.
+    surfaceError = error
   }
 
   // Switch point: a failed agent start keeps its pane, so no extra shell is seeded beside it.
   const startupPaneHeld =
-    didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
+    didSpawnStartup ||
+    (request.initializeSurface !== undefined && !surfaceError) ||
+    (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
   if (shouldActivate) {
     const provisionInBackground = ports.provisionInBackground?.() === true
     // Why: a failed agent start hands the whole create to the window, which seeds the agent's tab
     // first and lays setup and default tabs around it; main provisioning first would leave it no tab.
-    const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
+    const agentStartFailed = Boolean(
+      sequencedStartup && ports.canSpawn && !didSpawnStartup && !request.initializeSurface
+    )
     // Switch point: main provisions whether or not a window is open; no window takes over.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
@@ -210,8 +250,11 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     try {
       await ports.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
-      warning = appendFailure(warning, worktree.path, 'initial', error)
+      warning = appendWorktreeTerminalFailure(warning, worktree.path, 'initial', error)
     }
+  }
+  if (surfaceError) {
+    throw surfaceError
   }
   const returnedSetup = didSpawnSetup
     ? undefined
@@ -246,12 +289,12 @@ function provisionArgs(
     worktreePath: args.worktree.path,
     ...(args.setup ? { setup: args.setup } : {}),
     ...(args.defaultTabs ? { defaultTabs: args.defaultTabs } : {}),
-    primaryTerminalHandle,
+    primaryTerminalHandle: args.startup !== undefined ? primaryTerminalHandle : null,
     hasStartupTerminal,
     ...(args.request.setupOnly !== undefined ? { setupOnly: args.request.setupOnly } : {}),
     callerProvidesSurface: callerProvidesInitialSurface(args),
     startupNeedsTerminal: args.startup !== undefined,
-    setupCommandPlatform: setupPlatform(args.setup, 'posix'),
+    setupCommandPlatform: worktreeSetupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
@@ -267,32 +310,4 @@ function callerProvidesInitialSurface(
       args.request.activate !== true &&
       args.request.runHooks !== true)
   )
-}
-
-function setupPlatform(
-  setup: CreateWorktreeResult['setup'],
-  fallback: 'windows' | 'posix'
-): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
-}
-
-function ownerSurfacing(
-  shouldSurface: boolean
-): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
-  return shouldSurface ? {} : { surfaceOwner: false }
-}
-
-function appendFailure(
-  warning: string | undefined,
-  path: string,
-  kind: 'startup' | 'initial',
-  error: unknown
-): string {
-  const message = error instanceof Error ? error.message : String(error)
-  const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
-  const combined = warning
-    ? `${warning} Also ${failure}`
-    : `${failure[0].toUpperCase()}${failure.slice(1)}`
-  console.warn(`[worktree-create] ${combined}`)
-  return combined
 }

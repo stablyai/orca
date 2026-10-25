@@ -63,7 +63,25 @@ describe('runtime spawn commit: run facts', () => {
   })
 
   it('records a new process as a fresh spawn', async () => {
-    expect((await commit({})).freshSpawn).toBe(true)
+    const registerPty = vi.fn()
+    expect(
+      (
+        await commit({}, undefined, undefined, (ctx) => {
+          ctx.args.worktreeId = 'wt-1'
+          ctx.args.tabId = 'tab-1'
+          ctx.metadataLeafId = 'leaf-1'
+          ctx.env = { ORCA_SETUP_COMPLETION_TOKEN: 'native:runtime-run-facts' }
+          ctx.deps.runtime!.registerPty = registerPty
+        })
+      ).freshSpawn
+    ).toBe(true)
+    expect(registerPty).toHaveBeenCalledWith(
+      PTY_ID,
+      'wt-1',
+      null,
+      expect.objectContaining({ setupCompletionToken: 'native:runtime-run-facts' }),
+      expect.any(Boolean)
+    )
   })
 
   it('never reads an SSH adoption that omits isReattach as fresh', async () => {

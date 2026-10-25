@@ -1,3 +1,7 @@
+import {
+  stripNativeSetupCompletionEnvironment,
+  nativeSetupCompletionToken
+} from '../../runtime/orchestration/setup-completion-signal'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
@@ -111,7 +115,8 @@ export function createPtyShellLaunchPlan(
       cwd: spawnCwd,
       defaultCwd: resolveSafePtyDefaultCwd(),
       wslContext: resolvedWslContext,
-      startupCommand: opts.command
+      startupCommand: opts.command,
+      nativeSetupToken: nativeSetupCompletionToken(opts.env)
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -127,7 +132,8 @@ export function createPtyShellLaunchPlan(
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
         opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+        nativeSetupCompletionToken(opts.env)
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -155,7 +161,8 @@ export function createPtyShellLaunchPlan(
               resolveSafePtyDefaultCwd(),
               { distro: codexHomeWslInfo.distro },
               opts.command,
-              env.ORCA_CODEX_LAUNCH_PREFLIGHT
+              env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+              nativeSetupCompletionToken(opts.env)
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
@@ -184,6 +191,10 @@ export function createPtyShellLaunchPlan(
       delete env.ORCA_CODEX_HOME
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      if (nativeSetupCompletionToken(opts.env)) {
+        env.ORCA_SHELL_FEATURES = 'ready,identity'
+        addWslEnvKeys(env, ['ORCA_SHELL_FEATURES'])
+      }
       addOrcaWslInteropEnv(env)
     }
   } else {
@@ -234,6 +245,7 @@ export function createPtyShellLaunchPlan(
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
   finalizeDaemonPtyEnvironment(env, opts.env)
+  stripNativeSetupCompletionEnvironment(env)
 
   return {
     shellPath,

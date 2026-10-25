@@ -1,8 +1,13 @@
+import {
+  nativeSetupCompletionShell,
+  nativeSetupCompletionToken
+} from '../runtime/orchestration/setup-completion-signal'
 import type * as pty from 'node-pty'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 import {
   createShellPromptReadinessProbe,
+  readMatchingPromptShellExecutable,
   type ShellPromptReadinessProbe
 } from '../shell-prompt-readiness-probe'
 import {
@@ -78,12 +83,15 @@ export function createLocalPtyShellReadinessSession(args: {
       shellCwd: plan.effectiveCwd,
       shellPathEnv: env.PATH,
       getShellPid: () => shellStartupPid,
-      onPromptReady: () => {
+      onPromptReady: (executablePath) => {
         console.warn(
           `[pty] ${id}: shell-ready wrapper was replaced before its marker; releasing at the identified shell prompt. OSC 133 integration may be unavailable.`
         )
         releaseHeldShellReadyBytes()
-        finishShellReady({ postMarkerBytesObserved: true })
+        finishShellReady({
+          postMarkerBytesObserved: true,
+          nativeSetupShell: nativeSetupCompletionShell(executablePath)
+        })
       }
     })
   }
@@ -94,7 +102,13 @@ export function createLocalPtyShellReadinessSession(args: {
         finishShellReady({ postMarkerBytesObserved: false })
       }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
     } else {
-      finishShellReady({ postMarkerBytesObserved: false })
+      const shell = nativeSetupCompletionShell(plan.shellPath)
+      finishShellReady({
+        postMarkerBytesObserved: false,
+        ...(process.platform === 'win32' && (shell === 'cmd' || shell === 'powershell')
+          ? { nativeSetupShell: shell }
+          : {})
+      })
     }
   }
   let startupCommandCleanup: (() => void) | null = null
@@ -117,17 +131,60 @@ export function createLocalPtyShellReadinessSession(args: {
     shellReadyPromise,
     acceptData: (rawData) => {
       let data = rawData
+      let emitted = false
       if (shellStartupOutputScanState && resolveShellReady) {
-        const scanned = scanShellStartupOutput(shellStartupOutputScanState, data)
+        const scanned = scanShellStartupOutput(
+          shellStartupOutputScanState,
+          data,
+          (part, removed) => {
+            emitted = true
+            if (removed) {
+              startupIngress.interruptPaintedText()
+            } else {
+              startupIngress.accept(part)
+            }
+          }
+        )
         data = scanned.output
         if (scanned.shellPid) {
           shellStartupPid = scanned.shellPid
         }
         if (scanned.ready) {
-          finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
+          const signal = { postMarkerBytesObserved: scanned.postMarkerBytesObserved }
+          if (
+            nativeSetupCompletionToken(spawn.env) &&
+            shellStartupPid &&
+            process.platform !== 'win32'
+          ) {
+            // Why bounded: the existing ready timer still sends the original command on missing proof.
+            void readMatchingPromptShellExecutable({
+              shellPid: shellStartupPid,
+              shellPath: plan.shellPath,
+              shellCwd: plan.effectiveCwd,
+              shellPathEnv: env.PATH
+            }).then(
+              (executablePath) =>
+                finishShellReady({
+                  ...signal,
+                  ...(executablePath
+                    ? { nativeSetupShell: nativeSetupCompletionShell(executablePath) }
+                    : {})
+                }),
+              () => finishShellReady(signal)
+            )
+          } else {
+            finishShellReady({
+              ...signal,
+              ...(process.platform === 'win32' && scanned.nativeSetupShell
+                ? { nativeSetupShell: scanned.nativeSetupShell }
+                : {})
+            })
+          }
         }
       }
-      startupIngress.accept(data)
+      if (!emitted) {
+        startupIngress.accept(data)
+      }
       if (resolveShellReady && data.length > 0) {
         shellPromptReadinessProbe?.notifyOutput(data)
       }

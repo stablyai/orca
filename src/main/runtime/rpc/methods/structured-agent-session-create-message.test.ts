@@ -120,7 +120,7 @@ it.each([
   }
 )
 
-it('the old client retains acquired create and waits for acquisition before publishing', async () => {
+it('the old client retains its acquired result while the chat publishes before acquisition', async () => {
   const acquired = rig.adapter.acquire.getMockImplementation()
   if (!acquired) {
     throw new Error('test acquire missing')
@@ -140,7 +140,7 @@ it('the old client retains acquired create and waits for acquisition before publ
   await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledOnce())
   await entered.promise
   expect(answered).toBe(false)
-  expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+  expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
   release.resolve()
   expect(await creating).toMatchObject({ ok: true, result: { ok: true } })
   expect(rig.adapter.acquire).toHaveBeenCalledOnce()
@@ -301,3 +301,37 @@ it('answers an old client whose start failed before spawning in plain words', as
   })
   expect(JSON.stringify(answer)).not.toContain(raw)
 })
+
+it.each([false, true])(
+  'a fresh legacy create during setup returns the same at-rest chat immediately; opening message=%s',
+  async (withMessage) => {
+    const setup = Promise.withResolvers<void>()
+    let held = true
+    rig.host.deps.setupHold = () => (held ? setup.promise : null)
+    const input = params(undefined, withMessage)
+    try {
+      expect(await call('agentSession.create', input, legacy)).toMatchObject({
+        ok: true,
+        result: { ok: true, replayed: false }
+      })
+      rig.clock.now += 45_000
+      expect(await call('agentSession.create', input, legacy)).toMatchObject({
+        ok: true,
+        result: { ok: true, replayed: true, value: { sessionId: SESSION } }
+      })
+      expect(rig.store.listRecords()).toHaveLength(1)
+      expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      held = false
+      setup.resolve()
+      if (withMessage) {
+        await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+        expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+      } else {
+        expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      }
+    } finally {
+      held = false
+      setup.resolve()
+    }
+  }
+)

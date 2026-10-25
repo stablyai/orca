@@ -144,6 +144,7 @@ describe('registerPtyHandlers', () => {
           'hidden output',
           expect.any(Number),
           'hidden output'.length,
+          undefined,
           undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)

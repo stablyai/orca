@@ -4,7 +4,8 @@ import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
-import { getDefaultRepoHookSettings } from '../../shared/constants'
+import { getDefaultRepoHookSettings, getDefaultSettings } from '../../shared/constants'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../shared/worktree/meta-persisted-defaults'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { AddWorktreeOptions } from '../git/worktree'
 import {
@@ -186,20 +187,78 @@ beforeEach(() => {
   readSparsePresets.mockReturnValue([WEB_PRESET])
 })
 
+it('writes a requested identity only at actual checkout materialization, including the folder-repo creator', async () => {
+  const instanceId = '94d38a16-e9db-4e86-b81d-334788958124'
+  const before = writtenMeta.length
+  mocks.consume.mockRejectedValueOnce(new Error('checkout failed'))
+  await expect(createWorktree({ requestedInstanceId: instanceId })).rejects.toThrow(
+    'checkout failed'
+  )
+  expect(writtenMeta).toHaveLength(before)
+  const created = await createWorktree({ requestedInstanceId: instanceId })
+  expect(created.worktree.id).toBe(`repo-1::${worktreePath}`)
+  expect(writtenMeta.at(-1)).toMatchObject({ instanceId })
+  const { createRuntimeFolderWorktree } = await import('./runtime-folder-worktree-create')
+  const unexpected = (): never => {
+    throw new Error('unexpected folder-create dependency')
+  }
+  const write = vi.fn((_target: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => ({
+    ...WORKTREE_META_PERSISTED_DEFAULTS,
+    displayName: '',
+    comment: '',
+    isUnread: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    ...meta
+  }))
+  const folder = await createRuntimeFolderWorktree({
+    request: { repoSelector: 'folder', name: 'chat', requestedInstanceId: instanceId },
+    repo: { id: 'folder', path: '/folder', displayName: 'Folder', badgeColor: 'blue', addedAt: 1 },
+    promisedAgentChat: true,
+    deps: {
+      store: {
+        getSettings: () => getDefaultSettings('/fixture'),
+        setWorktreeMeta: write,
+        getRepos: unexpected,
+        getRepo: unexpected,
+        addRepo: unexpected,
+        updateRepo: unexpected,
+        getAllWorktreeMeta: unexpected,
+        getWorktreeMeta: unexpected,
+        removeWorktreeMeta: unexpected,
+        getGitHubCache: unexpected
+      },
+      ptySpawnAvailable: false,
+      invalidateResolvedWorktrees: vi.fn(),
+      notifyWorktreesChanged: vi.fn(),
+      emitCreated: vi.fn(),
+      createTerminal: unexpected,
+      pasteDraft: unexpected,
+      sendFollowup: unexpected,
+      activate: unexpected
+    }
+  })
+  expect(folder.worktree.instanceId).toBe(instanceId)
+  expect(write).toHaveBeenCalledOnce()
+  expect(write.mock.calls[0]?.[1]).toMatchObject({ instanceId })
+  expect(folder.worktree.id).toContain(instanceId)
+})
+
 describe('runtime create listing hold', () => {
   const rows = [{ path: worktreePath }]
 
-  it('holds the checkout during Git creation and releases it once metadata is saved', async () => {
+  it('holds the checkout during Git creation and keeps it through metadata and include preparation', async () => {
     mocks.consume.mockImplementation(async () => {
       expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
       return { status: 'hit', result: {}, rearm: mocks.rearm }
     })
     mocks.resolveShared.mockImplementation(async () => {
-      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
+      expect(withoutInFlightWorktreeCreates('repo-1', rows)).toEqual([])
       return []
     })
     await createWorktree()
     expect(mocks.resolveShared).toHaveBeenCalledOnce()
+    expect(withoutInFlightWorktreeCreates('repo-1', rows)).toBe(rows)
   })
 
   it('releases the checkout when Git creation fails', async () => {
@@ -259,6 +318,37 @@ describe('runtime keep-local-main-up-to-date choice', () => {
     expect(addRefreshArg()).toBe(false)
     expect(addOptions()?.suggestLocalBaseRefUpdate).toBe(true)
   })
+})
+
+it('reports actual fetch then checkout and Git meter through the runtime create route', async () => {
+  const onProgress = vi.fn()
+  const checkout = { percent: 45, completed: 45, total: 100 }
+  mocks.hasBase.mockResolvedValue(false)
+  mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled' })
+  mocks.fetch.mockImplementation(async () => {
+    expect(onProgress.mock.calls).toEqual([[{ phase: 'fetching' }]])
+  })
+  mocks.add.mockImplementation(async (...inputs: unknown[]) => {
+    expect(onProgress.mock.calls.at(-1)).toEqual([{ phase: 'creating' }])
+    const options = inputs[6]
+    if (typeof options !== 'object' || options === null || !('onCheckoutProgress' in options)) {
+      throw new Error('missing checkout progress callback')
+    }
+    const report = options.onCheckoutProgress
+    if (typeof report !== 'function') {
+      throw new Error('invalid checkout progress callback')
+    }
+    report(checkout)
+    report(null)
+    return {}
+  })
+  await createWorktree({ onProgress })
+  expect(onProgress.mock.calls).toEqual([
+    [{ phase: 'fetching' }],
+    [{ phase: 'creating' }],
+    [{ phase: 'creating', checkout }],
+    [{ phase: 'creating', checkout: null }]
+  ])
 })
 
 describe('runtime prepared-worktree replenishment', () => {
@@ -760,7 +850,11 @@ describe('runtime create setup decision', () => {
       (error: unknown) => error
     )
     expect(refusal).toBeInstanceOf(WorktreeCreateSetupChoiceRefusedError)
-    expect(refusal).toMatchObject({ message: 'Setup decision required for this repository' })
+    expect(refusal).toMatchObject({
+      code: 'worktree_create_setup_choice_required',
+      message: 'Setup decision required for this repository',
+      cause: expect.objectContaining({ message: 'Setup decision required for this repository' })
+    })
     // Hooks come from the main checkout (no worktree path): the new worktree doesn't exist yet.
     expect(mocks.effectiveHooks.mock.calls).toEqual([[expect.objectContaining({ path: '/repo' })]])
     for (const gitWork of [mocks.defaultBase, mocks.remoteBase, mocks.hasBase, mocks.refresh]) {

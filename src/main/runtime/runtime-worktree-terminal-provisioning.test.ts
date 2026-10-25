@@ -21,9 +21,7 @@ function fakeHost() {
       return { handle: `term_${created}` }
     }),
     setTabTitle: vi.fn(async (_handle: string, _title: string) => {}),
-    setTabColor: vi.fn(async (_handle: string, _color: string) => {}),
-    getPtyId: () => undefined,
-    recordSetupCompletionToken: vi.fn()
+    setTabColor: vi.fn(async (_handle: string, _color: string) => {})
   } satisfies Partial<Record<keyof WorktreeTerminalProvisioningHost, unknown>>
 }
 
@@ -103,9 +101,7 @@ function createHost(): {
       canSpawn: () => true,
       createTerminal,
       setTabTitle: vi.fn(async () => {}),
-      setTabColor: vi.fn(async () => {}),
-      getPtyId: () => undefined,
-      recordSetupCompletionToken: vi.fn()
+      setTabColor: vi.fn(async () => {})
     },
     titles: () => createTerminal.mock.calls.map(([, options]) => options.title)
   }

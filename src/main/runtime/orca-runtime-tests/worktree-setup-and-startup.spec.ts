@@ -360,7 +360,14 @@ describe('OrcaRuntimeService', () => {
       activate: false,
       surfaceOwner: false,
       tabId: setupSpawnEnv.ORCA_TAB_ID,
-      leafId: setupLeafId
+      leafId: setupLeafId,
+      // The window places Setup into the current topology, where the primary terminal stays selected.
+      initialWorkspaceTopology: expect.objectContaining({
+        worktree: result.worktree.id,
+        tabs: expect.arrayContaining([
+          expect.objectContaining({ ptyId: 'pty-primary', isActive: true })
+        ])
+      })
     })
   })
 

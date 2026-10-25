@@ -592,7 +592,33 @@ describe('LocalPtyProvider', () => {
       const onSpawned = vi.fn()
       provider.configure({ onSpawned })
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId)
+      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId, undefined)
+    })
+
+    it('announces the owned native token before synchronous data subscription', async () => {
+      const onSpawned = vi.fn()
+      const onData = vi.fn(() => expect(onSpawned).toHaveBeenCalledOnce())
+      provider.configure({ onSpawned, onData })
+      mockProc.onData.mockImplementation((listener: (data: string) => void) => {
+        listener('ORCA_SETUP_DONE:native:local-origin:0;')
+        return { dispose: vi.fn() }
+      })
+      const { id, incarnationId } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { ORCA_SETUP_COMPLETION_TOKEN: 'native:local-origin' }
+      })
+      expect(onSpawned).toHaveBeenCalledExactlyOnceWith(id, incarnationId, 'native:local-origin')
+      const frame = 'ORCA_SETUP_DONE:native:local-origin:0;'
+      expect(onData).toHaveBeenCalledExactlyOnceWith(
+        id,
+        frame,
+        expect.any(Number),
+        frame.length,
+        false,
+        frame.length
+      )
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.ORCA_SETUP_COMPLETION_TOKEN).toBeUndefined()
     })
 
     it('reports physical commit before post-spawn publication can fail', async () => {

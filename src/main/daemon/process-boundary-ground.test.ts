@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
@@ -126,11 +127,11 @@ describe('process boundary ground at a cold restore', () => {
 describe('process boundary ground at a proven crash', () => {
   it('grounds a dead TUI before the shell prompt re-arms its own modes', async () => {
     const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
-    const released: string[] = []
+    const released: PtyIngressEmission[] = []
     const barrier = new TerminalShellRecoveryBarrier({
       confirmShellForeground: async () => true,
       release: (emission) => {
-        released.push(emission.data)
+        released.push(emission)
         write(live, emission.data)
       },
       isAlive: () => true
@@ -140,9 +141,32 @@ describe('process boundary ground at a proven crash', () => {
     const data = `\x1b]133;A\x07$ tui\r\n\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07\x1b[?2004h$ `
     barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
 
-    await vi.waitFor(() => expect(released).toHaveLength(3))
-    expect(released[1]).toBe(`\x1b]133;D;137\x07${PROCESS_BOUNDARY_GROUND}`)
-    expect(released[2]).toBe('\x1b[?2004h$ ')
+    await vi.waitFor(() => expect(released).toHaveLength(4))
+    const marker = '\x1b]133;D;137\x07'
+    const markerStart = data.indexOf(marker)
+    const markerEnd = markerStart + marker.length
+    expect(released[1]!.data).toBe(marker)
+    expect(released[2]!.data).toBe(PROCESS_BOUNDARY_GROUND)
+    expect(released[3]!.data).toBe('\x1b[?2004h$ ')
+    expect(released).toEqual([
+      {
+        data: data.slice(0, markerStart),
+        rawStartSeq: 0,
+        rawEndSeq: markerStart,
+        transformed: false
+      },
+      { data: marker, rawStartSeq: markerStart, rawEndSeq: markerEnd, transformed: false },
+      {
+        data: PROCESS_BOUNDARY_GROUND,
+        rawStartSeq: markerEnd,
+        rawEndSeq: markerEnd,
+        transformed: true
+      },
+      { data: '\x1b[?2004h$ ', rawStartSeq: markerEnd, rawEndSeq: data.length, transformed: false }
+    ])
+    expect(released.map((emission) => emission.data).join('')).toBe(
+      `${data.slice(0, markerEnd)}${PROCESS_BOUNDARY_GROUND}${data.slice(markerEnd)}`
+    )
     expect(barrier.getOwner()).toBe('shell')
     const snapshot = live.getSnapshot()
     expect(snapshot.modes.alternateScreen).toBe(false)

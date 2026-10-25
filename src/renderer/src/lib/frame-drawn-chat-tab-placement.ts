@@ -10,7 +10,6 @@ import { useAppStore } from '@/store'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 import { serverLayoutApplyRoute } from '@/runtime/server-layout-apply-routes'
 import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
-import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 
 function frameDrawnEnvironment(
   target: RuntimeClientTarget | null,
@@ -22,17 +21,7 @@ function frameDrawnEnvironment(
     : null
 }
 
-/** Before the server saves the chat, its frames would drop the tab and redraw it at the end. */
-export function holdFrameDrawnProvisionalChatTab(
-  target: RuntimeClientTarget | null,
-  worktreeId: string,
-  tabId: string
-): void {
-  const environmentId = frameDrawnEnvironment(target, worktreeId)
-  if (environmentId) {
-    noteDesktopCreatedServerTab(environmentId, worktreeId, tabId)
-  }
-}
+export { holdFrameDrawnProvisionalChatTab } from './desktop-created-server-tabs'
 
 type TabPlacement = NonNullable<StructuredAgentSessionCreateParams['tabPlacement']>
 

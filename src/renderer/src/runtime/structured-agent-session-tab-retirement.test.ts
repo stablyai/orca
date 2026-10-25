@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, sessionId: string) => Promise<'closed' | 'unsupported'>>(),
   callRuntime:
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>(),
+  abandonPrompt: vi.fn(),
   discardOutbox: vi.fn<(sessionId: string) => void>(),
   stopSends: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
@@ -30,7 +31,8 @@ vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
 vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
-  discardStructuredAgentSessionChatSends: mocks.discardOutbox
+  discardStructuredAgentSessionChatSends: mocks.discardOutbox,
+  abandonHostCreatedLaunchPrompts: mocks.abandonPrompt
 }))
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
   stopStructuredAgentSessionSends: mocks.stopSends
@@ -157,6 +159,7 @@ describe('structured agent session tab retirement', () => {
     })
     expect(mocks.discardOutbox).not.toHaveBeenCalled()
     expect(mocks.stopSends).toHaveBeenCalledWith('session-1')
+    expect(mocks.abandonPrompt).toHaveBeenCalledBefore(mocks.stopSends)
     await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
   })
 

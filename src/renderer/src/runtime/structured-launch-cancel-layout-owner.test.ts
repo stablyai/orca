@@ -28,7 +28,8 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
-  discardStructuredAgentSessionChatSends: vi.fn()
+  discardStructuredAgentSessionChatSends: vi.fn(),
+  abandonHostCreatedLaunchPrompts: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession

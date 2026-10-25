@@ -633,7 +633,7 @@ describe('launch facts outside the tables', () => {
           beginRegistration.mock.calls.findIndex(([id]) => id === sessionId)
         ]?.value
       expect(claim).toBeDefined()
-      expect(cancelRegistration.mock.calls).toEqual([[sessionId, undefined, claim]])
+      expect(cancelRegistration.mock.calls).toEqual([[sessionId], [sessionId, undefined, claim]])
       expect(gateReleased).toHaveBeenCalledOnce()
       expect(ptySizes.has(sessionId)).toBe(false)
       const paneKey = makePaneKey(HOST_TAB_ID, HOST_LEAF_ID)

@@ -74,8 +74,8 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-const { createTestStore } =
-  await import('../../../src/renderer/src/store/slices/store-test-helpers')
+const { createRuntimeDetectedAgentsTestStore: createTestStore } =
+  await import('../../../src/renderer/src/store/slices/runtime-detected-agents.test-fixture')
 
 function hostBuild(
   capabilities: readonly string[],

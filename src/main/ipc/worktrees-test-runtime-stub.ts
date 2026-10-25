@@ -1,3 +1,4 @@
+import { WorkspaceSetupAgentStartHolds } from '../runtime/workspace-setup-agent-start-holds'
 import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
 import { vi } from 'vitest'
 import { WorkspaceLifecycleQueue } from '../runtime/workspaces/workspace-lifecycle-queue'
@@ -23,6 +24,7 @@ export type WorktreeRuntimeStub = {
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
   hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
+  workspaceSetupAgentStarts: WorkspaceSetupAgentStartHolds
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
 
@@ -33,6 +35,8 @@ export function createWorktreeRuntimeStub(mainWindow?: {
   // Reset removals whenever the harness builds a runtime to prevent cross-test leaks.
   _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
+    // Mirrors the runtime field: listed only when the sidebar-inputs switch is on.
+    workspaceSetupAgentStarts: new WorkspaceSetupAgentStartHolds(),
     workspaceLifecycle: ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null,
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),

@@ -9,6 +9,7 @@ export type ShellReadyScanResult = {
   output: string
   matched: boolean
   postMarkerBytesObserved: boolean
+  nativeSetupShell?: 'posix' | 'fish'
 }
 
 type ShellReadyBoundaryScanResult = ShellReadyScanResult & {
@@ -28,7 +29,8 @@ export function drainShellReadyHeldBytes(state: ShellReadyScanState): string {
 
 export function scanForShellReadyBoundary(
   state: ShellReadyScanState,
-  data: string
+  data: string,
+  emit?: (data: string, removed?: boolean) => void
 ): ShellReadyBoundaryScanResult {
   let output = ''
 
@@ -51,14 +53,26 @@ export function scanForShellReadyBoundary(
       }
     } else if (ch === '\x07') {
       const remaining = data.slice(i + 1)
+      const marker = state.heldBytes
       state.heldBytes = ''
       state.matchPos = 0
+      emit?.(output)
+      emit?.('', true)
+      emit?.(remaining)
       return {
         output: output + remaining,
         matched: true,
         postMarkerBytesObserved: remaining.length > 0,
-        postMarkerOutputIndex: output.length
+        postMarkerOutputIndex: output.length,
+        ...(marker.endsWith(':fish') ? { nativeSetupShell: 'fish' as const } : {}),
+        ...(marker.endsWith(':posix') ? { nativeSetupShell: 'posix' as const } : {})
       }
+    } else if (
+      [':posix', ':fish'].some((suffix) =>
+        `${SHELL_READY_MARKER_PREFIX}${suffix}`.startsWith(state.heldBytes + ch)
+      )
+    ) {
+      state.heldBytes += ch
     } else {
       output += state.heldBytes
       state.heldBytes = ''
@@ -72,6 +86,7 @@ export function scanForShellReadyBoundary(
     }
   }
 
+  emit?.(output)
   return {
     output,
     matched: false,

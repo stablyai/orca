@@ -1,12 +1,13 @@
+import { createSetupCompletionObservation } from '../../orchestration/setup-completion-signal'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import type {
   PtyRegistrationClaim,
+  RuntimePtyRegistrationBinding,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
@@ -29,18 +30,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
-    binding?: {
-      tabId: string
-      leafId: string
-      incarnationId?: PtyIncarnationId
-      /** Handle allocated for the replacement incarnation, when one is known. */
-      terminalHandle?: string
-      agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
-      providerReattachLaunchIdentity?: {
-        incarnationId: PtyIncarnationId
-        launchAgent: TuiAgent
-      }
-    },
+    binding?: RuntimePtyRegistrationBinding,
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
@@ -67,7 +57,14 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       binding?.incarnationId !== undefined &&
       existingPty.incarnationId !== null &&
       existingPty.incarnationId !== binding.incarnationId
+    const claim = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const preserveEarly =
+      claim?.setupObservation !== undefined && claim.incarnationId === binding?.incarnationId
     if (incarnationChanged || pendingReplacementMatches) {
+      if (!preserveEarly) {
+        this.setupCompletionTokenByPtyId.get(ptyId)?.fail(new Error('terminal_handle_stale'))
+        this.setupCompletionTokenByPtyId.delete(ptyId)
+      }
       // A reconnect can register a replacement before inventory reports its exported handle.
       // Drop every alias for the predecessor; a newly preallocated handle is retained only when
       // the caller can prove it is the replacement's handle.
@@ -89,6 +86,9 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
           pendingReplacementMatches
         )
       }
+    }
+    if (preserveEarly) {
+      claim.previousSetupObservation?.fail(new Error('terminal_handle_stale'))
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.terminalViewSubscribers.markSpawnPublished(ptyId)
@@ -123,6 +123,19 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       !isRuntimeHostedWorkspace(this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId))
     ) {
       assertPaneBoundAtRegistration(ptyId, paneKey, this.paneOfPty(pty).paneKey)
+    }
+    if (binding?.setupCompletionToken) {
+      let observed = this.setupCompletionTokenByPtyId.get(ptyId)
+      if (!observed) {
+        observed = createSetupCompletionObservation(binding.setupCompletionToken)
+        this.setupCompletionTokenByPtyId.set(ptyId, observed)
+        if (!binding.setupCompletionToken.startsWith('native:')) {
+          observed.scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+        }
+      }
+      observed.publish()
+      const completion = observed.completion
+      this.workspaceSetupAgentStarts.observe(worktreeId, () => completion)
     }
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
@@ -210,22 +223,51 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     }
   }
 
-  beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId) {
+  beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId, setupToken?: string) {
+    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    if (
+      setupToken === undefined &&
+      incarnationId !== undefined &&
+      pending?.incarnationId === incarnationId &&
+      pending.setupObservation !== undefined &&
+      this.setupCompletionTokenByPtyId.get(ptyId) === pending.setupObservation
+    ) {
+      return pending
+    }
+    this.cancelPendingPtyRegistration(ptyId)
     const claim: PtyRegistrationClaim = {
       incarnationId: incarnationId ?? null,
       exitedIncarnations: new Set()
     }
     this.pendingPtyRegistrationIncarnations.set(ptyId, claim)
+    if (setupToken?.startsWith('native:')) {
+      const previous = this.setupCompletionTokenByPtyId.get(ptyId)
+      if (previous) {
+        claim.previousSetupObservation = previous
+      }
+      claim.setupObservation = createSetupCompletionObservation(setupToken, true)
+      this.setupCompletionTokenByPtyId.set(ptyId, claim.setupObservation)
+    }
     return claim
   }
 
   narrowPtyRegistration(
     ptyId: string,
     claim: PtyRegistrationClaim,
-    incarnationId?: PtyIncarnationId
+    incarnationId?: PtyIncarnationId,
+    adopted = false
   ): boolean {
     if (this.pendingPtyRegistrationIncarnations.get(ptyId) !== claim) {
       return false
+    }
+    if (adopted && claim.setupObservation) {
+      claim.setupObservation.noteGap()
+      if (claim.previousSetupObservation) {
+        this.setupCompletionTokenByPtyId.set(ptyId, claim.previousSetupObservation)
+      } else {
+        this.setupCompletionTokenByPtyId.delete(ptyId)
+      }
+      delete claim.setupObservation
     }
     claim.incarnationId = incarnationId ?? null
     return true
@@ -253,6 +295,17 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
         pending.incarnationId !== incarnationId)
     ) {
       return
+    }
+    if (
+      pending.setupObservation &&
+      this.setupCompletionTokenByPtyId.get(ptyId) === pending.setupObservation
+    ) {
+      pending.setupObservation.noteGap()
+      if (pending.previousSetupObservation) {
+        this.setupCompletionTokenByPtyId.set(ptyId, pending.previousSetupObservation)
+      } else {
+        this.setupCompletionTokenByPtyId.delete(ptyId)
+      }
     }
     this.pendingPtyRegistrationIncarnations.delete(ptyId)
   }

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import { describe, expect, it, vi } from 'vitest'
 import {
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE,
@@ -108,17 +109,54 @@ describe('startup device attributes responder', () => {
   })
 })
 
+function createQueryFilterHarness() {
+  const filter = new StartupDeviceAttributesQueryFilter()
+  let accepted = 0
+  let emitted = 0
+  const text = (spans: PtyIngressEmission[]): string => {
+    for (const span of spans) {
+      expect(span.rawStartSeq).toBe(emitted)
+      expect(span.rawEndSeq).toBeGreaterThanOrEqual(span.rawStartSeq)
+      expect(span.rawEndSeq).toBeLessThanOrEqual(accepted)
+      if (span.transformed) {
+        expect(span.data).toBe('')
+        expect(span.rawEndSeq).toBeGreaterThan(span.rawStartSeq)
+      } else {
+        expect(span.rawEndSeq - span.rawStartSeq).toBe(span.data.length)
+      }
+      emitted = span.rawEndSeq
+    }
+    return spans.map((span) => span.data).join('')
+  }
+  return {
+    accept(data: string): string {
+      const rawStartSeq = accepted
+      accepted += data.length
+      return text(
+        filter.acceptEmission({ data, rawStartSeq, rawEndSeq: accepted, transformed: false })
+      )
+    },
+    release(): string {
+      const pending = filter.releaseEmission()
+      const output = text(pending ? [pending] : [])
+      expect(emitted).toBe(accepted)
+      return output
+    }
+  }
+}
+
 describe('startup device attributes query filter', () => {
   it('removes both DA1 forms while preserving surrounding output', () => {
-    const filter = new StartupDeviceAttributesQueryFilter()
+    const filter = createQueryFilterHarness()
 
     expect(filter.accept(`before\x1b[c middle\x1b[0c after`)).toBe('before middle after')
+    expect(filter.release()).toBe('')
   })
 
   it('removes a DA1 query split at every chunk boundary', () => {
     for (const query of ['\x1b[c', '\x1b[0c']) {
       for (let split = 1; split < query.length; split++) {
-        const filter = new StartupDeviceAttributesQueryFilter()
+        const filter = createQueryFilterHarness()
         expect(filter.accept(`before${query.slice(0, split)}`)).toBe('before')
         expect(filter.accept(`${query.slice(split)}after`)).toBe('after')
         expect(filter.release()).toBe('')
@@ -127,10 +165,41 @@ describe('startup device attributes query filter', () => {
   })
 
   it('releases incomplete and non-DA1 sequences unchanged', () => {
-    const filter = new StartupDeviceAttributesQueryFilter()
+    const filter = createQueryFilterHarness()
 
     expect(filter.accept('before\x1b[')).toBe('before')
     expect(filter.release()).toBe('\x1b[')
     expect(filter.accept('\x1b[>c')).toBe('\x1b[>c')
+    expect(filter.release()).toBe('')
   })
+})
+
+it('retains source spans across a torn DA1 query without joining receipt fragments', async () => {
+  const { createSetupCompletionObservation } =
+    await import('../runtime/orchestration/setup-completion-signal')
+  const filter = new StartupDeviceAttributesQueryFilter()
+  const observed = createSetupCompletionObservation('native:filter', true)
+  const receipt = 'ORCA_SETUP_DONE:native:filter:0;'
+  const complete = vi.fn()
+  void observed.completion.then(complete)
+  let end = 0
+  for (const data of [`${receipt.slice(0, 10)}\x1b[`, `0c${receipt.slice(10)}`, receipt]) {
+    const rawStartSeq = end
+    end += data.length
+    for (const span of filter.acceptEmission({
+      data,
+      rawStartSeq,
+      rawEndSeq: end,
+      transformed: false
+    })) {
+      observed.scan(span.data, span.rawEndSeq - span.rawStartSeq, span.transformed, span.rawEndSeq)
+    }
+    observed.publish()
+    await Promise.resolve()
+    if (data !== receipt) {
+      expect(complete).not.toHaveBeenCalled()
+    }
+  }
+  expect(observed.unknown).toBe(false)
+  await expect(observed.completion).resolves.toEqual({ exitCode: 0 })
 })

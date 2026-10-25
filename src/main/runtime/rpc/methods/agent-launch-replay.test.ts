@@ -31,6 +31,11 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../agent-session-record-store-test-harness'
+import { StoreRuntimeState } from '../../../persistence/loading-store/store-runtime-state'
+import { createStoreDomains } from '../../../persistence/loading-store/store-domain-composition'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
+import { getDefaultPersistedState } from '../../../../shared/constants'
+import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import type { RpcContext } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -38,6 +43,7 @@ import {
   methodNamed,
   rpcContext,
   runtimeStub,
+  STRUCTURED_PREFERENCE,
   setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
@@ -93,6 +99,24 @@ const ROTATED_CREDENTIAL_CLIENT: Partial<RpcContext> = {
 let directory: string
 let store: AgentSessionRecordStore
 
+function metadataOwner(state: ReturnType<typeof getDefaultPersistedState>) {
+  const runtime = new StoreRuntimeState({ dataFile: join(directory, 'metadata.json') })
+  runtime.state = state
+  return createStoreDomains(runtime).metadata
+}
+
+function metadataRow(instanceId: string) {
+  return {
+    ...WORKTREE_META_PERSISTED_DEFAULTS,
+    instanceId,
+    displayName: '',
+    comment: '',
+    isUnread: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
+}
+
 type LaunchParams = AgentLaunchFingerprintInput & { operationId?: string }
 
 function createLaunch(overrides: Partial<LaunchParams> = {}): LaunchParams {
@@ -135,6 +159,82 @@ afterEach(async () => {
 })
 
 describe('exactly one execution per launch operation', () => {
+  it('holds the requested workspace instance through same-operation joins and checks canonical and legacy occupants before creation', async () => {
+    const instanceId = '94d38a16-e9db-4e86-b81d-334788958124'
+    const state = getDefaultPersistedState('/fixture')
+    const metadata = metadataOwner(state)
+    const runtime = runtimeStub()
+    runtime.requireStore.mockReturnValue(
+      Object.assign(metadata, { getSettings: () => STRUCTURED_PREFERENCE })
+    )
+    const params = createLaunch({
+      operationId: OPERATION_ID,
+      surface: 'chat',
+      sessionId: 'claude_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d',
+      paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      createIdentity: { instanceId }
+    })
+    const { createIdentity: _identity, ...old } = params
+    expect(computeAgentLaunchFingerprint(old)).toBe(
+      computeAgentLaunchFingerprint({ ...old, createIdentity: undefined })
+    )
+    expect(computeAgentLaunchFingerprint(params)).not.toBe(computeAgentLaunchFingerprint(old))
+    expect(AGENT_LAUNCH.params.safeParse({ ...params, operationId: undefined }).success).toBe(false)
+    expect(
+      AGENT_LAUNCH.params.safeParse({ ...params, target: { kind: 'existing', worktree: 'wt' } })
+        .success
+    ).toBe(false)
+    let release!: () => void
+    let started!: () => void
+    const reached = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    runtime.createManagedWorktree.mockImplementationOnce(async (args) => {
+      expect(args.requestedInstanceId).toBe(instanceId)
+      started()
+      await gate
+      return { worktree: { id: 'wt-new' }, startupTerminal: undefined }
+    })
+    const first = launch(params, runtime)
+    await reached
+    const joined = launch(params, runtime)
+    await expect(
+      launch(
+        { ...params, createIdentity: { instanceId: '9ccecb73-d0bf-470a-88ac-d20ff63972ad' } },
+        runtime
+      )
+    ).rejects.toThrow('agent_session_operation_conflict')
+    const other = (suffix: string) => ({
+      ...params,
+      operationId: `${NOW}-${suffix.padStart(32, '0')}`
+    })
+    await expect(launch(other('ab'), runtime)).rejects.toThrow(
+      'Workspace identity is already in use.'
+    )
+    release()
+    expect(await joined).toEqual(await first)
+    const key = canonicalWorktreeIdentity({
+      worktreeId: 'unlisted',
+      executionHostId: 'local',
+      instanceId
+    })
+    state.worktreeMetaByIdentity = { [key]: { ...metadataRow(instanceId), hostId: 'local' } }
+    await expect(launch(other('ac'), runtime)).rejects.toThrow(
+      'Workspace identity is already in use.'
+    )
+    delete state.worktreeMetaByIdentity[key]
+    state.worktreeMeta['legacy'] = metadataRow(instanceId)
+    await expect(launch(other('ad'), runtime)).rejects.toThrow(
+      'Workspace identity is already in use.'
+    )
+    delete state.worktreeMeta['legacy']
+    await launch(other('ae'), runtime)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(2)
+  })
+
   it('joins an identical live retry through settlement and conflicts on changed intent', async () => {
     const runtime = runtimeStub()
     let markStarted: (() => void) | undefined
@@ -628,4 +728,163 @@ describe('the inner attach reserves under its own id', () => {
     })
     expect(child.decision).toBe('admit')
   })
+})
+
+it('carries only an actual resolved workspace on negotiated desktop errors and preserves the older mapped refusal', async () => {
+  const desktopCapability = 'agent.launch.desktop-create.v1'
+  const replay = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
+  const runtime = runtimeStub()
+  const metadata = getDefaultPersistedState('/fixture')
+  const owner = metadataOwner(metadata)
+  runtime.requireStore.mockReturnValue(
+    Object.assign(owner, { getSettings: () => STRUCTURED_PREFERENCE })
+  )
+  runtime.createManagedWorktree.mockImplementation(async (args) => {
+    if (typeof args.initializeSurface !== 'function') {
+      throw new Error('missing real initialization seam')
+    }
+    await args.initializeSurface({
+      worktreeId: 'wt-resolved',
+      workspacePath: '/actual/workspace',
+      startupTerminalHandle: undefined
+    })
+    throw new Error('post-resolution bookkeeping failed')
+  })
+  const params = replay.params.parse(
+    createLaunch({
+      operationId: `${NOW}-0000000000000000000000000000e001`,
+      surface: 'chat',
+      sessionId: 'claude_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d',
+      paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      createIdentity: { instanceId: '94d38a16-e9db-4e86-b81d-334788958124' }
+    })
+  )
+  const { mapRuntimeError } = await import('../errors')
+  const invoke = async (operationId: string, clientCapabilities: string[]) => {
+    try {
+      await replay.handler(
+        { ...params, operationId },
+        rpcContext(runtime, { ...PAIRED_CLIENT, clientCapabilities })
+      )
+      throw new Error('expected execution to fail')
+    } catch (error) {
+      return mapRuntimeError('desktop', { runtimeId: 'fixture' }, error)
+    }
+  }
+  const modern = await invoke(params.operationId, [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    desktopCapability
+  ])
+  expect(modern).toMatchObject({
+    ok: false,
+    error: {
+      code: 'agent_session_operation_unknown',
+      message: 'agent_session_operation_unknown',
+      data: { desktopCreate: { worktreeId: 'wt-resolved' } }
+    }
+  })
+  const older = await invoke(`${NOW}-0000000000000000000000000000e002`, [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY
+  ])
+  expect(older).toMatchObject({
+    ok: false,
+    error: { code: 'agent_session_operation_unknown', message: 'agent_session_operation_unknown' }
+  })
+  if (older.ok) {
+    throw new Error('expected mapped error')
+  }
+  expect(older.error).not.toHaveProperty('data')
+  runtime.createManagedWorktree.mockRejectedValueOnce(new Error('before actual workspace'))
+  const before = await invoke(`${NOW}-0000000000000000000000000000e003`, [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    desktopCapability
+  ])
+  if (before.ok) {
+    throw new Error('expected unresolved create')
+  }
+  expect(before.error).not.toHaveProperty('data')
+})
+
+it('bounds active instance admission and legacy ownership scans by their actual N/10N populations', async () => {
+  const counts: number[][] = []
+  for (const size of [10, 100]) {
+    const state = getDefaultPersistedState('/fixture')
+    let legacyReads = 0
+    for (let i = 0; i < size; i++) {
+      Object.defineProperty(state.worktreeMeta, `legacy-${i}`, {
+        enumerable: true,
+        get: () => {
+          legacyReads++
+          return { instanceId: `legacy-${i}` }
+        }
+      })
+    }
+    const owner = metadataOwner(state)
+    const runtime = runtimeStub()
+    runtime.requireStore.mockReturnValue(
+      Object.assign(owner, { getSettings: () => STRUCTURED_PREFERENCE })
+    )
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let started = 0
+    let allStarted!: () => void
+    const reached = new Promise<void>((resolve) => {
+      allStarted = resolve
+    })
+    runtime.createManagedWorktree.mockImplementation(async () => {
+      started++
+      if (started === size) {
+        allStarted()
+      }
+      await gate
+      return { worktree: { id: `wt-${started}` }, startupTerminal: undefined }
+    })
+    let activeVisits = 0
+    const values = Map.prototype.values
+    const walk = vi.spyOn(Map.prototype, 'values').mockImplementation(function* (
+      this: Map<unknown, unknown>
+    ) {
+      for (const value of values.call(this)) {
+        if (
+          value &&
+          typeof value === 'object' &&
+          'hostFoundingAttempt' in value &&
+          'fingerprint' in value
+        ) {
+          activeVisits++
+        }
+        yield value
+      }
+      return undefined
+    })
+    const flights = Array.from({ length: size }, (_, i) => {
+      const suffix = (size * 1000 + i).toString(16).padStart(12, '0')
+      return launch(
+        createLaunch({
+          operationId: `${NOW}-${suffix.padStart(32, '0')}`,
+          surface: 'chat',
+          sessionId: `claude_00000000_0000_4000_8000_${suffix}`,
+          paneKey: `00000000-0000-4000-8000-${suffix}:3f2504e0-4f89-41d3-9a0c-0305e82c3301`,
+          createIdentity: { instanceId: `00000000-0000-4000-8000-${suffix}` }
+        }),
+        runtime
+      )
+    })
+    try {
+      await reached
+      expect(legacyReads).toBeLessThanOrEqual(size * size)
+      expect(activeVisits).toBeLessThanOrEqual(size * size)
+      counts.push([size, legacyReads, activeVisits])
+    } finally {
+      walk.mockRestore()
+      release()
+      await Promise.all(flights)
+    }
+  }
+  console.info(
+    'identity admission [population, legacy reads, active visits]',
+    JSON.stringify(counts)
+  )
 })

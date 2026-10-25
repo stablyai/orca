@@ -5,8 +5,8 @@
 // the message back in the composer when the host did not take it, or nobody can say. While it is
 // out the chat takes no other send, which keeps the host's arrival order without a client line.
 //
-// Nothing here is saved, nothing outlives one deadline, and nothing is ever sent twice: a send makes
-// one request, and whatever its answer, nothing sends it again.
+// Nothing here is saved or sent twice. A host-create claim may wait for its actual target before
+// its deadline starts; ordinary sends make one request with their budget starting immediately.
 
 import type {
   AgentJournalCursor,
@@ -42,6 +42,7 @@ import {
   type StructuredAgentSessionPendingSend
 } from './structured-agent-session-pending-sends'
 import {
+  activateSend,
   beginSend,
   finish,
   handBack,
@@ -118,16 +119,27 @@ export type StructuredAgentSessionReservedSend = {
   /** Sends it once the chat exists; null when the reservation was released or dropped meanwhile. */
   send: (target: RuntimeClientTarget) => StructuredAgentSessionSent | null
   /** The same message, owned by create instead of a later send request. */
-  create: (target: RuntimeClientTarget) => StructuredAgentSessionCreateSend | null
+  create: (
+    target: RuntimeClientTarget,
+    options?: {
+      deferUntilTarget?: true
+      beforeFinish?: (outcome: StructuredAgentSessionSendOutcome) => void
+    }
+  ) => StructuredAgentSessionCreateSend | null
   /** Gives the slot back unsent. */
   release: () => void
 }
 
 export type StructuredAgentSessionCreateSend = StructuredAgentSessionSent & {
   message: StructuredAgentSessionFirstMessage
+  /** Call only after actual target proof, never for a reserved id or a mounted view. */
+  activate: () => void
+  /** Abandons only this create's exact slot, leaving subsequent ordinary sends alone. */
+  drop: () => void
   settle: (
     result:
       | { kind: 'recorded'; submission: AgentJournalSubmission; cursor?: AgentJournalCursor }
+      | { kind: 'recorded-proof'; sessionId: string; clientMessageId: string }
       | { kind: 'refused'; failure?: AgentSessionWriteFailure }
       | { kind: 'unconfirmed' }
   ) => void
@@ -172,7 +184,7 @@ export function reserveStructuredAgentSessionSend(
       }
       return sending
     },
-    create: (target) => {
+    create: (target, options) => {
       const current = held()
       if (!current) {
         return null
@@ -180,12 +192,17 @@ export function reserveStructuredAgentSessionSend(
       sent = true
       clearTimeout(deadline)
       const remaining = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS - (Date.now() - current.queuedAt)
-      if (remaining <= 0) {
+      if (!options?.deferUntilTarget && remaining <= 0) {
         handBack(current, ['unreachable', ...agentSessionWriteNotDoneParts('composer-send')])
         settleReservation('returned')
         return null
       }
-      const sending = beginSend(current, target, remaining)
+      const sending = beginSend(
+        current,
+        target,
+        options?.deferUntilTarget ? null : remaining,
+        options?.beforeFinish
+      )
       void sending.outcome.then(settleReservation)
       updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
         issued: true
@@ -193,12 +210,34 @@ export function reserveStructuredAgentSessionSend(
       return {
         ...sending,
         message: { clientMessageId: current.clientMessageId, body: current.body },
+        activate: () => activateSend(current),
+        drop: () => {
+          const pending = findStructuredAgentSessionPendingSend(
+            current.sessionId,
+            current.clientMessageId
+          )
+          if (pending) {
+            finish(pending, 'dropped')
+          }
+        },
         settle: (result) => {
           const pending = findStructuredAgentSessionPendingSend(
             current.sessionId,
             current.clientMessageId
           )
-          if (!pending || pending.phase === 'recorded' || !runtimes.has(current.clientMessageId)) {
+          if (!pending) {
+            return
+          }
+          if (result.kind === 'recorded-proof') {
+            if (
+              result.sessionId === pending.sessionId &&
+              result.clientMessageId === pending.clientMessageId
+            ) {
+              finish(pending, 'recorded')
+            }
+            return
+          }
+          if (pending.phase === 'recorded' || !runtimes.has(current.clientMessageId)) {
             return
           }
           if (result.kind === 'recorded') {
@@ -271,8 +310,12 @@ export function dropStructuredAgentSessionSends(sessionId: string): void {
   for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
     const runtime = runtimes.get(entry.clientMessageId)
     runtime?.abort.abort()
-    if (runtime) {
-      clearTimeout(runtime.deadline)
+    if (runtime?.beforeFinish) {
+      finish(entry, 'dropped')
+    } else if (runtime) {
+      if (runtime.deadline !== null) {
+        clearTimeout(runtime.deadline)
+      }
       runtimes.delete(entry.clientMessageId)
       runtime.resolve('dropped')
     }

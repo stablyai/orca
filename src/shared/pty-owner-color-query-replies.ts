@@ -28,6 +28,12 @@ export class PtyOwnerColorQueryReplies {
     return terminalOscColorQueryReplies(this.overrides.resolve(this.themeColors()), slots) ?? []
   }
 
+  /** True when at least the first reply landed; a failed write stops the rest in order. */
+  answer(slots: readonly TerminalOscColorQuerySlot[], write: (reply: string) => boolean): boolean {
+    const replies = this.replies(slots)
+    return replies.length > 0 && replies.findIndex((reply) => !write(reply)) !== 0
+  }
+
   private themeColors(): TerminalOscColorQueryReplyColors {
     return resolvePtyOwnerColorQueryColors(this.resolveHostColors(), this.intent?.colors)
   }

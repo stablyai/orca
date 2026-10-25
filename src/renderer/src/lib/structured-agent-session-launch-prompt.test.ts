@@ -34,6 +34,8 @@ import {
   hasStagedStructuredLaunchPrompt,
   settleStructuredAgentLaunchPrompt,
   stageStructuredLaunchPrompt,
+  sendStagedStructuredLaunchPrompt,
+  prepareLegacyStructuredLaunchPrompts,
   takeBackLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
 
@@ -110,6 +112,46 @@ describe('settleStructuredAgentLaunchPrompt', () => {
       body: { blocks: [{ type: 'text', text: 'review this' }] }
     })
     expect(hasStagedStructuredLaunchPrompt(SESSION)).toBe(false)
+  })
+
+  it.each(['legacy completion', 'host completion'])(
+    '%s preserves initial input ownership and failed-send handback',
+    async (route) => {
+      const opening = stageStructuredLaunchPrompt(SESSION, 'Implement A')
+      prepareLegacyStructuredLaunchPrompts(SESSION)
+      expect(
+        sendStructuredAgentSessionMessage({ sessionId: SESSION, target, text: 'Implement B' })
+      ).toBeNull()
+      mocks.call.mockImplementation(async (_target, method) => {
+        if (method === 'agentSession.history') {
+          return { ok: true, page: { fence: 1 } }
+        }
+        throw new Error('connection lost')
+      })
+      const delivered =
+        route === 'host completion'
+          ? sendStagedStructuredLaunchPrompt(SESSION, target)
+          : settleStructuredAgentLaunchPrompt({
+              launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
+              target,
+              options: { prompt: 'Implement A' },
+              stagedPrompt: opening
+            })
+      expect(await delivered).toMatchObject({ delivered: false, inComposer: true })
+      expect(sends()).toHaveLength(1)
+      expect(sends()[0]?.[2]).toMatchObject({
+        body: { blocks: [{ type: 'text', text: 'Implement A' }] }
+      })
+      expect(draft()).toBe('Implement A')
+      expect(hasStagedStructuredLaunchPrompt(SESSION)).toBe(false)
+    }
+  )
+
+  it('does not recreate the host create prompt after the chat was closed or stopped', () => {
+    stageStructuredLaunchPrompt(SESSION, 'Implement A')
+    discardStructuredLaunchPrompts(SESSION)
+    expect(sendStagedStructuredLaunchPrompt(SESSION, target)).toBeUndefined()
+    expect(sends()).toHaveLength(0)
   })
 
   it('shares one send between every caller waiting on the same staged prompt', async () => {

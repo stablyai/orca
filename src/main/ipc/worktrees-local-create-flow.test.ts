@@ -1,3 +1,4 @@
+import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -746,14 +747,19 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
-    createSetupRunnerScriptMock.mockReturnValueOnce({
-      runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-      shell: { family: 'posix', executable: 'wsl.exe' },
-      envVars: {
-        ORCA_ROOT_PATH: 'C:\\workspace\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
-      },
-      waitForAgentStartup: true
+    createSetupRunnerScriptMock.mockImplementationOnce(() => {
+      expect(
+        withoutInFlightWorktreeCreates('repo-1', [{ path: '/workspace/improve-dashboard' }])
+      ).toEqual([])
+      return {
+        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+        shell: { family: 'posix', executable: 'wsl.exe' },
+        envVars: {
+          ORCA_ROOT_PATH: 'C:\\workspace\\repo',
+          ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
+        },
+        waitForAgentStartup: true
+      }
     })
     runtimeStub.createTerminal
       .mockResolvedValueOnce({ handle: 'term-startup', surface: 'visible' })
@@ -781,6 +787,8 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(result.setup?.command).toContain('printf')
+    const holds = runtimeStub.workspaceSetupAgentStarts
+    expect(holds.pending('repo-1::/workspace/improve-dashboard')).not.toBeNull()
   })
 
   it('opens Setup beside the startup terminal without surfacing the workspace', async () => {

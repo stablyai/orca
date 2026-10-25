@@ -124,7 +124,7 @@ export async function call(
   return JSON.parse(JSON.stringify(response))
 }
 
-export async function createChat(sessionId: string, tabId?: string) {
+export async function createChat(sessionId: string, tabId?: string, publishTab = true) {
   return commitStructuredAgentSessionCreate({
     runtime,
     caller,
@@ -140,7 +140,7 @@ export async function createChat(sessionId: string, tabId?: string) {
         },
         ...(tabId ? { surfaceTabId: tabId } : {})
       }),
-      tab: { workspaceId: HOST_TEST_LOCATION.workspaceId, agent: 'codex' }
+      tab: publishTab ? { workspaceId: HOST_TEST_LOCATION.workspaceId, agent: 'codex' } : null
     }
   })
 }

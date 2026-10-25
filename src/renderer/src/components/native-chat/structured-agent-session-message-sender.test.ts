@@ -1,3 +1,4 @@
+import { registerCreateOwnedSenderContracts } from './structured-agent-session-create-owned-sender.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 
@@ -133,6 +134,19 @@ describe('structured agent session message sender', () => {
       envelope: { sessionId: SESSION, expectedRuntimeFence: 4 },
       body: { blocks: [{ type: 'text', text: 'b' }] }
     })
+  })
+
+  registerCreateOwnedSenderContracts({
+    SESSION,
+    target,
+    mocks,
+    phases,
+    sendCalls,
+    deferredCalls,
+    send,
+    flush,
+    okSubmission,
+    submission
   })
 
   it('carries the options read at the send on its request, and nothing without them', async () => {

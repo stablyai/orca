@@ -21,14 +21,17 @@ function toAttempt(
   cwd: string,
   defaultCwd: string,
   wslContext: WindowsShellWslContext | undefined,
-  startupCommand: string | undefined
+  startupCommand: string | undefined,
+  nativeSetupToken: string | undefined
 ): WindowsShellSpawnAttempt {
   const resolved = resolveWindowsShellLaunchArgs(
     shellPath,
     cwd,
     defaultCwd,
     wslContext,
-    startupCommand
+    startupCommand,
+    undefined,
+    nativeSetupToken
   )
   return {
     shellPath,
@@ -58,6 +61,7 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   defaultCwd: string
   wslContext?: WindowsShellWslContext
   startupCommand?: string
+  nativeSetupToken?: string
   resolveOptions?: WindowsPowerShellResolveOptions
 }): WindowsShellSpawnAttempt[] {
   const basename = pathWin32.basename(args.shellPath).toLowerCase()
@@ -66,6 +70,13 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   }
   const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
   return chain.map((candidate) =>
-    toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
+    toAttempt(
+      candidate,
+      args.cwd,
+      args.defaultCwd,
+      args.wslContext,
+      args.startupCommand,
+      args.nativeSetupToken
+    )
   )
 }

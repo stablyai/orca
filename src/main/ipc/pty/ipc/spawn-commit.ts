@@ -25,6 +25,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       seedPaneKey: ctx.validatedPaneKey,
       paneBinding: ipcSpawnPaneBinding(ctx),
       registration: {
+        setupCompletionToken: ctx.spawnEnv?.ORCA_SETUP_COMPLETION_TOKEN,
         store: ctx.deps.store,
         worktreeId,
         shellOverride: ctx.effectiveShellOverride,

@@ -1362,6 +1362,9 @@
       "worktreeJumpNavigation": {
         "filteredNotice": "This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces."
       },
+      "worktreeCreationThroughHost": {
+        "unconfirmedCreate": "Could not confirm whether {{agent}} created the workspace. Retry to check the same request."
+      },
       "file": {
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",
@@ -19148,7 +19151,7 @@
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
-        "stoppedBeforeStart": "Stopped manually",
+        "stoppedBeforeStart": "Interrupted",
         "dismiss": "Dismiss",
         "copyError": "Copy error",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",

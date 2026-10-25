@@ -1,3 +1,14 @@
+import type * as StructuredAgentSessionCreate from '../../src/main/runtime/rpc/methods/structured-agent-session-create'
+import {
+  createRestTestRig,
+  type RestTestRig
+} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import { createTestParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { layoutApplyOn } from '../../src/main/runtime/session-layout-apply.test-fixture'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
+import { loadTestJournal } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,6 +42,7 @@ vi.mock('../../src/main/runtime/rpc/methods/agent-launch-terminal-prompt', () =>
 const { AGENT_LAUNCH_METHODS } = await import('../../src/main/runtime/rpc/methods/agent-launch')
 
 let directory: string
+let foundingRig: RestTestRig | undefined
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-launch-cli-'))
   setAgentLaunchRecordStore(await openTestAgentSessionRecordStore(directory))
@@ -39,10 +51,59 @@ beforeEach(async () => {
   terminalPrompt.mockClear()
 })
 afterEach(async () => {
+  if (foundingRig) {
+    await foundingRig.host.flushAllStreamedEvents({ trigger: 'quit' })
+    setStructuredAgentSessionHost(null)
+    await foundingRig.dispose()
+    foundingRig = undefined
+  }
   setAgentLaunchRecordStore(null)
   vi.restoreAllMocks()
   await rm(directory, { recursive: true, force: true })
 })
+
+async function useRealFounding(runtime: ReturnType<typeof runtimeStub>): Promise<RestTestRig> {
+  const rig = await createRestTestRig()
+  vi.spyOn(Date, 'now').mockImplementation(() => rig.clock.now)
+  foundingRig = rig
+  setStructuredAgentSessionHost(rig.host)
+  setAgentLaunchRecordStore(rig.store)
+  let session: WorkspaceSessionState = {
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {}
+  }
+  const store = {
+    getSettings: () => ({ experimentalNativeChat: true }),
+    getWorkspaceSession: () => session,
+    getWorkspaceSessionHostIds: () => ['local'],
+    setWorkspaceSession: (next: WorkspaceSessionState) => {
+      session = next
+    },
+    applyLayoutCommand: layoutApplyOn(
+      () => session,
+      (next) => {
+        session = next
+      }
+    )
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: publication uses only these layout/settings store methods; founding and its receipt are real.
+  const publisher = new OrcaRuntimeService(store as never)
+  Object.assign(runtime, {
+    resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
+      ...createTestParams(),
+      envelope: input.envelope
+    }),
+    publishStructuredAgentSessionTab: publisher.publishStructuredAgentSessionTab.bind(publisher)
+  })
+  const actual = await vi.importActual<typeof StructuredAgentSessionCreate>(
+    '../../src/main/runtime/rpc/methods/structured-agent-session-create'
+  )
+  chatCreate.mockImplementation(actual.createStructuredAgentSessionForWorktree)
+  return rig
+}
 
 function hostClient(runtime: ReturnType<typeof runtimeStub>, loseReply = false) {
   const client = new RuntimeClient(directory, 60_000, null, null)
@@ -122,6 +183,7 @@ describe('CLI launch through host surface creation and replay admission', () => 
     'a lost accepted reply replays without a second chat or prompt: %j',
     async (target) => {
       const runtime = runtimeStub()
+      const rig = await useRealFounding(runtime)
       const launch = {
         agent: 'codex',
         prompt: { text: 'Fix the repo\nThen test it', delivery: 'submit' }
@@ -163,12 +225,26 @@ describe('CLI launch through host surface creation and replay admission', () => 
         { target, presentation: 'background' },
         AGENT_LAUNCH_RUNTIME_CAPABILITIES
       )
+      const opening = chatCreate.mock.calls[0]?.[0].firstMessage
+      expect(opening).toMatchObject({
+        body: { blocks: [{ type: 'text', text: launch.prompt.text }] }
+      })
       expect(result.result.prompt).toMatchObject({
         outcome: 'journaled',
-        messageId: 'message_test'
+        messageId: opening.clientMessageId
       })
+      const sessionId = chatCreate.mock.calls[0]?.[0].envelope.sessionId
+      const journal = loadTestJournal(rig.root, sessionId)
+      expect(journal?.state.submissions.size).toBe(1)
+      expect(
+        [...(journal?.state.items.values() ?? [])].flatMap((item) =>
+          item.body.kind === 'message' && item.body.role === 'user'
+            ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+      ).toEqual([launch.prompt.text])
+      await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(1))
       expect(chatCreate).toHaveBeenCalledTimes(1)
-      expect(promptCommit).toHaveBeenCalledTimes(1)
       expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(
         target.kind === 'create-worktree' ? 1 : 0
       )

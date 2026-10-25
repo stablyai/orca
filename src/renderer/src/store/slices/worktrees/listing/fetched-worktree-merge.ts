@@ -1,3 +1,4 @@
+import { acceptDesktopCreateCatalog } from '@/lib/structured-agent-session-desktop-create-presentation'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -158,6 +159,7 @@ export function mergeFetchedWorktrees(
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []
+  let acceptedRows: readonly Worktree[] = []
   set((s) => {
     // Why against live state: a create or remove reply can have landed while this listing was in
     // flight. A listing that describes the catalog before that reply must not undo it, so it is
@@ -204,6 +206,7 @@ export function mergeFetchedWorktrees(
       incoming,
       s.worktreesByRepo[args.repoId]
     )
+    acceptedRows = worktrees
     const currentForHost = (s.worktreesByRepo[args.repoId] ?? []).filter((worktree) =>
       worktreeMatchesHost(worktree, args.hostId, matchOptions)
     )
@@ -293,6 +296,11 @@ export function mergeFetchedWorktrees(
     }
   })
   if (decision.outcome === 'applied') {
+    try {
+      acceptDesktopCreateCatalog(args.hostId, acceptedRows, get)
+    } catch (error) {
+      console.warn('worktree create: provisional presentation failed', error)
+    }
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)

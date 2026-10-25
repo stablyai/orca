@@ -1,3 +1,7 @@
+import type { AgentLaunchIntent } from '../../../../shared/agent-launch-intent'
+import type { CreateWorktreeProgressEvent } from '../../../../shared/worktree/create-types'
+import type { AgentLaunchExecution } from '../../../agent-launch/agent-launch-execution'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 /**
  * Creating the worktree an `agent.launch` asks for.
  *
@@ -11,7 +15,6 @@
 
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -32,11 +35,10 @@ type WorktreeCreateParams = Extract<
   { kind: 'create-worktree' }
 >['create']
 
-const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
-
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
-  agent: TuiAgent
+  agent: TuiAgent,
+  createIdentity?: AgentLaunchIntent['createIdentity']
 ): AgentLaunchWorkspaceFactory {
   return {
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
@@ -48,6 +50,7 @@ export function agentLaunchWorkspaceFactory(
       startupAgent,
       promisedAgentChat,
       onWorkspaceCreated,
+      initializeSurface,
       startupPrompt,
       agentArgs,
       cwd,
@@ -70,7 +73,8 @@ export function agentLaunchWorkspaceFactory(
       })
       // Reserved before creation so a retry can recover; a failed attempt has to release it.
       try {
-        const result = await runtime.createManagedWorktree({
+        const createArgs = {
+          ...(createIdentity ? { requestedInstanceId: createIdentity.instanceId } : {}),
           ...buildManagedWorktreeCreateArgs(
             {
               ...(agentLaunchMovesHostWindow(context) ? params : withoutHostActivation(params)),
@@ -105,17 +109,50 @@ export function agentLaunchWorkspaceFactory(
           ...(accountEnv ? { startupAccountEnv: { ...accountEnv } } : {}),
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
+          ...(context.clientKind === 'runtime' ? { telemetryEntryPoint: 'app' as const } : {}),
           createdWithAgent: agent,
           ...(promisedAgentChat ? { promisedAgentChat } : {}),
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
-          // Structured sessions have no startup command to sequence behind setup. Provision the
-          // setup terminal synchronously and attach a completion token so the launch can wait
-          // before creating the chat surface.
+          ...(context.clientKind === 'runtime'
+            ? {
+                onProgress: (progress: Omit<CreateWorktreeProgressEvent, 'creationId'>) =>
+                  runtime.notifyWorktreeCreationProgress({
+                    ...progress,
+                    creationId: params.creationId
+                  })
+              }
+            : {}),
+          ...(initializeSurface
+            ? {
+                initializeSurface: async (
+                  workspace: Parameters<NonNullable<typeof initializeSurface>>[0]
+                ) => {
+                  return initializeSurface({
+                    ...workspace,
+                    ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
+                  })
+                }
+              }
+            : {}),
           awaitTerminalProvisioning: true,
+          // Lets the hold see setup end even when its terminal's shell stays open.
           observeSetupCompletion: true
-        })
-        if (!startupAgent) {
-          await waitForStructuredSetup(runtime, result.setupReceipt)
+        }
+        let result
+        try {
+          result = await runtime.createManagedWorktree(createArgs)
+        } catch (error) {
+          if (
+            !params.parentWorkspace ||
+            !hasRuntimeRpcErrorCode(error, 'LINEAGE_PARENT_NOT_FOUND')
+          ) {
+            throw error
+          }
+          console.warn('[agent-launch] Parent workspace no longer exists; creating without it.')
+          result = await runtime.createManagedWorktree({
+            ...createArgs,
+            lineage: { noParent: true }
+          })
         }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         const warning =
@@ -124,6 +161,7 @@ export function agentLaunchWorkspaceFactory(
             result.warning
           ) ?? result.warning
         return {
+          created: result,
           worktreeId: result.worktree.id,
           workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
@@ -157,33 +195,11 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
   }
 }
 
-async function waitForStructuredSetup(
-  runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
-  receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
-): Promise<void> {
-  if (
-    !receipt ||
-    receipt.startupPolicy !== 'wait-for-setup' ||
-    receipt.state !== 'running' ||
-    !receipt.terminalHandle
-  ) {
-    return
-  }
-  const abort = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([
-      runtime.waitForSetupTerminalCompletion(receipt.terminalHandle, abort.signal),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          abort.abort(new Error('structured_setup_wait_timeout'))
-          resolve()
-        }, STRUCTURED_SETUP_WAIT_TIMEOUT_MS)
-      })
-    ])
-  } catch {
-    // Setup completion is evidence, not a reason to strand a launch when the PTY disappears.
-  } finally {
-    clearTimeout(timer)
+export function agentLaunchWorkspaceCreation(
+  context: RpcContext,
+  intent: AgentLaunchIntent
+): Pick<AgentLaunchExecution, 'workspaces'> {
+  return {
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent, intent.createIdentity)
   }
 }

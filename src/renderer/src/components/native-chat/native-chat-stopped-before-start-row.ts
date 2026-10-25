@@ -9,10 +9,7 @@ export function nativeChatBlocksInOwnWords(blocks: NativeChatBlock[]): NativeCha
         isStoppedBeforeStartBlock(block)
           ? {
               type: 'text',
-              text: translate(
-                'components.native-chat.notices.stoppedBeforeStart',
-                'Stopped manually'
-              )
+              text: translate('components.native-chat.notices.stoppedBeforeStart', 'Interrupted')
             }
           : block
       )

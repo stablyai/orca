@@ -1,3 +1,4 @@
+import { pendingWorkspaceSetupAgentStart } from '../workspace-setup-agent-start-holds'
 import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from '../runtime-worktree-agent-sources'
@@ -318,7 +319,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps
       // its agent running. No database answers no.
       hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+      setupHold: (workspaceId) => {
+        return pendingWorkspaceSetupAgentStart(workspaceId, () =>
+          this.workspaceSetupAgentStarts.pending(workspaceId)
+        )
+      }
     })
   }
 

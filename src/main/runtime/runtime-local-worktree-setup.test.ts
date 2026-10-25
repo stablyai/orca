@@ -51,6 +51,22 @@ describe('runtime create setup for a hook the new branch added', () => {
     expect(mocks.runHook).not.toHaveBeenCalled()
   })
 
+  it('returns actual in-process completion rather than treating hook launch as completion', async () => {
+    const completion = Promise.withResolvers<{ success: boolean; output: string }>()
+    mocks.runHook.mockReturnValue(completion.promise)
+    const result = await prepare({ setupDecision: 'run' })
+    expect(result.inProcessCompletion).toBeInstanceOf(Promise)
+    let ended = false
+    void result.inProcessCompletion?.then(() => {
+      ended = true
+    })
+    await Promise.resolve()
+    expect(ended).toBe(false)
+    completion.resolve({ success: false, output: 'setup failed' })
+    await result.inProcessCompletion
+    expect(ended).toBe(true)
+  })
+
   it('still runs setup when the caller decided to', async () => {
     const result = await prepare({ setupDecision: 'run' })
 

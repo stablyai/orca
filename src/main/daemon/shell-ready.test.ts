@@ -36,7 +36,7 @@ const itWithZsh = hasZsh ? it : it.skip
 const FISH = resolveFishBinary()
 const itWithFish = FISH.available ? it : it.skip
 
-const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
+const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready:posix\x07'
 
 /** Answer startup and per-prompt capability queries so fish can finish drawing prompts. */
 const TERMINAL_QUERY_REPLIES: readonly (readonly [string, string])[] = [
@@ -213,8 +213,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
     const init = config.args?.[2] ?? ''
     expect(init).toContain('--on-event fish_prompt')
-    // User-defined printf functions must not swallow readiness markers.
-    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready\\007"')
+    // Why `builtin`: a user-defined printf function would swallow the marker and
+    // stall every launch on the ready timeout.
+    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready:fish\\007"')
+    // Why: the marker must fire once; a repeating marker would corrupt later output scans.
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
@@ -239,6 +241,7 @@ describePosix('daemon shell-ready launch config', () => {
     async () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('fish')
+      const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready:fish\x07'
       const tempHome = mkdtempSync(join(tmpdir(), 'fish-shell-ready-'))
       const sentinel = join(tempHome, 'launched')
       const erased = join(tempHome, 'marker-erased')
@@ -509,7 +512,7 @@ describePosix('daemon shell-ready launch config', () => {
     async () => {
       const zdotdir = mkdtempSync(join(tmpdir(), 'orca-zsh-resource-'))
       const userHookOutput = 'ORCA-TEST-PRIOR-WIDGET'
-      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;orca-shell-ready\\007')
+      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;orca-shell-ready:posix\\007')
       writeFileSync(
         join(zdotdir, '.zshrc'),
         [

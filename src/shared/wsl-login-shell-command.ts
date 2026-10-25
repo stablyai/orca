@@ -91,14 +91,17 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    ;;',
     // Why: a WSL fish pane gets no shell-ready wrapper or XDG handoff, so this is its only `claude`.
     '  fish)',
-    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getFishClaudeShellFunction())}`,
+    '    unset ORCA_SHELL_FEATURES',
+    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(`${getFishClaudeShellFunction()}\nfunction __orca_setup_prompt --on-event fish_prompt; functions -e __orca_setup_prompt; printf '\\033]777;orca-shell-ready:fish\\007'; end`)}`,
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '      exec "$_orca_wsl_shell" -l',
     '    fi',
     '    ;;',
     'esac',
+    'unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }

@@ -7,16 +7,22 @@ import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
  *  and the prompt's row is on screen. The terminal is where to act, so it offers no Retry. */
 export function useNativeChatLaunchPromptDeliveryNotice(
   failedMessageId: string | null | undefined,
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  unconfirmed = false
 ): ReadonlyMap<string, NativeChatDeliveryNotice> | undefined {
   return useMemo(() => {
     if (!failedMessageId || !messages.some((message) => message.id === failedMessageId)) {
       return undefined
     }
-    const text = translate(
-      'components.native-chat.launchPromptNotDelivered',
-      'Not delivered — check the terminal'
-    )
+    const text = unconfirmed
+      ? translate(
+          'components.native-chat.deliveryUnconfirmed',
+          'Delivery unconfirmed — check chat before retrying'
+        )
+      : translate(
+          'components.native-chat.launchPromptNotDelivered',
+          'Not delivered — check the terminal'
+        )
     return new Map([[failedMessageId, { text }]])
-  }, [failedMessageId, messages])
+  }, [failedMessageId, messages, unconfirmed])
 }

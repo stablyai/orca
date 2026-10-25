@@ -161,7 +161,9 @@ describe('binary stream framing', () => {
             expected: transformed
               ? { seq, rawLength, sequenceChars: rawLength, transformed: true }
               : {
-                  ...(seq === undefined ? {} : { seq: seq - (data.length - consumed) }),
+                  ...(seq === undefined
+                    ? {}
+                    : { seq: seq - (rawLength === 0 ? 0 : data.length - consumed) }),
                   ...(raw === undefined && seq === undefined
                     ? {}
                     : {

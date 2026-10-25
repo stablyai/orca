@@ -19152,7 +19152,7 @@
         "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
         "continuedOutside": "이 채팅 밖에서 이어졌습니다.",
         "continuedOutsideRewound": "이 채팅 밖에서 이어졌습니다. 위의 이전 답변은 더 이상 이 대화 기록에 없습니다.",
-        "stoppedBeforeStart": "수동으로 중지됨",
+        "stoppedBeforeStart": "중단됨",
         "dismiss": "닫기",
         "copyError": "오류 복사",
         "orcaStopUpdate": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다.",

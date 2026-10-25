@@ -118,4 +118,21 @@ describe('shell startup output scanner', () => {
       '\x1b]777;orca-shell-st\x1b]777;orca-shell-rea'
     )
   })
+  it('carries only complete prompt-time native facts across every split while legacy markers remain untagged', () => {
+    for (const family of ['posix', 'fish'] as const) {
+      const bytes = `${IDENTITY_MARKER}\x1b]777;orca-shell-ready:${family}\x07prompt`
+      for (let split = 0; split <= bytes.length; split++) {
+        const state = createShellStartupOutputScanState()
+        const chunks = [
+          scanShellStartupOutput(state, bytes.slice(0, split)),
+          scanShellStartupOutput(state, bytes.slice(split))
+        ]
+        expect(chunks.map((c) => c.output).join('')).toBe('prompt')
+        expect(chunks.find((c) => c.ready)?.nativeSetupShell).toBe(family)
+      }
+    }
+    expect(
+      scanShellStartupOutput(createShellStartupOutputScanState(), READY_MARKER).nativeSetupShell
+    ).toBeUndefined()
+  })
 })

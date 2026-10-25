@@ -53,6 +53,7 @@ export class JournalSubmissionWriter {
           return [...card.rows, submission]
         },
         {
+          transactionObservation: receipt?.transactionObservation,
           write: (db, row) => {
             card?.receipt.write(db)
             // New client sends require stored uploads; queued cards already claimed theirs.

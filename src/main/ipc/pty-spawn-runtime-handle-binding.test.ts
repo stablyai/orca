@@ -58,7 +58,46 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, createMockProc } = setupPtyIpcSuite()
+
+  it('retains the fresh local spawn observation through returned-ID admission and setup hold completion', async () => {
+    const runtime = new OrcaRuntimeService()
+    const worktreeId = 'repo-1::/tmp/fresh-local-setup'
+    const token = 'native:fresh-local-setup'
+    const proc = createMockProc()
+    spawnMock.mockReturnValueOnce(proc.proc)
+    const spawned = vi.spyOn(runtime, 'onPtySpawned')
+    const admission = vi.spyOn(runtime, 'beginPtyRegistration')
+    runtime.workspaceSetupAgentStarts.hold(worktreeId)
+    const held = runtime.workspaceSetupAgentStarts.pending(worktreeId)
+    registerPtyHandlers(mainWindow as never, runtime)
+
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/fresh-local-setup',
+      worktreeId,
+      tabId: 'tab-fresh-local-setup',
+      leafId: '55555555-5555-4555-8555-555555555555',
+      env: { ORCA_SETUP_COMPLETION_TOKEN: token }
+    })
+
+    expect(spawned).toHaveBeenCalledExactlyOnceWith(expect.any(String), expect.any(String), {
+      setupToken: token
+    })
+    const [ptyId, incarnationId] = spawned.mock.calls[0]
+    expect(admission).toHaveBeenCalledExactlyOnceWith(ptyId, incarnationId)
+    const result = admission.mock.results[0]
+    if (result.type !== 'return' || !result.value.setupObservation) {
+      throw new Error('missing continuous local spawn observation')
+    }
+    const observed = result.value.setupObservation
+    expect(observed.unknown).toBe(false)
+    expect(runtime.workspaceSetupAgentStarts.pending(worktreeId)).toBe(held)
+    proc.emitData(`ORCA_SETUP_DONE:${token}:0;`)
+    await expect(observed.completion).resolves.toEqual({ exitCode: 0 })
+    await expect(held).resolves.toBeUndefined()
+  })
 
   it('refreshes captured native Agent Teams env for renderer PTY spawns', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
@@ -167,7 +206,8 @@ describe('registerPtyHandlers', () => {
       cwd: '/repo',
       tabId: 'tab-1',
       leafId,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'host-setup-token' }
     })
 
     // Mobile-create recovery needs tab/leaf identity at runtime registration (#7587).
@@ -175,7 +215,12 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'wt-1',
       null,
-      { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
+      {
+        tabId: 'tab-1',
+        leafId,
+        incarnationId: expect.any(String),
+        setupCompletionToken: 'host-setup-token'
+      },
       false
     )
   })

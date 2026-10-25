@@ -25,3 +25,13 @@ describe('resolveRpcWorkspaceCreatorProvenance', () => {
     expect(resolveRpcWorkspaceCreatorProvenance({})).toEqual({ kind: 'host' })
   })
 })
+
+it('still refuses declared client metadata without authenticated device or desktop authority', () => {
+  expect(() =>
+    resolveRpcWorkspaceCreatorProvenance({
+      clientId: 'unidentified',
+      clientKind: 'runtime',
+      connectionId: 'connection-1'
+    })
+  ).toThrow('authenticated_device_identity_missing')
+})

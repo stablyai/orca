@@ -228,7 +228,7 @@ describe('a message sent while the turn ahead is still opening', () => {
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
     view.rerender(frame(queued, [...submissions, withdrawn], [], true))
-    const stopRow = screen.getByText('Stopped manually')
+    const stopRow = screen.getByText('Interrupted')
     expect(follows(screen.getByText('B'), liveStatus())).toBe(true)
     expect(follows(stopRow, screen.getByText('B'))).toBe(true)
     expect(follows(liveActivity(), stopRow)).toBe(true)
@@ -340,7 +340,7 @@ describe('a send a Stop took back before the agent started it', () => {
   afterAll(() => restoreViewport())
   afterEach(cleanup)
 
-  const STOP_ROW = 'Stopped manually'
+  const STOP_ROW = 'Interrupted'
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }
   let sequence = 0
 

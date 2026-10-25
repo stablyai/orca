@@ -151,6 +151,7 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
     // duplicate a pane the host is about to republish after a restart — the same "ask me later"
     // frame the tombstone write already refuses to treat as the user emptying the workspace.
     hostSnapshotAffirmsWorktreeContents(args.event) &&
+    !args.event.initialSurfaceLaunch &&
     args.event.tabs.length === 0 &&
     // Why the shared predicate: the host owning the terminals does not change what an empty
     // workspace means. A missing row is "never initialized", an explicit empty row is "the user
@@ -181,6 +182,9 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
     return false
   }
   if (args.activeWorktreeId !== args.event.worktree) {
+    return false
+  }
+  if (args.event.initialSurfaceLaunch) {
     return false
   }
   const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length

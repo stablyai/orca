@@ -20,10 +20,9 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { randomUUID } from 'node:crypto'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
-import { structuredAgentSessionStartFlightLock } from './structured-agent-session-start-flight'
+import { registerStructuredAgentSessionStart } from './structured-agent-session-start-flight'
 import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import {
@@ -123,49 +122,30 @@ export function claimOperationStart(
   }
 }
 
-/** Register cancellation, startup limits and quit drainage before the first wait. */
+/** Inside the register step, before any wait: the controller a Stop, close or quit aborts, the
+ *  startup clock (once any setup hold ends), and quit's drain all cover the start from here. */
 function registerStart(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   startedFor: string | undefined
 ): Promise<StructuredAgentSessionResumeOutcome> {
-  const { runtimeState } = context
-  const attemptId = randomUUID()
-  const acquire = runtimeState.acquireAborts.begin(sessionId)
-  runtimeState.startupAttempts.begin(sessionId, attemptId)
-  const lock = structuredAgentSessionStartFlightLock({
+  return registerStructuredAgentSessionStart(
+    context,
     sessionId,
-    attemptId,
-    signal: acquire.signal,
-    flights: runtimeState.startFlights,
-    serialize: context.serialize
-  })
-  const outcome = context.tasks.trackAttach(
-    Promise.resolve()
-      .then(() => runStart(context, sessionId, startedFor, lock, attemptId))
-      .catch((error: unknown) => {
-        if (!acquire.signal.aborted) {
+    (lock, attemptId) =>
+      runStart(context, sessionId, startedFor, lock, attemptId).catch((error: unknown) => {
+        if (!lock.signal.aborted) {
           throw error
         }
-        const expired = isStructuredAgentSessionStartupExpired(acquire.signal.reason)
+        const expired = isStructuredAgentSessionStartupExpired(lock.signal.reason)
         return {
           ok: false as const,
           refusal: startFailedRefusal(),
           ...(expired ? { expired: true as const } : { aborted: true as const })
         }
-      })
-      .finally(() => {
-        acquire.end()
-        runtimeState.startFlights.end(sessionId, attemptId)
-        runtimeState.startupAttempts.abandon(sessionId, attemptId)
-      })
+      }),
+    (result) => result
   )
-  runtimeState.startFlights.register(sessionId, {
-    attemptId,
-    outcome,
-    abort: acquire.abort
-  })
-  return outcome
 }
 
 async function runStart(

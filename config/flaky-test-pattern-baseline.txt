@@ -959,7 +959,6 @@
 1 test-no-wall-clock:src/main/runtime/remote-agent-session-host-authority.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/remote-runtime-request-connection.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/dispatcher-feature-interactions.test.ts
-1 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch-prestart-failure.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch-replay.test.ts
 5 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch-restart-replay.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/federation/federation-output.test.ts

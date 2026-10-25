@@ -110,7 +110,7 @@ describe('a Grok start the host aborts', () => {
     })
     expect(
       await host.attach(CALLER, attachParams()).catch((error: unknown) => error)
-    ).toMatchObject({ name: 'AgentSessionPreSpawnError' })
+    ).toMatchObject({ name: 'Error', message: 'closed while starting' })
     expect(await within(closing!, 2_000)).not.toBe(STALLED)
     expect(rig.spawned).not.toContain('spawn')
   })

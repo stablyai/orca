@@ -20,7 +20,9 @@ export async function completeWorktreeCreation(args: {
 }): Promise<void> {
   const { request } = args
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
-  useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
+  useAppStore
+    .getState()
+    .removePendingWorktreeCreation(args.creationId, { cleanupVm: false, reason: 'completed' })
   // Why: an agent the host planned but did not start has no tab to seed and is not the window's to start.
   const hostAgentMissing = args.hostPlannedStartup && !args.backendSpawned
   if (!args.structuredLaunchAccepted && !hostAgentMissing) {

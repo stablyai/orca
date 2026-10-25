@@ -19185,7 +19185,7 @@
         "historyItemTooLarge": "Esta parte do chat era grande demais para ser exibida.",
         "continuedOutside": "Continuou fora deste chat.",
         "continuedOutsideRewound": "Continuou fora deste chat. As respostas anteriores acima não fazem mais parte do histórico desta conversa.",
-        "stoppedBeforeStart": "Interrompido manualmente",
+        "stoppedBeforeStart": "Interrompido",
         "dismiss": "Dispensar",
         "copyError": "Copiar erro",
         "orcaStopUpdate": "O Orca em {{machine}} reiniciou para uma atualização enquanto esta resposta estava em andamento.",

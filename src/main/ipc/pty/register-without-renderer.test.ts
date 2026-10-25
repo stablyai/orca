@@ -89,7 +89,14 @@ describe('PTY registration without renderer delivery', () => {
     daemon.emitDataGap('daemon-pty', 3)
     daemon.emitExit('daemon-pty', 0)
 
-    expect(onData).toHaveBeenCalledWith('daemon-pty', 'output', expect.any(Number), 6, undefined)
+    expect(onData).toHaveBeenCalledWith(
+      'daemon-pty',
+      'output',
+      expect.any(Number),
+      6,
+      undefined,
+      undefined
+    )
     expect(onExit).toHaveBeenCalledWith('daemon-pty', 0, undefined, { providerExitObserved: true })
     expect(onLifecycleExit).toHaveBeenCalledWith('daemon-pty', expect.any(Number))
     await expect(controller?.serializeBuffer?.('daemon-pty')).resolves.toBeNull()

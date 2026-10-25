@@ -1,7 +1,6 @@
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
-import type { TerminalOscColorQuerySlot } from './terminal-osc-color-reply'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
@@ -92,6 +91,10 @@ export class PtyStartupIngress {
     })
   }
 
+  interruptPaintedText(): void {
+    this.enqueue({ kind: 'boundary' })
+  }
+
   closeQueryAuthority(): number {
     this.enqueue({ kind: 'close-query' })
     return this.rawHighWater
@@ -137,6 +140,10 @@ export class PtyStartupIngress {
     switch (operation.kind) {
       case 'data':
         this.processEchoSpan(operation.chunk)
+        return
+      case 'boundary':
+        this.releasePendingInSourceOrder(true)
+        this.emit({ data: '', rawStartSeq: this.rawHighWater, rawEndSeq: this.rawHighWater }, true)
         return
       case 'close-query':
         // Why only Kitty: colour authority never hands off, and the echo hold survives
@@ -287,7 +294,7 @@ export class PtyStartupIngress {
       const answered =
         query.kind === 'kitty'
           ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`, 'owner')
-          : this.answerColorQuery(query.slots)
+          : this.colorQueries.answer(query.slots, (reply) => this.delivery.answer(reply, 'owner'))
       if (query.kind === 'kitty' && answered) {
         this.kittyQueryOpen = false
       }
@@ -301,15 +308,6 @@ export class PtyStartupIngress {
       scanOffset = query.endIndex
       emittedOffset = query.endIndex
     }
-  }
-
-  /** True when at least the first reply landed; a failed write stops the rest in order. */
-  private answerColorQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
-    const replies = this.colorQueries.replies(slots)
-    return (
-      replies.length > 0 &&
-      replies.findIndex((reply) => !this.delivery.answer(reply, 'owner')) !== 0
-    )
   }
 
   private releaseQueryPending(): void {

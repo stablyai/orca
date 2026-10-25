@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import { createSetupCompletionObservation } from '../runtime/orchestration/setup-completion-signal'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
@@ -20,8 +21,6 @@ function createMockSubprocess() {
   let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
   let killed = false
-  let clearCalls = 0
-  let pid = 12345
   let pauseCalls = 0
   let resumeCalls = 0
 
@@ -32,7 +31,7 @@ function createMockSubprocess() {
       return killed
     },
     get pid() {
-      return pid
+      return 12345
     },
     get pauseCalls() {
       return pauseCalls
@@ -55,12 +54,7 @@ function createMockSubprocess() {
     resume() {
       resumeCalls++
     },
-    get clearCalls() {
-      return clearCalls
-    },
-    clear() {
-      clearCalls++
-    },
+    clear() {},
     kill() {
       killed = true
       setTimeout(() => onExit?.(0), 5)
@@ -138,6 +132,32 @@ describe('Session', () => {
     })
     return session
   }
+
+  it('attaches the actual initial client before a synchronous retained-data flush', () => {
+    const onData = vi.fn()
+    session = new Session({
+      sessionId: 'initial-stream',
+      cols: 80,
+      rows: 24,
+      shellReadySupported: false,
+      subprocess: {
+        ...subprocess,
+        onData: (read) => {
+          read('first')
+          subprocess.onData(read)
+        }
+      },
+      initialClient: { onData, onExit: () => {} }
+    })
+    expect(onData).toHaveBeenCalledExactlyOnceWith('first', 5, false, 5)
+    expect(session.initialAttachToken).toBeDefined()
+    if (!session.initialAttachToken) {
+      throw new Error('missing actual attachment')
+    }
+    session.detachClient(session.initialAttachToken)
+    subprocess.simulateData('later')
+    expect(onData).toHaveBeenCalledTimes(1)
+  })
 
   describe('state machine', () => {
     it('starts in running state when shell readiness is not supported', () => {
@@ -271,7 +291,7 @@ describe('Session', () => {
       expect(onData.mock.calls).toEqual([
         ['', query.length, true, query.length],
         ['', echo.length, true, query.length + echo.length],
-        ['prompt']
+        ['prompt', 6, false, query.length + echo.length + 6]
       ])
       expect(session.takePendingOutput(false)?.records).toEqual([
         { kind: 'output', data: 'prompt' }
@@ -323,7 +343,7 @@ describe('Session', () => {
         expect(subprocess.written, ownerBackend).toEqual([reply])
         expect(onData.mock.calls, ownerBackend).toEqual([
           ['', query.length, true, query.length],
-          ['prompt']
+          ['prompt', 6, false, query.length + 6]
         ])
         expect(session.getSnapshot()?.snapshotAnsi, ownerBackend).not.toContain(']10;rgb')
         session.dispose()
@@ -457,21 +477,52 @@ describe('Session', () => {
 
     it('strips shell-ready marker bytes before client and pending-output fan-out', () => {
       createSession({ shellReadySupported: true })
-      const received: string[] = []
+      const received: [string, number?, boolean?, number?][] = []
       session.attachClient({
-        onData: (data) => received.push(data),
+        onData: (...span) => received.push(span),
         onExit: () => {}
       })
 
       subprocess.simulateData('hello \x1b]777;orca-shell-ready\x07% ')
 
-      expect(received).toEqual(['hello % '])
+      expect(received).toEqual([
+        ['hello ', 6, false, 6],
+        ['', 0, true, 6],
+        ['% ', 2, false, 8]
+      ])
+      expect(received.map(([data]) => data).join('')).toBe('hello % ')
       expect(session.takePendingOutput(false)?.records).toEqual([
         { kind: 'output', data: 'hello % ' }
       ])
       expect(session.getSnapshot()?.snapshotAnsi).toContain('hello % ')
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
     })
+
+    it.each(['\x1b]777;orca-shell-ready\x07', '\x1b]777;orca-shell-start:12345\x07'])(
+      'retains continuity without splicing a receipt across removed marker %j',
+      async (marker) => {
+        createSession({ shellReadySupported: true })
+        const observed = createSetupCompletionObservation('native:marker', true)
+        const complete = vi.fn()
+        void observed.completion.then(complete)
+        observed.publish()
+        const received: string[] = []
+        session.attachClient({
+          onData: (data, rawLength, transformed, seq) => {
+            received.push(data)
+            observed.scan(data, rawLength, transformed, seq)
+          },
+          onExit: () => {}
+        })
+        subprocess.simulateData(`ORCA_SETUP_${marker}DONE:native:marker:17;`)
+        await Promise.resolve()
+        expect(received.join('')).toBe('ORCA_SETUP_DONE:native:marker:17;')
+        expect(observed.unknown).toBe(false)
+        expect(complete).not.toHaveBeenCalled()
+        subprocess.simulateData('ORCA_SETUP_DONE:native:marker:0;')
+        await expect(observed.completion).resolves.toEqual({ exitCode: 0 })
+      }
+    )
 
     it('publishes an absolute output sequence with live snapshots', () => {
       createSession()
@@ -765,7 +816,7 @@ describe('Session', () => {
       subprocess.simulateData('late output')
       subprocess.simulateExit(23)
 
-      expect(onData).toHaveBeenCalledWith('late output')
+      expect(onData).toHaveBeenCalledWith('late output', 11, false, 11)
       expect(onExit).toHaveBeenCalledTimes(1)
       expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
         kind: 'operator_close'

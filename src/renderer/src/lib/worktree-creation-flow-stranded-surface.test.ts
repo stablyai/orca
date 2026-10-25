@@ -200,7 +200,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()
@@ -219,7 +220,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
 
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
   })
 
@@ -280,7 +282,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     )
     // ...and the creation still completed instead of stranding the entry.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()
@@ -331,7 +334,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     await executeWorktreeCreation('creation-1', request)
 
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+      cleanupVm: false,
+      reason: 'completed'
     })
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()

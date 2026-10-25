@@ -1,15 +1,24 @@
+import type { AttachedClient } from './session-output-plane'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 
+export type NativeSetupWrite = {
+  command: string
+  token: string
+  bracketedPasteSafe: boolean
+}
+
 export type SessionOptions = {
   sessionId: string
+  initialClient?: Omit<AttachedClient, 'token'>
   cols: number
   rows: number
   terminalHandle?: string
   launchAgent?: TuiAgent
   subprocess: SubprocessHandle
+  nativeSetupToken?: string
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
   /** Use the daemon file log: detached stdio is ignored. */

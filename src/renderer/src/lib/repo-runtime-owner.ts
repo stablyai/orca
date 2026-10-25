@@ -55,8 +55,17 @@ export function runtimeTargetForRepoOwner(
   state: RepoRuntimeOwnerState,
   repoId: string | null | undefined
 ): RuntimeClientTarget | null {
+  const hostId = repoOwnerHostId(state, repoId)
+  return hostId ? ipcOrRuntimeTargetForHostId(hostId) : null
+}
+
+/** The host of the only row with this id; `null` under the same rules as {@link runtimeTargetForRepoOwner}. */
+export function repoOwnerHostId(
+  state: RepoRuntimeOwnerState,
+  repoId: string | null | undefined
+): ExecutionHostId | null {
   const repo = repoId ? findRepoOwner(state, repoId) : null
-  return repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null
+  return repo ? getRepoExecutionHostId(repo) : null
 }
 
 export function getRuntimeEnvironmentIdForRepo(

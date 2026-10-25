@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
@@ -154,7 +155,8 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       wslContext: seed.launchWslContext,
-      startupCommand: args.command
+      startupCommand: args.command,
+      nativeSetupToken: nativeSetupCompletionToken(args.env)
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -172,7 +174,9 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       seed.launchWslContext,
-      args.command
+      args.command,
+      undefined,
+      nativeSetupCompletionToken(args.env)
     )
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { commitStructuredAgentSessionLaunchPrompt } from '../../runtime/rpc/methods/agent-launch-structured-prompt'
+import { restTestSend } from './structured-agent-session-rest-test-rig'
 import {
   accepted,
   attachParams,
@@ -31,7 +31,7 @@ function modelAdapterLiveness(registerOnAcquire: boolean): void {
   })
 }
 
-/** Match launch-surface ordering: create, then send at its returned fence. */
+/** The acquired-create contract remains ordinary Send on the create's own fence. */
 async function launchAndDeliver(): Promise<{
   messageId: string | null
   dispatchState: string
@@ -41,13 +41,9 @@ async function launchAndDeliver(): Promise<{
   if (!created.ok) {
     throw new Error(`expected a create, got ${created.refusal.code}`)
   }
-  const messageId = await commitStructuredAgentSessionLaunchPrompt({
-    host,
-    caller: CALLER,
-    sessionId: created.value.sessionId,
-    fence: created.value.fence,
-    text: 'fix the failing test'
-  })
+  const params = restTestSend('fix the failing test', created.value.fence)
+  await host.send(CALLER, params)
+  const messageId = params.envelope.clientOperationId
   const sent = await send.mock.results[0]!.value
   if (!sent.ok) {
     return { messageId, dispatchState: `refused:${sent.refusal.code}:${sent.refusal.message}` }

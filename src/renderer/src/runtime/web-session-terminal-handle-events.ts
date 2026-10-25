@@ -1,3 +1,10 @@
+import { useAppStore } from '@/store'
+import { noteHostCreatedLaunchTargets } from '../lib/structured-agent-session-launch-prompt'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { getWebSessionTabsTrackingGeneration } from './web-session-tabs-sync/tracking-lifecycle'
+import { suppressCancelledStructuredSessionTabs } from './structured-agent-session-tab-retirement'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
@@ -86,6 +93,24 @@ export function queueAcceptedWebSessionTerminalSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
 ): void {
+  if (hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    const connection = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    const pairing = getRuntimeEnvironmentRevision(environmentId)
+    const tracking = getWebSessionTabsTrackingGeneration(environmentId)
+    queueMicrotask(() => {
+      if (
+        connection === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+        pairing === getRuntimeEnvironmentRevision(environmentId) &&
+        tracking === getWebSessionTabsTrackingGeneration(environmentId)
+      ) {
+        noteHostCreatedLaunchTargets(
+          toRuntimeExecutionHostId(environmentId),
+          suppressCancelledStructuredSessionTabs(snapshot, { kind: 'environment', environmentId }),
+          useAppStore.getState
+        )
+      }
+    })
+  }
   // Why: a frame the host synthesized before publishing says nothing about any surface.
   if (subscribersBySession.size === 0 || !hostSnapshotAffirmsWorktreeContents(snapshot)) {
     return

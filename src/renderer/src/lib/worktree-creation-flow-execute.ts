@@ -28,24 +28,11 @@ import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-
-// Why: activePendingCreationId can outlive the terminal route when the user
-// switches app views; only the terminal route renders the creation panel.
-function isPendingCreationSurfaceVisible(creationId: string): boolean {
-  const state = useAppStore.getState()
-  return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-// Why: the created row is listed before completion, so a user may already have opened it.
-function isCreatedWorkspaceInView(creationId: string, worktreeId: string): boolean {
-  const state = useAppStore.getState()
-  return (
-    isPendingCreationSurfaceVisible(creationId) ||
-    (state.activeView === 'terminal' &&
-      state.activePendingCreationId === null &&
-      state.activeWorktreeId === worktreeId)
-  )
-}
+import { createWorktreeThroughHost } from '@/lib/worktree-creation-through-host'
+import {
+  isPendingCreationSurfaceVisible,
+  isCreatedWorkspaceInView
+} from '@/lib/worktree-creation-surface'
 
 export async function executeWorktreeCreation(
   creationId: string,
@@ -71,6 +58,10 @@ export async function executeWorktreeCreation(
   let result: CreatedWorktreeResult
   try {
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
+    const throughHost = structuredLaunch && !provisionedRoot
+    if (throughHost && (await createWorktreeThroughHost(creationId, preparedRequest))) {
+      return
+    }
     const backendStartup =
       provisionedRoot || structuredLaunch ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
@@ -147,7 +138,7 @@ export async function executeWorktreeCreation(
     })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
-    if (!isPendingCreationSurfaceVisible(creationId)) {
+    if (!isPendingCreationSurfaceVisible(useAppStore.getState(), creationId)) {
       toast.error(message)
     }
     return
@@ -170,7 +161,11 @@ export async function executeWorktreeCreation(
   // Why: only a user still watching the creation surface (or already on the new
   // workspace) is handed it; anyone who moved on (another workspace or an app
   // view) keeps their place and gets a toast instead (#9944).
-  const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
+  const shouldActivateOnCompletion = isCreatedWorkspaceInView(
+    useAppStore.getState(),
+    creationId,
+    worktree.id
+  )
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 

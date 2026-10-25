@@ -1,3 +1,5 @@
+import type { AgentLaunchParams } from '../../../shared/rpc-contract/agent-launch-params'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -31,6 +33,17 @@ export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 /** Serializable creation intent, including any script checks deferred until
  * after the composer closes. Retained by the pending panel for Retry. */
 export type WorktreeCreationRequest = {
+  /** Kept with Retry so an unanswered host create is replayed, never recreated. */
+  hostAgentLaunch?: {
+    operationId: string
+    sessionId: string
+    paneKey: string
+    params: AgentLaunchParams & { operationId: string }
+    target: RuntimeClientTarget
+    executionHostId: ExecutionHostId
+    pairingRevision?: number
+    issued: boolean
+  }
   repoId: string
   /** Execution owner retained after script preparation, including retries. */
   executionHostId?: ExecutionHostId

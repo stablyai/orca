@@ -1,3 +1,4 @@
+import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 /** Answer DA1 when ConPTY startup or shell-ready gating prevents a renderer reply; bypass queued stdin. */
 import type { Terminal } from '@xterm/headless'
 
@@ -10,43 +11,61 @@ export const STARTUP_DA1_RESPONSE = '\x1b[?1;2c'
 
 /** Removes startup DA1 queries from renderer-bound output after the daemon answers them. */
 export class StartupDeviceAttributesQueryFilter {
-  private pending = ''
-
-  accept(data: string): string {
-    const input = this.pending + data
-    this.pending = ''
-    let output = ''
+  private pending: PtyIngressEmission | null = null
+  acceptEmission(span: PtyIngressEmission): PtyIngressEmission[] {
+    const output: PtyIngressEmission[] = []
+    if (span.transformed) {
+      const pending = this.releaseEmission()
+      if (pending) {
+        output.push(pending)
+      }
+      output.push(span)
+      return output
+    }
+    const input = this.pending
+      ? { ...span, data: this.pending.data + span.data, rawStartSeq: this.pending.rawStartSeq }
+      : span
+    this.pending = null
+    const emit = (start: number, end: number, omitted = false): void => {
+      if (end > start) {
+        output.push({
+          data: omitted ? '' : input.data.slice(start, end),
+          rawStartSeq: input.rawStartSeq + start,
+          rawEndSeq: input.rawStartSeq + end,
+          transformed: omitted
+        })
+      }
+    }
     let offset = 0
-
-    while (offset < input.length) {
-      const candidate = input.indexOf('\x1b', offset)
+    while (offset < input.data.length) {
+      const candidate = input.data.indexOf('\x1b', offset)
       if (candidate === -1) {
-        output += input.slice(offset)
+        emit(offset, input.data.length)
         break
       }
-      output += input.slice(offset, candidate)
+      emit(offset, candidate)
       const query = PRIMARY_DEVICE_ATTRIBUTES_QUERIES.find((value) =>
-        input.startsWith(value, candidate)
+        input.data.startsWith(value, candidate)
       )
       if (query) {
+        emit(candidate, candidate + query.length, true)
         offset = candidate + query.length
         continue
       }
-      const tail = input.slice(candidate)
+      const tail = input.data.slice(candidate)
       if (PRIMARY_DEVICE_ATTRIBUTES_QUERIES.some((value) => value.startsWith(tail))) {
-        this.pending = tail
+        this.pending = { ...input, data: tail, rawStartSeq: input.rawStartSeq + candidate }
         break
       }
-      output += '\x1b'
+      emit(candidate, candidate + 1)
       offset = candidate + 1
     }
-
     return output
   }
 
-  release(): string {
+  releaseEmission(): PtyIngressEmission | null {
     const pending = this.pending
-    this.pending = ''
+    this.pending = null
     return pending
   }
 }

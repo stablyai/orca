@@ -1,3 +1,7 @@
+import {
+  AgentLaunchReplay,
+  type AgentLaunchParams
+} from '../../../shared/rpc-contract/agent-launch-params'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
@@ -42,7 +46,8 @@ export function parseStructuredLaunchSurfaceAddress(
   }
 }
 
-export type StructuredAgentLaunchPersistedRecord = {
+type StrictStructuredAgentLaunchRecord = {
+  desktopCreate?: undefined
   surfaceAddress?: StructuredLaunchSurfaceAddress
   sessionId: string
   /** The host the chat was created on. Records written before paired hosts could hold a chat lack
@@ -63,11 +68,94 @@ export type StructuredAgentLaunchPersistedRecord = {
   failedAt?: number
 }
 
+export const desktopCreateAcceptedTerminal = Symbol('desktopCreateAcceptedTerminal')
+
+export type DesktopCreateLaunchRecord = Omit<
+  StrictStructuredAgentLaunchRecord,
+  'clientOperationId' | 'payloadFingerprint' | 'expectedRuntimeFence' | 'desktopCreate'
+> & {
+  [desktopCreateAcceptedTerminal]?: true
+  clientOperationId?: never
+  payloadFingerprint?: never
+  expectedRuntimeFence?: never
+  desktopCreate: { params: AgentLaunchParams & { operationId: string }; worktreeId?: string }
+}
+
+export type StructuredAgentLaunchPersistedRecord =
+  | StrictStructuredAgentLaunchRecord
+  | DesktopCreateLaunchRecord
+
+export function freezeDesktopCreateParams<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) {
+      freezeDesktopCreateParams(child)
+    }
+    Object.freeze(value)
+  }
+  return value
+}
+
+export function parseDesktopCreateLaunchRecord(
+  value: unknown
+): DesktopCreateLaunchRecord | undefined {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('desktopCreate' in value) ||
+    !value.desktopCreate ||
+    typeof value.desktopCreate !== 'object' ||
+    !('params' in value.desktopCreate) ||
+    !('executionHostId' in value) ||
+    typeof value.executionHostId !== 'string' ||
+    !parseExecutionHostId(value.executionHostId) ||
+    !('sessionId' in value) ||
+    !('agent' in value) ||
+    !('lifecycle' in value) ||
+    (value.lifecycle !== 'pending' && value.lifecycle !== 'visibility-unknown') ||
+    'clientOperationId' in value ||
+    'payloadFingerprint' in value ||
+    'expectedRuntimeFence' in value
+  ) {
+    return undefined
+  }
+  const parsed = AgentLaunchReplay.safeParse(value.desktopCreate.params)
+  if (
+    !parsed.success ||
+    !parsed.data.createIdentity ||
+    parsed.data.agent !== value.agent ||
+    parsed.data.sessionId !== value.sessionId
+  ) {
+    return undefined
+  }
+  const worktreeId =
+    'worktreeId' in value.desktopCreate ? value.desktopCreate.worktreeId : undefined
+  if (worktreeId !== undefined && (typeof worktreeId !== 'string' || !worktreeId)) {
+    return undefined
+  }
+  const surfaceAddress = parseStructuredLaunchSurfaceAddress(
+    'surfaceAddress' in value ? value.surfaceAddress : undefined
+  )
+  if (surfaceAddress && surfaceAddress.worktreeId !== worktreeId) {
+    return undefined
+  }
+  return {
+    sessionId: parsed.data.sessionId!,
+    agent: parsed.data.agent,
+    executionHostId: parseExecutionHostId(value.executionHostId)!.id,
+    lifecycle: value.lifecycle,
+    desktopCreate: {
+      params: freezeDesktopCreateParams(parsed.data),
+      ...(worktreeId ? { worktreeId } : {})
+    },
+    ...(surfaceAddress ? { surfaceAddress } : {})
+  }
+}
+
 /** What survives a reload of an unpublished launch. */
 export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
-): StructuredAgentLaunchPersistedRecord {
+): StrictStructuredAgentLaunchRecord {
   const { envelope, resumeFrom, firstMessage, options } = intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
@@ -91,12 +179,12 @@ export function structuredAgentLaunchRecordFor(
 }
 
 export function validRecord(value: unknown): value is Omit<
-  StructuredAgentLaunchPersistedRecord,
+  StrictStructuredAgentLaunchRecord,
   'executionHostId'
 > & {
   executionHostId?: string
 } {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || 'desktopCreate' in value) {
     return false
   }
   if (

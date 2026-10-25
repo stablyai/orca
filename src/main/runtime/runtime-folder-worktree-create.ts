@@ -7,6 +7,7 @@ import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-display
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
+import { getRepoSshConnectionId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
@@ -66,7 +67,7 @@ export async function createRuntimeFolderWorktree(args: {
   const { request, repo, deps } = args
   const now = Date.now()
   const settings = deps.store.getSettings()
-  const instanceId = randomUUID()
+  const instanceId = request.requestedInstanceId ?? randomUUID()
   const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     request.displayName,
@@ -187,6 +188,14 @@ export async function createRuntimeFolderWorktree(args: {
       console.warn(`[worktree-create] ${warning}`)
     }
   }
+  await request.initializeSurface?.({
+    worktreeId: worktree.id,
+    workspacePath: worktree.path,
+    connectionId: getRepoSshConnectionId(repo),
+    created: { worktree, ...(startupTerminal ? { startupTerminal } : {}) },
+    startupTerminalHandle: startupTerminal?.handle,
+    ...(startupTerminal?.paneKey ? { startupTerminalPaneKey: startupTerminal.paneKey } : {})
+  })
   if (shouldActivate) {
     deps.activate(
       repo.id,

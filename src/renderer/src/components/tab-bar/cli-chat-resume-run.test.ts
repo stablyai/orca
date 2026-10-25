@@ -552,3 +552,94 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(useAppStore.getState().groupsByWorktree['wt-1'][0].recentTabIds ?? []).toEqual([])
   })
 })
+
+it('bounds repeated real startup restoration by its canonical population with no or one outer owner, without child-session calls', async () => {
+  const { parseDesktopCreateLaunchRecord } =
+    await import('@/lib/structured-agent-session-launch-record')
+  const { writeStructuredAgentLaunchRecords } =
+    await import('@/lib/structured-agent-session-launch-persistence')
+  const counts: number[][] = []
+  for (const size of [10, 100]) {
+    for (const outer of [false, true]) {
+      stopStructuredLaunchSlotTracking()
+      localStorage.clear()
+      resetStructuredAgentLaunchPersistenceForTests()
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      useAppStore.setState({
+        worktreesByRepo: { repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', hostId: 'local' })] }
+      })
+      const ordinary = Array.from({ length: size }, (_, i) => ({
+        sessionId: `ordinary-${i}`,
+        executionHostId: 'local' as const,
+        agent: 'claude' as const,
+        lifecycle: 'visibility-unknown' as const,
+        clientOperationId: `op-${i}`,
+        payloadFingerprint: 'fp',
+        expectedRuntimeFence: null
+      }))
+      const sessionId = 'claude_11111111_2222_4333_8444_555555555555'
+      const sparse = parseDesktopCreateLaunchRecord({
+        sessionId,
+        executionHostId: 'local',
+        agent: 'claude',
+        lifecycle: 'visibility-unknown',
+        surfaceAddress: { worktreeId: 'wt-1', precedingTabIds: [] },
+        desktopCreate: {
+          worktreeId: 'wt-1',
+          params: {
+            agent: 'claude',
+            sessionId,
+            surface: 'chat',
+            operationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
+            createIdentity: { instanceId: '94d38a16-e9db-4e86-b81d-334788958124' },
+            paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+            target: { kind: 'create-worktree', create: { repo: 'repo', name: 'startup' } },
+            prompt: { text: 'already submitted A', delivery: 'submit' }
+          }
+        }
+      })
+      if (!sparse) {
+        throw new Error('outer fixture invalid')
+      }
+      writeStructuredAgentLaunchRecords([...ordinary, ...(outer ? [sparse] : [])])
+      await redrawFromMain()
+      let visits = 0
+      const iterator = Map.prototype[Symbol.iterator]
+      const walk = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* (
+        this: Map<unknown, unknown>
+      ) {
+        for (const entry of iterator.call(this)) {
+          if (
+            entry[1] &&
+            typeof entry[1] === 'object' &&
+            'sessionId' in entry[1] &&
+            'lifecycle' in entry[1]
+          ) {
+            visits++
+          }
+          yield entry
+        }
+        return undefined
+      })
+      try {
+        for (let i = 0; i < 3; i++) {
+          restoreStructuredLaunchSurfaces()
+          await main?.settle()
+        }
+        expect(visits).toBeLessThanOrEqual(30 * (size + 6))
+        counts.push([size, Number(outer), visits])
+        expect(tabs()).toHaveLength(Number(outer))
+        if (outer) {
+          expect(getStructuredAgentSessionLaunchLifecycle('wt-1', sessionId)).toBe(
+            'visibility-unknown'
+          )
+        }
+        expect(mocks.call).not.toHaveBeenCalled()
+      } finally {
+        walk.mockRestore()
+        stopStructuredLaunchSlotTracking()
+      }
+    }
+  }
+  console.info('real startup canonical visits', JSON.stringify(counts))
+})

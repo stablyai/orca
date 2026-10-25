@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/daemon-protocol-version.ts'
 
 const require = createRequire(import.meta.url)
 const {
@@ -138,8 +139,9 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
           buffer = buffer.slice(newline + 1)
           fs.appendFileSync(${JSON.stringify(messagesPath)}, JSON.stringify(message) + '\\n')
           if (message.type === 'hello') {
-            if (message.role === 'stream') globalThis.stream = socket
-            socket.write(JSON.stringify({ ok: true }) + '\\n')
+            const ok = message.version === ${PROTOCOL_VERSION}
+            if (ok && message.role === 'stream') globalThis.stream = socket
+            socket.write(JSON.stringify({ ok, error: ok ? undefined : 'Protocol version mismatch' }) + '\\n')
           } else if (message.type === 'createOrAttach') {
             globalThis.stream.write(JSON.stringify({ payload: { data: 'OK 42' } }) + '\\n')
           }
@@ -154,6 +156,10 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
     expect(messages.slice(0, 2).map(({ type, role, token }) => ({ type, role, token }))).toEqual([
       { type: 'hello', role: 'control', token: 'tok' },
       { type: 'hello', role: 'stream', token: 'tok' }
+    ])
+    expect(messages.slice(0, 2).map(({ version, role }) => ({ version, role }))).toEqual([
+      { version: PROTOCOL_VERSION, role: 'control' },
+      { version: PROTOCOL_VERSION, role: 'stream' }
     ])
     expect(messages[0].clientId).toBe(messages[1].clientId)
     expect(messages[0].clientId).toMatch(/^[0-9a-f-]{36}$/)

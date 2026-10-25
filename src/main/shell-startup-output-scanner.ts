@@ -21,6 +21,7 @@ export type ShellStartupOutputScanResult = {
   shellPid: number | null
   ready: boolean
   postMarkerBytesObserved: boolean
+  nativeSetupShell?: 'posix' | 'fish'
 }
 
 export function createShellStartupOutputScanState(): ShellStartupOutputScanState {
@@ -32,31 +33,39 @@ export function createShellStartupOutputScanState(): ShellStartupOutputScanState
 
 export function scanShellStartupOutput(
   state: ShellStartupOutputScanState,
-  data: string
+  data: string,
+  emit?: (data: string, removed?: boolean) => void
 ): ShellStartupOutputScanResult {
-  const readiness = scanForShellReadyBoundary(state.ready, data)
-  const postMarkerOutputIndex = readiness.postMarkerOutputIndex ?? readiness.output.length
-  const identityInput = readiness.output.slice(0, postMarkerOutputIndex)
   let shellPid: number | null = null
-  let output = identityInput
-  if (state.identity) {
-    const identity = scanForShellStartupIdentity(state.identity, identityInput)
-    output = identity.output
-    shellPid = identity.shellPid
-    if (shellPid) {
-      state.identity = null
+  let output = ''
+  const readiness = scanForShellReadyBoundary(state.ready, data, (part, removed) => {
+    if (removed) {
+      if (state.identity) {
+        const held = drainShellStartupIdentityHeldBytes(state.identity)
+        output += held
+        emit?.(held)
+        state.identity = null
+      }
+      emit?.('', true)
+    } else if (state.identity) {
+      const identity = scanForShellStartupIdentity(state.identity, part, (text, boundary) => {
+        output += text
+        emit?.(text, boundary)
+      })
+      if (identity.shellPid) {
+        shellPid = identity.shellPid
+        state.identity = null
+      }
+    } else {
+      output += part
+      emit?.(part)
     }
-  }
-
-  if (readiness.matched && state.identity) {
-    output += drainShellStartupIdentityHeldBytes(state.identity)
-    state.identity = null
-  }
-  output += readiness.output.slice(postMarkerOutputIndex)
+  })
   return {
     output,
     shellPid,
     ready: readiness.matched,
+    ...(readiness.nativeSetupShell ? { nativeSetupShell: readiness.nativeSetupShell } : {}),
     postMarkerBytesObserved: readiness.postMarkerBytesObserved
   }
 }

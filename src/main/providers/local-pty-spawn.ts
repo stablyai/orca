@@ -1,3 +1,4 @@
+import { stripNativeSetupCompletionEnvironment } from '../runtime/orchestration/setup-completion-signal'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
@@ -86,6 +87,7 @@ export async function spawnLocalPty(
     const finalEnv = envResult instanceof Promise ? await envResult : envResult
     throwIfCanceled()
     enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
+    stripNativeSetupCompletionEnvironment(finalEnv)
     const historyResult = finalizeLocalPtySpawnEnvironment({
       spawn: args,
       getOptions,

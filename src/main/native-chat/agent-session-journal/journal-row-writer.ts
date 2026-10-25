@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import type { JournalTransactionObservation } from './journal-database'
 import { insertJournalRow } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -8,6 +9,7 @@ import type { JournalWriteBody } from './journal-write-queue'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  transactionObservation?: JournalTransactionObservation
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
 }
@@ -65,7 +67,8 @@ export class JournalRowWriter {
           insertJournalRow(db, this.deps.sessionId, row, savedAt)
           receipt?.write(db, row)
         },
-        !receipt && this.streamed([row])
+        !receipt && this.streamed([row]),
+        receipt?.transactionObservation
       )
       // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
@@ -106,7 +109,8 @@ export class JournalRowWriter {
         }
         receipt?.write(db, receiptRow?.(rows))
       },
-      !receipt && this.streamed(rows)
+      !receipt && this.streamed(rows),
+      receipt?.transactionObservation
     )
     receipt?.committed()
     this.deps.commit(rows, ts)

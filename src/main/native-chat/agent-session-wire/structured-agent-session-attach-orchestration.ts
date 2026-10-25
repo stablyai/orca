@@ -6,8 +6,7 @@ import {
   type BoundAttach
 } from './structured-agent-session-attach-publish'
 
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import { refuse } from '../../../shared/agent-session-wire-refusals'
+import { joinStructuredAgentSessionAttach } from './structured-agent-session-start-flight'
 import { randomUUID } from 'node:crypto'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import type {
@@ -58,9 +57,11 @@ export type StructuredAgentSessionAttachOptions = {
   lock?: StructuredAgentSessionAttachLock
   startupAttemptId?: string
   onPublished?: () => void
+  publishTab?: () => Promise<void>
 }
 
-/** Share attach steps; background starts use a lock, client attaches hold serialization throughout. */
+/** The attach an agent start runs under its own lock (`structured-agent-session-start-flight`);
+ *  client acquisitions register the same flight and retain their original operation result. */
 export function attachStructuredAgentSessionForStart(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
@@ -80,38 +81,13 @@ export function attachStructuredAgentSession(
   // Track from enqueue so quit drains queued attaches before eviction, preventing late orphan spawns.
   const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
     context.tasks.trackAttach(
-      (async () => {
-        for (;;) {
-          const selected = await context.serialize(sessionId, async () => {
-            const child = context.sessions.get(sessionId)?.child
-            const flight = context.runtimeState.startFlights.get(sessionId)
-            // Only the owning flight publishes; replays wait outside the lane.
-            if (!child && flight) {
-              return { flight }
-            }
-            const record = context.deps.store.getRecord(sessionId)
-            if (!child && record && agentSessionLeaseAdmitsWriter(record.lease)) {
-              return {
-                result: {
-                  ok: false as const,
-                  refusal: refuse(
-                    'agent_session_ownership_unknown',
-                    { reason: 'noProviderChild' },
-                    'The session has no provider child to write to.'
-                  )
-                }
-              }
-            }
-            return {
-              result: await runAttach(context, callerKey, params, { ...options, recordPhase })
-            }
-          })
-          if (selected.result !== undefined) {
-            return selected.result
-          }
-          await selected.flight.outcome
-        }
-      })(),
+      joinStructuredAgentSessionAttach(context, callerKey, params, (lock, startupAttemptId) =>
+        runAttach(context, callerKey, params, {
+          ...options,
+          recordPhase,
+          ...(lock ? { lock, startupAttemptId } : {})
+        })
+      ),
       { sessionId, location: params.location }
     )
   if (params.envelope.expectedRuntimeFence !== null) {
@@ -137,7 +113,6 @@ async function runAttach(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  // Register cancellation before any phase; background-start locks already registered their controller.
   const acquire = options.lock
     ? null
     : context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
@@ -210,8 +185,16 @@ async function runAttachUnderAbort(
       agents: context.deps.agents,
       logger: context.deps.logger,
       eventSink: attemptSink.sink,
-      // Drain superseded writes before starting a new child.
+      // The superseded child's writes settle into its own journal before a new child starts.
+      onReserved: options.publishTab,
       onAcquiring: async () => {
+        const setup = context.deps.setupHold?.(params.location.workspaceId)
+        if (setup) {
+          await lock.wait(setup)
+        }
+        if (options.startupAttemptId) {
+          startupAttempts.begin(sessionId, options.startupAttemptId)
+        }
         const barrier = await lock.wait(
           Promise.resolve(context.runtimeState.currentEventSink(sessionId)?.drained())
         )

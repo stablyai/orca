@@ -54,6 +54,7 @@ export const AgentLaunchFields = z.object({
       'Malformed launch operation id'
     )
     .optional(),
+  createIdentity: z.object({ instanceId: z.string().uuid() }).optional(),
   target: z.discriminatedUnion('kind', [
     z.object({
       kind: z.literal('existing'),
@@ -162,9 +163,23 @@ export const AgentLaunchFields = z.object({
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names
  *  its lane on sight. */
 function refuseSessionIdForAnotherAgent(
-  launch: { agent: string; sessionId?: string | undefined },
+  launch: z.infer<typeof AgentLaunchFields>,
   ctx: z.RefinementCtx
 ): void {
+  if (
+    launch.createIdentity &&
+    (!launch.operationId ||
+      !launch.sessionId ||
+      !launch.paneKey ||
+      launch.surface !== 'chat' ||
+      launch.target.kind !== 'create-worktree')
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['createIdentity'],
+      message: 'Workspace identity requires a replay-safe explicit chat create'
+    })
+  }
   if (launch.sessionId && !isStructuredAgentSessionIdFor(launch.agent, launch.sessionId)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -182,3 +197,17 @@ export type AgentLaunchParams = z.infer<typeof AgentLaunch>
 export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true }).superRefine(
   refuseSessionIdForAnotherAgent
 )
+
+export const AgentLaunchCancel = AgentLaunchFields.omit({
+  reuseTerminal: true,
+  cwd: true,
+  accountEnv: true,
+  nativeChatDefault: true
+})
+  .extend({
+    surface: z.literal('chat'),
+    target: z.object({ kind: z.literal('create-worktree'), create: WorktreeCreate }).strict()
+  })
+  .required({ operationId: true, sessionId: true, paneKey: true })
+  .strict()
+  .superRefine(refuseSessionIdForAnotherAgent)

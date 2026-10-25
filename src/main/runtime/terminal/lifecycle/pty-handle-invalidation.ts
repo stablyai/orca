@@ -1,3 +1,4 @@
+import { createSetupCompletionObservation } from '../../orchestration/setup-completion-signal'
 import { OrcaRuntimeWithResolveKnownWorkspaceFileTarget } from '../../workspaces/known-workspace-file-target'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
@@ -148,7 +149,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
   onPtySpawned(
     ptyId: string,
     incarnationId?: PtyIncarnationId,
-    options: { awaitsRegistration?: boolean } = {}
+    options: { awaitsRegistration?: boolean; setupToken?: string } = {}
   ): void {
     this.invalidatePtyControllerInventoryForLifecycle(ptyId)
     const existingPty = this.ptysById.get(ptyId)
@@ -183,6 +184,15 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
           incarnationId: incarnationId ?? null,
           exitedIncarnations: new Set()
         })
+      }
+    }
+    if (options.setupToken) {
+      const claim = this.pendingPtyRegistrationIncarnations.get(ptyId)
+      const observed = createSetupCompletionObservation(options.setupToken, true)
+      this.setupCompletionTokenByPtyId.get(ptyId)?.fail(new Error('terminal_handle_stale'))
+      this.setupCompletionTokenByPtyId.set(ptyId, observed)
+      if (claim) {
+        claim.setupObservation = observed
       }
     }
     this.terminalViewSubscribers.markSpawnPublished(ptyId)

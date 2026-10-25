@@ -191,7 +191,8 @@ function writeBinaryStreamDataEvents(
         )
     const chunk = data.slice(start, end)
     start = end
-    const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - start)
+    const chunkEndSeq =
+      seq === undefined ? undefined : seq - (explicitRawLength === 0 ? 0 : data.length - start)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
     streamSocket.write(
       encodeBinaryStreamDataFrame(
@@ -237,7 +238,8 @@ export function writeStreamDataEvents(
   let consumed = 0
   for (const chunk of chunks) {
     consumed += chunk.length
-    const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
+    const chunkEndSeq =
+      seq === undefined ? undefined : seq - (explicitRawLength === 0 ? 0 : data.length - consumed)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
     streamSocket.write(encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq))
   }

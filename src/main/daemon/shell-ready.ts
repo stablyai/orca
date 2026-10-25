@@ -179,7 +179,7 @@ export function getShellLaunchConfig(
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER.replace(':posix', ':fish'), features.includes('ready'))}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
       ],
       env: {},
       supportsReadyMarker: features.includes('ready')

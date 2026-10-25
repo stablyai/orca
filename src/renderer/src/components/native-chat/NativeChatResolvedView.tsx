@@ -58,8 +58,8 @@ import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
-import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { dispatchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
@@ -92,7 +92,10 @@ export function NativeChatResolvedView({
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
-  const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
+  const paneLaunchPrompt =
+    launchPrompt?.agent === agent && (!launchPrompt.paneKey || launchPrompt.paneKey === paneKey)
+      ? launchPrompt
+      : null
   // Launch context prefilled into the TUI input as an unsent draft; the
   // composer adopts it so the GUI view shows the same context as the TUI.
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
@@ -193,8 +196,9 @@ export function NativeChatResolvedView({
   // Why: answer from the conversation the pane shows, so a `/clear` sent here reads as reset.
   const answerLocally = useNativeChatLocalCommandAnswer(agent, sessionAfterCommandBoundaries)
   const launchPromptDeliveryNotices = useNativeChatLaunchPromptDeliveryNotice(
-    paneLaunchPrompt?.failed ? launchPromptMessage?.id : null,
-    sessionAfterCommandBoundaries.messages
+    paneLaunchPrompt?.failed || paneLaunchPrompt?.unconfirmed ? launchPromptMessage?.id : null,
+    sessionAfterCommandBoundaries.messages,
+    paneLaunchPrompt?.unconfirmed
   )
   // Why memoized: a fresh map each render would re-render every memoized transcript row.
   const deliveryNotices = useMemo(
@@ -350,17 +354,7 @@ export function NativeChatResolvedView({
       }}
       onKeyDownCapture={(event) => {
         find.onKeyDownCapture(event)
-        const splitDirection = event.repeat
-          ? null
-          : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
-        if (splitDirection && contextMenuActions) {
-          event.preventDefault()
-          event.stopPropagation()
-          if (splitDirection === 'right') {
-            contextMenuActions.onSplitRight()
-          } else {
-            contextMenuActions.onSplitDown()
-          }
+        if (dispatchNativeChatSplitShortcut(event, keybindings, contextMenuActions)) {
           return
         }
         rootInput.onKeyDownCapture(event)

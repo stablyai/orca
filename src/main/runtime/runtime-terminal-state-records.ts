@@ -1,3 +1,4 @@
+import type { createSetupCompletionObservation } from './orchestration/setup-completion-signal'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
@@ -33,7 +34,23 @@ type RuntimeTerminalTailState = {
   tailWaitState?: TerminalTailWaitState
 }
 
+export type RuntimePtyRegistrationBinding = {
+  tabId: string
+  leafId: string
+  setupCompletionToken?: string
+  incarnationId?: PtyIncarnationId
+  /** Handle allocated for the replacement incarnation, when one is known. */
+  terminalHandle?: string
+  agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
+  providerReattachLaunchIdentity?: {
+    incarnationId: PtyIncarnationId
+    launchAgent: TuiAgent
+  }
+}
+
 export type PtyRegistrationClaim = {
+  setupObservation?: ReturnType<typeof createSetupCompletionObservation>
+  previousSetupObservation?: ReturnType<typeof createSetupCompletionObservation>
   incarnationId: PtyIncarnationId | null
   exitedIncarnations: Set<PtyIncarnationId | null>
 }

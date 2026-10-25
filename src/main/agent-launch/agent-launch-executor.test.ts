@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchPromptDisposal,
+  AgentLaunchResult
+} from '../../shared/agent-launch-intent'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 
@@ -20,7 +25,6 @@ function harness(options: {
   lineCarriesPrompt?: boolean
   worktreeCreateError?: Error
   onStructuredCreate?: () => void
-  onStructuredPromptDelivery?: () => void
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
   worktreeOnlyFactory?: boolean
 }) {
@@ -63,25 +67,26 @@ function harness(options: {
     }
     return options.createSupport ?? { supported: true }
   })
-  const createStructuredSession = vi.fn(async () => {
-    calls.push('createStructuredSession')
-    options.onStructuredCreate?.()
-    if (options.structuredCreateError) {
-      throw options.structuredCreateError
+  const createStructuredSession = vi.fn(
+    async (args: { firstMessage?: StructuredAgentSessionFirstMessage['body'] }) => {
+      calls.push('createStructuredSession')
+      options.onStructuredCreate?.()
+      if (options.structuredCreateError) {
+        throw options.structuredCreateError
+      }
+      const promptDisposal: AgentLaunchPromptDisposal =
+        args.firstMessage && options.deliveredMessageId !== null
+          ? { outcome: 'journaled', messageId: options.deliveredMessageId ?? 'msg-1' }
+          : { outcome: 'not-delivered' }
+      return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4, promptDisposal }
     }
-    return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
-  })
+  )
   const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
     if (options.terminalCreateError) {
       throw options.terminalCreateError
     }
     return { handle: 'term_1', ...carried(args.startupPrompt) }
-  })
-  const deliverStructuredPrompt = vi.fn(async () => {
-    calls.push('deliverStructuredPrompt')
-    options.onStructuredPromptDelivery?.()
-    return options.deliveredMessageId === undefined ? 'msg-1' : options.deliveredMessageId
   })
   const deliverTerminalPrompt = vi.fn(async () => {
     calls.push('deliverTerminalPrompt')
@@ -101,7 +106,6 @@ function harness(options: {
     createRecoveryShell,
     createStructuredSession,
     createTerminalAgent,
-    deliverStructuredPrompt,
     deliverTerminalPrompt,
     run: (intent: AgentLaunchIntent) =>
       executeAgentLaunch({
@@ -111,7 +115,6 @@ function harness(options: {
         surfaces: {
           createStructuredSession,
           createTerminalAgent,
-          deliverStructuredPrompt,
           deliverTerminalPrompt
         },
         workspaces: options.worktreeOnlyFactory
@@ -128,17 +131,13 @@ const CREATE_INTENT: AgentLaunchIntent = {
 }
 
 describe('a structured launch that creates its own worktree', () => {
-  it('keeps its live inventory through publication and clears it before prompt delivery', async () => {
+  it('keeps its live inventory during founding admission and clears it after publication', async () => {
     let duringCreate: unknown
-    let duringPrompt: unknown
     const h = harness({
-      onStructuredCreate: () => (duringCreate = readCreatedWorkspaceLaunch(h.runtime, 'wt-new')),
-      onStructuredPromptDelivery: () =>
-        (duringPrompt = readCreatedWorkspaceLaunch(h.runtime, 'wt-new'))
+      onStructuredCreate: () => (duringCreate = readCreatedWorkspaceLaunch(h.runtime, 'wt-new'))
     })
     await h.run({ ...CREATE_INTENT, prompt: { text: 'start', delivery: 'submit' } })
     expect(duringCreate).toMatchObject({ agent: 'claude', launchId: expect.any(String) })
-    expect(duringPrompt).toBeUndefined()
     expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
   })
 
@@ -426,14 +425,17 @@ describe('the prompt receipt', () => {
     expect(h.calls).toEqual([
       'createWorktree(startupAgent=undefined)',
       'createSupport',
-      'createStructuredSession',
-      'deliverStructuredPrompt'
+      'createStructuredSession'
     ])
-    expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
-      sessionId: 'sess-1',
-      fence: 4,
-      prompt: SUBMIT
-    })
+    expect(h.createStructuredSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstMessage: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: SUBMIT.text }]
+        }
+      })
+    )
   })
 
   it('under-claims as not delivered when nothing was committed', async () => {
@@ -449,7 +451,7 @@ describe('the prompt receipt', () => {
       prompt: { text: 'do the thing', delivery: 'draft' }
     })
     expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
-    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+    expect(h.createStructuredSession.mock.calls[0]?.[0].firstMessage).toBeUndefined()
   })
 
   it('omits the receipt when no prompt was requested', async () => {
@@ -790,21 +792,13 @@ describe('the surface is published as the launch stands, before its prompt is de
     expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('records a chat before its first message is committed', async () => {
+  it('records a chat with the founding first-message proof', async () => {
     const { launch, published } = publishing({})
 
     const result = await launch.run(PROMPTED_EXISTING)
 
-    expect(launch.calls).toEqual([
-      'createSupport',
-      'createStructuredSession',
-      'published',
-      'deliverStructuredPrompt'
-    ])
-    expect(published[0]).toEqual({
-      ...result,
-      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
-    })
+    expect(launch.calls).toEqual(['createSupport', 'createStructuredSession', 'published'])
+    expect(published[0]).toEqual(result)
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
   })
 })

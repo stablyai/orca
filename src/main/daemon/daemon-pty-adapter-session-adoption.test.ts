@@ -304,7 +304,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       lastSubprocess._simulateData('after-reattach')
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
+      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach', sequenceChars: 14, seq: 14 })
 
       adapter2.dispose()
     })

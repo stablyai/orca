@@ -366,6 +366,32 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
+  it('drops a transformed source span whole and preserves the following tail sequence', () => {
+    vi.useFakeTimers()
+    const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => true })
+    try {
+      batcher.enqueue('client-1', 'session-bg', 'a'.repeat(900 * 1024), {
+        transformed: true,
+        rawLength: 1_000_000,
+        seq: 1_000_000
+      })
+      batcher.enqueue('client-1', 'session-bg', 'b'.repeat(300 * 1024), {
+        seq: 1_000_000 + 300 * 1024
+      })
+      vi.advanceTimersByTime(2)
+      const messages = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
+      expect(messages[0]).toMatchObject({
+        event: 'dataGap',
+        payload: { droppedChars: 900 * 1024, sequenceChars: 1_000_000 }
+      })
+      expect(writtenData(streamSocket)).toBe('b'.repeat(300 * 1024))
+      expect(messages.at(-1)?.payload.seq).toBe(1_000_000 + 300 * 1024)
+    } finally {
+      batcher.clear()
+      vi.useRealTimers()
+    }
+  })
+
   it('accounts every dropped char across repeated drops (gap sums + delivered = enqueued)', () => {
     vi.useFakeTimers()
     try {
@@ -612,4 +638,22 @@ describe('DaemonStreamDataBatcher', () => {
       vi.useRealTimers()
     }
   })
+})
+
+it('reports each bulk slice end and keeps a following zero-raw span constant', () => {
+  const { batcher, streamSocket } = createBatcher()
+  try {
+    batcher.enqueue('client', 'pty', 'x'.repeat(70_000), { seq: 70_000 })
+    batcher.enqueue('client', 'pty', 'copy', { rawLength: 0, seq: 70_000 })
+    batcher.flush('client')
+    const frames = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
+    expect(frames.map((frame) => [frame.payload.data.length, frame.payload.seq])).toEqual([
+      [65_536, 65_536],
+      [4_464, 70_000],
+      [4, 70_000]
+    ])
+    expect(frames.at(-1).payload.rawLength).toBe(0)
+  } finally {
+    batcher.clear()
+  }
 })

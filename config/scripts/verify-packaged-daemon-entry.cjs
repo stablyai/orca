@@ -7,8 +7,8 @@ const { join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const { macTerminalHostPaths } = require('./macos-terminal-host-bundle.cjs')
 const {
-  daemonProtocolVersion
-} = require('../../src/shared/local-build-compatibility-contract.json')
+  PROTOCOL_VERSION: daemonProtocolVersion
+} = require('../../src/main/daemon/daemon-protocol-version.ts')
 
 // Why: `asarUnpack` in config/electron-builder.config.cjs lists
 // out/main/daemon-entry.js on every platform, and the packaged daemon fork

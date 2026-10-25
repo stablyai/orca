@@ -152,3 +152,76 @@ describe('terminal listing while a spawn binding is being persisted', () => {
     ])
   })
 })
+
+it('publishes an early native receipt only for its admitted incarnation and retains it on adoption', async () => {
+  const { runtime } = createInventoryRuntime(async () => [])
+  runtime.workspaceSetupAgentStarts.hold(WORKTREE)
+  const held = runtime.workspaceSetupAgentStarts.pending(WORKTREE)
+  const claim = runtime.beginPtyRegistration(PTY, undefined, 'native:origin')
+  const observed = claim.setupObservation
+  expect(observed).toBeDefined()
+  const receipt = 'ORCA_SETUP_DONE:native:origin:0;'
+  const complete = vi.fn()
+  void observed?.completion.then(complete)
+  runtime.onPtyData(PTY, receipt, 1, receipt.length, false, receipt.length)
+  await Promise.resolve()
+  expect(complete).not.toHaveBeenCalled()
+  expect(runtime.narrowPtyRegistration(PTY, claim, PREDECESSOR)).toBe(true)
+  registerBoundPty(runtime, PTY, WORKTREE, null, {
+    tabId: TAB,
+    leafId: LEAF,
+    incarnationId: PREDECESSOR,
+    setupCompletionToken: 'native:origin'
+  })
+  await expect(held).resolves.toBeUndefined()
+  await expect(observed?.completion).resolves.toEqual({ exitCode: 0 })
+  const adoption = runtime.beginPtyRegistration(PTY, undefined, 'native:discard')
+  const discarded = vi.fn()
+  void adoption.setupObservation?.completion.then(discarded)
+  const tentative = 'ORCA_SETUP_DONE:native:discard:17;'
+  runtime.onPtyData(PTY, tentative, 2, tentative.length, false, tentative.length)
+  expect(runtime.narrowPtyRegistration(PTY, adoption, PREDECESSOR, true)).toBe(true)
+  registerBoundPty(runtime, PTY, WORKTREE, null, {
+    tabId: TAB,
+    leafId: LEAF,
+    incarnationId: PREDECESSOR,
+    setupCompletionToken: 'native:origin'
+  })
+  await Promise.resolve()
+  expect(discarded).not.toHaveBeenCalled()
+  expect(complete).toHaveBeenCalledExactlyOnceWith({ exitCode: 0 })
+  const rejected = runtime.beginPtyRegistration(PTY, undefined, 'native:reject')
+  runtime.cancelPendingPtyRegistration(PTY, undefined, rejected)
+  const replacement = runtime.beginPtyRegistration(PTY, undefined, 'native:replacement')
+  expect(replacement.setupObservation).not.toBe(rejected.setupObservation)
+  runtime.cancelPendingPtyRegistration(PTY, undefined, replacement)
+})
+
+it('keeps a registered gap unknown until the real terminal exit settles its hold', async () => {
+  const { runtime } = createInventoryRuntime(async () => [])
+  runtime.workspaceSetupAgentStarts.hold(WORKTREE)
+  const held = runtime.workspaceSetupAgentStarts.pending(WORKTREE)
+  const claim = runtime.beginPtyRegistration(PTY, PREDECESSOR, 'native:gap-exit')
+  const observed = claim.setupObservation
+  if (!observed) {
+    throw new Error('missing spawn observation')
+  }
+  runtime.notePtyDataGap(PTY)
+  const receipt = 'ORCA_SETUP_DONE:native:gap-exit:0;'
+  runtime.onPtyData(PTY, receipt, 1, receipt.length, false, receipt.length)
+  registerBoundPty(runtime, PTY, WORKTREE, null, {
+    tabId: TAB,
+    leafId: LEAF,
+    incarnationId: PREDECESSOR,
+    setupCompletionToken: 'native:gap-exit'
+  })
+  const complete = vi.fn()
+  void observed.completion.then(complete)
+  await Promise.resolve()
+  expect(observed.unknown).toBe(true)
+  expect(complete).not.toHaveBeenCalled()
+  expect(runtime.workspaceSetupAgentStarts.pending(WORKTREE)).toBe(held)
+  await runtime.onPtyExit(PTY, 17, PREDECESSOR, { providerExitObserved: true })
+  await expect(observed.completion).resolves.toEqual({ exitCode: 17 })
+  await expect(held).resolves.toBeUndefined()
+})

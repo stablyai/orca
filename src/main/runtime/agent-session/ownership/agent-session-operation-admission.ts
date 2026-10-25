@@ -260,3 +260,23 @@ export function settleAgentSessionOperationInto(
 ): void {
   state.operations = settleAgentSessionOperation(state.operations, args)
 }
+
+export function cancelAgentLaunchOperationInto(
+  draft: AgentSessionStoreState,
+  args: AgentSessionOperationAdmission & { livePrevention: boolean; code: string }
+): AgentSessionOperationOutcome {
+  const decision = admitAgentSessionOperationInto(draft, args)
+  if (decision.decision === 'refused') {
+    throw new Error(decision.code)
+  }
+  const outcome = decision.row.outcome
+  if (outcome.status === 'pending' || (outcome.status === 'unknown' && args.livePrevention)) {
+    settleAgentSessionOperationInto(draft, {
+      callerKey: args.callerKey,
+      operationId: args.operationId,
+      outcome: { status: 'failed', code: args.code }
+    })
+    return { status: 'failed' as const, code: args.code }
+  }
+  return outcome
+}

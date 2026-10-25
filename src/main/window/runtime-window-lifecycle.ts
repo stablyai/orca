@@ -121,6 +121,9 @@ export function registerRuntimeWindowLifecycle(
           requestId,
           worktreeId,
           ptyId: opts.ptyId,
+          ...(opts.initialWorkspaceTopology
+            ? { initialWorkspaceTopology: opts.initialWorkspaceTopology }
+            : {}),
           title: opts.title ?? undefined,
           ...(opts.cwd ? { cwd: opts.cwd } : {}),
           ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
@@ -150,6 +153,9 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
+    worktreeCreationProgress: (event) => {
+      send('createWorktree:progress', event)
+    },
     publishAgentLaunchTab: (request) =>
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),

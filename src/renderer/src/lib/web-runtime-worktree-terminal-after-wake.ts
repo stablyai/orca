@@ -15,6 +15,8 @@ import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+import { canSeedWebRuntimeWorktreeInitialSurface } from './web-runtime-worktree-initial-surface'
+import { isWebRuntimeInitialTerminalBootstrapInFlight } from '@/runtime/web-runtime-initial-terminal-bootstrap'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -27,6 +29,15 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     unknownHostCountIsEmpty?: boolean
   }
 ): void {
+  void seedWorktreeTerminalAfterWake(worktreeId, opts).catch((error) => {
+    console.error('web runtime terminal after wake failed', worktreeId, error)
+  })
+}
+
+async function seedWorktreeTerminalAfterWake(
+  worktreeId: string,
+  opts: Parameters<typeof ensureWebRuntimeWorktreeTerminalAfterWake>[1]
+): Promise<void> {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   if (!worktree) {
@@ -74,24 +85,13 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     if (hostTerminalTabCount === null && !opts?.startup) {
       // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
       // empty. Delete this capability check once every supported host advertises it.
-      void runtimeEnvironmentSupportsCapability(
+      const hostAnswersLater = await runtimeEnvironmentSupportsCapability(
         runtimeEnvironmentId,
         SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY
-      )
-        .catch(() => false)
-        .then((hostAnswersLater) => {
-          if (!hostAnswersLater) {
-            ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
-              ...opts,
-              runtimeEnvironmentId,
-              unknownHostCountIsEmpty: true
-            })
-          }
-        })
-        .catch((error) => {
-          console.error('web runtime terminal after wake failed', worktreeId, error)
-        })
-      return
+      ).catch(() => false)
+      if (hostAnswersLater) {
+        return
+      }
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
@@ -109,44 +109,66 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     }
   }
 
-  if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
+  if (
+    (!launchAgent &&
+      isWebRuntimeInitialTerminalBootstrapInFlight(runtimeEnvironmentId, worktreeId)) ||
+    !beginWebRuntimeWakeTerminalRespawn(worktreeId)
+  ) {
     return
   }
-
-  const startup = opts?.startup
-  // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal(
-    {
-      worktreeId,
-      environmentId: runtimeEnvironmentId,
-      ...(startup
-        ? {
-            command: startup.command,
-            ...(startup.env ? { env: startup.env } : {}),
-            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {})
-          }
-        : launchAgent
-          ? { agent: launchAgent }
-          : {}),
-      activate: opts?.activate !== false,
-      selectWorktree: false
-    },
-    // This flow toasts every failure itself, including a disconnected host.
-    { notifyFailure: false }
-  )
-    .then((outcome) => {
-      if (outcome.status === 'failed') {
-        toast.error(outcome.message, {
-          id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
-        })
+  try {
+    if (!launchAgent) {
+      if (!(await canSeedWebRuntimeWorktreeInitialSurface(runtimeEnvironmentId, worktreeId))) {
+        return
       }
-    })
-    .finally(() => {
-      endWebRuntimeWakeTerminalRespawn(worktreeId)
-    })
+      const current = useAppStore.getState()
+      const currentTabs = current.tabsByWorktree[worktreeId] ?? []
+      if (
+        !current.getKnownWorktreeById(worktreeId) ||
+        currentTabs.some(
+          (tab) => isWebTerminalSurfaceTabId(tab.id) || tabHasLivePty(current.ptyIdsByTabId, tab.id)
+        ) ||
+        (current.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (tab) => tab.contentType === 'agent-session'
+        ) ||
+        (currentTabs.length === 0 && Object.hasOwn(current.tabsByWorktree, worktreeId))
+      ) {
+        return
+      }
+    }
+
+    const startup = opts?.startup
+    // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
+    const outcome = await createWebRuntimeSessionTerminal(
+      {
+        worktreeId,
+        environmentId: runtimeEnvironmentId,
+        ...(startup
+          ? {
+              command: startup.command,
+              ...(startup.env ? { env: startup.env } : {}),
+              ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+              ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+              ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+              ...(startup.startupCommandDelivery
+                ? { startupCommandDelivery: startup.startupCommandDelivery }
+                : {})
+            }
+          : launchAgent
+            ? { agent: launchAgent }
+            : {}),
+        activate: opts?.activate !== false,
+        selectWorktree: false
+      },
+      // This flow toasts every failure itself, including a disconnected host.
+      { notifyFailure: false }
+    )
+    if (outcome.status === 'failed') {
+      toast.error(outcome.message, {
+        id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
+      })
+    }
+  } finally {
+    endWebRuntimeWakeTerminalRespawn(worktreeId)
+  }
 }

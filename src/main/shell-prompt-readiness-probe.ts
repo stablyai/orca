@@ -24,7 +24,7 @@ export function createShellPromptReadinessProbe(options: {
   shellPath: string | undefined
   shellCwd?: string
   shellPathEnv?: string
-  onPromptReady: () => void
+  onPromptReady: (executablePath: string) => void
   settleMs?: number
 }): ShellPromptReadinessProbe | null {
   const lineEditorProbe = createPtySlaveLineEditorProbe(options.slavePath)
@@ -32,7 +32,6 @@ export function createShellPromptReadinessProbe(options: {
     return null
   }
   const settleMs = options.settleMs ?? SHELL_PROMPT_PROBE_SETTLE_MS
-  const expectedShellName = options.shellPath ? basename(options.shellPath).toLowerCase() : null
   const shellCwd = options.shellCwd ?? process.cwd()
   const outputScanState = createLineEditorReadyOutputScanState()
   let disposed = false
@@ -51,40 +50,17 @@ export function createShellPromptReadinessProbe(options: {
     if (disposed || scheduledGeneration !== generation) {
       return
     }
-    const [shell, expectedPath] = await Promise.all([
-      readShellProcessReadiness(shellPid),
-      options.shellPath
-        ? resolveShellExecutablePath(options.shellPath, shellCwd, options.shellPathEnv)
-        : Promise.resolve(null)
-    ])
-    if (disposed || scheduledGeneration !== generation) {
+    const executablePath = await readMatchingPromptShellExecutable({
+      shellPid,
+      shellPath: options.shellPath,
+      shellCwd,
+      shellPathEnv: options.shellPathEnv
+    })
+    if (disposed || scheduledGeneration !== generation || !executablePath) {
       return
-    }
-    if (
-      !shell?.foreground ||
-      !expectedShellName ||
-      !expectedPath ||
-      basename(shell.executablePath).toLowerCase() !== expectedShellName
-    ) {
-      return
-    }
-    if (shell.executablePath !== expectedPath) {
-      // Profiles can exec another installed shell; accept only replacements found on this pane's PATH.
-      const installedPaths = await resolveInstalledShellExecutablePaths(
-        expectedShellName,
-        shellCwd,
-        options.shellPathEnv
-      )
-      if (
-        disposed ||
-        scheduledGeneration !== generation ||
-        !installedPaths.includes(shell.executablePath)
-      ) {
-        return
-      }
     }
     disposed = true
-    options.onPromptReady()
+    options.onPromptReady(executablePath)
   }
 
   return {
@@ -116,4 +92,39 @@ export function createShellPromptReadinessProbe(options: {
       }
     }
   }
+}
+
+export async function readMatchingPromptShellExecutable(options: {
+  shellPid: number
+  shellPath: string | undefined
+  shellCwd: string
+  shellPathEnv?: string
+}): Promise<string | null> {
+  const expectedShellName = options.shellPath ? basename(options.shellPath).toLowerCase() : null
+  const [shell, expectedPath] = await Promise.all([
+    readShellProcessReadiness(options.shellPid),
+    options.shellPath
+      ? resolveShellExecutablePath(options.shellPath, options.shellCwd, options.shellPathEnv)
+      : Promise.resolve(null)
+  ])
+  if (
+    !shell?.foreground ||
+    !expectedShellName ||
+    !expectedPath ||
+    basename(shell.executablePath).toLowerCase() !== expectedShellName
+  ) {
+    return null
+  }
+  if (shell.executablePath !== expectedPath) {
+    // Why: profile exec may replace the binary with another installed copy of the same shell.
+    const installedPaths = await resolveInstalledShellExecutablePaths(
+      expectedShellName,
+      options.shellCwd,
+      options.shellPathEnv
+    )
+    if (!installedPaths.includes(shell.executablePath)) {
+      return null
+    }
+  }
+  return shell.executablePath
 }

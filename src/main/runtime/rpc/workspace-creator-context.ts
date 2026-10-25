@@ -4,7 +4,12 @@ import type { RpcContext } from './core'
 export function resolveRpcWorkspaceCreatorProvenance(
   context: Pick<
     RpcContext,
-    'pairedDeviceId' | 'pairedDeviceParentId' | 'clientId' | 'clientKind' | 'connectionId'
+    | 'caller'
+    | 'pairedDeviceId'
+    | 'pairedDeviceParentId'
+    | 'clientId'
+    | 'clientKind'
+    | 'connectionId'
   >
 ): WorkspaceCreatorProvenance {
   if (context.pairedDeviceId) {
@@ -15,6 +20,9 @@ export function resolveRpcWorkspaceCreatorProvenance(
     return context.pairedDeviceParentId
       ? { kind: 'paired-device', deviceId: context.pairedDeviceParentId }
       : { kind: 'host' }
+  }
+  if (context.caller?.kind === 'desktop') {
+    return { kind: 'host' }
   }
   if (context.clientId || context.clientKind || context.connectionId) {
     throw new Error('authenticated_device_identity_missing')

@@ -268,7 +268,7 @@ __orca_deferred_init() {
     fi
     __orca_prompt_mark() {
       if [[ "${__orca_emit_ready_marker-1}" == 1 ]]; then
-        printf "\033]777;orca-shell-ready\007"
+        printf "\033]777;orca-shell-ready:posix\007"
       fi
       # Call as a function so $WIDGET remains zle-line-init for add-zle-hook-widget dispatchers.
       if [[ -n "${__orca_prev_line_init_fn:-}" ]]; then

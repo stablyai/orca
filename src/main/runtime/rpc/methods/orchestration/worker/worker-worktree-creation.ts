@@ -1,3 +1,4 @@
+import type { AgentLaunchInitialSurfaceStage } from '../../../../../agent-launch/agent-launch-surface-factories'
 /**
  * Creating the worktree a `--worktree new-child` / `new-top-level` dispatch asks for.
  *
@@ -40,6 +41,8 @@ export async function createWorkerWorktree(args: {
   withAgentTerminal: boolean
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
+  initializeSurface?: AgentLaunchInitialSurfaceStage
+  onSetupReceipt?: (receipt: WorkerSetupReceipt) => void
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
@@ -49,6 +52,7 @@ export async function createWorkerWorktree(args: {
 }> {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  let surfaceFailure: { error: unknown } | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     repoSelector: params.repo ?? coordinatorWorktree.repoId,
@@ -64,7 +68,33 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
-    ...(args.onWorkspaceCreated ? { onWorkspaceCreated: args.onWorkspaceCreated } : {}),
+    onWorkspaceCreated: (worktreeId) => {
+      effects.push({
+        kind: 'worktree',
+        action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
+        id: worktreeId
+      })
+      db.recordWorkerStage({
+        dispatchId,
+        stage: 'worktree_created',
+        worktreeId,
+        effects,
+        residualResources: effects
+      })
+      args.onWorkspaceCreated?.(worktreeId)
+    },
+    ...(args.initializeSurface
+      ? {
+          initializeSurface: async (workspace: Parameters<AgentLaunchInitialSurfaceStage>[0]) => {
+            try {
+              return await args.initializeSurface?.(workspace)
+            } catch (error) {
+              // Keep the original refusal until Setup and its actual resources are recorded.
+              surfaceFailure = { error }
+            }
+          }
+        }
+      : {}),
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
@@ -81,19 +111,7 @@ export async function createWorkerWorktree(args: {
     }
   })
   const terminalHandle = created.startupTerminal?.handle
-  effects.push({
-    kind: 'worktree',
-    action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
-  })
-  db.recordWorkerStage({
-    dispatchId,
-    stage: 'worktree_created',
-    worktreeId: created.worktree.id,
-    effects,
-    residualResources: effects
-  })
-  const setupReceipt = {
+  const setupReceipt: WorkerSetupReceipt = {
     requested: setupDecision,
     effective: setupDecision,
     source: params.setup ? 'explicit_request' : 'orchestration_default',
@@ -140,6 +158,18 @@ export async function createWorkerWorktree(args: {
     state: setupReceipt.state,
     terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
+  args.onSetupReceipt?.(setupReceipt)
+  if (surfaceFailure) {
+    db.recordWorkerStage({
+      dispatchId,
+      stage: 'terminal_creating',
+      worktreeId: created.worktree.id,
+      setupState: setupReceipt.state,
+      effects,
+      residualResources: effects
+    })
+    throw surfaceFailure.error
+  }
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,

@@ -476,6 +476,7 @@ describe('registerPtyHandlers', () => {
         'daemon output',
         expect.any(Number),
         'daemon output'.length,
+        undefined,
         undefined
       )
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {

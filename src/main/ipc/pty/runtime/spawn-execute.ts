@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../../../runtime/orchestration/setup-completion-signal'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ptyIncarnationById } from '../provider/ownership-state'
@@ -74,7 +75,13 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       markRuntimeSpawnHiddenBeforeSpawn(ctx)
     }
     if (expectedPtyId) {
-      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(
+        expectedPtyId,
+        undefined,
+        ctx.isDaemonHostSpawn && ctx.isNewDaemonSession
+          ? nativeSetupCompletionToken(ctx.env)
+          : undefined
+      )
       ctx.pendingRegistrationPtyId = expectedPtyId
     }
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
@@ -189,7 +196,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       !ctx.deps.runtime?.narrowPtyRegistration(
         ctx.result.id,
         ctx.pendingRegistrationClaim,
-        ctx.result.incarnationId
+        ctx.result.incarnationId,
+        ctx.result.isReattach === true || ctx.result.agentSessionEnsure?.disposition === 'adopted'
       )
     ) {
       throw new PaneOwnerContentionError()

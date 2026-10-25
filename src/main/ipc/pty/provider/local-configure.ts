@@ -127,7 +127,8 @@ export function configureLocalPtyProvider(args: {
       }
       return env
     },
-    onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
+    onSpawned: (id, incarnationId, setupToken) =>
+      runtime?.onPtySpawned(id, incarnationId, { setupToken }),
     onExit: (id, code, incarnationId, cause) => {
       if (!isCurrentPtyExit({ id, incarnationId })) {
         return
@@ -141,7 +142,7 @@ export function configureLocalPtyProvider(args: {
         ...(cause ? { cause } : {})
       })
     },
-    onData: (id, data, timestamp, sequenceChars, transformed) =>
-      runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
+    onData: (id, data, timestamp, sequenceChars, transformed, seq) =>
+      runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed, seq)
   })
 }

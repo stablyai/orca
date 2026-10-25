@@ -104,10 +104,10 @@ export function observedReceipt(
 ): AgentSessionOperationReceipt {
   let committed = false
   const observed: AgentSessionOperationReceipt = {
-    write: receipt.write,
+    ...receipt,
     committed: () => {
-      receipt.committed()
       committed = true
+      receipt.committed()
     },
     isCommitted: () => committed,
     commitAlone: async () => {

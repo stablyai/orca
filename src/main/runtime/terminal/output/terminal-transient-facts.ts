@@ -56,6 +56,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
    *  follows, and drop the mobile headless mirror — it rebuilds from the
    *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
+    this.setupCompletionTokenByPtyId.get(ptyId)?.noteGap()
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
       // dropped. Advancing without parsing preserves that absolute domain so

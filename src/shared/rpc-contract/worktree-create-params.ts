@@ -104,6 +104,7 @@ export const WorktreeCreate = z
         coordinatorHandle: OptionalString
       })
       .optional(),
+    pendingFirstAgentMessageRename: z.boolean().optional(),
     setupOnly: z.boolean().optional(),
     setupDecision: z
       .unknown()

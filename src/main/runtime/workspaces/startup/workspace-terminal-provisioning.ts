@@ -54,7 +54,11 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
-        this.createTerminal(selector, options, createdWorktree),
+        this.createTerminal(
+          selector,
+          { ...options, initializeWorkspaceTopology: true },
+          createdWorktree
+        ),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // Why not renameTerminal: it writes the pane's title, stamped to outrank every later
@@ -71,10 +75,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       setTabColor: async (handle, color) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
-      },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      }
     }
   }
 
@@ -90,7 +91,11 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     return {
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
-        this.createTerminal(selector, options, createdWorktree),
+        this.createTerminal(
+          selector,
+          { ...options, initializeWorkspaceTopology: true },
+          createdWorktree
+        ),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         const ok = applied(
@@ -131,10 +136,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           tabs
         })
         return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
-      },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      }
     }
   }
 

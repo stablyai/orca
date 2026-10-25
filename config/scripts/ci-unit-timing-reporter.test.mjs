@@ -340,3 +340,178 @@ describe('optional unit phase diagnostics', () => {
     }
   )
 })
+
+describe('immediate CI unit diagnostics', () => {
+  const makeModule = (file, state = 'passed') => ({
+    type: 'module',
+    id: 'module-id',
+    moduleId: resolve(file),
+    relativeModuleId: file,
+    project: { name: 'bun' },
+    state: () => state,
+    errors: () => [],
+    children: {
+      allSuites: function* () {},
+      allTests: function* () {}
+    }
+  })
+  const capture = () => {
+    const log = vi.fn()
+    const reporter = new UnitTimingReporter()
+    reporter.onInit({ config: { root: process.cwd() }, logger: { log } })
+    return {
+      reporter,
+      log,
+      records: () => log.mock.calls.map(([line]) => JSON.parse(line.slice('[unit-ci] '.length)))
+    }
+  }
+
+  it('prints collection, nested-suite and case stacks at module end without waiting for run end', () => {
+    const { reporter, log, records } = capture()
+    const module = makeModule('src/unselected-collection.test.ts', 'failed')
+    module.errors = () => [
+      {
+        name: 'TypeError',
+        message: 'collection failed',
+        stack: `TypeError: collection failed\n    at ${process.cwd()}/src/import.ts:3:4`,
+        actual: 'omit-actual',
+        stdout: 'omit-cli-output',
+        token: 'omit-token'
+      }
+    ]
+    reporter.onTestModuleEnd(module)
+    expect(records()).toEqual([
+      {
+        event: 'error',
+        file: module.relativeModuleId,
+        project: 'bun',
+        entity: 'module',
+        id: 'module-id',
+        name: 'TypeError',
+        message: 'collection failed',
+        stack: 'TypeError: collection failed\n    at <root>/src/import.ts:3:4'
+      }
+    ])
+
+    module.errors = () => []
+    const suite = {
+      type: 'suite',
+      id: 'suite-id',
+      module,
+      location: { line: 7, column: 1 },
+      errors: () => [{ name: 'Error', message: 'suite failed', stack: 'suite stack' }]
+    }
+    const test = {
+      type: 'test',
+      id: 'case-id',
+      module,
+      location: { line: 12, column: 1 },
+      result: () => ({
+        state: 'failed',
+        errors: [
+          {
+            name: 'AssertionError',
+            message: 'case failed https://example.invalid/private',
+            stacks: [{ file: resolve('src/case.ts'), line: 8, column: 2 }]
+          }
+        ]
+      })
+    }
+    module.children.allSuites = function* () {
+      yield suite
+    }
+    module.children.allTests = function* (state) {
+      expect(state).toBe('failed')
+      yield test
+    }
+    reporter.onTestModuleEnd(module)
+    expect(records().slice(1)).toEqual([
+      {
+        event: 'error',
+        file: module.relativeModuleId,
+        project: 'bun',
+        entity: 'suite',
+        id: 'suite-id',
+        line: 7,
+        name: 'Error',
+        message: 'suite failed',
+        stack: 'suite stack'
+      },
+      {
+        event: 'error',
+        file: module.relativeModuleId,
+        project: 'bun',
+        entity: 'test',
+        id: 'case-id',
+        line: 12,
+        name: 'AssertionError',
+        message: 'case failed [url omitted]',
+        stack: `<root>${resolve('src/case.ts').slice(process.cwd().length)}:8:2`
+      }
+    ])
+    expect(log.mock.calls.flat().join('\n')).not.toMatch(/omit-actual|omit-cli-output|omit-token/)
+    const passed = makeModule('src/unselected-passed.test.ts')
+    passed.errors = () => {
+      throw new Error('passed module must not be scanned')
+    }
+    reporter.onTestModuleEnd(passed)
+    expect(records()).toHaveLength(3)
+  })
+
+  it('limits lifecycle identities to exact diagnostic paths and tolerates a failed log write', () => {
+    const { reporter, log, records } = capture()
+    const selected = [
+      'src/renderer/src/components/native-chat/structured-agent-session-status-bridge-unconfirmed-start.test.tsx',
+      'src/main/runtime/structured-agent-session-integration-replay.test.ts',
+      'src/renderer/src/store/slices/repos.test.ts',
+      'src/renderer/src/components/terminal-pane/pending-split-close.test.ts'
+    ]
+    for (const file of [...selected, `${selected[2]}.unselected`, 'src/unrelated.test.ts']) {
+      const module = makeModule(file)
+      const test = {
+        type: 'test',
+        id: 'case-id',
+        module,
+        location: { line: 11 },
+        result: () => ({ state: 'passed' })
+      }
+      const suite = { type: 'suite', id: 'suite-id', module, location: { line: 4 } }
+      reporter.onTestModuleQueued(module)
+      reporter.onTestModuleCollected(module)
+      reporter.onTestModuleStart(module)
+      reporter.onTestCaseReady(test)
+      reporter.onTestCaseResult(test)
+      for (const [name, entity] of [
+        ['beforeAll', module],
+        ['afterAll', suite],
+        ['beforeEach', test],
+        ['afterEach', test]
+      ]) {
+        reporter.onHookStart({ name, entity })
+        reporter.onHookEnd({ name, entity })
+      }
+      reporter.onTestModuleEnd(module)
+    }
+    expect(records()).toHaveLength(selected.length * 14)
+    expect(new Set(records().map(({ file }) => file))).toEqual(new Set(selected))
+    expect(
+      records()
+        .slice(0, 3)
+        .map(({ event }) => event)
+    ).toEqual(['module-queued', 'module-collected', 'module-start'])
+    expect(records()[3]).toMatchObject({
+      event: 'case-ready',
+      entity: 'test',
+      id: 'case-id',
+      line: 11
+    })
+    expect(records()[4]).toMatchObject({ event: 'case-result', state: 'passed' })
+    expect(records()[5]).toMatchObject({ event: 'hook-start', hook: 'beforeAll', entity: 'module' })
+    expect(records()[7]).toMatchObject({ event: 'hook-start', hook: 'afterAll', entity: 'suite' })
+    expect(records()[13]).toMatchObject({ event: 'module-end', state: 'passed' })
+    log.mockImplementation(() => {
+      throw new Error('diagnostic transport failed')
+    })
+    expect(() => reporter.onTestModuleQueued(makeModule(selected[0]))).not.toThrow()
+  })
+})

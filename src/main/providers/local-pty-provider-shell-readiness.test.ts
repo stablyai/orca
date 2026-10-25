@@ -14,7 +14,8 @@ const {
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsAsyncMock,
-  createShellPromptReadinessProbeMock
+  createShellPromptReadinessProbeMock,
+  readMatchingPromptShellExecutableMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -28,7 +29,8 @@ const {
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
-  createShellPromptReadinessProbeMock: vi.fn()
+  createShellPromptReadinessProbeMock: vi.fn(),
+  readMatchingPromptShellExecutableMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -111,7 +113,8 @@ vi.mock('../wsl', () => ({
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
-  createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
+  createShellPromptReadinessProbe: createShellPromptReadinessProbeMock,
+  readMatchingPromptShellExecutable: readMatchingPromptShellExecutableMock
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
@@ -335,7 +338,10 @@ describe('LocalPtyProvider', () => {
         expect(onData).toHaveBeenCalledWith(
           expect.any(String),
           '\x1b]777;orca-shell-ready',
-          expect.any(Number)
+          expect.any(Number),
+          22,
+          false,
+          22
         )
         expect(mockProc.write).not.toHaveBeenCalled()
 
@@ -362,8 +368,75 @@ describe('LocalPtyProvider', () => {
       expect(onData).toHaveBeenCalledWith(
         expect.any(String),
         '\x1b]777;orca-shell-ready',
-        expect.any(Number)
+        expect.any(Number),
+        22,
+        false,
+        22
       )
+    })
+    it('native setup strips metadata before spawn, waits for post-profile proof, and cannot dispatch after close', async () => {
+      vi.useFakeTimers()
+      try {
+        const command = 'bash /actual/setup-runner.sh'
+        let settle = (_value: string | null) => {}
+        readMatchingPromptShellExecutableMock.mockImplementation(
+          () =>
+            new Promise<string | null>((resolve) => {
+              settle = resolve
+            })
+        )
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { ORCA_SETUP_COMPLETION_TOKEN: 'native:local' }
+        })
+        expect(spawnMock.mock.calls.at(-1)?.[2].env.ORCA_SETUP_COMPLETION_TOKEN).toBeUndefined()
+        const data = mockProc.onData.mock.calls.at(-1)?.[0]
+        data?.('\x1b]777;orca-shell-start:42\x07\x1b]777;orca-shell-ready:posix\x07prompt')
+        await vi.advanceTimersByTimeAsync(100)
+        expect(mockProc.write).not.toHaveBeenCalled()
+        settle('/bin/zsh')
+        await vi.advanceTimersByTimeAsync(30)
+        expect(mockProc.write).toHaveBeenCalledTimes(1)
+        expect(mockProc.write.mock.calls[0]?.[0]).toMatch(/^bash \/actual\/setup-runner.sh; \(/)
+
+        mockProc.write.mockClear()
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { ORCA_SETUP_COMPLETION_TOKEN: 'native:closed' }
+        })
+        const late = mockProc.onData.mock.calls.at(-1)?.[0]
+        late?.('\x1b]777;orca-shell-start:43\x07\x1b]777;orca-shell-ready:posix\x07prompt')
+        exitCb?.({ exitCode: 0 })
+        settle('/bin/zsh')
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(mockProc.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('native setup with an absent post-profile fact sends only C within the existing budget', async () => {
+      vi.useFakeTimers()
+      try {
+        readMatchingPromptShellExecutableMock.mockImplementation(() => new Promise(() => {}))
+        const command = 'bash /actual/setup-runner.sh'
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          command,
+          env: { ORCA_SETUP_COMPLETION_TOKEN: 'native:no-fact' }
+        })
+        const data = mockProc.onData.mock.calls.at(-1)?.[0]
+        data?.('\x1b]777;orca-shell-start:42\x07\x1b]777;orca-shell-ready:posix\x07prompt')
+        await vi.advanceTimersByTimeAsync(1700)
+        expect(mockProc.write).toHaveBeenCalledExactlyOnceWith(`${command}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

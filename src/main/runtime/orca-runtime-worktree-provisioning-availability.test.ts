@@ -1,3 +1,6 @@
+import { awaitStructuredWorkerSetupGate } from './rpc/methods/orchestration/worker/worker-start-structured-setup-gate'
+import type { WorkerEffect } from './rpc/methods/orchestration/worker/worker-topology'
+import { holdInFlightWorktreeCreate } from '../worktree-create-in-flight'
 import './orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
@@ -10,13 +13,69 @@ import {
   listWorktrees,
   shouldRunSetupForCreate
 } from './orca-runtime-test-mocks.spec'
-import { store } from './orca-runtime-test-fixtures.spec'
+import { store, TEST_WORKTREE_PATH, TEST_WORKTREE_ID } from './orca-runtime-test-fixtures.spec'
 import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 import { tmpdir } from 'node:os'
 import type { Worktree } from '../../shared/worktree/types'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 describe('host worktree creation while its renderer is unavailable', () => {
+  it('joins preparation for explicit id and path before resolving an unfiltered checkout', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const release = await holdInFlightWorktreeCreate('repo-1', TEST_WORKTREE_PATH)
+    let completed = 0
+    const calls = [`id:${TEST_WORKTREE_ID}`, `path:${TEST_WORKTREE_PATH}`].map((selector) =>
+      runtime['resolveWorktreeSelector'](selector).finally(() => {
+        completed++
+      })
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(completed).toBe(0)
+    release()
+    await Promise.all(calls)
+    expect(completed).toBe(2)
+  })
+  it('releases chat but preserves the worker lost-observation receipt when the setup incarnation is replaced', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.workspaceSetupAgentStarts.hold(TEST_WORKTREE_ID)
+    const held = runtime.workspaceSetupAgentStarts.pending(TEST_WORKTREE_ID)
+    runtime.setPtyController({
+      spawn: async () => ({ id: 'setup-replaced', incarnationId: 'setup-original' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'original-setup' }
+    })
+    const effects: WorkerEffect[] = [{ kind: 'setup', terminalId: terminal.handle }]
+    const waiting = awaitStructuredWorkerSetupGate({
+      runtime,
+      effects,
+      timeoutMs: 1000,
+      setup: {
+        requested: 'run',
+        effective: 'run',
+        source: 'project',
+        hookFound: true,
+        startupPolicy: 'wait-for-setup',
+        state: 'running'
+      }
+    })
+    runtime.registerPty('setup-replaced', TEST_WORKTREE_ID, null, {
+      tabId: 'replacement',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      incarnationId: 'setup-replacement'
+    })
+    await held
+    await expect(waiting).resolves.toBeNull()
+    expect(effects).toContainEqual({
+      kind: 'setup',
+      action: 'wait_unevaluated',
+      state: 'terminal_handle_stale'
+    })
+  })
   it.each([
     ['git', 'reload', 'host'],
     ['git', 'crash', 'host'],
@@ -138,7 +197,11 @@ describe('startup hosts retain current runtime capabilities', () => {
     ) {
       expect(this).toBe(runtime)
       expect(arguments.length).toBe(3)
-      expect([selector, input, evidence]).toEqual(['id:created-worktree', options, created])
+      expect([selector, input, evidence]).toEqual([
+        'id:created-worktree',
+        { ...options, initializeWorkspaceTopology: true },
+        created
+      ])
       expect(evidence).toBe(created)
       return { handle: 'created-handle', worktreeId: created.id, title: null }
     })
@@ -183,16 +246,5 @@ describe('startup hosts retain current runtime capabilities', () => {
     expect(provisioning.canSpawn()).toBe(false)
     expect(() => host.getForegroundProcess('startup-pty')).toThrow(TypeError)
     expect(() => hasChildProcesses('startup-pty')).toThrow(TypeError)
-  })
-
-  it('writes the canonical setup-token map when invoked', () => {
-    const runtime = new OrcaRuntimeService(store)
-    const host = runtime['getWorktreeTerminalProvisioningHost']()
-    const original = runtime['setupCompletionTokenByPtyId']
-    const replacement = new Map<string, string>()
-    Object.defineProperty(runtime, 'setupCompletionTokenByPtyId', { value: replacement })
-    host.recordSetupCompletionToken?.('startup-pty', 'late-token')
-    expect(replacement.get('startup-pty')).toBe('late-token')
-    expect(original.has('startup-pty')).toBe(false)
   })
 })

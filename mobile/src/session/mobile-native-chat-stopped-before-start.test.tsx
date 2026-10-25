@@ -181,6 +181,6 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
     expect(renderer!.root.findAllByType(MobileMarkdown)).toEqual([])
     expect(
       renderer!.root.findAll((node) => String(node.type) === 'Text').map((node) => node.children)
-    ).toEqual([['Stopped manually']])
+    ).toEqual([['Interrupted']])
   })
 })

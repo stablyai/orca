@@ -15,6 +15,7 @@ import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
 import { RpcDispatcher } from '../dispatcher'
 import {
   methodNamed,
@@ -62,21 +63,26 @@ function failingCreate(runtime: AgentLaunchRuntimeStub, error: Error, afterDispa
 }
 
 describe('a launch whose terminal fails', () => {
-  // The ledger admits against `Date.now()`, so the ids must be dated now.
-  const OPERATION_ID = `${Date.now()}-000000000000000000000000000000cc`
-  const OTHER_OPERATION_ID = `${Date.now()}-000000000000000000000000000000dd`
+  const NOW = 1_800_000_000_000
+  const OPERATION_ID = `${NOW}-000000000000000000000000000000cc`
+  const OTHER_OPERATION_ID = `${NOW}-000000000000000000000000000000dd`
   let directory: string
   let store: AgentSessionRecordStore
 
   beforeEach(async () => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-prestart-'))
     store = await openTestAgentSessionRecordStore(directory)
     setAgentLaunchRecordStore(store)
   })
 
   afterEach(async () => {
-    setAgentLaunchRecordStore(null)
-    await rm(directory, { recursive: true, force: true })
+    try {
+      setAgentLaunchRecordStore(null)
+      await rm(directory, { recursive: true, force: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   function outcomeOf(operationId: string) {
@@ -131,6 +137,80 @@ describe('a launch whose terminal fails', () => {
     expect(retry.createTerminal).not.toHaveBeenCalled()
     expect(response).toMatchObject({ ok: false, error: { message: NO_LAUNCH_COMMAND } })
   })
+
+  it('preserves a typed setup-choice refusal across live RPC and durable replay', async () => {
+    const message = 'Setup decision required for this repository'
+    const first = runtimeStub({ settings: {} })
+    first.createManagedWorktree.mockRejectedValueOnce(
+      new WorktreeCreateSetupChoiceRefusedError(message, { cause: new Error(message) })
+    )
+    const response = await replay(first, CREATE_LAUNCH)
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'worktree_create_setup_choice_required', message }
+    })
+    expect(outcomeOf(OPERATION_ID)).toEqual({
+      status: 'failed',
+      code: 'worktree_create_setup_choice_required',
+      message
+    })
+    expect(first.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(first.createTerminal).not.toHaveBeenCalled()
+
+    store = await openTestAgentSessionRecordStore(directory)
+    setAgentLaunchRecordStore(store)
+    const retry = runtimeStub({ settings: {} })
+    expect(await replay(retry, CREATE_LAUNCH)).toEqual(response)
+    expect(retry.createManagedWorktree).not.toHaveBeenCalled()
+    expect(retry.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('reads an old English setup failure without rewriting its durable row', async () => {
+    const code = 'Setup decision required for this repository'
+    const callerKey = 'trusted-local:runtime'
+    const launch = AGENT_LAUNCH_REPLAY.params.parse({
+      ...CREATE_LAUNCH,
+      operationId: OPERATION_ID
+    })
+    await store.admitOperation({
+      callerKey,
+      operationId: OPERATION_ID,
+      fingerprint: computeAgentLaunchFingerprint(launch),
+      now: NOW
+    })
+    await store.claimOperation({ callerKey, operationId: OPERATION_ID })
+    await store.recordOperationOutcome({
+      callerKey,
+      operationId: OPERATION_ID,
+      outcome: { status: 'failed', code }
+    })
+    store = await openTestAgentSessionRecordStore(directory)
+    setAgentLaunchRecordStore(store)
+    const runtime = runtimeStub({ settings: {} })
+    expect(await replay(runtime, CREATE_LAUNCH)).toMatchObject({
+      ok: false,
+      error: { code: 'worktree_create_setup_choice_required', message: code }
+    })
+    expect(outcomeOf(OPERATION_ID)).toEqual({ status: 'failed', code })
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+    expect(runtime.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it.each(['Setup decision required for this repository', 'runtime_error', 'runtime_unavailable'])(
+    'does not treat an untyped create failure %s as proof of no effects',
+    async (message) => {
+      const runtime = runtimeStub({ settings: {} })
+      runtime.createManagedWorktree.mockRejectedValueOnce(new Error(message))
+      const response = await replay(runtime, CREATE_LAUNCH)
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'agent_session_operation_unknown' }
+      })
+      expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
+      expect(await replay(runtime, CREATE_LAUNCH)).toEqual(response)
+      expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
+    }
+  )
 
   it('stays unknown when the failure came after the spawn request left', async () => {
     // An SSH or daemon spawn whose reply was lost may still have started an agent.
@@ -277,7 +357,7 @@ describe('a launch whose terminal fails', () => {
       callerKey,
       operationId: OPERATION_ID,
       fingerprint: computeAgentLaunchFingerprint(launch),
-      now: Date.now()
+      now: NOW
     })
     await store.claimOperation({ callerKey, operationId: OPERATION_ID })
     await store.recordOperationOutcome({

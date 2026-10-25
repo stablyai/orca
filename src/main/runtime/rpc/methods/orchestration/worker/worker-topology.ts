@@ -1,3 +1,4 @@
+import type { AgentLaunchTerminalSequence } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -61,6 +62,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  sequenceTerminalCommand?: AgentLaunchTerminalSequence
   taskId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
@@ -69,6 +71,9 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
+    ...(args.sequenceTerminalCommand
+      ? { sequenceTerminalCommand: args.sequenceTerminalCommand }
+      : {}),
     launchSource: 'orchestration',
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),

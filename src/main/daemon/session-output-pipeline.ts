@@ -1,3 +1,5 @@
+import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { SessionOptions } from './session-options'
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -29,4 +31,17 @@ export function createSessionOutputPipeline(opts: {
   })
   barrier = recoveryBarrier
   return { output, recoveryBarrier }
+}
+
+export function createSessionStartupIngress(
+  opts: Pick<SessionOptions, 'startupIngress' | 'ownerBackend'>,
+  subprocess: SubprocessHandle,
+  recoveryBarrier: TerminalShellRecoveryBarrier
+): PtyStartupIngress {
+  return new PtyStartupIngress({
+    ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+    ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+    write: (data) => subprocess.write(data),
+    onEmission: (emission) => recoveryBarrier.accept(emission)
+  })
 }

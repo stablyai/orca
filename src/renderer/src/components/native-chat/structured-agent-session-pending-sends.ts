@@ -63,7 +63,11 @@ export function publishStructuredAgentSessionSends(
   const state = sessionSends(sessionId)
   Object.assign(state, change)
   for (const listener of state.listeners) {
-    listener()
+    try {
+      listener()
+    } catch (error) {
+      console.error('[native-chat-send] presentation observer failed', error)
+    }
   }
 }
 

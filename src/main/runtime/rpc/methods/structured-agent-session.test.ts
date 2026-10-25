@@ -462,7 +462,7 @@ describe('method routing', () => {
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
       expect.not.objectContaining({ hostLaunchDirectory: expect.anything() }),
-      { hostLaunchDirectory: '/host/floating-folder' }
+      { hostLaunchDirectory: '/host/floating-folder', publishTab: expect.any(Function) }
     )
   })
 

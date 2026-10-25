@@ -60,7 +60,13 @@ export async function launchHeadlessAutomationAgent(
     },
     terminalOnly: true,
     workspaces: {
-      createWorktree: async ({ startupAgent, startupPrompt }) => {
+      createWorktree: async ({
+        startupAgent,
+        startupPrompt,
+        initializeSurface,
+        onWorkspaceCreated
+      }) => {
+        // Agent-first is the only create here; a structured pre-flight must not reach it.
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
@@ -72,6 +78,25 @@ export async function launchHeadlessAutomationAgent(
         const created = await runtime.createManagedWorktree({
           ...create,
           startupAgent,
+          onWorkspaceCreated,
+          ...(initializeSurface
+            ? {
+                initializeSurface: async (initial) => {
+                  workspace = {
+                    id: initial.worktreeId,
+                    displayName: initial.created?.worktree.displayName ?? null
+                  }
+                  const startup = initial.created?.startupTerminal
+                  if (startup?.handle) {
+                    terminal = { ...startup, handle: startup.handle }
+                  }
+                  return initializeSurface({
+                    ...initial,
+                    ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
+                  })
+                }
+              }
+            : {}),
           ...(startupPrompt ? { startupPrompt } : {})
         })
         workspace = {
@@ -98,9 +123,10 @@ export async function launchHeadlessAutomationAgent(
       createStructuredSession: () => {
         throw new Error(TERMINAL_ONLY_MESSAGE)
       },
-      createTerminalAgent: async ({ worktreeId, startupPrompt }) => {
+      createTerminalAgent: async ({ worktreeId, startupPrompt, sequenceTerminalCommand }) => {
         const launched = await runtime.launchAgentTerminal(`id:${worktreeId}`, {
           agent,
+          ...(sequenceTerminalCommand ? { sequenceTerminalCommand } : {}),
           prompt: startupPrompt ?? '',
           title: run.title,
           suppressStartupUpdatePrompt: true,

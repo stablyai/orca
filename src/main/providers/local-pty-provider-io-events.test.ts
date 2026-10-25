@@ -248,9 +248,9 @@ describe('LocalPtyProvider', () => {
 
       expect(mockProc.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
       expect(runtimeData.mock.calls.map((call) => call.slice(1))).toEqual([
-        ['', expect.any(Number), query.length, true],
-        ['', expect.any(Number), echo.length, true],
-        ['prompt', expect.any(Number)]
+        ['', expect.any(Number), query.length, true, query.length],
+        ['', expect.any(Number), echo.length, true, query.length + echo.length],
+        ['prompt', expect.any(Number), 6, false, query.length + echo.length + 6]
       ])
       expect(dataHandler.mock.calls.map(([payload]) => payload)).toEqual([
         { id, data: '', sequenceChars: query.length, seq: query.length, transformed: true },

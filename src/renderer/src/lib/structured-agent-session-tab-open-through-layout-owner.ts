@@ -7,7 +7,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 import { contentTabOpenPlacement } from '@/store/slices/tabs/content-tab-open-placement'
@@ -29,10 +29,11 @@ export type OpenedAgentSessionTab = Pick<Tab, 'id' | 'entityId'>
 
 /** Null when main is not asked (a paired server owns the workspace's layout): draw as today. */
 export function openAgentSessionTabThroughLayoutOwner(
-  open: AgentSessionTabOpen
+  open: AgentSessionTabOpen,
+  get: () => AppState
 ): OpenedAgentSessionTab | null {
   const { worktreeId, sessionId } = open
-  const state = useAppStore.getState()
+  const state = get()
   const tabId = structuredAgentSessionTabId(sessionId)
   const label = defaultAgentChatLabel(open.agent)
   const placement = contentTabOpenPlacement(state, worktreeId, tabId, {
@@ -58,7 +59,7 @@ export function openAgentSessionTabThroughLayoutOwner(
         return
       }
       // As the window's own open: the chat is selected in its group; the focused group stays.
-      const current = useAppStore.getState()
+      const current = get()
       current.activateTab(shownId, { worktreeId })
       current.setActiveTabType('agent-session', worktreeId)
     },

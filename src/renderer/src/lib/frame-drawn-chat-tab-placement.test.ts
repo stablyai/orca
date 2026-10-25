@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const mocks = vi.hoisted(() => {
   const groupsByWorktree: Record<string, { id: string; tabOrder: string[] }[]> = {}
-  const noted: string[][] = []
-  const flags: { frameDrawn: boolean; routed: boolean; supported: boolean | null } = {
-    frameDrawn: true,
+  const flags: { routed: boolean; supported: boolean | null } = {
     routed: true,
     supported: true
   }
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
     ...flags,
     /** Tabs the server's frames hold, by desktop id → server id. */
     serverIds: new Map<string, string>(),
-    noted
+    writes: vi.fn()
   }
 })
 
@@ -22,17 +22,20 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   readCachedRuntimeEnvironmentCapability: () => mocks.supported
 }))
 vi.mock('@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces', () => ({
-  isFrameDrawnServerWorkspace: () => mocks.frameDrawn
+  isFrameDrawnServerWorkspace: (environmentId: string, worktreeId: string) =>
+    isFrameDrawnServerWorkspace(environmentId, worktreeId)
 }))
 vi.mock('@/runtime/server-layout-apply-routes', () => ({
   serverLayoutApplyRoute: () =>
     mocks.routed ? { serverTabId: (id: string) => mocks.serverIds.get(id) ?? null } : null
 }))
-vi.mock('./desktop-created-server-tabs', () => ({
-  noteDesktopCreatedServerTab: (...args: string[]) => mocks.noted.push(args)
-}))
-
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import {
+  isFrameDrawnServerWorkspace,
+  resetFrameDrawnServerWorkspacesForTests,
+  setFrameDrawnServerWorkspaces
+} from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { _resetDesktopCreatedServerTabsForTests } from './desktop-created-server-tabs'
 import {
   holdFrameDrawnProvisionalChatTab,
   withFrameDrawnChatTabPlacement
@@ -58,7 +61,13 @@ const intent = {
 
 describe('a chat opened in a frame-drawn server workspace (L270)', () => {
   beforeEach(() => {
-    mocks.frameDrawn = true
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: mocks.writes,
+      removeItem: vi.fn()
+    })
+    _resetDesktopCreatedServerTabsForTests()
+    setFrameDrawnServerWorkspaces('env-1', new Set(['wt']))
     mocks.supported = true
     mocks.routed = true
     mocks.serverIds = new Map([
@@ -66,13 +75,19 @@ describe('a chat opened in a frame-drawn server workspace (L270)', () => {
       ['editor-1', 'editor-1'],
       ['editor-2', 'editor-2']
     ])
-    mocks.noted = []
+    mocks.writes.mockClear()
     mocks.state.groupsByWorktree = {
       wt: [
         { id: 'g-1', tabOrder: ['editor-0'] },
         { id: 'g-2', tabOrder: ['editor-1', 'sim-1', TAB, 'editor-2'] }
       ]
     }
+  })
+
+  afterEach(() => {
+    _resetDesktopCreatedServerTabsForTests()
+    resetFrameDrawnServerWorkspacesForTests()
+    vi.unstubAllGlobals()
   })
 
   it("names the tab's group and the server tab before it, skipping tabs the server lacks", () => {
@@ -115,15 +130,17 @@ describe('a chat opened in a frame-drawn server workspace (L270)', () => {
   )
 
   it('sends no place, and holds nothing, outside a frame-drawn workspace', () => {
-    mocks.frameDrawn = false
+    setFrameDrawnServerWorkspaces('env-1', new Set())
     expect(withFrameDrawnChatTabPlacement(intent)).toBe(intent.params)
     holdFrameDrawnProvisionalChatTab(intent.target, 'wt', TAB)
     holdFrameDrawnProvisionalChatTab({ kind: 'local' }, 'wt', TAB)
-    expect(mocks.noted).toEqual([])
+    expect(mocks.writes.mock.calls).toEqual([])
   })
 
   it('holds the provisional tab for its server until the server lists it', () => {
     holdFrameDrawnProvisionalChatTab(intent.target, 'wt', TAB)
-    expect(mocks.noted).toEqual([['env-1', 'wt', TAB]])
+    expect(mocks.writes.mock.calls).toEqual([
+      ['orca.desktop-created-server-tabs.v1', JSON.stringify([['env-1', 'wt', [TAB]]])]
+    ])
   })
 })

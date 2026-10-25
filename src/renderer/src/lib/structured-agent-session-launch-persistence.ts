@@ -1,6 +1,15 @@
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import {
+  launchRecordSlotIds,
+  launchRecordKeys
+} from './structured-agent-session-launch-record-keys'
+export {
+  desktopCreateWorktreeKey,
+  desktopCreateIdentityKey
+} from './structured-agent-session-launch-record-keys'
+
 import {
   validRecord,
+  parseDesktopCreateLaunchRecord,
   parseStructuredLaunchSurfaceAddress,
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
@@ -24,6 +33,7 @@ const tombstones = new Map<string, ExecutionHostId>()
 /** When each paired-host tombstone was written, so one whose host never answers again expires. */
 const remoteTombstoneCancelledAt = new Map<string, number>()
 const REMOTE_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+let desktopCreateRecordCount = 0
 let loaded = false
 
 function load(): void {
@@ -38,7 +48,12 @@ function load(): void {
     const stored = JSON.parse(localStorage.getItem(LAUNCH_STORAGE_KEY) ?? '[]')
     if (Array.isArray(stored)) {
       for (const value of stored) {
-        if (validRecord(value)) {
+        if (value && typeof value === 'object' && 'desktopCreate' in value) {
+          const record = parseDesktopCreateLaunchRecord(value)
+          if (record) {
+            indexLaunchRecord({ ...record, lifecycle: 'visibility-unknown' })
+          }
+        } else if (validRecord(value)) {
           const seedOptions = parseStructuredLaunchSeedOptions(
             'seedOptions' in value ? value.seedOptions : undefined
           )
@@ -46,7 +61,7 @@ function load(): void {
             'surfaceAddress' in value ? value.surfaceAddress : undefined
           )
           const { seedOptions: _stored, surfaceAddress: _address, ...rest } = value
-          records.set(value.sessionId, {
+          indexLaunchRecord({
             ...rest,
             ...(surfaceAddress ? { surfaceAddress } : {}),
             ...(seedOptions ? { seedOptions } : {}),
@@ -111,6 +126,43 @@ function serializeTombstone(sessionId: string, executionHostId: ExecutionHostId)
       }
 }
 
+function indexLaunchRecord(record: StructuredAgentLaunchPersistedRecord): void {
+  for (const key of launchRecordKeys(record)) {
+    const occupant = records.get(key)
+    if (occupant) {
+      removeIndexedLaunchRecord(occupant.sessionId)
+    }
+  }
+  if (record.desktopCreate) {
+    desktopCreateRecordCount++
+  }
+  for (const key of launchRecordKeys(record)) {
+    records.set(key, record)
+  }
+}
+
+function removeIndexedLaunchRecord(sessionId: string): boolean {
+  const record = records.get(sessionId)
+  if (!record) {
+    return false
+  }
+  if (record.desktopCreate) {
+    desktopCreateRecordCount--
+  }
+  for (const key of launchRecordKeys(record)) {
+    if (records.get(key) === record) {
+      records.delete(key)
+    }
+  }
+  return true
+}
+
+function canonicalLaunchRecords(): StructuredAgentLaunchPersistedRecord[] {
+  return [...records]
+    .filter(([key, record]) => key === record.sessionId)
+    .map(([, record]) => record)
+}
+
 function writeRecords(): void {
   if (typeof localStorage === 'undefined') {
     return
@@ -119,7 +171,7 @@ function writeRecords(): void {
     if (records.size === 0) {
       localStorage.removeItem(LAUNCH_STORAGE_KEY)
     } else {
-      localStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify([...records.values()]))
+      localStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify(canonicalLaunchRecords()))
     }
   } catch {
     // Why: persistence is recovery bookkeeping and must never block a launch.
@@ -152,20 +204,11 @@ function writeTombstones(): void {
 
 export function readStructuredAgentLaunchRecords(): readonly StructuredAgentLaunchPersistedRecord[] {
   load()
-  return [...records.values()]
+  return canonicalLaunchRecords()
 }
 
 export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): Set<string> {
-  return new Set(
-    readStructuredAgentLaunchRecords().flatMap((record) =>
-      record.executionHostId === 'local' &&
-      record.lifecycle !== 'failed' &&
-      record.surfaceAddress?.worktreeId === worktreeId &&
-      (!groupId || record.surfaceAddress.targetGroupId === groupId)
-        ? [structuredAgentSessionTabId(record.sessionId)]
-        : []
-    )
-  )
+  return launchRecordSlotIds(readStructuredAgentLaunchRecords(), worktreeId, groupId)
 }
 
 export function readStructuredAgentLaunchRecord(
@@ -179,15 +222,38 @@ export function writeStructuredAgentLaunchRecord(
   record: StructuredAgentLaunchPersistedRecord
 ): void {
   load()
-  records.set(record.sessionId, record)
-  writeRecords()
+  writeStructuredAgentLaunchRecords([record])
+}
+
+export function hasDesktopCreateLaunchRecords(): boolean {
+  load()
+  return desktopCreateRecordCount > 0
+}
+
+export function writeStructuredAgentLaunchRecords(
+  updates: readonly StructuredAgentLaunchPersistedRecord[],
+  removed: readonly string[] = []
+): void {
+  load()
+  let changed = false
+  for (const id of removed) {
+    changed = removeIndexedLaunchRecord(id) || changed
+  }
+  for (const record of updates) {
+    removeIndexedLaunchRecord(record.sessionId)
+    indexLaunchRecord(record)
+  }
+  if (updates.length || changed) {
+    writeRecords()
+  }
 }
 
 export function deleteStructuredAgentLaunchRecord(sessionId: string): void {
-  load()
-  if (records.delete(sessionId)) {
-    writeRecords()
-  }
+  deleteStructuredAgentLaunchRecords([sessionId])
+}
+
+export function deleteStructuredAgentLaunchRecords(sessionIds: readonly string[]): void {
+  writeStructuredAgentLaunchRecords([], sessionIds)
 }
 
 export function markStructuredAgentLaunchCancelledPersisted(
@@ -195,7 +261,7 @@ export function markStructuredAgentLaunchCancelledPersisted(
   executionHostId: ExecutionHostId
 ): void {
   load()
-  records.delete(sessionId)
+  removeIndexedLaunchRecord(sessionId)
   if (!tombstones.has(sessionId)) {
     tombstones.set(sessionId, executionHostId)
     if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
@@ -255,6 +321,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
+  desktopCreateRecordCount = 0
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()
   loaded = false

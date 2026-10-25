@@ -1,7 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as setupCompletionSignal from '../runtime/orchestration/setup-completion-signal'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
@@ -86,6 +87,66 @@ describe('resolveWindowsShellLaunchArgs', () => {
       `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & codex --no-alt-screen`
     ])
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('keeps the same short command on argv without observation and on stdin with a quoted suffix', () => {
+    const command = 'cmd.exe /c plain.cmd'
+    const plain = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\repo',
+      'C:\\repo',
+      undefined,
+      command,
+      CODEX_LAUNCH_PREFLIGHT
+    )
+    expect(plain.shellArgs).toEqual([
+      '/K',
+      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & ${command}`
+    ])
+    expect(plain.startupCommandDeliveredInShellArgs).toBe(true)
+    const observed = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\repo',
+      'C:\\repo',
+      undefined,
+      command,
+      CODEX_LAUNCH_PREFLIGHT,
+      'native:unit'
+    )
+    expect(observed.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
+    expect(observed.startupCommandDeliveredInShellArgs).toBeUndefined()
+    const full = setupCompletionSignal.appendNativeSetupCompletion(command, 'native:unit', 'cmd')
+    expect(full.startsWith(command)).toBe(true)
+    expect(full).toBe(
+      `${command} & call "%ComSpec%" /d /c ^"echo ORCA_SETUP_DONE:native:unit:%^errorlevel%;^&exit /b %^errorlevel%^"`
+    )
+  })
+
+  it('applies the cmd argv size boundary to the composed command', () => {
+    // Isolate size from the current suffix's independent quote rejection.
+    const compose = vi.spyOn(setupCompletionSignal, 'appendNativeSetupCompletion')
+    try {
+      const command = 'cmd.exe /c plain.cmd'
+      for (const length of [6000, 6001]) {
+        const full = command.padEnd(length)
+        compose.mockReturnValueOnce(full)
+        const resolved = resolveWindowsShellLaunchArgs(
+          'cmd.exe',
+          'C:\\repo',
+          'C:\\repo',
+          undefined,
+          command,
+          undefined,
+          'native:unit'
+        )
+        expect(resolved.shellArgs).toEqual(
+          length === 6000 ? ['/K', `chcp 65001 > nul & ${full}`] : ['/K', 'chcp 65001 > nul']
+        )
+        expect(resolved.startupCommandDeliveredInShellArgs === true).toBe(length === 6000)
+      }
+    } finally {
+      compose.mockRestore()
+    }
   })
 
   it('keeps quoted cmd.exe startup commands on stdin delivery', () => {

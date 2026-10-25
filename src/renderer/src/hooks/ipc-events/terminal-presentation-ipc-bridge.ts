@@ -1,7 +1,7 @@
+import { registerTerminalTabMountIpcBridge } from './terminal-tab-mount-ipc-bridge'
+import { materializeWorkspaceInitialSurface } from '@/runtime/workspace-initial-surface-materialization'
 import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
 import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
@@ -48,9 +48,22 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         leafId,
         splitFromLeafId,
         splitDirection,
-        splitTelemetrySource
+        splitTelemetrySource,
+        initialWorkspaceTopology
       }) => {
         try {
+          const materializedTabId = materializeWorkspaceInitialSurface({
+            worktreeId,
+            initialWorkspaceTopology,
+            ptyId,
+            tabId,
+            leafId,
+            cwd,
+            targetGroupId,
+            shellOverride,
+            launchAgent,
+            viewMode
+          })
           const store = useAppStore.getState()
           const terminalPresentation = resolveTerminalPresentation({
             presentation,
@@ -96,7 +109,10 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             ownership.kind === 'owned'
               ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
               : undefined
-          let reusedTab = existingTab ?? splitTargetTab
+          let reusedTab =
+            existingTab ??
+            splitTargetTab ??
+            worktreeTabs.find((candidate) => candidate.id === materializedTabId)
           // Switch point: main wrote this tab before revealing it, so its frame may have drawn it
           // while stale records left the terminal's owner unclear; that tab is the one to show.
           const frameDrawnTab =
@@ -174,7 +190,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)
           }
           // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
-          if (title && !reusedTab) {
+          if (title && (!reusedTab || tab.id === materializedTabId)) {
             store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
           }
           if (leafId && ptyId) {
@@ -287,30 +303,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
     )
   )
 
-  // Why: background-mount a mobile-subscribed tab's PTY without navigating the desktop (STA-1840).
-  unsubs.push(
-    window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
-      if (!worktreeId) {
-        return
-      }
-      // Why: synthetic pty handles need persisted-tab resolution; a miss must not mount every saved tab in a hidden worktree.
-      const mount = planMobileTerminalTabMount(
-        useAppStore.getState(),
-        {
-          worktreeId,
-          ...(tabId ? { tabId } : {}),
-          ...(ptyId ? { ptyId } : {})
-        },
-        {
-          isTabMounted: (tabId, targetWorktreeId) =>
-            hasRegisteredRuntimeTerminalTab(tabId, targetWorktreeId)
-        }
-      )
-      if (mount) {
-        requestBackgroundTerminalWorktreeMount(mount)
-      }
-    })
-  )
+  registerTerminalTabMountIpcBridge(unsubs)
 
   // Why: CLI-driven terminal creation waits for the tabId reply so it can hand the caller a usable handle immediately.
 }

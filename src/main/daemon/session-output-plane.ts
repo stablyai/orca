@@ -178,14 +178,10 @@ export class SessionOutputPlane {
 
   /** Return query authority and any held partial query to the renderer. */
   releaseDeviceAttributesFilter(): void {
-    const pending = this.deviceAttributesQueryFilter?.release() ?? ''
+    const pending = this.deviceAttributesQueryFilter?.releaseEmission()
     this.deviceAttributesQueryFilter = null
-    if (pending.length === 0) {
-      return
-    }
-    this.record({ kind: 'output', data: pending })
-    for (const client of this.attachedClients) {
-      client.onData(pending, 0, true, this._outputSequence)
+    if (pending) {
+      this.broadcast(pending)
     }
   }
 
@@ -196,18 +192,20 @@ export class SessionOutputPlane {
     this._outputSequence += rawLength
     if (data.length > 0) {
       this.emulator.write(data)
-      data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }
-    if (data.length > 0) {
-      this.record({ kind: 'output', data })
+    const spans = this.deviceAttributesQueryFilter?.acceptEmission(emission) ?? [emission]
+    for (const span of spans) {
+      this.broadcast(span)
     }
+  }
 
+  private broadcast(span: PtyIngressEmission): void {
+    if (span.data.length > 0) {
+      this.record({ kind: 'output', data: span.data })
+    }
+    const rawLength = span.rawEndSeq - span.rawStartSeq
     for (const client of this.attachedClients) {
-      if (emission.transformed || rawLength !== data.length) {
-        client.onData(data, rawLength, true, this._outputSequence)
-      } else {
-        client.onData(data)
-      }
+      client.onData(span.data, rawLength, span.transformed, span.rawEndSeq)
     }
   }
 

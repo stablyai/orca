@@ -1,3 +1,7 @@
+import {
+  appendNativeSetupCompletion,
+  type NativeSetupCompletionShell
+} from '../runtime/orchestration/setup-completion-signal'
 /**
  * Writes a startup command into a local PTY once the shell reports readiness.
  */
@@ -10,6 +14,7 @@ const POST_SHELL_READY_STARTUP_COMMAND_FALLBACK_MS = 200
 
 export type ShellReadySignal = {
   postMarkerBytesObserved: boolean
+  nativeSetupShell?: NativeSetupCompletionShell
 }
 
 export function writeStartupCommandWhenShellReady(
@@ -18,9 +23,10 @@ export function writeStartupCommandWhenShellReady(
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
   // Why: only shells with bracketed-paste active (see isBracketedPasteSafeShell) accept the wrapper; others use the raw path so ESC[200~ isn't echoed.
-  options: { bracketedPasteSafe?: boolean } = {}
+  options: { bracketedPasteSafe?: boolean; nativeSetupToken?: string } = {}
 ): void {
   let sent = false
+  let nativeSetupShell: NativeSetupCompletionShell | undefined
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
   let postReadyDataDisposable: { dispose: () => void } | null = null
 
@@ -48,9 +54,12 @@ export function writeStartupCommandWhenShellReady(
     // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
     // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
     proc.write(
-      buildStartupCommandSubmission(startupCommand, {
-        bracketedPasteSafe: options.bracketedPasteSafe === true
-      })
+      buildStartupCommandSubmission(
+        appendNativeSetupCompletion(startupCommand, options.nativeSetupToken, nativeSetupShell),
+        {
+          bracketedPasteSafe: options.bracketedPasteSafe === true
+        }
+      )
     )
   }
 
@@ -59,6 +68,7 @@ export function writeStartupCommandWhenShellReady(
   }
 
   readyPromise.then((signal) => {
+    nativeSetupShell = signal?.nativeSetupShell
     if (sent) {
       return
     }

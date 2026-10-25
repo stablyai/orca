@@ -130,6 +130,7 @@ export async function createStructuredWorkerSession(args: {
         payloadFingerprint: ''
       },
       worktree: `id:${args.worktreeId}`,
+      atRest: true,
       agent: args.agent,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),

@@ -19249,7 +19249,7 @@
         "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
         "continuedOutside": "Continuado fuera de este chat.",
         "continuedOutsideRewound": "Continuado fuera de este chat. Las respuestas anteriores ya no están en el historial de esta conversación.",
-        "stoppedBeforeStart": "Detenido manualmente",
+        "stoppedBeforeStart": "Interrumpido",
         "dismiss": "Descartar",
         "copyError": "Copiar error",
         "orcaStopUpdate": "Orca en {{machine}} se reinició para actualizarse mientras esta respuesta estaba en curso.",

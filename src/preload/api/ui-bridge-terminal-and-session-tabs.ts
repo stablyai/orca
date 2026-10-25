@@ -23,6 +23,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeMobileSessionTabsResult,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -49,6 +50,7 @@ export const uiTerminalAndSessionTabsApi = {
       activate?: boolean
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
+      initialWorkspaceTopology?: RuntimeMobileSessionTabsResult
       surfaceOwner?: false
       agentLaunchViewer?: AgentLaunchTabViewerRule
       tabId?: string
@@ -79,6 +81,7 @@ export const uiTerminalAndSessionTabsApi = {
         activate?: boolean
         focus?: boolean
         presentation?: RuntimeTerminalPresentation
+        initialWorkspaceTopology?: RuntimeMobileSessionTabsResult
         surfaceOwner?: false
         agentLaunchViewer?: AgentLaunchTabViewerRule
         tabId?: string
