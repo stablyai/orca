@@ -10,6 +10,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import {
   makeTerminalScrollbackSnapshotRef,
   readTerminalScrollbackStoredBytesSync,
+  readTerminalScrollbackStoredSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
 import { compareKeys } from './orcad-source-key-order'
@@ -64,14 +65,13 @@ export function projectOrcadMigrationSessionScrollback(
       const bytes = buffer
         ? Buffer.from(buffer, 'utf8')
         : sourceRef
-          ? readTerminalScrollbackStoredBytesSync(sourceRef, storage)
-          : null
-      if (
-        !ref ||
-        !bytes ||
-        bytes.length === 0 ||
-        bytes.length > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-      ) {
+          ? readTerminalScrollbackStoredSnapshotSync(sourceRef, storage)
+          : 'absent'
+      if (bytes === 'absent') {
+        // Nothing was saved, so the pane moves with no history to lose.
+        continue
+      }
+      if (!ref || !bytes || bytes.length > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
         ;(leaveBehind ? leftBehindItems : blockedItems).push(
           `saved terminal history Orca could not read for tab ${tabId}`
         )
