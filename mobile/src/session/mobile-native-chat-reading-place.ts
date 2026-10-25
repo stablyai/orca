@@ -95,12 +95,13 @@ function firstRowEndingBelow(rows: readonly { node: Tagged }[], y: number): numb
   return low
 }
 
-export function mobileNativeChatRowWithin(
+// The nearest row wholly more than `distance` above the view; it ends at or above that line.
+export function mobileNativeChatRowAbove(
   scroller: MobileNativeChatScrollNode,
-  above: number
+  distance: number
 ): string | undefined {
   const rows = tagged(scroller, ROW)
-  return rows[firstRowEndingBelow(rows, scroller.getBoundingClientRect().top - above)]?.id
+  return rows[firstRowEndingBelow(rows, scroller.getBoundingClientRect().top - distance) - 1]?.id
 }
 
 export function mobileNativeChatReadingPlace(

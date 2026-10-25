@@ -23,7 +23,7 @@ import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   mobileNativeChatReadingDrift,
   mobileNativeChatReadingPlace,
-  mobileNativeChatRowWithin,
+  mobileNativeChatRowAbove,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
@@ -251,7 +251,8 @@ export function MobileNativeChatPageList({
         const next = Math.max(0, at - DRAW_BATCH)
         setDrawn({ scope: current.scope, firstKey: drawnKeys[next]!, count: total - next })
       } else if (screens > TRIM_SCREENS && isFollowing()) {
-        const kept = mobileNativeChatRowWithin(s, DRAW_AHEAD_SCREENS * s.clientHeight)
+        // Cut at a row wholly above the draw-ahead line so drawing never wants it back.
+        const kept = mobileNativeChatRowAbove(s, DRAW_AHEAD_SCREENS * s.clientHeight)
         const next = Math.min(rowAt.get(kept ?? '') ?? at, Math.max(0, total - FIRST_ROWS))
         if (next > at) {
           setDrawn({ scope: current.scope, firstKey: drawnKeys[next]!, count: total - next })

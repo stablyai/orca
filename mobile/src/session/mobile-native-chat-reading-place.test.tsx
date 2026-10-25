@@ -1,4 +1,4 @@
-import { createElement as h, useMemo, type ReactElement, type ReactNode } from 'react'
+import { createElement as h, Fragment, useMemo, type ReactElement, type ReactNode } from 'react'
 import {
   act,
   create,
@@ -235,6 +235,7 @@ function Chat(props: {
   live: boolean
   joined?: number
   runs?: boolean
+  status?: boolean
 }): ReactElement {
   const folded = useMemo(
     () => foldMobileNativeChatMessages(props.messages, 'claude'),
@@ -257,13 +258,22 @@ function Chat(props: {
     onEndDistance: () => {},
     renderItem: ({ item, index }) => {
       const { workRun, joinsWorkRun } = turns.resolveRow(index, item)
-      return h(Row, {
+      const row = h(Row, {
         message: item,
         rowKey: keys.keyOf(item),
         joined: item === folded.at(-1) ? props.joined : 0,
         workRun,
         joinsWorkRun
       })
+      // Turn status draws beside its row, untagged.
+      return props.status
+        ? h(
+            Fragment,
+            null,
+            row,
+            ...Array.from({ length: 5 }, (_, i) => h('span', { key: i }, 'Done'))
+          )
+        : row
     },
     layoutKey: 'layout',
     contentContainerStyle: null,
@@ -276,7 +286,10 @@ function Chat(props: {
 
 function mount(
   messages: NativeChatMessage[],
-  options: { following: boolean; live: boolean; runs?: boolean } = { following: false, live: false }
+  options: { following: boolean; live: boolean; runs?: boolean; status?: boolean } = {
+    following: false,
+    live: false
+  }
 ) {
   let renderer!: ReactTestRenderer
   act(() => {
@@ -425,10 +438,12 @@ it('opens a chat whose newest rows are short and older ones tall without drawing
 })
 
 it('draws a bounded tail again once a reader who scrolled back through history returns to it', () => {
-  const messages = Array.from({ length: 200 }, (_, i) =>
-    say(`m${i}`, i % 2 ? 'assistant' : 'user', `message ${i}`)
-  )
-  const options = { following: true, live: false }
+  // Rows and their status lines are sized so a cut that drops a row's status would draw it back.
+  const messages = Array.from({ length: 200 }, (_, i) => ({
+    ...say(`m${i}`, i % 2 ? 'assistant' : 'user', ''),
+    blocks: [0, 1].map((line) => ({ type: 'text' as const, text: `message ${i}.${line}` }))
+  }))
+  const options = { following: true, live: false, status: true }
   const chat0 = mount(messages, options)
   const tail = chat0.rows().length
   options.following = false
