@@ -1433,6 +1433,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Nenhum espaço de trabalho precisa de atenção"
+        },
         "sshManagedServer": {
           "refusedBlocked": "O Orca não conseguiu se configurar neste host SSH. Veja o motivo em Hosts SSH nas Configurações."
         }
