@@ -45,6 +45,7 @@ import {
 } from './pty-connection-test-environment'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
+/** Registers the reattach mode reset regression tests for the PTY connection layer. */
 export function registerPtyConnectionReattachModeResetTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
@@ -598,13 +599,20 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
-    // Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
-    // rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
-    const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
+    /**
+     * Returns the reattach reset for a snapshot payload, with optional connect metadata.
+     *
+     * Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
+     * rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+     */
+    const reattachSnapshotResetFor = async (
+      snapshot: string,
+      connect: { isAlternateScreen?: boolean } = {}
+    ): Promise<string | undefined> => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
-        sessionId ? { id: sessionId, snapshot } : null
+        sessionId ? { id: sessionId, snapshot, ...connect } : null
       )
       transportFactoryQueue.push(transport)
       setReattachPaneTitle('zsh')
@@ -633,6 +641,14 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('keeps mouse reporting when a reattach snapshot restores a live alternate-screen TUI', async () => {
       const reset = await reattachSnapshotResetFor(
         '\x1b[?1049h\x1b[?1002h\x1b[?1006hthird-party tui session'
+      )
+      expect(reset).toBe(replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE))
+    })
+
+    it('keeps mouse reporting when the replay enters the alternate screen but the snapshot flag says normal', async () => {
+      const reset = await reattachSnapshotResetFor(
+        '\x1b[?1049h\x1b[?1002h\x1b[?1006hthird-party tui session',
+        { isAlternateScreen: false }
       )
       expect(reset).toBe(replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE))
     })
