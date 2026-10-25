@@ -2,6 +2,7 @@ import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
+import { formatRemoteUpdateSupportLines } from './serve-manual-update-format'
 
 export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
 
@@ -139,7 +140,9 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`,
-    ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
+    ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`]),
+    ...(status.runtime.appVersion ? [`appVersion: ${status.runtime.appVersion}`] : []),
+    ...formatRemoteUpdateSupportLines(status.runtime.remoteUpdateSupport)
   ].join('\n')
 }
 

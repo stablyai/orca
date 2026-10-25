@@ -90,6 +90,7 @@ vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: () => null,
   isExternallyManagedLinuxInstall: () => false
 }))
+vi.mock('./serve-manual-update-report', () => ({ getServeManualUpdateReport: () => null }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({
@@ -754,6 +755,26 @@ describe('headless serve update install handoff', () => {
       expect.anything()
     )
   })
+
+  it.each(['unsupported-headless-serve', 'supervised-headless-serve'] as const)(
+    'reports %s before updater initialization without taking restart ownership',
+    async (mode) => {
+      const { getRemoteServerUpdateSupport, setUpdateInstallMode, checkForRemoteServerUpdate } =
+        await loadUpdaterModule()
+      setUpdateInstallMode(mode)
+      expect(getRemoteServerUpdateSupport()).toEqual({
+        installMode: mode,
+        automatic: false,
+        reason:
+          mode === 'unsupported-headless-serve'
+            ? 'manual-service-update-required'
+            : 'updater-unavailable'
+      })
+      expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
+      expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    }
+  )
 
   it('advertises remote update control only for safely restartable installs', async () => {
     const { checkForRemoteServerUpdate, getRemoteServerUpdateSupport, setupAutoUpdater } =

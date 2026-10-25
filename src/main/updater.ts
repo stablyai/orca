@@ -22,6 +22,10 @@ export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMod
   return updater.resolveUpdateInstallMode(isServeMode)
 }
 
+export function setUpdateInstallMode(mode: UpdateInstallMode): void {
+  updater.setUpdateInstallMode(mode)
+}
+
 export function getUpdateStatus(): UpdateStatus {
   return updater.getUpdateStatus()
 }

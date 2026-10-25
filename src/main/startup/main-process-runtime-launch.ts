@@ -44,7 +44,8 @@ import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
-import { resolveUpdateInstallMode } from '../updater'
+import { resolveUpdateInstallMode, setUpdateInstallMode } from '../updater'
+import { startServeManualUpdateReporting } from '../serve-manual-update-report'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
@@ -134,6 +135,8 @@ async function launchServeMode(
   runtimeRpc: OrcaRuntimeRpcServer,
   serveOptions: NonNullable<ReturnType<typeof getServeOptions>>
 ): Promise<void> {
+  const serveInstallMode = resolveUpdateInstallMode(true)
+  setUpdateInstallMode(serveInstallMode)
   // Why here: headless serve has no window to unblock, so keep the persisted proxy strictly
   // ahead of every fetcher this phase can reach (relay, CLI install, RPC clients).
   await state.initialProxyApplicationReady
@@ -196,8 +199,9 @@ async function launchServeMode(
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',
-    updateInstallMode: resolveUpdateInstallMode(true)
+    updateInstallMode: serveInstallMode
   })
+  void startServeManualUpdateReporting({ installMode: serveInstallMode })
 }
 
 async function launchDesktopMode(
