@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { fetchAntigravityRateLimits } from '../../../../main/rate-limits/antigravity-usage-fetcher'
+import { ANTIGRAVITY_LOCATION_REJECTION } from '../../../../main/rate-limits/antigravity-usage-location-rejection.test-fixtures'
 
 const i18nState = vi.hoisted(() => ({ language: 'en' }))
 
@@ -65,6 +67,48 @@ describe('unsubscribed OpenCode Go accounts', () => {
 
   it('keeps the specific message rather than the generic auth copy', () => {
     expect(getProviderUsageErrorMessage(noSubscription)).toBe(noSubscription.error)
+  })
+})
+
+describe('unavailable Antigravity usage', () => {
+  const locationRejection = {
+    provider: 'antigravity',
+    session: null,
+    weekly: null,
+    updatedAt: 0,
+    error:
+      'Antigravity usage is not available. The Antigravity CLI reports that Antigravity is not currently available in your location.',
+    status: 'unavailable',
+    usageMetadata: { failureKind: 'usage-unavailable' }
+  } as const
+
+  it('labels the captured rejection and preserves the specific CLI reason through the fetcher', async () => {
+    const result = await fetchAntigravityRateLimits({
+      resolveCommand: async () => '/test/agy',
+      resolveEnvironment: async () => ({}),
+      runCommand: async (spec) => ({
+        signal: null,
+        timedOut: false,
+        ...(spec.args?.[0] === '--version'
+          ? { code: 0, stdout: '1.4.7', stderr: '' }
+          : ANTIGRAVITY_LOCATION_REJECTION)
+      })
+    })
+    expect(getProviderUsageStatusLabel(result)).toBe('Usage unavailable')
+    expect(getProviderUsageErrorMessage(result)).toContain(
+      'The Antigravity CLI reports that Antigravity is not currently available in your location.'
+    )
+  })
+
+  it('keeps unknown Antigravity refresh failures distinct', () => {
+    expect(
+      getProviderUsageStatusLabel({
+        ...locationRejection,
+        status: 'error',
+        error: 'The Antigravity CLI did not report a quota (exit 1).',
+        usageMetadata: { failureKind: 'parse' }
+      })
+    ).toBe('Refresh failed')
   })
 })
 

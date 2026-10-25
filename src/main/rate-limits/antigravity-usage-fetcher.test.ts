@@ -5,6 +5,7 @@ import {
 } from './antigravity-usage-fetcher'
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+import { ANTIGRAVITY_LOCATION_REJECTION } from './antigravity-usage-location-rejection.test-fixtures'
 
 const { hostShellEnvironmentMock } = vi.hoisted(() => ({
   hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
@@ -199,6 +200,53 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
     expect(result.error).toContain('Sign in with `agy`')
+  })
+
+  it('reports the captured location rejection as unavailable without inventing a quota or sign-out', async () => {
+    const h = harness({ result: processResult(ANTIGRAVITY_LOCATION_REJECTION) })
+    const result = await h.fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toBe(
+      'Antigravity usage is not available. The Antigravity CLI reports that Antigravity is not currently available in your location.'
+    )
+    expect(result.session).toBeNull()
+    expect(result.weekly).toBeNull()
+    expect(result.buckets).toBeUndefined()
+    expect(h.runCommand).toHaveBeenCalledTimes(2)
+
+    h.runCommand.mockImplementation(async (spec: { args?: readonly string[] }) =>
+      processResult({ stdout: spec.args?.[0] === '--version' ? '1.4.7' : USAGE_ENVELOPE })
+    )
+    expect((await h.fetch()).status).toBe('ok')
+  })
+
+  it('does not expose arbitrary diagnostics alongside a recognized location rejection', async () => {
+    const result = await harness({
+      result: processResult({
+        ...ANTIGRAVITY_LOCATION_REJECTION,
+        stderr: `${ANTIGRAVITY_LOCATION_REJECTION.stderr}private diagnostic details`
+      })
+    }).fetch()
+
+    expect(result.error).toContain('not currently available in your location')
+    expect(result.error).not.toContain('private diagnostic details')
+    expect(result.error).not.toContain('conversation_id')
+  })
+
+  it('keeps an unknown eligibility rejection as a parse failure without exposing its payload', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: '{"status":"ERROR","error":"Eligibility check failed: private unknown reason"}'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toContain('did not report a quota (exit 1)')
+    expect(result.error).not.toContain('private unknown reason')
   })
 
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
@@ -444,24 +492,30 @@ describe('quota read safety and diagnostic precedence', () => {
     expect(h.runCommand).toHaveBeenCalledTimes(1)
   })
 
-  it('accepts a quota reading ahead of unrelated auth diagnostics', async () => {
-    const result = await harness({
-      result: processResult({
-        stdout: USAGE_ENVELOPE,
-        stderr: 'Not authenticated. Run agy login.'
-      })
-    }).fetch()
-    expect(result.status).toBe('ok')
-  })
+  it.each(['Not authenticated. Run agy login.', ANTIGRAVITY_LOCATION_REJECTION.stderr])(
+    'accepts a quota reading ahead of unrelated diagnostics: %s',
+    async (stderr) => {
+      const result = await harness({
+        result: processResult({
+          stdout: USAGE_ENVELOPE,
+          stderr
+        })
+      }).fetch()
+      expect(result.status).toBe('ok')
+    }
+  )
 
-  it('latches a model turn ahead of authentication guidance', async () => {
-    const h = harness({
-      result: processResult({ stdout: MODEL_TURN_ENVELOPE, stderr: 'not logged into antigravity' })
-    })
-    expect((await h.fetch()).error).toContain('answers `/usage` as a prompt')
-    await h.fetch()
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-  })
+  it.each(['not logged into antigravity', ANTIGRAVITY_LOCATION_REJECTION.stderr])(
+    'latches a model turn ahead of failure guidance: %s',
+    async (stderr) => {
+      const h = harness({
+        result: processResult({ stdout: MODEL_TURN_ENVELOPE, stderr })
+      })
+      expect((await h.fetch()).error).toContain('answers `/usage` as a prompt')
+      await h.fetch()
+      expect(h.runCommand).toHaveBeenCalledTimes(2)
+    }
+  )
 
   it('prefers a structured quota failure over conflicting sign-in wording', async () => {
     const result = await harness({

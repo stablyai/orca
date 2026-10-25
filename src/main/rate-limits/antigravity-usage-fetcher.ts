@@ -216,6 +216,13 @@ export async function fetchAntigravityRateLimits(
   }
   if (!reading) {
     const failure = classifyAntigravityUsageFailure(`${result.stdout}\n${result.stderr}`)
+    if (failure?.reason === 'location-unavailable') {
+      return unavailable(
+        'Antigravity usage is not available. The Antigravity CLI reports that Antigravity is not currently available in your location.',
+        failure.failureKind,
+        now()
+      )
+    }
     if (failure?.signedOut) {
       return unavailable(
         'Antigravity usage is not available. Sign in with `agy` to report this account’s quota.',

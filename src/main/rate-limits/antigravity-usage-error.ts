@@ -1,6 +1,8 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 
 const AGY_ERROR_PREFIX = 'AGY_ERROR:'
+const LOCATION_REJECTION =
+  'eligibility check failed: your current account is not eligible for antigravity, because it is not currently available in your location.'
 
 const SIGNED_OUT_PHRASES = [
   'not logged into antigravity',
@@ -21,6 +23,7 @@ export type AntigravityUsageFailure = {
   failureKind: UsageRateLimitFailureKind
   /** Missing authentication requires sign-in guidance. */
   signedOut: boolean
+  reason?: 'location-unavailable'
 }
 
 type StructuredAgyError = { status?: unknown; error_code?: unknown }
@@ -76,6 +79,13 @@ export function classifyAntigravityUsageFailure(output: string): AntigravityUsag
     }
   }
   const lowered = output.toLowerCase()
+  if (lowered.includes(LOCATION_REJECTION)) {
+    return {
+      failureKind: 'usage-unavailable',
+      signedOut: false,
+      reason: 'location-unavailable'
+    }
+  }
   if (SIGNED_OUT_PHRASES.some((phrase) => lowered.includes(phrase))) {
     return { failureKind: 'missing-credentials', signedOut: true }
   }

@@ -106,6 +106,13 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (p.usageMetadata?.unverifiableOwner) {
     return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
   }
+  if (
+    p.provider === 'antigravity' &&
+    p.status === 'unavailable' &&
+    p.usageMetadata?.failureKind === 'usage-unavailable'
+  ) {
+    return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
+  }
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
     return translate('auto.components.status.bar.tooltip.e2c6a4f917', 'Run Grok to refresh')
