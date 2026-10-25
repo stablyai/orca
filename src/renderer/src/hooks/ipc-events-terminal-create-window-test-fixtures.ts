@@ -11,15 +11,13 @@ export function buildTerminalCreateWindow(args: {
   createTerminalListenerRef: ListenerRef
   requestTerminalCreateListenerRef: ListenerRef
   focusTerminalListenerRef: ListenerRef
-  newTerminalTabListenerRef: ListenerRef
 }): Record<string, unknown> {
   const {
     dispatchEvent,
     replyTerminalCreate,
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,
-    focusTerminalListenerRef,
-    newTerminalTabListenerRef
+    focusTerminalListenerRef
   } = args
   return {
     dispatchEvent,
@@ -125,8 +123,6 @@ export function buildTerminalCreateWindow(args: {
         onCloseTerminal: () => () => {},
         onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
-        onNewBrowserTab: () => () => {},
-        onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
         onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
@@ -134,17 +130,11 @@ export function buildTerminalCreateWindow(args: {
         replyTabClose: vi.fn(),
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},
-        onNewTerminalTab: (listener: () => void) => {
-          newTerminalTabListenerRef.current = listener
-          return () => {}
-        },
         onCloseActiveTab: () => () => {},
         onCloseFloatingItem: () => () => {},
         onSelectFloatingIndex: () => () => {},
-        onSwitchTab: () => () => {},
-        onSwitchTabAcrossAllTypes: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
         onSwitchRecentTab: () => () => {},
-        onSwitchTerminalTab: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},

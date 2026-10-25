@@ -183,8 +183,6 @@ describe('useIpcEvents browser tab create routing', () => {
           onCloseTerminal: () => () => {},
           onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
-          onNewBrowserTab: () => () => {},
-          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: (
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
@@ -197,14 +195,11 @@ describe('useIpcEvents browser tab create routing', () => {
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},
-          onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onCloseFloatingItem: () => () => {},
           onSelectFloatingIndex: () => () => {},
-          onSwitchTab: () => () => {},
-          onSwitchTabAcrossAllTypes: () => () => {},
+          onBrowserPageTabShortcut: () => () => {},
           onSwitchRecentTab: () => () => {},
-          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},

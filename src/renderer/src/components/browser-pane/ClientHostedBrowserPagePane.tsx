@@ -32,7 +32,6 @@ import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
-import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
@@ -95,7 +94,7 @@ export function ClientHostedBrowserPagePane({
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
-  const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
+  const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     ...shortcutOwner,
     addressBarInputRef,
     guestFocus
@@ -280,8 +279,6 @@ export function ClientHostedBrowserPagePane({
     runtimeEnvironmentId,
     setAddressBarValueFromPage
   ])
-
-  useClientHostedGuestActivationFocus({ isActive, guestFocus, keepAddressBarFocusRef })
 
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({

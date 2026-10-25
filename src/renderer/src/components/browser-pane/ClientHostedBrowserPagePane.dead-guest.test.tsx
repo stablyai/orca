@@ -74,6 +74,8 @@ function createGuest(): Electron.WebviewTag & {
     reload: ReturnType<typeof vi.fn>
   }
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => 'https://example.internal/'),
     getTitle: vi.fn(() => 'Example'),
     isLoading: vi.fn(() => false),

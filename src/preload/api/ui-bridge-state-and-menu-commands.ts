@@ -138,21 +138,6 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:worktreeHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:worktreeHistoryNavigate', listener)
   },
-  onNewBrowserTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newBrowserTab', listener)
-    return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
-  },
-  onNewMarkdownTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newMarkdownTab', listener)
-    return () => ipcRenderer.removeListener('ui:newMarkdownTab', listener)
-  },
-  onNewSimulatorTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newSimulatorTab', listener)
-    return () => ipcRenderer.removeListener('ui:newSimulatorTab', listener)
-  },
   onRequestTabCreate: (
     callback: (data: {
       requestId: string

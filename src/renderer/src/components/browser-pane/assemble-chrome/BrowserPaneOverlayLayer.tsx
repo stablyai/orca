@@ -1,7 +1,8 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
+import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
@@ -173,6 +174,26 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }
     return entries
   }, [groupActiveTabById, unifiedTabs])
+
+  // Why: a click into a page is a press in another WebContents; the slot's own pointer and focus
+  // handlers never see it, so its split stayed inactive (#22144). Main reports the press instead.
+  useEffect(() => {
+    if (!isWorktreeActive) {
+      return
+    }
+    return window.api.ui.onBrowserPagePointerDown(({ browserPageId }) => {
+      const state = useAppStore.getState()
+      const owner = resolveBrowserWorkspaceOwner(state, browserPageId, worktreeId)
+      const groupId = owner
+        ? state.unifiedTabsByWorktree[worktreeId]?.find(
+            (tab) => tab.contentType === 'browser' && tab.entityId === owner.workspaceId
+          )?.groupId
+        : undefined
+      if (groupId) {
+        focusOwningGroup(groupId)
+      }
+    })
+  }, [focusOwningGroup, isWorktreeActive, worktreeId])
 
   return (
     <>
