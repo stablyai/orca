@@ -19565,6 +19565,10 @@
           "editors": "Fermer tous les onglets de l’éditeur ?",
           "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
           "confirm": "Fermer les onglets"
+        },
+        "chatRename": {
+          "empty": "Le nom du chat ne peut pas être vide",
+          "failed": "Impossible de renommer ce chat"
         }
       }
     },

@@ -258,9 +258,20 @@ export type AgentSessionStatusSummary = {
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = { message: string; failedAt: number }
 
+export type AgentSessionConversationName = {
+  sessionId: string
+  conversationName: string | null
+  namingError?: AgentSessionNamingError
+}
+
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[]; namingActiveSessionIds?: string[] }
+  | {
+      type: 'snapshot'
+      sessions: AgentSessionStatusSummary[]
+      namingActiveSessionIds?: string[]
+      conversationNames?: AgentSessionConversationName[]
+    }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 

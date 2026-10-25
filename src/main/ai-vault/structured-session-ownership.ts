@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
-import { historyRowShowsChatName } from '../../shared/structured-chat-row-name'
+import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -105,12 +105,10 @@ function ownedRow(rowAgent: string, ownership: StructuredProviderSessionOwnershi
     sessionId: ownership.sessionId,
     workspaceId: ownership.workspaceId
   }
-  return historyRowShowsChatName(rowAgent)
-    ? {
-        title: ownership.conversationName ?? defaultAgentChatLabel(ownership.provider),
-        structuredSession
-      }
-    : { structuredSession }
+  const title =
+    ownership.conversationName ??
+    (historyRowFallsBackToChatLabel(rowAgent) ? defaultAgentChatLabel(ownership.provider) : null)
+  return title === null ? { structuredSession } : { title, structuredSession }
 }
 
 // Build one lookup per projection to avoid scanning all chat records for every row.

@@ -10,6 +10,9 @@ export function foldAgentSessionStatusEvent(
   event: AgentSessionStatusEvent
 ): AgentSessionStatusSnapshot {
   if (event.type === 'snapshot') {
+    if (event.sessions.length === 0) {
+      return snapshot
+    }
     const next = new Map(snapshot)
     for (const session of event.sessions) {
       next.set(session.sessionId, session)
@@ -52,4 +55,74 @@ export function revokeAgentSessionStatusLive(
     })
   }
   return next ?? snapshot
+}
+
+/** A provider head is a query dependency, never a client-side ownership index. */
+export class AgentSessionAssociationObservation {
+  private readonly associations = new Map<string, string>()
+  private confirmed = false
+  revision = 0
+
+  renew(): void {
+    this.confirmed = false
+  }
+
+  observe(frame: unknown): boolean {
+    if (typeof frame !== 'object' || frame === null || !('type' in frame)) {
+      return false
+    }
+    let included: unknown[]
+    if (frame.type === 'snapshot' && 'sessions' in frame && Array.isArray(frame.sessions)) {
+      if ('namingActiveSessionIds' in frame) {
+        return false
+      }
+      included = frame.sessions
+    } else if (frame.type === 'status' && 'session' in frame) {
+      included = [frame.session]
+    } else {
+      return false
+    }
+    let changed = frame.type === 'snapshot' && !this.confirmed
+    for (const summary of included) {
+      if (
+        typeof summary !== 'object' ||
+        summary === null ||
+        !('sessionId' in summary) ||
+        typeof summary.sessionId !== 'string' ||
+        !('agent' in summary) ||
+        typeof summary.agent !== 'string' ||
+        !('workspaceId' in summary) ||
+        typeof summary.workspaceId !== 'string'
+      ) {
+        continue
+      }
+      const provider = 'providerSession' in summary ? summary.providerSession : undefined
+      if (
+        provider !== undefined &&
+        (typeof provider !== 'object' ||
+          provider === null ||
+          !('key' in provider) ||
+          typeof provider.key !== 'string' ||
+          !('id' in provider) ||
+          typeof provider.id !== 'string')
+      ) {
+        continue
+      }
+      const tuple = JSON.stringify([
+        summary.agent,
+        summary.workspaceId,
+        provider?.key,
+        provider?.id
+      ])
+      changed ||= this.associations.get(summary.sessionId) !== tuple
+      this.associations.set(summary.sessionId, tuple)
+    }
+    if (frame.type === 'snapshot') {
+      this.confirmed = true
+    }
+    if (changed) {
+      this.revision += 1
+    }
+    return changed
+  }
 }

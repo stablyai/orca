@@ -19,6 +19,7 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
@@ -218,6 +219,16 @@ export function supportsStructuredAgentSessionRegenerateName(
   return structuredAgentSessionHostSupports(
     target,
     STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the owning host saves a chat's rename; an unproven host keeps it on the tab. */
+export function supportsStructuredAgentSessionRename(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
   )
 }
 

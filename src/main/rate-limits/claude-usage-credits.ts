@@ -1,4 +1,6 @@
-import type { ExtraUsageBalance } from '../../shared/rate-limit-types'
+import type { ExtraUsageBalance, RateLimitWindow } from '../../shared/rate-limit-types'
+
+const MONTHLY_WINDOW_MINUTES = 43_200
 
 // Minor units use the reported exponent: 200000 at exponent 2 is 2000 currency units.
 type OAuthMoney = {
@@ -53,6 +55,35 @@ export function mapClaudeExtraUsage(data: {
   return mapSpend(data.spend) ?? mapLegacyExtraUsage(data.extra_usage)
 }
 
+// Why: Enterprise seats have no 5h/7d windows; their monthly spend cap is the only limit that binds.
+// Falls back to legacy `extra_usage` when `spend` carries only a balance.
+export function mapClaudeSpendLimitWindow(data: {
+  spend?: ClaudeOAuthSpend
+  extra_usage?: ClaudeOAuthExtraUsage
+}): RateLimitWindow | null {
+  return (
+    toSpendLimitWindow(mapSpend(data.spend)) ??
+    toSpendLimitWindow(mapLegacyExtraUsage(data.extra_usage))
+  )
+}
+
+function toSpendLimitWindow(extraUsage: ExtraUsageBalance | null): RateLimitWindow | null {
+  if (
+    extraUsage?.unit !== 'currency' ||
+    extraUsage.spentPercent === null ||
+    extraUsage.spendLimit === null ||
+    extraUsage.spendLimit <= 0
+  ) {
+    return null
+  }
+  return {
+    usedPercent: extraUsage.spentPercent,
+    windowMinutes: MONTHLY_WINDOW_MINUTES,
+    resetsAt: extraUsage.resetsAt,
+    resetDescription: null
+  }
+}
+
 function mapSpend(spend: ClaudeOAuthSpend | undefined): ExtraUsageBalance | null {
   if (!spend) {
     return null
@@ -104,11 +135,12 @@ function mapLegacyExtraUsage(extra: ClaudeOAuthExtraUsage | undefined): ExtraUsa
     amount_minor: extra.used_credits ?? undefined,
     exponent: extra.decimal_places
   })
+  // Why amounts first: `utilization` has been seen as a 0–1 fraction as well as a percentage.
   const spentPercent =
-    typeof extra.utilization === 'number' && Number.isFinite(extra.utilization)
-      ? clampPercent(extra.utilization)
-      : spendLimit > 0 && spent !== null
-        ? clampPercent((spent / spendLimit) * 100)
+    spendLimit > 0 && spent !== null
+      ? clampPercent((spent / spendLimit) * 100)
+      : typeof extra.utilization === 'number' && Number.isFinite(extra.utilization)
+        ? clampPercent(extra.utilization)
         : null
   return {
     balance: null,

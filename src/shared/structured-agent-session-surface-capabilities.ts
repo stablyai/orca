@@ -15,6 +15,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY =
 // Offer Regenerate name only to hosts implementing agentSession.regenerateName.
 export const STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY =
   'agent-session.structured.regenerate-name.v1' as const
+// Save names only on rename-capable hosts; older hosts retain the local tab alias.
+export const STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY =
+  'agent-session.structured.rename.v1' as const
 // Negotiate resumeFrom before sending: old strict create schemas reject it, while unproven acceptance could silently start a blank chat.
 export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
   'agent-session.structured.resume-history.v1' as const
@@ -44,5 +47,6 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY
+  STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
 ] as const

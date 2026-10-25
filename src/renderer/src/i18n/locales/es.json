@@ -19425,6 +19425,10 @@
           "editors": "¿Cerrar todas las pestañas del editor?",
           "description": "Se cerrarán las pestañas seleccionadas. Las pestañas fijadas permanecerán abiertas.",
           "confirm": "Cerrar pestañas"
+        },
+        "chatRename": {
+          "empty": "El nombre del chat no puede estar vacío",
+          "failed": "No se pudo cambiar el nombre de este chat"
         }
       }
     },

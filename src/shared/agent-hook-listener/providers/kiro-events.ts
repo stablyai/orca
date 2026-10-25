@@ -19,12 +19,18 @@ export function normalizeKiroEvent(
     case 'userPromptSubmit':
     case 'preToolUse':
     case 'postToolUse':
+    case 'UserPromptSubmit':
+    case 'PreToolUse':
+    case 'PostToolUse':
       stateName = 'working'
       break
     case 'agentSpawn':
     case 'stop':
+    case 'Stop':
+    case 'SessionEnd':
       stateName = 'done'
       break
+    // V3 fires SessionStart lazily, just before the first prompt; done would flash idle mid-turn.
     default:
       return null
   }
