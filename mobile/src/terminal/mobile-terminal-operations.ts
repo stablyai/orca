@@ -6,6 +6,12 @@ import {
   terminalViewportUpdatedSchema,
   terminalWriteUnreadReplySchema
 } from './terminal-reply-schema'
+import {
+  terminalDraftBeginSchema,
+  terminalDraftReleaseSchema,
+  terminalDraftSaveSchema,
+  terminalDraftSubmitSchema
+} from './terminal-draft-reply-schema'
 
 // Terminal input, the in-place viewport update and the buffer clear. The `subscribe` and
 // `sendUnsubscribe` ports these files also reach are a separate boundary and are untouched.
@@ -92,5 +98,49 @@ export const terminalBufferClear = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
+  })
+)
+
+/**
+ * Terminal draft editing. A host that predates these methods refuses the method, which the object
+ * policy reads as null: the caller keeps its local text and the old direct-input path stays usable.
+ */
+export const terminalDraftBegin = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.draft-begin',
+    method: 'terminal.draft.begin',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-draft-begin', terminalDraftBeginSchema)
+  })
+)
+
+export const terminalDraftSave = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.draft-save',
+    method: 'terminal.draft.save',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-draft-save', terminalDraftSaveSchema)
+  })
+)
+
+export const terminalDraftSubmit = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.draft-submit',
+    method: 'terminal.draft.submit',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-draft-submit', terminalDraftSubmitSchema)
+  })
+)
+
+export const terminalDraftRelease = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.draft-release',
+    method: 'terminal.draft.release',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-draft-release', terminalDraftReleaseSchema)
   })
 )

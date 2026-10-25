@@ -3,6 +3,7 @@ import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
+import { disposeTerminalDraftState } from '../../../runtime/terminal/draft/terminal-draft-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { clearMigrationUnsupportedPty } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
@@ -39,6 +40,7 @@ export function clearProviderPtyState(
   // Release agent overlay/hook state even on teardown paths outside the local process table.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  disposeTerminalDraftState(id)
   ptySizes.delete(id)
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)

@@ -151,6 +151,15 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
+  inputBarMultiline: {
+    alignItems: 'flex-end'
+  },
+  textInputMultiline: {
+    minHeight: 72,
+    height: 'auto',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm
+  },
   textInput: {
     flex: 1,
     height: 34,
@@ -165,6 +174,52 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   liveInputBar: {
     gap: spacing.sm
+  },
+  remoteDraftBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 1
+  },
+  remoteDraftLabel: {
+    flexShrink: 1,
+    color: colors.textSecondary,
+    fontSize: 11
+  },
+  remoteDraftHint: {
+    marginLeft: 'auto',
+    color: colors.textMuted,
+    fontSize: 10
+  },
+  remoteDraftActions: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  remoteDraftAction: {
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2
+  },
+  remoteDraftActionText: {
+    color: colors.textSecondary,
+    fontSize: 10
+  },
+  remoteDraftButton: {
+    backgroundColor: colors.bgRaised,
+    width: 34,
+    height: 34,
+    borderRadius: radii.input,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs
   },
 
   liveInputFocusTarget: {

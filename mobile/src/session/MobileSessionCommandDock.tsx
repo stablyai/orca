@@ -17,6 +17,7 @@ import {
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { MobileRemoteDraftBar, MobileRemoteDraftFetchActions } from './MobileRemoteDraftControls'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
@@ -28,6 +29,15 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const {
     insets,
     bufferedTerminalDraftState,
+    remoteDraftSession,
+    remoteDraftConflict,
+    remoteDraftUncertain,
+    loadRemoteDraft,
+    saveRemoteDraft,
+    exitRemoteDraft,
+    reloadConflict,
+    reloadUncertainDraft,
+    keepConflictMine,
     autocompleteEnabled,
     liveInputCapture,
     activeHandle,
@@ -81,9 +91,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        {/* Accessory keys */}
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
-          {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
             <Pressable
               style={({ pressed }) => [
@@ -107,7 +115,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               </View>
             </Pressable>
           )}
-          {/* Why: default tap handling makes the first accessory-key tap dismiss the keyboard and get swallowed (#5106). */}
           <ScrollView
             style={styles.accessoryScroll}
             horizontal
@@ -257,7 +264,15 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </ScrollView>
         </View>
 
-        {/* Input bar */}
+        <MobileRemoteDraftBar
+          editing={Boolean(remoteDraftSession)}
+          changed={Boolean(remoteDraftConflict)}
+          uncertain={remoteDraftUncertain}
+          onReload={remoteDraftUncertain ? reloadUncertainDraft : reloadConflict}
+          onKeepMine={keepConflictMine}
+          onExit={exitRemoteDraft}
+        />
+
         {liveInputEnabled ? (
           <View style={[styles.inputBar, styles.liveInputBar]}>
             <Pressable
@@ -308,7 +323,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoCorrect={false}
               spellCheck={false}
               smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
               autoComplete="off"
               keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
               returnKeyType="default"
@@ -318,10 +332,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             />
           </View>
         ) : (
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, remoteDraftSession && styles.inputBarMultiline]}>
             <TextInput
               ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
               key={
                 hostOs() === 'android'
                   ? autocompleteEnabled
@@ -329,8 +342,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                     : 'cmd-input-ac-off'
                   : 'cmd-input'
               }
-              style={styles.textInput}
+              style={[styles.textInput, remoteDraftSession && styles.textInputMultiline]}
               value={bufferedTerminalDraftState.input}
+              multiline={Boolean(remoteDraftSession)}
+              textAlignVertical={remoteDraftSession ? 'top' : 'center'}
               // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
               onChangeText={bufferedTerminalDraftState.setInput}
               placeholder="Type a command…"
@@ -339,14 +354,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoCorrect={autocompleteEnabled}
               spellCheck={autocompleteEnabled}
               smartInsertDelete={false}
-              // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
               autoComplete="off"
               keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
-              returnKeyType="send"
+              returnKeyType={remoteDraftSession ? 'default' : 'send'}
               blurOnSubmit={false}
-              // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
+              // Why: in draft mode Return must insert a newline; the arrow is the only submit.
+              onSubmitEditing={remoteDraftSession ? undefined : () => void handleSend()}
             />
             <MobileTerminalInputActions
               canSend={canSend}
@@ -363,6 +377,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onDictationPressIn={handleDictationPressIn}
               onDictationPressOut={handleDictationPressOut}
               onDictationCancel={cancelDictation}
+            />
+            <MobileRemoteDraftFetchActions
+              canSend={canSend}
+              editing={Boolean(remoteDraftSession)}
+              onLoad={loadRemoteDraft}
+              onSave={() => void saveRemoteDraft()}
             />
             <Pressable
               style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
