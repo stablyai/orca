@@ -3196,6 +3196,7 @@
         "workflow": "Background workflow"
       },
       "composer": {
+        "defaultModel": "Default",
         "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent.",
         "placeholder": "Ask anything, @ to mention files, / for commands"
@@ -3312,6 +3313,7 @@
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
+        "orchestrationMail": "Orchestration mail",
         "plan": "Plan"
       },
       "question": {

@@ -600,7 +600,8 @@
         "orcaStopCrash": "Во время ответа Orca на {{machine}} неожиданно завершилась.",
         "orcaStopRemote": "Во время ответа Orca на {{machine}} остановилась.",
         "orcaStopCanContinue": "Вы можете продолжить этот разговор.",
-        "orcaStopUnnamedServer": "удалённом сервере"
+        "orcaStopUnnamedServer": "удалённом сервере",
+        "orchestrationMail": "Служебные сообщения агентов"
       },
       "composer": {
         "imageUnsupported": "Этот агент не поддерживает вставку изображений.",
@@ -715,7 +716,8 @@
           "medium": "Сред.",
           "xhigh": "Очень выс."
         },
-        "imageUnavailable": "Предпросмотр недоступен"
+        "imageUnavailable": "Предпросмотр недоступен",
+        "defaultModel": "По умолчанию"
       },
       "tool": {
         "exitCode": "код {{value0}}",

@@ -19141,7 +19141,8 @@
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
-        "orcaStopUnnamedServer": "the remote server"
+        "orcaStopUnnamedServer": "the remote server",
+        "orchestrationMail": "Orchestration mail"
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
@@ -19256,7 +19257,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "defaultModel": "Default"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
