@@ -302,4 +302,16 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   }
 }
 
+// The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
+export function sessionRowRootDirs(
+  agent: AiVaultDeletableAgent,
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[]
+): string[] {
+  const roots = AI_VAULT_AGENT_SOURCES[agent].rootDirs(options, wslHomeDirs)
+  return agent === 'omp'
+    ? [...roots, ...AI_VAULT_AGENT_SOURCES.pi.rootDirs(options, wslHomeDirs)]
+    : roots
+}
+
 export { isDiscoverableSessionFile } from './session-file-discovery'
