@@ -22,7 +22,7 @@ import {
   retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
-import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
+import { structuredStatusChildWorkFields } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
@@ -244,16 +244,7 @@ export class StructuredAgentSessionStatusFeed {
     sessionId: string,
     provider: StatusFeedSession['params']['provider']
   ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
-    }
+    return structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
   }
 
   /** Publish evidence then refold parent/summary; sink failure must not block other publications. */

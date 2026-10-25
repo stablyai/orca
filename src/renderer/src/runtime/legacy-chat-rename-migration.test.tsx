@@ -41,7 +41,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
 import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
-import { readStructuredAgentLaunchRecord } from '@/lib/structured-agent-session-launch-persistence'
+import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 
 const mock = vi.hoisted(() => ({
   rpc: vi.fn(),
