@@ -1,4 +1,8 @@
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type MessageRow, type OrchestrationDb } from './db'
+import type { MessageType } from './types'
+
+// Liveness is recorded on the dispatch and read via worker-list; a heartbeat never needs a reader's turn.
+const NEVER_POINTED_TYPES: readonly MessageType[] = ['heartbeat']
 
 export type OrchestrationMessageWaiter = { typeFilter: string[] | undefined }
 
@@ -36,7 +40,7 @@ export function selectOrchestrationPointerBatch(input: {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return []
   }
-  const excludedTypes = new Set(input.reservedTypes)
+  const excludedTypes = new Set<string>([...(input.reservedTypes ?? []), ...NEVER_POINTED_TYPES])
   for (const waiter of input.waiters ?? []) {
     for (const type of waiter.typeFilter ?? []) {
       excludedTypes.add(type)
