@@ -11,6 +11,7 @@ export function revealCreatedTerminal(args: {
   cwd: string
   launchOpts: dependencies.TerminalCreateOptions
   effectiveLaunchConfig: dependencies.TerminalCreateOptions['launchConfig']
+  freshAgentLaunch?: boolean
   launchToken: string | undefined
   presentation: RuntimeTerminalPresentation | undefined
   opts: dependencies.TerminalCreateOptions
@@ -27,6 +28,7 @@ export function revealCreatedTerminal(args: {
     cwd,
     launchOpts,
     effectiveLaunchConfig,
+    freshAgentLaunch,
     launchToken,
     presentation,
     opts,
@@ -39,6 +41,7 @@ export function revealCreatedTerminal(args: {
       try {
         await reveal(workspace.id, {
           ptyId,
+          ...(freshAgentLaunch ? { freshAgentLaunch: true } : {}),
           title: launchOpts.title ?? null,
           ...(cwd !== workspace.path ? { cwd } : {}),
           ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),

@@ -276,6 +276,11 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           cwd: savedStartupCwd,
           launchOpts,
           effectiveLaunchConfig,
+          freshAgentLaunch:
+            !adoptedStablePane &&
+            result.agentSessionEnsure?.disposition !== 'adopted' &&
+            Boolean(launchOpts.launchAgent || effectiveLaunchConfig) &&
+            !launchOpts.resumeProviderSession,
           launchToken,
           presentation,
           opts,

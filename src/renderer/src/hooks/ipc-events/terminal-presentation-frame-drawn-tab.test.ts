@@ -81,7 +81,7 @@ function setup(frameDrewTab = true) {
       : {})
   })
   registerTerminalPresentationIpcBridge([])
-  const reveal = () =>
+  const reveal = (overrides: Record<string, unknown> = {}) =>
     listeners.get('onCreateTerminal')?.({
       requestId: 'request-1',
       worktreeId: WORKTREE,
@@ -89,7 +89,8 @@ function setup(frameDrewTab = true) {
       tabId: TAB,
       leafId: LEAF,
       title: 'Build',
-      presentation: 'background'
+      presentation: 'background',
+      ...overrides
     })
   return { store, reveal, replyTerminalCreate }
 }
@@ -154,5 +155,71 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
     expect(replyTerminalCreate).toHaveBeenCalledWith(
       expect.objectContaining({ requestId: 'request-1', tabId: TAB })
     )
+  })
+})
+
+describe('startup commands on a restored pane', () => {
+  const paneKey = `${TAB}:${LEAF}`
+  const providerSession = { key: 'session_id' as const, id: 'saved-session' }
+
+  function setupRestoredPane() {
+    const context = setup()
+    context.store.getState().rememberSleepingAgentSession({
+      paneKey,
+      tabId: TAB,
+      worktreeId: WORKTREE,
+      agent: 'codex',
+      providerSession,
+      prompt: 'Saved conversation',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'quit'
+    })
+    return context
+  }
+
+  it.each([
+    { label: 'fresh command', payload: { command: 'codex' }, expected: undefined },
+    {
+      label: 'runtime fresh launch',
+      payload: { freshAgentLaunch: true, launchAgent: 'codex' },
+      expected: undefined
+    },
+    {
+      label: 'explicit resume',
+      payload: { command: 'codex resume saved-session', resumeProviderSession: providerSession },
+      expected: providerSession
+    },
+    { label: 'existing terminal reveal', payload: {}, expected: providerSession },
+    {
+      label: 'existing agent reveal',
+      payload: { launchAgent: 'codex', launchToken: 'existing-launch' },
+      expected: providerSession
+    }
+  ])('uses the correct conversation after $label', ({ payload, expected }) => {
+    const { store, reveal, replyTerminalCreate } = setupRestoredPane()
+    reveal(payload)
+    expect(replyTerminalCreate.mock.calls[0]?.[0]).not.toHaveProperty('error')
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'done',
+        prompt: '',
+        agentType: 'codex',
+        observation: {
+          origin: 'osc',
+          kind: 'snapshot',
+          authorityId: 'renderer',
+          incarnation: 0,
+          revision: 1,
+          observedAt: 1
+        }
+      },
+      'Codex',
+      undefined,
+      { tabId: TAB, worktreeId: WORKTREE }
+    )
+    expect(store.getState().agentStatusByPaneKey[paneKey]?.providerSession).toEqual(expected)
   })
 })

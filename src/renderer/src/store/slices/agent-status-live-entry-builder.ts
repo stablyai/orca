@@ -31,6 +31,7 @@ import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
+  providerSessionForResumeSnapshot,
   recordLaunchConfigForStatus,
   statusRetainsResumableIdentity
 } from '../../../../shared/agent-resume-record-from-status'
@@ -163,7 +164,16 @@ export function buildAgentStatusLiveEntry(
   })
   const providerSession =
     metadata?.providerSession ??
-    (canReuseExistingProviderSession ? existing.providerSession : undefined)
+    (canReuseExistingProviderSession ? existing.providerSession : undefined) ??
+    (!existing
+      ? providerSessionForResumeSnapshot(state.sleepingAgentSessionsByPaneKey[paneKey], {
+          ...payload,
+          paneKey,
+          agentType: identity.agentType,
+          connectionId: routing?.connectionId,
+          worktreeId: routing?.worktreeId ?? findAgentPaneWorktreeId(state, paneKey) ?? undefined
+        })
+      : undefined)
   const existingProviderSession = canReuseExistingProviderSession
     ? existing.providerSession
     : undefined

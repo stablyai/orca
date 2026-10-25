@@ -1,4 +1,6 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import { providerSessionForResumeSnapshot } from '../../../../shared/agent-resume-record-from-status'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
 
@@ -17,6 +19,7 @@ export type NativeChatPaneResolutionInput = {
    *  captured `providerSession` (the agent's own session id) once the agent has
    *  reported it, plus the detected `agentType`. */
   agentStatusEntry?: AgentStatusEntry
+  resumeIdentity?: SleepingAgentSessionRecord
   /** Runtime PTY id bound to this pane. ptyId is pane-manager runtime state, so
    *  it's passed in rather than looked up inside this pure function. */
   ptyId: string | null
@@ -50,10 +53,23 @@ export function resolveNativeChatSession(
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
+  // Resume launches publish identity before Codex emits its first turn hook.
+  const resumeIdentity = input.resumeIdentity
+  const providerSession =
+    input.agentStatusEntry?.providerSession ??
+    (input.agentStatusEntry
+      ? providerSessionForResumeSnapshot(input.resumeIdentity, input.agentStatusEntry)
+      : undefined) ??
+    (!input.agentStatusEntry &&
+    resumeIdentity?.paneKey === input.paneKey &&
+    resumeIdentity.agent === agent &&
+    (resumeIdentity.origin === 'live' || resumeIdentity.origin === 'quit')
+      ? resumeIdentity.providerSession
+      : undefined)
   return {
     agent,
-    sessionId: input.agentStatusEntry?.providerSession?.id ?? null,
-    transcriptPath: input.agentStatusEntry?.providerSession?.transcriptPath ?? null,
+    sessionId: providerSession?.id ?? null,
+    transcriptPath: providerSession?.transcriptPath ?? null,
     ptyId: input.ptyId,
     paneKey: input.paneKey
   }

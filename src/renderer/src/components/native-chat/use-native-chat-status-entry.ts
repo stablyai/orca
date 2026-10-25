@@ -13,8 +13,7 @@ export function useNativeChatStatusEntry(
         : findTabAgentEntry(state.agentStatusByPaneKey, terminalTabId)
     )
   )
-  return {
-    entry,
-    paneKey: preferredPaneKey ?? entry?.paneKey ?? `${terminalTabId}:`
-  }
+  const paneKey = preferredPaneKey ?? entry?.paneKey ?? `${terminalTabId}:`
+  const resumeIdentity = useAppStore((state) => state.sleepingAgentSessionsByPaneKey[paneKey])
+  return { entry, paneKey, resumeIdentity }
 }

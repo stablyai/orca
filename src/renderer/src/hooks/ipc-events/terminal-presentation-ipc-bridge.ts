@@ -31,6 +31,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         env,
         launchConfig,
         resumeProviderSession,
+        freshAgentLaunch,
         launchToken,
         launchAgent,
         viewMode,
@@ -179,6 +180,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           if (leafId && ptyId) {
             const launchPaneKey = tryMakePaneKey(tab.id, leafId)
+            if (launchPaneKey && (command || freshAgentLaunch) && !resumeProviderSession) {
+              store.clearSleepingAgentSession(launchPaneKey)
+            }
             if (launchConfig) {
               if (launchPaneKey) {
                 store.registerAgentLaunchConfig(launchPaneKey, launchConfig, {
