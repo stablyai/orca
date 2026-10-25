@@ -424,6 +424,27 @@ it('opens a chat whose newest rows are short and older ones tall without drawing
   expect(chat0.drawn(mobileNativeChatRowId('t11'))).toBe(1)
 })
 
+it('draws a bounded tail again once a reader who scrolled back through history returns to it', () => {
+  const messages = Array.from({ length: 200 }, (_, i) =>
+    say(`m${i}`, i % 2 ? 'assistant' : 'user', `message ${i}`)
+  )
+  const options = { following: true, live: false }
+  const chat0 = mount(messages, options)
+  const tail = chat0.rows().length
+  options.following = false
+  chat0.show(messages)
+  for (let page = 0; page < 8; page += 1) {
+    chat0.read(() => chat0.scroller.showFrom(0))
+  }
+  expect(chat0.rows().length).toBeGreaterThan(tail * 2)
+
+  options.following = true
+  chat0.show(messages)
+  chat0.read(() => (chat0.scroller.scrollTop = 0))
+  expect(chat0.rows().length).toBeLessThanOrEqual(tail)
+  expect(chat0.rows().at(-1)).toBe(mobileNativeChatRowId('m199'))
+})
+
 it('holds a row the reader taps open in place, and a reply below waits out a flick', () => {
   const later = Array.from({ length: 10 }, (_, i) => say(`t${i}`, 'user', 'later'))
   const chat0 = mount([...from('r21'), ...later])

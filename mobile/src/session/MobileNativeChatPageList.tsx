@@ -23,6 +23,7 @@ import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   mobileNativeChatReadingDrift,
   mobileNativeChatReadingPlace,
+  mobileNativeChatRowWithin,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
@@ -36,6 +37,8 @@ import {
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
 const DRAW_AHEAD_SCREENS = 3
+// At the tail, rows drawn on the way back through history are dropped past this many screens.
+const TRIM_SCREENS = 6
 // Fetch ahead far enough for multi-screen phone flicks.
 const FETCH_AHEAD_ROWS = 40
 const FETCH_REACH_SCREENS = 10
@@ -157,9 +160,9 @@ export function MobileNativeChatPageList({
   const live = useRef<Held>({ rows: liveRows, footer: liveFooter, renderItem })
   const ask = useRef(onNearTop)
   // Read latest committed geometry from event handlers between renders.
-  const latest = useRef({ first, n, keys, layoutKey, rowKeys })
+  const latest = useRef({ first, n, keys, indexOf, layoutKey, rowKeys })
   useLayoutEffect(() => {
-    latest.current = { first, n, keys, layoutKey, rowKeys }
+    latest.current = { first, n, keys, indexOf, layoutKey, rowKeys }
     ask.current = onNearTop
     live.current = { rows: liveRows, footer: liveFooter, renderItem }
   })
@@ -234,17 +237,32 @@ export function MobileNativeChatPageList({
   })
   useEffect(() => () => clearTimeout(settleTimer.current), [])
 
-  const drawAndFetch = useCallback((s: Scroller) => {
-    const { first: at, keys: drawnKeys, n: total, rowKeys: current } = latest.current
-    const screens = (s.scrollHeight - s.clientHeight + s.scrollTop) / s.clientHeight
-    if (at > 0 && screens < DRAW_AHEAD_SCREENS) {
-      const next = Math.max(0, at - DRAW_BATCH)
-      setDrawn({ scope: current.scope, firstKey: drawnKeys[next]!, count: total - next })
-    }
-    if (at < FETCH_AHEAD_ROWS && screens < FETCH_REACH_SCREENS) {
-      ask.current?.()
-    }
-  }, [])
+  const drawAndFetch = useCallback(
+    (s: Scroller) => {
+      const {
+        first: at,
+        keys: drawnKeys,
+        indexOf: rowAt,
+        n: total,
+        rowKeys: current
+      } = latest.current
+      const screens = (s.scrollHeight - s.clientHeight + s.scrollTop) / s.clientHeight
+      if (at > 0 && screens < DRAW_AHEAD_SCREENS) {
+        const next = Math.max(0, at - DRAW_BATCH)
+        setDrawn({ scope: current.scope, firstKey: drawnKeys[next]!, count: total - next })
+      } else if (screens > TRIM_SCREENS && isFollowing()) {
+        const kept = mobileNativeChatRowWithin(s, DRAW_AHEAD_SCREENS * s.clientHeight)
+        const next = Math.min(rowAt.get(kept ?? '') ?? at, Math.max(0, total - FIRST_ROWS))
+        if (next > at) {
+          setDrawn({ scope: current.scope, firstKey: drawnKeys[next]!, count: total - next })
+        }
+      }
+      if (at < FETCH_AHEAD_ROWS && screens < FETCH_REACH_SCREENS) {
+        ask.current?.()
+      }
+    },
+    [isFollowing]
+  )
 
   useImperativeHandle(
     ref,
