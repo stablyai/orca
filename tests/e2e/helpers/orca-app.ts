@@ -243,6 +243,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // window (e.g. pointer-capture drag tests).
       env: {
         ...homeIsolation.env,
+        ELECTRON_RENDERER_URL: '',
         NODE_ENV: 'development',
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }

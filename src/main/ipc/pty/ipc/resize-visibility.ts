@@ -1,9 +1,4 @@
 import { getPtyIpc } from '../../pty-host-bindings'
-import type {
-  PtyDeliveryWriteOff,
-  PtyRendererDeliveryHealthReply,
-  PtyRendererDeliveryStateReport
-} from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
@@ -21,25 +16,24 @@ import {
   rendererVisibilityKnownPtys,
   visibleRendererPtys
 } from '../delivery/visibility-state'
-import {
-  mainDeliveryBreadcrumbs,
-  resetRendererDeliveryAccountingForLifecycleReset
-} from '../delivery/debug'
-import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
-import { applyCumulativeAck } from '../delivery/accounting'
+import { mainDeliveryBreadcrumbs } from '../delivery/debug'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
-import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
 import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
+import { installPtyRendererDeliveryCreditIpc } from './renderer-delivery-credit'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   const ipcMain = getPtyIpc()
-  const { runtime, mainWindow } = session
+  const { runtime } = session
+  const native = session.options?.nativeWindowDelivery
 
   // Fire-and-forget resize avoids an empty acknowledgement round trip.
   ipcMain.removeAllListeners('pty:resize')
-  ipcMain.on('pty:resize', (_event, args: { id: string; cols: number; rows: number }) => {
+  ipcMain.on('pty:resize', (event, args: { id: string; cols: number; rows: number }) => {
+    if (native && !native.canResize(event.sender, args.id)) {
+      return
+    }
     // Fit overrides remeasure all panes; suppress the cascade so background full-width measurements cannot resize PTYs.
     if (runtime?.isResizeSuppressed()) {
       return
@@ -68,7 +62,10 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
 
   // Measurement-only reports update desktop restore geometry while viewer-owned resizing is blocked (docs/mobile-fit-hold.md).
   ipcMain.removeAllListeners('pty:reportGeometry')
-  ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
+  ipcMain.on('pty:reportGeometry', (event, args: { id: string; cols: number; rows: number }) => {
+    if (native && !native.canResize(event.sender, args.id)) {
+      return
+    }
     runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
   })
 
@@ -94,127 +91,15 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
   )
 
-  // Bound renderer delivery independently of provider/runtime ingestion.
-  ipcMain.removeAllListeners('pty:ackData')
-  ipcMain.on(
-    'pty:ackData',
-    (_event, args: { id: string; charCount?: number; processedChars?: number }) => {
-      session.lastAckReceivedAtMs = Date.now()
-      // A live ACK ends the prior silent diagnostic streak.
-      session.deliveryResyncUnansweredWarnLogged = false
-      let acknowledged = 0
-      if (typeof args.processedChars === 'number' && Number.isFinite(args.processedChars)) {
-        acknowledged = applyCumulativeAck(session, args.id, Math.max(0, args.processedChars))
-      } else {
-        // Hot reload can pair a legacy delta-ACK renderer with a newer main.
-        const accounting = session.rendererDeliveryAccountingByPty.get(args.id)
-        const delta = Number.isFinite(args.charCount) ? Math.max(0, args.charCount ?? 0) : 0
-        acknowledged = accounting
-          ? applyCumulativeAck(session, args.id, accounting.ackedChars + delta)
-          : 0
-      }
-      tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
-      session.schedulePendingDataAfterCreditReport(acknowledged > 0)
-    }
-  )
-
-  ipcMain.removeAllListeners('pty:deliveryResyncResponse')
-  ipcMain.on(
-    'pty:deliveryResyncResponse',
-    (_event, args: { requestId: number; processedCharsByPty: Record<string, number> }) => {
-      if (
-        session.deliveryResyncOutstandingRequestId === null ||
-        args?.requestId !== session.deliveryResyncOutstandingRequestId
-      ) {
-        return
-      }
-      session.clearDeliveryResyncProbe()
-      session.deliveryResyncUnansweredWarnLogged = false
-      // Max-merge cumulative processed totals to repay debt from lost ACKs.
-      let creditedAny = false
-      for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
-        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
-          continue
-        }
-        const acknowledged = applyCumulativeAck(session, id, Math.max(0, processedChars))
-        if (acknowledged > 0) {
-          creditedAny = true
-          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
-        }
-      }
-      session.schedulePendingDataAfterCreditReport(creditedAny)
-    }
-  )
-
-  // Renderer invoke can survive broken push channels; use it for delivery resync and explicit repair.
-  ipcMain.removeHandler('pty:reportRendererDeliveryState')
-  ipcMain.handle(
-    'pty:reportRendererDeliveryState',
-    (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
-      // Merge cumulative totals before deciding whether lost delivery needs write-off.
-      let creditedAny = false
-      for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
-        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
-          continue
-        }
-        const acknowledged = applyCumulativeAck(session, id, Math.max(0, processedChars))
-        if (acknowledged > 0) {
-          creditedAny = true
-          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
-        }
-      }
-      let writtenOff: PtyDeliveryWriteOff[] = []
-      // Require main-observed ACK silence before allowing a caller to write off delivery.
-      if (
-        args?.heal === true &&
-        session.rendererInFlightTotalChars > 0 &&
-        (session.lastAckReceivedAtMs === null ||
-          Date.now() - session.lastAckReceivedAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
-      ) {
-        writtenOff = session.writeOffLostRendererDelivery(args)
-        creditedAny ||= writtenOff.length > 0
-      }
-      session.schedulePendingDataAfterCreditReport(creditedAny)
-      let inFlightPtyCount = 0
-      for (const accounting of session.rendererDeliveryAccountingByPty.values()) {
-        if (accounting.sentChars - accounting.ackedChars > 0) {
-          inFlightPtyCount++
-        }
-      }
-      return {
-        inFlightTotalChars: session.rendererInFlightTotalChars,
-        inFlightPtyCount,
-        msSinceLastAck:
-          session.lastAckReceivedAtMs === null ? null : Date.now() - session.lastAckReceivedAtMs,
-        ...(writtenOff.length > 0 ? { writtenOff } : {})
-      }
-    }
-  )
-
-  // Hold sends until the replacement renderer confirms its data dispatcher exists.
-  ipcMain.removeAllListeners('pty:rendererDispatcherReady')
-  ipcMain.on('pty:rendererDispatcherReady', (event) => {
-    // Reconcile clears accounting; reject dying-window handshakes that could reset the new page.
-    if (!isMainWindowPtyIpcEvent(event, mainWindow)) {
-      return
-    }
-    // A handshake on an open gate reveals missed lifecycle reset; clear stale debt.
-    if (session.rendererPtyDispatcherReady) {
-      resetRendererDeliveryAccountingForLifecycleReset()
-    }
-    session.clearDispatcherReadyWatchdog()
-    session.rendererPtyDispatcherReady = true
-    session.pendingData.reactivateBlocked()
-    session.schedulePendingDataFlush(0)
-  })
-
+  installPtyRendererDeliveryCreditIpc(session)
   ipcMain.removeAllListeners('pty:setActiveRendererPty')
-  ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {
+  ipcMain.on('pty:setActiveRendererPty', (event, args: { id: string; active: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     // Active panes get scheduling priority; inactive ingestion, state and notifications continue.
-    if (args.active) {
+    const active = native?.updateHint(event.sender, args.id, 'active', args.active) ?? args.active
+    if (active) {
       if (activeRendererPtys.has(args.id)) {
         return
       }
@@ -226,13 +111,15 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   })
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
-  ipcMain.on('pty:setRendererPtyVisible', (_event, args: { id: string; visible: boolean }) => {
+  ipcMain.on('pty:setRendererPtyVisible', (event, args: { id: string; visible: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     // Preserve hidden-at-production origin through batching even if visibility changes before flush.
     rendererVisibilityKnownPtys.add(args.id)
-    if (args.visible) {
+    const visible =
+      native?.updateHint(event.sender, args.id, 'visible', args.visible) ?? args.visible
+    if (visible) {
       visibleRendererPtys.add(args.id)
       closeStartupQueryAuthorityForPty(args.id)
     } else {
@@ -242,18 +129,16 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   })
 
   ipcMain.removeAllListeners('pty:setHiddenRendererPty')
-  ipcMain.on('pty:setHiddenRendererPty', (_event, args: { id: string; hidden: boolean }) => {
+  ipcMain.on('pty:setHiddenRendererPty', (event, args: { id: string; hidden: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     mainDeliveryBreadcrumbs.record(args.hidden === true ? 'gate-mark' : 'gate-unmark', {
       id: redactPtyIdForDiagnostics(args.id)
     })
-    const transition = session.transitionHiddenRendererPtyDeliveryState(
-      args.id,
-      args.hidden === true
-    )
-    if (args.hidden === true) {
+    const hidden = native?.updateHint(event.sender, args.id, 'hidden', args.hidden) ?? args.hidden
+    const transition = session.transitionHiddenRendererPtyDeliveryState(args.id, hidden)
+    if (hidden) {
       closeStartupQueryAuthorityForPty(args.id)
       // Newly hidden queued bytes can drop despite ACK starvation; reveal restores their model snapshot.
       const pending = session.pendingData.get(args.id)
@@ -297,14 +182,16 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   installTerminalViewAttributesIpc(session)
 
   ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
-  ipcMain.on('pty:setPtyDeliveryInterest', (_event, args: { id: string; interested: boolean }) => {
+  ipcMain.on('pty:setPtyDeliveryInterest', (event, args: { id: string; interested: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     // Raw-byte interests bypass hidden gating without changing daemon pacing during interest churn.
     const settings = session.getSettings?.()
     const wasDroppable = shouldDropHiddenRendererPtyData(args.id, settings)
-    setRendererPtyDeliveryInterest(args.id, args.interested === true)
+    const interested =
+      native?.updateHint(event.sender, args.id, 'interest', args.interested) ?? args.interested
+    setRendererPtyDeliveryInterest(args.id, interested)
     if (wasDroppable !== shouldDropHiddenRendererPtyData(args.id, settings)) {
       invalidatePendingPtyDrainPolicy(args.id)
     }

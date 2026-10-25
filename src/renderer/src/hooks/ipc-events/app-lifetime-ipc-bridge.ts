@@ -132,6 +132,17 @@ export function installAppLifetimeIpcEvents(): () => void {
     isRuntimeEnvironmentActive
   )
 
+  const unsubscribeNotifierReset = window.api.runtime.onNotifierReset?.(() => {
+    void window.api.app
+      .reload()
+      .catch((error) => console.error('Failed to resync native window:', error))
+  })
+  if (unsubscribeNotifierReset) {
+    unsubs.push(unsubscribeNotifierReset)
+  }
+  // Reuse startup hydration if bounded replay cannot represent all missed changes.
+  window.api.runtime.notifierReady?.().catch(() => {})
+
   return () => {
     agentStatusBridge.disposeAsyncState()
     disposeMobileDriverHydration()

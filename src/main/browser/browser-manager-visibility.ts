@@ -3,17 +3,17 @@ import { BrowserManagerState } from './browser-manager-state'
 import { focusGuardUnavailableError, guardPaneFocusForAgentInput } from './agent-input-focus-guard'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
-  private readonly capturePaintHolds = new Map<string, number>()
+  private readonly capturePaintHolds = new Map<number, number>()
 
   // Do not await the renderer: minimized or throttled windows must not stall frame capture.
   holdPaintForCapture(guestWebContentsId: number): () => void {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+    const renderer = this.getRendererContextForGuest(guestWebContentsId)?.renderer
     if (!browserPageId || !renderer || renderer.isDestroyed()) {
       return () => {}
     }
-    const holds = this.capturePaintHolds.get(browserPageId) ?? 0
-    this.capturePaintHolds.set(browserPageId, holds + 1)
+    const holds = this.capturePaintHolds.get(guestWebContentsId) ?? 0
+    this.capturePaintHolds.set(guestWebContentsId, holds + 1)
     if (holds === 0) {
       renderer.send('browser:capturePaintHold', { browserPageId, held: true })
     }
@@ -26,12 +26,12 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       }
       released = true
       releaseThrottle()
-      const remaining = (this.capturePaintHolds.get(browserPageId) ?? 1) - 1
+      const remaining = (this.capturePaintHolds.get(guestWebContentsId) ?? 1) - 1
       if (remaining > 0) {
-        this.capturePaintHolds.set(browserPageId, remaining)
+        this.capturePaintHolds.set(guestWebContentsId, remaining)
         return
       }
-      this.capturePaintHolds.delete(browserPageId)
+      this.capturePaintHolds.delete(guestWebContentsId)
       if (!renderer.isDestroyed()) {
         renderer.send('browser:capturePaintHold', { browserPageId, held: false })
       }
@@ -41,7 +41,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Agent input moves Chromium focus into the guest; the pane restores the user's focus.
   guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+    const renderer = this.getRendererContextForGuest(guestWebContentsId)?.renderer
     if (!browserPageId || !renderer || renderer.isDestroyed()) {
       return Promise.reject(focusGuardUnavailableError())
     }

@@ -1,4 +1,4 @@
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type BrowserWindow, type WebContents } from 'electron'
 import {
   createRejectedNativeFileDropPayload,
   validateNativeFileDropPaths
@@ -15,6 +15,13 @@ import {
   type DroppedPathPreparationDeps
 } from './dropped-path-preparation'
 import { getDarwinUserTempDir } from './darwin-user-temp-dir'
+
+type WindowPreparation = {
+  prepare: ReturnType<typeof createDroppedPathPreparationQueue>
+  isGone: () => boolean
+}
+
+const preparations = new Map<WebContents, WindowPreparation>()
 
 export function registerDroppedPathPreparation(
   mainWindow: BrowserWindow,
@@ -37,11 +44,14 @@ export function registerDroppedPathPreparation(
     },
     windowDragTempCopyLane
   )
+  const entry = { prepare, isGone: isWindowGone }
+  preparations.set(mainWebContents, entry)
   const prepareHandler = (
     event: Electron.IpcMainInvokeEvent,
     args: unknown
   ): Promise<PreparedDroppedPaths> => {
-    if (isWindowGone() || event.sender !== mainWebContents) {
+    const owner = preparations.get(event.sender)
+    if (!owner || owner.isGone()) {
       throw new Error('Dropped paths must come from the owning window')
     }
     if (!isPrepareDroppedPathsRequest(args)) {
@@ -54,20 +64,19 @@ export function registerDroppedPathPreparation(
         failures: [createRejectedNativeFileDropPayload(validation)]
       })
     }
-    return Promise.resolve(prepare(args))
+    return Promise.resolve(owner.prepare(args))
   }
   ipcMain.handle(prepareChannel, prepareHandler)
-  activePrepareHandler = prepareHandler
   mainWindow.on('closed', () => {
     // Why: an old window closing late must not remove the replacement window's handler.
-    if (activePrepareHandler === prepareHandler) {
+    if (preparations.get(mainWebContents) === entry) {
+      preparations.delete(mainWebContents)
+    }
+    if (preparations.size === 0) {
       ipcMain.removeHandler(prepareChannel)
-      activePrepareHandler = undefined
     }
   })
 }
-
-let activePrepareHandler: unknown
 
 function isPrepareDroppedPathsRequest(value: unknown): value is PrepareDroppedPathsRequest {
   return (

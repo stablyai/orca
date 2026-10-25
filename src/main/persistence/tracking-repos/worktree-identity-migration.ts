@@ -10,6 +10,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
+import { migrateDesktopWindowWorktreeIdentity } from '../../../shared/desktop-window-worktree-identity'
 
 /**
  * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
@@ -56,7 +57,7 @@ export function migrateWorktreeIdentity(
         }
       : renamedValue
   }
-  const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
+  const migrateSession = (session: Partial<WorkspaceSessionState> | undefined): boolean => {
     if (!session) {
       return false
     }
@@ -294,6 +295,13 @@ export function migrateWorktreeIdentity(
   for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
     changed = migrateSession(session) || changed
   }
+  changed =
+    migrateDesktopWindowWorktreeIdentity(
+      state.ui.desktopWindows,
+      oldWorktreeId,
+      newWorktreeId,
+      migrateSession
+    ) || changed
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}
   )) {

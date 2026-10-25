@@ -231,6 +231,43 @@ describe('BrowserCertificateTrustController', () => {
     expect(otherCertificate.preventDefault).not.toHaveBeenCalled()
   })
 
+  it('keeps certificate challenges with their own guest when native peers share a page', () => {
+    pageByGuestId.set(otherGuest.id, 'page-1')
+    certificateEvent({ controller, guest })
+    guestByPageId.set('page-1', otherGuest.id)
+    expect(controller.getFailure('page-1')).toBeNull()
+
+    certificateEvent({ controller, guest: otherGuest, url: 'https://localhost:3444/peer' })
+    expect(controller.getFailure('page-1')).toMatchObject({
+      challengeId: 'challenge-2',
+      origin: 'https://localhost:3444'
+    })
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: false, reason: 'changed' })
+    expect(otherGuest.loadURL).not.toHaveBeenCalled()
+
+    guestByPageId.set('page-1', guest.id)
+    expect(controller.getFailure('page-1')).toMatchObject({
+      challengeId: 'challenge-1',
+      origin: 'https://localhost:3443'
+    })
+  })
+
+  // PR33112: a native renderer's own guest id must resolve its challenge even while the
+  // shared page-to-guest mapping is pointing at a peer window's guest.
+  it('proceeds the calling renderer guest when an explicit webContentsId is given', () => {
+    pageByGuestId.set(otherGuest.id, 'page-1')
+    certificateEvent({ controller, guest })
+    // The shared selection now points at the peer guest, as it would if the other window is active.
+    guestByPageId.set('page-1', otherGuest.id)
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: false, reason: 'missing' })
+    expect(guest.loadURL).not.toHaveBeenCalled()
+
+    // Passing the caller's own exact guest id resolves its own pending challenge regardless.
+    expect(controller.proceed('page-1', 'challenge-1', guest.id)).toEqual({ ok: true })
+    expect(guest.loadURL).toHaveBeenCalledWith('https://localhost:3443/app')
+    expect(otherGuest.loadURL).not.toHaveBeenCalled()
+  })
+
   it('blocks a session-cached certificate for sibling requests until that guest approves it', () => {
     certificateEvent({ controller, guest })
     expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })

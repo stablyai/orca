@@ -45,6 +45,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
 import { resolveUpdateInstallMode } from '../updater'
+import { restoreNativeDesktopWindows } from '../window/native-desktop-windows'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
@@ -232,6 +233,9 @@ async function launchDesktopMode(
     void state.mainProcessI18nReady.then(() =>
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
+  } else {
+    // Why after both: restored windows need the live listener, and they close with the main window.
+    restoreNativeDesktopWindows()
   }
   // Why before the proxy await: a mint in that window must wait for the installer, not fail
   // provider_missing; the installer itself holds its first request until the proxy lands.

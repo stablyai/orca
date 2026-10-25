@@ -19,7 +19,8 @@ import {
   getRendererInFlightCharsForPty,
   schedulePendingDataAfterCreditReport,
   setPendingPtyData,
-  writeOffLostRendererDelivery
+  writeOffLostRendererDelivery,
+  resetPtyRendererDeliveryAccounting
 } from './accounting'
 import {
   readCurrentPtyRendererDeliveryDebugSnapshot,
@@ -98,6 +99,11 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.writeOffLostRendererDelivery = (report) => writeOffLostRendererDelivery(session, report)
   session.getRendererInFlightCharsForPty = (id) => getRendererInFlightCharsForPty(session, id)
 
+  if (session.options?.rendererDeliveryOnly) {
+    session.updateProducerFlowControl = () => {}
+    return
+  }
+
   setClearBackgroundedDeliverySyncForPty((id: string) => {
     session.backgroundedDeliverySyncByPty.delete(id)
   })
@@ -118,22 +124,7 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
     seedPtyRendererDeliveryPeaksFromCurrentState(session)
   })
   setResetRendererDeliveryAccountingForLifecycleReset(() => {
-    // Replacement views restore from main's authoritative history, so dead-page pending delivery can be discarded.
-    session.lastLifecycleResetClearedChars = session.rendererInFlightTotalChars
-    session.rendererLifecycleResetCount += 1
-    // Resume producers before discarding the dead page's pending bytes and credits.
-    session.producerFlowControl.releaseAll()
-    session.clearDeliveryResyncProbe()
-    session.deliveryResyncUnansweredWarnLogged = false
-    session.rendererDeliveryAccountingByPty.clear()
-    session.rendererInFlightTotalChars = 0
-    session.clearPendingPtyData()
-    session.pendingOverflowMarkedPtys.clear()
-    session.rendererDeliveryRestoreNeededPtys.clear()
-    // Hold sends until the replacement dispatcher exists, or dropped sends recreate permanent debt.
-    session.rendererPtyDispatcherReady = false
-    // Recover if the readiness handshake never arrives; a real handshake cancels the watchdog.
-    session.armDispatcherReadyWatchdog()
+    resetPtyRendererDeliveryAccounting(session, true)
   })
   // Re-registration must be able to cancel this closure's readiness watchdog.
   setClearRendererDispatcherReadyWatchdog(session.clearDispatcherReadyWatchdog)

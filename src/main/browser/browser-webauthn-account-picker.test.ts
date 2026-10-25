@@ -48,6 +48,42 @@ function mockSession(): Electron.Session {
 }
 
 describe('browser WebAuthn account picker', () => {
+  it.each([false, true])('keeps B answerable when root A unregisters; popup=%s', async (popup) => {
+    const first = mockWebContents(91)
+    const second = mockWebContents(92)
+    const a = mockWebContents(popup ? 103 : 101)
+    const b = mockWebContents(102)
+    const session = mockSession()
+    fromFrameMock.mockReturnValueOnce(a).mockReturnValueOnce(b)
+    getRendererContextForGuestMock
+      .mockReturnValueOnce({
+        browserPageId: 'shared',
+        renderer: first,
+        rootGuestWebContentsId: 101
+      })
+      .mockReturnValueOnce({
+        browserPageId: 'shared',
+        renderer: second,
+        rootGuestWebContentsId: 102
+      })
+    const firstSelection = requestBrowserWebAuthnAccount(accountDetails(), session)
+    const secondSelection = requestBrowserWebAuthnAccount(accountDetails(), session)
+    const requestId = vi.mocked(second.send).mock.calls[0]![1].requestId
+    cancelBrowserWebAuthnAccountRequests('shared', 101)
+    await expect(firstSelection).resolves.toBeNull()
+    expect(second.send).not.toHaveBeenCalledWith(
+      'browser:webauthn-account-request-closed',
+      expect.anything()
+    )
+    expect(
+      respondToBrowserWebAuthnAccountRequest(first, { requestId, credentialId: 'credential-1' })
+    ).toBe(false)
+    expect(
+      respondToBrowserWebAuthnAccountRequest(second, { requestId, credentialId: 'credential-1' })
+    ).toBe(true)
+    await expect(secondSelection).resolves.toBe('credential-1')
+  })
+
   beforeEach(() => {
     vi.useFakeTimers()
     fromFrameMock.mockReset()

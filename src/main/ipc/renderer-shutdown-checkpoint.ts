@@ -11,6 +11,11 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { Store } from '../persistence'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
 import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'
+import {
+  saveDesktopWindowSessionView,
+  updateDesktopWindowUI
+} from '../persistence/desktop-window-state'
+import { prepareDesktopWindowSessionWrite } from '../persistence/desktop-window-session-writes'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
@@ -97,31 +102,46 @@ export function registerRendererShutdownCheckpointHandler(
 ): void {
   // beforeunload cannot await; sync reply confirms staging while navigation paths separately join durability.
   let pendingCheckpoint: Promise<ShutdownCheckpointResult> = Promise.resolve({ ok: true })
+  const rendererCheckpoints = new WeakMap<object, Promise<ShutdownCheckpointResult>>()
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let ok = true
     try {
       for (const { state, hostId } of args.sessions) {
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
+          const windowWrite = prepareDesktopWindowSessionWrite(
+            store,
+            event.sender,
+            { kind: 'set', session: state },
+            hostId
+          )
+          saveDesktopWindowSessionView(store, event.sender, state, hostId)
           store.stageWorkspaceSessionBeforeUnload(
             ORCA_LAYOUT_OWNER_IS_MAIN
               ? stagedSessionForMain(store, state, hostId, quitResumeRecordsFor, reconnectFactsFor)
-              : state,
+              : (windowWrite?.shared ?? state),
             hostId
           )
+          windowWrite?.commit()
         }
       }
-      store.updateUI(args.ui)
+      updateDesktopWindowUI(store, event.sender, args.ui)
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
     }
     pendingCheckpoint = ok ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
+    if (event.sender) {
+      rendererCheckpoints.set(event.sender, pendingCheckpoint)
+    }
     event.returnValue = { ok }
   })
 
   ipcMain.handle(
     'app:await-before-unload-checkpoint',
-    (): Promise<ShutdownCheckpointResult> => pendingCheckpoint
+    (event): Promise<ShutdownCheckpointResult> =>
+      event?.sender
+        ? (rendererCheckpoints.get(event.sender) ?? Promise.resolve({ ok: true }))
+        : pendingCheckpoint
   )
 }

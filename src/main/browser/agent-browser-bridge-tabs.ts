@@ -2,6 +2,7 @@ import type { BrowserTabInfo, BrowserTabListResult } from '../../shared/runtime-
 import { BrowserError } from './cdp-bridge'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
+import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {
@@ -99,7 +100,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         firstLiveWcId = wcId
       }
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
-      const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
+      const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId, wcId)
       result.push({
         browserPageId: tabId,
         index: index++,
@@ -140,7 +141,15 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
 
     const tabs = this.getRegisteredTabs(worktreeId)
-    const webContentsId = tabs.get(browserPageId)
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    const ownedGuestId =
+      this.sessions.get(sessionName)?.webContentsId ?? this.commandGuestBySession.get(sessionName)
+    const webContentsId =
+      ownedGuestId !== undefined &&
+      this.browserManager.getTabIdForWebContentsId(ownedGuestId) === browserPageId &&
+      tabs.has(browserPageId)
+        ? ownedGuestId
+        : tabs.get(browserPageId)
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -170,7 +179,11 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     const preferredWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
 
-    if (preferredWcId != null) {
+    if (typeof preferredWcId === 'number') {
+      const pageId = this.resolveTabIdSafe(preferredWcId)
+      if (pageId && tabs.has(pageId) && this.getWebContents(preferredWcId)) {
+        return { browserPageId: pageId, webContentsId: preferredWcId }
+      }
       for (const [tabId, wcId] of tabs) {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }

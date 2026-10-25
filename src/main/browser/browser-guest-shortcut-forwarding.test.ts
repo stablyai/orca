@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { screenGetCursorScreenPointMock } = vi.hoisted(() => ({
-  screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 }))
-}))
+const { screenGetCursorScreenPointMock, openRuntimeClientWindowFromUserCommandMock } = vi.hoisted(
+  () => ({
+    screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
+    openRuntimeClientWindowFromUserCommandMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: screenGetCursorScreenPointMock },
   webContents: { fromId: vi.fn() }
+}))
+vi.mock('../window/runtime-client-window-open-command', () => ({
+  openRuntimeClientWindowFromUserCommand: openRuntimeClientWindowFromUserCommandMock
 }))
 
 import {
@@ -206,6 +212,66 @@ describe('setupGuestShortcutForwarding', () => {
     rendererSendMock = vi.fn()
     guestOnMock = vi.fn()
     guestOffMock = vi.fn()
+    openRuntimeClientWindowFromUserCommandMock.mockClear()
+  })
+
+  it('opens exactly one window for the default New Window chord from a focused guest page', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyN',
+      key: 'n',
+      meta: isMac,
+      control: !isMac,
+      alt: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(openRuntimeClientWindowFromUserCommandMock).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the window for a custom New Window binding even with no renderer registered for the guest', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => null,
+      getKeybindings: () => ({ 'window.new': ['Mod+Alt+Shift+W'] })
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyW',
+      key: 'w',
+      meta: isMac,
+      control: !isMac,
+      alt: true,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(openRuntimeClientWindowFromUserCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops the held-key repeat for New Window without opening a second window', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const baseInput = { code: 'KeyN', key: 'n', meta: isMac, control: !isMac, alt: true }
+    triggerBeforeInput(baseInput)
+    const repeatPreventDefault = triggerBeforeInput({ ...baseInput, isAutoRepeat: true })
+
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
+    expect(openRuntimeClientWindowFromUserCommandMock).toHaveBeenCalledTimes(1)
   })
 
   it('commits Ctrl+Tab switching from focused guest pages on generic release events', () => {

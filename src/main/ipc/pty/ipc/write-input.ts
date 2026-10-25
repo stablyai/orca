@@ -22,7 +22,7 @@ export function isMainWindowPtyIpcEvent(
   return (
     !!mainWindow &&
     !!mainWebContents &&
-    event.sender === mainWebContents &&
+    (event.sender === mainWebContents || mainWindow.acceptsRenderer?.(event.sender) === true) &&
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
   )

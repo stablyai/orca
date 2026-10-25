@@ -321,6 +321,55 @@ describe('staged client page profile switching', () => {
     expect(h.bindReplacement).not.toHaveBeenCalled()
   })
 
+  // PR33112: a profile switch must mount its replacement through the page's own renderer,
+  // not whichever desktop window the shared selector would currently pick.
+  it('mounts the replacement through the owning renderer even when another window is focused', async () => {
+    const h = await fixture()
+    // Simulate focus moving to a second window between page creation and the profile switch.
+    h.dependencies.selectRenderer.mockReturnValue(h.focusedRenderer)
+
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toEqual({
+      status: 'completed'
+    })
+
+    expect(h.renderer.mountPage).toHaveBeenCalledTimes(2)
+    expect(h.focusedRenderer.mountPage).not.toHaveBeenCalled()
+    expect(h.bindReplacement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        registration: expect.objectContaining({
+          webContentsId: 42,
+          rendererWebContentsId: h.renderer.rendererWebContentsId
+        })
+      })
+    )
+  })
+
+  // The same pin must hold through rollback: a bind failure restores the old guest on its own renderer.
+  it('restores the old guest on its own renderer when binding fails while another window is focused', async () => {
+    const h = await fixture()
+    h.dependencies.selectRenderer.mockReturnValue(h.focusedRenderer)
+    h.bindReplacement.mockImplementation(() => {
+      throw new Error('bind failed')
+    })
+
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+      status: 'failed'
+    })
+
+    expect(h.executor.hasPage('page-a', 7)).toBe(true)
+    expect(h.focusedRenderer.mountPage).not.toHaveBeenCalled()
+    expect(h.focusedRenderer.retirePage).not.toHaveBeenCalled()
+    expect(h.renderer.retirePage).toHaveBeenCalledWith(
+      expect.objectContaining({ browserPageId: 'page-a', pageHostGeneration: 8 })
+    )
+    expect(h.dependencies.guestBinding.bind).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 41 }),
+        browserProfileId: 'profile-a'
+      })
+    )
+  })
+
   it('rolls back an abort after successful target binding', async () => {
     const h = await fixture()
     const controller = new AbortController()

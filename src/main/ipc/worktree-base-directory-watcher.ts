@@ -36,6 +36,7 @@ const activeWatches = new Map<string, ActiveWatch>()
 let syncGeneration = 0
 let scheduledSync: ReturnType<typeof setTimeout> | null = null
 let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
+const contextWindows = new WeakSet<BrowserWindow>()
 export function setWorktreeGitStatusRefWatch(
   args: GitStatusRefBindingRequest,
   resolveUpstreamRef: (signal: AbortSignal) => Promise<string | undefined>
@@ -188,9 +189,14 @@ export function setWorktreeBaseDirectoryWatcherSyncContext(
   store: Store,
   mainWindow: BrowserWindow
 ): void {
+  syncGeneration++
   latestSyncContext = { store, mainWindow }
+  for (const watch of activeWatches.values()) {
+    watch.mainWindow = mainWindow
+  }
   // Real windows release retained sync context on close; lean test windows may lack event methods.
-  if (typeof mainWindow.once === 'function') {
+  if (!contextWindows.has(mainWindow) && typeof mainWindow.once === 'function') {
+    contextWindows.add(mainWindow)
     mainWindow.once('closed', () => {
       if (latestSyncContext?.mainWindow === mainWindow) {
         latestSyncContext = null

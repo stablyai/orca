@@ -11,7 +11,8 @@ import { PTY_BATCH_INTERVAL_MS } from './constants'
 import {
   appendPendingPtyData,
   getDroppedMode2031RendererData,
-  getDroppedSynchronizedOutputRendererData
+  getDroppedSynchronizedOutputRendererData,
+  markIncomingPtyDataAsDropped
 } from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
@@ -31,6 +32,7 @@ export function acceptPtyDataForRenderer(
     data: string
     sequenceChars?: number
     transformed?: boolean
+    droppedOutput?: boolean
   },
   outputSeq: number | undefined
 ): void {
@@ -69,22 +71,25 @@ export function acceptPtyDataForRenderer(
     }
     return
   }
-  if (payload.data.length === 0 && !payload.transformed) {
+  if (payload.data.length === 0 && !payload.transformed && payload.droppedOutput !== true) {
     return
   }
   const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
-  const pending = appendPendingPtyData(
-    session,
-    payload.id,
-    session.pendingData.get(payload.id),
-    payload.data,
-    startSeq,
-    preservesSeq,
-    containsBackgroundOutput,
-    rawLength,
-    payload.transformed === true
-  )
+  const pending =
+    payload.droppedOutput === true
+      ? markIncomingPtyDataAsDropped(session, payload.id, payload.data)
+      : appendPendingPtyData(
+          session,
+          payload.id,
+          session.pendingData.get(payload.id),
+          payload.data,
+          startSeq,
+          preservesSeq,
+          containsBackgroundOutput,
+          rawLength,
+          payload.transformed === true
+        )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&

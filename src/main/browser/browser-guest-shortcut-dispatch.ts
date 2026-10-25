@@ -7,6 +7,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { openRuntimeClientWindowFromUserCommand } from '../window/runtime-client-window-open-command'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
@@ -47,7 +48,8 @@ export function forwardGuestShortcutInput(
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace'
+      action?.type === 'deleteCurrentWorkspace' ||
+      action?.type === 'newWindow'
     ) {
       event.preventDefault()
       return true
@@ -66,6 +68,13 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:toggleFloatingTerminal')
+    return true
+  }
+
+  if (action?.type === 'newWindow') {
+    // Main-process-only capability; skip the renderer lookup below entirely.
+    event.preventDefault()
+    openRuntimeClientWindowFromUserCommand()
     return true
   }
 

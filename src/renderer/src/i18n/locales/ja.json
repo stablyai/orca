@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "新しいウィンドウ",
+    "openInNewWindow": "新しいウィンドウで開く",
+    "openFailed": "新しいウィンドウを開けませんでした",
+    "openFailedDetail": "理由: {{reason}}"
+  },
   "app": {
     "saving": {
       "delayedTitle": "プロファイルのストレージ処理に通常より時間がかかっています",

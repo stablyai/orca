@@ -18,8 +18,13 @@ export function reconcileHydratedWorkspaceTabModels(
   // Switch point: from main's first layout snapshot on, the frames' workspaces replace what restore
   // built for them, and each capable paired server's do from its own stream's. Records frames do not carry (sleeping agents, closed tabs, default-tab marks,
   // what reattaches) and the view stay restore's; main records later resume-record changes itself.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN ||
+    (typeof window !== 'undefined' && window.__ORCA_NATIVE_WINDOW_ID__)
+  ) {
     showStartupLayoutFrames()
+  }
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     showServerLayoutFrames()
     followSleepingRecordsInLayoutOwner()
   }

@@ -12,6 +12,14 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
+import {
+  desktopWindowSession,
+  saveDesktopWindowSessionView
+} from '../persistence/desktop-window-state'
+import {
+  prepareDesktopWindowSessionWrite,
+  readDesktopWindowSession
+} from '../persistence/desktop-window-session-writes'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
   // Renderer saves must not mutate a fenced source host partition.
@@ -19,8 +27,8 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     isFrozenOrcadSourceSessionPartition(store, hostId)
 
   // Optional hostId preserves local-partition behavior for older renderers.
-  ipcMain.handle('session:get', (_event, hostId?: string | null) => {
-    return store.getWorkspaceSession(hostId)
+  ipcMain.handle('session:get', (event, hostId?: string | null) => {
+    return readDesktopWindowSession(store, event?.sender, hostId)
   })
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).
@@ -44,25 +52,62 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     )
   }
 
-  ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
+  ipcMain.handle('session:set', (event, args: WorkspaceSessionState, hostId?: string | null) => {
     if (!isFenced(hostId)) {
+      const windowWrite = prepareDesktopWindowSessionWrite(
+        store,
+        event?.sender,
+        { kind: 'set', session: args },
+        hostId
+      )
+      saveDesktopWindowSessionView(store, event?.sender, args, hostId)
       store.setWorkspaceSession(
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? sessionForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'set'),
+          : windowSaveKeepingMainSleepRecords(
+              store.getWorkspaceSession(hostId),
+              windowWrite?.shared ?? args,
+              'set'
+            ),
         hostId
       )
+      windowWrite?.commit()
     }
   })
 
-  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+  ipcMain.handle('session:patch', (event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     if (!isFenced(hostId)) {
+      const windowWrite = prepareDesktopWindowSessionWrite(
+        store,
+        event?.sender,
+        { kind: 'patch', patch: args },
+        hostId
+      )
+      saveDesktopWindowSessionView(
+        store,
+        event?.sender,
+        windowWrite?.window ?? { ...desktopWindowSession(store, event?.sender, hostId), ...args },
+        hostId
+      )
+      if (windowWrite && !ORCA_LAYOUT_OWNER_IS_MAIN) {
+        store.setWorkspaceSession(
+          windowSaveKeepingMainSleepRecords(
+            store.getWorkspaceSession(hostId),
+            windowWrite.shared,
+            'set'
+          ),
+          hostId
+        )
+        windowWrite.commit()
+        return
+      }
       store.patchWorkspaceSession(
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? patchForMain(args, hostId)
           : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch'),
         hostId
       )
+      windowWrite?.commit()
     }
   })
 

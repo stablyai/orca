@@ -16,6 +16,12 @@ export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+  notifierReady: (): Promise<void> => ipcRenderer.invoke('runtime:notifierReady'),
+  onNotifierReset: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:notifierReset', listener)
+    return () => ipcRenderer.removeListener('runtime:notifierReset', listener)
+  },
   call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
     ipcRenderer.invoke('runtime:call', args),
   subscribe: async (

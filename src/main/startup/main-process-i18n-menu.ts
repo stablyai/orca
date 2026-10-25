@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import type { UIZoomDirection } from '../../shared/ui-zoom-level'
 import { ensureMainI18n, setMainUiLanguage } from '../i18n/main-i18n'
 import {
   registerAppMenu,
@@ -7,6 +8,8 @@ import {
 } from '../menu/register-app-menu'
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
+import { preferredDesktopRenderer } from '../window/desktop-renderer-registry'
+import { openRuntimeClientWindowFromUserCommand } from '../window/runtime-client-window-open-command'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
@@ -19,6 +22,17 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
+
+// Auxiliary windows handle zoom directly; full desktop windows use their renderer.
+function zoomFocusedWindowFromMenu(direction: UIZoomDirection): void {
+  if (!zoomDashboardPopoutIfFocused(direction) && !zoomWorkspaceSpaceWindowIfFocused(direction)) {
+    preferredDesktopRenderer()?.send('terminal:zoom', direction)
+  }
+}
+
+function sendToFocusedDesktopRenderer(channel: string): void {
+  preferredDesktopRenderer()?.send(channel)
+}
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -42,6 +56,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
+    onNewWindow: openRuntimeClientWindowFromUserCommand,
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       sendOpenSetupGuide(targetWindow instanceof BrowserWindow ? targetWindow : null)
@@ -55,29 +70,15 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       // Why: use the invoking BrowserWindow so hidden/E2E and multi-window flows route to the right renderer, not global focus.
       sendOpenFeatureTour(targetWindow instanceof BrowserWindow ? targetWindow : null)
     },
-    // Why: menu zoom must act on the window the user is looking at — routing to
-    // the main window while the dashboard pop-out is focused zooms behind it.
-    onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'in')
-      }
-    },
-    onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out') && !zoomWorkspaceSpaceWindowIfFocused('out')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'out')
-      }
-    },
-    onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset') && !zoomWorkspaceSpaceWindowIfFocused('reset')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'reset')
-      }
-    },
-    onToggleLeftSidebar: () => state.mainWindow?.webContents.send('ui:toggleLeftSidebar'),
-    onToggleRightSidebar: () => state.mainWindow?.webContents.send('ui:toggleRightSidebar'),
+    onZoomIn: () => zoomFocusedWindowFromMenu('in'),
+    onZoomOut: () => zoomFocusedWindowFromMenu('out'),
+    onZoomReset: () => zoomFocusedWindowFromMenu('reset'),
+    onToggleLeftSidebar: () => sendToFocusedDesktopRenderer('ui:toggleLeftSidebar'),
+    onToggleRightSidebar: () => sendToFocusedDesktopRenderer('ui:toggleRightSidebar'),
     onToggleAppearance: (key) => {
       if (key === 'statusBarVisible') {
         // Why: status bar visibility lives in persisted UI state (not settings) and the renderer owns the toggle — forward the event, let it flip + store.
-        state.mainWindow?.webContents.send('ui:toggleStatusBar')
+        sendToFocusedDesktopRenderer('ui:toggleStatusBar')
         return
       }
       const current = store.getSettings()

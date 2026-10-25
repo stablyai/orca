@@ -15,6 +15,40 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 // Both directions of the pairing boundary for the fields in PAIRING_LOCAL_UI_FIELDS: a client's
 // value must never be persisted by the host, and the host's must never be returned to a client.
 describe('client UI RPC pairing-local field seams', () => {
+  it('keeps native window selections and editor drafts off paired client responses', async () => {
+    const state = {
+      ...getDefaultUIState(),
+      desktopWindows: {
+        first: {
+          open: true,
+          ui: { lastActiveWorktreeId: 'private-desktop-workspace' }
+        }
+      }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these RPCs read only the supplied runtime id and UI methods.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getUIState: () => state,
+      updateUIState: () => state,
+      recordFeatureInteraction: () => state
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+    for (const request of [
+      makeRequest('ui.get'),
+      makeRequest('ui.set', { sidebarWidth: 300 }),
+      makeRequest('ui.recordFeatureInteraction', 'tasks')
+    ]) {
+      const response = await dispatcher.dispatch(request)
+      const parsed = z
+        .object({
+          ok: z.literal(true),
+          result: z.object({ ui: z.record(z.string(), z.unknown()) })
+        })
+        .parse(response)
+      expect(parsed.result.ui).not.toHaveProperty('desktopWindows')
+    }
+  })
+
   it('drops a paired client manualRepoOrder while forwarding the rest of the payload', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

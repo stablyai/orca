@@ -104,7 +104,8 @@ describe('createMainWindow', () => {
 
     expect(syncListener).toBeTypeOf('function')
 
-    syncListener?.({} as never, 1.2)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the control reads only this event's sender.
+    syncListener?.({ sender: webContents } as never, 1.2)
 
     if (process.platform === 'darwin') {
       expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 16 })

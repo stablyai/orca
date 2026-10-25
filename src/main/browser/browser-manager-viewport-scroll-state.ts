@@ -12,24 +12,29 @@ type ViewportPresetState = {
 }
 
 export abstract class BrowserManagerViewportScrollState {
+  protected readonly webContentsIdByTabId = new Map<string, number>()
+  protected readonly tabIdByWebContentsId = new Map<number, string>()
   protected readonly rendererWebContentsIdByTabId = new Map<string, number>()
   // Panning follows requested metrics; identity follows applied metrics, both fenced to one guest.
-  protected readonly viewportPresetByTabId = new Map<string, ViewportPresetState>()
-  protected readonly viewportScrollStateByTabId = new Map<string, BrowserViewportScrollState>()
+  protected readonly viewportPresetsByGuestId = new Map<number, ViewportPresetState>()
+  protected readonly viewportScrollStatesByGuestId = new Map<number, BrowserViewportScrollState>()
 
   protected isViewportPresetActive(browserTabId: string, guestWebContentsId: number): boolean {
-    const state = this.viewportPresetByTabId.get(browserTabId)
-    return state?.guestWebContentsId === guestWebContentsId && state.requested !== null
+    const state = this.viewportPresetsByGuestId.get(guestWebContentsId)
+    return this.isRegisteredPageGuest(browserTabId, guestWebContentsId) && state?.requested != null
   }
+
+  protected isRegisteredPageGuest(browserTabId: string, guestId: number): boolean {
+    return this.tabIdByWebContentsId.get(guestId) === browserTabId
+  }
+
+  protected abstract guestIdForRenderer(pageId: string, rendererId: number): number | undefined
 
   setViewportScrollState(
     browserTabId: string,
     rendererWebContentsId: number,
     state: BrowserViewportScrollState
   ): void {
-    if (this.rendererWebContentsIdByTabId.get(browserTabId) !== rendererWebContentsId) {
-      return
-    }
     if (
       ![state.scrollLeft, state.scrollTop, state.maxScrollLeft, state.maxScrollTop].every(
         (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -37,23 +42,27 @@ export abstract class BrowserManagerViewportScrollState {
     ) {
       return
     }
-    this.viewportScrollStateByTabId.set(browserTabId, state)
+    // Resolve the reporting renderer's own guest; a peer's selection must not steal this write.
+    const guestId = this.guestIdForRenderer(browserTabId, rendererWebContentsId)
+    if (guestId !== undefined) {
+      this.viewportScrollStatesByGuestId.set(guestId, state)
+    }
   }
 
-  recordViewportScrollDelta(browserTabId: string, deltaX: number, deltaY: number): void {
-    const state = this.viewportScrollStateByTabId.get(browserTabId)
+  recordViewportScrollDelta(guestId: number, deltaX: number, deltaY: number): void {
+    const state = this.viewportScrollStatesByGuestId.get(guestId)
     if (!state) {
       return
     }
-    this.viewportScrollStateByTabId.set(browserTabId, {
+    this.viewportScrollStatesByGuestId.set(guestId, {
       ...state,
       scrollLeft: Math.min(state.maxScrollLeft, Math.max(0, state.scrollLeft + deltaX)),
       scrollTop: Math.min(state.maxScrollTop, Math.max(0, state.scrollTop + deltaY))
     })
   }
 
-  protected canViewportScroll(browserTabId: string, mouse: Electron.MouseWheelInputEvent): boolean {
-    const state = this.viewportScrollStateByTabId.get(browserTabId)
+  protected canViewportScroll(guestId: number, mouse: Electron.MouseWheelInputEvent): boolean {
+    const state = this.viewportScrollStatesByGuestId.get(guestId)
     if (!state) {
       return false
     }
@@ -79,9 +88,9 @@ export abstract class BrowserManagerViewportScrollState {
     guestWebContentsId: number,
     applied: BrowserViewportOverride | null
   ): void {
-    const preset = this.viewportPresetByTabId.get(browserTabId)
-    if (preset?.guestWebContentsId === guestWebContentsId) {
-      this.viewportPresetByTabId.set(browserTabId, { ...preset, applied })
+    const preset = this.viewportPresetsByGuestId.get(guestWebContentsId)
+    if (preset && this.isRegisteredPageGuest(browserTabId, guestWebContentsId)) {
+      this.viewportPresetsByGuestId.set(guestWebContentsId, { ...preset, applied })
     }
   }
 

@@ -465,6 +465,33 @@ describe('folder repo git upgrade watch', () => {
     )
   })
 
+  it('resumes a parked watch on a visible replacement without a new visibility event', async () => {
+    const repoPath = join(root, 'surviving-window')
+    await mkdir(repoPath)
+    const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })])
+    const first = makeWindow()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixtures provide every store/window member read by the real upgrade watch.
+    startFolderRepoGitUpgradeWatch(store as never, first as never, { pollIntervalMs: POLL_MS })
+    await tick()
+    first.visible = false
+    await tick(3)
+    first.destroyed = true
+    gitInit(repoPath)
+    const surviving = makeWindow()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Reattachment changes only the store/window fixtures consumed by the existing watch.
+    startFolderRepoGitUpgradeWatch(store as never, surviving as never)
+    await vi.waitFor(
+      () =>
+        expect(store.updateRepo).toHaveBeenCalledWith(
+          repoTarget('folder-repo'),
+          expect.objectContaining({ kind: 'git' })
+        ),
+      { timeout: 5_000, interval: POLL_MS }
+    )
+    expect(notifyReposChanged).toHaveBeenCalledWith(surviving)
+    expect(prepareLocalWorktreeRootForRepo).toHaveBeenCalledTimes(1)
+  })
+
   it('does not notify when the repo disappears between the marker check and the update', async () => {
     const repoPath = join(root, 'my-project')
     await mkdir(repoPath)

@@ -98,6 +98,63 @@ export function dropOversizedPendingPtyData(
   }
 }
 
+/** Per-window mirror of a source pending already marked `droppedOutput: true`; replaces (not appends to) this window's own queued bytes the same way `dropOversizedPendingPtyData` replaces the source's. */
+export function markIncomingPtyDataAsDropped(
+  session: PtyIpcSession,
+  id: string,
+  data: string
+): PendingPtyData {
+  const existing = session.pendingData.get(id)
+  if (existing?.droppedOutput === true) {
+    const mode2031 = scanDroppedMode2031Data(
+      data,
+      existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+    )
+    const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+      data,
+      existing.droppedSynchronizedOutputState ?? INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+    )
+    const remainingQueryCapacity = Math.max(
+      0,
+      DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+    )
+    return {
+      ...existing,
+      data: existing.data + data.slice(0, remainingQueryCapacity),
+      droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
+      droppedMode2031ScanState: mode2031.state,
+      droppedSynchronizedOutputState: synchronizedOutput.state
+    }
+  }
+  // Scan discarded bytes for open DEC 2026/2031 state, then chain into the marker's own bytes so a toggle split at the boundary still resolves.
+  const discarded = existing?.data ?? ''
+  const discardedMode2031 = scanDroppedMode2031Data(discarded, INITIAL_MODE_2031_REPLY_SCAN_STATE)
+  const mode2031 = scanDroppedMode2031Data(data, discardedMode2031.state)
+  const discardedSynchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+    discarded,
+    INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+  )
+  const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+    data,
+    discardedSynchronizedOutput.state
+  )
+  const salvagedFromDiscarded = extractDroppedPtyQueryBytes(discarded).slice(
+    0,
+    DROPPED_QUERY_SALVAGE_MAX_CHARS
+  )
+  const remainingQueryCapacity = Math.max(
+    0,
+    DROPPED_QUERY_SALVAGE_MAX_CHARS - salvagedFromDiscarded.length
+  )
+  return {
+    data: salvagedFromDiscarded + data.slice(0, remainingQueryCapacity),
+    droppedOutput: true,
+    droppedMode2031Data: mode2031.data || discardedMode2031.data,
+    droppedMode2031ScanState: mode2031.state,
+    droppedSynchronizedOutputState: synchronizedOutput.state
+  }
+}
+
 export function appendPendingPtyData(
   session: PtyIpcSession,
   id: string,

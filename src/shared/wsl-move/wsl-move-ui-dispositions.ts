@@ -8,6 +8,11 @@ import {
 
 /** UI fields that name a repo, worktree, pane or path. Everything else in the UI state is global. */
 export const UI_STATE_DISPOSITIONS = {
+  desktopWindows: {
+    disposition: 'rewrite-desktop',
+    item: 38,
+    note: 'Window ownership stays on the desktop; per-host selections follow moved workspaces.'
+  },
   lastActiveRepoId: notApplicableDisposition(38, 'repoId is kept.'),
   lastActiveWorktreeId: moveDisposition(38, { rewriteDesktopCopy: true }),
   manualRepoOrder: moveDisposition(38, {
@@ -147,6 +152,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'windowBounds',
   'windowMaximized',
   'dashboardPopoutBounds',
+  'runtimeClientWindows',
   'starNagBaselineAgents',
   'starNagAppVersion',
   'starNagNextThreshold',

@@ -31,6 +31,12 @@ export type RuntimeApi = {
       graph: RuntimeRendererSyncWindowGraph
     ) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
+    /**
+     * Proves this renderer's runtime notification listeners are mounted. Native desktop windows
+     * gate notifier routing on this; other hosts accept and ignore it (older preloads lack it).
+     */
+    notifierReady?: () => Promise<void>
+    onNotifierReset?: (callback: () => void) => () => void
     call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
     subscribe: (
       args: { method: string; params?: unknown },

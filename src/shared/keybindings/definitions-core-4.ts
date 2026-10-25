@@ -33,6 +33,15 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'window.new',
+    title: 'New Window',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'window', 'new window', 'open'],
+    // Why: Mod+Shift+N belongs to workspace.create; no definition binds Mod+Alt+N on any platform.
+    defaultBindings: platformBindings(['Mod+Alt+N'])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

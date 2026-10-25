@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DragTempFileCopy from './dragged-temp-file-copy'
 import type { DragTempCopyItemResult } from './dragged-temp-file-copy'
 
@@ -42,6 +42,7 @@ import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
 const DRAG_TEMP = join('/', 'var', 'T', 'TemporaryItems', 'NSIRD_screencaptureui_1', 'Shot.png')
 const COPY = join('/', 'var', 'T', 'orca-drops-501', 'orca-drop-abc123', 'Shot.png')
 const FINDER = join('/', 'Users', 'me', 'Desktop', 'notes.txt')
+const windowCleanups: (() => void)[] = []
 
 function copied(sourcePath: string, destPath = sourcePath): DragTempCopyItemResult {
   return { sourcePath, status: 'imported', destPath }
@@ -63,6 +64,12 @@ beforeEach(() => {
   materializeMock.mockReset()
 })
 
+afterEach(() => {
+  for (const close of windowCleanups.splice(0)) {
+    close()
+  }
+})
+
 function createWindow() {
   let destroyed = false
   const windowListeners = new Map<string, () => void>()
@@ -79,13 +86,15 @@ function createWindow() {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preparation handler only touches the members stubbed above.
   const window = fake as unknown as BrowserWindow
+  const close = (): void => {
+    destroyed = true
+    windowListeners.get('closed')?.()
+  }
+  windowCleanups.push(close)
   return {
     window,
     webContents,
-    close: () => {
-      destroyed = true
-      windowListeners.get('closed')?.()
-    },
+    close,
     destroy: () => {
       destroyed = true
       webContents.once.mock.calls.find(([event]) => event === 'destroyed')?.[1]()
@@ -161,6 +170,29 @@ describe('registerDroppedPathPreparation', () => {
     await expect(
       handler({ sender: second.webContents }, { paths: [FINDER], consumer: 'main-reader' })
     ).resolves.toEqual({ paths: [FINDER], failures: [] })
+    second.close()
+    expect(ipcHandlers.has('fs:prepareDroppedPaths')).toBe(false)
+  })
+
+  it('keeps serving the first renderer after the newest window closes, until both close', async () => {
+    const first = createWindow()
+    const second = createWindow()
+    registerDroppedPathPreparation(first.window)
+    registerDroppedPathPreparation(second.window)
+    const handler = ipcHandlers.get('fs:prepareDroppedPaths')!
+    await expect(
+      handler({ sender: first.webContents }, { paths: [FINDER], consumer: 'main-reader' })
+    ).resolves.toEqual({ paths: [FINDER], failures: [] })
+    second.close()
+    expect(ipcHandlers.get('fs:prepareDroppedPaths')).toBe(handler)
+    await expect(
+      handler({ sender: first.webContents }, { paths: [FINDER], consumer: 'agent' })
+    ).resolves.toEqual({ paths: [FINDER], failures: [] })
+    expect(() =>
+      handler({ sender: second.webContents }, { paths: [FINDER], consumer: 'agent' })
+    ).toThrow('owning window')
+    first.close()
+    expect(ipcHandlers.has('fs:prepareDroppedPaths')).toBe(false)
   })
 
   it.skipIf(process.platform !== 'darwin')(

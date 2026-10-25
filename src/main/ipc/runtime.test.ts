@@ -21,10 +21,32 @@ vi.mock('electron', () => ({
   }
 }))
 
+import type { WebContents } from 'electron'
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
 import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import {
+  registerDesktopRenderer,
+  unregisterDesktopRenderer
+} from '../window/desktop-renderer-registry'
+import { registerNativeDesktopNotifier } from '../window/native-desktop-notifiers'
+import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+
+function stubRuntimeNotifier(): RuntimeNotifier {
+  return {
+    worktreesChanged: vi.fn(),
+    reposChanged: vi.fn(),
+    activateWorktree: vi.fn(),
+    createTerminal: vi.fn(),
+    splitTerminal: vi.fn(),
+    renameTerminal: vi.fn(),
+    focusTerminal: vi.fn(),
+    closeTerminal: vi.fn(),
+    terminalFitOverrideChanged: vi.fn(),
+    terminalDriverChanged: vi.fn()
+  }
+}
 
 function runtimeCallEvent() {
   const mainFrame = {}
@@ -147,6 +169,99 @@ describe('registerRuntimeHandlers', () => {
       handler({ sender, senderFrame: currentMainFrame }, { tabs: [], leaves: [] })
     ).toThrow('Runtime graph sync requires a renderer generation')
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
+  })
+
+  it('flushes a buffered broadcast to a native window once it pings runtime:notifierReady', () => {
+    const runtime = { syncWindowGraph: vi.fn(), setNotifier: vi.fn() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only retains this partial runtime; the test invokes the notifier-ready handler.
+    registerRuntimeHandlers(runtime as never)
+    const readyHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:notifierReady'
+    )?.[1]
+    expect(readyHandler).toBeTypeOf('function')
+
+    const mainFrame = {}
+    const renderer = {
+      id: 901,
+      on: vi.fn(),
+      getType: () => 'window',
+      isDestroyed: () => false,
+      mainFrame
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the renderer registry and readiness handler members exercised here.
+    const webContents = renderer as unknown as WebContents
+    const window = { id: 901, isDestroyed: () => false, webContents }
+    registerDesktopRenderer(webContents, 'window-901')
+    try {
+      const reposChanged = vi.fn()
+      const notifier: RuntimeNotifier = {
+        ...stubRuntimeNotifier(),
+        reposChanged,
+        worktreesChanged: vi.fn()
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing uses only the fixture's setNotifier; no runtime graph command is invoked.
+      registerNativeDesktopNotifier(runtime as never, window, notifier, () => true)
+      const router = runtime.setNotifier.mock.calls.at(-1)?.[0]
+      router.reposChanged()
+      expect(reposChanged).not.toHaveBeenCalled()
+
+      fromWebContentsMock.mockReturnValue(window)
+      readyHandler?.({ sender: webContents, senderFrame: mainFrame })
+
+      expect(reposChanged).toHaveBeenCalledTimes(1)
+    } finally {
+      unregisterDesktopRenderer(webContents)
+    }
+  })
+
+  it('ignores runtime:notifierReady from a sender with no registered desktop window id', () => {
+    const runtime = { syncWindowGraph: vi.fn(), setNotifier: vi.fn() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test exercises admission only and invokes no other runtime service method.
+    registerRuntimeHandlers(runtime as never)
+    const readyHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:notifierReady'
+    )?.[1]
+
+    fromWebContentsMock.mockReturnValue({ id: 999 })
+    expect(() => readyHandler?.({ sender: { id: 999 } })).not.toThrow()
+  })
+
+  it('ignores runtime:notifierReady sent from a stale (non-main) frame', () => {
+    const runtime = { syncWindowGraph: vi.fn(), setNotifier: vi.fn() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stale-frame admission test invokes no runtime operations.
+    registerRuntimeHandlers(runtime as never)
+    const readyHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:notifierReady'
+    )?.[1]
+
+    const mainFrame = {}
+    const staleFrame = {}
+    const renderer = {
+      id: 902,
+      on: vi.fn(),
+      getType: () => 'window',
+      isDestroyed: () => false,
+      mainFrame
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the registry and sender-frame identity used by admission.
+    const webContents = renderer as unknown as WebContents
+    const window = { id: 902, isDestroyed: () => false, webContents }
+    registerDesktopRenderer(webContents, 'window-902')
+    try {
+      const reposChanged = vi.fn()
+      const notifier: RuntimeNotifier = { ...stubRuntimeNotifier(), reposChanged }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only setNotifier is used, since the rejected sender never issues a graph command.
+      registerNativeDesktopNotifier(runtime as never, window, notifier, () => true)
+      const router = runtime.setNotifier.mock.calls.at(-1)?.[0]
+      router.reposChanged()
+
+      fromWebContentsMock.mockReturnValue(window)
+      expect(() => readyHandler?.({ sender: webContents, senderFrame: staleFrame })).not.toThrow()
+
+      expect(reposChanged).not.toHaveBeenCalled()
+    } finally {
+      unregisterDesktopRenderer(webContents)
+    }
   })
 
   it('answers runtime:getStatus only once the machine-name lookup has landed', async () => {

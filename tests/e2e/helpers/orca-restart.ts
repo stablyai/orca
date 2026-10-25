@@ -166,6 +166,7 @@ export function createRestartSession(
       env: {
         ...homeIsolation.env,
         ...options?.extraEnv,
+        ELECTRON_RENDERER_URL: '',
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })
@@ -207,6 +208,7 @@ export function createRestartSession(
       args: getOrcaElectronLaunchArgs(mainPath, false),
       env: {
         ...homeIsolation.env,
+        ELECTRON_RENDERER_URL: '',
         ORCA_BACKGROUND_LAUNCH: '1',
         ORCA_E2E_HEADLESS: '1',
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)

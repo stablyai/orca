@@ -14,6 +14,27 @@ import {
 import type { PtyIpcSession } from '../session'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 
+export function resetPtyRendererDeliveryAccounting(
+  session: PtyIpcSession,
+  armWatchdog: boolean
+): void {
+  session.lastLifecycleResetClearedChars = session.rendererInFlightTotalChars
+  session.rendererLifecycleResetCount += 1
+  session.producerFlowControl.releaseAll()
+  session.clearDeliveryResyncProbe()
+  session.deliveryResyncUnansweredWarnLogged = false
+  session.rendererDeliveryAccountingByPty.clear()
+  session.rendererInFlightTotalChars = 0
+  session.clearPendingPtyData()
+  session.pendingOverflowMarkedPtys.clear()
+  session.rendererDeliveryRestoreNeededPtys.clear()
+  session.rendererPtyDispatcherReady = false
+  session.clearDispatcherReadyWatchdog()
+  if (armWatchdog) {
+    session.armDispatcherReadyWatchdog()
+  }
+}
+
 export function getRendererInFlightCharsForPty(session: PtyIpcSession, id: string): number {
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
   return accounting ? accounting.sentChars - accounting.ackedChars : 0
@@ -170,7 +191,9 @@ export function writeOffLostRendererDelivery(
     if (acknowledged <= 0) {
       continue
     }
-    tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
+    if (!session.options?.rendererDeliveryOnly) {
+      tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
+    }
     // The snapshot covers pre-marker pending bytes; flushing them would paint twice.
     const pending = session.pendingData.get(id)
     if (pending) {
@@ -179,7 +202,8 @@ export function writeOffLostRendererDelivery(
       session.pendingOverflowMarkedPtys.delete(id)
       session.updateProducerFlowControl(id)
     }
-    const markerSeq = session.runtime?.getPtyOutputSequence(id)
+    const markerSeq =
+      session.runtime?.getPtyOutputSequence(id) ?? session.options?.outputSequenceOf?.(id)
     writtenOff.push({
       id,
       ...(typeof markerSeq === 'number' ? { markerSeq } : {}),

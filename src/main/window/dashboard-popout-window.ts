@@ -5,14 +5,9 @@ import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
-import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
-import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingInput,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
+import type { UIZoomDirection } from '../../shared/ui-zoom-level'
+import type { KeybindingOverrides } from '../../shared/keybindings'
+import { installWindowLocalZoomShortcuts, stepWebContentsZoom } from './window-zoom-shortcuts'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -38,32 +33,6 @@ export function isDashboardPopoutRenderer(sender: WebContents): boolean {
   return getDashboardPopoutWindow()?.webContents === sender
 }
 
-function zoomDashboardPopout(window: BrowserWindow, direction: UIZoomDirection): void {
-  const webContents = window.webContents
-  webContents.setZoomLevel(stepUIZoomLevel(webContents.getZoomLevel(), direction))
-}
-
-const ZOOM_SHORTCUTS: readonly [KeybindingActionId, UIZoomDirection][] = [
-  ['zoom.in', 'in'],
-  ['zoom.out', 'out'],
-  ['zoom.reset', 'reset']
-]
-
-function resolveZoomShortcut(
-  input: KeybindingInput,
-  keybindings: KeybindingOverrides | undefined
-): UIZoomDirection | null {
-  // Why: this runs on every keydown; avoid scanning unrelated window shortcuts in the typing path.
-  for (const [actionId, direction] of ZOOM_SHORTCUTS) {
-    if (
-      keybindingMatchesAction(actionId, input, process.platform, keybindings, { context: 'app' })
-    ) {
-      return direction
-    }
-  }
-  return null
-}
-
 /**
  * Apply a zoom step to the pop-out when it is the focused window. Returns false
  * when the pop-out is closed or unfocused so the caller can route the action to
@@ -75,7 +44,7 @@ export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolea
   if (!popout || !popout.isFocused()) {
     return false
   }
-  zoomDashboardPopout(popout, direction)
+  stepWebContentsZoom(popout.webContents, direction)
   return true
 }
 
@@ -209,31 +178,7 @@ export function createOrFocusDashboardPopout(
     }
   })
 
-  // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
-  // zoom chords here and let every other key fall through untouched.
-  window.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
-      return
-    }
-    const direction = resolveZoomShortcut(input, options.getKeybindings?.())
-    if (direction) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
-
-  window.webContents.on('zoom-changed', (event, direction) => {
-    // Why: Electron reports Ctrl/Cmd+wheel zoom outside the keyboard input path.
-    if (
-      (direction === 'in' || direction === 'out') &&
-      nativeZoomCommandMatchesKeybindings(direction, process.platform, options.getKeybindings?.(), {
-        context: 'app'
-      })
-    ) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
+  installWindowLocalZoomShortcuts(window.webContents, () => options.getKeybindings?.())
 
   window.once('ready-to-show', () => {
     showWindowWithoutStealingFocus(window)

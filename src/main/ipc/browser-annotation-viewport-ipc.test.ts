@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
   getAuthorizedGuest: vi.fn(() => ({})),
-  setAnnotationViewportBridge: vi.fn().mockResolvedValue(true)
+  setAnnotationViewportBridge: vi.fn().mockResolvedValue(true),
+  selectNativeRenderer: vi.fn()
 }))
 
 vi.mock('electron', () => ({

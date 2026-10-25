@@ -68,7 +68,9 @@ export async function switchBrowserClientPageProfile(input: {
         ...dependencies,
         // A profile switch cannot change the execution route or supersede the old guest.
         retireSupersededExecutionHostPages: async () => {},
-        guestBinding: { bind: () => {}, release: () => {} }
+        guestBinding: { bind: () => {}, release: () => {} },
+        // The replacement must mount through the page's own renderer, not whichever window is now focused.
+        selectRenderer: () => old.renderer
       },
       create,
       signal,

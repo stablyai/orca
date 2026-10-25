@@ -31,12 +31,13 @@ import {
   assertTerminalQuickCommandMutationReadableForClient,
   projectTerminalQuickCommandsForClient
 } from './terminal-quick-command-client-capabilities'
+import { omitStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 
 function uiForCaller(
   state: PersistedUIState,
   context: Pick<RpcContext, 'clientKind' | 'pairedDeviceParentId'>
 ): PairedUiState & Pick<PersistedUIState, 'hideWorkspacesFromOtherDevices'> {
-  const ui = omitPairingLocalUiFields(state)
+  const ui = omitPairingLocalUiFields(omitStoredFields(state, ['desktopWindows']))
   // Why always sent: its presence tells the phone this host shares the filter; an older host omits
   // it, and the phone then keeps its local value.
   return isHostOwnPhone(context)

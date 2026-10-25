@@ -23,8 +23,12 @@ export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifec
     const sessionNames = new Set([
       ...this.sessions.keys(),
       ...this.pendingSessionCreation.keys(),
-      ...this.pendingSessionDestruction.keys()
+      ...this.pendingSessionDestruction.keys(),
+      ...this.commandQueues.keys()
     ])
+    for (const sessionName of sessionNames) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
+    }
     await mapSettledWithConcurrency(
       [...sessionNames],
       AGENT_BROWSER_CLEANUP_CONCURRENCY,

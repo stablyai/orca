@@ -39,6 +39,7 @@ import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard-popout'
 import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space-window'
+import { registerRuntimeClientWindowHandlers } from '../runtime-client-window'
 import { registerTerminalPreviewHandlers } from '../terminal-preview'
 import { registerDeveloperPermissionHandlers } from '../developer-permissions'
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
@@ -209,6 +210,7 @@ export function registerCoreHandlers(
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)
   registerWorkspaceSpaceWindowHandlers(store)
+  registerRuntimeClientWindowHandlers()
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
   // Diagnostics and telemetry register independent channels and keep separate data paths.

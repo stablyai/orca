@@ -7,6 +7,8 @@ const {
   attachGuestPoliciesMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
+  getGuestWebContentsIdForRendererMock,
+  getTabIdForWebContentsIdMock,
   getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
   getAuthorizedGuestMock,
@@ -16,7 +18,8 @@ const {
   cancelDownloadMock,
   proceedCertificateMock,
   browserWindowFromWebContentsMock,
-  webContentsFromIdMock
+  webContentsFromIdMock,
+  selectNativeRendererMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
@@ -24,6 +27,8 @@ const {
   attachGuestPoliciesMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
+  getGuestWebContentsIdForRendererMock: vi.fn(),
+  getTabIdForWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
   getAuthorizedGuestMock: vi.fn(),
@@ -33,7 +38,8 @@ const {
   cancelDownloadMock: vi.fn(),
   proceedCertificateMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
-  webContentsFromIdMock: vi.fn()
+  webContentsFromIdMock: vi.fn(),
+  selectNativeRendererMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -54,10 +60,13 @@ vi.mock('../browser/browser-manager', () => ({
     proceed: proceedCertificateMock
   },
   browserManager: {
+    selectNativeRenderer: selectNativeRendererMock,
     registerGuest: registerGuestMock,
     attachGuestPolicies: attachGuestPoliciesMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
+    getGuestWebContentsIdForRenderer: getGuestWebContentsIdForRendererMock,
+    getTabIdForWebContentsId: getTabIdForWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     getAuthorizedGuest: getAuthorizedGuestMock,
@@ -69,6 +78,7 @@ vi.mock('../browser/browser-manager', () => ({
 }))
 
 import { registerBrowserHandlers, setAgentBrowserBridgeRef, type BrowserGuestArgs } from './browser'
+import { nativeRegistrationRegressions } from './browser-native-registration.test-fixture'
 import {
   waitForAnyTabRegistration,
   waitForTabRegistration,
@@ -76,6 +86,13 @@ import {
 } from './browser-tab-registration-wait'
 
 describe('registerBrowserHandlers', () => {
+  nativeRegistrationRegressions({
+    handleMock,
+    getGuestWebContentsIdMock,
+    getTabIdForWebContentsIdMock,
+    getWorktreeIdForTabMock
+  })
+
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     removeHandlerMock.mockReset()
@@ -85,6 +102,8 @@ describe('registerBrowserHandlers', () => {
     attachGuestPoliciesMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
+    getGuestWebContentsIdForRendererMock.mockReset()
+    getTabIdForWebContentsIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
@@ -99,6 +118,7 @@ describe('registerBrowserHandlers', () => {
     browserWindowFromWebContentsMock.mockReset()
     webContentsFromIdMock.mockReset()
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    selectNativeRendererMock.mockReset()
     openDevToolsMock.mockResolvedValue(true)
     setAnnotationViewportBridgeMock.mockResolvedValue(true)
     setAgentBrowserBridgeRef(null)
@@ -167,7 +187,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('validates exact live guest registration only for the trusted renderer', () => {
-    getGuestWebContentsIdMock.mockReturnValue(123)
+    getGuestWebContentsIdForRendererMock.mockReturnValue(123)
     registerBrowserHandlers()
     const validateHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:isGuestRegistered'
@@ -182,6 +202,7 @@ describe('registerBrowserHandlers', () => {
     expect(
       validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
     ).toBe(true)
+    expect(getGuestWebContentsIdForRendererMock).toHaveBeenCalledWith('page-1', 91)
     expect(
       validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 124 })
     ).toBe(false)
@@ -312,13 +333,14 @@ describe('registerBrowserHandlers', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
+    getGuestWebContentsIdMock.mockReturnValue(123)
     expect(
       proceedHandler(
         { sender: trustedSender },
         { browserPageId: 'page-1', challengeId: 'challenge-1' }
       )
     ).toEqual({ ok: true })
-    expect(proceedCertificateMock).toHaveBeenCalledWith('page-1', 'challenge-1')
+    expect(proceedCertificateMock).toHaveBeenCalledWith('page-1', 'challenge-1', 123)
 
     proceedCertificateMock.mockClear()
     const untrustedSender = {
@@ -352,33 +374,6 @@ describe('registerBrowserHandlers', () => {
       expect(proceedHandler({ sender }, args)).toEqual({ ok: false, reason: 'missing' })
     }
     expect(proceedCertificateMock).not.toHaveBeenCalled()
-  })
-
-  it('updates the bridge active tab for the owning worktree', async () => {
-    const onTabChangedMock = vi.fn()
-    getGuestWebContentsIdMock.mockReturnValue(4242)
-    getWorktreeIdForTabMock.mockReturnValue('wt-browser')
-
-    setAgentBrowserBridgeRef({ onTabChanged: onTabChangedMock } as never)
-    registerBrowserHandlers()
-
-    const activeTabChangedHandler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'browser:activeTabChanged'
-    )?.[1] as (event: { sender: Electron.WebContents }, args: { browserPageId: string }) => boolean
-
-    const result = activeTabChangedHandler(
-      {
-        sender: {
-          isDestroyed: () => false,
-          getType: () => 'window',
-          getURL: () => 'file:///renderer/index.html'
-        } as Electron.WebContents
-      },
-      { browserPageId: 'page-1' }
-    )
-
-    expect(result).toBe(true)
-    expect(onTabChangedMock).toHaveBeenCalledWith(4242, 'wt-browser')
   })
 
   it('resolves concurrent tab registration waiters for the same page', async () => {

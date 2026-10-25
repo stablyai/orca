@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "Nova janela",
+    "openInNewWindow": "Abrir em uma nova janela",
+    "openFailed": "Não foi possível abrir uma nova janela",
+    "openFailedDetail": "Motivo: {{reason}}"
+  },
   "common": {
     "retry": "Tentar novamente",
     "cancel": "Cancelar"

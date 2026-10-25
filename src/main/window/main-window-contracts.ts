@@ -9,11 +9,13 @@ import type { RendererLivenessAtDeath } from './renderer-liveness-at-death'
 
 /** Per-load outcome from Electron's load promise, which is scoped to that one load unlike `did-finish-load`. */
 export type MainWindowLoadObserver = {
+  worktreeId?: string
   onLoaded?: () => void
   onError?: (error: Error) => void
 }
 
 export type CreateMainWindowOptions = {
+  windowId?: string
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */

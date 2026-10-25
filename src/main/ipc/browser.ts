@@ -3,6 +3,8 @@ import { browserCertificateTrustController, browserManager } from '../browser/br
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../browser/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { selectTrustedBrowserRenderer } from './browser-renderer-selection'
+import { desktopWindowId } from '../window/desktop-renderer-registry'
 import {
   isLiveBrowserWebContentsId,
   resolveTabRegistrationWaiters
@@ -26,7 +28,11 @@ import type {
 } from '../../shared/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../browser/browser-page-prompts'
 
-let agentBrowserBridgeRef: AgentBrowserBridge | null = null
+type BrowserAgentLifecycle = Pick<
+  AgentBrowserBridge,
+  'onProcessSwap' | 'onTabClosed' | 'onTabChanged'
+>
+let agentBrowserBridgeRef: BrowserAgentLifecycle | null = null
 
 export type BrowserGuestArgs = {
   browserPageId: string
@@ -36,7 +42,7 @@ export type BrowserGuestArgs = {
   webContentsId: number
 }
 
-export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): void {
+export function setAgentBrowserBridgeRef(bridge: BrowserAgentLifecycle | null): void {
   agentBrowserBridgeRef = bridge
 }
 
@@ -89,7 +95,12 @@ export function registerBrowserHandlers(): void {
     if (!registered) {
       return false
     }
-    if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
+    if (
+      agentBrowserBridgeRef &&
+      previousWcId !== null &&
+      previousWcId !== args.webContentsId &&
+      browserManager.getTabIdForWebContentsId(previousWcId) !== args.browserPageId
+    ) {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
     resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
@@ -155,8 +166,8 @@ export function registerBrowserHandlers(): void {
         return false
       }
       return (
-        browserManager.getGuestWebContentsId(args.browserPageId) === args.webContentsId &&
-        isLiveBrowserWebContentsId(args.webContentsId)
+        browserManager.getGuestWebContentsIdForRenderer(args.browserPageId, event.sender.id) ===
+          args.webContentsId && isLiveBrowserWebContentsId(args.webContentsId)
       )
     }
   )
@@ -169,13 +180,31 @@ export function registerBrowserHandlers(): void {
     if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
       return false
     }
+    const isNative = Boolean(desktopWindowId(event.sender))
+    // A native renderer may only unregister its own guest, never a peer window's.
+    const wcId = isNative
+      ? browserManager.getGuestWebContentsIdForRenderer(args.browserPageId, event.sender.id)
+      : browserManager.getGuestWebContentsId(args.browserPageId)
+    if (isNative && wcId === null) {
+      return false
+    }
     // Destroy bridge sessions before unregistering clears the guest mapping.
-    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
-    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
-    browserManager.unregisterGuest(args.browserPageId)
+    if (wcId !== null || !isNative) {
+      cancelBrowserWebAuthnAccountRequests(
+        args.browserPageId,
+        isNative ? (wcId ?? undefined) : undefined
+      )
+    }
+    const unregistered = browserManager.unregisterGuestForRenderer(
+      args.browserPageId,
+      event.sender.id
+    )
+    if (!unregistered && isNative) {
+      return false
+    }
     disposeGrabModeStateForPage(args.browserPageId)
     return true
   })
@@ -213,13 +242,21 @@ export function registerBrowserHandlers(): void {
       ) {
         return { ok: false, reason: 'missing' }
       }
-      return browserCertificateTrustController.proceed(args.browserPageId, args.challengeId)
+      const webContentsId = desktopWindowId(event.sender)
+        ? browserManager.getGuestWebContentsIdForRenderer(args.browserPageId, event.sender.id)
+        : browserManager.getGuestWebContentsId(args.browserPageId)
+      return browserCertificateTrustController.proceed(
+        args.browserPageId,
+        args.challengeId,
+        webContentsId
+      )
     }
   )
 
   // Keep agent commands aligned with the tab the user selected.
   ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
+    // Explicit activation: this is the one path that may move the shared selection cursor.
+    if (!selectTrustedBrowserRenderer(event.sender)) {
       return false
     }
     if (!agentBrowserBridgeRef) {

@@ -16,6 +16,9 @@ import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { publishMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import { desktopWindowId } from '../window/desktop-renderer-registry'
+import { nativeDesktopWindowGraphs } from '../runtime/native-desktop-window-graphs'
+import { markNativeDesktopNotifierReady } from '../window/native-desktop-notifiers'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -31,6 +34,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
+  ipcMain.removeHandler('runtime:notifierReady')
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
@@ -49,8 +53,10 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      const result = runtime.syncWindowGraph(window.id, graph)
-      // Only the authoritative window's accepted graph may publish its project catalog.
+      const result = desktopWindowId(event.sender)
+        ? nativeDesktopWindowGraphs(runtime).sync(window.id, graph)
+        : runtime.syncWindowGraph(window.id, graph)
+      // Only an accepted graph may publish its project catalog.
       if (graph.projectSectionCatalog) {
         publishMobileProjectSections(graph.projectSectionCatalog)
       }
@@ -62,6 +68,18 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     // Match status.get's capped name wait; later reads pick up a lookup that is still running.
     await runtime.machineNameReady()
     return runtime.getStatus()
+  })
+
+  // Why: a native window multiplexes one runtime across many renderers; only an explicit ping
+  // proves this one's notifier listeners are mounted (did-finish-load can precede them).
+  ipcMain.handle('runtime:notifierReady', (event): void => {
+    if (event.senderFrame !== event.sender.mainFrame) {
+      return
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window && desktopWindowId(event.sender)) {
+      markNativeDesktopNotifierReady(runtime, window.id)
+    }
   })
 
   ipcMain.handle(

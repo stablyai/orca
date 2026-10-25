@@ -51,6 +51,7 @@ import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { isTrustedDesktopRenderer } from './desktop-renderer-registry'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -321,21 +322,5 @@ function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
 }
 
 function isTrustedClipboardRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedClipboardRendererWebContentsId != null) {
-    return sender.id === trustedClipboardRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
+  return isTrustedDesktopRenderer(sender, trustedClipboardRendererWebContentsId, true)
 }

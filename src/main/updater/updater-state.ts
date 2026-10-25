@@ -1,4 +1,8 @@
-import type { BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
+import {
+  broadcastDesktopRendererEvent,
+  preferredDesktopRenderer
+} from '../window/desktop-renderer-registry'
 import type { ElectronAutoUpdater } from '../electron-updater-loader'
 import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
 import type { UpdateSource, UpdateStatus } from '../../shared/update-status-types'
@@ -43,7 +47,23 @@ export class ReleaseFeedPreflightError extends Error {
 }
 
 export abstract class UpdaterState {
-  protected mainWindowRef: BrowserWindow | null = null
+  private lastMainWindowRef: BrowserWindow | null = null
+  protected get mainWindowRef(): BrowserWindow | null {
+    const renderer = preferredDesktopRenderer()
+    return renderer
+      ? BrowserWindow.fromWebContents(renderer)
+      : this.lastMainWindowRef?.isDestroyed?.()
+        ? null
+        : this.lastMainWindowRef
+  }
+  protected set mainWindowRef(window: BrowserWindow | null) {
+    this.lastMainWindowRef = window
+  }
+  protected sendToRenderers(channel: string, ...args: unknown[]): void {
+    if (broadcastDesktopRendererEvent(channel, ...args) === 0) {
+      this.mainWindowRef?.webContents.send(channel, ...args)
+    }
+  }
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null

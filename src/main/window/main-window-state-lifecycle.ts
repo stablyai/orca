@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
 import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
+import { desktopWindowUI, saveDesktopWindowGeometry } from '../persistence/desktop-window-state'
 
 export type MainWindowStateLifecycle = {
   clearInitialRevealFallbackTimer: () => void
@@ -14,13 +15,24 @@ export type MainWindowStateLifecycle = {
 
 export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
+  windowId?: string
   revealOnDidFinishLoad: boolean
   savedMaximized: boolean
   store: Store | null
 }): MainWindowStateLifecycle {
-  const { mainWindow, revealOnDidFinishLoad, savedMaximized, store } = args
+  const { mainWindow, revealOnDidFinishLoad, savedMaximized, store, windowId } = args
+  const persistGeometry = (updates: {
+    windowBounds?: Electron.Rectangle
+    windowMaximized?: boolean
+  }): void => {
+    if (store) {
+      saveDesktopWindowGeometry(store, windowId, updates)
+    }
+  }
   mainWindow.webContents.on('dom-ready', () => {
-    const level = store?.getUI().uiZoomLevel ?? 0
+    const level = store
+      ? (desktopWindowUI(store.getUI(), mainWindow.webContents).uiZoomLevel ?? 0)
+      : 0
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
@@ -88,17 +100,17 @@ export function installMainWindowStateLifecycle(args: {
       // Why: persist windowMaximized and windowBounds atomically; the near-min guard must not leave them a mismatched pair.
       const isMaximized = mainWindow.isMaximized()
       if (isMaximized) {
-        store?.updateUI({ windowMaximized: true })
+        persistGeometry({ windowMaximized: true })
         return
       }
       const bounds = mainWindow.getBounds()
       // Why: never persist shrink-to-min bounds (teardown race past the freeze, PR #1269); fall back to defaultBounds next launch.
       if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
         console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
-        store?.updateUI({ windowMaximized: false })
+        persistGeometry({ windowMaximized: false })
         return
       }
-      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+      persistGeometry({ windowMaximized: false, windowBounds: bounds })
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
@@ -121,7 +133,7 @@ export function installMainWindowStateLifecycle(args: {
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: true })
+    persistGeometry({ windowMaximized: true })
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -133,10 +145,10 @@ export function installMainWindowStateLifecycle(args: {
     // Why: mirror the saveBounds guard — unmaximize during teardown can land at min size; don't persist that as remembered size.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
       console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
-      store?.updateUI({ windowMaximized: false })
+      persistGeometry({ windowMaximized: false })
       return
     }
-    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+    persistGeometry({ windowMaximized: false, windowBounds: bounds })
   })
 
   mainWindow.on('enter-full-screen', () => {

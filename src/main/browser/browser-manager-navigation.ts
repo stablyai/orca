@@ -60,9 +60,8 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
 
   // Popups have no device-metrics override; never inherit the opener tab's mobile identity.
   protected hasMobileViewportApplied(guestWebContentsId: number): boolean {
-    const browserPageId = this.tabIdByWebContentsId.get(guestWebContentsId)
-    const preset = browserPageId ? this.viewportPresetByTabId.get(browserPageId) : undefined
-    return preset?.guestWebContentsId === guestWebContentsId && preset.applied?.mobile === true
+    const preset = this.viewportPresetsByGuestId.get(guestWebContentsId)
+    return this.tabIdByWebContentsId.has(guestWebContentsId) && preset?.applied?.mobile === true
   }
 
   /** Write synchronously at cross-document navigation start; later UA writes can abort or reload. */

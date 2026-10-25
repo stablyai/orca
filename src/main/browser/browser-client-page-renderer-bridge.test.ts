@@ -9,6 +9,31 @@ import {
 } from './browser-client-page-renderer-bridge-test-rig'
 
 describe('BrowserClientPageRendererBridgeRegistry', () => {
+  it('keeps peer requests and pages alive through another renderer reload and retirement', async () => {
+    const harness = createHarness()
+    const first = harness.registry.attachRenderer(harness.endpoint)
+    const firstMount = first.mountPage(page, new AbortController().signal)
+    const firstResult = Promise.allSettled([firstMount])
+    const peerEndpoint = createEndpoint(42)
+    const peer = harness.registry.attachRenderer(peerEndpoint)
+    expect(first.isCurrent()).toBe(true)
+    expect(peer.isCurrent()).toBe(true)
+    completeMount(harness, harness.endpoint, 91)
+    expect(await firstResult).toEqual([{ status: 'fulfilled', value: { webContentsId: 91 } }])
+
+    const retained = first.mountPage(page, new AbortController().signal)
+    peerEndpoint.mainFrame = {}
+    const reloaded = harness.registry.attachRenderer(peerEndpoint)
+    expect(peer.isCurrent()).toBe(false)
+    expect(first.isCurrent()).toBe(true)
+    expect(reloaded.isCurrent()).toBe(true)
+    expect(harness.registry.retireRenderer(peerEndpoint)).toBe(true)
+    expect(harness.registry.selectRenderer()).toBe(first)
+    completeMount(harness, harness.endpoint, 92)
+    await expect(retained).resolves.toEqual({ webContentsId: 92 })
+    harness.registry.dispose()
+  })
+
   it('rekeys only after an exact current-document echo', async () => {
     const harness = createHarness()
     const renderer = harness.registry.attachRenderer(harness.endpoint)

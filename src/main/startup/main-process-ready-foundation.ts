@@ -14,6 +14,7 @@ import { getCanonicalUserDataPath } from '../persistence'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { registerWslMoveDesktopWindowRewrite } from '../persistence/moving-wsl-projects/wsl-move-desktop-windows'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
@@ -158,7 +159,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why before any handler or runtime: a project a WSL move is taking must never get a new terminal.
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
   // Finishes a move that committed before a crash; gated off it does nothing, and it never throws.
-  void runGatedWslMoveDesktopRewritePass({ userDataPath: getAppEnvironment().getPath('userData') })
+  registerWslMoveDesktopWindowRewrite(store)
+  await runGatedWslMoveDesktopRewritePass({ userDataPath: getAppEnvironment().getPath('userData') })
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —

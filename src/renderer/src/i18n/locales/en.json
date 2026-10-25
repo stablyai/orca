@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "New Window",
+    "openInNewWindow": "Open in New Window",
+    "openFailed": "Could not open a new window",
+    "openFailedDetail": "Reason: {{reason}}"
+  },
   "csv": {
     "detectingDelimiter": "Detecting delimiter…",
     "indexProgress": "Indexing CSV… {{percent}}%",

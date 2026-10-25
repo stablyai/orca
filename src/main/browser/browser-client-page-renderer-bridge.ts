@@ -60,7 +60,7 @@ export class BrowserClientPageRendererBridgeRegistry {
   private readonly timeoutMs: number
   private readonly createRequestId: () => string
   private readonly pending = new Map<string, PendingRequest>()
-  private current: RendererState | null = null
+  private readonly renderers = new Map<number, RendererState>()
   private disposed = false
 
   constructor(
@@ -90,9 +90,9 @@ export class BrowserClientPageRendererBridgeRegistry {
     if (this.disposed) {
       throw new Error('browser_client_page_renderer_registry_disposed')
     }
-    const previous = this.current
+    const previous = this.renderers.get(endpoint.id)
     if (previous) {
-      this.current = null
+      this.renderers.delete(endpoint.id)
       this.rejectRendererPending(previous, 'browser_client_page_renderer_replaced')
     }
     const state: RendererState = { endpoint, frame, bridge: null }
@@ -109,12 +109,16 @@ export class BrowserClientPageRendererBridgeRegistry {
       retirePage: (page: RendererPageIdentity) => this.retirePage(state, page)
     })
     state.bridge = bridge
-    this.current = state
+    this.renderers.set(endpoint.id, state)
     return bridge
   }
 
-  selectRenderer = (): BrowserClientPageRenderer => {
-    const state = this.current
+  selectRenderer = (preferredId?: number): BrowserClientPageRenderer => {
+    const preferred = preferredId === undefined ? undefined : this.renderers.get(preferredId)
+    const state =
+      preferred && this.isCurrent(preferred)
+        ? preferred
+        : [...this.renderers.values()].find((renderer) => this.isCurrent(renderer))
     const bridge = state?.bridge
     if (!state || !bridge || !this.isCurrent(state)) {
       throw new Error('browser_client_page_renderer_unavailable')
@@ -123,11 +127,11 @@ export class BrowserClientPageRendererBridgeRegistry {
   }
 
   retireRenderer(endpoint: BrowserClientPageRendererEndpoint): boolean {
-    const state = this.current
+    const state = this.renderers.get(endpoint.id)
     if (!state || state.endpoint !== endpoint) {
       return false
     }
-    this.current = null
+    this.renderers.delete(endpoint.id)
     this.rejectRendererPending(state, 'browser_client_page_renderer_retired')
     return true
   }
@@ -137,11 +141,10 @@ export class BrowserClientPageRendererBridgeRegistry {
       return
     }
     this.disposed = true
-    const state = this.current
-    this.current = null
-    if (state) {
+    for (const state of this.renderers.values()) {
       this.rejectRendererPending(state, 'browser_client_page_renderer_registry_disposed')
     }
+    this.renderers.clear()
     this.options.transport.offReply(this.onReply)
   }
 
@@ -298,7 +301,7 @@ export class BrowserClientPageRendererBridgeRegistry {
   private isCurrent(state: RendererState): boolean {
     return (
       !this.disposed &&
-      this.current === state &&
+      this.renderers.get(state.endpoint.id) === state &&
       readCurrentRendererFrame(state.endpoint) === state.frame
     )
   }

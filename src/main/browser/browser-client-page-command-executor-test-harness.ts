@@ -52,6 +52,7 @@ export function createLifecycleClaim(
 export function createHarness(options: { maxPages?: number } = {}) {
   const order: string[] = []
   let rendererCurrent = true
+  let focusedRendererCurrent = true
   const route = {
     key: 'execution-host-a',
     executionHostIdentity: 'execution-host-record-a',
@@ -76,6 +77,18 @@ export function createHarness(options: { maxPages?: number } = {}) {
     }),
     retirePage: vi.fn(async () => {
       order.push('retire-renderer-page')
+    })
+  }
+  // A second desktop window that may become focused after the page's own renderer mounted it.
+  const focusedRenderer = {
+    rendererWebContentsId: 12,
+    isCurrent: vi.fn(() => focusedRendererCurrent),
+    mountPage: vi.fn(async () => {
+      order.push('mount-page-focused-renderer')
+      return { webContentsId: 51 }
+    }),
+    retirePage: vi.fn(async () => {
+      order.push('retire-focused-renderer-page')
     })
   }
   const dependencies = {
@@ -138,10 +151,14 @@ export function createHarness(options: { maxPages?: number } = {}) {
     executor: new BrowserClientPageCommandExecutor(dependencies),
     order,
     renderer,
+    focusedRenderer,
     route,
     routeSession,
     setRendererCurrent: (value: boolean) => {
       rendererCurrent = value
+    },
+    setFocusedRendererCurrent: (value: boolean) => {
+      focusedRendererCurrent = value
     }
   }
 }

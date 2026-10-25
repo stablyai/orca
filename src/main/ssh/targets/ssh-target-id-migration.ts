@@ -128,6 +128,25 @@ export function migrateUiHostScopeSshTargetId(
   const oldHostId = toSshExecutionHostId(oldTargetId)
   const newHostId = toSshExecutionHostId(newTargetId)
   let changed = false
+  for (const window of Object.values(ui.desktopWindows ?? {})) {
+    const oldView = window.viewsByHostId?.[oldHostId]
+    if (oldView && window.viewsByHostId) {
+      window.viewsByHostId[newHostId] = window.viewsByHostId[newHostId] ?? oldView
+      delete window.viewsByHostId[oldHostId]
+      if (oldView.activeWorkspaceExecutionHostId === oldHostId) {
+        oldView.activeWorkspaceExecutionHostId = newHostId
+      }
+      changed = true
+    }
+    const selected = window.ui?.lastActiveWorktreeId
+    if (selected?.startsWith(`${oldHostId}|`)) {
+      window.ui = {
+        ...window.ui,
+        lastActiveWorktreeId: `${newHostId}${selected.slice(oldHostId.length)}`
+      }
+      changed = true
+    }
+  }
   if (ui.workspaceHostScope === oldHostId) {
     ui.workspaceHostScope = newHostId
     changed = true

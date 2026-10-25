@@ -5,7 +5,7 @@ import type { AppState } from '@/store/types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { pairedServerMirrors } from './paired-server-workspace'
 
-type HeldWorkspacesStore = {
+export type HeldWorkspacesStore = {
   getState: () => AppState
   subscribe: (listener: (state: AppState) => void) => () => void
 }

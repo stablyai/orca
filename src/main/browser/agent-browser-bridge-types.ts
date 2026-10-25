@@ -58,6 +58,7 @@ export type AgentBrowserExecOptions = {
 
 export type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
+  retargetNavigation?: boolean
   // Text mutations must not fall back to a global tab from another worktree.
   requireScopedTarget?: boolean
 }

@@ -40,11 +40,17 @@ import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 
 import { isResourceWindowVisible } from '../window/resource-view-admission'
+import {
+  configureNativeDesktopWindows,
+  preferredNativeDesktopWindow,
+  type NativeDesktopWindowOpenOptions
+} from '../window/native-desktop-windows'
+import { isQuittingForUpdate } from '../updater'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
-export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+export function openMainWindow(options: NativeDesktopWindowOpenOptions = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
@@ -90,7 +96,15 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       noteWindowsInstallDirAclProbePending()
     }
   }
+  const desktopWindows = configureNativeDesktopWindows({
+    getStore: () => state.store,
+    openWindow: openMainWindow,
+    isQuitting: () => state.isQuitting || isQuittingForUpdate(),
+    isServeMode: () => state.isServeMode
+  })
+  const windowId = options.windowId ?? desktopWindows.startupId()
   const window = createMainWindow(store, {
+    windowId,
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
@@ -161,6 +175,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordDurableCrashBreadcrumb(`renderer_recovery_reload_${status}`, outcome)
     }
   })
+  desktopWindows.register(window, windowId)
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
   const createTray = createSystemTrayDeferred(window, () => logStartupMilestone('tray-created'))
@@ -194,6 +209,10 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  window.on('focus', () => {
+    state.mainWindow = window
+    state.rateLimits?.attach(window)
+  })
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -223,13 +242,17 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   })
   window.on('closed', () => {
     if (state.mainWindow === window) {
-      state.mainWindow = null
+      state.mainWindow = preferredNativeDesktopWindow()
     }
     clearExpectedRendererReload(rendererWebContentsId)
-    state.automations?.setWebContents(null)
-    clearMainWindowAgentStatusListeners()
+    if (state.mainWindow) {
+      state.rateLimits?.attach(state.mainWindow)
+    }
+    if (!state.mainWindow) {
+      clearMainWindowAgentStatusListeners()
+    }
   })
   logStartupMilestone('load-start')
-  loadMainWindow(window)
+  loadMainWindow(window, options.worktreeId ? { worktreeId: options.worktreeId } : undefined)
   return window
 }

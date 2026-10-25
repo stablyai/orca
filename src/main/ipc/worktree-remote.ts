@@ -55,6 +55,7 @@ import {
 } from '../effective-hook-config'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import { broadcastDesktopRendererEvent } from '../window/desktop-renderer-registry'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -889,7 +890,10 @@ export async function configureCreatedWorktreePushTarget(
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   // Invalidate before notifying so observer list requests see the changed catalog.
   runWorktreeChangeInvalidators(repoId)
-  if (!mainWindow.isDestroyed()) {
+  if (
+    broadcastDesktopRendererEvent('worktrees:changed', { repoId }) === 0 &&
+    !mainWindow.isDestroyed()
+  ) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
   }
 }
@@ -900,10 +904,13 @@ export function notifyWorktreeGitStatusMetadataChanged(
   worktreePaths: readonly string[] | null = null
 ): void {
   // Index churn refreshes Source Control only; it must not mutate structural caches or runtime/mobile graphs.
-  if (!mainWindow.isDestroyed()) {
-    const payload: GitStatusMetadataChangedEvent = worktreePaths
-      ? { repoId, worktreePaths: [...worktreePaths] }
-      : { repoId }
+  const payload: GitStatusMetadataChangedEvent = worktreePaths
+    ? { repoId, worktreePaths: [...worktreePaths] }
+    : { repoId }
+  if (
+    broadcastDesktopRendererEvent('worktrees:gitStatusMetadataChanged', payload) === 0 &&
+    !mainWindow.isDestroyed()
+  ) {
     mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', payload)
   }
 }
@@ -914,7 +921,11 @@ export function notifyWorktreeHeadIdentitiesChanged(
   identities: WorktreeHeadIdentity[]
 ): void {
   // Background workspaces lack active status refresh; publish head moves through targeted events.
-  if (!mainWindow.isDestroyed()) {
+  if (
+    broadcastDesktopRendererEvent('worktrees:headIdentitiesChanged', { repoId, identities }) ===
+      0 &&
+    !mainWindow.isDestroyed()
+  ) {
     mainWindow.webContents.send('worktrees:headIdentitiesChanged', { repoId, identities })
   }
 }
@@ -926,12 +937,15 @@ export function emitCreateWorktreeProgress(
   creationId?: string,
   checkout?: WorktreeCheckoutProgress | null
 ): void {
-  if (!mainWindow.isDestroyed()) {
-    const event: CreateWorktreeProgressEvent = {
-      creationId,
-      phase,
-      ...(checkout !== undefined ? { checkout } : {})
-    }
+  const event: CreateWorktreeProgressEvent = {
+    creationId,
+    phase,
+    ...(checkout !== undefined ? { checkout } : {})
+  }
+  if (
+    broadcastDesktopRendererEvent('createWorktree:progress', event) === 0 &&
+    !mainWindow.isDestroyed()
+  ) {
     mainWindow.webContents.send('createWorktree:progress', event)
   }
 }

@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "Nouvelle fenêtre",
+    "openInNewWindow": "Ouvrir dans une nouvelle fenêtre",
+    "openFailed": "Impossible d’ouvrir une nouvelle fenêtre",
+    "openFailedDetail": "Raison : {{reason}}"
+  },
   "app": {
     "saving": {
       "delayedTitle": "Le stockage du profil prend plus de temps que d’habitude",
