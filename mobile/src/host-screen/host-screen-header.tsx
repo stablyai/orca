@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react-native'
 import { StatusDot } from '../components/StatusDot'
-import { classifyConnection, type ConnectionVerdict } from '../transport/connection-health'
+import type { ConnectionVerdict } from '../transport/connection-health'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -28,6 +28,7 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
   const {
     actions,
+    connectionVerdict,
     connState,
     embedded,
     floatingWorkspaceEnabled,
@@ -36,8 +37,6 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     hostDisplay,
     lastConnectedAt,
     onHideSidebar,
-    reconnectAttempts,
-    relayRecovery,
     state
   } = controller
   // Why: a drop healed in a few seconds must not flash the host dot amber.
@@ -55,62 +54,47 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
         >
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
-        {(() => {
-          const headerVerdict = classifyConnection({
-            state: connState,
-            reconnectAttempts,
-            lastConnectedAt,
-            hostName: state.hostName,
-            ...relayRecovery
-          })
-          return (
-            <>
-              <View style={styles.hostIdentity}>
-                <View style={styles.hostIdentityLine}>
-                  {presentedConnState !== connState && !isErrorVerdict(headerVerdict) ? (
-                    <StatusDot state={presentedConnState} />
-                  ) : (
-                    <StatusDot state={connState} verdict={headerVerdict} />
-                  )}
-                  <Text style={styles.hostNameText} numberOfLines={1}>
-                    {hostDisplay.title}
-                  </Text>
-                </View>
-                {hostDisplay.descriptorLine ? (
-                  <Text style={styles.hostPlatformText} numberOfLines={1}>
-                    {hostDisplay.descriptorLine}
-                  </Text>
-                ) : null}
-              </View>
-              {connState !== 'connected' &&
-                (() => {
-                  // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
-                  const verdict = headerVerdict
-                  const isError = isErrorVerdict(verdict)
-                  // Null on the page, where the shell owns the connection and nothing here re-dials.
-                  if (
-                    !isError ||
-                    !hostId ||
-                    verdict.kind === 'auth-failed' ||
-                    forceReconnectHost === null
-                  ) {
-                    return null
-                  }
-                  return (
-                    <Pressable
-                      style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Reconnect"
-                      hitSlop={8}
-                    >
-                      <Text style={styles.reconnectButtonText}>Reconnect</Text>
-                    </Pressable>
-                  )
-                })()}
-            </>
-          )
-        })()}
+        <View style={styles.hostIdentity}>
+          <View style={styles.hostIdentityLine}>
+            {presentedConnState !== connState && !isErrorVerdict(connectionVerdict) ? (
+              <StatusDot state={presentedConnState} />
+            ) : (
+              <StatusDot state={connState} verdict={connectionVerdict} />
+            )}
+            <Text style={styles.hostNameText} numberOfLines={1}>
+              {hostDisplay.title}
+            </Text>
+          </View>
+          {hostDisplay.descriptorLine ? (
+            <Text style={styles.hostPlatformText} numberOfLines={1}>
+              {hostDisplay.descriptorLine}
+            </Text>
+          ) : null}
+        </View>
+        {connState !== 'connected' &&
+          (() => {
+            // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
+            // Null on the page, where the shell owns the connection and nothing here re-dials.
+            if (
+              !isErrorVerdict(connectionVerdict) ||
+              !hostId ||
+              connectionVerdict.kind === 'auth-failed' ||
+              forceReconnectHost === null
+            ) {
+              return null
+            }
+            return (
+              <Pressable
+                style={styles.reconnectButton}
+                onPress={() => void forceReconnectHost(hostId)}
+                accessibilityRole="button"
+                accessibilityLabel="Reconnect"
+                hitSlop={8}
+              >
+                <Text style={styles.reconnectButtonText}>Reconnect</Text>
+              </Pressable>
+            )
+          })()}
         {!embedded && floatingWorkspaceEnabled ? (
           <Pressable
             style={[

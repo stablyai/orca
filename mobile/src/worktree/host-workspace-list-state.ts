@@ -1,7 +1,9 @@
+import type { ConnectionVerdict } from '../transport/connection-health'
 import type { ConnectionState } from '../transport/types'
 
 export type HostWorkspaceListStateInput = {
   connState: ConnectionState
+  connectionVerdict: ConnectionVerdict
   worktreesLoaded: boolean
   displayCount: number
   sectionCount: number
@@ -11,14 +13,26 @@ export type HostWorkspaceListStateInput = {
 // A failed catalog must not appear as a healthy empty host (STA-3123).
 export function selectHostWorkspaceListState(
   input: HostWorkspaceListStateInput
-): 'loading' | 'catalog-error' | 'empty' | null {
-  const { connState, worktreesLoaded, displayCount, sectionCount, catalogError } = input
-  // Let the header escalate disconnected outages; do not present them as empty workspace lists.
+): 'loading' | 'unreachable' | 'catalog-error' | 'empty' | null {
+  const {
+    connState,
+    connectionVerdict,
+    worktreesLoaded,
+    displayCount,
+    sectionCount,
+    catalogError
+  } = input
+  // An outage with nothing cached must say so; a spinner there never ends (STA-11382).
+  if (
+    displayCount === 0 &&
+    (connState === 'disconnected' ||
+      connectionVerdict.kind === 'warning' ||
+      connectionVerdict.kind === 'unreachable')
+  ) {
+    return 'unreachable'
+  }
   const pending =
-    connState === 'connecting' ||
-    connState === 'handshaking' ||
-    connState === 'reconnecting' ||
-    connState === 'disconnected'
+    connState === 'connecting' || connState === 'handshaking' || connState === 'reconnecting'
   if (
     (pending && displayCount === 0) ||
     (connState === 'connected' && !worktreesLoaded && displayCount === 0 && !catalogError)
