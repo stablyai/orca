@@ -228,11 +228,12 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
     accumulator.title = null
   }
   updateTimeline(accumulator, extractString(record.timestamp))
-  if (accumulator.agent === 'omp') {
+  // Pi folds them too: an OMP title can precede the record that proves OMP wrote the transcript.
+  if (accumulator.agent === 'omp' || accumulator.agent === 'pi') {
     state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
-    if (state.ompTitle) {
-      accumulator.title = state.ompTitle.title
-    }
+  }
+  if (accumulator.agent === 'omp' && state.ompTitle) {
+    accumulator.title = state.ompTitle.title
   }
   if (record.type === 'session') {
     const sessionId = extractString(record.id)

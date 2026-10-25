@@ -75,6 +75,23 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
       runtime
     }
   ])
+  // Older OMP builds wrote no title slot or runtime stamps, only the header name and model_change.model.
+  await writeJsonlFile(join(ompDir, '2026-04-01T10-00-00-000Z_legacy.jsonl'), [
+    {
+      type: 'session',
+      version: 3,
+      id: '0199a000-0000-7000-8000-000000000004',
+      title: 'Legacy OMP name',
+      timestamp: '2026-04-01T10:00:00.000Z',
+      cwd: '/repo/app'
+    },
+    { type: 'model_change', timestamp: '2026-04-01T10:00:00.100Z', model: 'gpt-5.4-mini' },
+    {
+      type: 'message',
+      timestamp: '2026-04-01T10:00:01.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'Legacy prompt' }] }
+    }
+  ])
   await writeJsonlFile(join(ompDir, OMP_STEM, 'Worker.jsonl'), [
     {
       type: 'session',
@@ -117,6 +134,7 @@ describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
         .map((session) => [session.agent, session.title, session.subagentTranscriptCount])
         .sort()
     ).toEqual([
+      ['omp', 'Legacy OMP name', 0],
       ['omp', 'OMP named chat', 1],
       ['pi', 'Pi prompt', 0]
     ])
