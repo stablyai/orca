@@ -8,18 +8,35 @@ import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
 
 describe('PowerShell OSC 133 bootstrap', () => {
-  // Bootstrap and startup commands share the EncodedCommand size limit.
-  it('leaves room for a long startup command to ride in the shell args', () => {
+  // Bootstrap and startup commands share the EncodedCommand size limit: reasonable
+  // commands ride in the shell args, and oversized ones fall back to barrier-queued
+  // stdin delivery, which the pwsh startup barrier makes safe (#27293).
+  it('leaves room for a realistic startup command to ride in the shell args', () => {
     const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
     const result = resolveWindowsShellLaunchArgs(
       'pwsh.exe',
       cwd,
       cwd,
       undefined,
-      `orca ${'x'.repeat(1000)}`
+      `orca ${'x'.repeat(500)}`
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('lets an oversized startup command fall back to barrier-queued stdin', () => {
+    const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
+    const result = resolveWindowsShellLaunchArgs(
+      'pwsh.exe',
+      cwd,
+      cwd,
+      undefined,
+      // 6000 = windows-shell-args STARTUP_COMMAND_TEXT_MAX_CHARS (module-private).
+      `orca ${'x'.repeat(6000)}`
+    )
+
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+    expect(result.shellArgs.slice(0, 2)).toEqual(['-NoLogo', '-NoExit'])
   })
 
   it('wraps prompt/readline without bypassing profiles or execution policy', () => {

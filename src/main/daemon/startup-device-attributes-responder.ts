@@ -4,8 +4,6 @@ import { PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES } from '../../shared/terminal
 
 type DeviceAttributesParser = Pick<Terminal['parser'], 'registerCsiHandler'>
 
-
-
 /** Match renderer attributes so startup gating does not change TUI capabilities. */
 export const STARTUP_DA1_RESPONSE = '\x1b[?1;2c'
 
@@ -39,9 +37,7 @@ export class StartupDeviceAttributesQueryFilter {
         break
       }
       output += input.slice(offset, candidate)
-      const query = STARTUP_QUERY_STRINGS.find((value) =>
-        input.startsWith(value, candidate)
-      )
+      const query = STARTUP_QUERY_STRINGS.find((value) => input.startsWith(value, candidate))
       if (query) {
         offset = candidate + query.length
         continue
