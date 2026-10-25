@@ -385,7 +385,8 @@ describe('structured agent session message sender', () => {
           { type: 'image-ref', path: STORED }
         ]
       },
-      undefined
+      undefined,
+      JSON.stringify(['structured', target, SESSION])
     )
     expect(getStructuredAgentSessionSendNotice(SESSION)).toBe(
       'This attachment expired. Your message was not sent. Remove it and attach it again.'
@@ -488,6 +489,14 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(1)
   })
 
+  it('warns when handing back a refused message remains only in memory', async () => {
+    mocks.call.mockResolvedValue(refusedSend)
+    mocks.handBack.mockReturnValueOnce(false)
+    const sent = send('Keep this draft')
+    expect(await sent.outcome).toBe('returned')
+    expect(getStructuredAgentSessionSendNotice(SESSION)).toContain("Couldn't save your message.")
+  })
+
   it('gives back a remote image with the connection it lives on, which never goes to the host', async () => {
     mocks.call.mockResolvedValue(refusedSend)
     const a = send('look', {
@@ -498,7 +507,8 @@ describe('structured agent session message sender', () => {
       SESSION,
       a.clientMessageId,
       expect.objectContaining({ blocks: expect.any(Array) }),
-      ['ssh-1']
+      ['ssh-1'],
+      JSON.stringify(['structured', target, SESSION])
     )
     expect(JSON.stringify(mocks.call.mock.calls[0][2])).not.toContain('ssh-1')
   })

@@ -3,6 +3,7 @@ import {
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { prepareNativeChatAnnotatedMessage } from './native-chat-annotations-store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import { useAppStore } from '../../store'
@@ -13,6 +14,7 @@ import {
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
+import type { NativeChatSendOptions } from './native-chat-input-clear'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
@@ -31,6 +33,7 @@ export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
   draft: string
   draftScopeKey: string
+  annotationScopeKey?: string
   imageAttachments: readonly { path: string }[]
   disabled: boolean
   isDispatchingSessionOption: boolean
@@ -56,7 +59,7 @@ export function useNativeChatPtyComposerSend(args: {
   return useCallback(() => {
     let text = args.draft
     const imagePaths = args.imageAttachments.map((attachment) => attachment.path)
-    if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
+    if (args.disabled) {
       return
     }
     // Why: keep option-command and prompt writes from interleaving on the PTY input line.
@@ -75,6 +78,14 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     text = resolveNativeChatPastedText(args.draftScopeKey, text)
+    const annotated =
+      classification === 'command'
+        ? null
+        : prepareNativeChatAnnotatedMessage(args.annotationScopeKey, text)
+    text = annotated?.text ?? text
+    if (text.trim() === '' && imagePaths.length === 0) {
+      return
+    }
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
@@ -82,7 +93,7 @@ export function useNativeChatPtyComposerSend(args: {
       readScreen: () => args.readTerminalScreen?.()
     })
     let pendingId: string | undefined
-    const sendOptions =
+    const echoOptions: NativeChatSendOptions | undefined =
       args.agent === 'claude' && classification === 'chat'
         ? {
             ...launchSendOptions,
@@ -98,6 +109,17 @@ export function useNativeChatPtyComposerSend(args: {
             }
           }
         : launchSendOptions
+    const sendOptions = annotated?.hasAnnotations
+      ? {
+          ...echoOptions,
+          onWriteRejected: echoOptions?.onWriteRejected ?? (() => {}),
+          onDeliverySettled: (acknowledged: boolean) => {
+            if (acknowledged) {
+              annotated.consume()
+            }
+          }
+        }
+      : echoOptions
     let pendingHandle: NativeChatSendHandle | null = null
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {

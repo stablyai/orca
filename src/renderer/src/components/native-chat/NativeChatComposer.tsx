@@ -1,6 +1,5 @@
 import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from './use-native-chat-mobile-hold-notice'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { forwardRef, useCallback, useState } from 'react'
 import { useNativeChatComposerInterrupt } from './use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from './use-native-chat-context-usage-summary'
@@ -30,6 +29,8 @@ import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-even
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
+import { useNativeChatAnnotations } from './use-native-chat-annotations'
+import { useNativeChatComposerInputEvents } from './use-native-chat-composer-input-events'
 
 export type {
   NativeChatComposerHandle,
@@ -50,6 +51,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       terminalTabId,
       paneKey,
       draftScopeKey = paneKey,
+      annotationScopeKey,
+      annotations,
       targetPtyId,
       agent,
       canSend = true,
@@ -85,6 +88,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       imeEnterGesture.isComposing
     )
     const [caret, setCaret] = useState(draft.length)
+    const annotationReview = useNativeChatAnnotations(annotationScopeKey)
+    const hasAnnotations =
+      annotationReview.notes.length > 0 || Boolean(annotationReview.editor?.comment.trim())
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
       agent,
@@ -181,7 +187,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       structuredTransport?.sendBlockedReason !== undefined
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
-      : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
+      : sendHeld || (draft.trim() === '' && imageAttachments.length === 0 && !hasAnnotations)
 
     const { pickAttachments, attachExternalPaths, captureCopiedFiles, resolveAttachmentOwner } =
       useNativeChatFileDrops({
@@ -256,6 +262,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
       draftScopeKey,
+      annotationScopeKey,
       imageAttachments,
       structuredTransport,
       isComposing: imeEnterGesture.isComposing,
@@ -283,6 +290,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     }
     const sendPty = useNativeChatPtyComposerSend({
       draftScopeKey,
+      annotationScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,
@@ -300,6 +308,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       caret,
       imageAttachments,
+      hasAnnotations,
       disabled,
       sendPty,
       sendStructured,
@@ -341,27 +350,24 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       dismissPicker: dismiss,
       interrupt,
       send,
-      hasAttachments: imageAttachments.length > 0,
+      hasAttachments: imageAttachments.length > 0 || hasAnnotations,
       ...(steerQueued ? { steerQueued } : {}),
       setActiveSuggestion,
       setDraft,
       setCaret
     })
 
-    const handleDraftChange = useCallback(
-      (value: string, element: NativeChatComposerInput) => {
-        const nextCaret = element.selectionStart ?? value.length
-        setDraft(value)
-        setCaret(nextCaret)
-        handleDraftOrCaretChange(value, nextCaret)
-        setActiveSuggestion(0)
-      },
-      [handleDraftOrCaretChange, setDraft]
-    )
+    const inputEvents = useNativeChatComposerInputEvents({
+      setDraft,
+      setCaret,
+      setActiveSuggestion,
+      onDraftOrCaretChange: handleDraftOrCaretChange
+    })
 
     return (
       <NativeChatComposerField
         draftScopeKey={draftScopeKey}
+        annotations={annotations}
         textareaRef={textareaRef}
         draft={draft}
         disabled={disabled}
@@ -388,18 +394,12 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}
         imeEnterGesture={imeEnterGesture}
-        onDraftChange={handleDraftChange}
-        onTextareaSelect={(element) => {
-          const value = element.value
-          const nextCaret = element.selectionStart ?? value.length
-          setCaret(nextCaret)
-          handleDraftOrCaretChange(value, nextCaret)
-          setActiveSuggestion(0)
-        }}
+        onDraftChange={inputEvents.onChange}
+        onTextareaSelect={inputEvents.onSelect}
         onKeyDown={handleKeyDown}
         onImeSettled={(element) => {
           if (element.value !== draft) {
-            handleDraftChange(element.value, element)
+            inputEvents.onChange(element.value, element)
           }
           flushDraftAppends()
           attachments.flushPendingAttachments()

@@ -18,6 +18,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
+import type { ReactNode } from 'react'
 
 export type NativeChatComposerErrorDetail = {
   /** Error text Orca did not write, shown apart and copyable. */
@@ -90,6 +91,8 @@ export type NativeChatComposerProps = {
   /** Owner of the unsent draft; defaults to `paneKey`. A structured chat's is its conversation,
    *  shared by every composer showing it. */
   draftScopeKey?: string
+  annotationScopeKey?: string
+  annotations?: ReactNode
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType

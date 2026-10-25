@@ -18592,6 +18592,23 @@
   },
   "components": {
     "native-chat": {
+      "annotations": {
+        "add": "添加批注",
+        "count": "{{count}} 条批注",
+        "countOne": "1 条批注",
+        "title": "批注",
+        "comment": "批注内容",
+        "save": "保存批注",
+        "cancel": "取消",
+        "edit": "修改批注",
+        "remove": "删除批注",
+        "locate": "定位原文",
+        "collapse": "收起批注",
+        "expand": "展开批注",
+        "notSaved": "批注未能保存到本机。",
+        "originalUnavailable": "对应原文目前未显示。",
+        "retry": "重试保存批注"
+      },
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…"
       },

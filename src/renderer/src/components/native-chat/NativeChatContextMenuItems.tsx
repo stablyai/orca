@@ -1,5 +1,14 @@
 import type { RefObject } from 'react'
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  Globe,
+  MessageSquarePlus,
+  Quote,
+  Search,
+  Undo2
+} from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -10,6 +19,7 @@ import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
 import { formatNativeChatQuote } from './native-chat-quote-selection'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+import { nativeChatAnnotationCopy } from './native-chat-annotation-copy'
 
 function copyText(text: string): void {
   // Best-effort, as the hover copy buttons are: the clipboard can reject when unfocused.
@@ -20,16 +30,24 @@ function copyText(text: string): void {
 export function NativeChatContextMenuTargetItems({
   target,
   composerRef,
-  rewind
+  rewind,
+  onAnnotate
 }: {
   target: NativeChatContextMenuTarget
   composerRef: RefObject<NativeChatComposerHandle | null>
   rewind: NativeChatRewindSurface | undefined
+  onAnnotate?: () => void
 }): React.JSX.Element {
   const { quoteText, link, codeText, messageText, rewindItemId } = target
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
     <>
+      {onAnnotate ? (
+        <DropdownMenuItem onSelect={onAnnotate}>
+          <MessageSquarePlus />
+          {nativeChatAnnotationCopy().add}
+        </DropdownMenuItem>
+      ) : null}
       {quoteText ? (
         <DropdownMenuItem
           onSelect={() => composerRef.current?.appendText(formatNativeChatQuote(quoteText))}

@@ -59,6 +59,7 @@ export type NativeChatMessageListHandle = {
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its hover button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
+  revealAnnotationMessage?: (messageId: string) => boolean
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
@@ -87,7 +88,8 @@ export function useNativeChatMessageListHandle(
   jumpToLatest: () => void,
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
   onSent?: () => void,
-  slots: readonly NativeChatTranscriptSlot[] = []
+  slots: readonly NativeChatTranscriptSlot[] = [],
+  revealAnnotationMessage?: (messageId: string) => boolean
 ): void {
   useImperativeHandle(
     ref,
@@ -97,8 +99,9 @@ export function useNativeChatMessageListHandle(
         jumpToLatest()
       },
       revealFindMatch,
+      revealAnnotationMessage,
       messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [jumpToLatest, revealFindMatch, onSent, slots]
+    [jumpToLatest, revealFindMatch, onSent, slots, revealAnnotationMessage]
   )
 }

@@ -7,16 +7,7 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
-import {
-  Clipboard,
-  Copy,
-  GitFork,
-  Image as ImageIcon,
-  PanelBottomClose,
-  PanelRightClose,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,14 +23,15 @@ import {
   type NativeChatCopyImage
 } from './native-chat-image-copy'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
-import { useAppStore } from '@/store'
-import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
-import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import { NativeChatPaneMenuItems, StructuredChatPaneMenuItems } from './NativeChatPaneMenuItems'
+import type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from './native-chat-composer-types'
 import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
 import {
@@ -54,6 +46,11 @@ import {
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+import {
+  readNativeChatAnnotationAnchor,
+  type NativeChatAnnotationAnchor
+} from './native-chat-annotation-anchor'
+import { useNativeChatAnnotationReview } from './use-native-chat-annotation-review'
 
 type NativeChatContextMenuState = {
   open: boolean
@@ -63,6 +60,8 @@ type NativeChatContextMenuState = {
   image?: NativeChatCopyImage
   target: NativeChatContextMenuTarget
   returnFocusTo: Element | null
+  annotationAnchor?: NativeChatAnnotationAnchor | null
+  annotationScopeKey?: string
 }
 
 type UseNativeChatContextMenuArgs = {
@@ -82,8 +81,12 @@ type UseNativeChatContextMenuArgs = {
 
 /** What the menu needs to offer the rows for a right-clicked target. */
 export type NativeChatContextMenuTargetArgs = {
+  annotationScopeKey?: string
   /** Answers which text a right-clicked message row copies. */
-  messageListRef?: RefObject<Pick<NativeChatMessageListHandle, 'messageCopyText'> | null>
+  messageListRef?: RefObject<Pick<
+    NativeChatMessageListHandle,
+    'messageCopyText' | 'revealAnnotationMessage'
+  > | null>
   fileLinkContext?: NativeChatFileLinkContext | null
   /** Where the transcript offers rewind; absent where it never does. */
   rewind?: NativeChatRewindSurface
@@ -151,12 +154,21 @@ export function useNativeChatContextMenu({
   messageListRef,
   fileLinkContext = null,
   rewind,
-  onFind
+  onFind,
+  annotationScopeKey
 }: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
   onPointerDownCapture: PointerEventHandler<HTMLElement>
   menu: React.JSX.Element
+  annotationComposerProps: Pick<NativeChatComposerProps, 'annotationScopeKey' | 'annotations'>
 } {
+  const annotationReview = useNativeChatAnnotationReview({
+    scopeKey: annotationScopeKey,
+    rootRef,
+    composerRef,
+    messageListRef,
+    enabled
+  })
   const menuOpenedAtRef = useRef(0)
   const [state, setState] = useState<NativeChatContextMenuState>({
     open: false,
@@ -210,6 +222,8 @@ export function useNativeChatContextMenu({
         canPaste: isEditableTarget(event.target),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
+        annotationScopeKey,
+        annotationAnchor: rootRef.current ? readNativeChatAnnotationAnchor(rootRef.current) : null,
         target: readNativeChatContextMenuTarget(event.target, {
           root: rootRef.current,
           composer: composerRef.current,
@@ -218,7 +232,7 @@ export function useNativeChatContextMenu({
         })
       })
     },
-    [composerRef, enabled, fileLinkContext, messageListRef, rootRef]
+    [annotationScopeKey, composerRef, enabled, fileLinkContext, messageListRef, rootRef]
   )
 
   const setOpen = useCallback((open: boolean) => {
@@ -229,6 +243,7 @@ export function useNativeChatContextMenu({
   }, [])
 
   return {
+    annotationComposerProps: { annotationScopeKey, annotations: annotationReview.tray },
     onContextMenuCapture,
     onPointerDownCapture: keepSelectionThroughMenuPress,
     menu: (
@@ -238,6 +253,8 @@ export function useNativeChatContextMenu({
           rootRef={rootRef}
           composerRef={composerRef}
           enabled={enabled && !(state.open && hasItems)}
+          onAnnotate={annotationReview.begin}
+          annotationScopeKey={annotationScopeKey}
         />
         <DropdownMenuTrigger asChild>
           <button
@@ -282,6 +299,17 @@ export function useNativeChatContextMenu({
             target={target}
             composerRef={composerRef}
             rewind={rewind}
+            onAnnotate={
+              state.annotationScopeKey === annotationScopeKey &&
+              state.annotationAnchor &&
+              annotationReview.begin
+                ? () => {
+                    if (state.annotationAnchor) {
+                      annotationReview.begin?.(state.annotationAnchor)
+                    }
+                  }
+                : undefined
+            }
           />
           {state.canPaste ? (
             <DropdownMenuItem onSelect={() => actions.onPaste()}>
@@ -338,51 +366,6 @@ export function useNativeChatContextMenu({
       </DropdownMenu>
     )
   }
-}
-
-function StructuredChatPaneMenuItems({
-  pane,
-  leadingSeparator,
-  splitShortcutLabels,
-  resolveOrcaSessionId
-}: Pick<UseNativeChatContextMenuArgs, 'splitShortcutLabels' | 'resolveOrcaSessionId'> & {
-  pane: NonNullable<UseNativeChatContextMenuArgs['chatPane']>
-  leadingSeparator: boolean
-}) {
-  const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
-  const hasSplitPanes = useAppStore(
-    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
-  )
-  return (
-    <>
-      {leadingSeparator ? <DropdownMenuSeparator /> : null}
-      <DropdownMenuItem onSelect={actions.onSplitRight}>
-        <PanelRightClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
-        <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={actions.onSplitDown}>
-        <PanelBottomClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
-        <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      {resolveOrcaSessionId ? (
-        <>
-          <DropdownMenuSeparator />
-          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
-        </>
-      ) : null}
-      {hasSplitPanes && actions.canClosePane ? (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
-            <X />
-            {actions.closeLabel}
-          </DropdownMenuItem>
-        </>
-      ) : null}
-    </>
-  )
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {

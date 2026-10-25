@@ -90,6 +90,18 @@ describe('NativeChatSelectionQuote', () => {
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
   })
 
+  it('offers the selection when Chromium dispatches selectionchange after mouseup', () => {
+    render(<Chat />)
+    const first = screen.getByTestId('first')
+    fireEvent.pointerDown(first, { button: 0 })
+    const range = document.createRange()
+    range.selectNodeContents(first)
+    window.getSelection()!.addRange(range)
+    fireEvent.mouseUp(first, { button: 0 })
+    settle()
+    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
+  })
+
   it('offers nothing for a selection outside an agent reply', () => {
     render(<Chat />)
     releaseSelection(screen.getByTestId('user'))

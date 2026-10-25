@@ -30,8 +30,8 @@ import { useNativeChatTranscriptRowContext } from './use-native-chat-transcript-
 import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import {
-  splitNativeChatSlotsWaitingBehindLiveTurn,
-  nativeChatSlotIndexOf
+  nativeChatSlotIndexOf,
+  splitNativeChatSlotsWaitingBehindLiveTurn
 } from './native-chat-transcript-slots'
 import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
@@ -52,6 +52,7 @@ import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jum
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
 import { useNativeChatReaderScrollInput } from './native-chat-reader-scroll-input'
 import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import { useNativeChatAnnotationReveal } from './use-native-chat-annotation-locate'
 
 import type {
   AgentJournalRenderItem,
@@ -276,7 +277,7 @@ export function NativeChatMessageList({
     virtualItems: transcriptWindow.virtualItems,
     outline: railOutline
   })
-  const requestRailJump = useCallback((item: NativeChatRailItem) => {
+  const requestRailJump = useCallback((item: Pick<NativeChatRailItem, 'id'>) => {
     navigationSequence.current += 1
     const requestId = navigationSequence.current
     setNavigationRequest({ kind: 'rail', messageId: item.id, requestId })
@@ -327,7 +328,20 @@ export function NativeChatMessageList({
     onLeaveEnd: readerLeavesEnd,
     onScrollGesture: transcriptScroll.forwardedGesture
   })
-  useNativeChatMessageListHandle(ref, jumpToLatest, readerInput.revealFindMatch, dismiss, allSlots)
+  const revealAnnotationMessage = useNativeChatAnnotationReveal(
+    slots,
+    beginNavigation,
+    readerLeavesEnd,
+    requestRailJump
+  )
+  useNativeChatMessageListHandle(
+    ref,
+    jumpToLatest,
+    readerInput.revealFindMatch,
+    dismiss,
+    allSlots,
+    revealAnnotationMessage
+  )
   useNativeChatRailJumpLanding({
     railJump,
     slots,

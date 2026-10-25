@@ -73,6 +73,8 @@
   --color-chat-composer-surface: var(--chat-composer-surface);
   --color-chat-composer-border: var(--chat-composer-border);
   --color-chat-warning: var(--chat-warning);
+  --color-chat-annotation: var(--chat-annotation);
+  --color-chat-annotation-foreground: var(--chat-annotation-foreground);
   --color-chat-diff-added: var(--chat-diff-added);
   --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
@@ -228,6 +230,8 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --chat-annotation: var(--color-blue-600);
+  --chat-annotation-foreground: var(--color-white);
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   /* "An agent is asking you something" — one hue for every surface that shows
@@ -347,6 +351,8 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --chat-annotation: var(--color-blue-500);
+  --chat-annotation-foreground: var(--color-white);
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);

@@ -49,16 +49,17 @@ export function finish(
   updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, keep ?? null)
 }
 
-/** Puts the text back in the chat's composer; false, reported, when the draft write threw. */
+/** Puts text back in the composer; false when the durable write fails. */
 function returnToComposer(entry: StructuredAgentSessionPendingSend): boolean {
   try {
-    handBackStructuredAgentSessionMessage(
+    const target = runtimes.get(entry.clientMessageId)?.target
+    return handBackStructuredAgentSessionMessage(
       entry.sessionId,
       entry.clientMessageId,
       entry.body,
-      entry.imageConnectionIds
+      entry.imageConnectionIds,
+      target ? JSON.stringify(['structured', target, entry.sessionId]) : undefined
     )
-    return true
   } catch (error) {
     console.error('[native-chat-send] a message could not be put back in the composer', error)
     return false

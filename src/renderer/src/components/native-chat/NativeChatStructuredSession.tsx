@@ -67,9 +67,7 @@ import {
   useNativeChatClaudeSignIn
 } from './native-chat-claude-sign-in'
 
-export function NativeChatStructuredSession(
-  props: Omit<NativeChatStructuredViewProps, 'mode'>
-): React.JSX.Element {
+export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -167,6 +165,7 @@ export function NativeChatStructuredSession(
   )
   const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const paneCommands = useStructuredNativeChatPaneCommands({
+    annotationScopeKey: JSON.stringify(['structured', props.target, props.sessionId]),
     tabId: props.tabId,
     ownerWorktreeId,
     groupId: props.groupId,
@@ -394,6 +393,7 @@ export function NativeChatStructuredSession(
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer
+              {...paneCommands.annotationComposerProps}
               ref={composerRef}
               terminalTabId={props.tabId}
               paneKey={paneKey}

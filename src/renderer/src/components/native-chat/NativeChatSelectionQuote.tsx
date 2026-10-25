@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { Quote } from 'lucide-react'
+import { MessageSquarePlus, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
@@ -11,6 +11,11 @@ import {
   readNativeChatQuotableSelection,
   readNativeChatTranscriptSelection
 } from './native-chat-quote-selection'
+import {
+  readNativeChatAnnotationAnchor,
+  type NativeChatAnnotationAnchor
+} from './native-chat-annotation-anchor'
+import { nativeChatAnnotationCopy } from './native-chat-annotation-copy'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
 const DOUBLE_CLICK_SETTLE_MS = 500
@@ -18,6 +23,8 @@ const DOUBLE_CLICK_SETTLE_MS = 500
 /** The selected text, and the point the offer is drawn at, which moves with that text. */
 type QuoteRequest = {
   text: string
+  scopeKey?: string
+  annotationAnchor: NativeChatAnnotationAnchor | null
   anchor: { getBoundingClientRect: () => DOMRect; contextElement?: Element }
 }
 
@@ -28,15 +35,20 @@ type QuoteRequest = {
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
-  enabled
+  enabled,
+  onAnnotate,
+  annotationScopeKey
 }: {
   rootRef: RefObject<HTMLElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   enabled: boolean
+  onAnnotate?: (anchor: NativeChatAnnotationAnchor) => void
+  annotationScopeKey?: string
 }): React.JSX.Element {
   const [request, setRequest] = useState<QuoteRequest | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const virtualRef = useMemo(() => ({ current: request?.anchor ?? null }), [request])
+  const canAnnotate = onAnnotate !== undefined
 
   useEffect(() => {
     const root = rootRef.current
@@ -44,6 +56,7 @@ export function NativeChatSelectionQuote({
       return
     }
     let selectionChanged = false
+    let selectionAtPress: Range | null = null
     let timer: number | undefined
     const close = (): void => {
       window.clearTimeout(timer)
@@ -55,6 +68,8 @@ export function NativeChatSelectionQuote({
       }
       close()
       selectionChanged = false
+      const selection = window.getSelection()
+      selectionAtPress = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null
     }
     // `point` is where the pointer was released; a keyboard selection is offered at its end.
     const offer = (point: { x: number; y: number } | null, delay = 0): void => {
@@ -73,9 +88,10 @@ export function NativeChatSelectionQuote({
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         // Only offered where the text would land.
-        const quotable = composerRef.current?.acceptsText()
-          ? readNativeChatQuotableSelection(root)
-          : null
+        const quotable =
+          canAnnotate || composerRef.current?.acceptsText()
+            ? readNativeChatQuotableSelection(root)
+            : null
         if (!quotable) {
           setRequest(null)
           return
@@ -87,6 +103,8 @@ export function NativeChatSelectionQuote({
         const dy = (point?.y ?? end.top) - held.top
         setRequest({
           text,
+          scopeKey: annotationScopeKey,
+          annotationAnchor: readNativeChatAnnotationAnchor(root, range),
           anchor: {
             getBoundingClientRect: () => {
               const now = range.getBoundingClientRect()
@@ -100,6 +118,17 @@ export function NativeChatSelectionQuote({
     }
     const onMouseUp = (event: MouseEvent): void => {
       if (event.button === 0) {
+        const selection = window.getSelection()
+        const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+        // Chromium can report selectionchange after mouseup for a double or triple click.
+        if (
+          range &&
+          (!selectionAtPress ||
+            range.compareBoundaryPoints(Range.START_TO_START, selectionAtPress) !== 0 ||
+            range.compareBoundaryPoints(Range.END_TO_END, selectionAtPress) !== 0)
+        ) {
+          selectionChanged = true
+        }
         offer(
           { x: event.clientX, y: event.clientY },
           event.detail === 2 ? DOUBLE_CLICK_SETTLE_MS : 0
@@ -128,10 +157,13 @@ export function NativeChatSelectionQuote({
       window.removeEventListener('blur', close)
       removeResizeListener()
     }
-  }, [composerRef, enabled, rootRef])
+  }, [annotationScopeKey, canAnnotate, composerRef, enabled, rootRef])
 
   return (
-    <Popover open={request !== null} onOpenChange={(open) => !open && setRequest(null)}>
+    <Popover
+      open={request !== null && request.scopeKey === annotationScopeKey}
+      onOpenChange={(open) => !open && setRequest(null)}
+    >
       <PopoverAnchor virtualRef={virtualRef} />
       {request ? (
         <PopoverContent
@@ -146,10 +178,26 @@ export function NativeChatSelectionQuote({
           // Keeps the selection, and the focus, where they are until the quote is taken.
           onMouseDown={(event) => event.preventDefault()}
         >
-          <div className="p-0.5">
+          <div className="flex items-center gap-1 p-0.5">
+            {request.annotationAnchor && onAnnotate ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  if (request.annotationAnchor && request.scopeKey === annotationScopeKey) {
+                    onAnnotate(request.annotationAnchor)
+                  }
+                  setRequest(null)
+                }}
+              >
+                <MessageSquarePlus />
+                {nativeChatAnnotationCopy().add}
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="xs"
+              disabled={!composerRef.current?.acceptsText()}
               onClick={() => {
                 // Taken or not (the composer may have locked since), the offer is spent.
                 composerRef.current?.appendText(formatNativeChatQuote(request.text))

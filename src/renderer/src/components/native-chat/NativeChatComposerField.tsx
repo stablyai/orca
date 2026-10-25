@@ -1,6 +1,6 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, ReactNode, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -31,6 +31,7 @@ export type NativeChatComposerFieldProps = {
    *  only in the composer it was dropped on. */
   /** Owner of the draft the editor's document is saved with. */
   draftScopeKey: string
+  annotations?: ReactNode
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -123,6 +124,7 @@ function imeComposedSegment(base: string, settled: string): string {
 
 export function NativeChatComposerField({
   draftScopeKey,
+  annotations,
   textareaRef,
   draft,
   disabled,
@@ -269,6 +271,7 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
+            {annotations}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (

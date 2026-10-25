@@ -2,6 +2,7 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session-j
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { promptMarkersToImageReferences } from '../../../../shared/native-chat-image-transcript-markers'
+import { restoreNativeChatAnnotationMessage } from './native-chat-annotation-delivery'
 
 /** The text a message body carries, as the composer shows it. */
 export function structuredAgentSessionMessageText(body: AgentJournalMessageItem): string {
@@ -16,7 +17,8 @@ export function returnMessageToComposer(
   attachmentIdPrefix: string,
   blocks: AgentJournalMessageItem['blocks'],
   /** Each image's SSH connection, in block order. */
-  imageConnectionIds?: readonly (string | null)[]
+  imageConnectionIds?: readonly (string | null)[],
+  restoredText?: string
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -44,7 +46,7 @@ export function returnMessageToComposer(
   return appendNativeChatDraftCache(
     composerScopeKey,
     promptMarkersToImageReferences(
-      structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
+      restoredText ?? structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
       imageIds
     ),
     undefined,
@@ -61,12 +63,20 @@ export function handBackStructuredAgentSessionMessage(
   sessionId: string,
   clientMessageId: string,
   body: AgentJournalMessageItem,
-  imageConnectionIds?: readonly (string | null)[]
+  imageConnectionIds?: readonly (string | null)[],
+  annotationScopeKey?: string
 ): boolean {
   return returnMessageToComposer(
     structuredAgentSessionDraftScopeKey(sessionId),
     `returned-${clientMessageId}`,
     body.blocks,
-    imageConnectionIds
+    imageConnectionIds,
+    annotationScopeKey
+      ? restoreNativeChatAnnotationMessage(
+          annotationScopeKey,
+          clientMessageId,
+          structuredAgentSessionMessageText(body)
+        )
+      : undefined
   )
 }

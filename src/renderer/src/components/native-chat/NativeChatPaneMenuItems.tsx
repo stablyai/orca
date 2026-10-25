@@ -16,6 +16,56 @@ import {
 import { ClearPaneTitleMenuItem } from '@/components/terminal-pane/ClearPaneTitleMenuItem'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import { useAppStore } from '@/store'
+import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
+import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
+
+export function StructuredChatPaneMenuItems({
+  pane,
+  leadingSeparator,
+  splitShortcutLabels,
+  resolveOrcaSessionId
+}: {
+  pane: { tabId: string; worktreeId: string; groupId: string }
+  leadingSeparator: boolean
+  splitShortcutLabels?: { right: string; down: string }
+  resolveOrcaSessionId?: () => Promise<string | null>
+}) {
+  const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
+  const hasSplitPanes = useAppStore(
+    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
+  )
+  return (
+    <>
+      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem onSelect={actions.onSplitRight}>
+        <PanelRightClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={actions.onSplitDown}>
+        <PanelBottomClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      {resolveOrcaSessionId ? (
+        <>
+          <DropdownMenuSeparator />
+          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
+        </>
+      ) : null}
+      {hasSplitPanes && actions.canClosePane ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
+            <X />
+            {actions.closeLabel}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  )
+}
 
 /** The terminal pane's layout and identity rows, for a chat that sits in a terminal pane. */
 export function NativeChatPaneMenuItems({

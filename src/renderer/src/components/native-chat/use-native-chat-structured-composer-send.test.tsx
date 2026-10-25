@@ -12,6 +12,9 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import { getNativeChatAnnotationsStore } from './native-chat-annotations-store'
+import { nativeChatAnnotationStorage } from './native-chat-annotation-storage'
+import { reconcileNativeChatAnnotationDeliveries } from './use-native-chat-annotation-delivery'
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 vi.mock('@/lib/worker-terminal-takeover-report', () => ({
@@ -20,14 +23,36 @@ vi.mock('@/lib/worker-terminal-takeover-report', () => ({
 
 const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
 
+function acceptAnnotation(scopeKey: string, clientMessageId: string): void {
+  reconcileNativeChatAnnotationDeliveries(scopeKey, {
+    cards: [],
+    submissions: [
+      {
+        clientMessageId,
+        fence: 1,
+        payloadFingerprint: 'sent',
+        dispatchState: 'accepted',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: 2
+      }
+    ]
+  })
+}
+
 function harness(
   agent: AgentType,
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal'],
-  onSubmitted?: () => void
+  onSubmitted?: () => void,
+  annotationScopeKey?: string
 ) {
   const structuredTransport: NativeChatStructuredComposerTransport = {
     capturePresentation: () => () => true,
-    send: vi.fn(() => true),
+    send: vi.fn((_text, _attachments, request) => {
+      request?.onAdmitted?.('annotation-send')
+      return true
+    }),
     dispatchCommand: (text: string) =>
       dispatchStructuredAgentSessionComposerCommand(text, {
         agent,
@@ -58,6 +83,7 @@ function harness(
     useNativeChatStructuredComposerSend({
       agent,
       draftScopeKey: 'tab-1:pane',
+      annotationScopeKey,
       imageAttachments: [ATTACHMENT],
       structuredTransport,
       isComposing: () => false,
@@ -68,6 +94,121 @@ function harness(
   )
   return { send: result.current, structuredTransport, setDraft }
 }
+
+it('attaches comments at send time, keeps them on refusal and consumes only accepted revisions', async () => {
+  const scope = 'structured-annotation-send'
+  const store = getNativeChatAnnotationsStore(scope)
+  store.clear()
+  const note = store.add(
+    { quote: 'Measured disturbance.', messageId: 'reply', startOffset: 0 },
+    'Explain the units.'
+  )
+  if (!note) {
+    throw new Error('Annotation unavailable')
+  }
+  const { send, structuredTransport } = harness('codex', undefined, undefined, scope)
+  vi.mocked(structuredTransport.send).mockReturnValue(false)
+  await send('Revise this.', [])
+  expect(structuredTransport.send).toHaveBeenCalledWith(
+    'Revise this.\n\n> Measured disturbance.\n\nExplain the units.',
+    [],
+    expect.objectContaining({ onAdmitted: expect.any(Function), onSettled: expect.any(Function) })
+  )
+  expect(store.getSnapshot().notes).toHaveLength(1)
+  vi.mocked(structuredTransport.send).mockImplementation((_text, _attachments, request) => {
+    store.update(note.id, 'Keep this newer edit.')
+    request?.onAdmitted?.('edited-send')
+    return true
+  })
+  await send('', [])
+  acceptAnnotation(scope, 'edited-send')
+  expect(store.getSnapshot().notes[0]?.comment).toBe('Keep this newer edit.')
+  vi.mocked(structuredTransport.send).mockImplementation((_text, _attachments, request) => {
+    request?.onAdmitted?.('final-send')
+    return true
+  })
+  await send('', [])
+  acceptAnnotation(scope, 'final-send')
+  expect(store.getSnapshot().notes).toHaveLength(0)
+})
+
+it('keeps notes and the unfinished editor durable until the structured host accepts the message', async () => {
+  const scope = 'structured-annotation-durable-send'
+  const store = getNativeChatAnnotationsStore(scope)
+  store.clear()
+  const anchor = { quote: 'Original sentence.', messageId: 'reply', startOffset: 0 }
+  store.add(anchor, 'Saved comment.')
+  store.setEditor({ anchor, comment: 'Unfinished comment.' })
+  const stored = nativeChatAnnotationStorage(scope)
+  const before = stored.read()
+  const { send, structuredTransport } = harness('codex', undefined, undefined, scope)
+  vi.mocked(structuredTransport.send).mockReturnValue(false)
+  await send('Existing draft.', [])
+  expect(stored.read()).toEqual(before)
+  expect(structuredTransport.send).toHaveBeenCalledWith(
+    'Existing draft.\n\n> Original sentence.\n\nSaved comment.\n\n> Original sentence.\n\nUnfinished comment.',
+    [],
+    expect.objectContaining({ onAdmitted: expect.any(Function) })
+  )
+  vi.mocked(structuredTransport.send).mockImplementation((_text, _attachments, request) => {
+    request?.onAdmitted?.('annotation-send')
+    return true
+  })
+  await send('Existing draft.', [])
+  expect(stored.read()).toEqual(before)
+  acceptAnnotation(scope, 'annotation-send')
+  expect(stored.read()).toEqual({ notes: [] })
+})
+
+it('keeps editable annotation records durable while the message waits in the queue', async () => {
+  const scope = 'structured-annotation-queued-send'
+  const store = getNativeChatAnnotationsStore(scope)
+  store.add({ quote: 'Queued passage.', messageId: 'reply', startOffset: 0 }, 'Keep the anchor.')
+  const { send, structuredTransport } = harness('codex', undefined, undefined, scope)
+  vi.mocked(structuredTransport.send).mockImplementation((_text, _attachments, request) => {
+    request?.onAdmitted?.('queued-send')
+    return 'queued'
+  })
+  await send('Later.', [])
+  expect(nativeChatAnnotationStorage(scope).read().notes).toHaveLength(1)
+  expect(store.getSnapshot().notes).toHaveLength(0)
+  await send('A different follow-up.', [])
+  expect(structuredTransport.send).toHaveBeenLastCalledWith('A different follow-up.', [])
+  reconcileNativeChatAnnotationDeliveries(scope, {
+    cards: [{ messageId: 'queued-send', state: 'returned' }],
+    submissions: []
+  })
+  expect(store.getSnapshot().notes[0]?.comment).toBe('Keep the anchor.')
+})
+
+it('retains durable annotations if accepted-send cleanup fails and removes them on persistence retry', async () => {
+  const scope = 'structured-annotation-cleanup-retry'
+  const store = getNativeChatAnnotationsStore(scope)
+  store.clear()
+  const anchor = { quote: 'Original sentence.', messageId: 'reply', startOffset: 0 }
+  store.add(anchor, 'Saved comment.')
+  store.setEditor({ anchor, comment: 'Unfinished comment.' })
+  const stored = nativeChatAnnotationStorage(scope)
+  const before = stored.read()
+  const write = localStorage.setItem.bind(localStorage)
+  const blocked = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+    if (key.includes(':consumed-note:') || key.includes(':consumed-editor:')) {
+      throw new Error('Cleanup storage unavailable')
+    }
+    write(key, value)
+  })
+  try {
+    const { send } = harness('codex', undefined, undefined, scope)
+    await send('Existing draft.', [])
+    acceptAnnotation(scope, 'annotation-send')
+    expect(stored.read()).toEqual(before)
+    expect(store.getSnapshot().persistenceError).toBe('Cleanup storage unavailable')
+  } finally {
+    blocked.mockRestore()
+  }
+  expect(store.retryPersistence()).toBe(true)
+  expect(stored.read()).toEqual({ notes: [] })
+})
 
 // The guard exists because a host command sends no message, so its attachments
 // would be dropped without a word. A pass-through command IS the message, so the

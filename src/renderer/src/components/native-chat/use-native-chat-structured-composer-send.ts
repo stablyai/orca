@@ -5,6 +5,7 @@ import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent
 import { SkillRefLimitError } from '../../../../shared/structured-agent-session-send-mutation'
 import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
+import { prepareNativeChatAnnotatedMessage } from './native-chat-annotations-store'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionComposerCommand,
@@ -32,6 +33,7 @@ import {
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
   draftScopeKey: string
+  annotationScopeKey?: string
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   structuredTransport?: NativeChatStructuredComposerTransport
   isComposing: () => boolean
@@ -62,6 +64,7 @@ export type NativeChatStructuredComposerSend = (
 export function useNativeChatStructuredComposerSend({
   agent,
   draftScopeKey,
+  annotationScopeKey,
   imageAttachments,
   structuredTransport,
   isComposing,
@@ -109,11 +112,28 @@ export function useNativeChatStructuredComposerSend({
       }
       const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      const annotated = hostCommand
+        ? null
+        : prepareNativeChatAnnotatedMessage(annotationScopeKey, text)
+      let annotationMessageId: string | undefined
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
-        text,
+        annotated?.text ?? text,
         attachments,
-        promptSkillRefs(submitted.document)
+        promptSkillRefs(submitted.document),
+        annotated?.hasAnnotations
+          ? {
+              onAdmitted: (messageId) => {
+                annotationMessageId = messageId
+                annotated.reserve(messageId)
+              },
+              onSettled: (outcome) => {
+                if (annotationMessageId && (outcome === 'returned' || outcome === 'dropped')) {
+                  annotated.release(annotationMessageId)
+                }
+              }
+            }
+          : undefined
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           if (!hostCommand || isCurrent()) {
@@ -173,6 +193,7 @@ export function useNativeChatStructuredComposerSend({
     },
     [
       agent,
+      annotationScopeKey,
       clearSkillOrigin,
       draftScopeKey,
       imageAttachments,

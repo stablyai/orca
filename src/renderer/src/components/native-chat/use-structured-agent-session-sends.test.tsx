@@ -11,6 +11,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
+import { getStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
 const QUEUEING = { capability: 'supported', enabled: true } as const
 
@@ -70,10 +71,16 @@ it('takes no second send while the first is out', () => {
   )
   let first: boolean | 'queued' = false
   let second: boolean | 'queued' = true
+  const onAdmitted = vi.fn()
+  const refusedAdmission = vi.fn()
   act(() => {
-    first = result.current.send('one')
-    second = result.current.send('two')
+    first = result.current.send('one', [], { onAdmitted })
+    second = result.current.send('two', [], { onAdmitted: refusedAdmission })
   })
   expect(first).toBe('queued')
   expect(second).toBe(false)
+  expect(onAdmitted).toHaveBeenCalledExactlyOnceWith(
+    getStructuredAgentSessionPendingSends('session-1')[0]?.clientMessageId
+  )
+  expect(refusedAdmission).not.toHaveBeenCalled()
 })

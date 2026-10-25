@@ -6,6 +6,7 @@ import type { NativeChatSendClassification } from '../../../../shared/native-cha
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
+import { getNativeChatAnnotationsStore } from './native-chat-annotations-store'
 
 const handle = vi.hoisted(() => ({ cancel: () => {}, settleAfterMs: 0 }))
 vi.mock('./native-chat-runtime-send', () => ({
@@ -25,13 +26,15 @@ function send(
   agent: AgentType,
   classification: NativeChatSendClassification,
   draft: string,
-  imagePaths: string[] = []
+  imagePaths: string[] = [],
+  annotationScopeKey?: string
 ) {
   const callbacks = { rejected: vi.fn(), unconfirmed: vi.fn(), submitted: vi.fn() }
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
       agent,
       draftScopeKey: 'terminal-test-scope',
+      annotationScopeKey,
       draft,
       imageAttachments: imagePaths.map((path) => ({ path })),
       disabled: false,
@@ -68,6 +71,25 @@ it('routes a Claude chat send outcome to its own pending echo', () => {
   options?.onWriteUnconfirmed?.()
   expect(callbacks.rejected).toHaveBeenCalledWith('pending-1')
   expect(callbacks.unconfirmed).toHaveBeenCalledWith('pending-1')
+})
+
+it('sends annotations from an empty composer and keeps them until all PTY writes are acknowledged', () => {
+  const scope = 'pty-annotation-send'
+  const store = getNativeChatAnnotationsStore(scope)
+  store.clear()
+  store.add(
+    { quote: 'Measured disturbance.', messageId: 'reply', startOffset: 0 },
+    'Explain its units.'
+  )
+  send('codex', 'chat', '', [], scope)
+  expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[1]).toBe(
+    '> Measured disturbance.\n\nExplain its units.'
+  )
+  const options = vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]
+  options?.onDeliverySettled?.(false)
+  expect(store.getSnapshot().notes).toHaveLength(1)
+  options?.onDeliverySettled?.(true)
+  expect(store.getSnapshot().notes).toHaveLength(0)
 })
 
 it('routes a Claude image send outcome to its own pending echo', () => {

@@ -28,9 +28,11 @@ import type { useStructuredAgentSession } from './use-structured-agent-session'
 
 function composerAcceptsImages(reported: boolean | undefined): boolean | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building the transport reads only these members; nothing is sent.
-  const controller = { acceptsImages: reported } as unknown as ReturnType<
-    typeof useStructuredAgentSession
-  >
+  const controller = {
+    acceptsImages: reported,
+    queuedMessages: { cards: [] },
+    submissions: []
+  } as unknown as ReturnType<typeof useStructuredAgentSession>
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerTransport({
       props: { agent: 'grok', sessionId: 'session-1', target: { kind: 'local' } },

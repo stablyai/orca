@@ -18934,6 +18934,23 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "annotations": {
+        "add": "Add annotation",
+        "count": "{{count}} annotations",
+        "countOne": "1 annotation",
+        "title": "Annotations",
+        "comment": "Comment",
+        "save": "Save annotation",
+        "cancel": "Cancel",
+        "edit": "Edit annotation",
+        "remove": "Delete annotation",
+        "locate": "Show original text",
+        "collapse": "Collapse annotations",
+        "expand": "Expand annotations",
+        "notSaved": "Annotations could not be saved on this device.",
+        "originalUnavailable": "Original text is not currently displayed.",
+        "retry": "Retry saving annotations"
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },

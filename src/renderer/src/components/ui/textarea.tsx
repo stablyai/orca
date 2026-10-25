@@ -9,6 +9,8 @@ const textareaVariants = cva('', {
     variant: {
       default: '',
       code: 'font-mono',
+      annotation:
+        'min-h-8 resize-none border-0 bg-transparent px-1 py-1 text-sm shadow-none dark:bg-transparent focus-visible:ring-0',
       cell: 'h-full min-h-0 resize-none rounded-none border-0 px-2 py-0 font-mono text-xs shadow-none md:text-xs focus-visible:ring-1 focus-visible:ring-inset'
     }
   },

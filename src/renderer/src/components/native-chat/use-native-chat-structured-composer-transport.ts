@@ -10,6 +10,7 @@ import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { useNativeChatAnnotationDelivery } from './use-native-chat-annotation-delivery'
 
 /** Why a paired chat's files can't upload yet: its host has not created the chat. */
 function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
@@ -52,6 +53,10 @@ export function useNativeChatStructuredComposerTransport(args: {
   const { setOptionPickerRequest, onError, onSubmitted } = args
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
+  useNativeChatAnnotationDelivery(JSON.stringify(['structured', props.target, props.sessionId]), {
+    cards: controller.queuedMessages.cards,
+    submissions: controller.submissions
+  })
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,

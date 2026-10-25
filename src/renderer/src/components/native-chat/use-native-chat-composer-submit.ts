@@ -44,6 +44,7 @@ export function useNativeChatComposerSubmit(args: {
   draft: string
   caret: number
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  hasAnnotations?: boolean
   disabled: boolean
   sendPty: () => void
   sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
@@ -52,7 +53,16 @@ export function useNativeChatComposerSubmit(args: {
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
-  const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
+  const {
+    caret,
+    disabled,
+    draft,
+    draftScopeKey,
+    imageAttachments,
+    hasAnnotations,
+    sendPty,
+    sendStructured
+  } = args
   const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
@@ -139,7 +149,10 @@ export function useNativeChatComposerSubmit(args: {
       }
     } else if (!structuredTransport) {
       sendPty()
-    } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
+    } else if (
+      (draft.trim() !== '' || imageAttachments.length > 0 || hasAnnotations) &&
+      !disabled
+    ) {
       sendStructured(draft, imageAttachments)
     }
   }, [
@@ -149,6 +162,7 @@ export function useNativeChatComposerSubmit(args: {
     draft,
     draftScopeKey,
     imageAttachments,
+    hasAnnotations,
     sendPty,
     sendStructured,
     setCaret,

@@ -136,23 +136,20 @@ export function NativeChatResolvedView({
   // Optimistic "queued" sends (mobile parity): a composer send is echoed
   // immediately and pruned once its real user turn lands in the transcript, so
   // the message never vanishes between send and transcript catch-up.
-  const commandMarkerScope = useMemo(
-    () => ({ paneKey, agent, sessionId }),
-    [paneKey, agent, sessionId]
-  )
+  const commandScope = useMemo(() => ({ paneKey, agent, sessionId }), [paneKey, agent, sessionId])
   const delivery = useNativeChatPendingDelivery({ paneKey, agent, session })
   const { pending, record, clear } = delivery
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
-    readCommandMarkerCache(commandMarkerScope)
+    readCommandMarkerCache(commandScope)
   )
   // Command markers are session-scoped because slash commands like /clear are
   // local feedback for a specific transcript boundary.
   useEffect(() => {
-    setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
+    setCommandMarkers(readCommandMarkerCache(commandScope))
     setWorkingInterrupted(false)
-  }, [commandMarkerScope])
+  }, [commandScope])
   useEffect(() => {
     if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
       return
@@ -168,9 +165,9 @@ export function NativeChatResolvedView({
   )
   const onSlashCommand = useCallback(
     (command: string, output?: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))
+      setCommandMarkers(appendCommandMarkerCache(commandScope, command, Date.now(), output))
     },
-    [commandMarkerScope]
+    [commandScope]
   )
 
   const launchPromptMessage = useMemo(
@@ -319,6 +316,7 @@ export function NativeChatResolvedView({
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
   const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
   const contextMenu = useNativeChatContextMenu({
+    annotationScopeKey: JSON.stringify(['terminal', runtimeEnvironmentId, agent, sessionId]),
     rootRef,
     composerRef,
     enabled: isVisible,
@@ -421,6 +419,7 @@ export function NativeChatResolvedView({
           detaching the ref keeps root typing, paste and reveal focus off it. */}
       <div hidden={shownPromptCard !== null} className="contents">
         <NativeChatComposer
+          {...contextMenu.annotationComposerProps}
           ref={shownPromptCard ? undefined : composerRef}
           inputOwnedByCard={shownPromptCard !== null}
           terminalTabId={terminalTabId}
