@@ -16,26 +16,42 @@ import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
 import type { GitConflictKind, GitStatusEntry } from '../../../../shared/git-status-types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
-  both_modified: 'Both modified',
-  both_added: 'Both added',
-  deleted_by_us: 'Deleted by us',
-  deleted_by_them: 'Deleted by them',
-  added_by_us: 'Added by us',
-  added_by_them: 'Added by them',
-  both_deleted: 'Both deleted'
-}
+const getConflictKindLabels = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
+  both_modified: translate('editorConflicts.kind.bothModified', 'Both modified'),
+  both_added: translate('editorConflicts.kind.bothAdded', 'Both added'),
+  deleted_by_us: translate('editorConflicts.kind.deletedByUs', 'Deleted by us'),
+  deleted_by_them: translate('editorConflicts.kind.deletedByThem', 'Deleted by them'),
+  added_by_us: translate('editorConflicts.kind.addedByUs', 'Added by us'),
+  added_by_them: translate('editorConflicts.kind.addedByThem', 'Added by them'),
+  both_deleted: translate('editorConflicts.kind.bothDeleted', 'Both deleted')
+}))
 
-export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
-  both_modified: 'Resolve the conflict markers',
-  both_added: 'Choose which version to keep, or combine them',
-  deleted_by_us: 'Decide whether to restore the file',
-  deleted_by_them: 'Decide whether to keep the file or accept deletion',
-  added_by_us: 'Review whether to keep the added file',
-  added_by_them: 'Review the added file before keeping it',
-  both_deleted: 'Resolve in Git or restore one side before editing'
-}
+const getConflictHints = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
+  both_modified: translate('editorConflicts.hint.bothModified', 'Resolve the conflict markers'),
+  both_added: translate(
+    'editorConflicts.hint.bothAdded',
+    'Choose which version to keep, or combine them'
+  ),
+  deleted_by_us: translate(
+    'editorConflicts.hint.deletedByUs',
+    'Decide whether to restore the file'
+  ),
+  deleted_by_them: translate(
+    'editorConflicts.hint.deletedByThem',
+    'Decide whether to keep the file or accept deletion'
+  ),
+  added_by_us: translate('editorConflicts.hint.addedByUs', 'Review whether to keep the added file'),
+  added_by_them: translate(
+    'editorConflicts.hint.addedByThem',
+    'Review the added file before keeping it'
+  ),
+  both_deleted: translate(
+    'editorConflicts.hint.bothDeleted',
+    'Resolve in Git or restore one side before editing'
+  )
+}))
 
 const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
 let conflictReviewFileTreeCollapsedPreference = false
@@ -81,7 +97,10 @@ export function ConflictBanner({
   }
 
   const isUnresolved = conflict.conflictStatus === 'unresolved'
-  const label = isUnresolved ? 'Unresolved' : 'Resolved locally'
+  const kind = getConflictKindLabels()[conflict.conflictKind]
+  const label = isUnresolved
+    ? translate('editorConflicts.unresolvedBanner', 'Unresolved conflict · {{kind}}', { kind })
+    : translate('editorConflicts.resolvedBanner', 'Conflict resolved locally · {{kind}}', { kind })
 
   return (
     <div
@@ -99,11 +118,7 @@ export function ConflictBanner({
           ) : (
             <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           )}
-          <span className="min-w-0 truncate font-medium text-foreground">
-            {label}{' '}
-            {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}{' '}
-            {CONFLICT_KIND_LABELS[conflict.conflictKind]}
-          </span>
+          <span className="min-w-0 truncate font-medium text-foreground">{label}</span>
           {conflictNavigation && conflictNavigation.total > 0 && (
             <span className="shrink-0 px-1 text-[11px] tabular-nums text-muted-foreground">
               {(conflictNavigation.currentIndex ?? 0) + 1} / {conflictNavigation.total}
@@ -185,7 +200,7 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
     <div className="flex h-full items-center justify-center px-6 text-center">
       <div className="max-w-md space-y-2">
         <div className="text-sm font-medium text-foreground">
-          {CONFLICT_KIND_LABELS[conflict.conflictKind]}
+          {getConflictKindLabels()[conflict.conflictKind]}
         </div>
         <div className="text-xs text-muted-foreground">
           {conflict.message ??
@@ -195,7 +210,7 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
             )}
         </div>
         <div className="text-xs text-muted-foreground">
-          {conflict.guidance ?? CONFLICT_HINT_MAP[conflict.conflictKind]}
+          {conflict.guidance ?? getConflictHints()[conflict.conflictKind]}
         </div>
       </div>
     </div>
@@ -319,12 +334,10 @@ export function ConflictReviewPanel({
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {unresolvedCount}{' '}
-                {translate(
-                  'auto.components.editor.ConflictComponents.4be41eaafc',
-                  'unresolved conflict'
-                )}
-                {unresolvedCount === 1 ? '' : 's'}
+                {translate('editorConflicts.unresolvedCount', '{{count}} unresolved conflicts', {
+                  count: unresolvedCount,
+                  defaultValue_one: '{{count}} unresolved conflict'
+                })}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">

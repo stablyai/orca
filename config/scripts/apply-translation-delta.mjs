@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { flattenCatalogEntries, resolveLocaleSourceKey } from './verify-localization-catalog.mjs'
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
-const SUPPORTED_LOCALES = new Set(['es', 'fr', 'ja', 'ko', 'zh'])
+const SUPPORTED_LOCALES = new Set(['es', 'fr', 'ja', 'ko', 'pt', 'ru', 'zh'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function placeholders(value) {
@@ -28,19 +30,43 @@ function setEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function getEn(catalog, key) {
-  const value = getEntry(catalog, key)
+function getEn(enEntries, locale, key) {
+  const sourceKey = resolveLocaleSourceKey(enEntries, locale, key)
+  const value = enEntries.get(sourceKey)
   if (typeof value !== 'string') {
     throw new Error(`en.json has no string entry for ${key}`)
   }
   return value
 }
 
-async function main() {
-  const root = process.cwd()
-  const translationsPath = process.argv[2] ?? '/tmp/translations.json'
+function protectedMarkup(value) {
+  return [...value.matchAll(/<\/?[a-z][^>]*>|`[^`\n]+`|\]\(([^)]+)\)|https?:\/\/[^\s<>"`]+/gi)]
+    .map(([match]) => (match.startsWith('http') ? match.replace(/[.,;!?]+$/, '') : match))
+    .sort()
+    .join('|')
+}
+
+function balancedMarkup(value) {
+  const stack = []
+  for (const [tag, closing, name] of value.matchAll(/<(\/?)([a-z][\w-]*)\b[^>]*>/gi)) {
+    if (tag.endsWith('/>') || ['br', 'hr', 'img', 'input', 'meta', 'link'].includes(name)) {
+      continue
+    }
+    if (closing) {
+      if (stack.pop() !== name) {
+        return false
+      }
+    } else {
+      stack.push(name)
+    }
+  }
+  return stack.length === 0
+}
+
+export async function applyTranslationDelta(root, translationsPath) {
   const translations = JSON.parse(await fs.readFile(translationsPath, 'utf8'))
   const enCatalog = JSON.parse(await fs.readFile(path.join(root, LOCALES_DIR, 'en.json'), 'utf8'))
+  const enEntries = flattenCatalogEntries(enCatalog)
 
   for (const [locale, entries] of Object.entries(translations)) {
     // Why: the locale becomes a path segment, so an unchecked key could write outside LOCALES_DIR.
@@ -51,17 +77,38 @@ async function main() {
     const localeCatalog = JSON.parse(await fs.readFile(localePath, 'utf8'))
     let added = 0
     let skipped = 0
-    for (const [key, rawValue] of Object.entries(entries)) {
-      if (getEntry(localeCatalog, key) !== undefined) {
-        console.log(`[${locale}] already present, skip: ${key}`)
-        skipped += 1
-        continue
+    for (const [key, entry] of Object.entries(entries)) {
+      const enValue = getEn(enEntries, locale, key)
+      const rawValue = typeof entry === 'string' ? entry : entry?.translation
+      if (locale === 'ru' && (typeof entry !== 'object' || entry?.source !== enValue)) {
+        throw new Error(`[${locale}] current English source required for ${key}`)
       }
-      const enValue = getEn(enCatalog, key)
+      if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+        throw new Error(`[${locale}] empty translation for ${key}`)
+      }
+      const existing = getEntry(localeCatalog, key)
+      if (existing !== undefined) {
+        if (locale === 'ru' && typeof entry === 'object' && 'previousTranslation' in entry) {
+          if (entry.previousTranslation !== existing) {
+            throw new Error(`[${locale}] translation changed since review for ${key}`)
+          }
+        } else {
+          console.log(`[${locale}] already present, skip: ${key}`)
+          skipped += 1
+          continue
+        }
+      }
       if (placeholders(enValue) !== placeholders(rawValue)) {
         throw new Error(
           `[${locale}] placeholder mismatch for ${key}: en=${placeholders(enValue)} vs locale=${placeholders(rawValue)}`
         )
+      }
+      if (
+        locale === 'ru' &&
+        (protectedMarkup(enValue) !== protectedMarkup(rawValue) ||
+          (balancedMarkup(enValue) && !balancedMarkup(rawValue)))
+      ) {
+        throw new Error(`[${locale}] protected markup mismatch for ${key}`)
       }
       const repaired = repairTranslatedValue({
         key,
@@ -90,4 +137,6 @@ async function main() {
   }
 }
 
-await main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await applyTranslationDelta(process.cwd(), process.argv[2] ?? '/tmp/translations.json')
+}

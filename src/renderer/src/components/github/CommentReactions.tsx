@@ -19,15 +19,23 @@ const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {
   eyes: '👀'
 }
 
-const REACTION_LABEL: Record<GitHubReactionContent, string> = {
-  '+1': 'thumbs up',
-  '-1': 'thumbs down',
-  laugh: 'laugh',
-  confused: 'confused',
-  heart: 'heart',
-  hooray: 'hooray',
-  rocket: 'rocket',
-  eyes: 'eyes'
+const REACTION_LABEL: Record<GitHubReactionContent, () => string> = {
+  '+1': () => translate('githubReactions.thumbsUp', 'thumbs up'),
+  '-1': () => translate('githubReactions.thumbsDown', 'thumbs down'),
+  laugh: () => translate('githubReactions.laugh', 'laugh'),
+  confused: () => translate('githubReactions.confused', 'confused'),
+  heart: () => translate('githubReactions.heart', 'heart'),
+  hooray: () => translate('githubReactions.hooray', 'hooray'),
+  rocket: () => translate('githubReactions.rocket', 'rocket'),
+  eyes: () => translate('githubReactions.eyes', 'eyes')
+}
+
+function reactionCountLabel(reaction: GitHubReaction): string {
+  return translate('githubReactions.namedCount', '{{count}} {{reaction}} reactions', {
+    count: reaction.count,
+    reaction: REACTION_LABEL[reaction.content](),
+    defaultValue_one: '{{count}} {{reaction}} reaction'
+  })
 }
 
 export function CommentReactions({
@@ -97,15 +105,7 @@ export function CommentReactions({
                 reaction.viewerHasReacted && 'border-ring bg-accent text-accent-foreground'
               )}
               aria-pressed={Boolean(reaction.viewerHasReacted)}
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.a18f669c7a',
-                '{{value0}} {{value1}} reaction{{value2}}',
-                {
-                  value0: reaction.count,
-                  value1: REACTION_LABEL[reaction.content],
-                  value2: reaction.count === 1 ? '' : 's'
-                }
-              )}
+              aria-label={reactionCountLabel(reaction)}
               onClick={() =>
                 void changeReaction(
                   reaction.content,
@@ -121,15 +121,7 @@ export function CommentReactions({
           ) : (
             <span
               className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.a18f669c7a',
-                '{{value0}} {{value1}} reaction{{value2}}',
-                {
-                  value0: reaction.count,
-                  value1: REACTION_LABEL[reaction.content],
-                  value2: reaction.count === 1 ? '' : 's'
-                }
-              )}
+              aria-label={reactionCountLabel(reaction)}
             >
               <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
               <span className="tabular-nums">{reaction.count}</span>
@@ -192,12 +184,12 @@ export function CommentReactions({
                         ? translate(
                             'auto.components.github.CommentReactions.removeNamedReaction',
                             'Remove {{value0}} reaction',
-                            { value0: REACTION_LABEL[content] }
+                            { value0: REACTION_LABEL[content]() }
                           )
                         : translate(
                             'auto.components.github.CommentReactions.addNamedReaction',
                             'Add {{value0}} reaction',
-                            { value0: REACTION_LABEL[content] }
+                            { value0: REACTION_LABEL[content]() }
                           )
                     }
                     aria-pressed={reacted}

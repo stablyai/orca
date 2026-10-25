@@ -29,6 +29,10 @@ import {
 } from '../../../../shared/file-write-disk-precondition'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
+import {
+  fileExplorerBatchDeleteConfirmation,
+  fileExplorerDeleteConfirmation
+} from './file-explorer-delete-confirmation'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -76,27 +80,7 @@ export function useFileDeletion({
         )
         // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
         if (isRemote && !options?.skipConfirmation) {
-          const confirmed = await confirm({
-            title: translate(
-              'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
-              "Permanently delete '{{value0}}'?",
-              { value0: node.name }
-            ),
-            description: node.isDirectory
-              ? translate(
-                  'auto.components.right.sidebar.useFileDeletion.7fb9435c86',
-                  'This permanently deletes the directory and its contents on the remote host. This cannot be undone.'
-                )
-              : translate(
-                  'auto.components.right.sidebar.useFileDeletion.23e98f192f',
-                  'This permanently deletes the file on the remote host. This cannot be undone.'
-                ),
-            confirmLabel: translate(
-              'auto.components.right.sidebar.useFileDeletion.92276aceb7',
-              'Delete'
-            ),
-            confirmVariant: 'destructive'
-          })
+          const confirmed = await confirm(fileExplorerDeleteConfirmation(node))
           if (!confirmed) {
             return false
           }
@@ -219,16 +203,23 @@ export function useFileDeletion({
 
         return true
       } catch (error) {
-        const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
         const errorMessage = getFileDeleteErrorMessage(error)
         toast.error(
           errorMessage
             ? errorMessage
-            : translate(
-                'auto.components.right.sidebar.useFileDeletion.72691dfebc',
-                "Failed to {{value0}} '{{value1}}'.",
-                { value0: action, value1: node.name }
-              )
+            : isRemote
+              ? translate('fileExplorer.deleteFailed', "Failed to delete '{{name}}'.", {
+                  name: node.name
+                })
+              : isWindows
+                ? translate(
+                    'fileExplorer.recycleFailed',
+                    "Failed to move '{{name}}' to Recycle Bin.",
+                    { name: node.name }
+                  )
+                : translate('fileExplorer.trashFailed', "Failed to move '{{name}}' to Trash.", {
+                    name: node.name
+                  })
         )
         return false
       } finally {
@@ -262,7 +253,6 @@ export function useFileDeletion({
       const roots = selectDeletionRoots(nodes)
       // Mixed batches must distinguish permanent remote deletion from local Trash.
       const hasLocalDelete = roots.some(isLocalDeleteNode)
-      const trashName = isWindows ? 'Recycle Bin' : 'Trash'
       // Clear selection after the whole batch so concurrent completions cannot restore stale partial sets.
       void (async () => {
         const deletedRoots = await runBatchDeletion({
@@ -270,35 +260,14 @@ export function useFileDeletion({
           // Local Trash remains prompt-free; only remote roots need confirmation.
           needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
           confirmBatch: () =>
-            confirm({
+            confirm(
               // Count selected children even when ancestor roots subsume their deletes.
-              title: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.77fdc36183',
-                    'Delete {{count}} items?',
-                    { count: nodes.length }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.useFileDeletion.af1270b90d',
-                    'Permanently delete {{count}} items?',
-                    { count: nodes.length }
-                  ),
-              description: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.fca915a67a',
-                    'Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}.',
-                    { value0: trashName }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
-                    'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-                  ),
-              confirmLabel: translate(
-                'auto.components.right.sidebar.useFileDeletion.92276aceb7',
-                'Delete'
-              ),
-              confirmVariant: 'destructive'
-            }),
+              fileExplorerBatchDeleteConfirmation({
+                count: nodes.length,
+                hasLocalDelete,
+                isWindows
+              })
+            ),
           deleteNode: (node) => runDelete(node, { skipConfirmation: true })
         })
         if (deletedRoots === null || deletedRoots.length === 0) {

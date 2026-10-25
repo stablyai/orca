@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { translate } from '@/i18n/i18n'
 import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
@@ -18,7 +20,6 @@ import {
   type PluginPanelsFetchStatus
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
@@ -35,6 +36,8 @@ export function useRightSidebarActivityItems({
 }: {
   rightSidebarOpen: boolean
 }): RightSidebarActivityItems {
+  const { i18n } = useTranslation()
+  const language = i18n.language
   const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
@@ -69,8 +72,10 @@ export function useRightSidebarActivityItems({
     [installedPlugins]
   )
 
-  const activityItems = useMemo<ActivityBarItem[]>(
-    () => [
+  const activityItems = useMemo<ActivityBarItem[]>(() => {
+    // translate reads the subscribed language implicitly.
+    void language
+    return [
       {
         id: 'explorer',
         icon: Files,
@@ -123,16 +128,16 @@ export function useRightSidebarActivityItems({
       },
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
-    ],
-    [
-      checksShortcut,
-      explorerShortcut,
-      pluginPanelErrors,
-      visiblePluginPanels,
-      portsShortcut,
-      sourceControlShortcut
     ]
-  )
+  }, [
+    language,
+    checksShortcut,
+    explorerShortcut,
+    pluginPanelErrors,
+    visiblePluginPanels,
+    portsShortcut,
+    sourceControlShortcut
+  ])
 
   const visibleItems = useMemo(
     () =>

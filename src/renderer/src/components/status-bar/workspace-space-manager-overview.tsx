@@ -133,12 +133,20 @@ export function WorkspaceSpaceManagerOverview({
               ? translate(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
                   '{{value0}}. You can leave this page; the last result stays visible.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0:
+                      progressLabel ??
+                      translate('workspaceSpace.scanningSizes', 'Scanning workspace sizes')
+                  }
                 )
               : translate(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
                   '{{value0}}. You can leave this page.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0:
+                      progressLabel ??
+                      translate('workspaceSpace.scanningSizes', 'Scanning workspace sizes')
+                  }
                 )}
           </span>
         </div>

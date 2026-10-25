@@ -14,6 +14,7 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_PORTUGUESE,
+  UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH
 } from '../../shared/ui-language'
 import {
@@ -64,6 +65,17 @@ describe('main-i18n lazy locale loading', () => {
   it('uses caller English when a target catalog omits a key', async () => {
     await setMainUiLanguage(UI_LANGUAGE_SPANISH)
     expect(translateMain('missing.main.feature', 'English fallback')).toBe('English fallback')
+  })
+
+  it('loads Russian before native menu registration reads it', async () => {
+    expect(await setMainUiLanguage(UI_LANGUAGE_RUSSIAN)).toBe('ru')
+    expect(translateMain('menu.file', 'File')).toBe('Файл')
+    expect(translateMain('menu.settings', 'Settings')).toBe('Настройки')
+    expect(
+      translateMain('components.native-chat.queuedMessages.imageCount', '{{count}} images', {
+        count: 5
+      })
+    ).toBe('5 изображений')
   })
 
   it('returns to English from a lazily-loaded locale', async () => {

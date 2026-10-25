@@ -8,6 +8,7 @@ import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rat
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result = fallback
     for (const [key, value] of Object.entries(values ?? {})) {

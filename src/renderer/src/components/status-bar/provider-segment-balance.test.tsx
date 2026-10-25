@@ -10,6 +10,7 @@ afterEach(() => {
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result =
       _key === 'auto.components.status.bar.StatusBar.4fba7dc1e7' && compactMessages.balance

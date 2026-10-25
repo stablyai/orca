@@ -122,13 +122,17 @@ export function useSourceControlDiscardConfirmation({
           // Limit bulk failures to the first error and sample paths so the toast stays readable.
           const firstMsg = readIpcErrorMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
-          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
+          const more =
+            result.failed.length > 3
+              ? translate('sourceControl.discard.moreFailures', ', +{{count}} more', {
+                  count: result.failed.length - 3
+                })
+              : ''
           toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.8eb3782a0c',
-              'Failed to discard {{value0}} file{{value1}}',
-              { value0: result.failed.length, value1: result.failed.length === 1 ? '' : 's' }
-            ),
+            translate('sourceControl.discard.failedFiles', 'Failed to discard {{count}} files', {
+              count: result.failed.length,
+              defaultValue_one: 'Failed to discard {{count}} file'
+            }),
             {
               description: firstMsg
                 ? translate(

@@ -4,6 +4,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     Object.entries(values ?? {}).reduce((text, [k, v]) => text.replace(`{{${k}}}`, v), fallback)
 }))

@@ -73,10 +73,7 @@ export function RichMarkdownDocLinkMenu({
         </div>
       ) : null}
       <div className="rich-markdown-doc-link-hint">
-        {translate(
-          'auto.components.editor.RichMarkdownDocLinkMenu.e17b987473',
-          '↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss'
-        )}
+        {translate('documentLinks.keyboardHint', '↑↓ navigate  ↵ select  esc dismiss')}
       </div>
     </div>
   )

@@ -113,15 +113,13 @@ export function CompactAgentSummaryButton({
       )}
       aria-label={
         expanded
-          ? translate(
-              'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
-              'Collapse {{value0}}',
-              { value0: subjectLabel }
-            )
+          ? translate('worktreeAgentSummary.collapse', 'Collapse agent summary: {{subject}}', {
+              subject: subjectLabel
+            })
           : translate(
-              'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
-              'Expand {{value0}}. {{value1}}',
-              { value0: summary, value1: agentIdentitySummary }
+              'worktreeAgentSummary.expand',
+              'Expand agent summary: {{summary}}. {{identities}}',
+              { summary, identities: agentIdentitySummary }
             )
       }
       aria-expanded={expanded}
