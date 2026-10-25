@@ -754,7 +754,8 @@
           "microphone": "microfone",
           "location": "localização",
           "notifications": "notificações",
-          "clipboard": "área de transferência"
+          "clipboard": "área de transferência",
+          "localNetwork": "rede local"
         }
       },
       "profileScope": {
@@ -18947,7 +18948,8 @@
             "clipboard": "Área de transferência",
             "midi": "Dispositivos MIDI",
             "windowManagement": "Gerenciamento de janelas",
-            "idleDetection": "Uso do dispositivo"
+            "idleDetection": "Uso do dispositivo",
+            "localNetwork": "Rede local"
           },
           "ask": {
             "camera": "Usar sua câmera",
@@ -18957,7 +18959,8 @@
             "clipboard": "Ver textos e imagens copiados para a área de transferência",
             "midi": "Usar seus dispositivos MIDI",
             "windowManagement": "Gerenciar janelas em todas as suas telas",
-            "idleDetection": "Saber quando você está usando este dispositivo ativamente"
+            "idleDetection": "Saber quando você está usando este dispositivo ativamente",
+            "localNetwork": "Acessar apps neste dispositivo e dispositivos na sua rede local"
           },
           "title": "{{site}} quer",
           "allow": "Permitir",

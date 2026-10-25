@@ -444,7 +444,8 @@
           "microphone": "microphone",
           "location": "location",
           "notifications": "notifications",
-          "clipboard": "clipboard"
+          "clipboard": "clipboard",
+          "localNetwork": "local network"
         }
       },
       "profileScope": {
@@ -18669,7 +18670,8 @@
             "clipboard": "Clipboard",
             "midi": "MIDI devices",
             "windowManagement": "Window management",
-            "idleDetection": "Device use"
+            "idleDetection": "Device use",
+            "localNetwork": "Local network"
           },
           "ask": {
             "camera": "Use your camera",
@@ -18679,7 +18681,8 @@
             "clipboard": "See text and images copied to the clipboard",
             "midi": "Use your MIDI devices",
             "windowManagement": "Manage windows on all your displays",
-            "idleDetection": "Know when you are actively using this device"
+            "idleDetection": "Know when you are actively using this device",
+            "localNetwork": "Access apps on this device and devices on your local network"
           },
           "title": "{{site}} wants to",
           "allow": "Allow",

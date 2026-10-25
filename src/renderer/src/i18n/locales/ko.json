@@ -209,7 +209,8 @@
           "microphone": "마이크",
           "location": "위치",
           "notifications": "알림",
-          "clipboard": "클립보드"
+          "clipboard": "클립보드",
+          "localNetwork": "로컬 네트워크"
         },
         "title": "사이트 권한",
         "profile": "브라우저 프로필",
@@ -18367,6 +18368,7 @@
             "clipboard": "클립보드",
             "windowManagement": "창 관리",
             "idleDetection": "장치 사용",
+            "localNetwork": "로컬 네트워크",
             "midi": "MIDI 장치"
           },
           "allow": "허용",
@@ -18377,6 +18379,7 @@
             "location": "위치 정보 확인",
             "microphone": "마이크 사용",
             "idleDetection": "이 장치의 사용 여부 감지",
+            "localNetwork": "이 장치의 앱과 로컬 네트워크의 장치에 액세스",
             "clipboard": "클립보드에 복사된 텍스트 및 이미지 보기",
             "windowManagement": "모든 디스플레이의 창 관리",
             "midi": "MIDI 장치 사용"

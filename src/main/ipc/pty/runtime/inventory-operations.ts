@@ -16,7 +16,7 @@ function markSshInventoryUnverifiable(
 }
 
 export async function listProcessesWithHostScopeFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
+  deps: Pick<PtyRuntimeControllerDeps, 'runtime'>,
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
   const providerSessions = await Promise.all(

@@ -28,20 +28,9 @@ describe('browser notice formatting', () => {
     ).toBe('this page asked for your location, and Orca denied it.')
   })
 
-  it('names the storage permission in words rather than its raw token', () => {
-    const notice = formatPermissionNotice({
-      browserPageId: 'browser-1',
-      permission: 'top-level-storage-access',
-      origin: 'https://example.com'
-    })
-    expect(notice).not.toContain('top-level-storage-access')
-    expect(notice).toBe(
-      'https://example.com asked for cookie access on behalf of an embedded site, and Orca denied it.'
-    )
-  })
-
   it.each([
     ['storage-access', 'access to its own cookies and storage while embedded on this page'],
+    ['top-level-storage-access', 'cookie access on behalf of an embedded site'],
     ['idle-detection', 'permission to detect when you are idle'],
     ['display-capture', 'permission to capture your screen'],
     ['window-management', 'screen information and multi-screen window placement'],

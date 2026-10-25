@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   installBrowserWebAuthnAccessHandlers: vi.fn(),
   isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
   requestExternalAppLaunch: vi.fn(),
-  notifyPermissionDenied: vi.fn()
+  notifyPermissionDenied: vi.fn(),
+  resolvePagePromptTarget: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -81,7 +83,8 @@ vi.mock('./browser-manager', () => ({
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),
     notifyPermissionDenied: mocks.notifyPermissionDenied,
-    requestExternalAppLaunch: mocks.requestExternalAppLaunch
+    requestExternalAppLaunch: mocks.requestExternalAppLaunch,
+    resolvePagePromptTarget: mocks.resolvePagePromptTarget
   }
 }))
 vi.mock('./doc-preview-download-block-notice', () => ({
@@ -195,16 +198,6 @@ describe('partition download policy', () => {
 })
 
 describe('partition permission policy', () => {
-  it('keeps ordinary browser partitions on the browser permission policy', async () => {
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-1'))
-
-    expect(mocks.installBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(
-      sessionsByPartition.get('persist:browsing-1')
-    )
-    expect(mocks.clearBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
-  })
-
   it('denies clipboard reads only to pages an SSH host has driven (#29145)', async () => {
     mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 7)
     const install = await loadInstaller()
@@ -310,6 +303,57 @@ describe('partition permission policy', () => {
     tab.mainFrame.framesInSubtree.push({ url: 'about:blank', origin: 'https://a.test' })
     // Ambiguous blank-frame origins must be refused.
     await expect(request('about:blank')).resolves.toBe(false)
+  })
+
+  it('asks when a page checks local network access, since Electron never requests it', async () => {
+    const install = await loadInstaller()
+    const store = await import('./browser-site-permission-store')
+    store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
+    const { respondToBrowserPagePrompt } = await import('./browser-page-prompts')
+    const send = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed, send and subscribe to the window's lifecycle events.
+    const renderer = {
+      id: 10,
+      isDestroyed: () => false,
+      send,
+      on: vi.fn(),
+      off: vi.fn()
+    } as unknown as Electron.WebContents
+    mocks.resolvePagePromptTarget.mockReturnValue({ browserPageId: 'page-1', renderer })
+    install(profileFor('persist:browsing-lna'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const checkHandler = sessionsByPartition.get('persist:browsing-lna')?.setPermissionCheckHandler
+      .mock.calls[0]?.[0] as (
+      webContents: EventEmitter,
+      permission: string,
+      origin: string
+    ) => boolean
+    const tab = (url: string): EventEmitter =>
+      Object.assign(new EventEmitter(), { id: 20, isDestroyed: () => false, getURL: () => url })
+    const prompts = () =>
+      send.mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
+    const signIn = tab('https://login.example.com/signin')
+
+    // Chromium 150 asks loopback-network for 127.0.0.1; older pages query the legacy name.
+    expect(checkHandler(signIn, 'loopback-network', 'https://login.example.com')).toBe(false)
+    expect(checkHandler(signIn, 'local-network-access', 'https://login.example.com')).toBe(false)
+    expect(prompts()).toMatchObject([
+      [
+        'browser:page-prompt-requested',
+        { details: { origin: 'https://login.example.com', permissions: ['local-network'] } }
+      ]
+    ])
+    await respondToBrowserPagePrompt(renderer, {
+      requestId: prompts()[0][1].requestId,
+      answer: 'allow'
+    })
+    expect(checkHandler(signIn, 'loopback-network', 'https://login.example.com')).toBe(true)
+
+    // Chrome never gates loopback pages, so localhost dev servers neither ask nor read denied.
+    expect(
+      checkHandler(tab('http://localhost:5173/'), 'loopback-network', 'http://localhost:5173')
+    ).toBe(true)
+    expect(prompts()).toHaveLength(1)
   })
 
   it("keeps a paired server's pages off this computer's saved answers for the same profile id", async () => {

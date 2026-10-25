@@ -209,7 +209,8 @@
           "microphone": "麦克风",
           "location": "位置",
           "notifications": "通知",
-          "clipboard": "剪贴板"
+          "clipboard": "剪贴板",
+          "localNetwork": "本地网络"
         },
         "title": "站点权限",
         "empty": "尚未允许或阻止任何网站。",
@@ -18367,6 +18368,7 @@
             "clipboard": "剪贴板",
             "midi": "MIDI 设备",
             "idleDetection": "设备使用",
+            "localNetwork": "本地网络",
             "windowManagement": "窗口管理"
           },
           "allow": "允许",
@@ -18379,7 +18381,8 @@
             "midi": "使用 MIDI 设备",
             "clipboard": "查看复制到剪贴板的文本和图像",
             "windowManagement": "管理所有显示器上的窗口",
-            "idleDetection": "检测您是否正在使用此设备"
+            "idleDetection": "检测您是否正在使用此设备",
+            "localNetwork": "访问此设备上的应用和本地网络中的设备"
           },
           "localFiles": "本地文件",
           "title": "{{site}} 请求执行以下操作",

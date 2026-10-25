@@ -209,7 +209,8 @@
           "microphone": "マイクロフォン",
           "location": "場所",
           "notifications": "通知",
-          "clipboard": "クリップボード"
+          "clipboard": "クリップボード",
+          "localNetwork": "ローカル ネットワーク"
         },
         "description": "サイトはカメラ、マイク、位置情報などを使用する前に許可を求めます。サイトごとに許可またはブロックした内容を変更できます。",
         "profile": "ブラウザプロファイル",
@@ -18366,6 +18367,7 @@
             "notifications": "通知",
             "clipboard": "クリップボード",
             "idleDetection": "デバイスの使用",
+            "localNetwork": "ローカル ネットワーク",
             "windowManagement": "ウィンドウ管理",
             "midi": "MIDIデバイス"
           },
@@ -18377,6 +18379,7 @@
             "camera": "カメラを使用する",
             "location": "位置情報を取得する",
             "idleDetection": "このデバイスを操作中かどうかを検出する",
+            "localNetwork": "このデバイス上のアプリとローカル ネットワーク上のデバイスにアクセスする",
             "windowManagement": "すべてのディスプレイ上のウィンドウを管理",
             "clipboard": "クリップボードにコピーされたテキストと画像を読み取る",
             "midi": "MIDI デバイスを使用する"

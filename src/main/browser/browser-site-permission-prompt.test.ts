@@ -142,15 +142,6 @@ describe('browser site permission prompts', () => {
     expect(allowedOnCheck(['camera', 'microphone'])).toBe(true)
   })
 
-  it('remembers Block and refuses without asking again', async () => {
-    const call = ask(['location'])
-    await answerLatest('block')
-    await expect(call).resolves.toBe(false)
-
-    await expect(ask(['location'])).resolves.toBe(false)
-    expect(sentRequests(renderer)).toHaveLength(1)
-  })
-
   it('asks only for what is unanswered, and a remembered Block refuses the whole request', async () => {
     const camera = ask(['camera'])
     await answerLatest('allow')

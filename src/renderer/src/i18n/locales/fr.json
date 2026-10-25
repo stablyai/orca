@@ -349,6 +349,7 @@
           "microphone": "micro",
           "location": "emplacement",
           "clipboard": "presse-papiers",
+          "localNetwork": "réseau local",
           "notifications": "notifications"
         },
         "empty": "Aucun site n'a encore été autorisé ou bloqué.",
@@ -18523,7 +18524,8 @@
             "clipboard": "Presse-papiers",
             "windowManagement": "Gestion des fenêtres",
             "midi": "Appareils MIDI",
-            "idleDetection": "Utilisation de l'appareil"
+            "idleDetection": "Utilisation de l'appareil",
+            "localNetwork": "Réseau local"
           },
           "allow": "Autoriser",
           "block": "Bloquer",
@@ -18535,7 +18537,8 @@
             "camera": "Utiliser votre caméra",
             "midi": "Utiliser vos appareils MIDI",
             "location": "Accéder à votre position",
-            "idleDetection": "Détecter quand vous utilisez cet appareil"
+            "idleDetection": "Détecter quand vous utilisez cet appareil",
+            "localNetwork": "Accéder aux applications de cet appareil et aux appareils de votre réseau local"
           },
           "fileTitle": "Ce fichier souhaite",
           "localFiles": "Fichiers locaux",

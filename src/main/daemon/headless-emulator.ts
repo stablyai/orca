@@ -1,5 +1,5 @@
 import './xterm-env-polyfill'
-import { Terminal } from '@xterm/headless'
+import { Terminal, type ITerminalOptions } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
@@ -31,7 +31,8 @@ import {
   type HeadlessTerminalRow
 } from './headless-terminal-rows'
 
-export type HeadlessEmulatorOptions = {
+/** windowsPty: ConPTY repaints its own grid after a resize, so growing rows must not pull scrollback. */
+export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
   cols: number
   rows: number
   scrollback?: number
@@ -90,7 +91,8 @@ export class HeadlessEmulator {
       allowProposedApi: true,
       logLevel: 'off',
       // Match renderer kitty flag parsing and query responses.
-      vtExtensions: { kittyKeyboard: true }
+      vtExtensions: { kittyKeyboard: true },
+      windowsPty: opts.windowsPty ?? {}
     })
 
     this.serializer = new SerializeAddon()
