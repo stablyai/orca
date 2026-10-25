@@ -30,7 +30,9 @@ const {
 }))
 
 vi.mock('node:crypto', () => ({
-  randomUUID: randomUUIDMock
+  randomUUID: randomUUIDMock,
+  // Why: the clipboard text publisher stages its fingerprint helper at import time.
+  createHash: vi.fn(() => ({ update: () => ({ digest: () => '' }) }))
 }))
 
 vi.mock('node:fs/promises', () => ({
