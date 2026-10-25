@@ -6,6 +6,7 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-preference'
 import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import { setPublishedSidebarWorktrees } from '../../attention-order-workspaces'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 
@@ -15,8 +16,9 @@ const getSidebarContainer = (): Element | null =>
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  sidebarWorktrees: readonly Worktree[]
 }) {
-  const { sectionRows, pinnedDisplayPolicy } = args
+  const { sectionRows, pinnedDisplayPolicy, sidebarWorktrees } = args
   // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
   const renderedWorktrees = useMemo(
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
@@ -66,6 +68,12 @@ export function useSidebarWorktreeSelection(args: {
       setVisibleWorktreeShortcutTargets(null)
     }
   }, [renderedWorktreeIds, renderedWorktrees, sectionRows])
+
+  // Why layout effect: the next-attention shortcut must order by the same frozen sort the list just painted.
+  useLayoutEffect(() => {
+    setPublishedSidebarWorktrees(sidebarWorktrees)
+    return () => setPublishedSidebarWorktrees(null)
+  }, [sidebarWorktrees])
 
   return {
     renderedWorktreeIds,

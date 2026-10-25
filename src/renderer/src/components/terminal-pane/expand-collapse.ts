@@ -112,6 +112,10 @@ function requestPaneSizeRefreshFrame(
 
 export function createExpandCollapseActions(state: ExpandCollapseState) {
   const setExpandedPane = (paneId: number | null): void => {
+    // Why: the persisted snapshot reads split ratios from the DOM, so collapse must undo expanded styles first.
+    if (paneId === null) {
+      restoreExpandedLayoutFrom(state.expandedStyleSnapshotRef.current)
+    }
     state.expandedPaneIdRef.current = paneId
     state.setExpandedPaneId(paneId)
     state.setTabPaneExpanded(state.tabId, paneId !== null)

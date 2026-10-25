@@ -1613,6 +1613,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "No workspaces need attention"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why."
         }

@@ -144,6 +144,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneTransportsRef: { current: new Map() },
       isActiveRef: { current: false },
       isVisibleRef: { current: false },
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     })
 
@@ -179,6 +180,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneTransportsRef: { current: new Map() },
       isActiveRef: { current: false },
       isVisibleRef: { current: false },
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     })
 

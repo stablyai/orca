@@ -54,6 +54,9 @@ export function sendResolvedWindowShortcutAction(
     case 'toggleAgentDashboard':
       mainWindow.webContents.send('ui:toggleAgentDashboard')
       return
+    case 'jumpToNextAttention':
+      mainWindow.webContents.send('ui:jumpToNextAttention')
+      return
     case 'switchRecentTab':
       mainWindow.webContents.send('ui:switchRecentTab')
       return

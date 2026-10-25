@@ -1496,6 +1496,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Aucun espace de travail ne requiert d'attention"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca n’a pas pu s’installer sur cet hôte SSH. La section Hôtes SSH des Paramètres en indique la raison."
         }
