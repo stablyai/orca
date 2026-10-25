@@ -14,7 +14,7 @@ describe("undo's stop of the host's copies", () => {
   // awin verify-7, 6c: the host's agent kept running beside the one undo resumed here.
   it('sleeps every host workspace and reports stopped once none of their terminals runs', async () => {
     let checks = 0
-    const host = port({ liveTerminals: vi.fn(async () => (checks++ < 2 ? 1 : 0)) })
+    const host = port({ liveTerminals: vi.fn(async () => (checks++ < 4 ? 1 : 0)) })
 
     expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toBe('stopped')
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-a')
@@ -34,6 +34,13 @@ describe("undo's stop of the host's copies", () => {
     expect(await stopWslMoveHostCopies(['wt-a'], port({ liveTerminals: async () => null }))).toBe(
       'unreachable'
     )
+  })
+
+  // awin verify-9, X1: a host that answers for one workspace only must have none of them stopped.
+  it('stops nothing when the host does not answer for every workspace up front', async () => {
+    const host = port({ liveTerminals: vi.fn(async (id: string) => (id === 'wt-b' ? null : 1)) })
+    expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toBe('unreachable')
+    expect(host.sleepWorkspace).not.toHaveBeenCalled()
   })
 
   it('checks exit even when the host refused the sleep itself', async () => {
