@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CODEX_CAPACITY_MESSAGE, CodexCapacityNoticeTracker } from './codex-capacity-notice'
+import { CODEX_CAPACITY_MESSAGE, createCodexCapacityNoticeTracker } from './codex-native-notice'
 
 describe('Codex capacity candidate bounds', () => {
   it('reads neither the screen nor its mode during ordinary output', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [])
     const readSynchronized = vi.fn(() => false)
     tracker.observe('ordinary output'.repeat(1000), readScreen, readSynchronized)
@@ -11,7 +11,7 @@ describe('Codex capacity candidate bounds', () => {
     expect(readSynchronized).not.toHaveBeenCalled()
   })
   it('does not inspect a partial synchronized frame with combined ANSI modes', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›'])
     expect(tracker.observe(`\x1b[?25;2026h■ ${CODEX_CAPACITY_MESSAGE}`, readScreen)).toBe(false)
     expect(readScreen).not.toHaveBeenCalled()
@@ -19,7 +19,7 @@ describe('Codex capacity candidate bounds', () => {
     expect(readScreen).toHaveBeenCalledTimes(1)
   })
   it('ignores repeated unrelated markers and still accepts a later native notice', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›'])
     expect(tracker.observe('■'.repeat(100_000), readScreen)).toBe(false)
     expect(readScreen).not.toHaveBeenCalled()
@@ -27,7 +27,7 @@ describe('Codex capacity candidate bounds', () => {
     expect(readScreen).toHaveBeenCalledTimes(1)
   })
   it('finds the notice inside a large text chunk after unrelated warning markers', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›'])
     expect(
       tracker.observe(
@@ -39,7 +39,7 @@ describe('Codex capacity candidate bounds', () => {
   })
 
   it('recognizes a split notice immediately after abandoning an unrelated warning', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [`⚠ ${CODEX_CAPACITY_MESSAGE}`, '›'])
     expect(tracker.observe('⚠ 1 warning · f2 to view', readScreen)).toBe(false)
     expect(readScreen).not.toHaveBeenCalled()

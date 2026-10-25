@@ -711,7 +711,6 @@
 1 test-no-wall-clock:mobile/src/tasks/worktree-create-launch-operation.test.ts
 2 test-no-wall-clock:mobile/src/transport/cellular-handshake-stall-real-socket.test.ts
 1 test-no-wall-clock:mobile/src/transport/host-store.test.ts
-2 test-no-wall-clock:mobile/src/transport/mobile-endpoint-lifecycle-host-edit.test.ts
 1 test-no-wall-clock:mobile/src/transport/mobile-relay-invite-director.test.ts
 3 test-no-wall-clock:mobile/src/transport/mobile-relay-resume-director.test.ts
 3 test-no-wall-clock:mobile/src/transport/rpc-client-live-recovery.test.ts

@@ -1,7 +1,9 @@
 import {
-  CodexCapacityNoticeTracker,
-  CODEX_CAPACITY_MESSAGE
-} from '../../shared/codex-capacity-notice'
+  CODEX_CAPACITY_MESSAGE,
+  createCodexCapacityNoticeTracker,
+  createCodexReconnectFailedNoticeTracker,
+  type CodexNoticeTracker
+} from '../../shared/codex-native-notice'
 import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
@@ -9,21 +11,24 @@ import type {
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 
-const trackers = new WeakMap<HeadlessEmulator, CodexCapacityNoticeTracker>()
+const capacityTrackers = new WeakMap<HeadlessEmulator, CodexNoticeTracker>()
+const reconnectFailedTrackers = new WeakMap<HeadlessEmulator, CodexNoticeTracker>()
 const launchIdentities = new WeakMap<HeadlessEmulator, { command?: string; codex: boolean }>()
 type CodexCapacityStatus = Pick<
   AgentStatusIpcPayload,
   'agentType' | 'prompt' | 'model' | 'subagents' | 'mainAgent' | 'turnStartedAt'
 >
 
-export function observeCodexCapacityTerminalStatus(
+/** A pane earns a tracker once it is known to run Codex; other agents never scan for its notices. */
+function codexNoticeTracker(
+  trackers: WeakMap<HeadlessEmulator, CodexNoticeTracker>,
+  create: () => CodexNoticeTracker,
   emulator: HeadlessEmulator,
   data: string,
   startupCommand: string | undefined,
   launchAgent: string | null | undefined,
-  readStatus: () => CodexCapacityStatus | undefined,
-  outputObservedAt = Date.now()
-): ParsedAgentStatusPayload | null {
+  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined
+): CodexNoticeTracker | null {
   let tracker = trackers.get(emulator)
   if (!tracker && launchAgent !== 'codex') {
     let identity = launchIdentities.get(emulator)
@@ -43,8 +48,57 @@ export function observeCodexCapacityTerminalStatus(
     }
   }
   if (!tracker) {
-    tracker = new CodexCapacityNoticeTracker()
+    tracker = create()
     trackers.set(emulator, tracker)
+  }
+  return tracker
+}
+
+/** True once Codex paints that reconnect gave up; its TUI keeps running with no app-server behind it. */
+export function observeCodexReconnectFailure(
+  emulator: HeadlessEmulator,
+  data: string,
+  startupCommand: string | undefined,
+  launchAgent: string | null | undefined,
+  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined
+): boolean {
+  const tracker = codexNoticeTracker(
+    reconnectFailedTrackers,
+    createCodexReconnectFailedNoticeTracker,
+    emulator,
+    data,
+    startupCommand,
+    launchAgent,
+    readStatus
+  )
+  return (
+    tracker?.observe(
+      data,
+      () => emulator.getVisibleLines(),
+      () => emulator.isSynchronizedOutput
+    ) === true
+  )
+}
+
+export function observeCodexCapacityTerminalStatus(
+  emulator: HeadlessEmulator,
+  data: string,
+  startupCommand: string | undefined,
+  launchAgent: string | null | undefined,
+  readStatus: () => CodexCapacityStatus | undefined,
+  outputObservedAt = Date.now()
+): ParsedAgentStatusPayload | null {
+  const tracker = codexNoticeTracker(
+    capacityTrackers,
+    createCodexCapacityNoticeTracker,
+    emulator,
+    data,
+    startupCommand,
+    launchAgent,
+    readStatus
+  )
+  if (!tracker) {
+    return null
   }
   if (
     !tracker.observe(

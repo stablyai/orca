@@ -2519,10 +2519,6 @@
               "waiting": {
                 "label": "Atualiza quando o Claude é executado",
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
-              },
-              "expired": {
-                "label": "Login expirado",
-                "message": "Os dados de uso do Claude expiraram. Inicie o Claude nesta conta para atualizá-los."
               }
             }
           },

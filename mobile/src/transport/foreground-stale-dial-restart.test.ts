@@ -69,7 +69,6 @@ class MockWebSocket {
 }
 
 const sockets: MockWebSocket[] = []
-const originalWebSocket = globalThis.WebSocket
 
 function latest(): MockWebSocket {
   const socket = sockets[sockets.length - 1]
@@ -117,13 +116,13 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     sockets.length = 0
-    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
+    vi.stubGlobal('WebSocket', MockWebSocket)
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
-    globalThis.WebSocket = originalWebSocket
+    vi.unstubAllGlobals()
   })
 
   it('abandons a dial that predates the foreground edge instead of waiting it out', async () => {
@@ -144,8 +143,11 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
 
     expect(sockets.length).toBe(socketsBeforeForeground + 1)
     expect(latest()).not.toBe(doomed)
+    expect(doomed.readyState).toBe(MockWebSocket.CLOSED)
     latest().authenticate()
     expect(client.getState()).toBe('connected')
+    client.close()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('clears the escalated label once the foreground redial lands', async () => {
@@ -207,7 +209,8 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     client.notifyForeground()
 
     expect(latest()).toBe(afterFirstNudge)
-    expect(fresh.endpoint).toBe(TAILSCALE_ENDPOINT)
+    expect(afterFirstNudge).toBe(fresh)
+    expect(fresh.readyState).toBe(MockWebSocket.CONNECTING)
 
     client.close()
   })

@@ -8,6 +8,7 @@ import {
   serializeWithAbsoluteCursor
 } from '../../shared/terminal-serialize-absolute-cursor'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
@@ -55,7 +56,6 @@ type TerminalWithSynchronousWrite = Terminal & {
   }
 }
 
-const DEFAULT_SCROLLBACK = 5000
 // Match renderer terminal-capability-replies.ts without importing renderer code.
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
@@ -86,7 +86,7 @@ export class HeadlessEmulator {
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: opts.scrollback ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
       allowProposedApi: true,
       logLevel: 'off',
       // Match renderer kitty flag parsing and query responses.

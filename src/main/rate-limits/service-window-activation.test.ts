@@ -7,6 +7,7 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { fetchCursorRateLimits } from './cursor-fetcher'
 import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import {
   asRateLimitWindow,
@@ -452,6 +453,183 @@ describe('RateLimitService', () => {
       expect(claude?.status).toBe('error')
       expect(claude?.error).toBe('Claude usage is rate limited right now.')
       expect(claude?.session?.usedPercent).toBe(18)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps last-known usage through an expired access token past the generic stale threshold', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 18))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      await service.refresh()
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // Why: Orca never refreshes a Claude login, so an idle account's usage 401s until Claude runs again.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      await service.refresh()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('error')
+      expect(claude?.usageMetadata?.failureKind).toBe('stale-token')
+      expect(claude?.session?.usedPercent).toBe(18)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a non-Claude expired sign-in age out at the generic stale threshold', async () => {
+    vi.useFakeTimers()
+    try {
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => okProvider('claude', 18))
+      vi.mocked(fetchCursorRateLimits)
+        .mockImplementationOnce(async () => okProvider('cursor', 42))
+        .mockImplementation(async () => ({
+          ...errorProvider('cursor', 'Cursor sign-in expired — run `cursor-agent login` again'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+
+      const service = new RateLimitService()
+      await service.refresh()
+      expect(service.getState().cursor?.session?.usedPercent).toBe(42)
+
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      await service.refresh()
+
+      const cursor = service.getState().cursor
+      expect(cursor?.status).toBe('error')
+      expect(cursor?.usageMetadata?.failureKind).toBe('stale-token')
+      expect(cursor?.session).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a kept window once its reset passes and keeps the rest', async () => {
+    vi.useFakeTimers()
+    try {
+      const startedAt = Date.now()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...okProvider('claude', 18),
+          session: {
+            usedPercent: 18,
+            windowMinutes: 300,
+            resetsAt: startedAt + 60 * 60 * 1000,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 40,
+            windowMinutes: 10080,
+            resetsAt: startedAt + 3 * 24 * 60 * 60 * 1000,
+            resetDescription: null
+          }
+        }))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      await service.refresh()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('error')
+      expect(claude?.session).toBeNull()
+      expect(claude?.weekly?.usedPercent).toBe(40)
+      expect(claude?.updatedAt).toBe(startedAt)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps an outgoing account whose kept snapshot lost only its reset 5h window', async () => {
+    vi.useFakeTimers()
+    try {
+      const startedAt = Date.now()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...okProvider('claude', 18),
+          session: {
+            usedPercent: 18,
+            windowMinutes: 300,
+            resetsAt: startedAt + 60 * 60 * 1000,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 40,
+            windowMinutes: 10080,
+            resetsAt: startedAt + 3 * 24 * 60 * 60 * 1000,
+            resetDescription: null
+          }
+        }))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.setInactiveClaudeAccountsResolver(() => [{ id: 'outgoing' }])
+      await service.refresh()
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      await service.refresh()
+      await service.refreshForClaudeAccountChange('outgoing')
+
+      const outgoing = service
+        .getState()
+        .inactiveClaudeAccounts.find((row) => row.accountId === 'outgoing')
+      expect(outgoing?.rateLimits?.session).toBeNull()
+      expect(outgoing?.rateLimits?.weekly?.usedPercent).toBe(40)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the failure instead of a kept snapshot once every window has reset', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...okProvider('claude', 18),
+          session: {
+            usedPercent: 18,
+            windowMinutes: 300,
+            resetsAt: Date.now() + 60 * 60 * 1000,
+            resetDescription: null
+          }
+        }))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      const failedAt = Date.now()
+      await service.refresh()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('error')
+      expect(claude?.session).toBeNull()
+      expect(claude?.weekly).toBeNull()
+      expect(claude?.updatedAt).toBe(failedAt)
+      expect(claude?.error).toBe('Claude usage updates the next time Claude runs.')
     } finally {
       vi.useRealTimers()
     }

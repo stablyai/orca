@@ -4385,10 +4385,6 @@
               "waiting": {
                 "label": "Se met à jour quand Claude s'exécute",
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
-              },
-              "expired": {
-                "label": "Connexion expirée",
-                "message": "L'utilisation de Claude a expiré. Démarrez Claude dans ce compte pour l'actualiser."
               }
             },
             "remoteOwnerNotConfigured": "Non configuré sur {{server}}",

@@ -1,7 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
+import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -34,7 +36,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
       const version = readFileSync(versionPath, 'utf8').trim()
       // Versions become shell literals and path segments; accept only a safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
-        return { jsPath, version }
+        return { jsPath, version: `${version}.${guestLauncherRevision()}` }
       }
     }
   }
@@ -46,16 +48,28 @@ function guestRelayDirExpr(version: string): string {
   return `$HOME/${WSL_HOOK_RELAY_DIR}/${version}`
 }
 
+let launcherRevision: string | undefined
+// The bundle hash alone misses launcher edits; a new guest dir forces one reinstall of launch.sh.
+function guestLauncherRevision(): string {
+  launcherRevision ??= createHash('sha256')
+    .update(buildGuestLaunchScript('0'))
+    .digest('hex')
+    .slice(0, 8)
+  return launcherRevision
+}
+
 /** Probe candidate Node versions: noninteractive sh may miss a newer nvm installation. */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
+  // A WSL host distro may have no system node but always has orcad's pinned runtime.
+  const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
   return [
     '#!/bin/sh',
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_HOOK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ -n "$${WSL_HOOK_RELAY_VERSION_ENV}" ] && [ "$v" = "$${WSL_HOOK_RELAY_VERSION_ENV}" ] || exit ${WSL_HOOK_RELAY_STALE_EXIT_CODE}`,
     'n=""',
-    'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
+    `for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`,
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
     `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
     '    n="$c"',

@@ -41,7 +41,7 @@ describe('getUsageRosterRowState', () => {
         }),
         false
       )
-    ).toEqual({ kind: 'error', statusLabel: 'Sign-in expired' })
+    ).toEqual({ kind: 'error', statusLabel: 'Updates when Claude runs' })
     expect(
       getUsageRosterRowState(
         provider({

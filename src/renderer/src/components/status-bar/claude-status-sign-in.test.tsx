@@ -178,6 +178,29 @@ describe('status bar Claude account that needs a sign-in', () => {
     expect(newRow?.textContent).toContain('Sign in to see usage')
   })
 
+  it('does not ask an idle account whose usage token expired overnight to sign in', async () => {
+    inactiveClaudeAccounts = [
+      {
+        accountId: 'new',
+        isFetching: false,
+        rateLimits: {
+          ...claudeProvider,
+          status: 'error',
+          error: 'Claude usage updates the next time Claude runs.',
+          usageMetadata: {
+            failureKind: 'stale-token',
+            attemptedSources: ['oauth'],
+            authProvenance: 'profile:new'
+          }
+        }
+      }
+    ]
+    await openAccounts()
+    const newRow = screen.getAllByText('new@example.com').at(-1)!.closest('[role="menuitem"]')
+    expect(newRow?.textContent).not.toContain('Sign in to see usage')
+    expect(newRow?.textContent).toContain('Updates when Claude runs')
+  })
+
   it('says why a failed sign-in failed', async () => {
     reauthenticate.mockRejectedValueOnce(new Error('Claude login exited with code 1.'))
     await openAccounts()

@@ -10,6 +10,7 @@ function fakeClient(
 ): { client: RpcClient; set: (next: ConnectionState) => void; listenerCount: () => number } {
   let state = initial
   const listeners = new Set<(next: ConnectionState) => void>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The wait owner only reads getState and registers onStateChange on this fixture.
   const client = {
     getState: () => state,
     onStateChange: (listener: (next: ConnectionState) => void) => {
@@ -41,12 +42,19 @@ describe('waitForRpcClientReconnected', () => {
   })
 
   it('resolves once the transport comes back, and unsubscribes', async () => {
-    const { client, set, listenerCount } = fakeClient('reconnecting')
-    const pending = waitForRpcClientReconnected(client, 10_000)
-    expect(listenerCount()).toBe(1)
-    set('connected')
-    await expect(pending).resolves.toBe(true)
-    expect(listenerCount()).toBe(0)
+    vi.useFakeTimers()
+    try {
+      const { client, set, listenerCount } = fakeClient('reconnecting')
+      const pending = waitForRpcClientReconnected(client, 10_000)
+      expect(listenerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(1)
+      set('connected')
+      await expect(pending).resolves.toBe(true)
+      expect(listenerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('gives up at the timeout and unsubscribes', async () => {
@@ -54,7 +62,12 @@ describe('waitForRpcClientReconnected', () => {
     try {
       const { client, listenerCount } = fakeClient('reconnecting')
       const pending = waitForRpcClientReconnected(client, 10_000)
-      await vi.advanceTimersByTimeAsync(10_000)
+      const settled = vi.fn()
+      void pending.then(settled)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(settled).not.toHaveBeenCalled()
+      expect(listenerCount()).toBe(1)
+      await vi.advanceTimersByTimeAsync(1)
       await expect(pending).resolves.toBe(false)
       expect(listenerCount()).toBe(0)
     } finally {

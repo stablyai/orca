@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   CODEX_CAPACITY_MESSAGE,
-  CodexCapacityNoticeTracker
-} from '../../shared/codex-capacity-notice'
-import { observeCodexCapacityTerminalStatus } from './codex-capacity-terminal-status'
+  createCodexCapacityNoticeTracker
+} from '../../shared/codex-native-notice'
+import { observeCodexCapacityTerminalStatus } from './codex-notice-terminal-status'
 import * as agentProcessRecognition from '../../shared/agent-process-recognition'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
@@ -30,7 +30,7 @@ describe('Codex model capacity terminal status', () => {
     [fullscreenTranscript, 40, 8192]
   ] as const)('reads a captured notice %#', async (recording, cols, size) => {
     const emulator = new HeadlessEmulator({ cols, rows: 24 })
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     let detected = false
     try {
       for (let index = 0; index < recording.length; index += size) {
@@ -45,7 +45,7 @@ describe('Codex model capacity terminal status', () => {
   })
 
   it('does not read the screen for ordinary output or OSC string payloads', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const readScreen = vi.fn(() => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›'])
     tracker.observe('x'.repeat(1_000_000), readScreen)
     tracker.observe(`\x1b]0;■ ${CODEX_CAPACITY_MESSAGE}\x07`, readScreen)
@@ -58,13 +58,13 @@ describe('Codex model capacity terminal status', () => {
       [`■ ${CODEX_CAPACITY_MESSAGE}`, '› continue', '• Working (1s • esc to interrupt)', '›'],
       [`■ ${CODEX_CAPACITY_MESSAGE}`, '• Working (1s • esc to interrupt)', '›']
     ]) {
-      const tracker = new CodexCapacityNoticeTracker()
+      const tracker = createCodexCapacityNoticeTracker()
       expect(tracker.observe(`■ ${CODEX_CAPACITY_MESSAGE}`, () => lines)).toBe(false)
     }
   })
 
   it('handles a wrapped native warning and waits for the synchronized frame to finish', () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     const screen = vi.fn(() => [
       '⚠ Selected model is at capacity. Please',
       '  try a different model.',

@@ -80,6 +80,7 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
@@ -96,6 +97,7 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
+      expect(mockSockets).toHaveLength(i + 1)
       const socket = lastSocket()
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
@@ -122,6 +124,8 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
 
     await vi.advanceTimersByTimeAsync(500)
     const next = lastSocket()
+    expect(next).not.toBe(first)
+    expect(mockSockets).toHaveLength(2)
     next.open()
     next.receive(JSON.stringify({ type: 'e2ee_ready' }))
     next.receive('encrypted:{"type":"e2ee_authenticated"}')
@@ -138,6 +142,7 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
+      expect(mockSockets).toHaveLength(i + 1)
       const socket = lastSocket()
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
@@ -157,8 +162,10 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
     for (let i = 0; i < 5; i++) {
+      const previousCount = mockSockets.length
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(60_000)
+        expect(mockSockets.length).toBeGreaterThan(previousCount)
       }
       const socket = lastSocket()
       socket.open()

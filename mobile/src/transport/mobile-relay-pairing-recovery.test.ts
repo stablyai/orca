@@ -72,7 +72,7 @@ function endpoints(
 
 function journal(mode: 'authenticated-direct' | 'relay-basis' = 'authenticated-direct') {
   const value = createMobileRelayPairingJournal({
-    offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+    offer,
     hostId: 'host-1',
     hostName: 'Blue Whale',
     now,
@@ -98,13 +98,15 @@ function dependencies(args: {
   bundle?: MobileRelayCredentialBundle | null
   hosts?: HostProfile[]
 }) {
+  const releaseJournal = vi.fn()
   return {
+    releaseJournal,
     loadJournal: vi.fn(async () => args.journal),
     updateJournal: vi.fn(async (_id, update) => {
       Object.assign(args.journal.metadata, update(args.journal.metadata))
     }),
     clearJournal: vi.fn(async () => {}),
-    claimJournal: vi.fn(async () => () => {}),
+    claimJournal: vi.fn(async () => releaseJournal),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
     writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {}),
     loadHosts: vi.fn(async (): Promise<HostProfile[]> => args.hosts ?? []),
@@ -144,9 +146,32 @@ describe('mobile relay pairing recovery', () => {
         expectedCredentialKind: 'resume'
       })
     )
-    expect(deps.writeCredentialBundle).toHaveBeenCalledOnce()
-    expect(deps.savePairedHost).toHaveBeenCalledOnce()
-    expect(deps.clearJournal).toHaveBeenCalledOnce()
+    expect(deps.writeCredentialBundle).toHaveBeenCalledExactlyOnceWith({
+      v: 1,
+      hostId: 'host-1',
+      deviceToken: offer.deviceToken,
+      current: {
+        token: saved.secrets.pendingResumeToken,
+        hash: saved.metadata.pendingResumeTokenHash,
+        version: committed.currentVersion,
+        expiresAt: committed.resumeExpiresAt
+      }
+    })
+    expect(deps.savePairedHost).toHaveBeenCalledExactlyOnceWith({
+      ...saved.metadata.host,
+      deviceToken: offer.deviceToken,
+      relay: endpoints(saved, { state: 'committed', result: committed }).relay
+    })
+    expect(deps.clearJournal).toHaveBeenCalledExactlyOnceWith(saved.metadata.journalId)
+    expect(deps.claimJournal).toHaveBeenCalledExactlyOnceWith(saved.metadata.journalId)
+    expect(deps.releaseJournal).toHaveBeenCalledOnce()
+    expect(deps.writeCredentialBundle.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.savePairedHost.mock.invocationCallOrder[0]
+    )
+    expect(deps.savePairedHost.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.clearJournal.mock.invocationCallOrder[0]
+    )
+    expect(pending.close).toHaveBeenCalledOnce()
   })
 
   it('clears a journal whose relay routing the host already carries, without dialing', async () => {
@@ -282,7 +307,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
-  it('never publishes a committed install once a newer scan replaced its journal', async () => {
+  it('never publishes a committed install when its journal publication claim is stale', async () => {
     const saved = journal()
     const committed = installed(saved, 'relay-basis')
     const pending = client(async () =>
@@ -298,6 +323,9 @@ describe('mobile relay pairing recovery', () => {
     await expect(recoverMobileRelayPairing(deps)).resolves.not.toBe('recovered')
     expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
     expect(deps.savePairedHost).not.toHaveBeenCalled()
+    expect(deps.claimJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+    expect(pending.close).toHaveBeenCalledTimes(2)
   })
 
   it('bounds how long a new scan waits for recovery', async () => {
@@ -360,5 +388,9 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
     expect(deps.clearJournal).not.toHaveBeenCalled()
+    expect(deps.writeCredentialBundle).toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
+    expect(deps.releaseJournal).toHaveBeenCalled()
+    expect(committed.close).toHaveBeenCalled()
   })
 })

@@ -34,6 +34,7 @@ import {
   ProviderIcon,
   ProviderPanel
 } from './tooltip'
+import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
@@ -245,34 +246,26 @@ describe('provider usage error copy', () => {
     )
   })
 
-  it('uses structured Claude failure kinds before raw auth regexes', () => {
-    const p = provider({
-      error: 'Invalid OAuth token.',
-      usageMetadata: {
-        failureKind: 'stale-token',
-        attemptedSources: ['oauth', 'cli']
-      }
-    })
+  // Why: an expired access token is not a signed-out login; Claude refreshes it the next time it runs.
+  it.each([undefined, 'system', 'wsl:Ubuntu:system', 'profile:idle'])(
+    'tells every Claude login (%s) calmly that usage updates when Claude next runs',
+    (authProvenance) => {
+      const p = provider({
+        error: 'Invalid OAuth token.',
+        usageMetadata: {
+          failureKind: 'stale-token',
+          attemptedSources: ['oauth'],
+          authProvenance
+        }
+      })
 
-    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in expired')
-    expect(getProviderUsageErrorMessage(p)).toBe(
-      'Claude usage has expired. Start Claude in this account to refresh it.'
-    )
-  })
-
-  it('tells a System Default user calmly that usage updates when Claude next runs', () => {
-    const p = provider({
-      error: 'Invalid OAuth token.',
-      usageMetadata: {
-        failureKind: 'stale-token',
-        attemptedSources: ['oauth'],
-        authProvenance: 'system'
-      }
-    })
-
-    expect(getProviderUsageStatusLabel(p)).toBe('Updates when Claude runs')
-    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage updates the next time Claude runs.')
-  })
+      expect(getProviderUsageStatusLabel(p)).toBe('Updates when Claude runs')
+      expect(getProviderUsageErrorMessage(p)).toBe(
+        'Claude usage updates the next time Claude runs.'
+      )
+      expect(isClaudeUsageWaitingForClaude(p)).toBe(true)
+    }
+  )
 
   it('keeps refresh copy for failure kinds only a refreshing older host reports', () => {
     const p = provider({

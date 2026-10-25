@@ -80,7 +80,7 @@ function lastSocket(): WedgedWebSocket {
 function openConnectionLogs(spy: MockInstance<typeof console.log>): Record<string, unknown>[] {
   return spy.mock.calls
     .filter((call) => call[0] === '[net] openConnection')
-    .map((call) => call[1] as Record<string, unknown>)
+    .map((call) => logFields(call[1]) ?? {})
 }
 
 describe('synthesized close diagnostics', () => {
@@ -90,6 +90,7 @@ describe('synthesized close diagnostics', () => {
     vi.useFakeTimers()
     recordSocketDeadlineAppState('active')
     sockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = WedgedWebSocket as unknown as typeof WebSocket
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   })
@@ -245,18 +246,18 @@ describe('synthesized close diagnostics', () => {
     // Deliver the old close during the replacement socket’s lifetime.
     await vi.advanceTimersByTimeAsync(200)
     wedged.deliverClose(1006)
-    const staleCloseLog = logSpy.mock.calls.findLast(
-      (call) => call[0] === '[net] ws.onclose'
-    )?.[1] as Record<string, unknown> | undefined
+    const staleCloseLog = logFields(
+      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
+    )
     expect(staleCloseLog?.constructToCloseMs).toBe(5_700)
     expect(staleCloseLog?.aliveMs).toBeNull()
     expect(staleCloseLog?.inboundIdleMs).toBe(5_600)
 
     await vi.advanceTimersByTimeAsync(300)
     lastSocket().deliverClose(1006)
-    const closeLog = logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1] as
-      | Record<string, unknown>
-      | undefined
+    const closeLog = logFields(
+      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
+    )
     expect(closeLog?.constructToCloseMs).toBe(500)
     expect(closeLog?.aliveMs).toBe(500)
     expect(closeLog?.inboundIdleMs).toBe(500)
@@ -334,3 +335,9 @@ describe('synthesized close diagnostics', () => {
     client.close()
   })
 })
+
+function logFields(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value))
+    : undefined
+}

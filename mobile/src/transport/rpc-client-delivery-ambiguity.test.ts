@@ -70,11 +70,20 @@ class MockWebSocket {
 const mockSockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
 
+function readRequest(payload: string): { id: string; method: string } | null {
+  const value: unknown = JSON.parse(payload.replace(/^encrypted:/, ''))
+  return value &&
+    typeof value === 'object' &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'method' in value &&
+    typeof value.method === 'string'
+    ? { id: value.id, method: value.method }
+    : null
+}
+
 function hasSentRequest(socket: MockWebSocket, method: string): boolean {
-  return socket.sent.some(
-    (payload) =>
-      (JSON.parse(payload.replace(/^encrypted:/, '')) as { method: string }).method === method
-  )
+  return socket.sent.some((payload) => readRequest(payload)?.method === method)
 }
 
 function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: MockWebSocket } {
@@ -91,6 +100,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
@@ -206,12 +216,11 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
     )
     const authProbe = client.sendRequest('status.get')
     await Promise.resolve()
-    const probe = socket.sent
-      .map(
-        (payload) =>
-          JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string; method: string }
-      )
-      .find((request) => request.method === 'status.get')!
+    expect(hasSentRequest(socket, 'terminal.send')).toBe(true)
+    const probe = socket.sent.map(readRequest).find((request) => request?.method === 'status.get')
+    if (!probe) {
+      throw new Error('Expected the written status probe')
+    }
 
     socket.receive(
       `encrypted:${JSON.stringify({ id: probe.id, ok: false, error: { code: 'unauthorized', message: 'Unauthorized' } })}`

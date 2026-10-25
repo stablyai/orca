@@ -43,7 +43,10 @@ function readSource(relative) {
   return fs.readFileSync(path.join(ROOT, relative), 'utf8')
 }
 
-const TERMINAL_SOURCE = readSource('src/main/runtime/rpc/methods/terminal.ts')
+const BATCH_SOURCE = readSource('src/main/runtime/rpc/methods/terminal/terminal-output-batcher.ts')
+const SNAPSHOT_SOURCE = readSource(
+  'src/main/runtime/rpc/methods/terminal/terminal-snapshot-publication.ts'
+)
 
 function requireCallForm(source, needle, label) {
   if (!source.includes(needle)) {
@@ -66,19 +69,25 @@ const {
 )
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = (() => {
-  const match = /const REQUESTED_SNAPSHOT_BYTE_BUDGET = ([^\n]+)/.exec(TERMINAL_SOURCE)
+  const match = /const REQUESTED_SNAPSHOT_BYTE_BUDGET = ([^\n]+)/.exec(SNAPSHOT_SOURCE)
   if (!match) {
-    throw new Error('terminal.ts is stale: REQUESTED_SNAPSHOT_BYTE_BUDGET is gone')
+    throw new Error(
+      'terminal-snapshot-publication.ts is stale: REQUESTED_SNAPSHOT_BYTE_BUDGET is gone'
+    )
   }
   return Number(new Function(`return (${match[1].trim()})`)())
 })()
 
-requireCallForm(TERMINAL_SOURCE, 'measureTerminalStreamByteLength(data, {', 'terminal.ts')
-requireCallForm(TERMINAL_SOURCE, 'stopAfterBytes: remainingBudget', 'terminal.ts')
 requireCallForm(
-  TERMINAL_SOURCE,
+  BATCH_SOURCE,
+  'measureTerminalStreamByteLength(data, {',
+  'terminal-output-batcher.ts'
+)
+requireCallForm(BATCH_SOURCE, 'stopAfterBytes: remainingBudget', 'terminal-output-batcher.ts')
+requireCallForm(
+  SNAPSHOT_SOURCE,
   'terminalStreamByteLengthExceeds(data, REQUESTED_SNAPSHOT_BYTE_BUDGET)',
-  'terminal.ts'
+  'terminal-snapshot-publication.ts'
 )
 
 const nativeByteLength = Buffer.byteLength

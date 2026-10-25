@@ -30,6 +30,9 @@ import { getStatusBarUsageSections } from './status-bar-usage-sections'
 import { GroupedPoolUsage } from './usage-grouped-pools'
 import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { useNow } from '@/hooks/use-now'
+
+const CALM_STALE_USAGE_MAX_AGE_MS = 30 * 60_000
 
 function MiniBar({
   usedPct,
@@ -243,6 +246,7 @@ export function ProviderSegment({
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
+  const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
     ? mode === 'compact'
       ? getUsageHeadlineSection(p)
@@ -308,7 +312,9 @@ export function ProviderSegment({
     )
   }
 
-  const isStale = p.status === 'error' && !calm
+  // Why: calm is honest only while the kept bars are recent; old ones still deserve the warning.
+  const isStale =
+    p.status === 'error' && (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
   const showBalance = isExtraUsageActive(p)
   const showGroupedPools =
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length

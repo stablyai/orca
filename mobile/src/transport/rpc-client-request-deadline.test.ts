@@ -83,6 +83,7 @@ describe('mobile rpc-client request deadline', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The socket fixture provides the constructor, states, handlers, send and close used by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
@@ -108,6 +109,7 @@ describe('mobile rpc-client request deadline', () => {
       await vi.advanceTimersByTimeAsync(500)
       mockSockets[1]!.open()
       await vi.advanceTimersByTimeAsync(0)
+      expectRequestSent(mockSockets[1]!, 'terminal.send', { terminal: 't1', text: 'hi' })
 
       await vi.advanceTimersByTimeAsync(4_499)
       expect(outcome.read()).toBe('pending')
@@ -139,6 +141,7 @@ describe('mobile rpc-client request deadline', () => {
       await vi.advanceTimersByTimeAsync(500)
       mockSockets[1]!.open()
       await vi.advanceTimersByTimeAsync(0)
+      expectRequestSent(mockSockets[1]!, 'speech.dictation.finish', { dictationId: 'd1' })
 
       await vi.advanceTimersByTimeAsync(4_999)
       expect(outcome.read()).toBe('pending')
@@ -163,6 +166,8 @@ describe('mobile rpc-client request deadline', () => {
     const outcome = track(request)
 
     try {
+      await vi.advanceTimersByTimeAsync(0)
+      expectRequestSent(mockSockets[0]!, 'terminal.send', { terminal: 't1', text: 'hi' })
       await vi.advanceTimersByTimeAsync(399)
       expect(outcome.read()).toBe('pending')
       await vi.advanceTimersByTimeAsync(1)
@@ -173,3 +178,15 @@ describe('mobile rpc-client request deadline', () => {
     }
   })
 })
+
+function expectRequestSent(socket: MockWebSocket, method: string, params: unknown): void {
+  const frames = socket.sent
+    .filter((frame) => frame.startsWith('encrypted:'))
+    .map((frame) => JSON.parse(frame.slice('encrypted:'.length)))
+  expect(frames).toContainEqual({
+    id: expect.stringMatching(/^rpc-/),
+    deviceToken: 'token',
+    method,
+    params
+  })
+}

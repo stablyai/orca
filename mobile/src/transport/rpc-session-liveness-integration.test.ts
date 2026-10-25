@@ -73,6 +73,7 @@ const originalWebSocket = globalThis.WebSocket
 beforeEach(() => {
   vi.useFakeTimers()
   sockets.length = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the socket constructor, states, handlers, send and close consumed by the client.
   globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
 })
 
@@ -126,7 +127,7 @@ describe('physical session liveness', () => {
       })
     })
     await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(8_000)
+    await vi.advanceTimersByTimeAsync(24_000)
 
     expect(socket.close).not.toHaveBeenCalled()
     expect(client.getState()).toBe('connected')
@@ -179,11 +180,27 @@ describe('physical session liveness', () => {
       client.notifyForeground()
       const request = socket.sent
         .map((payload) => payload.replace(/^encrypted:/, ''))
-        .map((payload) => JSON.parse(payload) as { id?: string; method?: string })
-        .findLast((payload) => payload.method === 'status.get')
+        .flatMap((payload) => {
+          const value: unknown = JSON.parse(payload)
+          return value &&
+            typeof value === 'object' &&
+            'method' in value &&
+            value.method === 'status.get' &&
+            'id' in value &&
+            typeof value.id === 'string'
+            ? [{ id: value.id }]
+            : []
+        })
+        .at(-1)
+      expect(socket.sent.filter((payload) => payload.includes('status.get'))).toHaveLength(
+        index + 1
+      )
+      if (!request) {
+        throw new Error('Expected a written liveness probe')
+      }
       socket.onmessage?.({
         data: `encrypted:${JSON.stringify({
-          id: request?.id,
+          id: request.id,
           ok: false,
           error: { code: 'unauthorized', message: 'Unauthorized' }
         })}`

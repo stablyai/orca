@@ -4221,10 +4221,6 @@
               "waiting": {
                 "label": "Claude 실행 시 업데이트됨",
                 "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
-              },
-              "expired": {
-                "label": "로그인 만료",
-                "message": "Claude 사용량이 만료되었습니다. 이 계정에서 Claude를 시작하면 사용량이 갱신됩니다."
               }
             },
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
