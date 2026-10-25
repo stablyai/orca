@@ -17,6 +17,7 @@ type State =
 type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
 
 export function MobilePdfHandoff(props: Props) {
+  // Downloaded PDF bytes are written to a temporary file before sharing.
   const { media, client, title } = props
   const [state, setState] = useState<State>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
