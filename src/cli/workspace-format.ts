@@ -140,7 +140,7 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}  pinned:${worktree.isPinned ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
@@ -182,7 +182,7 @@ export function formatWorktreeList(
   const body = result.worktrees
     .map((worktree) => {
       const childCount = worktree.childWorktreeIds?.length ?? 0
-      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\npinned: ${worktree.isPinned ? 'yes' : 'no'}\ncomment: ${String(worktree.comment ?? '')}`
     })
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
