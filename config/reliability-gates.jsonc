@@ -15269,18 +15269,21 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and exact legacy behavior for every other configured agent. SSH, daemon, and remote-runtime remain explicit gaps.",
+      "coverageNotes": "Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and legacy direct behavior for agents outside the separately gated Pi route. SSH, daemon, and remote-runtime remain explicit gaps. Pi framing is separately covered by runtime/RPC fault injection and the official pi-tui 0.99.2 Editor/StdinBuffer recipient on macOS; this proves input acceptance, not turn settlement.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4328",
-        "https://github.com/stablyai/orca/issues/14525"
+        "https://github.com/stablyai/orca/issues/14525",
+        "https://github.com/stablyai/orca/issues/20695"
       ],
-      "invariant": "A public CLI send containing non-empty text plus Enter and no interrupt identifies agent-prompt intent. The owning runtime uses bracketed-paste and settled submit only when a fresh foreground-process read positively identifies the exact target as Claude or Codex on a desktop call; every other agent, stale agent metadata over a shell, text-only input, bare Enter, interrupts, mobile input, query replies, and older clients keep the direct terminal contract.",
-      "oracle": "Launch a bare fake Codex through the real Electron PTY and delay its composer render for 1,200 ms, beyond the legacy generic 500 ms gap. Send a 557-byte prompt with the public CLI and require the marker, zero premature Enter, no rescue Enter, and one submission. POSIX child stdin must retain one bracketed-paste frame; Windows ConPTY consumes that control frame, so runtime tests require the frame at the PTY write boundary while the Windows child requires the exact prompt. The same harness against the installed pre-fix runtime must record one premature Enter and require one bare rescue Enter. Focused units require CLI intent only for text plus Enter, settlement only for freshly identified Claude/Codex, the legacy platform delay for every other configured agent, stale Codex launch identity over a shell to fall back, no wrapper polling, and byte-for-byte direct delivery for non-targets.",
+      "invariant": "CLI nonempty text plus Enter without interrupt identifies prompt intent. Fresh Claude/Codex desktop targets retain settled submission. A durable desktop request also permits bracketed paste for Pi launch targets with freshly confirmed Pi foreground only when its exact process incarnation has authoritative parsed paste mode. Foreground, mode, binding and cancellation are rechecked before frame and Enter. Pi reports unsupported turn observation without Enter retries. Path-prefixed/control payloads, other agents, non-durable clients, text-only/Enter/interrupt/mobile/query input retain their direct contract.",
+      "oracle": "Launch a bare fake Codex through the real Electron PTY and delay its composer render for 1,200 ms, beyond the legacy generic 500 ms gap. Send a 557-byte prompt with the public CLI and require the marker, zero premature Enter, no rescue Enter, and one submission. POSIX child stdin must retain one bracketed-paste frame; Windows ConPTY consumes that control frame, so runtime tests require the frame at the PTY write boundary while the Windows child requires the exact prompt. The same harness against the installed pre-fix runtime must record one premature Enter and require one bare rescue Enter. Focused units require CLI intent only for text plus Enter, settlement only for freshly identified Claude/Codex, the legacy platform delay for every other configured agent, stale Codex launch identity over a shell to fall back, no wrapper polling, and byte-for-byte direct delivery for non-targets. For Pi, the official Editor/StdinBuffer/CombinedAutocompleteProvider must turn production raw bytes into a completion with no submission, and framed production bytes into one intended submission. Runtime faults require no bytes on replaced incarnation or pre-frame mode loss, and no Enter/resend after post-frame shell/mode/exit/cancellation.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/rpc/pi-terminal-prompt-framing.test.ts",
         "pnpm run build:cli && pnpm exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm.cmd exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "node tests/tools/repro-terminal-send-submit.mjs --cli orca --worktree <registered-worktree> --discard-report"
+        "node tests/tools/repro-terminal-send-submit.mjs --cli orca --worktree <registered-worktree> --discard-report",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+        "pnpm test src/main/runtime/rpc/pi-terminal-prompt-framing.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts src/main/runtime/rpc/terminal-send.test.ts"
       ],
       "testFiles": [
         "src/cli/handlers/terminal.test.ts",
@@ -15289,7 +15292,8 @@
         "src/main/runtime/orca-runtime.test.ts",
         "src/shared/agent-prompt-injection.test.ts",
         "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
-        "tests/tools/repro-terminal-send-submit.mjs"
+        "tests/tools/repro-terminal-send-submit.mjs",
+        "src/main/runtime/rpc/pi-terminal-prompt-framing.test.ts"
       ],
       "assertionRefs": [
         {
@@ -15321,6 +15325,14 @@
             "the public source-built CLI submits after a delayed composer render without rescue",
             "the fake agent receives the marker and zero premature Enter on macOS and Windows",
             "POSIX preserves one bracketed-paste frame while Windows validates the ConPTY-observable payload"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/pi-terminal-prompt-framing.test.ts",
+          "assertions": [
+            "fresh Pi plus negotiated mode produces one complete paste frame and one Enter with unsupported observation",
+            "mode, foreground, incarnation, exit and cancellation changes prevent unsafe writes without fallback",
+            "path/control payloads and non-prompt requests preserve raw bytes"
           ]
         }
       ],
@@ -15360,6 +15372,15 @@
           "result": "passed",
           "durationSeconds": 23.2,
           "summary": "After rebasing onto current main, the final narrowed runtime/CLI/RPC suite passed 1,201 tests with one skip, including fresh Claude/Codex identity, stale-agent shell fallback, and legacy timing for every other configured agent."
+        },
+        {
+          "date": "2026-10-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/main/runtime/rpc/pi-terminal-prompt-framing.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-prompt-delivery-receipt.test.ts src/main/runtime/rpc/terminal-send.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.68,
+          "summary": "67 focused tests pass, including 23 Pi framing, exact binding, mode/foreground/exit/cancellation faults, raw capability fallback, control/path payload and non-durable compatibility cases. Official pi-tui 0.99.2 separately consumed captured production raw/framed writes: raw accepts .agents/ completion with zero submissions; framed submits exact prompt once with empty and ordinary existing drafts."
         }
       ],
       "runtimeBudget": {
@@ -15372,11 +15393,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The fake-composer oracle was red against the installed pre-fix runtime with prematureEnters=1 and rescueSent=true. It also caught a source-built late-identity race with a complete paste frame but one premature Enter before the render gate began resolving foreground identity. The final candidate is green on macOS and Windows with prematureEnters=0 and rescueSent=false."
+        "evidence": "The fake-composer oracle was red against the installed pre-fix runtime with prematureEnters=1 and rescueSent=true. It also caught a source-built late-identity race with a complete paste frame but one premature Enter before the render gate began resolving foreground identity. The final candidate is green on macOS and Windows with prematureEnters=0 and rescueSent=false. Pi production routing was independently disabled as a control: captured raw bytes reproduce completion acceptance and zero submissions in the official pi-tui 0.99.2 recipient; candidate frame+Enter yields exactly one intended submission with empty or ordinary existing drafts. This does not prove a live model turn."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Only a CLI request with non-empty text plus Enter and no interrupt adds a bounded fresh foreground read and one non-retrying liveness check. Positively identified Claude and Codex reuse the O(prompt bytes) chunked prompt sender plus one PTY-local listener until post-marker quiescence or the bounded fallback. Every other agent and shell retains the existing direct-send path. Text-only, bare Enter, interrupt, mobile, renderer stream input, and query replies add no work."
+        "evidence": "Only a CLI request with non-empty text plus Enter and no interrupt adds a bounded fresh foreground read and one non-retrying liveness check. Positively identified Claude and Codex reuse the O(prompt bytes) chunked prompt sender plus one PTY-local listener until post-marker quiescence or the bounded fallback. Every other agent and shell retains the existing direct-send path. Text-only, bare Enter, interrupt, mobile, renderer stream input, and query replies add no work. The eligible durable Pi route adds at most three targeted confirmations (classification, frame, Enter) beyond existing settled-agent classification, existing bounded output-chain awaits, no polling, timers, snapshots, inventory scans or listeners."
       },
       "promotionCriteria": [
         "Collect live Codex and Claude CLI sends on representative slow systems.",
@@ -15384,9 +15405,11 @@
       ],
       "knownGaps": [
         "Live SSH/daemon/remote-runtime evidence is not yet attached.",
-        "Only Claude and Codex opt into settlement; every other agent retains the legacy behavior until independently validated.",
+        "Only Claude and Codex opt into settled CLI routing. Pi framing does not prove a turn; Cursor and other agents retain raw terminal.send input. Pi draft detection/clearing and worker-start readiness remain outside this repair.",
         "A new CLI talking to an old host safely loses the optional field and therefore keeps the old timing behavior until the host updates.",
-        "The E2E fake agent models the submission race without requiring external agent authentication; live account-backed agents are covered separately."
+        "The E2E fake agent models the submission race without requiring external agent authentication; live account-backed agents are covered separately.",
+        "Pi recipient evidence covers macOS and pi-tui 0.99.2 without a model/account. Native Linux/Windows PTY and live daemon/SSH/WSL/remote Pi journeys remain gaps.",
+        "Pi needs fresh confirmForegroundProcess support and authoritative headless modes. Missing capabilities and provider-snapshot-preferred/partially restored terminals retain raw input. Ordinary drafts are appended/submitted as before; leading /, ~, . and control input are excluded from framing. Manually started Pi in panes launched for other agents keeps raw delivery, so settlement cannot inherit a different launch provider."
       ],
       "demotionRule": "Keep experimental or demote to protection none if direct shell/mobile/query input is reframed, an unrecognized target receives bracketed paste, a prompt can emit duplicate Enter, mixed-version decoding rejects the optional field, or the deterministic fake-composer candidate requires a rescue send."
     },

@@ -1,3 +1,4 @@
+import { prepareTerminalSendPrompt } from './terminal-prompt-routing'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -197,13 +198,12 @@ export const TERMINAL_SEND_METHODS = [
               markMutationEffectPossible?.()
             }
           : assertSendPreconditions
-      const useSettledAgentPrompt =
-        params.agentPrompt === true &&
-        hasText &&
-        params.enter === true &&
-        params.interrupt !== true &&
-        params.client?.type === 'desktop' &&
-        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+      const agentPrompt = await prepareTerminalSendPrompt(
+        runtime,
+        params,
+        Boolean(orchestrationMutation),
+        beforeWrite
+      )
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -217,10 +217,10 @@ export const TERMINAL_SEND_METHODS = [
       let result
       let acceptedPromptCheckpoint: unknown
       try {
-        result = useSettledAgentPrompt
+        result = agentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
-              beforeWrite,
+              ...agentPrompt,
               signal,
               ...(orchestrationMutation
                 ? {
