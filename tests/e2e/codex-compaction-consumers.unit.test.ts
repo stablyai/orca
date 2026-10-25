@@ -1,12 +1,15 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AgentHookServer } from '../agent-hooks/server'
-import { buildBody, postHookEvent } from '../agent-hooks/server.test-fixtures'
-import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
-import { OrcaRuntimeService } from './orca-runtime'
-import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
-import { storeWorktreeMeta } from './runtime-store-partial-fixture'
-import { codexCompactionSequence } from '../../shared/agent-hook-listener-test-harness'
-import { buildWorktree } from '../../cli/test-fixtures'
+import { AgentHookServer } from '../../src/main/agent-hooks/server'
+import { buildBody, postHookEvent } from '../../src/main/agent-hooks/server.test-fixtures'
+import {
+  createTranscriptPane,
+  waitForTranscriptIdle
+} from '../../src/main/runtime/agent-transcript-pane-test-harness'
+import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import type { ResolvedWorktreeSnapshot } from '../../src/main/runtime/runtime-resolved-worktree-cache'
+import { storeWorktreeMeta } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { codexCompactionSequence } from '../../src/shared/agent-hook-listener-test-harness'
+import { buildWorktree } from '../../src/cli/test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -14,8 +17,8 @@ const mocks = vi.hoisted(() => ({
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp')
 }))
-vi.mock('../../cli/runtime-client', async () => {
-  const { createRuntimeClientModuleMock } = await import('../../cli/index-test-harness.js')
+vi.mock('../../src/cli/runtime-client', async () => {
+  const { createRuntimeClientModuleMock } = await import('../../src/cli/index-test-harness.js')
   return createRuntimeClientModuleMock(mocks)
 })
 vi.mock('electron', () => ({
@@ -24,7 +27,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
-import { main } from '../../cli/index'
+import { main } from '../../src/cli/index'
 
 class CompactionRuntime extends OrcaRuntimeService {
   protected override async listResolvedWorktreeSnapshot(): Promise<ResolvedWorktreeSnapshot> {

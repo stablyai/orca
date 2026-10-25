@@ -1,14 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createTestStore, makeTab } from '../../store/slices/store-test-helpers'
-import { buildWindowApi } from '../ipc-events-agent-status-window-test-fixtures'
-import type { AgentStatusSetData } from '../ipc-events-agent-status-store-test-fixtures'
+import { createTestStore, makeTab } from '../../src/renderer/src/store/slices/store-test-helpers'
+import { buildWindowApi } from '../../src/renderer/src/hooks/ipc-events-agent-status-window-test-fixtures'
+import type { AgentStatusSetData } from '../../src/renderer/src/hooks/ipc-events-agent-status-store-test-fixtures'
 import {
   codexCompactionSequence,
   normalizeAndAccept,
   PANE_KEY
-} from '../../../../shared/agent-hook-listener-test-harness'
-import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
-import { toAgentStatusIpcPayload } from '../../../../main/agent-hooks/server/server-status-identity'
+} from '../../src/shared/agent-hook-listener-test-harness'
+import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
+import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/server-status-identity'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -19,12 +19,14 @@ afterEach(() => {
 it.each(['done', 'waiting'] as const)(
   'keeps compacted %s through desktop recovery',
   async (state) => {
+    const now = 1_800_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
     const store = createTestStore()
     store.setState({
       workspaceSessionReady: true,
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
     })
-    vi.doMock('../../store', () => ({ useAppStore: store }))
+    vi.doMock('../../src/renderer/src/store', () => ({ useAppStore: store }))
     let listener: ((row: AgentStatusSetData) => void) | undefined
     let snapshot: AgentStatusSetData[] = []
     vi.stubGlobal(
@@ -39,7 +41,8 @@ it.each(['done', 'waiting'] as const)(
         getSnapshot: async () => snapshot
       })
     )
-    const { registerAgentStatusIpcBridge } = await import('./agent-status-ipc-bridge')
+    const { registerAgentStatusIpcBridge } =
+      await import('../../src/renderer/src/hooks/ipc-events/agent-status-ipc-bridge')
     const unsubs: (() => void)[] = []
     let bridge = registerAgentStatusIpcBridge(unsubs)
     const stopBridge = () => {
@@ -58,8 +61,8 @@ it.each(['done', 'waiting'] as const)(
           ...event,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          receivedAt: Date.now(),
-          stateStartedAt: Date.now()
+          receivedAt: now,
+          stateStartedAt: now
         })
         if (row.providerSession?.key !== 'session_id') {
           throw new Error('Expected Codex session_id metadata')
