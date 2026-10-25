@@ -49,10 +49,14 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   }
 }
 
-function makeStore(project: Project): Store {
+function makeStore(
+  project: Project,
+  localWindowsRuntimeDefault: unknown = { kind: 'windows-host' }
+): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtime resolution reads only getProjects and getSettings.
   return {
     getProjects: () => [project],
-    getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+    getSettings: () => ({ localWindowsRuntimeDefault })
   } as unknown as Store
 }
 
@@ -69,6 +73,14 @@ describe('project runtime git options', () => {
     const options = withPlatform('win32', () =>
       getLocalProjectGitExecOptions(makeStore(project), makeRepo())
     )
+
+    expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
+  })
+
+  it('keeps WSL Git for a drive project that inherits WSL and never chose Windows Git', () => {
+    const store = makeStore(makeProject(), { kind: 'wsl', distro: 'Ubuntu' })
+
+    const options = withPlatform('win32', () => getLocalProjectGitExecOptions(store, makeRepo()))
 
     expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
   })
