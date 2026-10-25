@@ -270,6 +270,7 @@ async function openServersPane(page: Page): Promise<void> {
 
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
 test('moves projects through preview, blockers, progress and result', async ({}, testInfo) => {
+  // Two git projects are created, previewed and moved through every dialog step.
   test.setTimeout(240_000)
   const apiPath = createGitProject('payments-api')
   const webPath = createGitProject('web-app')
@@ -411,6 +412,7 @@ test('moves projects through preview, blockers, progress and result', async ({},
 
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
 test('with the internal gate closed, no move entry shows and main refuses', async ({}, testInfo) => {
+  // The gated-off launch still boots a full app before main is asked to refuse.
   test.setTimeout(180_000)
   const desktop = await launch(testInfo, false)
   const { page } = desktop

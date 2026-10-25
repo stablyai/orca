@@ -28,6 +28,7 @@ const DRAFT = 'unsaved words typed before the move'
 test("a moved project's browser tab and draft come back on the desktop from a browserless host", async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX paths')
+  // A host and two client launches, with a profile edit between them.
   test.setTimeout(600_000)
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-moved-browser-drafts-'))
   const repoPath = realpathSync(createMovedRepo(root))
@@ -71,8 +72,17 @@ test("a moved project's browser tab and draft come back on the desktop from a br
           { timeout: 60_000 }
         )
         .toBe(true)
-      // Lets this desktop save its own mirror of the host's tabs first, as one open before the move did.
-      await new Promise((resolve) => setTimeout(resolve, 5_000))
+      // This desktop mirrors the host's tabs before it quits, as one open before the move did.
+      await expect
+        .poll(
+          () =>
+            client.page.evaluate(
+              (id) => (window.__store?.getState().unifiedTabsByWorktree[id] ?? []).length,
+              worktreeId
+            ),
+          { timeout: 60_000, message: "the desktop never mirrored the host's tabs" }
+        )
+        .toBeGreaterThan(0)
       await client.quitPreservingProfile()
       // The move's seed of this desktop's copy of the host's session: browser tab and draft included.
       mutateStoppedProfileState(userDataDir, (state) => {
@@ -118,7 +128,9 @@ test("a moved project's browser tab and draft come back on the desktop from a br
           },
           { id: worktreeId, path: notesPath }
         )
-      await new Promise((resolve) => setTimeout(resolve, 10_000))
+      await expect
+        .poll(async () => (await readMoved()).tabs, { timeout: 60_000 })
+        .toEqual(expect.arrayContaining(['browser', 'editor']))
       const moved = await readMoved()
       console.log(`[moved-browser-drafts] ${JSON.stringify(moved)}`)
       // What the user sees: a tab for each, not only rows in the store.

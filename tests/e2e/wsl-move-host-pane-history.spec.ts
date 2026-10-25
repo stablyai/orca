@@ -75,6 +75,7 @@ test('a slept host pane this desktop never painted shows its history when opened
   orcaPage
 }, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX fixture command')
+  // A paired host and client each boot a full app, and the host terminal runs before the check.
   test.setTimeout(600_000)
   const worktreeId = await orcaPage.evaluate(() => {
     const id = window.__store?.getState().activeWorktreeId
@@ -109,8 +110,19 @@ test('a slept host pane this desktop never painted shows its history when opened
       worktreeId,
       fixtureCommand(marker)
     )
-    // Let the host's terminal print before it sleeps; the client never mounts the tab.
-    await new Promise((resolve) => setTimeout(resolve, 3_000))
+    // The host's terminal prints before it sleeps; the client never mounts the tab.
+    await expect
+      .poll(
+        async () => {
+          const read = await callEnvironment(client.page, client.environmentId, 'terminal.read', {
+            terminal: terminal.terminal,
+            screen: true
+          })
+          return JSON.stringify(read).includes(`${marker} line 39`)
+        },
+        { timeout: 30_000, message: 'the host terminal never printed its last line' }
+      )
+      .toBe(true)
     await callEnvironment(client.page, client.environmentId, 'worktree.sleep', {
       worktree: `id:${worktreeId}`
     })
@@ -123,7 +135,9 @@ test('a slept host pane this desktop never painted shows its history when opened
       `[moved-history] before-open ${JSON.stringify(await readClientTabState(client.page, terminal.webTabId))}`
     )
     await openPairedClientTab(client.page, worktreeId, terminal.webTabId)
-    await new Promise((resolve) => setTimeout(resolve, 8_000))
+    await expect
+      .poll(() => readPairedPaneContent(client.page, terminal.webTabId), { timeout: 30_000 })
+      .toContain(`${marker} line 39`)
     console.log(
       `[moved-history] after-open ${JSON.stringify(await readClientTabState(client.page, terminal.webTabId))}`
     )
@@ -184,7 +198,12 @@ async function openImportedPane(
         state?.setActiveWorktree(id)
       }, worktreeId)
       await openPairedClientTab(client.page, worktreeId, webTabId)
-      await new Promise((resolve) => setTimeout(resolve, 8_000))
+      // The pane has started once it shows anything: its replayed history or a fresh prompt.
+      await expect
+        .poll(async () => (await readPairedPaneContent(client.page, webTabId)).trim().length, {
+          timeout: 30_000
+        })
+        .toBeGreaterThan(0)
       const state = await readClientTabState(client.page, webTabId)
       console.log(`[moved-history] import after-open ${JSON.stringify(state)}`)
       outcome.content = await readPairedPaneContent(client.page, webTabId)
@@ -211,6 +230,7 @@ async function openImportedPane(
 test("an ordinary pane's saved snapshot is not replayed by a host start", async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX paths')
+  // A paired host and client each boot a full app, and the host terminal runs before the check.
   test.setTimeout(600_000)
   // No move receipt: the same saved state on a host that was never a move's destination.
   const outcome = await openImportedPane(testInfo, false)

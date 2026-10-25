@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMigrationJournalDirectory } from './migration-journal-directory'
 
 type JournalRecord = { migrationId: string }
@@ -18,19 +18,27 @@ const journal = createMigrationJournalDirectory<JournalRecord>({
   unreadable: (detail) => new Error(detail)
 })
 
+// The sweep compares a file's mtime with the clock, so both read this fixed time.
+const NOW = Date.UTC(2026, 9, 24, 12)
+
 let userDataPath: string
 let dir: string
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(NOW)
   userDataPath = mkdtempSync(join(tmpdir(), 'migration-journal-'))
   dir = join(userDataPath, 'journal')
   mkdirSync(dir)
 })
-afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
+afterEach(() => {
+  vi.useRealTimers()
+  rmSync(userDataPath, { recursive: true, force: true })
+})
 
 function temporary(pid: number, ageMs: number): string {
   const path = join(dir, `move-1.json.${pid}.1792672615854.b6fca333.tmp`)
   writeFileSync(path, '{')
-  const at = (Date.now() - ageMs) / 1000
+  const at = (NOW - ageMs) / 1000
   utimesSync(path, at, at)
   return path
 }

@@ -270,6 +270,7 @@ describe.skipIf(process.platform === 'win32' && !WSL_DISTRO)(
         // The line `pwd` printed, right before the marker; the echoed command line holds neither.
         expect(output.get(restored)).toContain(`${sub}\r\nPWD_42`)
       },
+      // Real daemon shells start, pause and exit; their startup alone can take seconds.
       TIMEOUT_MS
     )
 
@@ -298,6 +299,7 @@ describe.skipIf(process.platform === 'win32' && !WSL_DISTRO)(
         const alive = (await daemon.adapter.listSessions()).filter((s) => s.isAlive)
         expect(alive.map((s) => s.sessionId)).toEqual([SESSION_B])
       },
+      // Real daemon shells start, pause and exit; their startup alone can take seconds.
       TIMEOUT_MS
     )
   }
