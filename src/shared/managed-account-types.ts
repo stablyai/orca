@@ -121,6 +121,17 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultEmail?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+  /** Whether this host switches accounts before a usage limit; absent from older hosts. */
+  autoSwitchEnabled?: boolean
+}
+
+/** Orca moved Claude to another account before a usage limit, so running sessions can follow. */
+export type ClaudeAutoSwitchedEvent = {
+  /** The accounts at the switch, so following it waits on no read another switch could overtake. */
+  accounts: ClaudeManagedAccountSummary[]
+  fromAccountId: string
+  toAccountId: string
+  target: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

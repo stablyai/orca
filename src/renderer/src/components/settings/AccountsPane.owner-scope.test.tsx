@@ -27,12 +27,14 @@ const fake = vi.hoisted(() => {
   const state: {
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
+    setAutoSwitch: ReturnType<typeof vi.fn>
     rosters: Map<string, unknown>
     watchedTargets: unknown[]
     selects: unknown[][]
   } = {
     pendingSelect: null,
     write: vi.fn(),
+    setAutoSwitch: vi.fn(),
     rosters: new Map(),
     watchedTargets: [],
     selects: []
@@ -94,6 +96,7 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => {
     },
     selectCodexProviderAccount: fake.write,
     removeClaudeProviderAccount: fake.write,
+    setClaudeAutoSwitch: fake.setAutoSwitch,
     removeCodexProviderAccount: fake.write
   }
 })
@@ -177,6 +180,33 @@ it('keeps a late account result once the pane is back on the server it was sent 
   await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
 
   expect(within(alphaRow()).getByText('Active')).toBeTruthy()
+})
+
+it('turns on automatic switching on the server whose accounts the page shows', async () => {
+  const roster = claudeRoster('acct-a', 'alpha@server-a.test', true)
+  const second = claudeRoster('acct-c', 'gamma@server-a.test', false).accounts
+  fake.rosters.set('server-a', {
+    ...roster,
+    accounts: [...roster.accounts, ...second],
+    autoSwitchEnabled: false
+  })
+  fake.setAutoSwitch.mockResolvedValue({
+    ...roster,
+    accounts: [...roster.accounts, ...second],
+    autoSwitchEnabled: true
+  })
+  render(renderPane(scopeFor('server-a')))
+  await act(async () => {})
+  const toggle = (): HTMLElement =>
+    screen.getByRole('switch', { name: 'Switch accounts before a usage limit' })
+
+  await act(async () => fireEvent.click(toggle()))
+
+  expect(fake.setAutoSwitch).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'server-a' },
+    true
+  )
+  expect(toggle().getAttribute('aria-checked')).toBe('true')
 })
 
 it("shows a WSL host's distro accounts from this desktop and selects for that distro", async () => {

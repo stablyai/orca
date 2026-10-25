@@ -16,6 +16,7 @@ import {
   RemoveAccountParams,
   SelectAccountParams,
   SelectCodexAccountForTargetParams,
+  SetClaudeAutoSwitchParams,
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
   HostAccountSignInFlowParams,
@@ -143,6 +144,12 @@ export const ACCOUNT_METHODS = [
     permission: 'accounts-admin',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.setClaudeAutoSwitch',
+    permission: 'accounts-admin',
+    params: SetClaudeAutoSwitchParams,
+    handler: async (params, { runtime }) => runtime.setClaudeAutoSwitch(params.enabled)
   }),
   defineMethod({
     name: 'accounts.selectCodex',

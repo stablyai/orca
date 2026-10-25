@@ -11,6 +11,7 @@ import {
 } from '@/lib/claude-account-switch-sessions'
 import ClaudeAccountSwitchDialog from './ClaudeAccountSwitchDialog'
 import type * as AccountMove from '@/lib/claude-session-account-move'
+import type { ClaudeAutoSwitchedEvent } from '../../../shared/managed-account-types'
 
 vi.mock('@/lib/claude-session-account-move', async (importOriginal) => ({
   ...(await importOriginal<typeof AccountMove>()),
@@ -36,6 +37,7 @@ const row = (id: string) => ({
 })
 const ROSTER = { accounts: [row('account-a'), row('account-b')] }
 const updateSettings = vi.fn(async () => {})
+let autoSwitched: (switched: ClaudeAutoSwitchedEvent) => void = () => {}
 
 async function switchWith(count: number, from = 'account-a', to = 'account-b'): Promise<void> {
   vi.mocked(findMovableClaudeSessions).mockResolvedValue(
@@ -57,6 +59,14 @@ describe('ClaudeAccountSwitchDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetClaudeAccountSwitchSessionsForTests()
+    vi.stubGlobal('api', {
+      claudeAccounts: {
+        onAutoSwitched: (callback: typeof autoSwitched) => {
+          autoSwitched = callback
+          return () => {}
+        }
+      }
+    })
     useAppStore.setState({
       updateSettings,
       pendingPaneAccountRestarts: {},
@@ -76,6 +86,23 @@ describe('ClaudeAccountSwitchDialog', () => {
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('asks the same question after Orca switches accounts on its own', async () => {
+    vi.mocked(findMovableClaudeSessions).mockResolvedValue([candidate(1)])
+    render(<ClaudeAccountSwitchDialog />)
+
+    act(() =>
+      autoSwitched({
+        accounts: ROSTER.accounts,
+        fromAccountId: 'account-a',
+        toAccountId: 'account-b',
+        target: { runtime: 'host' }
+      })
+    )
+
+    expect(await screen.findByText('Switched to account-b@example.com')).toBeTruthy()
   })
 
   it('stays closed when no session needs restarting', async () => {

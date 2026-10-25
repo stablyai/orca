@@ -204,6 +204,10 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.selectAccount(accountId)
   }
 
+  setClaudeAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.setAutoSwitch(enabled)
+  }
+
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
     return this.requireServices().codexAccounts.selectAccount(accountId)
   }

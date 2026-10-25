@@ -31,6 +31,7 @@ export type ClaudeAccountSettings = Pick<
   | 'claudeManagedAccounts'
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'claudeAutoSwitchEnabled'
 >
 
 export type ClaudeAccountStore = {
@@ -85,11 +86,17 @@ export class ClaudeAccountSelection {
       accounts,
       activeAccountId: selection.host,
       activeAccountIdsByRuntime: selection,
+      autoSwitchEnabled: settings.claudeAutoSwitchEnabled === true,
       ...(systemDefault ? { systemDefaultEmail: systemDefault.email } : {}),
       ...(systemDefault && this.runtimeAuth.router.copiedLoginIntoSystemDefault()
         ? { systemDefaultMayBeCopied: true }
         : {})
     }
+  }
+
+  setAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAutoSwitchEnabled: enabled })
+    return this.list()
   }
 
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
