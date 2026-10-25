@@ -97,6 +97,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 // Fix live shortcut labels so each action’s assigned shortcut remains independently observable.
 vi.mock('@/hooks/useShortcutLabel', () => ({
+  formatOptionalShortcutLabel: shortcutLabelMock,
   useOptionalShortcutLabel: shortcutLabelMock
 }))
 

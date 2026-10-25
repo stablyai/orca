@@ -9,6 +9,8 @@ import {
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '../../store'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
@@ -53,6 +55,16 @@ export function TabWorkspaceLayoutMenuSection({
   trailingSeparator?: boolean
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
+  // Why: read without a hook to match the sibling guard below — BrowserTab renders this
+  // section through a shallow function-call harness where hooks are not available.
+  const moveToSplitRightShortcut = formatOptionalShortcutLabel(
+    'tab.moveToSplitRight',
+    useAppStore.getState().keybindings
+  )
+  // Why: caller-supplied labels (e.g. native chat) win; otherwise "right" advertises the global chord.
+  const directionShortcutLabel = (direction: TabSplitDirection): string | null | undefined =>
+    shortcutLabels?.[direction] ?? (direction === 'right' ? moveToSplitRightShortcut : null)
+
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
@@ -78,8 +90,8 @@ export function TabWorkspaceLayoutMenuSection({
             >
               {paneColumnDirectionIcon(direction)}
               {paneColumnDirectionLabel(direction)}
-              {shortcutLabels?.[direction] ? (
-                <DropdownMenuShortcut>{shortcutLabels[direction]}</DropdownMenuShortcut>
+              {directionShortcutLabel(direction) ? (
+                <DropdownMenuShortcut>{directionShortcutLabel(direction)}</DropdownMenuShortcut>
               ) : null}
             </DropdownMenuItem>
           ))}
