@@ -37,6 +37,17 @@ describe('dispatchTerminalWebViewNotification', () => {
     })
   })
 
+  it('routes a swipe down to its own handler, apart from taps', () => {
+    const onTerminalSwipeDown = vi.fn()
+    const onTerminalTap = vi.fn()
+    dispatchTerminalWebViewNotification(
+      { type: 'terminal-swipe-down' },
+      { onTerminalSwipeDown, onTerminalTap, reportEngineError: vi.fn() }
+    )
+    expect(onTerminalSwipeDown).toHaveBeenCalledTimes(1)
+    expect(onTerminalTap).not.toHaveBeenCalled()
+  })
+
   it('passes a tap click on and keeps other terminal input bytes-only', () => {
     const onTerminalInput = vi.fn()
     const handlers = { onTerminalInput, reportEngineError: vi.fn() }

@@ -6,7 +6,7 @@ import {
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
-import { Alert, type Keyboard, type TextInput } from 'react-native'
+import { Alert, Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -182,10 +182,11 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
-  const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
+  const { handleTerminalSwipeDown, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
     commandInputRef,
+    dismissKeyboard: () => Keyboard.dismiss(),
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
@@ -266,6 +267,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     canSend,
     liveInputEnabled,
     handleTerminalTap,
+    handleTerminalSwipeDown,
     resetLiveInputFocus,
     terminalInventoryRecoveryScope,
     registerTerminalInventoryRecoveryAction,

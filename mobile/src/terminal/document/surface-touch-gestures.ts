@@ -24,6 +24,8 @@ import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
 
 const RELEASE_VELOCITY_MAX_AGE_MS = 100
+// A release this far below its start, mostly vertical, reads as "swipe down" (the host may dismiss the keyboard).
+const SWIPE_DOWN_MIN_PX = 56
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
@@ -40,6 +42,9 @@ export type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
+  /** Where the current one-finger gesture began; null once a second finger joins. */
+  swipeStartX: number | null
+  swipeStartY: number | null
 }
 
 export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
@@ -65,6 +70,20 @@ export function getDistance(a: Touch, b: Touch) {
 
 function pinchMidpoint(scope: TerminalDocumentScope, a: Touch, b: Touch) {
   return viewportPoint(scope, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)
+}
+
+// The swipe still scrolls scrollback; the host only learns the gesture happened.
+function reportSwipeDown(scope: TerminalDocumentScope) {
+  const { swipeStartX, swipeStartY, lastX, lastY } = scope.touchGesture
+  scope.touchGesture.swipeStartX = null
+  scope.touchGesture.swipeStartY = null
+  if (swipeStartX === null || swipeStartY === null) {
+    return
+  }
+  const dy = lastY - swipeStartY
+  if (dy >= SWIPE_DOWN_MIN_PX && dy > 2 * Math.abs(lastX - swipeStartX)) {
+    notify(scope, { type: 'terminal-swipe-down' })
+  }
 }
 
 export function attachSurfaceEventHandlers(
@@ -114,6 +133,8 @@ export function attachSurfaceEventHandlers(
         stopSurfaceTouchGestures(scope)
         resetSmoothScrollOffset(scope)
         scope.touchGesture.isPinching = true
+        scope.touchGesture.swipeStartX = null
+        scope.touchGesture.swipeStartY = null
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -124,6 +145,8 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.isPinching = false
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
+        scope.touchGesture.swipeStartX = touches[0].clientX
+        scope.touchGesture.swipeStartY = touches[0].clientY
         scope.touchGesture.lastTime = Date.now()
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
@@ -249,6 +272,7 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
+        reportSwipeDown(scope)
         scope.touchGesture.active = false
         // A finger resting after its last move has no remaining momentum to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
