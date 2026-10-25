@@ -59,7 +59,9 @@ export async function fetchActiveClaudeRateLimits(
     )
   }
   try {
-    return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    const usage = await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    // Why: a successful reading names its account too, as failures and live session posts do.
+    return { ...usage, usageMetadata: { ...metadata, ...usage.usageMetadata } }
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
     // Retain both the 429 polling delay and its user-visible cause.

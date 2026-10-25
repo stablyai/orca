@@ -136,7 +136,9 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
         { accountId },
         ACCOUNT_MUTATION_TIMEOUT_MS
       )
-    }
+    },
+    // Why: an automatic switch on the server is the server's own; this client restarts nothing.
+    onAutoSwitched: () => () => {}
   }
 }
 

@@ -480,6 +480,30 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
+  it('drops a queued automatic switch once the user acts', async () => {
+    const f = fixture([account('a'), account('b'), account('c')])
+    f.signIn('a', 'a@example.test')
+    f.signIn('b', 'b@example.test')
+    f.signIn('c', 'c@example.test')
+    f.runLogin.mockImplementationOnce(
+      (_args, _config, _timeoutMs, options) =>
+        new Promise((_resolve, reject) =>
+          options?.signal?.addEventListener('abort', () =>
+            reject(new Error('Claude sign-in was cancelled.'))
+          )
+        )
+    )
+    const adding = f.service.addAccount({ runtime: 'host' }).catch(() => null)
+    await vi.waitFor(() => expect(f.runLogin).toHaveBeenCalled())
+
+    const autoSwitch = f.service.autoSelectAccountForTarget('b', { runtime: 'host' }, () => true)
+    await f.service.removeAccount('c')
+    await adding
+
+    await expect(autoSwitch).resolves.toBe(false)
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBe('a')
+  })
+
   it('clears the selection, republishes, then deletes the folder on remove', async () => {
     const f = fixture()
     f.signIn('a', 'a@example.test')

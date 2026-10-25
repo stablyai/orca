@@ -123,6 +123,15 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultMayBeCopied?: boolean
 }
 
+/** Orca moved Claude to another account before a usage limit, so running sessions can follow. */
+export type ClaudeAutoSwitchedEvent = {
+  /** The accounts at the switch, so following it waits on no read another switch could overtake. */
+  accounts: ClaudeManagedAccountSummary[]
+  fromAccountId: string
+  toAccountId: string
+  target: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+}
+
 export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null
   wsl: Record<string, string | null>

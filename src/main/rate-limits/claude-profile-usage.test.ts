@@ -100,6 +100,18 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
     usageMetadata: { failureKind: 'stale-token' }
   })
 })
+it('tags a successful reading with the account it was read for', async () => {
+  const f = profile()
+  writeFileSync(
+    join(f.home, '.credentials.json'),
+    JSON.stringify({ claudeAiOauth: { accessToken: 'fake', expiresAt: Date.now() + 3_600_000 } })
+  )
+  calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
+    status: 'ok',
+    usageMetadata: { authProvenance: 'profile:fake' }
+  })
+})
 it('reads only the requested scoped Keychain, with no unsuffixed fallback', async () => {
   const f = profile()
   await readClaudeOAuthCredentials({ credentialsFileConfigDir: f.home, keychainConfigDir: f.home })
