@@ -98,3 +98,33 @@ it.each(['clear', 'replace'] as const)(
     expect(dependencies.probe).not.toHaveBeenCalled()
   }
 )
+
+it.each(['clear', 'replace'] as const)(
+  'discards a completed probe overlapping %s',
+  async (kind) => {
+    let finishProbe: (reachable: boolean) => void = () => {}
+    dependencies.probe.mockReturnValueOnce(new Promise((resolve) => (finishProbe = resolve)))
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    let running: Promise<void> | undefined
+    await act(async () => {
+      running = diagnostics?.runDiagnostics()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(dependencies.probe).toHaveBeenCalledOnce()
+    if (kind === 'clear') {
+      noteEndpointAuthHeadersChanged(host.id)
+    } else {
+      markHostCredentialWrite(host.id)
+    }
+    await act(async () => {
+      finishProbe(true)
+      await running
+    })
+    expect(diagnostics?.checks.some((check) => check.label === host.name)).toBe(false)
+    expect(diagnostics?.diagnosticStatus).toBe('done')
+  }
+)
