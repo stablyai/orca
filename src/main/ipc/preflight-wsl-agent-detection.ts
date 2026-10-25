@@ -39,15 +39,7 @@ export async function detectWslCommandsOnPath(
   ].join('\n')
 
   try {
-    // Use cached login PATH without shell startup banners.
-    const result = await runWslProcess({
-      distro: wslTarget.distro,
-      loginPath: 'preferred',
-      script,
-      // POSIX `command -v` loop; declared because the payload is opaque here.
-      shell: 'sh',
-      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
-    })
+    const result = await runWslAgentDetectionWithColdStartRetry(wslTarget, script)
     // Timeout/nonzero results may contain partial stdout, not a complete inventory.
     if (result.timedOut || result.code !== 0) {
       return new Set()
@@ -56,6 +48,28 @@ export async function detectWslCommandsOnPath(
   } catch {
     return new Set()
   }
+}
+
+async function runWslAgentDetectionWithColdStartRetry(
+  wslTarget: WslPreflightTarget,
+  script: string
+) {
+  // Use cached login PATH without shell startup banners.
+  const runOnce = () =>
+    runWslProcess({
+      distro: wslTarget.distro,
+      loginPath: 'preferred',
+      script,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
+    })
+  const first = await runOnce()
+  // One retry absorbs a WSL cold-start timeout; a nonzero exit is a real failure (#8366).
+  if (!first.timedOut) {
+    return first
+  }
+  return await runOnce()
 }
 
 function parseWslDetectedCommands(stdout: string): Set<string> {

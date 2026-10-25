@@ -15,6 +15,7 @@ import {
 } from '../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -266,6 +267,139 @@ describe('useDetectedAgents (unresolved target)', () => {
     expect(refreshLocalAgents).not.toHaveBeenCalled()
     expect(detectRemoteAgents).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('useDetectedAgents (local call site)', () => {
+  it('fires local detection once on mount and does not thrash after an empty result', async () => {
+    detectLocalAgents.mockReset().mockResolvedValue([])
+    const root = await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().detectedAgentIds).toEqual([])
+
+    await act(async () => {
+      root.render(createElement(HookProbe, { target: { kind: 'local' } }))
+    })
+    await flushEffects()
+
+    // Same mounted surface: empty remount-retry marks once; re-render must not thrash.
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a cached empty local result when the launch surface is reopened', async () => {
+    // Why: WSL/local cold-start soft-fails to [] (#8366). Reopening TabBar /
+    // QuickLaunch must re-enter ensureDetectedAgents without a project switch.
+    detectLocalAgents.mockReset().mockResolvedValue([])
+    const firstRoot = await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().detectedAgentIds).toEqual([])
+
+    await act(async () => {
+      firstRoot.unmount()
+    })
+    roots.splice(roots.indexOf(firstRoot), 1)
+    detectLocalAgents.mockResolvedValueOnce(['grok'])
+
+    await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(2)
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['grok'])
+  })
+
+  it('retries each distinct cached-empty local context once on the same surface', async () => {
+    detectLocalAgents.mockReset().mockResolvedValue([])
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'repo-a',
+          displayName: 'WSL A',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-a'],
+          createdAt: 0,
+          updatedAt: 0,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        },
+        {
+          id: 'repo-b',
+          displayName: 'WSL B',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-b'],
+          createdAt: 0,
+          updatedAt: 0,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Debian' }
+        }
+      ],
+      repos: [
+        {
+          id: 'repo-a',
+          path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\a',
+          displayName: 'WSL A',
+          badgeColor: '#000000',
+          addedAt: 0
+        },
+        {
+          id: 'repo-b',
+          path: '\\\\wsl.localhost\\Debian\\home\\alice\\b',
+          displayName: 'WSL B',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: {
+        'repo-a': [
+          makeWorktree({
+            id: 'wt-a',
+            repoId: 'repo-a',
+            path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\a',
+            displayName: 'main'
+          })
+        ],
+        'repo-b': [
+          makeWorktree({
+            id: 'wt-b',
+            repoId: 'repo-b',
+            path: '\\\\wsl.localhost\\Debian\\home\\alice\\b',
+            displayName: 'main'
+          })
+        ]
+      },
+      localDetectedAgentIdsByContext: {
+        'repo-a:wsl:Ubuntu': [],
+        'repo-b:wsl:Debian': []
+      },
+      isDetectingLocalAgentsByContext: {
+        'repo-a:wsl:Ubuntu': false,
+        'repo-b:wsl:Debian': false
+      }
+    })
+
+    const targetA: AgentDetectionTarget = {
+      kind: 'local',
+      worktreeId: 'wt-a',
+      contextKey: 'repo-a:wsl:Ubuntu'
+    }
+    const targetB: AgentDetectionTarget = {
+      kind: 'local',
+      worktreeId: 'wt-b',
+      contextKey: 'repo-b:wsl:Debian'
+    }
+
+    const root = await renderProbe(targetA)
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(createElement(HookProbe, { target: targetB }))
+    })
+    await flushEffects()
+    expect(detectLocalAgents).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      root.render(createElement(HookProbe, { target: targetA }))
+    })
+    await flushEffects()
+    expect(detectLocalAgents).toHaveBeenCalledTimes(2)
   })
 })
 
