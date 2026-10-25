@@ -1,5 +1,9 @@
-import { terminalBackgroundFallback } from './document-constants'
-import { scope, type TerminalDocumentTheme } from './document-scope'
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
+import { colors } from '../../theme/mobile-theme'
+import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
+
+/** The page background before a theme arrives, and the fallback when a theme omits one. */
+const TERMINAL_BACKGROUND_FALLBACK = colors.terminalBg
 
 /** A terminal colour with no alpha: what the contrast maths works on. */
 export type TerminalDocumentRgb = { r: number; g: number; b: number }
@@ -7,9 +11,13 @@ export type TerminalDocumentRgb = { r: number; g: number; b: number }
 /** A parsed CSS colour, alpha included, before it is composited onto the app surface. */
 export type TerminalDocumentRgba = TerminalDocumentRgb & { a: number }
 
-/** The theme payload the host publishes; an older host omits the contrast floor. */
+/**
+ * The theme payload the host publishes; an older host omits the contrast floor. The floor arrives
+ * unvalidated from a host of unknown version, so it is typed as the router types its other wire
+ * fields and `normalizeTerminalContrastOverride` is what decides it is a usable number.
+ */
 export type TerminalDocumentThemeMessage =
-  | { theme?: Record<string, string>; minimumContrastRatio?: number }
+  | { theme?: Record<string, string>; minimumContrastRatio?: unknown }
   | null
   | undefined
 
@@ -133,7 +141,10 @@ export function resolveTerminalContrastFloor(background: unknown) {
   return isLight ? LIGHT_BG_MIN_CONTRAST : DARK_BG_MIN_CONTRAST
 }
 
-export function normalizeTerminalTheme(input: TerminalDocumentThemeMessage) {
+export function normalizeTerminalTheme(
+  scope: TerminalDocumentScope,
+  input: TerminalDocumentThemeMessage
+) {
   const source =
     input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
       ? input.theme
@@ -160,10 +171,18 @@ export type TerminalDocumentThemeTarget = {
   options: { theme?: TerminalDocumentTheme; minimumContrastRatio: number }
 }
 
-export function applyTerminalTheme(input: TerminalDocumentThemeMessage) {
+export function applyTerminalTheme(
+  scope: TerminalDocumentScope,
+  input: TerminalDocumentThemeMessage,
+  force = false
+) {
   scope.terminalThemeInput = input
-  scope.terminalTheme = normalizeTerminalTheme(input)
-  const background = scope.terminalTheme.background || terminalBackgroundFallback
+  const nextTheme = normalizeTerminalTheme(scope, input)
+  const themeChanged = Object.keys(scope.defaultTheme).some(
+    (key) => scope.terminalTheme[key] !== nextTheme[key]
+  )
+  scope.terminalTheme = nextTheme
+  const background = scope.terminalTheme.background || TERMINAL_BACKGROUND_FALLBACK
   scope.paintDocumentBackground(background)
   // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
   // an older host omits the field and the luminance gate stays authoritative.
@@ -173,7 +192,13 @@ export function applyTerminalTheme(input: TerminalDocumentThemeMessage) {
   scope.terminalMinimumContrastRatio =
     publishedFloor === null ? resolveTerminalContrastFloor(background) : publishedFloor
   if (scope.term) {
-    scope.term.options.theme = scope.terminalTheme
-    scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    // Reassigning the theme resets live OSC palette changes; visibility recovery still repaints.
+    if (force || themeChanged) {
+      scope.term.options.theme = scope.terminalTheme
+    }
+    if (scope.term.options.minimumContrastRatio !== scope.terminalMinimumContrastRatio) {
+      scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    }
   }
+  paintBottomRowBackdrop(scope)
 }

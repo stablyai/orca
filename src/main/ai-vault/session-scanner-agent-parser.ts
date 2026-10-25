@@ -1,4 +1,7 @@
+import { parseQoderSessionFile } from './session-scanner-qoder-parser'
+import { parseCodebuddySessionFile } from './session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
@@ -6,12 +9,17 @@ import { parseClineSessionFile } from './session-scanner-cline-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
+import { parseMuseSessionFile } from './session-scanner-muse-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import { parseJcodeSessionFile } from './session-scanner-jcode-parser'
+import { parseKiroSessionFile } from './session-scanner-kiro-parser'
 import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
+  captureZcodeSqliteSessionViaWorker,
   parseOpenCode2SqliteSessionViaWorker,
-  parseOpenCodeSqliteSessionViaWorker
+  parseOpenCodeSqliteSessionViaWorker,
+  parseZcodeSqliteSessionViaWorker
 } from './session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
@@ -23,46 +31,53 @@ import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 
-/**
- * Read an OpenCode SQLite session on the worker thread.
- *
- * Two request kinds rather than one, chosen by whether anyone is listening: a
- * list scan wants the newest few messages for the panel preview, so asking for
- * the whole transcript would read every part of every session on every refresh.
- * A read with a sink is the search index's, and that one needs all of it.
- */
+/** Listing needs only a preview; active message sinks require the full transcript. */
 async function readOpenCodeSqliteCandidate(
   sqliteCandidate: { dbPath: string; sessionId: string },
   platform: NodeJS.Platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal,
+  agent?: 'opencode2' | 'zcode'
 ): Promise<AiVaultSession | null> {
-  const request = { ...sqliteCandidate, platform }
+  throwIfSignalAborted(signal)
+  const request = { ...sqliteCandidate, platform, signal }
   if (!messages?.active) {
-    return parseOpenCodeSqliteSessionViaWorker(request)
+    const parse =
+      agent === 'opencode2'
+        ? parseOpenCode2SqliteSessionViaWorker
+        : agent === 'zcode'
+          ? parseZcodeSqliteSessionViaWorker
+          : parseOpenCodeSqliteSessionViaWorker
+    const session = await parse(request)
+    throwIfSignalAborted(signal)
+    return session
   }
-  const capture = await captureOpenCodeSqliteSessionViaWorker(request)
-  for (const message of capture.messages) {
+  const capture =
+    agent === 'opencode2'
+      ? captureOpenCode2SqliteSessionViaWorker
+      : agent === 'zcode'
+        ? captureZcodeSqliteSessionViaWorker
+        : captureOpenCodeSqliteSessionViaWorker
+  const result = await capture(request)
+  for (const message of result.messages) {
+    throwIfSignalAborted(signal)
     messages.push(message)
   }
-  return capture.session
+  throwIfSignalAborted(signal)
+  return result.session
 }
 
-/**
- * Parse a single agent session file into an `AiVaultSession`. Routes to the
- * appropriate agent-specific parser based on `candidate.agent`. For OpenCode
- * SQLite candidates (synthetic `db#id` paths), routes to
- * `parseOpenCodeSqliteSession` instead of the legacy JSON parser.
- * @param candidate - The session file candidate to parse.
- * @param platform - The platform to use for resume command generation.
- * @param messages - Where the parser publishes every decoded message.
- * @returns The parsed `AiVaultSession`, or `null` if parsing fails.
- */
 export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
+    case 'qoder':
+      return parseQoderSessionFile(candidate.file, platform, messages)
+    case 'codebuddy':
+      return parseCodebuddySessionFile(candidate.file, platform, messages)
     case 'claude':
       return parseClaudeSessionFile(candidate.file, platform, messages)
     case 'codex':
@@ -74,7 +89,7 @@ export async function parseAgentSessionFile(
         messages
       )
     case 'gemini':
-      return parseGeminiSessionFile(candidate.file, platform, messages)
+      return parseGeminiSessionFile(candidate.file, platform, messages, signal)
     case 'antigravity':
       return parseAntigravitySessionFile(candidate.file, platform, messages)
     case 'copilot':
@@ -82,44 +97,30 @@ export async function parseAgentSessionFile(
     case 'cursor':
       return parseCursorSessionFile(candidate.file, platform, messages)
     case 'opencode': {
-      // Why: OpenCode 1.17.x sessions are read from SQLite via a synthetic
-      // <dbPath>#<sessionId> candidate path. Legacy file-based sessions use
-      // real filesystem paths and fall through to the JSON parser.
+      // Synthetic db#id paths identify SQLite sessions; real paths retain the legacy JSON parser.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
-        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages)
+        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal)
       }
       return parseOpenCodeSessionFile(candidate.file, platform, messages)
     }
     case 'opencode2': {
-      // Why: opencode2 (beta) sessions are read from the channel-scoped SQLite
-      // DB (session_v2 schema) via the same synthetic <dbPath>#<sessionId>
-      // candidate path; there is no legacy file store.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
-        if (messages?.active) {
-          const capture = await captureOpenCode2SqliteSessionViaWorker({
-            dbPath: sqliteCandidate.dbPath,
-            sessionId: sqliteCandidate.sessionId,
-            platform
-          })
-          for (const message of capture.messages) {
-            messages.push(message)
-          }
-          return capture.session
-        }
-        return parseOpenCode2SqliteSessionViaWorker({
-          dbPath: sqliteCandidate.dbPath,
-          sessionId: sqliteCandidate.sessionId,
-          platform
-        })
+        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'opencode2')
       }
       return null
+    }
+    case 'zcode': {
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path, 'zcode')
+      return sqliteCandidate
+        ? readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'zcode')
+        : null
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)
     case 'hermes':
-      return parseHermesSessionFile(candidate.file, platform, messages)
+      return parseHermesSessionFile(candidate.file, platform, messages, signal)
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform, messages)
     case 'openclaw':
@@ -133,10 +134,16 @@ export async function parseAgentSessionFile(
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform, messages)
     case 'cline':
-      return parseClineSessionFile(candidate.file, platform, messages)
+      return parseClineSessionFile(candidate.file, platform, messages, signal)
     case 'devin':
-      return parseDevinSessionFile(candidate.file, platform, messages)
+      return parseDevinSessionFile(candidate.file, platform, messages, signal)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform, messages)
+    case 'muse':
+      return parseMuseSessionFile(candidate.file, platform, messages)
+    case 'jcode':
+      return parseJcodeSessionFile(candidate.file, platform, messages)
+    case 'kiro':
+      return parseKiroSessionFile(candidate.file, platform, messages)
   }
 }

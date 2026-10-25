@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -6,13 +7,13 @@ import {
   decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks,
-  RemoteRuntimeSubscriptionOptions
+  RemoteRuntimeSubscriptionCallbacks
 } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
@@ -58,7 +59,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
       })
     )
     const route = new PairedRuntimeBrowserNetworkRoute({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       lease,
       executionHostRevision: 1
     })
@@ -334,7 +335,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     const attempts = mockSubscriptionAttempts()
     const commandLease = { ...lease, pageCommandProtocolVersion: 1 }
     const route = new PairedRuntimeBrowserNetworkRoute({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       lease: commandLease,
       executionHostRevision: 1
     })
@@ -453,7 +454,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[0]!, 7)
     const address = await starting
 
-    // The tunnel attaches on its own subscription, so nothing outside the route observes this.
     attempts[0]!.callbacks.onClose?.()
 
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
@@ -487,8 +487,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     attempts[0]!.callbacks.onClose?.()
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
     ready(attempts[1]!, 8)
-    // Drive a request through the rebuilt tunnel so the first recovery has fully settled before
-    // the next failure; an in-flight loop would otherwise cover both deaths by itself.
+    // Wait for recovery to finish so the second failure exercises a new recovery loop.
     await expectSocksRoundTrip(address, attempts[1]!, 8, 'once-recovered.internal')
 
     attempts[1]!.callbacks.onClose?.()
@@ -649,7 +648,7 @@ function createRoute(
   } = {}
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({
-    pairing,
+    connection: pairedRuntimeConnectionFromOffer(pairing),
     lease,
     executionHostRevision: 1,
     ...overrides
@@ -709,7 +708,6 @@ function openFrames(attempt: SubscriptionAttempt) {
     )
 }
 
-/** Opens one SOCKS connection end to end, proving the route's current tunnel actually carries it. */
 async function expectSocksRoundTrip(
   address: { host: string; port: number },
   attempt: SubscriptionAttempt,

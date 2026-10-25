@@ -8,7 +8,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt, TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -158,7 +158,6 @@ describe('registerPtyHandlers', () => {
     )
     it('injects the agent hook receiver env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv()
-      // Why: buildAgentHookEnv must run exactly once per local spawn (inside shared buildPtyHostEnv); the old ad-hoc double-call is gone.
       expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(1)
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
@@ -336,9 +335,7 @@ describe('registerPtyHandlers', () => {
       })
     })
     it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
-      // Why: flag OFF must stay byte-identical to today. With no managed home
-      // selected (resolver null) and the real-home flag off, no CODEX_HOME
-      // injection or strip happens; an inherited value survives as before.
+      // With real-home routing disabled and no managed selection, preserve inherited CODEX_HOME.
       const env = await spawnAndGetEnv(
         undefined,
         { CODEX_HOME: '/tmp/system-codex-home' },

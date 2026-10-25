@@ -3,7 +3,7 @@ import WebSocket from 'ws'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
+import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
 
 export const REPO_ID = 'repo-1'
 export const FOLDER_REPO_ID = 'folder-repo-1'

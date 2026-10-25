@@ -1,4 +1,5 @@
-import type { JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraClientForSite } from './authenticated-request'
+import type { JiraSiteSelection } from '../../shared/jira/jira-types'
 
 export type JiraIssueSearchFailure = {
   error: unknown
@@ -74,7 +75,19 @@ export function shouldSurfaceSiteFailure(
   selection: JiraSiteSelection | null | undefined,
   entryCount: number
 ): boolean {
-  // getClients can resolve an omitted selection to the persisted 'all' choice;
-  // multi-entry reads need the same resilient fan-out policy as explicit 'all'.
+  // Omitted selections can resolve to persisted all-sites; apply the same resilient fan-out policy.
   return selection !== 'all' && entryCount <= 1
+}
+
+export function requireStrictJiraSite(
+  entries: JiraClientForSite[],
+  siteId: string | null | undefined,
+  strict: boolean
+): void {
+  if (
+    strict &&
+    (!siteId || siteId === 'all' || entries.length !== 1 || entries[0].site.id !== siteId)
+  ) {
+    throw new Error('Verified Jira reads require one connected site ID.')
+  }
 }

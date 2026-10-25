@@ -175,8 +175,7 @@ export class BrowserNetworkTunnelSession {
     }
   }
 
-  // The host grants more credit than the retained pool can hold (128 streams x 256 KB vs 8 MB),
-  // so a budget miss is reachable by a fully conforming peer and must not fence the tunnel.
+  // Valid peer credit can exceed the retained pool, so budget exhaustion must only fail its stream.
   private failDestinationFlow(stream: BrowserNetworkTunnelStream, code: string): void {
     if (code === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW) {
       this.failStream(stream, code)
@@ -249,8 +248,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
-    // The client has never seen Opened for this stream, so HalfClose/Close would read as a
-    // protocol violation and fence the whole tunnel; fail just this stream instead.
+    // Before Opened, HalfClose/Close would violate the protocol and fence the tunnel.
     if (!stream.connected) {
       this.failStream(stream, 'destination_closed_before_connect')
       return

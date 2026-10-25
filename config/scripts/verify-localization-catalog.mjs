@@ -151,6 +151,30 @@ function formatMissingKeys(label, keys) {
   return keys.map((key) => `${label}: ${key}`).join('\n')
 }
 
+// Language packs require nested names even though i18next also accepts flat keys.
+function collectDottedCatalogKeys(value, prefix = '') {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return []
+  }
+  return Object.entries(value).flatMap(([key, child]) => {
+    const keyPath = prefix ? `${prefix}.${key}` : key
+    return [...(key.includes('.') ? [keyPath] : []), ...collectDottedCatalogKeys(child, keyPath)]
+  })
+}
+
+function reportDottedCatalogKeys(fileName, catalog) {
+  const dottedKeys = collectDottedCatalogKeys(catalog)
+  if (dottedKeys.length === 0) {
+    return 0
+  }
+  console.error(`${fileName} has keys with a dot in the name. Write them as nested objects.`)
+  console.error(formatMissingKeys('dotted', dottedKeys.slice(0, 20)))
+  if (dottedKeys.length > 20) {
+    console.error(`...and ${dottedKeys.length - 20} more dotted keys`)
+  }
+  return 1
+}
+
 function normalizeInterpolationVariables(value) {
   return collectInterpolationVariables(value)
     .map((variable) => variable.slice(2, -2))
@@ -442,7 +466,27 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   return interpolationMismatches.length > 0 ? 1 : 0
 }
 
-export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
+export async function collectLocalizationReferences(root) {
+  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
+  const references = []
+
+  for (const sourceRoot of sourceRoots) {
+    const files = await collectSourceFiles(root, sourceRoot)
+    for (const filePath of files) {
+      references.push(
+        ...collectLocalizationKeyReferences(filePath, await fs.readFile(filePath, 'utf8'), root)
+      )
+    }
+  }
+
+  return references
+}
+
+export async function main(
+  root = process.cwd(),
+  options = parseArgs(process.argv.slice(2)),
+  sharedReferences
+) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
@@ -460,18 +504,11 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     }
     return 0
   }
-  let catalogKeys = new Set(flattenCatalogKeys(catalog))
-  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
-  const references = []
-
-  for (const sourceRoot of sourceRoots) {
-    const files = await collectSourceFiles(root, sourceRoot)
-    for (const filePath of files) {
-      references.push(
-        ...collectLocalizationKeyReferences(filePath, await fs.readFile(filePath, 'utf8'), root)
-      )
-    }
+  if (reportDottedCatalogKeys('en.json', catalog) !== 0) {
+    return 1
   }
+  let catalogKeys = new Set(flattenCatalogKeys(catalog))
+  const references = sharedReferences ?? (await collectLocalizationReferences(root))
 
   const missing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (missing.length > 0) {
@@ -529,6 +566,9 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
     const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    if (reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
+      return 1
+    }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
       console.error('')

@@ -16,6 +16,7 @@ import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine
 } from './terminal-input-quarantine'
+import { notifyTerminalInputNotSent } from './terminal-input-not-sent-notice'
 
 // Why this module exists: a terminal pane can die renderer-side while its PTY
 // stays alive — a wedged xterm WriteBuffer (issue #2836), a disposed xterm
@@ -61,6 +62,9 @@ type RecoveryRequest = {
    *  in-flight line, and only it may quarantine input — a recovery that always
    *  keeps the same live shell would have a legitimate command eaten. */
   endpointReplaced?: boolean
+  /** Read just before an endpoint-replaced remount: some pane holds input its host never
+   *  applied, which the remount discards. */
+  hasUndeliveredInput?: () => boolean
 }
 
 const activeTerminalRecoveryInstanceIds = new Set<number>()
@@ -97,7 +101,10 @@ function shouldScheduleRecoveryRetry(
     return request.terminalRecoveryGeneration !== undefined
   }
   if (decline.declinedBy === 'window-cap') {
-    return request.reason !== 'reattach-unverifiable'
+    // Why: a host that keeps contradicting itself must stop at the cap and leave the pane ended.
+    return (
+      request.reason !== 'reattach-unverifiable' && request.reason !== 'host-rebound-exited-pane'
+    )
   }
   // 'settled-failure' deliberately schedules nothing: a retry timer would be
   // the counting loop again. Only a new trigger reopens that reason.
@@ -272,6 +279,8 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
       // broken state.
     }
   }
+  // Why before the remount: it retires the transports that know what was typed.
+  const undeliveredInput = request.endpointReplaced && request.hasUndeliveredInput?.() === true
   let result: TerminalRecoveryRemountResult
   try {
     result = useAppStore
@@ -312,6 +321,9 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     // Why here and not at request time: arming before the remount is certain
     // would suppress input on a pane that never recovered.
     armTerminalInputQuarantine(request.tabId)
+    if (undeliveredInput) {
+      notifyTerminalInputNotSent(request.tabId)
+    }
   }
   // warn, not error: this is the recovery succeeding, and the breadcrumb below is
   // what diagnostics actually read. STA-2373 made this path routine (every daemon

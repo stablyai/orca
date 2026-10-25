@@ -128,18 +128,6 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
 
   const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
 
-  // Why: sentinel-based Jira/Linear items must bypass repository issue templates.
-  const willApplyIssueCommandAsPrompt =
-    enableIssueAutomation &&
-    !agentPrompt.trim() &&
-    Boolean(linkedWorkItem) &&
-    canUseIssueCommandForLinkedItemProvider(linkedWorkItemProvider)
-
-  const shouldWaitForIssueAutomationCheck =
-    enableIssueAutomation &&
-    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
-    !hasLoadedIssueCommand
-
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
 
   const resolvedSetupDecision =
@@ -258,8 +246,6 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     setupConfig,
     setupPolicy,
     linkedWorkItemProvider,
-    willApplyIssueCommandAsPrompt,
-    shouldWaitForIssueAutomationCheck,
     requiresExplicitSetupChoice,
     resolvedSetupDecision,
     isSetupCheckPending,

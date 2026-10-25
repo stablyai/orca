@@ -20,8 +20,7 @@ vi.mock('os', async () => {
 
 import { CommandCodeHookService } from './hook-service'
 
-const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 describe('CommandCodeHookService', () => {
   let homeDir: string
@@ -52,7 +51,11 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /command-code-hook/
+      process.platform === 'win32'
+        ? wrapWindowsBatchHookCommand(
+            join(homeDir, '.orca', 'agent-hooks', 'command-code-hook.cmd')
+          )
+        : /command-code-hook/
     )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
@@ -62,30 +65,23 @@ describe('CommandCodeHookService', () => {
     }
   })
 
-  // Why: #6078 — a Windows user profile path with a space used to be written
-  // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must use an encoded launcher so the path never appears raw
-  // on the cmd.exe command line.
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca command-code home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new CommandCodeHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.commandcode', 'settings.json'), 'utf8')
-        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
-
-        const command = config.hooks.PreToolUse[0].hooks[0].command
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-      } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(new CommandCodeHookService().install().state).toBe('installed')
+      const command = wrapWindowsBatchHookCommand(
+        join(homeDir, '.orca', 'agent-hooks', 'command-code-hook.cmd')
+      )
+      const config = JSON.parse(
+        readFileSync(join(homeDir, '.commandcode', 'settings.json'), 'utf8')
+      )
+      for (const eventName of ['PreToolUse', 'PostToolUse', 'Stop']) {
+        expect(config.hooks[eventName][0].hooks[0].command).toBe(command)
       }
+    } finally {
+      platform.mockRestore()
     }
-  )
+  })
 
   it('installs a hook script that can recover the endpoint when Command Code strips token env', () => {
     new CommandCodeHookService().install()
@@ -99,8 +95,6 @@ describe('CommandCodeHookService', () => {
       expect(script).toContain('orca-dev\\agent-hooks')
       expect(script).toContain('set ORCA_AGENT_HOOK_PORT=')
     } else {
-      expect(script).toContain('Command Code strips TOKEN-like env vars')
-      expect(script).toContain('Command Code sanitizes hook subprocess env')
       expect(script).toContain('__orca_read_ancestor_var')
       expect(script).toContain('__orca_fill_from_endpoint_file')
       expect(script).toContain('[ "$__orca_endpoint_port" != "$ORCA_AGENT_HOOK_PORT" ]')

@@ -15,3 +15,8 @@ export type WorktreeDeleteState = {
 }
 
 export type WorktreeDeleteStateTarget = Pick<Worktree, 'id' | 'hostId'>
+
+/** True once the row's own removal has started; a queued row still owns its terminals and may stay. */
+export function hasWorktreeTeardownStarted(state: WorktreeDeleteState | undefined): boolean {
+  return state?.isDeleting === true && state.phase !== 'queued'
+}

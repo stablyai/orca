@@ -1,3 +1,4 @@
+import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import {
@@ -32,6 +33,7 @@ import {
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
 import { parseTaskDeps } from '../worker/task-deps-argument'
+import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -45,6 +47,8 @@ export async function startFederatedWorker(args: {
     method: string
     payloadHash: string
   }
+  /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
+  callerSession?: OrchestrationSessionCaller
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -117,7 +121,7 @@ export async function startFederatedWorker(args: {
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
-    creator: resolveDispatchCreator(runtime, params.from),
+    creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task?.id,
     taskSpec: params.spec,
@@ -153,6 +157,8 @@ export async function startFederatedWorker(args: {
       protocolVersion: federationProtocolVersion
     }
   })
+  // A remote retry can replace a failed local attempt whose terminal is still live here.
+  releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })

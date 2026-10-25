@@ -11,21 +11,23 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined) =>
       settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: vi.fn(),
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: vi.fn()
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
@@ -33,11 +35,18 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
+vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
@@ -96,7 +105,7 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     latestFileContents = {}
     // Why: opening any tab arms useLocalLogTail's change subscription on window.api.
     vi.stubGlobal('api', {
-      fs: { authorizeExternalPath: vi.fn(), onLocalLogTailChanged: vi.fn(() => () => {}) }
+      fs: { onLocalLogTailChanged: vi.fn(() => () => {}) }
     })
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()

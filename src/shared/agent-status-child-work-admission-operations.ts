@@ -2,6 +2,7 @@ import { serializeAgentChildWorkBindingKey } from './agent-status-child-work-bin
 import { agentChildWorkFencesEqual, type AgentChildWorkId } from './agent-status-child-work'
 import {
   agentChildWorkAliasesForChild,
+  agentChildWorkSettledAt,
   buildAgentChildWork,
   buildAgentChildWorkAliases,
   commitAgentChildWork,
@@ -64,7 +65,12 @@ export function announceAgentChildWork(
     if (!aliases || findAgentChildWork(store, candidateId)) {
       return rejectAgentChildWorkAdmission(aliases ? 'id-collision' : 'invalid')
     }
-    const child = buildAgentChildWork(request, candidateId, request.observedAt, fence)
+    const child = buildAgentChildWork(request, {
+      childWorkId: candidateId,
+      firstObservedAt: request.observedAt,
+      invocation: fence,
+      settledAt: agentChildWorkSettledAt(request)
+    })
     return child
       ? commitAgentChildWork(store, child, aliases, true)
       : rejectAgentChildWorkAdmission('invalid')
@@ -110,7 +116,12 @@ export function announceAgentChildWork(
     candidateId,
     fence
   )
-  const child = buildAgentChildWork(request, candidateId, request.observedAt, fence)
+  const child = buildAgentChildWork(request, {
+    childWorkId: candidateId,
+    firstObservedAt: request.observedAt,
+    invocation: fence,
+    settledAt: agentChildWorkSettledAt(request)
+  })
   return aliases && child
     ? commitAgentChildWork(store, child, aliases, true)
     : rejectAgentChildWorkAdmission('invalid')

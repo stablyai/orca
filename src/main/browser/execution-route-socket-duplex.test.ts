@@ -77,17 +77,11 @@ describe('openExecutionRouteSocketAsDuplex', () => {
   })
 
   it('delivers server-speaks-first bytes that flow before the connect microtask', async () => {
-    // Why (review P2-1): BrowserNetworkDeferredSocket.attach() resumes the
-    // source synchronously (data flows on the nextTick queue) but emits
-    // 'connect' from a microtask — a banner buffered in the channel would be
-    // emitted before any consumer listener exists and silently dropped.
     const channel = new PassThrough()
     channel.write(Buffer.from('220 server-banner\r\n'))
     const socket = new BrowserNetworkDeferredSocket()
     const pending = openExecutionRouteSocketAsDuplex(socket)
-    // Why: attach() really runs inside an I/O callback (ssh2 forwardOut), where
-    // nextTick-scheduled stream flow drains BEFORE the connect microtask; from
-    // plain test-body context the order inverts and the bug hides.
+    // An I/O callback reproduces nextTick-before-microtask ordering; the test body reverses it.
     await new Promise<void>((resolve) => {
       setImmediate(() => {
         socket.attach(channel)

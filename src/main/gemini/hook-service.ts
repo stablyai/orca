@@ -11,11 +11,11 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
@@ -28,9 +28,10 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 
-// Why: Gemini has no permission-prompt hook (approvals are inline UI), so Orca can't show a waiting state — upstream limitation.
-// Why: Gemini's pre-tool event is BeforeTool, not Claude/Codex's PreToolUse; sweep stale PreToolUse entries below.
+// Gemini has no permission-prompt hook, so approvals cannot produce an Orca waiting state.
+// Gemini uses BeforeTool; remove stale Claude-style PreToolUse registrations below.
 const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool'] as const
 
 function getConfigPath(): string {
@@ -47,7 +48,7 @@ function getManagedScriptPath(): string {
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 
@@ -56,9 +57,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: emit `{}` first so Gemini never stalls parsing stdout, even if the guards below exit early.
+      // Reply before guards can exit so Gemini always receives valid hook JSON.
       'echo {}',
-      // Why: source the endpoint file so a surviving PTY reaches the current server. See claude/hook-service.ts.
+      // Refresh endpoint credentials for PTYs that outlive an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('gemini'),
@@ -70,11 +71,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
-    // Why: emit `{}` first so Gemini never stalls parsing stdout, even if the guards below exit early.
+    // Reply before guards can exit so Gemini always receives valid hook JSON.
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('gemini'),
-    // Why: source refreshes endpoint coords so a PTY surviving an Orca restart keeps reporting. See claude/hook-service.ts.
+    // Refresh endpoint credentials for PTYs that outlive an Orca restart.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -82,9 +83,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: worktreeId embeds a path, so post form fields, not hand-built JSON that breaks on quotes/newlines.
-    // Why: pipe payload via curl stdin (`payload@-`) so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\',
+    // Form encoding handles quotes/newlines in paths; stdin keeps large payloads off the command line.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -166,12 +166,11 @@ export class GeminiHookService {
     const command = getManagedCommand(scriptPath)
     const nextHooks = { ...config.hooks }
 
-    // Why: match by filename not exact command, so installs sweep stale entries instead of duplicating them.
+    // Match filenames so moved scripts replace stale registrations rather than duplicating them.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
 
     const managedEvents = new Set<string>(GEMINI_EVENTS)
 
-    // Why: sweep managed entries from dropped event buckets so stale hooks (e.g. PreToolUse) don't keep firing.
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (managedEvents.has(eventName)) {
         continue
@@ -191,7 +190,7 @@ export class GeminiHookService {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
-        // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+        // Gemini hook timeouts use milliseconds.
         hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
       }
       nextHooks[eventName] = [...cleaned, definition]
@@ -203,7 +202,7 @@ export class GeminiHookService {
     return this.getStatus()
   }
 
-  // POSIX-only remote install mirroring ClaudeHookService.installRemote; the managed script/JSON shape must match local install() or remote panes report a different status.
+  // Remote hooks use POSIX paths and the same event/config contract as local installation.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`
@@ -224,7 +223,6 @@ export class GeminiHookService {
       const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
       const managedEvents = new Set<string>(GEMINI_EVENTS)
 
-      // Why: sweep legacy managed event buckets so stale PreToolUse stops warning in SSH Gemini sessions.
       for (const [eventName, definitions] of Object.entries(nextHooks)) {
         if (managedEvents.has(eventName)) {
           continue
@@ -244,15 +242,15 @@ export class GeminiHookService {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
         const definition: HookDefinition = {
-          // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+          // Gemini hook timeouts use milliseconds.
           hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
         }
         nextHooks[eventName] = [...cleaned, definition]
       }
       config.hooks = nextHooks
 
-      // Why: write the script before settings.json so an interrupted install never points at a missing script.
-      // Why: SSH remotes always use POSIX `.sh` paths even when Orca runs on Windows.
+      // Publish scripts before config so interrupted installs cannot reference missing files.
+      // Remote hook syntax is POSIX regardless of the client platform.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, config)
 
@@ -288,10 +286,8 @@ export class GeminiHookService {
     }
 
     const nextHooks = { ...config.hooks }
-    // Why: match by filename so remove() sweeps stale entries even after the script path moved.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      // Why: fail open on malformed (non-array) entries so a broken user config never blocks uninstall.
       if (!Array.isArray(definitions)) {
         continue
       }

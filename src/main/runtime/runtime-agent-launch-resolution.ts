@@ -1,10 +1,14 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import {
+  executionRuntimePlatform,
+  remoteExecutionPlatform
+} from '../../shared/agent-launch-runtime'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 
@@ -103,17 +107,10 @@ export function inferCapturedClaudeAgentTeamsMode(
 }
 
 export function getAgentLaunchPlatformForRepo(
-  repo: Pick<Repo, 'connectionId' | 'path'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId' | 'path'>,
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): NodeJS.Platform {
-  if (!repo.connectionId) {
-    if (projectRuntime?.status === 'repair-required') {
-      return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
-    }
-    if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-      return 'linux'
-    }
-    return process.platform
-  }
-  return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
+  return getRepoRoutingConnectionId(repo)
+    ? remoteExecutionPlatform(repo.path)
+    : executionRuntimePlatform(projectRuntime, undefined, process.platform)
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
   vi.fn<
@@ -204,21 +204,24 @@ describe('installed agent skill discovery lifecycle', () => {
     expect(discover).toHaveBeenLastCalledWith(LOCAL, { projectRuntime: repairProjectRuntime })
   })
 
-  it('keys WSL targets by distro so two distros do not share one entry', async () => {
-    const discover = discoverSkillsForRuntimeTarget
-    discover.mockResolvedValueOnce(result(1))
-    discover.mockResolvedValueOnce(result(2))
-
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual(result(1))
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Debian' })
-    ).resolves.toEqual(result(2))
-    await expect(
-      discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual(result(1))
-    expect(discover).toHaveBeenCalledTimes(2)
+  it('keeps host, WSL, project, and filtered results in separate cache entries', async () => {
+    const targets: (SkillDiscoveryTarget | undefined)[] = [
+      undefined,
+      { runtime: 'wsl', wslDistro: null },
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      { projectRuntime: resolvedHostProjectRuntime },
+      { projectRuntime: resolvedWslProjectRuntime },
+      { names: ['orchestration'], sourceKinds: ['home'] },
+      { names: ['computer-use'], sourceKinds: ['home'] }
+    ]
+    for (const [index, target] of targets.entries()) {
+      discoverSkillsForRuntimeTarget.mockResolvedValueOnce(result(index))
+      await expect(discoverInstalledAgentSkills(false, target)).resolves.toEqual(result(index))
+    }
+    for (const [index, target] of targets.entries()) {
+      await expect(discoverInstalledAgentSkills(false, target)).resolves.toEqual(result(index))
+    }
+    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(targets.length)
   })
 
   it('keys targets by runtime and project identity', () => {
@@ -254,24 +257,6 @@ describe('installed agent skill discovery lifecycle', () => {
     )
   })
 
-  it('isolates project-runtime caches by target-contained filters', async () => {
-    discoverSkillsForRuntimeTarget.mockResolvedValueOnce(result(1)).mockResolvedValueOnce(result(2))
-
-    await expect(
-      discoverInstalledAgentSkills(false, {
-        projectRuntime: resolvedWslProjectRuntime,
-        names: ['orchestration']
-      })
-    ).resolves.toEqual(result(1))
-    await expect(
-      discoverInstalledAgentSkills(false, {
-        projectRuntime: resolvedWslProjectRuntime,
-        names: ['computer-use']
-      })
-    ).resolves.toEqual(result(2))
-
-    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(2)
-  })
   it('keys the bounded cache by runtime scope, not by the client target', async () => {
     // Why: #6887 scopes remote scans by environment. The cap rewrites this same
     // module, so pin that getRuntimeScopedSkillDiscoveryKey stays the producer —

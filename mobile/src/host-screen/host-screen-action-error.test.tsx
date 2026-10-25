@@ -1,11 +1,13 @@
-import { existsSync } from 'node:fs'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
-type Doubles = { removeRejects: boolean; alerts: unknown[][] }
+type Doubles = { removalRejection: unknown; alerts: unknown[][] }
 
-const doubles = vi.hoisted((): Doubles => ({ removeRejects: true, alerts: [] }))
+const doubles = vi.hoisted((): Doubles => ({
+  removalRejection: new Error('still paired'),
+  alerts: []
+}))
 
 vi.mock('react-native', () => ({
   Alert: {
@@ -18,17 +20,17 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('./host-screen-header', () => ({ HostScreenHeader: () => null }))
-vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: () => null }))
-vi.mock('./host-screen-overlays', () => ({ HostScreenOverlays: () => null }))
+vi.mock('./host-screen-header', () => ({ HostScreenHeader: 'HostScreenHeader' }))
+vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: 'HostWorkspaceList' }))
+vi.mock('./host-screen-overlays', () => ({ HostScreenOverlays: 'HostScreenOverlays' }))
 vi.mock('../transport/host-removal-lifecycle', () => ({
-  removeHostAndCloseClient: () =>
-    doubles.removeRejects ? Promise.reject(new Error('still paired')) : Promise.resolve()
+  removeHostAndCloseClient: () => Promise.reject(doubles.removalRejection)
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: vi.fn() }))
 
 import { useRouter } from 'expo-router'
+import { PageHostRemovalUnavailableError } from '../transport/page-host-removal-refusal'
 import { HostScreenView } from './host-screen-view'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import type { HostScreenState } from './use-host-screen-state'
@@ -59,12 +61,54 @@ function render(fields: { error: string; actionError: string }): ReactTestRender
   return rendered.tree
 }
 
+type RemovalWrites = { action: string[]; identity: string[]; confirm: boolean[] }
+
+/** One run of `handleRemoveHost` against a scripted rejection, reporting what it wrote. */
+async function runRemoval(rejection: unknown): Promise<RemovalWrites> {
+  doubles.alerts.length = 0
+  doubles.removalRejection = rejection
+  const writes: RemovalWrites = { action: [], identity: [], confirm: [] }
+  const held: { remove: (() => Promise<void>) | null } = { remove: null }
+  const partialState = {
+    setActionError: (value: string) => writes.action.push(value),
+    setError: (value: string) => writes.identity.push(value),
+    setConfirmRemoveHost: (value: boolean) => writes.confirm.push(value)
+  }
+  function Probe(): null {
+    const actions = useHostWorktreeActions({
+      client: null,
+      connState: 'connected',
+      embedded: false,
+      fetchWorktrees: () => Promise.resolve(),
+      forgetHostClient: () => {},
+      hostCapabilities: [],
+      hostId: 'host-a',
+      pathname: '/h/host-a',
+      router: useRouter(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal path reads exactly these three setters and `hostId`; no other member of the state is reachable from it.
+      state: partialState as unknown as HostScreenState
+    })
+    held.remove = actions.handleRemoveHost
+    return null
+  }
+  await act(async () => {
+    create(createElement(Probe))
+  })
+  await act(async () => {
+    await held.remove?.()
+  })
+  return writes
+}
+
 describe('a removal that failed', () => {
   it('keeps the list, the header and the overlays on screen', () => {
     // The confirm this failure re-opens lives in the overlays, so a screen that early-returned
     // would be asking the user to confirm against a view that is not rendering it.
     const tree = render({ error: '', actionError: 'Could not remove host. Please try again.' })
     expect(byName(tree, 'SafeAreaView')).toHaveLength(1)
+    expect(byName(tree, 'HostScreenHeader')).toHaveLength(1)
+    expect(byName(tree, 'HostWorkspaceList')).toHaveLength(1)
+    expect(byName(tree, 'HostScreenOverlays')).toHaveLength(1)
     expect(byName(tree, 'Text')).toEqual([])
   })
 
@@ -75,40 +119,7 @@ describe('a removal that failed', () => {
   })
 
   it('writes the transient surface and never the identity one, and raises no alert', async () => {
-    doubles.alerts.length = 0
-    const writes: { action: string[]; identity: string[]; confirm: boolean[] } = {
-      action: [],
-      identity: [],
-      confirm: []
-    }
-    const held: { remove: (() => Promise<void>) | null } = { remove: null }
-    const partialState = {
-      setActionError: (value: string) => writes.action.push(value),
-      setError: (value: string) => writes.identity.push(value),
-      setConfirmRemoveHost: (value: boolean) => writes.confirm.push(value)
-    }
-    function Probe(): null {
-      const actions = useHostWorktreeActions({
-        client: null,
-        connState: 'connected',
-        embedded: false,
-        fetchWorktrees: () => Promise.resolve(),
-        forgetHostClient: () => {},
-        hostId: 'host-a',
-        pathname: '/h/host-a',
-        router: useRouter(),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal path reads exactly these three setters and `hostId`; no other member of the state is reachable from it.
-        state: partialState as unknown as HostScreenState
-      })
-      held.remove = actions.handleRemoveHost
-      return null
-    }
-    await act(async () => {
-      create(createElement(Probe))
-    })
-    await act(async () => {
-      await held.remove?.()
-    })
+    const writes = await runRemoval(new Error('still paired'))
     expect(writes.action).toEqual(['Could not remove host. Please try again.'])
     expect(writes.identity).toEqual([])
     expect(writes.confirm).toEqual([true])
@@ -116,11 +127,12 @@ describe('a removal that failed', () => {
     expect(doubles.alerts).toEqual([])
   })
 
-  it('renders from the same module on both platforms, so one check covers each', () => {
-    // No `.web.tsx` sibling for either file: the page and the app run this exact tree, which is
-    // what makes the two render assertions above true of both.
-    for (const module of ['host-screen-view', 'host-workspace-list']) {
-      expect(existsSync(new URL(`./${module}.web.tsx`, import.meta.url)), module).toBe(false)
-    }
+  it('says where removal happens when the page refuses, and re-offers nothing', async () => {
+    // A refusal is not a failure: on the page there is no host list to remove from, so the copy
+    // names the app and the confirm this control would re-open stays shut.
+    const writes = await runRemoval(new PageHostRemovalUnavailableError())
+    expect(writes.action).toEqual(['Remove this host from the host list in the Orca app.'])
+    expect(writes.confirm).toEqual([])
+    expect(writes.identity).toEqual([])
   })
 })

@@ -5,7 +5,10 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import {
+  requestedAiVaultSessionDepth,
+  truncateAiVaultListResult
+} from '../../shared/ai-vault-session-depth'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -27,16 +30,12 @@ export function aiVaultScanIssueResult(args: {
   }
 }
 
-// A superseded scan has no findings to report; the flag tells the renderer to
-// keep the list it already has rather than paint this empty body.
+// Cancelled scans keep the existing list instead of repainting with this empty body.
 export function cancelledAiVaultListResult(): AiVaultListResult {
   return { sessions: [], issues: [], scannedAt: new Date().toISOString(), cancelled: true }
 }
 
-// Why: the serving-side scan is host-local and cached once for every caller
-// (desktop parent, web, mobile), so callers that address this host by a runtime
-// id get the cached result restamped on the way out instead of a per-host scan.
-// Mirrors the scanner's stamp recipe so ids stay stable across both paths.
+// Restamp the shared host-local cache for runtime callers, preserving the scanner's session-ID recipe.
 export function restampAiVaultListResult(
   result: AiVaultListResult,
   executionHostId: ExecutionHostId
@@ -59,9 +58,10 @@ export function restampAiVaultListResult(
 export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
   rawLimit: number | undefined,
-  unlimited = false
+  unlimited = false,
+  scopePaths: readonly string[] = []
 ): AiVaultListResult {
-  const limit = aiVaultScanLimit({ limit: rawLimit, unlimited })
+  const depth = requestedAiVaultSessionDepth({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
   const issues: AiVaultScanIssue[] = []
   for (const result of results) {
@@ -70,16 +70,18 @@ export function mergeAiVaultListResults(
     }
     issues.push(...result.issues)
   }
-  return {
-    sessions: [...byId.values()]
-      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-      .slice(0, limit),
-    issues,
-    // Why: a merge is not a new scan. Reminting here made every all-host cache
-    // hit look fresh to the renderer, which only skipped apply when scannedAt
-    // matched. Keep the latest input stamp so identical legs stay a no-op.
-    scannedAt: latestAiVaultScannedAt(results)
-  }
+  return truncateAiVaultListResult(
+    {
+      sessions: [...byId.values()].sort(
+        (left, right) => sessionSortTime(right) - sessionSortTime(left)
+      ),
+      issues,
+      // Reuse accepted scan times so unchanged host results cannot fabricate freshness.
+      scannedAt: latestAiVaultScannedAt(results)
+    },
+    depth,
+    scopePaths
+  )
 }
 
 function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
@@ -87,19 +89,12 @@ function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
   let latestMs = Number.NEGATIVE_INFINITY
   for (const result of results) {
     const stampMs = Date.parse(result.scannedAt)
-    // Remote legs carry their own clock and only `z.string()` validation. An
-    // unparsable or future stamp would pin the merged stamp above every local
-    // rescan and silently freeze the renderer's scannedAt equality guard.
-    // Compare parsed instants, not strings: `z.string()` does not pin the stamp
-    // to the exact `toISOString()` shape, and a legal variant (no milliseconds,
-    // a `+00:00` offset) orders wrongly under lexicographic compare.
+    // Reject invalid or future remote clocks; compare instants because ISO spellings can sort differently.
     if (Number.isNaN(stampMs) || stampMs > nowMs) {
       continue
     }
     latestMs = Math.max(latestMs, stampMs)
   }
-  // A merge has no single scan instant, so return the canonical form of the
-  // newest accepted one: echoing a winning leg's string made two legs at the
-  // same instant in different ISO shapes resolve by host-enumeration order.
+  // Canonicalize equal instants so host enumeration order cannot change the merged stamp.
   return new Date(latestMs === Number.NEGATIVE_INFINITY ? nowMs : latestMs).toISOString()
 }

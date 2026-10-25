@@ -4,7 +4,7 @@ import {
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/agent-status-projection'
 
 // Reference: the pre-change whole-array serialization, kept verbatim apart from the sort, which
 // is now a code-unit compare — the projection is only ever `===`-compared, never displayed, so it
@@ -13,6 +13,10 @@ import {
 // under test so a drifted constant cannot make this reference silently disagree for a reason
 // unrelated to the change.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
   return JSON.stringify(
     Object.entries(map)
@@ -25,20 +29,34 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
+        // A new turn can keep the state (child work held it open); its stamp alone must republish.
+        turnStartedAt: entry.turnStartedAt ?? null,
+        turnEndedAt: entry.turnEndedAt ?? null,
+        turnEndDisposition: entry.turnEndDisposition ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
           state: history.state,
           prompt: history.prompt,
           startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
+          interrupted: history.interrupted ?? null,
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        mainAgent: mainAgentKey(entry.mainAgent),
+        programStatus: entry.programStatus
+          ? [
+              entry.programStatus.state,
+              entry.programStatus.kind ?? null,
+              entry.programStatus.progress ?? null,
+              entry.programStatus.message ?? null
+            ]
+          : null
       }))
   )
 }
@@ -71,6 +89,7 @@ describe('mobile agent-status projection equivalence', () => {
     statusMaps.push({})
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { turnStartedAt: 1740000000500 }) })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
@@ -144,5 +163,58 @@ describe('mobile agent-status projection equivalence', () => {
     ).map((entry) => entry.paneKey)
     expect([...projected].sort()).toEqual([...localeCompareOrderedEntries].sort())
     expect(projected).toHaveLength(localeCompareOrderedEntries.length)
+  })
+
+  it('republishes a verdict change that leaves the interrupted flag as it was', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (live: 'success' | 'failure', history: 'success' | 'failure'): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'done',
+          mainAgent: { state: 'done', outcome: live, stateStartedAt: 1740000000000 },
+          stateHistory: [
+            {
+              state: 'done',
+              prompt: 'p',
+              startedAt: 1,
+              mainAgent: { state: 'done', outcome: history, stateStartedAt: 1 }
+            }
+          ]
+        })
+      })
+    expect(project('failure', 'success')).not.toBe(project('success', 'success'))
+    expect(project('success', 'failure')).not.toBe(project('success', 'success'))
+  })
+
+  it('republishes a main agent failing while its subagents keep the row working', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (outcome?: 'failure', stateStartedAt = 1740000000000): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'working',
+          mainAgent: { state: 'done', ...(outcome ? { outcome } : {}), stateStartedAt }
+        })
+      })
+    expect(project('failure')).not.toBe(project())
+    // The main agent's own clock dates the failure on mobile, so moving it republishes too.
+    expect(project('failure', 1740000001000)).not.toBe(project('failure'))
+  })
+})
+
+describe('mobile agent-status projection program-status facet', () => {
+  it('republishes on facet content but not on a new observedAt alone', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const facet = { state: 'working', progress: 10, observedAt: 1 }
+    const base = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: facet })
+    })
+    const reobserved = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: { ...facet, observedAt: 2 } })
+    })
+    const progressed = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: { ...facet, progress: 20 } })
+    })
+    expect(reobserved).toBe(base)
+    expect(progressed).not.toBe(base)
   })
 })

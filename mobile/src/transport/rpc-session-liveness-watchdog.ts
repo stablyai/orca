@@ -92,7 +92,9 @@ export class RpcSessionLivenessWatchdog {
     this.armIdle(identity)
   }
 
-  probeNow(identity: RpcSessionIdentity): void {
+  // decisiveTimeoutMs: one short probe whose first miss ends the session, for a
+  // link the OS may have killed while the app was suspended.
+  probeNow(identity: RpcSessionIdentity, decisiveTimeoutMs: number | null = null): void {
     if (this.identity !== identity || this.probing) {
       return
     }
@@ -104,7 +106,7 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.lastVoluntaryProbeAt = now
-    this.startProbe(identity)
+    this.startProbe(identity, decisiveTimeoutMs)
   }
 
   stop(identity: RpcSessionIdentity): void {
@@ -138,7 +140,7 @@ export class RpcSessionLivenessWatchdog {
     }, delayMs)
   }
 
-  private startProbe(identity: RpcSessionIdentity): void {
+  private startProbe(identity: RpcSessionIdentity, decisiveTimeoutMs: number | null = null): void {
     if (this.identity !== identity) {
       return
     }
@@ -155,27 +157,36 @@ export class RpcSessionLivenessWatchdog {
       this.terminateCurrent(identity, 'probe-send-failed')
       return
     }
-    this.timer = this.setTimer(() => this.handleProbeTimeout(identity, sentAt), this.probeTimeoutMs)
+    this.timer = this.setTimer(
+      () => this.handleProbeTimeout(identity, sentAt, decisiveTimeoutMs),
+      decisiveTimeoutMs ?? this.probeTimeoutMs
+    )
   }
 
-  private handleProbeTimeout(identity: RpcSessionIdentity, sentAt: number): void {
+  private handleProbeTimeout(
+    identity: RpcSessionIdentity,
+    sentAt: number,
+    decisiveTimeoutMs: number | null
+  ): void {
     this.timer = null
     if (this.identity !== identity) {
       return
     }
+    const timeoutMs = decisiveTimeoutMs ?? this.probeTimeoutMs
     const elapsedMs = this.now() - sentAt
-    if (elapsedMs < 0 || elapsedMs > this.probeTimeoutMs * 1.5) {
+    if (elapsedMs < 0 || elapsedMs > timeoutMs * 1.5) {
       console.log('[net] activity-probe unfair window skipped', {
         transport: this.options.transport,
         elapsedMs,
-        timeoutMs: this.probeTimeoutMs
+        timeoutMs
       })
-      this.startProbe(identity)
+      this.startProbe(identity, decisiveTimeoutMs)
       return
     }
     this.missedProbes += 1
-    if (this.missedProbes >= this.missedProbeLimit) {
-      this.terminateCurrent(identity, 'probe-timeout')
+    const missedProbeLimit = decisiveTimeoutMs === null ? this.missedProbeLimit : 1
+    if (this.missedProbes >= missedProbeLimit) {
+      this.terminateCurrent(identity, 'probe-timeout', missedProbeLimit)
       return
     }
     console.log('[net] activity-probe timeout tolerated', {
@@ -188,7 +199,8 @@ export class RpcSessionLivenessWatchdog {
 
   private terminateCurrent(
     identity: RpcSessionIdentity,
-    reason: LivenessTimeoutEvidence['reason']
+    reason: LivenessTimeoutEvidence['reason'],
+    missedProbeLimit = this.missedProbeLimit
   ): void {
     if (this.identity !== identity) {
       return
@@ -199,13 +211,13 @@ export class RpcSessionLivenessWatchdog {
     console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
       transport: this.options.transport,
       missedProbes: this.missedProbes,
-      missedProbeLimit: this.missedProbeLimit
+      missedProbeLimit
     })
     this.options.onTimeout?.({
       transport: this.options.transport,
       reason,
       missedProbes: this.missedProbes,
-      missedProbeLimit: this.missedProbeLimit,
+      missedProbeLimit,
       lastInboundAgeMs: Math.max(0, this.now() - this.lastInboundAt)
     })
     this.options.terminate(identity)

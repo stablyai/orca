@@ -10,12 +10,22 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../src/shared/agent-session-host-authority'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { runtimeStub } from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+import {
+  runtimeStub,
+  setAgentLaunchRecordStore
+} from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+import {
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-launch-runtime-capability'
+import {
+  launchAgentInExistingWorkspace,
+  reserveMobileAgentLaunch
+} from '../session/mobile-existing-agent-launch'
 
 const createStructuredSession = vi.fn()
 vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
@@ -30,14 +40,13 @@ beforeEach(async () => {
   createStructuredSession.mockReset()
   createStructuredSession.mockResolvedValue({ ok: true, value: { sessionId: 'session-1' } })
   directory = await mkdtemp(join(tmpdir(), 'orca-mobile-launch-replay-'))
-  store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only deps.store; structured session creation is the injected boundary above.
-  setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+  store = await openTestAgentSessionRecordStore(directory)
+  setAgentLaunchRecordStore(store)
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  setStructuredAgentSessionHost(null)
+  setAgentLaunchRecordStore(null)
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -160,5 +169,90 @@ describe('mobile launch retries through the host ledger', () => {
     expect(createStructuredSession).toHaveBeenCalledTimes(1)
     expect(launch.attempts).toHaveLength(2)
     expect(launch.attempts[1]).toEqual(launch.attempts[0])
+  })
+})
+
+describe('a + menu launch into an open workspace', () => {
+  it('reaches the host with the pane it reserved, once, across a lost reply', async () => {
+    const runtime = { ...runtimeStub(), getRuntimeId: () => 'runtime-1' }
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the launch handler and dispatcher metadata dependencies.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_LAUNCH_METHODS
+    })
+    const attempts: unknown[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the replay loop reaches only these transport members; requests use the real host dispatcher.
+    const client = {
+      getState: () => 'connected',
+      sendRequest: async (method: string, params: unknown) => {
+        attempts.push(params)
+        const response = await dispatcher.dispatch({
+          id: `request-${attempts.length}`,
+          authToken: 'token',
+          method,
+          params
+        })
+        if (attempts.length === 1) {
+          throw markRpcDeliveryUnknown(new Error('Request timed out'))
+        }
+        return response
+      }
+    } as unknown as RpcClient
+    const reservation = reserveMobileAgentLaunch('aider')
+
+    const launched = await launchAgentInExistingWorkspace({
+      client,
+      hostCapabilities: [
+        AGENT_LAUNCH_RUNTIME_CAPABILITY,
+        AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+      ],
+      worktreeId: 'wt-7',
+      agent: 'aider',
+      reservation
+    })
+
+    expect(launched).toMatchObject({
+      kind: 'launched',
+      result: { outcome: { kind: 'terminal', handle: 'term_1' } }
+    })
+    // The replay carries the same ids, so the host answers it from its ledger.
+    expect(attempts).toHaveLength(2)
+    expect(attempts[1]).toEqual(attempts[0])
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal.mock.calls[0]![1]).toMatchObject({
+      tabId: reservation.pane.tabId,
+      leafId: reservation.pane.leafId,
+      requireFreshPane: true
+    })
+  })
+
+  it('reaches the host with a chat reservation its schema accepts', async () => {
+    const runtime = { ...runtimeStub(), getRuntimeId: () => 'runtime-1' }
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the launch handler and dispatcher metadata dependencies.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_LAUNCH_METHODS
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reaches only these transport members; requests use the real host dispatcher.
+    const client = {
+      getState: () => 'connected',
+      sendRequest: async (method: string, params: unknown) =>
+        dispatcher.dispatch({ id: 'request-1', authToken: 'token', method, params })
+    } as unknown as RpcClient
+    const reservation = reserveMobileAgentLaunch('claude')
+
+    const launched = await launchAgentInExistingWorkspace({
+      client,
+      hostCapabilities: [
+        AGENT_LAUNCH_RUNTIME_CAPABILITY,
+        AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+      ],
+      worktreeId: 'wt-7',
+      agent: 'claude',
+      reservation
+    })
+
+    expect(reservation.sessionId).toMatch(/^claude_/)
+    expect(launched).toMatchObject({ kind: 'launched' })
   })
 })

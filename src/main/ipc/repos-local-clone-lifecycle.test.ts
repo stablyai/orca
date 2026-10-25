@@ -25,17 +25,12 @@ vi.mock('./registered-worktree-roots-cache', () =>
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
-vi.mock('../providers/ssh-filesystem-dispatch', () =>
-  moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
-)
-vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
-vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { isGitRepoAsync } from '../git/repo'
 import { listSubmodulePaths } from '../git/status'
 import {
   createMockCloneProcess,
@@ -43,6 +38,7 @@ import {
   resetLocalRepoMocks,
   waitForAssertion
 } from './repos-remote-test-harness'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 const {
   handleMock,
@@ -53,6 +49,32 @@ const {
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock
 } = reposMocks
+
+type GitExecOptions = { cwd?: unknown; signal?: unknown }
+
+// The shared spy is typed for exec's (argv, cwd); gitExecFileAsync gets (argv, options).
+function readGitExecOptions(call: unknown[]): GitExecOptions {
+  const options = call[1]
+  if (typeof options !== 'object' || options === null) {
+    return {}
+  }
+  return {
+    cwd: 'cwd' in options ? options.cwd : undefined,
+    signal: 'signal' in options ? options.signal : undefined
+  }
+}
+
+function answerAsCloneOf(path: string, originUrl: string): void {
+  gitExecFileAsyncMock.mockImplementation((...call: unknown[]) => {
+    const args = call[0]
+    if (!Array.isArray(args) || readGitExecOptions(call).cwd !== path) {
+      return Promise.reject(new Error('fatal: not a git repository'))
+    }
+    const stdout =
+      args[0] === 'rev-parse' ? '\n0123abcd\n' : args[0] === 'config' ? `${originUrl}\n` : ''
+    return Promise.resolve({ stdout, stderr: '' })
+  })
+}
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()
@@ -134,7 +156,11 @@ describe('repos:add + repos:clone', () => {
     expect(configReads).toHaveLength(2)
   })
 
-  it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
+  it.each([
+    { replacement: false, extraWorkspace: false },
+    { replacement: true, extraWorkspace: false },
+    { replacement: true, extraWorkspace: true }
+  ])('uses the current folder after clone proof: %j', async ({ replacement, extraWorkspace }) => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
     const existing = {
@@ -145,8 +171,21 @@ describe('repos:add + repos:clone', () => {
       addedAt: 1,
       kind: 'folder'
     }
-    const upgraded = { ...existing, kind: 'git' as const }
+    const current = replacement
+      ? { ...existing, id: 'replacement-folder', badgeColor: '#2563eb' }
+      : existing
+    const upgraded = { ...current, kind: 'git' as const }
     mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getAllWorktreeMeta.mockReturnValue({})
+    vi.mocked(isGitRepoAsync).mockImplementationOnce(async () => {
+      mockStore.getRepos.mockReturnValue([current])
+      if (extraWorkspace) {
+        mockStore.getAllWorktreeMeta.mockReturnValue({
+          [`${current.id}::${clonePath}::workspace:extra`]: {}
+        })
+      }
+      return true
+    })
     mockStore.updateRepo.mockReturnValue(upgraded)
 
     const result = await handlers.get('repos:clone')!(null, {
@@ -154,15 +193,49 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, {
-      kind: 'git',
-      projectHostSetupMethod: 'cloned'
-    })
-    expect(result).toEqual(upgraded)
-    expect(result).toHaveProperty('badgeColor', '#8b5cf6')
-    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, upgraded)
+    if (extraWorkspace) {
+      expect(mockStore.updateRepo).not.toHaveBeenCalled()
+      expect(result).toEqual(current)
+    } else {
+      expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(current.id), {
+        kind: 'git',
+        folderUpgradeGitRootPath: clonePath,
+        projectHostSetupMethod: 'cloned'
+      })
+      expect(result).toEqual(upgraded)
+    }
+    expect(result).toHaveProperty('badgeColor', current.badgeColor)
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, result)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('registers the completed clone with a fresh id when its saved folder is removed during proof', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const existing = {
+      id: 'removed-folder',
+      path: clonePath,
+      displayName: 'orca',
+      badgeColor: '#8b5cf6',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    vi.mocked(isGitRepoAsync).mockImplementationOnce(async () => {
+      mockStore.getRepos.mockReturnValue([])
+      return true
+    })
+
+    const result = await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    expect(result).not.toHaveProperty('id', existing.id)
+    expect(result).toMatchObject({ path: clonePath, kind: 'git' })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(result)
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
   })
 
   it('rejects a dot-segment URL before creating the destination or spawning git', async () => {
@@ -245,7 +318,7 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    // Without this env, a clone needing auth makes Git Credential Manager pop and loop its OAuth window on Windows.
+    // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning.
     expect(gitSpawnMock).toHaveBeenCalledWith(
       ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
       expect.objectContaining({
@@ -495,6 +568,8 @@ describe('repos:add + repos:clone', () => {
   it('dedupes retry when abort races with a successful clone close', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
+    // The queued caller must prove the first clone finished before reusing its registration.
+    answerAsCloneOf(clonePath, 'https://example.com/orca.git')
     const repos: unknown[] = []
     mockStore.getRepos.mockImplementation(() => repos)
     mockStore.addRepo.mockImplementation((repo: unknown) => {
@@ -529,6 +604,8 @@ describe('repos:add + repos:clone', () => {
   it('serializes concurrent clones for the same target', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
+    // The queued caller must prove the first clone finished before reusing its registration.
+    answerAsCloneOf(clonePath, 'https://example.com/orca.git')
     const repos: unknown[] = []
     mockStore.getRepos.mockImplementation(() => repos)
     mockStore.addRepo.mockImplementation((repo: unknown) => {
@@ -613,5 +690,103 @@ describe('repos:add + repos:clone', () => {
     await expect(clonePromise).rejects.toThrow('Clone aborted')
 
     expect(existsSync(replacementFile)).toBe(true)
+  })
+
+  describe('a saved project already at the clone path', () => {
+    const url = 'https://example.com/orca.git'
+    beforeEach(() => {
+      gitExecFileAsyncMock.mockReset()
+    })
+    const savedProject = (path: string, extra: Record<string, unknown> = {}) => ({
+      id: 'saved-project',
+      path,
+      displayName: 'orca',
+      badgeColor: '#fff',
+      addedAt: 1,
+      kind: 'git',
+      ...extra
+    })
+    const identity = (canonicalKey: string) => ({
+      canonicalKey,
+      remoteName: 'origin',
+      remoteUrl: `https://${canonicalKey}.git`
+    })
+    it('clones again when the saved project was this repo but its folder is gone', async () => {
+      const destination = await createTempRoot()
+      const clonePath = join(destination, 'orca')
+      const saved = savedProject(clonePath, { gitRemoteIdentity: identity('example.com/orca') })
+      mockStore.getRepos.mockReturnValue([saved])
+      gitExecFileAsyncMock.mockRejectedValue(new Error('spawn ENOENT'))
+
+      await expect(handlers.get('repos:clone')!(null, { url, destination })).resolves.toBe(saved)
+
+      expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+      // Recreated project folders invalidate both worktree-root preparation and cached authorization.
+      expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, saved)
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+    })
+
+    it('refuses, naming the project, when the saved project was a different repo', async () => {
+      const destination = await createTempRoot()
+      const clonePath = join(destination, 'orca')
+      const saved = savedProject(clonePath, {
+        gitRemoteIdentity: identity('github.com/stablyai/orca')
+      })
+      mockStore.getRepos.mockReturnValue([saved])
+      answerAsCloneOf(clonePath, 'https://github.com/stablyai/orca.git')
+
+      await expect(
+        handlers.get('repos:clone')!(null, { url: 'https://github.com/me/orca.git', destination })
+      ).rejects.toThrow('"orca" is already an Orca project')
+
+      expect(gitSpawnMock).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      { connectionId: 'conn-1' },
+      { executionHostId: 'runtime:env-1' },
+      { executionHostId: 'runtime:env-1', kind: 'folder' }
+    ])(
+      'does not treat a saved remote project at the same path as the local clone: %j',
+      async (host) => {
+        const destination = await createTempRoot()
+        const clonePath = join(destination, 'orca')
+        const remoteProject = savedProject(clonePath, host)
+        mockStore.getRepos.mockReturnValue([remoteProject])
+        gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+        const result = await handlers.get('repos:clone')!(null, { url, destination })
+
+        expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+        expect(result).not.toBe(remoteProject)
+        expect(mockStore.addRepo).toHaveBeenCalledWith(expect.objectContaining({ path: clonePath }))
+      }
+    )
+
+    it('stops without cloning when cancelled while git checks the saved folder', async () => {
+      const destination = await createTempRoot()
+      const clonePath = join(destination, 'orca')
+      mockStore.getRepos.mockReturnValue([
+        savedProject(clonePath, { gitRemoteIdentity: identity('example.com/orca') })
+      ])
+      gitExecFileAsyncMock.mockImplementation(
+        (...call: unknown[]) =>
+          new Promise((_resolve, reject) => {
+            const signal = readGitExecOptions(call).signal
+            if (signal instanceof AbortSignal) {
+              signal.addEventListener('abort', () => reject(new Error('aborted')))
+            }
+          })
+      )
+
+      const clonePromise = handlers.get('repos:clone')!(null, { url, destination })
+      await waitForAssertion(() => expect(gitExecFileAsyncMock).toHaveBeenCalled())
+      await handlers.get('repos:cloneAbort')!(null, undefined)
+
+      await expect(clonePromise).rejects.toThrow('Clone aborted')
+      expect(gitSpawnMock).not.toHaveBeenCalled()
+    })
   })
 })

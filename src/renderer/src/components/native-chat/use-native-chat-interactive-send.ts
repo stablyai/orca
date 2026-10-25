@@ -1,9 +1,10 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
+  nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../../shared/native-chat-agent-support'
@@ -33,12 +34,17 @@ export type NativeChatInteractiveSend = {
     prompt: AskPrompt,
     selections: AskAnswerSelection[],
     onDeliverySettled?: (delivered: boolean) => void
-  ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
+  ) => { settleAfterMs: number }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
+  /** `sendRaw` that resolves to whether the write was acknowledged; unknown delivery is false. */
+  sendRawVerified: (raw: string) => Promise<boolean>
   /** Stop delayed writes without interrupting the agent. */
   cancelPending: () => void
-  /** Send ESC to interrupt — cancels a question / denies an approval. */
+  /** Reject the active question without requesting session interruption; resolves to whether
+   *  the Escape was acknowledged. */
+  cancelAsk: () => Promise<boolean>
+  /** Interrupt the active turn. */
   cancel: () => void
 }
 
@@ -46,12 +52,11 @@ export type NativeChatInteractiveSend = {
  * Reuse the desktop composer's exact send path for the interactive cards:
  * resolve this tab's live ptyId + runtime owner settings, then write bytes via
  * `sendRuntimePtyInput` (which branches local pty:write vs remote runtime RPC,
- * so SSH panes work unchanged). Claude and Codex answers use their respective
+ * so SSH panes work unchanged). Selector answers use their respective
  * selector keystrokes via `sendNativeChatAskAnswer`; other agents still go through
  * `sendNativeChatMessage`. Control strings (option digits, ESC) are written raw.
  */
 export function useNativeChatInteractiveSend(
-  terminalTabId: string,
   paneKey: string,
   targetPtyId: string | null,
   agent: AgentType
@@ -66,19 +71,26 @@ export function useNativeChatInteractiveSend(
   }, [])
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
-  useLayoutEffect(
-    () => cancelInFlight,
-    [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId]
-  )
+  useLayoutEffect(() => cancelInFlight, [agent, cancelInFlight, paneKey, targetPtyId])
 
   const sendRaw = useCallback(
     (raw: string) => {
       if (!targetPtyId) {
         return
       }
-      sendRuntimePtyInput(getSettingsForAgentTabRuntimeOwner(terminalTabId), targetPtyId, raw)
+      sendRuntimePtyInput(targetPtyId, raw, 'driving')
     },
-    [terminalTabId, targetPtyId]
+    [targetPtyId]
+  )
+
+  const sendRawVerified = useCallback(
+    (raw: string): Promise<boolean> =>
+      targetPtyId
+        ? sendRuntimePtyInputVerified(targetPtyId, raw, 'driving', {
+            requireWriteSettlement: true
+          }).catch(() => false)
+        : Promise.resolve(false),
+    [targetPtyId]
   )
 
   const sendAnswer = useCallback(
@@ -86,16 +98,19 @@ export function useNativeChatInteractiveSend(
       prompt: AskPrompt,
       selections: AskAnswerSelection[],
       onDeliverySettled?: (delivered: boolean) => void
-    ): { settleAfterMs: number; waitsForVerifiedDelivery: boolean } => {
+    ): { settleAfterMs: number } => {
+      if (nativeChatAskRequiresTerminal(agent)) {
+        cancelInFlight()
+        onDeliverySettled?.(false)
+        return { settleAfterMs: 0 }
+      }
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
-        return { settleAfterMs: 0, waitsForVerifiedDelivery: false }
+        return { settleAfterMs: 0 }
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
-      const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-      // Claude and Codex ignore pasted labels but have different selector state
-      // machines; Grok commits pasted text. OpenClaude follows Claude's path.
-      const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
+      // Selector TUIs ignore pasted labels; Codex uses a different key sequence.
+      const stepsAnswer = !prompt.replyAsMessage && shouldStepNativeChatAskAnswer(agent)
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
@@ -107,55 +122,65 @@ export function useNativeChatInteractiveSend(
         ? useAppStore.getState().agentStatusByPaneKey[paneKey]
         : undefined
       let settledHandle: NativeChatSendHandle | null = null
-      const onSettled = stepsAnswer
-        ? (delivered: boolean): void => {
-            if (settledHandle && inFlightRef.current === settledHandle) {
-              // Why: a completed verified send otherwise retains its timers,
-              // promises, and prompt callback until the next send or unmount.
-              inFlightRef.current = null
-            }
-            if (delivered) {
-              inferQuestionAnsweredFromCurrentStatus({
-                paneKey,
-                getStatusEntry: () => questionStatusBaseline,
-                inferQuestionAnswered: (request) =>
-                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
-                    console.warn('[agent-question] native-chat inference failed:', err)
-                    return false
-                  })
+      const onSettled = (delivered: boolean): void => {
+        if (settledHandle && inFlightRef.current === settledHandle) {
+          // Why: a completed verified send otherwise retains its timers,
+          // promises, and prompt callback until the next send or unmount.
+          inFlightRef.current = null
+        }
+        if (delivered && stepsAnswer) {
+          inferQuestionAnsweredFromCurrentStatus({
+            paneKey,
+            getStatusEntry: () => questionStatusBaseline,
+            inferQuestionAnswered: (request) =>
+              window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                console.warn('[agent-question] native-chat inference failed:', err)
+                return false
               })
-            }
-            onDeliverySettled?.(delivered)
-          }
-        : undefined
+          })
+        }
+        onDeliverySettled?.(delivered)
+      }
       const handle: NativeChatSendHandle = stepsAnswer
         ? sendNativeChatAskAnswer(
-            settings,
             targetPtyId,
             buildsCodexAnswer
               ? buildCodexAskAnswerKeys(prompt, selections)
               : buildAskAnswerKeys(prompt, selections),
             onSettled
           )
-        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+        : sendNativeChatMessage(targetPtyId, formatAskAnswer(prompt, selections), {
+            onDeliverySettled: onSettled
+          })
       // Why: native-chat answer writes bypass xterm.onData. Infer only after
       // every paced selector write has fired, so an early digit in a multi-step
       // answer cannot dismiss the wait or cancel the remaining writes.
       settledHandle = handle
       inFlightRef.current = handle
       return {
-        settleAfterMs: handle.settleAfterMs,
-        waitsForVerifiedDelivery: onSettled !== undefined
+        settleAfterMs: handle.settleAfterMs
       }
     },
-    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
+    [paneKey, targetPtyId, agent, cancelInFlight]
   )
 
-  // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.
+  const cancelAsk = useCallback(() => {
+    cancelInFlight()
+    if (nativeChatAskRequiresTerminal(agent)) {
+      return Promise.resolve(false)
+    }
+    return sendRawVerified(ESC)
+  }, [agent, cancelInFlight, sendRawVerified])
+
   const cancel = useCallback(() => {
     cancelInFlight()
+    if (resolveNativeChatTranscriptAgent(agent) === 'opencode' && targetPtyId) {
+      // OpenCode confirms interruption with a second Escape; pace writes like mobile Stop.
+      inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
+      return
+    }
     sendRaw(ESC)
-  }, [cancelInFlight, sendRaw])
+  }, [agent, cancelInFlight, sendRaw, targetPtyId])
 
-  return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }
+  return { sendAnswer, sendRaw, sendRawVerified, cancelPending: cancelInFlight, cancelAsk, cancel }
 }

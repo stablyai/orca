@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -238,7 +239,7 @@ export function RightPanelCommentComposer({
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
-      <textarea
+      <ImeTextarea
         ref={setTextareaRef}
         value={body}
         rows={3}

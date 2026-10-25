@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
-import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils'
+import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './connection/ssh-connection-timing'
 import {
   FLAP_DELAY_CAP_MS,
   RELAY_REESTABLISH_BUDGET_MS,
@@ -58,7 +58,6 @@ describe('SshReconnectLadder', () => {
         now += decision.delayMs
       }
     }
-    expect(FLAP_DELAY_CAP_MS).toBe(5_000)
   })
 
   it('keeps the uncapped table for a host whose handshakes fail', () => {

@@ -15,7 +15,7 @@ import {
   type WorkspaceCreateTaskItem
 } from './workspace-create-params'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
-import type { WorktreeCreateAgentLaunch } from './agent-launch-worktree-create'
+import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 
 // The agent bundle the modal resolved: `choice` drives launch resolution — the
@@ -77,6 +77,16 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
         type: item.type === 'mr' ? 'mr' : 'issue',
         repoId: item.repoId ?? targetRepoId,
         number: item.number,
+        title: item.title,
+        url: item.url
+      }
+    }
+  }
+  if (item.provider === 'jira') {
+    return {
+      provider: 'jira',
+      source: {
+        key: item.jiraIdentifier ?? '',
         title: item.title,
         url: item.url
       }

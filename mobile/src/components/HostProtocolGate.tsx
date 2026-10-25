@@ -1,28 +1,28 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
-import { useHostClient } from '../transport/client-context'
-import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
+import { useHostClient } from '../transport/host-client-hooks'
+import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
+import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
   hostId: string | undefined
   children: ReactNode
-}
-
-const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
-
-export function useHostProtocolGates(): HostStatusGates {
-  const gates = useContext(HostStatusGatesContext)
-  if (!gates) {
-    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
-  }
-  return gates
+  /** For a route drawn over another screen: nothing shows while status is pending, not a spinner. */
+  transparentWhilePending?: boolean
+  /** In place of the block screen, for a route that hands a blocked host to the host list. */
+  blocked?: ReactNode
 }
 
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
 // whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
-export function HostProtocolGate({ hostId, children }: Props) {
+export function HostProtocolGate({
+  hostId,
+  children,
+  transparentWhilePending = false,
+  blocked: blockedView
+}: Props) {
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -33,6 +33,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
   const blocked = compatVerdict.kind === 'blocked'
   const pending = statusPending && resolvedHostIdRef.current !== hostKey
   const holdBack = pending && mountedHostIdRef.current !== hostKey
+  const covered = pending && !transparentWhilePending
 
   // Why: React can replay or discard a render, so the latches record committed
   // outcomes only — a discarded children render must not count as mounted.
@@ -49,6 +50,9 @@ export function HostProtocolGate({ hostId, children }: Props) {
     }
   })
 
+  if (holdBack && transparentWhilePending) {
+    return null
+  }
   if (holdBack) {
     // Why: nothing is mounted yet for this host, so hold the routes back entirely
     // rather than letting them mount (and fire their connect RPCs) pre-verdict.
@@ -62,7 +66,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
     )
   }
   if (blocked) {
-    return <ProtocolBlockScreen verdict={compatVerdict} />
+    return blockedView ?? <ProtocolBlockScreen verdict={compatVerdict} />
   }
   // Why: the host sidebar needs the same status fields; sharing the result avoids a second status.get per route.
   return (
@@ -72,11 +76,11 @@ export function HostProtocolGate({ hostId, children }: Props) {
           style={styles.host}
           // Why: the overlay blocks in-tree touches but TalkBack can still walk the covered
           // stack; hide it while pending (Android counterpart of the overlay's iOS modal flag).
-          importantForAccessibility={pending ? 'no-hide-descendants' : 'auto'}
+          importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
         >
           {children}
         </View>
-        {pending ? (
+        {covered ? (
           // Why: once the stack is mounted, unmounting it for a pending status.get destroys
           // in-flight nested navigation, so cover it instead. Mount effects underneath still
           // run — they wait for connState 'connected' and every capability-dependent call

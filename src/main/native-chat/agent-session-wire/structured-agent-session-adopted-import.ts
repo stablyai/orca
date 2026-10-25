@@ -1,7 +1,11 @@
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError,
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
-import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
   importLegacyTranscriptIntoJournal,
@@ -19,15 +23,18 @@ export async function prepareAdoptedTranscript(
   } catch (error) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_identity_required',
-        message: error instanceof Error ? error.message : String(error)
-      }
+      refusal: isAgentSessionRefusalError(error)
+        ? error.refusal
+        : refuse(
+            'agent_session_identity_required',
+            { reason: 'transcriptUnreadable' },
+            error instanceof Error ? error.message : String(error)
+          )
     }
   }
 }
 
-// Validate source input before a new record can claim the provider conversation.
+// Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
   params: AgentSessionAttachParams
 ): Promise<JournalReplacementItem[] | null> {
@@ -36,39 +43,47 @@ async function readAdoptedTranscript(
     return null
   }
   if (!adopt.transcriptPath) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptNotFound'
+    })
   }
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
-    options: { filePath: adopt.transcriptPath }
+    sessionId: adopt.providerHandle.nativeId,
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: prepared.sourceEmpty ? 'transcriptNotFound' : 'transcriptUnreadable'
+    })
   }
   return prepared.items
 }
 
-// Import before publication so the first visible chat agrees with the provider's resumed context.
+// Import before publication so visible history agrees with resumed provider context.
 export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
+  prepared: JournalReplacementItem[] | null,
+  options: { uncommittedCreate?: true } = {}
 ): Promise<void> {
-  try {
-    await applyAdoptedTranscript(params, attached, record, prepared)
-  } catch (error) {
-    // Publication has not taken ownership of this provisional journal yet.
-    await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
-    throw error
+  if (options.uncommittedCreate) {
+    // Rolled-back creates may leave unowned imported history.
+    if (prepared || attached.journal.cursor().sequence > 1) {
+      await attached.journal.replaceEpochItems(
+        params.adopt ? 'legacy_import' : 'session_created',
+        record.lease.runtimeFence,
+        prepared ?? []
+      )
+    }
+    return
   }
+  // Failed import must not close the conversation-owned journal.
+  await applyAdoptedTranscript(params, attached, record, prepared)
 }
 
 async function applyAdoptedTranscript(
@@ -78,7 +93,7 @@ async function applyAdoptedTranscript(
   prepared: JournalReplacementItem[] | null
 ): Promise<void> {
   const adopt = params.adopt
-  // A new journal contains only its epoch row; replay must preserve subsequent durable writes.
+  // Preserve durable writes after the initial epoch row.
   if (!adopt || attached.journal.cursor().sequence > 1) {
     return
   }
@@ -87,24 +102,24 @@ async function applyAdoptedTranscript(
     return
   }
   if (!adopt.transcriptPath) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptNotFound'
+    })
   }
   const imported = await importLegacyTranscriptIntoJournal({
     journal: attached.journal,
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+    sessionId: adopt.providerHandle.nativeId,
     fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath }
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!imported.ok) {
     throw new Error(imported.error)
   }
-  // `replaced: false` means the transcript decoded to nothing. The row promised a conversation and
-  // the provider resumed one, so an empty journal here is a disagreement, not an empty chat.
+  // Empty decode contradicts the adopted provider conversation; refuse rather than show an empty chat.
   if (!imported.replaced) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptUnreadable'
+    })
   }
 }

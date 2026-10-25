@@ -17,8 +17,7 @@ type TestActiveView = 'terminal' | 'tasks'
 const store = {
   settings: {
     activeRuntimeEnvironmentId: null as string | null,
-    experimentalNativeChat: undefined as boolean | undefined,
-    openAgentTabsInChatByDefault: undefined as boolean | undefined
+    experimentalNativeChat: undefined
   },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
@@ -63,7 +62,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: vi.fn(), success: vi.fn() }
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -197,7 +196,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       undefined,
       undefined,
-      undefined
+      {}
     )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {

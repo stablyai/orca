@@ -12,6 +12,8 @@ export type TreeNode = {
   relativePath: string
   isDirectory: boolean
   isSymlink?: boolean
+  /** Inferred from an opened link, not the parent's latest host listing. */
+  isDirectoryFromOpenedLink?: boolean
   depth: number
   /** Host snapshot that produced this node. Destructive actions fail closed without it. */
   operationOwner?: FileExplorerOperationOwner
@@ -19,6 +21,7 @@ export type TreeNode = {
 
 /** Why no `loading` here: see file-explorer-loading-dirs.ts — identity changes re-walk the tree. */
 export type DirCache = {
+  error?: string
   children: TreeNode[]
   operationOwner?: FileExplorerOperationOwner
 }

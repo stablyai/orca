@@ -49,7 +49,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       spawnCmd: `${installBin}\\idea64.exe`,
       spawnArgs: ['C:\\workspaces\\orca']
     })
-    // Why: a bare PATH `idea64` may belong to a different, stale install.
+    // A bare idea64 on PATH may belong to a different install.
     expect(resolveCliCommandMock).toHaveBeenCalledWith('idea', { platform: 'win32' })
     expect(resolveCliCommandMock).not.toHaveBeenCalledWith('idea64', expect.anything())
   })
@@ -173,7 +173,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
-  // Why: `start` re-parses argv, so only JetBrains shims may take that path.
+  // start re-parses argv; reserve it for shims that need detachment.
   it.each([
     ['code', 'C:\\Tools\\code.cmd', ['C:\\workspaces\\orca']],
     [
@@ -405,14 +405,44 @@ describe('resolveExternalEditorLaunchSpec', () => {
     }
   )
 
+  it.each([
+    ['C:\\Tools\\cursor.exe', '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project', 'wsl+Ubuntu'],
+    [
+      'C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd',
+      '\\\\wsl$\\Debian\\home\\ada\\project',
+      'wsl+Debian'
+    ]
+  ])('opens WSL UNC workspaces with %s in a new WSL remote window', (command, pathValue, auth) => {
+    expect(resolveExternalEditorLaunchSpec(command, pathValue, { platform: 'win32' })).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: command,
+      spawnArgs: ['--new-window', '--remote', auth, '/home/ada/project']
+    })
+  })
+
+  it.each(['darwin', 'linux'] as const)(
+    'keeps WSL-looking Cursor paths local on %s',
+    (platform) => {
+      const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
+      expect(resolveExternalEditorLaunchSpec('cursor', pathValue, { platform }).spawnArgs).toEqual([
+        '--new-window',
+        pathValue
+      ])
+    }
+  )
+
+  it('keeps non-WSL Windows paths local for Cursor', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('C:\\Tools\\cursor.exe', '\\\\server\\share\\project', {
+        platform: 'win32'
+      }).spawnArgs
+    ).toEqual(['--new-window', '\\\\server\\share\\project'])
+  })
+
   it('does not add VS Code remote arguments to other editors', () => {
     const pathValue = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\project'
 
-    expect(
-      resolveExternalEditorLaunchSpec('C:\\Tools\\cursor.exe', pathValue, {
-        platform: 'win32'
-      }).spawnArgs
-    ).toEqual(['--new-window', pathValue])
     expect(
       resolveExternalEditorLaunchSpec('C:\\Tools\\codium.exe', pathValue, {
         platform: 'win32'

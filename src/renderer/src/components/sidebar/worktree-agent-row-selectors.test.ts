@@ -15,7 +15,6 @@ import {
   EMPTY_TERMINAL_LAYOUTS,
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
-  selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
@@ -336,82 +335,6 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     }
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([])
-  })
-})
-
-describe('selectRuntimeAgentOrchestrationForWorktree', () => {
-  it('includes child orchestration metadata when only the parent tab is in the worktree', () => {
-    const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
-    const state = {
-      tabsByWorktree: {
-        'wt-1': [makeTab('tab-1')]
-      },
-      agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
-      runtimeAgentOrchestrationByPaneKey: {
-        [childPaneKey]: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          parentPaneKey: PANE_KEY_1
-        }
-      }
-    }
-
-    expect(selectRuntimeAgentOrchestrationForWorktree(state, 'wt-1')).toEqual({
-      [childPaneKey]: state.runtimeAgentOrchestrationByPaneKey[childPaneKey]
-    })
-  })
-
-  it('includes child orchestration metadata for a worktree-attributed live row without tab membership', () => {
-    const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
-    const childEntry = makeEntry(childPaneKey, 1000, {
-      worktreeId: 'wt-1'
-    })
-    const state = {
-      tabsByWorktree: {
-        'wt-1': []
-      },
-      agentStatusByPaneKey: {
-        [childPaneKey]: childEntry
-      },
-      retainedAgentsByPaneKey: {},
-      runtimeAgentOrchestrationByPaneKey: {
-        [childPaneKey]: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          parentPaneKey: PANE_KEY_1
-        }
-      }
-    }
-
-    expect(selectRuntimeAgentOrchestrationForWorktree(state, 'wt-1')).toEqual({
-      [childPaneKey]: state.runtimeAgentOrchestrationByPaneKey[childPaneKey]
-    })
-  })
-
-  it('includes child orchestration metadata for a retained worktree row without tab membership', () => {
-    const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
-    const retainedChild = makeRetained(childPaneKey, 'wt-1', 1000)
-    const state = {
-      tabsByWorktree: {
-        'wt-1': []
-      },
-      agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {
-        [childPaneKey]: retainedChild
-      },
-      runtimeAgentOrchestrationByPaneKey: {
-        [childPaneKey]: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          parentPaneKey: PANE_KEY_1
-        }
-      }
-    }
-
-    expect(selectRuntimeAgentOrchestrationForWorktree(state, 'wt-1')).toEqual({
-      [childPaneKey]: state.runtimeAgentOrchestrationByPaneKey[childPaneKey]
-    })
   })
 })
 

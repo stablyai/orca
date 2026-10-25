@@ -1,5 +1,5 @@
 const { randomBytes } = require('node:crypto')
-const { writeSync } = require('node:fs')
+const { existsSync, writeSync } = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
 
@@ -73,10 +73,28 @@ function buildGrandchildLaunch(channel, fixtureToken) {
   }
 }
 
-function startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir) {
-  const { spawnProcess } = require(
-    path.join(resourcesDir, 'app.asar.unpacked', 'out', 'shared', 'child-process', 'run-process.js')
+// Prefer the public package extraResources stages; only packages that predate it ship the private out/ copy.
+function packagedProcessHostPath(resourcesDir) {
+  const packageDir = path.join(resourcesDir, 'node_modules', '@orca', 'process-host')
+  if (existsSync(path.join(packageDir, 'package.json'))) {
+    return packageDir
+  }
+  // A present package without its manifest is broken output, not an older layout.
+  if (existsSync(packageDir)) {
+    throw new Error(`packaged @orca/process-host has no package.json: ${packageDir}`)
+  }
+  return path.join(
+    resourcesDir,
+    'app.asar.unpacked',
+    'out',
+    'shared',
+    'child-process',
+    'run-process.js'
   )
+}
+
+function startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir) {
+  const { spawnProcess } = require(packagedProcessHostPath(resourcesDir))
   const launch = buildGrandchildLaunch(channel, fixtureToken)
   const child = spawnProcess({
     ...launch,
@@ -429,6 +447,7 @@ module.exports = {
   buildGrandchildLaunch,
   createFixtureServer,
   isOneShotMode,
+  packagedProcessHostPath,
   reportFixtureObservation
 }
 

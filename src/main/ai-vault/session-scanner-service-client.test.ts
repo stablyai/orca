@@ -14,7 +14,6 @@ const SESSION_SEARCH_ON: AiVaultSessionSearchInit = {
   roots: {}
 }
 
-/** Every fork the client makes, so a respawn can be told from the first start. */
 function setupChildren(policy: () => AiVaultSessionSearchInit | null): {
   children: AiVaultServiceTestChild[]
   client: AiVaultScannerServiceClient
@@ -250,8 +249,7 @@ describe('AiVaultScannerServiceClient', () => {
       },
       init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
-    // Each request retries its cold start once, so two requests spend the three
-    // faults the circuit breaker needs.
+    // Two requests exhaust three startup faults because each retries once.
     const first = client.request({ type: 'request', operation: 'titles', requests: [] })
     vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
     await Promise.resolve()
@@ -312,8 +310,6 @@ describe('AiVaultScannerServiceClient', () => {
     await Promise.resolve()
     vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
 
-    // The scan owns liveness through its own 130s deadline; killing the child
-    // here would abort it and burn a slot toward the restart circuit.
     await expect(invalidation).resolves.toBeUndefined()
     expect(child.killed).toBe(false)
 
@@ -414,9 +410,6 @@ describe('AiVaultScannerServiceClient', () => {
     client.dispose()
   })
 
-  // The child holds the index while the setting is on, and its reconcile loop is
-  // invisible from here: retiring it would stop indexing until the next scan
-  // happened to respawn one, which is not a guarantee anyone stated.
   it('spawns a child for the index and never retires it while the index is on', async () => {
     vi.useFakeTimers()
     const { child, client } = setup(100)
@@ -426,7 +419,6 @@ describe('AiVaultScannerServiceClient', () => {
       roots: {}
     }
 
-    // No request outstanding: turning the index on is itself what spawns a child.
     client.updateSessionSearch(on)
     readyAiVaultServiceChild(child)
     await Promise.resolve()
@@ -435,7 +427,6 @@ describe('AiVaultScannerServiceClient', () => {
     vi.advanceTimersByTime(10_000)
     expect(child.sent).not.toContainEqual({ type: 'shutdown' })
 
-    // A live child hears the change directly rather than waiting for a respawn.
     const narrowed = { ...on, settings: { enabled: true, historyDays: 30 } }
     client.updateSessionSearch(narrowed)
     expect(child.sent).toContainEqual({ type: 'sessionSearch', init: narrowed })
@@ -483,9 +474,6 @@ describe('AiVaultScannerServiceClient', () => {
     client.dispose()
   })
 
-  // The hold is the only thing keeping this child alive, so nothing else will
-  // restart it: without its own restart, an idle indexing child that crashes
-  // leaves the index stopped until some unrelated request happens to arrive.
   it('restarts a child that faulted while the index was holding it', async () => {
     vi.useFakeTimers()
     const { children, client } = setupChildren(() => SESSION_SEARCH_ON)
@@ -493,7 +481,6 @@ describe('AiVaultScannerServiceClient', () => {
     readyAiVaultServiceChild(children[0]!)
     await Promise.resolve()
 
-    // No queued call and no outstanding invalidation: an idle child simply dies.
     children[0]!.emit('error', new Error('crashed'))
     expect(children).toHaveLength(1)
     vi.advanceTimersByTime(250)

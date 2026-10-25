@@ -1,21 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  openCodeBuildPtyEnvMock,
-  openCodeClearPtyMock,
-  piBuildPtyEnvMock,
-  piClearPtyMock
-} from './pty-ipc-mock-registry'
+import { openCodeClearPtyMock, piBuildPtyEnvMock, piClearPtyMock } from './pty-ipc-mock-registry'
+import { awaitExplicitPiOmpGuestReadiness } from '../agent-hooks/wsl-pi-omp-guest-readiness'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { SshPtyAbsentFromRelayError } from '../providers/ssh-pty-errors'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
 import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  deletePtyOwnership,
-  setPtyOwnership,
-  setLocalPtyProvider
-} from './pty'
+  buildJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../shared/jcode-runtime-dir'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -60,6 +54,9 @@ vi.mock('../codex/codex-pane-account-registry', () =>
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+vi.mock('../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
+  awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
+}))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, recoveredAgentClaim, recoveredAgentSurface } = setupPtyIpcSuite()
@@ -71,7 +68,7 @@ describe('registerPtyHandlers', () => {
         mainWindow
       })
 
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
+      // Daemon spawns bypass LocalPtyProvider.buildSpawnEnv; main must inject host-local environment.
       it('materializes the full guard for a legacy daemon host', async () => {
         const env = await daemonSpawnAndGetEnv(
           {
@@ -127,7 +124,7 @@ describe('registerPtyHandlers', () => {
         })
       })
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
-        // Why: daemon reconnect keys live-shell survival on the sessionId; prefixing with worktreeId scopes sessions by worktree with a unique tail.
+        // Scope daemon reconnect identity by worktree while retaining a unique session tail.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -210,7 +207,7 @@ describe('registerPtyHandlers', () => {
         expect(daemonSpawn).not.toHaveBeenCalled()
       })
       it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
-        // Why: buildPtyHostEnv reads `baseEnv.X ?? process.env.X` so the agent-dir guard works whether Pi's env came over IPC or via daemon fork.
+        // Ambient Pi configuration must receive the same guard as explicit IPC environment.
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           PI_CODING_AGENT_DIR: '/ambient/pi/agent'
         })
@@ -225,7 +222,7 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/ambient/pi/agent')
       })
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
-        // Why: the handler clones baseEnv so IPC-provided env stays pristine; a regression would leak Orca host env back into the renderer's reused copy.
+        // Host injection must not mutate a renderer's reusable environment object.
         const daemonSpawn = setupDaemonAdapter()
         const argsEnv: Record<string, string> = { FOO: 'bar' }
         handlers.clear()
@@ -236,13 +233,12 @@ describe('registerPtyHandlers', () => {
           env: argsEnv
         })
         expect(argsEnv).toEqual({ FOO: 'bar' })
-        // Sanity: the spawn did receive the injected env, so the test isn't passing vacuously.
         const spawnEnv = daemonSpawn.mock.calls.at(-1)![0].env
         expect(spawnEnv.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnEnv).not.toBe(argsEnv)
       })
       it('rejects a caller-supplied sessionId that escapes userData via ..', async () => {
-        // Why: effectiveSessionId reaches filesystem side-effects, so a traversal payload must be refused before they run.
+        // Reject traversal before session identity reaches filesystem side effects.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -258,7 +254,7 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
       })
       it('sweeps per-PTY state when provider.spawn fails for a MINTED sessionId', async () => {
-        // Why: buildPtyHostEnv has filesystem side-effects, so a minted id's per-PTY state must be cleared if provider.spawn later fails.
+        // Failed spawns must clear filesystem state for newly minted IDs.
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
@@ -293,7 +289,7 @@ describe('registerPtyHandlers', () => {
         )
       })
       it('does NOT sweep per-PTY state on provider.spawn failure for CALLER-supplied sessionId', async () => {
-        // Why: a caller-supplied sessionId may refer to an existing PTY whose state must survive a retry/attach failure; only minted ids get swept.
+        // Caller-supplied IDs may own live PTYs; failed retries must not sweep them.
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
@@ -332,308 +328,101 @@ describe('registerPtyHandlers', () => {
           { resetIncarnation: true }
         )
       })
-      it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
-        const sshSpawn = vi.fn(
-          async (_opts: {
-            env: Record<string, string>
-            envToDelete?: string[]
-            paneKey?: string
-            tabId?: string
-          }) => ({
-            id: 'ssh-pty'
-          })
-        )
-        const store = {
-          upsertSshRemotePtyLease: vi.fn(),
-          supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
-          persistPtyBinding: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          (() => ({
-            httpProxyUrl: 'http://proxy.example:8080',
-            httpProxyBypassRules: 'localhost',
-            codexSystemDefaultRealHomeEnabled: true
-          })) as never,
-          undefined,
-          store as never
-        )
-        const leafId = '11111111-1111-4111-8111-111111111111'
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
-          connectionId: 'ssh-1',
-          worktreeId: 'wt-1',
+    })
+  })
+
+  describe('daemon host env: where the lanes differ today', () => {
+    const { setupDaemonAdapter } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
+
+    function startLanes() {
+      const daemonSpawn = setupDaemonAdapter()
+      let controller: { spawn: (args: Record<string, unknown>) => Promise<unknown> } | undefined
+      const runtime = {
+        setPtyController: vi.fn((next) => {
+          controller = next
+        }),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      return {
+        daemonSpawn,
+        spawn: (lane: 'window' | 'host', request: Record<string, unknown>) =>
+          lane === 'window'
+            ? handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, ...request })
+            : controller!.spawn({ cols: 80, rows: 24, ...request })
+      }
+    }
+
+    // Only the id this request minted is swept; an operation id or caller id may name a live PTY.
+    it.each([
+      { lane: 'window', name: 'a minted id', request: {}, swept: true },
+      { lane: 'window', name: 'a caller id', request: { sessionId: 'caller-1' }, swept: false },
+      { lane: 'host', name: 'a minted id', request: {}, swept: true },
+      {
+        lane: 'host',
+        name: 'an operation id',
+        request: { worktreeId: 'wt-alpha', agentSessionCreateOperationId: 'a'.repeat(43) },
+        swept: false
+      },
+      {
+        lane: 'host',
+        name: 'a new caller id',
+        request: { sessionId: 'caller-1', isNewSession: true },
+        swept: false
+      }
+    ] as const)('$lane lane, $name: a failed env build sweeps per-PTY state: $swept', async (c) => {
+      const lanes = startLanes()
+      piBuildPtyEnvMock.mockImplementationOnce(() => {
+        throw new Error('env boom')
+      })
+
+      await expect(lanes.spawn(c.lane, { env: {}, ...c.request })).rejects.toThrow('env boom')
+      expect(lanes.daemonSpawn).not.toHaveBeenCalled()
+      expect(piClearPtyMock).toHaveBeenCalledTimes(c.swept ? 1 : 0)
+    })
+
+    // Current host/window difference: the host accepts an empty ID without host env; the window rejects it.
+    it('an empty session id: the window refuses it; the host spawns without host env', async () => {
+      const lanes = startLanes()
+      await expect(lanes.spawn('window', { env: {}, sessionId: '' })).rejects.toThrow(
+        /Invalid PTY session id/
+      )
+      await lanes.spawn('host', { env: {}, sessionId: '' })
+      expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+    })
+
+    it('both daemon lanes run the WSL Pi/OMP guest readiness wait once', async () => {
+      const lanes = startLanes()
+      vi.mocked(awaitExplicitPiOmpGuestReadiness).mockClear()
+      await lanes.spawn('window', { env: {}, command: 'pi' })
+      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledOnce()
+      await lanes.spawn('host', { env: {}, command: 'pi' })
+      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
+    })
+
+    it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {
+      const lanes = startLanes()
+      const leafId = '11111111-2222-4333-8444-555555555555'
+      const paneKey = `tab-1:${leafId}`
+      const jcodeDir = shouldInjectJcodeRuntimeDir(process.platform)
+        ? buildJcodeRuntimeDir(paneKey)
+        : undefined
+      for (const lane of ['window', 'host'] as const) {
+        await lanes.spawn(lane, {
+          env: { ORCA_PANE_KEY: 'stale-tab:stale-leaf' },
           tabId: 'tab-1',
-          leafId
+          leafId,
+          launchAgent: 'jcode'
         })
-        const spawnOptions = sshSpawn.mock.calls.at(-1)![0]
-        const env = spawnOptions.env
-        // Why: host-local vars must be absent over SSH (they point at the local host/disk) — shipping them is useless or a credential leak.
-        expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
-        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
-        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
-        expect(env.MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
-        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
-        expect(env.CODEX_HOME).toBeUndefined()
-        expect(env.HTTP_PROXY).toBeUndefined()
-        expect(env.HTTPS_PROXY).toBeUndefined()
-        expect(env.NO_PROXY).toBeUndefined()
-        expect(env.FOO).toBe('bar')
-        // Why: real-home routing is host-only. A null local-home resolver on
-        // SSH must not become a request to alter the remote Codex environment.
-        expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
-        expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
-        expect(spawnOptions.paneKey).toBe(makePaneKey('tab-1', leafId))
-        expect(spawnOptions.tabId).toBe('tab-1')
-        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
-        expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
-        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
-          expect.objectContaining({
-            targetId: 'ssh-1',
-            ptyId: 'ssh-pty',
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            state: 'attached'
-          })
-        )
-        expect(store.persistPtyBinding).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            ptyId: 'ssh-pty',
-            origin: 'spawn'
-          },
-          'ssh:ssh-1'
-        )
-
-        store.upsertSshRemotePtyLease.mockClear()
-        store.persistPtyBinding.mockClear()
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          env: { ORCA_PANE_KEY: 'tab-1:pane:1' },
-          connectionId: 'ssh-1',
-          worktreeId: 'wt-1',
-          tabId: 'tab-1',
-          leafId: 'pane:1'
-        })
-        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
-        const legacySpawnOptions = sshSpawn.mock.calls.at(-1)?.[0]
-        expect(legacySpawnOptions?.env.ORCA_PANE_KEY).toBeUndefined()
-        expect(legacySpawnOptions?.paneKey).toBeUndefined()
-        expect(legacySpawnOptions?.tabId).toBe('tab-1')
-        expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
-        expect(store.persistPtyBinding).not.toHaveBeenCalled()
-      })
-      it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
-        const sshSpawn = vi.fn(async () => {
-          // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose
-          // source stream needs restoring refuses with, and only this one is host-reported absence.
-          throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
-        })
-        const store = {
-          markSshRemotePtyLease: vi.fn(),
-          clearSshRemotePtyKillIntent: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-
-        await expect(
-          handlers.get('pty:spawn')!(null, {
-            cols: 80,
-            rows: 24,
-            env: {},
-            connectionId: 'ssh-1',
-            sessionId: 'remote-pty'
-          })
-        ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
-
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
-      })
-      it('leaves the lease alone when the refusal did not observe the process', async () => {
-        // A `restoreRequired` reattach is refused with the SAME `SSH_SESSION_EXPIRED` text, and it
-        // means the opposite: the PTY is live, only its source stream could not be resumed. The
-        // lease and the in-memory ownership are between them this client's only record that the
-        // remote process exists, and #9819's sweep reads a PTY it has no record of as one it may
-        // SIGKILL on the next connect. Erasing them here is how a live shell gets reaped.
-        const sshSpawn = vi.fn(async () => {
-          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
-        })
-        const store = {
-          markSshRemotePtyLease: vi.fn(),
-          clearSshRemotePtyKillIntent: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-
-        await expect(
-          handlers.get('pty:spawn')!(null, {
-            cols: 80,
-            rows: 24,
-            env: {},
-            connectionId: 'ssh-1',
-            sessionId: 'remote-pty'
-          })
-        ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
-
-        // The spawn still fails; what must not happen is the destructive bookkeeping.
-        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
-      })
-      it('marks a scoped SSH session expired using the raw relay lease id', async () => {
-        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
-        const sshSpawn = vi.fn(async () => {
-          // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose
-          // source stream needs restoring refuses with, and only this one is host-reported absence.
-          throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
-        })
-        const store = {
-          markSshRemotePtyLease: vi.fn(),
-          clearSshRemotePtyKillIntent: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        setPtyOwnership(scopedPtyId, 'ssh-1')
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-
-        try {
-          await expect(
-            handlers.get('pty:spawn')!(null, {
-              cols: 80,
-              rows: 24,
-              env: {},
-              connectionId: 'ssh-1',
-              sessionId: scopedPtyId
-            })
-          ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
-        } finally {
-          deletePtyOwnership(scopedPtyId)
-        }
-
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
-        expect(openCodeClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
-        expect(piClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
-      })
+        const env = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+        expect(env.ORCA_PANE_KEY).toBe(paneKey)
+        expect(env.ORCA_TAB_ID).toBe('tab-1')
+        expect(env[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(jcodeDir)
+      }
     })
   })
 })

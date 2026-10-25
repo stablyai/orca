@@ -7,6 +7,77 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 afterEach(cleanup)
 
 describe('NativeChatApprovalCard', () => {
+  describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
+    // A subject kind a newer build wrote; this build draws only plans.
+    const NEWER_SUBJECT = JSON.parse('{"kind":"diff","path":"a.ts"}')
+    const NEEDS_NEWER_ORCA = 'This request needs a newer version of Orca.'
+
+    function renderNewer(detail: string | undefined) {
+      const onChoose = vi.fn()
+      const onCancel = vi.fn()
+      render(
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Review proposed change',
+            ...(detail ? { detail } : {}),
+            subject: NEWER_SUBJECT,
+            options: [
+              { label: 'Approve', send: 'allow' },
+              { label: 'Deny', send: 'deny' }
+            ]
+          }}
+          onChoose={onChoose}
+          onCancel={onCancel}
+        />
+      )
+      return { onChoose, onCancel }
+    }
+
+    it('with no detail: says so, answers nothing, and only its cancel reaches the host', () => {
+      const { onChoose, onCancel } = renderNewer(undefined)
+      expect(screen.getByText(NEEDS_NEWER_ORCA)).toBeTruthy()
+      for (const label of ['Approve', 'Deny']) {
+        const option = screen.getByRole('button', { name: label })
+        expect(option.hasAttribute('disabled')).toBe(true)
+        fireEvent.click(option)
+      }
+      expect(onChoose).not.toHaveBeenCalled()
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      expect(cancel.hasAttribute('disabled')).toBe(false)
+      fireEvent.click(cancel)
+      fireEvent.keyDown(screen.getByRole('group'), { key: 'Escape' })
+      expect(onCancel).toHaveBeenCalledTimes(2)
+    })
+
+    it('with a detail: shows it, and still approves nothing', () => {
+      const { onChoose } = renderNewer('# Release\n- Run tests')
+      expect(document.querySelector('[data-native-chat-approval-detail]')?.textContent).toContain(
+        '# Release'
+      )
+      expect(screen.getByText(NEEDS_NEWER_ORCA)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      expect(screen.getByRole('button', { name: 'Approve' }).hasAttribute('disabled')).toBe(true)
+      expect(onChoose).not.toHaveBeenCalled()
+    })
+
+    it('leaves a plan answerable, with no such line', () => {
+      const onChoose = vi.fn()
+      render(
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Review proposed plan',
+            subject: { kind: 'plan', text: 'Step one' },
+            options: [{ label: 'Approve plan', send: 'allow' }]
+          }}
+          onChoose={onChoose}
+        />
+      )
+      expect(screen.queryByText(NEEDS_NEWER_ORCA)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve plan' }))
+      expect(onChoose).toHaveBeenCalledWith('allow')
+    })
+  })
+
   it('exposes cancellation while it owns the composer region', () => {
     const onCancel = vi.fn()
 
@@ -60,19 +131,39 @@ describe('NativeChatApprovalCard', () => {
     outside.remove()
   })
 
+  it.each([
+    ['this pane', true],
+    ['another surface', false]
+  ] as const)('with a text field focused in %s, takes focus: %s', (_where, takes) => {
+    const pane = document.createElement('div')
+    pane.setAttribute('data-native-chat-root', 'true')
+    const draft = document.createElement('textarea')
+    ;(takes ? pane : document.body).appendChild(draft)
+    document.body.appendChild(pane)
+    draft.focus()
+    render(
+      <NativeChatApprovalCard
+        approval={{ title: 'Allow command?', options: [{ label: 'Allow', send: 'allow' }] }}
+        onChoose={() => {}}
+        shouldFocus
+      />,
+      { container: pane }
+    )
+    const card = screen.getByRole('group', { name: 'Allow command?' })
+    expect(document.activeElement).toBe(takes ? card : draft)
+    pane.remove()
+    draft.remove()
+  })
+
   it('keeps all oversized provider context in one bounded scroller above the actions', () => {
     const description = `Read access outside the workspace ${'description '.repeat(400)}`
     const decisionReason = `The path is outside the allowed root. ${'reason '.repeat(400)}`
-    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
-    const ruleContent = `/repo/${'**/'.repeat(400)}`
     render(
       <NativeChatApprovalCard
         approval={{
           title: 'Claude wants to read secrets.txt '.repeat(400),
           description,
           decisionReason,
-          blockedPath,
-          matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
           detail: 'x'.repeat(4_000),
           options: [{ label: 'Allow', send: 'allow' }]
         }}
@@ -93,12 +184,67 @@ describe('NativeChatApprovalCard', () => {
     expect(content?.getAttribute('tabindex')).toBe('0')
     expect(content?.textContent).toContain(description.trim())
     expect(content?.textContent).toContain(decisionReason.trim())
-    expect(content?.textContent).toContain(blockedPath)
-    expect(content?.textContent).toContain(ruleContent)
     expect(content?.contains(detail)).toBe(true)
     expect(content?.contains(allow)).toBe(false)
     expect(actions?.contains(allow)).toBe(true)
     expect(actions?.classList.contains('shrink-0')).toBe(true)
+  })
+
+  // The path is what the request touches; the provider's ask-rule bookkeeping is not something to decide on.
+  it('names a blocked path the request does not show, but never the matched ask rule', () => {
+    const fromJournal = {
+      title: 'Claude wants to run git push',
+      decisionReason: 'Pushing changes the remote',
+      blockedPath: 'C:\\qa\\demo\\.git\\config',
+      matchedAskRule: {
+        source: 'projectSettings',
+        toolName: 'Bash',
+        ruleContent: 'Bash(git push:*)'
+      },
+      detail: 'git push origin main',
+      options: [{ label: 'Allow', send: 'allow' }]
+    }
+    render(<NativeChatApprovalCard approval={fromJournal} onChoose={() => {}} />)
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toContain('Reason: Pushing changes the remote')
+    expect(content?.textContent).toContain('git push origin main')
+    expect(content?.textContent).toContain('Needs access to: C:\\qa\\demo\\.git\\config')
+    for (const internal of ['Ask rule', 'Bash(git push:*)', 'projectSettings', 'Blocked path']) {
+      expect(content?.textContent).not.toContain(internal)
+    }
+  })
+
+  it('does not repeat a blocked path the request already shows', () => {
+    const blockedPath = 'C:\\qa\\demo\\notes.md'
+    render(
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Claude wants to write notes.md',
+          blockedPath,
+          detail: JSON.stringify({ file_path: blockedPath, content: 'hi' }, null, 2),
+          options: [{ label: 'Allow', send: 'allow' }]
+        }}
+        onChoose={() => {}}
+      />
+    )
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toContain('notes.md')
+    expect(content?.textContent).not.toContain('Needs access to')
+  })
+
+  it('shows the blocked path alone when the provider sent nothing else to show', () => {
+    render(
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Allow Read?',
+          blockedPath: '/outside/repo/secrets.txt',
+          options: [{ label: 'Allow', send: 'allow' }]
+        }}
+        onChoose={() => {}}
+      />
+    )
+    const content = document.querySelector('[data-native-chat-approval-content="true"]')
+    expect(content?.textContent).toBe('Needs access to: /outside/repo/secrets.txt')
   })
 
   it('renders a plan as markdown inside the same bounded scroller', () => {

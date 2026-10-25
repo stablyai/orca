@@ -141,7 +141,8 @@ describe('Claude session replacement voids the replaced session claims', () => {
     const paneKey = makePaneKey('same-session', LEAF_ID)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
-    const same = stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
+    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
+    const same = stop(state, paneKey, SESSION_A)
 
     expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
     expect(same?.payload.state).toBe('working')
@@ -193,7 +194,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
     expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(false)
   })
 
-  it('leaves the lead-state record to the incoming fold rather than deleting it', () => {
+  it('folds the replacement session prompt into the lead working state', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('lead-untouched', LEAF_ID)
 

@@ -102,7 +102,7 @@ export async function detectRepositoryMergeMetadata(
         typeof repository?.autoMergeAllowed === 'boolean' ? repository.autoMergeAllowed : null,
       ...(mergeMethodSettings ? { mergeMethodSettings } : {})
     }
-    // Why: a payload without `repository` is all-unknown; keep it on the short TTL so it retries once the condition clears.
+    // Missing repository data remains unknown and retries on the short TTL.
     cacheRepositoryMergeMetadata(
       cacheKey,
       value,
@@ -110,7 +110,7 @@ export async function detectRepositoryMergeMetadata(
     )
     return value
   } catch {
-    // Why: cache a conservative result for failed merge-queue probes so we don't retry GraphQL on every poll while GitHub/network is unhappy.
+    // Cool down failed probes without treating unknown merge-queue state as false.
     const value: GitHubRepositoryMergeMetadata = {
       mergeQueueRequired: null,
       autoMergeAllowed: null

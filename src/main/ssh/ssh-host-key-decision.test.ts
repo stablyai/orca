@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decideHostKey,
-  strictestHostKeyChecking,
+  hostKeyPolicyForOwner,
   type HostKeyDecisionInput
 } from './ssh-host-key-decision'
 
@@ -10,7 +10,7 @@ function input(overrides: Partial<HostKeyDecisionInput> = {}): HostKeyDecisionIn
     knownHostsOutcome: 'unknown',
     storeOutcome: 'unknown',
     strictHostKeyChecking: 'ask',
-    isEphemeralRuntimeTarget: false,
+    policy: { kind: 'standard' },
     siteConfigSuppressed: false,
     knownHostsUnreadable: false,
     displayHost: 'build-01',
@@ -315,12 +315,12 @@ describe('deciding what to do with a presented host key', () => {
     // A fresh VM presents a new key every launch, so recording one would accumulate a row per
     // launch and eventually turn a stale record into a spurious mismatch.
     it('accepts an ephemeral runtime target without remembering it', () => {
-      expect(decideHostKey(input({ isEphemeralRuntimeTarget: true })).action).toBe('accept')
+      expect(decideHostKey(input({ policy: { kind: 'ephemeral' } })).action).toBe('accept')
     })
 
     it('still rejects a changed key for an ephemeral target', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, knownHostsOutcome: 'mismatch' })
+        input({ policy: { kind: 'ephemeral' }, knownHostsOutcome: 'mismatch' })
       )
       expect(decision.action).toBe('reject')
     })
@@ -345,7 +345,7 @@ describe('deciding what to do with a presented host key', () => {
     // runtimes off for everyone whose HOME diverges from their passwd home.
     it('still accepts an ephemeral target when a source could not be read', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, siteConfigSuppressed: true })
+        input({ policy: { kind: 'ephemeral' }, siteConfigSuppressed: true })
       )
       expect(decision.action).toBe('accept')
     })
@@ -354,7 +354,7 @@ describe('deciding what to do with a presented host key', () => {
     // actually read and the user actually asked for, so it outranks the carve-out.
     it('denies an ephemeral target under an explicit StrictHostKeyChecking=yes', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, strictHostKeyChecking: 'yes' })
+        input({ policy: { kind: 'ephemeral' }, strictHostKeyChecking: 'yes' })
       )
       expect(decision.action).toBe('reject')
     })
@@ -363,7 +363,7 @@ describe('deciding what to do with a presented host key', () => {
     it('still rejects a changed key for an ephemeral target with sources incomplete', () => {
       const decision = decideHostKey(
         input({
-          isEphemeralRuntimeTarget: true,
+          policy: { kind: 'ephemeral' },
           siteConfigSuppressed: true,
           storeOutcome: 'mismatch'
         })
@@ -386,7 +386,7 @@ describe('deciding what to do with a presented host key', () => {
       { storeOutcome: 'mismatch' },
       { strictHostKeyChecking: 'yes' },
       { strictHostKeyChecking: 'no' },
-      { isEphemeralRuntimeTarget: true },
+      { policy: { kind: 'ephemeral' } },
       { siteConfigSuppressed: true },
       { knownHostsUnreadable: true }
     ]
@@ -396,38 +396,14 @@ describe('deciding what to do with a presented host key', () => {
   })
 })
 
-/**
- * Merging a user-resolved policy with a separately-probed site policy.
- *
- * Only reachable on the `-F` path, where OpenSSH ignores /etc/ssh/ssh_config so the per-user
- * resolution cannot represent a site policy at all. Before this, being unable to see the site policy
- * meant refusing every unknown host — which locked out anyone whose HOME diverges from their passwd
- * home (devcontainers, `su`, Nix shells) with no override.
- */
-describe('merging the user and site host key policies', () => {
-  it('keeps the user value when the site could not be read', () => {
-    // The blind case that still fails strict: a null probe must not invent a policy.
-    expect(strictestHostKeyChecking('ask', null)).toBe('ask')
-    expect(strictestHostKeyChecking(undefined, null)).toBe('ask')
-  })
-
-  it('takes a strict site policy over a laxer user value', () => {
-    expect(strictestHostKeyChecking('ask', 'yes')).toBe('yes')
-    expect(strictestHostKeyChecking('no', 'true')).toBe('true')
-  })
-
-  it('does not let a lax site policy loosen the user', () => {
-    // The direction that must never relax: a permissive site config cannot downgrade a user who
-    // asked for strict, or we end up laxer than ssh itself.
-    expect(strictestHostKeyChecking('yes', 'no')).toBe('yes')
-    expect(strictestHostKeyChecking('ask', 'off')).toBe('ask')
-  })
-
-  it('lets the site raise ask to accept-new', () => {
-    expect(strictestHostKeyChecking('ask', 'accept-new')).toBe('accept-new')
-  })
-
-  it('keeps a strict user value against accept-new', () => {
-    expect(strictestHostKeyChecking('yes', 'accept-new')).toBe('yes')
+describe('hostKeyPolicyForOwner', () => {
+  it('trusts first contact only for ephemeral runtime VMs', () => {
+    expect(hostKeyPolicyForOwner({ type: 'on-demand-runtime', runtimeId: 'vm-1' })).toEqual({
+      kind: 'ephemeral'
+    })
+    expect(
+      hostKeyPolicyForOwner({ type: 'on-demand-runtime', runtimeId: 'managed-orcad:env-1' })
+    ).toEqual({ kind: 'standard' })
+    expect(hostKeyPolicyForOwner(undefined)).toEqual({ kind: 'standard' })
   })
 })

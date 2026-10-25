@@ -12,10 +12,15 @@
  * Only a payload that is not a session at all falls back to defaults.
  */
 import { z } from 'zod'
+import {
+  leafStringsSchema,
+  terminalLayoutSnapshotSchema,
+  terminalPaneLayoutNodeSchema
+} from './terminal-layout-snapshot-schema'
+import { closedTerminalPaneSchema } from './closed-terminal-panes'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { terminalTabIdSchema } from './terminal-tab-id-schema'
@@ -29,7 +34,7 @@ import {
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
-import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
+import { workspaceSessionCloseIntentFieldSchemas } from './workspace-session-close-intent-schema'
 import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
 import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
@@ -38,48 +43,15 @@ import {
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
+import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
 
-// ─── Terminal pane layout (recursive) ───────────────────────────────
-
-const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
 
-// Why: z.lazy + type annotation keeps the recursive inference working without
-// forcing zod to resolve the whole tree at definition time. Discriminated on `type` because a
-// plain union re-tries the leaf branch for every split node of every restored terminal layout.
-const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
-  z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('leaf'),
-      leafId: z.string()
-    }),
-    z.object({
-      type: z.literal('split'),
-      direction: terminalPaneSplitDirectionSchema,
-      first: terminalPaneLayoutNodeSchema,
-      second: terminalPaneLayoutNodeSchema,
-      ratio: z.number().optional()
-    })
-  ])
-)
-
-const leafStringsSchema = salvagingRecord(z.string(), z.string())
-
-const terminalLayoutSnapshotSchema = z.object({
-  root: terminalPaneLayoutNodeSchema.nullable(),
-  activeLeafId: z.string().nullable(),
-  expandedLeafId: z.string().nullable(),
-  ptyIdsByLeafId: salvagedOptional('ptyIdsByLeafId', leafStringsSchema),
-  buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
-  scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),
-  titlesByLeafId: salvagedOptional('titlesByLeafId', leafStringsSchema)
-})
-
 // ─── Terminal tab (legacy) ──────────────────────────────────────────
 
-const terminalTabSchema = z.object({
+export const terminalTabSchema = z.object({
   id: terminalTabIdSchema,
   ptyId: z.string().nullable(),
   worktreeId: z.string(),
@@ -132,10 +104,14 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
-  agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
-  // Why: a structured terminal tab must recover its durable host session after
-  // restart; omitting this additive field silently routes it back through PTY.
-  structuredSessionId: z.string().min(1).optional().catch(undefined),
+  // Why: any agent a host registered, as the host published it. An id that is not an agent slug
+  // degrades to absent, which renders no chat, rather than failing the whole-session parse; a
+  // build that predates an agent reads its tab the same way.
+  agentSessionAgent: z
+    .string()
+    .refine((value) => isStructuredAgentId(value))
+    .optional()
+    .catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z
@@ -251,10 +227,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'clientHostedBrowserPagesByWorktree',
     salvagingRecord(worktreeIdSchema, salvagingArray(persistedClientHostedBrowserPageSchema))
   ),
-  clientHostedBrowserCloseIntentsByEnvironment: salvagedOptional(
-    'clientHostedBrowserCloseIntentsByEnvironment',
-    salvagingRecord(z.string().min(1), salvagingArray(clientHostedBrowserCloseIntentSchema))
-  ),
+  ...workspaceSessionCloseIntentFieldSchemas,
   activeTabTypeByWorktree: salvagedOptional(
     'activeTabTypeByWorktree',
     salvagingRecord(worktreeIdSchema, workspaceVisibleTabTypeSchema)
@@ -318,6 +291,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   closedTerminalTabTombstonesByTabId: salvagedOptional(
     'closedTerminalTabTombstonesByTabId',
     salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
+  ),
+  closedTerminalPanesByPaneKey: salvagedOptional(
+    'closedTerminalPanesByPaneKey',
+    salvagingRecord(z.string().min(1), closedTerminalPaneSchema)
   )
 })
 
@@ -363,3 +340,5 @@ export function parseWorkspaceSession(raw: unknown): ParsedWorkspaceSession {
   }
   return { ok: false, error: describeWorkspaceSessionError(result.error) }
 }
+
+export { terminalPaneLayoutNodeSchema }

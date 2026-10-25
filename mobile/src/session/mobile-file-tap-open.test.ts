@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openMobileFileTap } from './mobile-file-tap-open'
 
 function ok(result: unknown) {
@@ -21,6 +21,14 @@ function activeTerminalState(activated: boolean) {
     activeTabType: 'terminal'
   }
 }
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('openMobileFileTap', () => {
   it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
@@ -130,7 +138,7 @@ describe('openMobileFileTap', () => {
     })
     await Promise.resolve()
     await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.open',
@@ -663,5 +671,87 @@ describe('openMobileFileTap', () => {
     await Promise.resolve()
 
     expect(switchSessionTab).not.toHaveBeenCalled()
+  })
+
+  async function tapOnHostWithNoDesktopWindow(options: { leaveDuringOpen: boolean }) {
+    let latestActivationSeq = 1
+    const client = {
+      sendRequest: vi.fn(async (method: string) => {
+        if (method !== 'files.open') {
+          return ok({
+            worktree: 'wt-1',
+            relativePath: 'src/index.ts',
+            absolutePath: '/repo/src/index.ts',
+            exists: true,
+            isDirectory: false,
+            openTarget: {
+              kind: 'worktree-file',
+              provider: 'local',
+              relativePath: 'src/index.ts',
+              absolutePath: '/repo/src/index.ts'
+            }
+          })
+        }
+        if (options.leaveDuringOpen) {
+          latestActivationSeq = 2
+        }
+        return { ok: false, error: { code: 'runtime_error', message: 'renderer_unavailable' } }
+      })
+    }
+    const pushPreviewRoute = vi.fn()
+    const onOpenFailed = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      worktreeName: 'api',
+      pathText: 'src/index.ts',
+      line: null,
+      column: null,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => 'terminal-tab',
+      getActivationState: (activated) => ({
+        ...activeTerminalState(activated),
+        latestActivationSeq
+      }),
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onOpenFailed
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: 'src/index.ts' },
+      { timeoutMs: 15_000 }
+    )
+    expect(onOpenFailed).not.toHaveBeenCalled()
+    return pushPreviewRoute
+  }
+
+  it('previews a tapped worktree file when the host has no desktop window', async () => {
+    const pushPreviewRoute = await tapOnHostWithNoDesktopWindow({ leaveDuringOpen: false })
+
+    expect(pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'worktree',
+        relativePath: 'src/index.ts',
+        worktreeName: 'api'
+      })
+    })
+  })
+
+  it('does not push the preview once the user has moved on during the open call', async () => {
+    const pushPreviewRoute = await tapOnHostWithNoDesktopWindow({ leaveDuringOpen: true })
+
+    expect(pushPreviewRoute).not.toHaveBeenCalled()
   })
 })

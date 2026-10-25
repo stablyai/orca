@@ -17,9 +17,7 @@ export type ComposerBaseState = {
 // Mirrors the desktop composer's `linkedWorkItem` (a FolderWorkspaceLinkedTask
 // superset): the one work item a Smart selection pins the workspace to. Linear
 // items carry the workspace/org routing the runtime needs to relink the issue.
-export type MobileLinkedWorkItem = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
-  provider: Exclude<WorkspaceSourceLinkedItem['provider'], 'jira'>
-}
+export type MobileLinkedWorkItem = WorkspaceSourceLinkedItem
 
 export type SmartNameSelectionKind =
   | 'github-pr'
@@ -28,6 +26,7 @@ export type SmartNameSelectionKind =
   | 'gitlab-issue'
   | 'branch'
   | 'linear'
+  | 'jira'
 
 // The pill descriptor the field renders once a source is selected. Same shape
 // as desktop's `SmartWorkspaceNameSelection`.

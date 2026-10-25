@@ -1,19 +1,19 @@
-/**
- * The renderer's own main process refused `agent.launch` while the same renderer aimed at a remote
- * host was admitted. This drives the registered `runtime:call` / `runtime:subscribe` handlers and
- * feeds what they actually advertise to the real host gate, so wiring and gate are proved together
- * rather than each against a restatement of the other.
- */
+/** Exercise advertised IPC capabilities through the real host gate, including the local-renderer launch path. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeCapability } from '../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
+  resolveRpcCallerIdentity,
+  rpcCallerOperationKey,
+  type RpcCallerIdentity
+} from '../runtime/rpc/rpc-caller-identity'
 
 type AdvertisedClient = {
   clientKind?: 'mobile' | 'runtime'
   clientCapabilities?: readonly RuntimeCapability[]
+  caller?: RpcCallerIdentity
+  pairedDeviceId?: string
 }
 
 const { handlers, advertised } = vi.hoisted(
@@ -51,7 +51,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
       options: AdvertisedClient
     ): Promise<void> {
       advertised.streaming.push(options)
-      // Never settles: the handler only attaches a cleanup callback to this.
+      // Keep streaming open; the handler attaches only a cleanup callback.
       return new Promise<void>(() => {})
     }
   }
@@ -59,6 +59,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
 
 const { registerRuntimeHandlers } = await import('./runtime')
 const { supportsAgentLaunch } = await import('../runtime/rpc/methods/agent-launch')
+const { agentLaunchOperationCallerKey } = await import('../runtime/rpc/methods/agent-launch-replay')
 
 function rendererEvent() {
   const mainFrame = {}
@@ -76,8 +77,7 @@ function invoke(channel: string, args: unknown): void {
   void handler(rendererEvent(), args)
 }
 
-/** Throws rather than defaulting: a missing record would make `supportsAgentLaunch` pass on the
- *  `clientKind === undefined` branch and every assertion below would be vacuous. */
+/** Missing dispatch must fail rather than pass the gate via undefined clientKind. */
 function onlyAdvertisedClient(records: readonly AdvertisedClient[]): AdvertisedClient {
   const client = records[0]
   if (!client) {
@@ -113,8 +113,6 @@ describe('desktop renderer reaching agent.launch on its own main process', () =>
     const client = onlyAdvertisedClient(advertised.unary)
     expect(client.clientKind).toBe('runtime')
     expect(supportsAgentLaunch(client)).toBe(true)
-    // Negative control: the gate does refuse this same caller once the capability is taken away,
-    // so the assertion above is about the advertised list, not a permissive predicate.
     expect(supportsAgentLaunch(withoutLaunchCapability(client))).toBe(false)
   })
 
@@ -127,5 +125,19 @@ describe('desktop renderer reaching agent.launch on its own main process', () =>
       onlyAdvertisedClient(advertised.unary).clientCapabilities
     )
     expect(supportsAgentLaunch(streaming)).toBe(true)
+  })
+
+  it('names the desktop as its caller on both paths, so its launches replay under one identity', () => {
+    invoke('runtime:call', { method: 'status.get' })
+    invoke('runtime:subscribe', { subscriptionId: 'sub-1', method: 'session.tabs.watch' })
+
+    for (const client of [advertised.unary, advertised.streaming].map(onlyAdvertisedClient)) {
+      const caller = resolveRpcCallerIdentity(client)
+      expect(caller).toEqual({ kind: 'desktop' })
+      expect(agentLaunchOperationCallerKey({ caller })).toBe('trusted-local:desktop')
+    }
+    const { caller: _named, ...unnamed } = onlyAdvertisedClient(advertised.unary)
+    expect(resolveRpcCallerIdentity(unnamed)).toBeUndefined()
+    expect(rpcCallerOperationKey({ kind: 'local-cli' })).toBe('trusted-local:runtime')
   })
 })

@@ -65,11 +65,6 @@ describe('deriveMobilePrBranchContext', () => {
     expect(result.headSha).toBeNull()
   })
 
-  it('derives branch from status.branch', () => {
-    const result = deriveMobilePrBranchContext(status({ branch: 'topic' }), null)
-    expect(result.branch).toBe('topic')
-  })
-
   it('returns null branch when status.branch is absent', () => {
     const result = deriveMobilePrBranchContext(status({ branch: undefined }), null)
     expect(result.branch).toBeNull()
@@ -106,6 +101,10 @@ describe('loadMobilePrBranchContext', () => {
       return { ok: false, error: { message: `unexpected ${method}` } }
     })
     const out = await loadMobilePrBranchContext({ sendRequest } as never, 'repo::/wt')
+    expect(sendRequest).toHaveBeenCalledWith('git.branchCompare', {
+      worktree: 'id:repo::/wt',
+      baseRef: 'main'
+    })
     expect(out).toEqual({
       branch: 'feat',
       headSha: 'sha-status',

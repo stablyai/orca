@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/commit-message-host-key'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
@@ -17,7 +16,6 @@ import type {
   SourceControlTextActionId
 } from '../../../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
-import { buildResolveConflictsPrompt } from './prompts'
 import {
   saveSourceControlAiActionRecipeForTarget,
   saveSourceControlTextGenerationDefaults
@@ -25,19 +23,20 @@ import {
 import type { SourceControlAiControllerParams } from './controller-types'
 import { openSourceControlAiSettingsTarget } from '../../source-control-ai-settings-navigation'
 import { useSourceControlRecoveryAi } from './use-recovery-ai'
-import { translate } from '@/i18n/i18n'
+import { useConflictRecoveryComposer } from './use-conflict-recovery-composer'
 
 export function getSourceControlAiControllerDiscoveryHostKey(
-  settings: SourceControlAiControllerParams['settings'],
+  target: SourceControlAiControllerParams['target'],
   activeConnectionId: string | null | undefined
 ): string {
   return getCommitMessageModelDiscoveryHostKeyForScope(
-    getRuntimeGitScope(settings, activeConnectionId)
+    getRuntimeGitScope(target ?? { kind: 'local' }, activeConnectionId)
   )
 }
 
 export function useSourceControlAi({
   settings,
+  target,
   activeRepo,
   activeWorktreeId,
   activeConnectionId,
@@ -56,13 +55,12 @@ export function useSourceControlAi({
   openSettingsPage,
   getStoreState = useAppStore.getState
 }: SourceControlAiControllerParams) {
-  const [resolveConflictsComposerOpen, setResolveConflictsComposerOpen] = useState(false)
   const [commitGenerationDialogOpen, setCommitGenerationDialogOpen] = useState(false)
   const [pullRequestGenerationDialogOpen, setPullRequestGenerationDialogOpen] = useState(false)
 
   const sourceControlAiDiscoveryHostKey = useMemo(
-    () => getSourceControlAiControllerDiscoveryHostKey(settings, activeConnectionId),
-    [activeConnectionId, settings]
+    () => getSourceControlAiControllerDiscoveryHostKey(target, activeConnectionId),
+    [activeConnectionId, target]
   )
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),
@@ -147,30 +145,21 @@ export function useSourceControlAi({
     })
   }, [activeRepo, openSettingsPage, openSettingsTarget])
 
-  const resolveConflictsPrompt = useMemo(
-    () =>
-      buildResolveConflictsPrompt({
-        conflictOperation,
-        entries: unresolvedConflicts,
-        worktreePath
-      }),
-    [conflictOperation, unresolvedConflicts, worktreePath]
-  )
-  const handleResolveConflictsWithAI = useCallback((): void => {
-    if (!activeWorktreeId) {
-      return
-    }
-    if (unresolvedConflicts.length === 0) {
-      toast.message(
-        translate(
-          'auto.components.right.sidebar.use.source.control.ai.cfafa92509',
-          'No unresolved conflicts to send.'
-        )
-      )
-      return
-    }
-    setResolveConflictsComposerOpen(true)
-  }, [activeWorktreeId, unresolvedConflicts.length])
+  const {
+    resolveConflictsPrompt,
+    resolveConflictsComposerOpen,
+    isCheckingRecoveryAdmission,
+    resolveConflictsRecoveryContext,
+    setResolveConflictsComposerOpen,
+    handleResolveConflictsWithAI
+  } = useConflictRecoveryComposer({
+    target,
+    activeWorktreeId,
+    activeConnectionId,
+    conflictOperation,
+    unresolvedConflicts,
+    worktreePath
+  })
 
   const {
     isLaunchingCommitFailureAgent,
@@ -232,6 +221,8 @@ export function useSourceControlAi({
 
   return {
     sourceControlAiDiscoveryHostKey,
+    isCheckingRecoveryAdmission,
+    resolveConflictsRecoveryContext,
     sourceControlAiActionsVisible,
     resolvedCommitMessageAi,
     resolvedPrCreationDefaults,

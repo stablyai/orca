@@ -2,14 +2,14 @@ import { applyFitScale } from './fit-scale'
 import { isAlternateBufferActive } from './mouse-input-encoding'
 import { updateScrollIndicator } from './viewport-transform'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 
 // Why: rewrap the local xterm buffer (scrollback included) to a new width
 // after a server PTY reflow. Skip the alternate screen: those snapshots are
 // fully repainted by the PTY and a local resize there can drop SGR attributes
 // (see init's alt-screen handling), which shows as white text.
-export function reflow(cols: number, rows: number) {
-  if (!scope.term || isAlternateBufferActive()) {
+export function reflow(scope: TerminalDocumentScope, cols: number, rows: number) {
+  if (!scope.term || isAlternateBufferActive(scope)) {
     return
   }
   const nextCols = cols || scope.term.cols
@@ -31,7 +31,7 @@ export function reflow(cols: number, rows: number) {
   } else {
     scope.term.scrollLines(rewrapped.baseY - distanceFromBottom - rewrapped.viewportY)
   }
-  applyFitScale('reflow-msg')
-  updateScrollIndicator(false)
-  emitKeyboardAvoidanceMetrics()
+  applyFitScale(scope, 'reflow-msg')
+  updateScrollIndicator(scope, false)
+  emitKeyboardAvoidanceMetrics(scope)
 }

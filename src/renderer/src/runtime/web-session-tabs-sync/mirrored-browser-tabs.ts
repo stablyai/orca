@@ -8,6 +8,7 @@ import type { WebSessionTabsSyncState, MirroredBrowserTab } from './state'
 import { readBrowserClientHostId } from '../browser-client-host-identity'
 import { peekWebSessionBrowserPlacementGroup } from '../web-session-browser-placement'
 import { browserPageEqual } from './state-equality-tabs'
+import { sameStringArray } from './state-equality-core'
 import { collectLayoutGroupIds } from './tab-group-layout-tree'
 import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
@@ -201,13 +202,18 @@ export function buildMirroredBrowserTabs(
     // Why: reuse hinges on browserPageEqual comparing workspaceId — the removed-workspace
     // page-list cleanup gates on page.workspaceId matching this entry's workspace.id.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
+    const existingPageIds = existing?.workspace.pageIds
     const workspace: BrowserWorkspace = {
       id: workspaceId,
       worktreeId: snapshot.worktree,
       label: existing?.workspace.label,
       sessionProfileId: existing?.workspace.sessionProfileId ?? null,
       activePageId: page.id,
-      pageIds: [page.id],
+      // Why: the tab strip skips a tab only while every field keeps its identity.
+      pageIds:
+        existingPageIds && sameStringArray(existingPageIds, [page.id])
+          ? existingPageIds
+          : [page.id],
       url: page.url,
       title: page.title,
       loading: page.loading,

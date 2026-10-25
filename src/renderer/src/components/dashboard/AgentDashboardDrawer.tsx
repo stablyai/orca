@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
@@ -14,6 +15,7 @@ import {
 } from '../sidebar/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
+import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
 import { translate } from '@/i18n/i18n'
 
 // Why: Escape should dismiss interactive nested overlays (e.g. the terminal
@@ -39,11 +41,12 @@ function AgentDashboardDrawerBody({
   onMenuOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const snapshot = useLiveDashboardSnapshot()
+  useAgentDashboardTelemetry('in_window')
 
   // In-window ack/reveal act on the local store directly — the pop-out's IPC
   // relay is gated to the pop-out renderer and would reject calls from here.
-  const handleAckAgent = useCallback((paneKey: string) => {
-    useAppStore.getState().acknowledgeAgents([paneKey])
+  const handleAckAgent = useCallback((paneKey: string, intent: AgentSubjectReadIntent) => {
+    useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {

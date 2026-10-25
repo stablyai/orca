@@ -1,9 +1,4 @@
-import type {
-  DashboardRevealAgentArgs,
-  DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
-  DashboardSpawnAgentArgs
-} from '../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -16,15 +11,12 @@ export type DashboardApi = {
   onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
   onSnapshotRequested: (callback: () => void) => () => void
   onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
-  onAckAgent: (callback: (paneKey: string) => void) => () => void
-  onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
-  onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
+  /** `explicit` only for a click on the card; watching an open dialog is a view. */
+  onAckAgent: (callback: (paneKey: string, intent: 'view' | 'explicit') => void) => () => void
   requestSnapshot: () => Promise<void>
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
-  ackAgent: (paneKey: string) => Promise<void>
-  spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
-  sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  ackAgent: (paneKey: string, intent: 'view' | 'explicit') => Promise<void>
 }
 
 export type TerminalPreviewApi = {
@@ -33,7 +25,7 @@ export type TerminalPreviewApi = {
     opts?: { scrollbackRows?: number }
   ) => Promise<TerminalPreviewConnectResult>
   input: (ptyId: string, data: string) => Promise<boolean>
-  /** Claim the PTY grid for the preview dialog; resolves to the size actually in effect. */
+  /** Claims the PTY grid; returns the size actually in effect. */
   fit: (ptyId: string, cols: number, rows: number) => Promise<{ cols: number; rows: number } | null>
   ack: (ptyId: string, bytes: number) => Promise<void>
   unsubscribe: (ptyId: string) => Promise<void>

@@ -19,14 +19,13 @@ type KittyStackFrame = { flags: number; known: boolean }
  * DECSET/DECRST 47/1047/1049, the full reset on RIS, and the soft reset on
  * DECSTR (CSI ! p).
  *
- * Why a mirror instead of reading xterm's internal state: Orca defensively
- * wipes the renderer terminal's kitty flags at moments when the TUI may have
- * died (Ctrl+C interrupts, reattach resets) while the TUI is usually still
- * alive and expecting protocol-encoded input. This tracker is fed only by
- * application output, so it reflects what the *application* negotiated,
- * independent of renderer-side defensive writes. The daemon reuses it to
- * carry flags into snapshots (xterm's SerializeAddon does not serialize kitty
- * state).
+ * Why a mirror instead of reading xterm's internal state: xterm's public API
+ * exposes no kitty flags. The renderer scans application output as it queues
+ * it and every mode write of its own; wherever xterm may skip or discard
+ * scanned bytes (snapshot replays, abandoned restores) the renderer re-asserts
+ * the mirror's flags into xterm, so their active-screen flags converge.
+ * The daemon reuses it to carry flags into snapshots (xterm's SerializeAddon does
+ * not serialize kitty state).
  */
 export class TerminalKittyKeyboardModeTracker {
   private scanTail = ''
@@ -48,6 +47,15 @@ export class TerminalKittyKeyboardModeTracker {
   // one. Grounding flips on evidence only: an explicit fresh-PTY reset, a
   // proven snapshot restore, or scanned bytes that state flags absolutely.
   private baselineProven = false
+  // xterm modifyOtherKeys level (CSI > 4 ; n m). Not a kitty mode, but the same apps
+  // fall back to it when the kitty query goes unanswered (pi), and it gates the same keys.
+  private modifyOtherKeysState = 0
+  private readonly kittyKeyboard: boolean
+
+  /** `kittyKeyboard: false` mirrors an xterm with the protocol withheld, which ignores `CSI u`. */
+  constructor(options: { kittyKeyboard?: boolean } = {}) {
+    this.kittyKeyboard = options.kittyKeyboard ?? true
+  }
 
   /**
    * Current effective kitty keyboard flags. `0` doubles as the conservative
@@ -77,6 +85,11 @@ export class TerminalKittyKeyboardModeTracker {
     return this.baselineProven
   }
 
+  /** Last XTMODKEYS level the app set for modifyOtherKeys; 0 when off or never set. */
+  get modifyOtherKeys(): number {
+    return this.modifyOtherKeysState
+  }
+
   get isAlternateScreen(): boolean {
     return this.alternateScreenActive
   }
@@ -101,6 +114,7 @@ export class TerminalKittyKeyboardModeTracker {
     this.altStackComplete = true
     this.alternateScreenActive = false
     this.alternateScreenSwitchObserved = false
+    this.modifyOtherKeysState = 0
   }
 
   /**
@@ -111,7 +125,11 @@ export class TerminalKittyKeyboardModeTracker {
    * or explicit application output proves them again.
    */
   resetForSnapshot(): void {
+    // Why kept: an older host's snapshot cannot restate modifyOtherKeys, so absence proves nothing.
+    // A dead app's level is cleared by the shell and process-boundary grounds instead.
+    const modifyOtherKeys = this.modifyOtherKeysState
     this.reset()
+    this.modifyOtherKeysState = modifyOtherKeys
     this.baselineProven = false
     this.currentKnown = false
     this.mainKnown = false
@@ -128,7 +146,7 @@ export class TerminalKittyKeyboardModeTracker {
    */
   restoreSnapshotFlags(flags: number): void {
     const parsed = parseTerminalKittyKeyboardFlags(flags)
-    if (parsed === undefined) {
+    if (parsed === undefined || !this.kittyKeyboard) {
       return
     }
     this.currentFlags = parsed
@@ -163,8 +181,9 @@ export class TerminalKittyKeyboardModeTracker {
     }
     const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
-    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
-    const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
+    const kittyModeRe =
+      // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+      /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u|>4(?:;([0-9]*))?m)/g
     let match: RegExpExecArray | null
     while ((match = kittyModeRe.exec(input)) !== null) {
       if (match[0] === '\x1bc') {
@@ -183,7 +202,14 @@ export class TerminalKittyKeyboardModeTracker {
         this.applyScreenSwitch(match[1], match[2] === 'h')
         continue
       }
-      this.applyKittySequence(match[3], match[4] ?? '', replay)
+      if (match[3] === undefined) {
+        // `CSI > 4 m` and `CSI > 4 ; m` both reset the resource to 0.
+        this.modifyOtherKeysState = Number(match[5] ?? '') || 0
+        continue
+      }
+      if (this.kittyKeyboard) {
+        this.applyKittySequence(match[3], match[4] ?? '', replay)
+      }
     }
   }
 

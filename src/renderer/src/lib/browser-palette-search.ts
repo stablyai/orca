@@ -2,7 +2,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -79,7 +79,7 @@ export type BrowserPaletteSearchResult = {
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-export function isBrowserPaletteQueryTooLarge(
+function isBrowserPaletteQueryTooLarge(
   query: string,
   maxBytes = BROWSER_PALETTE_QUERY_MAX_BYTES
 ): boolean {

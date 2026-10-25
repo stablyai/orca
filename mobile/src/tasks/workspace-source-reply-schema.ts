@@ -1,29 +1,12 @@
 import { z } from 'zod'
-import type { SshConnectionStatus } from '../../../src/shared/ssh-types'
-import {
-  hostUnionArms,
-  openEnum,
-  salvagedOptional,
-  salvagingArray
-} from '../../../src/shared/zod-salvage'
+import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
 
 // The repo and SSH reads the workspace-create drawer runs. Checked against
 // src/main/runtime/rpc/methods/ssh.ts:30-46 (getPublicSshState, SshConnectionState in
 // src/shared/ssh-types.ts:187), src/main/runtime/rpc/methods/preflight.ts:22-30 (both agent probes
 // answer a bare `string[]`), and repo.ts:87-103/:184-192 (the sparse preset envelopes, the ref
 // search and the orca.yaml hooks).
-
-// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
-export const SSH_CONNECTION_STATUS = hostUnionArms<SshConnectionStatus>({
-  disconnected: true,
-  connecting: true,
-  'auth-failed': true,
-  'deploying-relay': true,
-  connected: true,
-  reconnecting: true,
-  'reconnection-failed': true,
-  error: true
-})
 
 const sourceText = (name: string) => salvagedOptional(name, z.string())
 
@@ -78,7 +61,21 @@ export const sshConnectionStateSchema = z
           status: openEnum(SSH_CONNECTION_STATUS, 'disconnected'),
           error: salvagedOptional('error', z.string().nullable()),
           reconnectAttempt: salvagedOptional('reconnectAttempt', z.number()),
-          connectionGeneration: salvagedOptional('connectionGeneration', z.number())
+          connectionGeneration: salvagedOptional('connectionGeneration', z.number()),
+          // Only the start refusal is read, for the desktop-recovery hint; old hosts omit it.
+          managedServer: salvagedOptional(
+            'managedServer',
+            z.looseObject({
+              kind: salvagedOptional('kind', z.string()),
+              serving: salvagedOptional(
+                'serving',
+                z.looseObject({
+                  state: salvagedOptional('state', z.string()),
+                  detail: salvagedOptional('detail', z.string())
+                })
+              )
+            })
+          )
         })
         .nullable()
     )

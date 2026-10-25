@@ -63,5 +63,13 @@ describe('normalizeLoadedProjectCatalog', () => {
     const result = normalizeLoadedProjectCatalog({}, vi.fn())
     expect(result.projects).toEqual([])
     expect(result.projectHostSetups).toEqual([])
+    const malformed = corrupt(makeParsed([], []), {
+      projects: 'not-an-array',
+      projectHostSetups: {}
+    })
+    expect(normalizeLoadedProjectCatalog(malformed, vi.fn())).toEqual({
+      projects: [],
+      projectHostSetups: []
+    })
   })
 })

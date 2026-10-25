@@ -5,7 +5,7 @@ export type DebouncedBatch = {
   events: WatcherEvent[]
   overflowed: boolean
   timer: ReturnType<typeof setTimeout> | null
-  firstEventAt: number
+  lastFlushAt: number
   flushInFlight: boolean
   flushQueued: boolean
   cancelled: boolean
@@ -16,14 +16,13 @@ export function createDebouncedBatch(): DebouncedBatch {
     events: [],
     overflowed: false,
     timer: null,
-    firstEventAt: 0,
+    lastFlushAt: 0,
     flushInFlight: false,
     flushQueued: false,
     cancelled: false
   }
 }
 
-/** Cancel pending and queued flush work when a root is torn down. */
 export function cancelLocalBatchFlush(root: WatchedRoot): void {
   root.batch.cancelled = true
   root.batch.flushQueued = false
@@ -33,5 +32,4 @@ export function cancelLocalBatchFlush(root: WatchedRoot): void {
   }
   root.batch.events = []
   root.batch.overflowed = false
-  root.batch.firstEventAt = 0
 }

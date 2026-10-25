@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  buildAgentPromptPasteBytes,
-  getAgentPromptSubmitDelayMs
-} from '../../shared/agent-prompt-injection'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime
 } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
+import type { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 
@@ -47,7 +46,9 @@ describe('agent prompt submission runtime', () => {
       }
     )
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -63,7 +64,9 @@ describe('agent prompt submission runtime', () => {
       }
     })
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -79,7 +82,9 @@ describe('agent prompt submission runtime', () => {
         runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› review this', Date.now())
       }
     })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
     await vi.runAllTimersAsync()
@@ -97,7 +102,9 @@ describe('agent prompt submission runtime', () => {
       }
     })
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
     await vi.runAllTimersAsync()
@@ -113,7 +120,9 @@ describe('agent prompt submission runtime', () => {
         runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
       }
     })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
     await vi.runAllTimersAsync()
@@ -126,9 +135,9 @@ describe('agent prompt submission runtime', () => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
     expect(writes).toEqual([])
   })
 
@@ -144,9 +153,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
     expect(writes).toEqual([])
   })
 
@@ -159,9 +168,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
     expect(writes).toEqual([])
   })
 
@@ -179,7 +188,9 @@ describe('agent prompt submission runtime', () => {
     )
     runtime.onPtyData('pty-prompt', '}\x07\x07', Date.now())
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
     await vi.runAllTimersAsync()
 
@@ -201,9 +212,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
     expect(writes).toEqual([])
   })
 
@@ -218,7 +229,9 @@ describe('agent prompt submission runtime', () => {
       text: 'Permission required\r\nAllow once\r\nAllow always\r\nReject\r\n'
     })
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -239,7 +252,9 @@ describe('agent prompt submission runtime', () => {
       }
     })
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
     await vi.runAllTimersAsync()
@@ -261,7 +276,9 @@ describe('agent prompt submission runtime', () => {
         runtime.onPtyData('pty-prompt', output, Date.now())
       }
     })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
     await vi.runAllTimersAsync()
@@ -275,6 +292,7 @@ describe('agent prompt submission runtime', () => {
     let writeChecks = 0
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
+      inputKind: 'driving',
       beforeWrite: () => {
         writeChecks += 1
         if (writeChecks === 2) {
@@ -295,6 +313,7 @@ describe('agent prompt submission runtime', () => {
     let writeChecks = 0
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
+      inputKind: 'driving',
       beforeWrite: () => {
         writeChecks += 1
         if (writeChecks === 2) {
@@ -323,9 +342,9 @@ describe('agent prompt submission runtime', () => {
     )
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
     expect(writes).toEqual([])
   })
 
@@ -373,7 +392,9 @@ describe('agent prompt submission runtime', () => {
     )
     vi.setSystemTime(2_000)
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -393,7 +414,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -412,7 +435,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
     await vi.runAllTimersAsync()
 
@@ -436,7 +461,9 @@ describe('agent prompt submission runtime', () => {
       Date.now()
     )
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -457,6 +484,7 @@ describe('agent prompt submission runtime', () => {
     )
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving',
       acceptQueued: true,
       requestId: 'queued-output-only',
       observationTimeoutMs: 0
@@ -470,434 +498,282 @@ describe('agent prompt submission runtime', () => {
 
   // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
   // the same path a headless `orca serve` host and a minimized desktop window take.
-  async function createHookOnlyPromptRuntime(
-    hook: {
-      state: 'done' | 'working'
-      stateStartedAt: number
-    },
-    launchAgent: 'kimi' | 'codex' = 'kimi'
-  ): Promise<{
-    runtime: OrcaRuntimeService
-    handle: string
-    writes: string[]
-  }> {
-    let handle = ''
-    const writes: string[] = []
-    const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'prompt-pane',
-          terminalHandle: handle,
-          state: hook.state,
-          prompt: '',
-          agentType: launchAgent,
-          connectionId: null,
-          // Why: every hook ping refreshes receivedAt, including same-state tool pings.
-          receivedAt: Date.now(),
-          stateStartedAt: hook.stateStartedAt
-        }
-      ]
-    })
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    handle = (
-      await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
-        launchAgent
+})
+
+const PTY = 'pty-input-dispatch'
+const HANDLE = 'term_input_dispatch'
+
+function inputDispatchRuntime() {
+  const result = new OrcaRuntimeService()
+  const write = vi.fn(() => true)
+  result.setPtyController({
+    write,
+    writeWithSettlement: settledWriteStub(write),
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  result.registerPty(PTY, 'repo::/tmp/input-dispatch', null, {
+    tabId: '11111111-1111-4111-8111-111111111111',
+    leafId: '22222222-2222-4222-8222-222222222222',
+    incarnationId: 'input-dispatch-test'
+  })
+  result.registerPreAllocatedHandleForPty(PTY, HANDLE)
+  return result
+}
+
+describe('terminal input dispatch through the current runtime', () => {
+  it.each(['pty', 'leaf'])('uses the runtime writer override in the %s lane', async (lane) => {
+    const target = inputDispatchRuntime()
+    if (lane === 'leaf') {
+      Object.defineProperties(target, {
+        getLivePtyForHandle: { value: () => null },
+        getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
+        isLeafPtyProvenAbsent: { value: async () => false }
       })
-    ).handle
-    return { runtime, handle, writes }
-  }
+    }
+    const writer = vi.fn(function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<RuntimeTerminalWriter['writeAction']>
+    ) {
+      expect(this).toBe(target)
+      expect(args).toHaveLength(4)
+      expect(args[0]).toBe(PTY)
+      return Promise.resolve()
+    })
+    Object.defineProperty(target, 'writeTerminalAction', { value: writer })
 
-  it('accepts a hook working status with no window and no title coverage', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const hook = { state: 'done' as 'done' | 'working', stateStartedAt: 1_000 }
-    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        if (data === '\r') {
-          vi.setSystemTime(3_000)
-          hook.state = 'working'
-          hook.stateStartedAt = 3_000
+    await expect(
+      target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
+    expect(writer).toHaveBeenCalledOnce()
+  })
+
+  it.each(['pty', 'leaf'])(
+    'captures the prompt writer before spreading options in the %s lane',
+    async (lane) => {
+      const target = inputDispatchRuntime()
+      const calls: string[] = []
+      if (lane === 'leaf') {
+        Object.defineProperties(target, {
+          getLivePtyForHandle: { value: () => null },
+          getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
+          isLeafPtyProvenAbsent: { value: async () => false }
+        })
+      }
+      const captured = function (this: OrcaRuntimeService, ...args: unknown[]) {
+        expect(this).toBe(target)
+        expect(args).toHaveLength(5)
+        calls.push('captured')
+        return Promise.resolve({ submits: 1 })
+      }
+      Object.defineProperties(target, {
+        serializeAgentPromptSubmission: {
+          value: (_id: string, _generation: number, submit: () => Promise<{ submits: number }>) =>
+            submit()
+        },
+        assertLiveTerminalHandleTargetsPty: { value: () => {} },
+        assertAgentPromptGeneration: { value: () => {} },
+        writeTerminalAgentPrompt: { value: captured, configurable: true }
+      })
+      const options = { inputKind: 'launch' as const }
+      Object.defineProperty(options, 'marker', {
+        enumerable: true,
+        get() {
+          Object.defineProperty(target, 'writeTerminalAgentPrompt', {
+            value: () => {
+              calls.push('late')
+              return Promise.resolve({ submits: 1 })
+            }
+          })
+          return true
         }
-        return true
+      })
+
+      await target.sendTerminalAgentPrompt(HANDLE, 'hello', options)
+      expect(calls).toEqual(['captured'])
+    }
+  )
+
+  it('captures permission validation before the nested activity lookup replaces it', async () => {
+    const target = inputDispatchRuntime()
+    let activityReads = 0
+    Object.defineProperties(target, {
+      assertAgentPromptGeneration: { value: () => {} },
+      getPtyWriteHostPlatform: { value: () => 'linux' },
+      getAgentPromptActivity: {
+        value: () => {
+          activityReads += 1
+          if (activityReads === 2) {
+            Object.defineProperty(target, 'assertAgentPromptPermissionSafe', {
+              value: () => {
+                throw new Error('late')
+              }
+            })
+          }
+          return {}
+        }
       },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    await vi.runAllTimersAsync()
-
-    await expect(submission).resolves.toMatchObject({ accepted: true })
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-  })
-
-  // Why: same-state pings keep refreshing receivedAt on a turn that started before the prompt;
-  // only the pinned stateStartedAt separates that from a turn this prompt started.
-  it('does not accept a hook row refreshed without a new working turn', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const { runtime, handle, writes } = await createHookOnlyPromptRuntime({
-      state: 'working',
-      stateStartedAt: 1_000
-    })
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-  })
-
-  it('reserves a hook-only turn start for the oldest queued prompt receipt', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const hook = { state: 'working' as const, stateStartedAt: 1_000 }
-    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
-
-    const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
-      acceptQueued: true,
-      requestId: 'hook-queued-first',
-      observationTimeoutMs: 0
-    })
-    await vi.runAllTimersAsync()
-    const first = await firstPromise
-    expect(first.prompt?.stages).toEqual(['input_accepted'])
-
-    const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 20_000)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        if (data === '\r') {
-          hook.stateStartedAt = Date.now()
-        }
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
-      acceptQueued: true,
-      requestId: 'hook-queued-second',
-      observationTimeoutMs: 500
-    })
-    await vi.runAllTimersAsync()
-
-    await expect(firstObserved).resolves.toMatchObject({
-      stages: ['input_accepted', 'turn_started']
-    })
-    const second = await secondPromise
-    expect(second).toMatchObject({
-      prompt: { stages: ['input_accepted'] }
-    })
-
-    const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
-    hook.stateStartedAt += 1
-    await vi.advanceTimersByTimeAsync(50)
-
-    await expect(secondObserved).resolves.toMatchObject({
-      stages: ['input_accepted', 'turn_started']
-    })
-  })
-
-  it('does not write Enter after the PTY generation changes during settlement', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('terminal_handle_stale')
-
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes.some((data) => data.includes(AGENT_PROMPT_BRACKETED_PASTE_END))).toBe(true)
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      runtime.getPtyOutputSequence('pty-prompt')
-    )
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(writes).not.toContain('\r')
-  })
-
-  it('does not reuse explicit permission status across a provider generation reset', async () => {
-    vi.useFakeTimers()
-    const controller = new AbortController()
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'continued' },
-      0
-    )
-    runtime.onPtyData(
-      'pty-prompt',
-      '\x1b]9999;{"state":"waiting","agentType":"aider"}\x07',
-      Date.now()
-    )
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      0
-    )
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      signal: controller.signal
-    })
-    const rejected = expect(submission).rejects.toThrow('request_aborted')
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(writes.some((data) => data.includes(AGENT_PROMPT_BRACKETED_PASTE_END))).toBe(true)
-    controller.abort()
-    await vi.runAllTimersAsync()
-    await rejected
-  })
-
-  it('does not reuse output-only permission across a provider generation reset', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-      }
-    })
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'continued' },
-      0
-    )
-    runtime.onPtyData(
-      'pty-prompt',
-      'Permission required\nAllow once\nAllow always\nReject\n',
-      Date.now()
-    )
-    const sequenceAtSpawnStart = runtime.getPtyOutputSequence('pty-prompt')
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      sequenceAtSpawnStart
-    )
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    await vi.runAllTimersAsync()
-
-    await expect(submission).resolves.toMatchObject({ accepted: true })
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-  })
-
-  it('fails closed when new bytes race a reset after old permission output', async () => {
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'continued' },
-      0
-    )
-    runtime.onPtyData(
-      'pty-prompt',
-      'Permission required\nAllow once\nAllow always\nReject\n',
-      Date.now()
-    )
-    const sequenceAtSpawnStart = runtime.getPtyOutputSequence('pty-prompt')
-    runtime.onPtyData('pty-prompt', 'replacement startup output\n', Date.now())
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      sequenceAtSpawnStart
-    )
-
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'review this')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
-    expect(writes).toEqual([])
-  })
-
-  it('reports permission reached after the first Enter as blocked', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
-      }
-    })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
-
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-  })
-
-  it('serializes concurrent prompt submissions within one PTY generation', async () => {
-    vi.useFakeTimers()
-    let enterCount = 0
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        enterCount += 1
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
-      }
-    })
-
-    const first = runtime.sendTerminalAgentPrompt(handle, 'first prompt')
-    const second = runtime.sendTerminalAgentPrompt(handle, 'second prompt')
-    await vi.runAllTimersAsync()
-    await Promise.all([first, second])
-
-    const firstPaste = writes.findIndex((data) => data.includes('first prompt'))
-    const firstEnter = writes.indexOf('\r', firstPaste + 1)
-    const secondPaste = writes.findIndex((data) => data.includes('second prompt'))
-    const secondEnter = writes.indexOf('\r', secondPaste + 1)
-    expect(firstPaste).toBeGreaterThanOrEqual(0)
-    expect(firstEnter).toBeGreaterThan(firstPaste)
-    expect(secondPaste).toBeGreaterThan(firstEnter)
-    expect(secondEnter).toBeGreaterThan(secondPaste)
-    expect(enterCount).toBe(2)
-  })
-
-  it('reserves a lifecycle transition for only one queued prompt receipt', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
-    runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-
-    const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
-      acceptQueued: true,
-      requestId: 'queued-first',
-      observationTimeoutMs: 0
-    })
-    await vi.runAllTimersAsync()
-    const first = await firstPromise
-    const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
-      acceptQueued: true,
-      requestId: 'queued-second',
-      observationTimeoutMs: 0
-    })
-    await vi.runAllTimersAsync()
-    const second = await secondPromise
-
-    runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07\x1b]0;Codex working\x07', Date.now())
-    const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 1_000)
-    await vi.runAllTimersAsync()
-    const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
-    await vi.runAllTimersAsync()
-
-    await expect(firstObserved).resolves.toMatchObject({
-      stages: ['input_accepted', 'turn_started']
-    })
-    await expect(secondObserved).resolves.toMatchObject({
-      stages: ['input_accepted']
-    })
-  })
-
-  it('does not queue a replacement generation behind an obsolete submission', async () => {
-    vi.useFakeTimers()
-    let releaseFirst!: () => void
-    let firstWriteReached!: () => void
-    const firstWrite = new Promise<void>((resolve) => {
-      firstWriteReached = resolve
-    })
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve
-    })
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-      }
-    })
-
-    const first = runtime.sendTerminalAgentPrompt(handle, 'obsolete prompt', {
-      beforeWrite: async () => {
-        firstWriteReached()
-        await firstGate
-      }
-    })
-    await firstWrite
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      0
-    )
-
-    const replacement = runtime.sendTerminalAgentPrompt(handle, 'replacement prompt')
-    await vi.runAllTimersAsync()
-    await expect(replacement).resolves.toMatchObject({ accepted: true })
-    expect(writes.some((data) => data.includes('replacement prompt'))).toBe(true)
-
-    releaseFirst()
-    await expect(first).rejects.toThrow('terminal_handle_stale')
-  })
-
-  it('does not close a partial paste after the PTY generation changes', async () => {
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    let writeChecks = 0
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
-      beforeWrite: () => {
-        writeChecks += 1
-        if (writeChecks === 2) {
-          runtime.synchronizePtyOutputSequenceFromProvider(
-            'pty-prompt',
-            { value: 0, generation: 'reset' },
-            runtime.getPtyOutputSequence('pty-prompt')
-          )
+      assertAgentPromptPermissionSafe: {
+        configurable: true,
+        value: function (this: OrcaRuntimeService) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(2)
+          if (activityReads === 2) {
+            throw new Error('captured')
+          }
         }
       }
     })
 
-    await expect(submission).rejects.toThrow('terminal_handle_stale')
-    expect(writes).toHaveLength(1)
-    expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    await expect(
+      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', {
+        inputKind: 'driving',
+        composerReady: true
+      })
+    ).rejects.toThrow('captured')
+    expect(activityReads).toBe(2)
   })
 
-  it('does not send delayed Enter after cancellation during settlement', async () => {
-    vi.useFakeTimers()
-    const controller = new AbortController()
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      signal: controller.signal
+  it('keeps the activity cache omitted in the baseline read', async () => {
+    const target = inputDispatchRuntime()
+    Object.defineProperty(target, 'assertAgentPromptGeneration', { value: () => {} })
+    const activity = vi.fn(function (this: OrcaRuntimeService) {
+      expect(this).toBe(target)
+      expect(arguments.length).toBe(2)
+      throw new Error('baseline reached')
     })
-    const rejected = expect(submission).rejects.toThrow('request_aborted')
+    Object.defineProperty(target, 'getAgentPromptActivity', { value: activity })
 
-    await vi.advanceTimersByTimeAsync(0)
-    controller.abort()
-    await vi.runAllTimersAsync()
+    await expect(
+      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', { inputKind: 'driving' })
+    ).rejects.toThrow('baseline reached')
+    expect(activity).toHaveBeenCalledOnce()
+  })
+})
 
+describe('input original queue, callback and private method contracts', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('keeps the private retry lookup on the Root receiver before any delay', async () => {
+    const target = inputDispatchRuntime()
+    const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
+      expect(this).toBe(target)
+      expect(args).toEqual([PTY])
+      return null
+    })
+    Object.defineProperty(target, 'getPtyAgent', { value: read })
+    await expect(
+      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
+    ).resolves.toBe(0)
+    expect(read).toHaveBeenCalledOnce()
+  })
+
+  it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
+    const target = inputDispatchRuntime()
+    const gate = Promise.withResolvers<void>()
+    const calls: string[] = []
+    const first = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
+      calls.push('first')
+      await gate.promise
+      throw new Error('rejected submission')
+    })
+    const rejected = expect(first).rejects.toThrow('rejected submission')
+    const second = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
+      calls.push('second')
+      return 2
+    })
+    const freshGeneration = target['serializeAgentPromptSubmission'](PTY, 2, async () => {
+      calls.push('fresh')
+      return 'fresh result'
+    })
+    await expect(freshGeneration).resolves.toBe('fresh result')
+    expect(calls).toEqual(['first', 'fresh'])
+    const replacement = Promise.resolve()
+    const key = `${PTY}\u00001`
+    target['agentPromptSubmissionTailByPtyId'].set(key, replacement)
+    gate.resolve()
     await rejected
-    expect(writes.filter((data) => data === '\r')).toHaveLength(0)
+    await expect(second).resolves.toBe(2)
+    expect(calls).toEqual(['first', 'fresh', 'second'])
+    expect(target['agentPromptSubmissionTailByPtyId'].get(key)).toBe(replacement)
+    expect(target['agentPromptSubmissionTailByPtyId'].has(`${PTY}\u00002`)).toBe(false)
   })
 
-  it('does not send another Enter after cancellation during verification', async () => {
-    vi.useFakeTimers()
-    const controller = new AbortController()
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      signal: controller.signal
+  it('keeps hook presence callback receivers and preserves invalidation failure', async () => {
+    const target = inputDispatchRuntime()
+    const check = vi.fn(async function (this: OrcaRuntimeService, ...args: unknown[]) {
+      expect(this).toBe(target)
+      expect(args).toHaveLength(1)
+      return 'live' as const
     })
-    const rejected = expect(submission).rejects.toThrow('request_aborted')
+    Object.defineProperty(target, 'checkHookAgentPresenceFn', {
+      configurable: true,
+      writable: true,
+      value: check
+    })
+    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
+      configurable: true,
+      value: () => new Set(['pane-first', 'pane-second'])
+    })
+    await expect(target['recheckHookAgentPresenceForPty'](PTY)).resolves.toBe('live')
+    expect(check.mock.calls).toEqual([['pane-first'], ['pane-second']])
+    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
+      value: () => {
+        Object.defineProperty(target, 'checkHookAgentPresenceFn', { value: null })
+        return new Set(['pane-first'])
+      }
+    })
+    await expect(target['recheckHookAgentPresenceForPty'](PTY)).rejects.toBeInstanceOf(TypeError)
+    expect(check).toHaveBeenCalledTimes(2)
+  })
 
-    // Why compute it: the submit delay now follows the payload size and the executing host,
-    // so a hardcoded number aborts before the Enter on some lanes.
-    await vi.advanceTimersByTimeAsync(
-      getAgentPromptSubmitDelayMs(
-        process.platform,
-        Buffer.byteLength(buildAgentPromptPasteBytes('review this'), 'utf8')
+  it.each([
+    { recover: false, hasHandle: false },
+    { recover: true, hasHandle: false },
+    { recover: true, hasHandle: true }
+  ])('keeps captured recovery handle semantics for %j', async ({ recover, hasHandle }) => {
+    const target = inputDispatchRuntime()
+    const pty = target['ptysById'].get(PTY)
+    if (!pty) {
+      throw new Error('registered fixture PTY missing')
+    }
+    pty.lastOscTitleAt = 0
+    pty.lastAgentStatusObservedLive = true
+    if (!hasHandle) {
+      target['handleByPtyId'].delete(PTY)
+    }
+    const foreground = Promise.withResolvers<{
+      controller: RuntimePtyController | null
+      available: boolean
+      process: string | null
+    }>()
+    const reads = vi.fn(() => foreground.promise)
+    const explicit = vi.fn(() => ({ status: 'idle' as const, updatedAt: 0, stateStartedAt: 0 }))
+    Object.defineProperties(target, {
+      readPtyForegroundProcessFromController: { value: reads },
+      getFreshExplicitAgentStatusForPty: { value: explicit },
+      recordTerminalSideEffectFact: { value: vi.fn() }
+    })
+    target['confirmLegacyPtyAgentExit'](PTY, recover, false)
+    target['handleByPtyId'].set(PTY, 'late-handle')
+    foreground.resolve({ controller: target['ptyController'], available: false, process: null })
+    await Promise.resolve()
+    if (recover && !hasHandle) {
+      expect(reads).not.toHaveBeenCalled()
+      expect(explicit).not.toHaveBeenCalled()
+    } else {
+      expect(reads).toHaveBeenCalledOnce()
+      expect(explicit.mock.calls).toEqual(
+        recover
+          ? [
+              [HANDLE, PTY],
+              [HANDLE, PTY]
+            ]
+          : []
       )
-    )
-    // Why: pin the phase boundary so drift fails here instead of as an empty post-abort array.
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-    controller.abort()
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    }
   })
-
 })

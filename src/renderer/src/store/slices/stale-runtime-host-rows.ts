@@ -17,7 +17,7 @@ export function isRemovedRuntimeHostId(
 
 export type DropRuntimeRowsResult<T> = {
   rowsByRepo: Record<string, T[]>
-  removedWorktreeIds: string[]
+  removedRows: T[]
 }
 
 /**
@@ -35,10 +35,10 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   repoIdsWithoutSurvivingOwners?: ReadonlySet<string>
 ): DropRuntimeRowsResult<T> {
   if (removedEnvironmentIds.size === 0) {
-    return { rowsByRepo, removedWorktreeIds: [] }
+    return { rowsByRepo, removedRows: [] }
   }
   let changed = false
-  const removedWorktreeIds: string[] = []
+  const removedRows: T[] = []
   const next: Record<string, T[]> = {}
   for (const [repoId, rows] of Object.entries(rowsByRepo)) {
     const survivors = rows.filter((row) => {
@@ -48,7 +48,7 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
         isRemovedRuntimeHostId(row.hostId, removedEnvironmentIds) ||
         (row.hostId === undefined && repoIdsWithoutSurvivingOwners?.has(repoId) === true)
       ) {
-        removedWorktreeIds.push(row.id)
+        removedRows.push(row)
         return false
       }
       return true
@@ -58,5 +58,19 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
       changed = true
     }
   }
-  return changed ? { rowsByRepo: next, removedWorktreeIds } : { rowsByRepo, removedWorktreeIds: [] }
+  return changed ? { rowsByRepo: next, removedRows } : { rowsByRepo, removedRows: [] }
+}
+
+/**
+ * Drops catalog rows (project groups, folder workspaces) stamped with a removed runtime host, so a
+ * stopped server leaves no empty heading behind. Returns the SAME reference when nothing changed.
+ */
+export function dropRuntimeHostedCatalogRows<T extends { executionHostId?: string | null }>(
+  rows: readonly T[],
+  removedEnvironmentIds: ReadonlySet<string>
+): readonly T[] {
+  const kept = rows.filter(
+    (row) => !isRemovedRuntimeHostId(row.executionHostId, removedEnvironmentIds)
+  )
+  return kept.length === rows.length ? rows : kept
 }

@@ -4,10 +4,7 @@ import type {
   AgentJournalMessageItem
 } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 export type ClaudeMessageEnvelope = {
   sessionId: string
@@ -74,8 +71,7 @@ export function claudeMessageIdentity(
   return { provider: 'claude', sessionId: envelope.sessionId, uuid: envelope.uuid }
 }
 
-/** User bubbles belong to the submitted message; SDK user frames carry echoes
- *  and tool results, so a user envelope keeps only its tool results. */
+/** Submitted messages own user bubbles; retain only tool results from SDK user echoes. */
 export function claudeOutputEnvelope(envelope: ClaudeMessageEnvelope): ClaudeMessageEnvelope {
   if (envelope.role !== 'user') {
     return envelope
@@ -146,11 +142,16 @@ function resultText(value: unknown): string {
     .join('\n')
 }
 
+export function claudeToolResultId(part: Record<string, unknown> | null): string | null {
+  const toolUseId = claudeText(part?.tool_use_id)
+  return part?.type === 'tool_result' ? toolUseId : null
+}
+
 export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolResult[] {
   return envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
-    const toolUseId = claudeText(part?.tool_use_id)
-    return part?.type === 'tool_result' && toolUseId
+    const toolUseId = claudeToolResultId(part)
+    return part && toolUseId
       ? [
           {
             toolUseId,
@@ -181,9 +182,7 @@ export function claudeToolBody(input: {
     input: input.tool.input,
     callId: input.tool.id,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
-    ...(input.result
-      ? { output: boundInlineText(input.result.output, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded }
-      : {})
+    ...(input.result ? { output: journalPayload(input.result.output) } : {})
   }
 }
 

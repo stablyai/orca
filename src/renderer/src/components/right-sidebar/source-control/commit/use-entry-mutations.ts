@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -7,24 +9,24 @@ import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import {
   bulkDiscardRuntimeGitPaths,
+  bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
   stageRuntimeGitPath,
-  unstageRuntimeGitPath,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
-import { useAppStore } from '@/store'
+  unstageRuntimeGitPath
+} from '@/runtime/runtime-git-working-tree-client'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 
 export function useSourceControlEntryMutations({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   refreshActiveGitStatusAfterMutation
 }: {
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   refreshActiveGitStatusAfterMutation: () => Promise<void>
@@ -44,7 +46,7 @@ export function useSourceControlEntryMutations({
         await mutate(
           {
             // Why: route the mutation by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
+            target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -71,7 +73,7 @@ export function useSourceControlEntryMutations({
       // Why: refreshing outside the try keeps a refresh failure from being reported as "Failed to stage"; the refresher reports its own.
       await refreshActiveGitStatusAfterMutation()
     },
-    [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
   const handleStage = useCallback(
@@ -80,8 +82,14 @@ export function useSourceControlEntryMutations({
   )
 
   const handleUnstage = useCallback(
-    (filePath: string): Promise<void> =>
-      runEntryMutation('unstage', filePath, unstageRuntimeGitPath),
+    (filePath: string, oldPath?: string): Promise<void> =>
+      runEntryMutation(
+        'unstage',
+        filePath,
+        oldPath
+          ? (context, path) => bulkUnstageRuntimeGitPaths(context, [path, oldPath])
+          : unstageRuntimeGitPath
+      ),
     [runEntryMutation]
   )
 
@@ -92,33 +100,38 @@ export function useSourceControlEntryMutations({
         return
       }
       const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+        activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
-      await requestEditorSaveQuiesce({
+      const releaseAutoSave = await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
         worktreePath,
         relativePath: filePath,
         runtimeEnvironmentId
       })
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await discardRuntimeGitPath(
-        {
-          // Why: route the discard by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+      // Why finally: autosave of this file stays held, in every workspace, until git has finished.
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        await discardRuntimeGitPath(
+          {
+            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
+        notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId
-        },
-        filePath
-      )
-      notifyEditorExternalFileChange({
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        relativePath: filePath,
-        runtimeEnvironmentId
-      })
+          relativePath: filePath,
+          runtimeEnvironmentId
+        })
+      } finally {
+        releaseAutoSave()
+      }
     },
-    [activeRepoSettings, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, worktreePath]
   )
 
   const discardMany = useCallback(
@@ -127,9 +140,9 @@ export function useSourceControlEntryMutations({
         return
       }
       const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+        activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
-      await Promise.all(
+      const quiesced = await Promise.allSettled(
         filePaths.map((relativePath) =>
           requestEditorSaveQuiesce({
             worktreeId: activeWorktreeId,
@@ -139,27 +152,44 @@ export function useSourceControlEntryMutations({
           })
         )
       )
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await bulkDiscardRuntimeGitPaths(
-        {
-          // Why: route the discard by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        filePaths
+      const releases = quiesced.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
       )
-      for (const relativePath of filePaths) {
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath,
-          runtimeEnvironmentId
-        })
+      const failed = quiesced.find((result) => result.status === 'rejected')
+      // Why: one path that can't be quiesced stops the whole discard; free the holds the rest took.
+      if (failed) {
+        for (const release of releases) {
+          release()
+        }
+        throw failed.reason
+      }
+      try {
+        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        await bulkDiscardRuntimeGitPaths(
+          {
+            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePaths
+        )
+        for (const relativePath of filePaths) {
+          notifyEditorExternalFileChange({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath,
+            runtimeEnvironmentId
+          })
+        }
+      } finally {
+        for (const release of releases) {
+          release()
+        }
       }
     },
-    [activeRepoSettings, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, worktreePath]
   )
 
   return { handleStage, handleUnstage, discardSingle, discardMany }

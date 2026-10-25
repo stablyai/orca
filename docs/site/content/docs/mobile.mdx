@@ -10,8 +10,8 @@ The Orca mobile companion is an iOS/Android app that pairs with your desktop Orc
 <Callout title="Beta">
   The mobile companion is in beta. Install iOS from the [App
   Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview
-  channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current APK
-  0.0.48](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.48/app-release.apk).
+  channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current
+  APK](https://www.onorca.dev/download/android).
 </Callout>
 
 ## What you can do from mobile
@@ -73,7 +73,7 @@ Long-press a tab in the session strip for tab actions, including **Close**, **Cl
 
 The mobile app exposes the same account switcher as the desktop status bar, including inline usage for inactive accounts. The accounts screen shows reset countdowns when a provider reports reset timestamps for its session or weekly window. Switching here switches on the paired desktop.
 
-When the active Codex account has earned **rate-limit reset** credits, the accounts screen shows how many are available (and when the next one expires) and a **Use reset** action. Confirming spends one credit for the current Codex target (host or WSL distro) and refreshes eligible rate-limit windows. The phone journals the attempt so a retry after a flaky connection does not double-spend. Outcomes include success, nothing eligible to reset, no credit left, or that a reset was already applied. See also [Usage & rate-limit tracking](/docs/agents/usage-tracking).
+When the active Codex account has earned **rate-limit reset** credits, the accounts screen shows how many are available (and when the next one expires) and a **Use reset** action. Confirming spends one credit for the current Codex target (host or WSL distro) and refreshes eligible rate-limit windows. As on the desktop, your computer keeps track of the attempt, so retrying after a flaky connection shows the real result and never spends a second credit. Outcomes include success, nothing eligible to reset, no credit left, or that a reset was already applied. See also [Usage & rate-limit tracking](/docs/agents/usage-tracking).
 
 ## Create a workspace
 

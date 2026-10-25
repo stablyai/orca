@@ -5,6 +5,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session-wire'
+import { structuredLaunchSeedOnSavedListing } from '../../../../session-tabs/structured-launch-seed-listing'
 
 const createStructuredWorkerSession = vi.fn(async (_args: Record<string, unknown>) => ({
   identity: { handle: 'structworker_1', sessionId: 'sess_1' },
@@ -69,7 +71,8 @@ describe('the create the seed options land in', () => {
       runtime: {
         resolveStructuredAgentSessionCreateIntent: async () => settingsResolved
       } as never,
-      ensureHost: async () => ({}) as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this prepare path touches only host.deps.modelCatalog, absent here, so options pass through unchecked.
+      ensureHost: async () => ({ deps: {} }) as never,
       envelope: {
         sessionId: 'sess_1',
         clientOperationId: 'op_1',
@@ -100,5 +103,30 @@ describe('the create the seed options land in', () => {
     // replay rather than conflict.
     const [seeded, unseeded] = await Promise.all([prepare({ model: 'gpt-5.6-sol' }), prepare()])
     expect(seeded.envelope.payloadFingerprint).toBe(unseeded.envelope.payloadFingerprint)
+  })
+})
+
+describe('a new Claude chat seeded from a remembered model the saved listing no longer names', () => {
+  it("starts on the listing's default, effort moved to the nearest level, as on main", async () => {
+    const levels = ['low', 'high'].map((value) => ({ value, label: value }))
+    const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: levels }]
+    }))
+    const host = { deps: { modelCatalog: { read } } }
+    const seeded = await structuredLaunchSeedOnSavedListing(
+      host,
+      'claude',
+      { model: 'claude-gone', effort: 'max' },
+      async () => '/repo/wt'
+    )
+    expect(seeded).toEqual({ model: 'opus', effort: 'high' })
+    expect(read).toHaveBeenCalledWith({
+      agent: 'claude',
+      workspacePath: '/repo/wt',
+      savedOnly: true,
+      verifiedOnly: true
+    })
   })
 })

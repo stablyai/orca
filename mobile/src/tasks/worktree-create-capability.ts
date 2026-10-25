@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
-import type { AgentLaunchSupport } from './agent-launch-worktree-create'
+import { readAgentLaunchSupport, type AgentLaunchSupport } from './agent-launch-request'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
@@ -31,25 +27,18 @@ export type NewWorktreeRuntimeCapabilities = {
   hostPlatform: NodeJS.Platform | null
 }
 
-const UNSUPPORTED_CAPABILITIES: NewWorktreeRuntimeCapabilities = {
-  tasksSupported: false,
-  worktreeCreateIdempotency: false,
-  agentLaunch: false,
-  hostPlatform: null
-}
-
 // Why: status.get is safe to replay and must settle before create, independently
 // of slower provider probes, so ambiguous cutover retries are gated correctly.
 export async function readNewWorktreeRuntimeCapabilities(
   client: RpcClient
-): Promise<NewWorktreeRuntimeCapabilities> {
+): Promise<NewWorktreeRuntimeCapabilities | null> {
   for (let migrationRetry = 0; ; migrationRetry += 1) {
     try {
       const status = worktreeCreateCapabilityRead.interpret(
         await worktreeCreateCapabilityRead.request(client)
       )
       if (!status.accepted) {
-        return UNSUPPORTED_CAPABILITIES
+        return null
       }
       const result = status.value
       const capabilities = result.capabilities ?? []
@@ -59,10 +48,7 @@ export async function readNewWorktreeRuntimeCapabilities(
       const advertisedIdempotency = result.worktreeCreateIdempotency
       return {
         tasksSupported: capabilities.includes(MOBILE_TASKS_CAPABILITY),
-        // Unsupported stays plain `false`, the same shape `worktreeCreateIdempotency` uses.
-        agentLaunch: capabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)
-          ? { replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY) }
-          : false,
+        agentLaunch: readAgentLaunchSupport(capabilities),
         worktreeCreateIdempotency: supportsIdempotency
           ? advertisedIdempotency === undefined
             ? { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS }
@@ -70,7 +56,9 @@ export async function readNewWorktreeRuntimeCapabilities(
                 typeof advertisedIdempotency === 'object' &&
                 !Array.isArray(advertisedIdempotency)
               ? resolveWorktreeCreateIdempotencySupport(
-                  (advertisedIdempotency as { dedupeTtlMs?: unknown }).dedupeTtlMs
+                  'dedupeTtlMs' in advertisedIdempotency
+                    ? advertisedIdempotency.dedupeTtlMs
+                    : undefined
                 )
               : { dedupeTtlMs: 0 }
           : false,
@@ -78,7 +66,7 @@ export async function readNewWorktreeRuntimeCapabilities(
       }
     } catch (error) {
       if (!isLogicalClientCutoverError(error) || migrationRetry >= STATUS_CUTOVER_MAX_RETRIES) {
-        return UNSUPPORTED_CAPABILITIES
+        return null
       }
     }
   }
@@ -93,49 +81,125 @@ export function useNewWorktreeRuntimeCapabilities(
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   getAgentLaunchSupport: () => Promise<AgentLaunchSupport | false>
 } {
-  const [tasksSupported, setTasksSupported] = useState(false)
-  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
+  const [capabilityState, setCapabilityState] = useState<{
+    client: RpcClient
+    generation: number | undefined
+    connectedAt: number | null | undefined
+    capabilities: NewWorktreeRuntimeCapabilities
+  } | null>(null)
   const capabilityProbeRef = useRef<{
     client: RpcClient | null
-    promise: Promise<NewWorktreeRuntimeCapabilities>
+    generation: number | undefined
+    connectedAt: number | null | undefined
+    promise: Promise<NewWorktreeRuntimeCapabilities | null>
   } | null>(null)
-  const getCapabilities = useCallback((): Promise<NewWorktreeRuntimeCapabilities> => {
-    if (!capabilityProbeRef.current || capabilityProbeRef.current.client !== client) {
-      // Why: a queued tap can reach Create before passive effects run; lazily
-      // starting one shared probe keeps that path from failing open.
-      capabilityProbeRef.current = {
+  const getCapabilities = useCallback(async (): Promise<NewWorktreeRuntimeCapabilities | null> => {
+    const generation = client?.getGeneration?.()
+    const connectedAt = client?.getLastConnectedAt()
+    let probe = capabilityProbeRef.current
+    if (
+      !probe ||
+      probe.client !== client ||
+      probe.generation !== generation ||
+      probe.connectedAt !== connectedAt
+    ) {
+      // A queued create can arrive before passive effects; share its status barrier.
+      probe = {
         client,
-        promise: client
-          ? readNewWorktreeRuntimeCapabilities(client)
-          : Promise.resolve(UNSUPPORTED_CAPABILITIES)
+        generation,
+        connectedAt,
+        promise: client ? readNewWorktreeRuntimeCapabilities(client) : Promise.resolve(null)
       }
+      capabilityProbeRef.current = probe
     }
-    return capabilityProbeRef.current.promise
+    const capabilities = await probe.promise
+    if (
+      capabilityProbeRef.current !== probe ||
+      client?.getGeneration?.() !== generation ||
+      client?.getLastConnectedAt() !== connectedAt
+    ) {
+      return null
+    }
+    if (!capabilities && capabilityProbeRef.current === probe) {
+      // A failed request says nothing about what the host supports.
+      capabilityProbeRef.current = null
+    }
+    return capabilities
   }, [client])
 
+  useEffect(() => {
+    if (capabilityProbeRef.current?.client !== client) {
+      capabilityProbeRef.current = null
+    }
+  }, [client])
+
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Cleanup cancels the timer and fences async rearming.
   useEffect(() => {
     if (!enabled || !client) {
       return
     }
     let stale = false
-    void getCapabilities().then((capabilities) => {
-      if (!stale) {
-        setTasksSupported(capabilities.tasksSupported)
-        setHostPlatform(capabilities.hostPlatform)
+    let refreshVersion = 0
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let retryDelay = 1_000
+    const refresh = async () => {
+      if (stale) {
+        return
+      }
+      const version = ++refreshVersion
+      clearTimeout(retry)
+      const capabilities = await getCapabilities()
+      if (stale || version !== refreshVersion) {
+        return
+      }
+      if (capabilities) {
+        setCapabilityState({
+          client,
+          generation: client.getGeneration?.(),
+          connectedAt: client.getLastConnectedAt(),
+          capabilities
+        })
+        retryDelay = 1_000
+      }
+      if (!capabilityProbeRef.current && client.getState() === 'connected') {
+        retry = setTimeout(() => void refresh(), retryDelay)
+        retryDelay = Math.min(retryDelay * 2, 30_000)
+      }
+    }
+    const unsubscribe = client.onStateChange((state) => {
+      if (state === 'connected') {
+        setCapabilityState(null)
+        capabilityProbeRef.current = null
+        void refresh()
       }
     })
+    void refresh()
     return () => {
       stale = true
+      clearTimeout(retry)
+      unsubscribe()
     }
-  }, [client, enabled, getCapabilities, setTasksSupported])
+  }, [client, enabled, getCapabilities])
 
   const getWorktreeCreateCutoverSupport = useCallback(
-    () => getCapabilities().then((capabilities) => capabilities.worktreeCreateIdempotency),
+    () =>
+      getCapabilities().then((capabilities) => capabilities?.worktreeCreateIdempotency ?? false),
     [getCapabilities]
   )
   const getAgentLaunchSupport = useCallback(
-    () => getCapabilities().then((capabilities) => capabilities.agentLaunch),
+    () => getCapabilities().then((capabilities) => capabilities?.agentLaunch ?? false),
     [getCapabilities]
   )
-  return { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport, getAgentLaunchSupport }
+  const capabilities =
+    capabilityState?.client === client &&
+    capabilityState?.generation === client?.getGeneration?.() &&
+    capabilityState?.connectedAt === client?.getLastConnectedAt()
+      ? capabilityState?.capabilities
+      : null
+  return {
+    tasksSupported: capabilities?.tasksSupported ?? false,
+    hostPlatform: capabilities?.hostPlatform ?? null,
+    getWorktreeCreateCutoverSupport,
+    getAgentLaunchSupport
+  }
 }

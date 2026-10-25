@@ -18,13 +18,17 @@ export type PtyBindingFastLaneMiss =
   | 'leaf_pty'
   | 'incarnation'
   | 'tombstone'
+  | 'inactive_worktree'
+  | 'defaults_not_applied'
   | 'not_durable'
+  | 'startup_cwd'
 
 export type PtyBindingFastLaneRequest = {
   tabId: string
   leafId: string
   ptyId: string
   incarnationId?: string
+  correctStartupCwd?: string
   expectedSourceBinding?: unknown
 }
 
@@ -56,6 +60,9 @@ export function evaluatePtyBindingFastLane(
     (candidate) => candidate.id === args.tabId
   )
   const layout = session.terminalLayoutsByTabId?.[args.tabId]
+  if (args.correctStartupCwd !== undefined && tab?.startupCwd !== args.correctStartupCwd) {
+    misses.push('startup_cwd')
+  }
   if (!tab) {
     misses.push('tab_missing')
   } else if (
@@ -79,6 +86,16 @@ export function evaluatePtyBindingFastLane(
   }
   if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     misses.push('tombstone')
+  }
+  if (
+    session.activeWorktreeIdsOnShutdown &&
+    !session.activeWorktreeIdsOnShutdown.includes(bindingWorktreeId)
+  ) {
+    misses.push('inactive_worktree')
+  }
+  // Apply writes this guard, so a missing one needs the repair path even when everything else matches.
+  if (session.defaultTerminalTabsAppliedByWorktreeId?.[bindingWorktreeId] !== true) {
+    misses.push('defaults_not_applied')
   }
   if (!durable) {
     misses.push('not_durable')

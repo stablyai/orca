@@ -5,6 +5,11 @@ import {
 } from './agent-title-decoration'
 
 describe('stripLeadingAgentTitleDecoration', () => {
+  it('strips Qoder permission decoration without stripping triangles inside a title', () => {
+    expect(stripLeadingAgentTitleDecoration('▲ Qoder CLI')).toBe('Qoder CLI')
+    expect(stripLeadingAgentTitleDecoration('deploy ▲ complete')).toBe('deploy ▲ complete')
+  })
+
   it("strips Claude's ✳ idle glyph", () => {
     expect(stripLeadingAgentTitleDecoration('✳ Claude Code')).toBe('Claude Code')
   })

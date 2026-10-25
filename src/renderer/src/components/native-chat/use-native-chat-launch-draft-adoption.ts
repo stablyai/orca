@@ -81,7 +81,7 @@ export function useNativeChatLaunchDraftAdoption(args: {
   launchDraft: NativeChatLaunchDraft | null | undefined
   launchDraftResolved: boolean
   draft: string
-  setDraft: (next: string) => void
+  setDraft: (next: string, options?: { unsaved?: boolean }) => void
   setCaret: (next: number) => void
   /** This pane is the tab-wide evidence's owner (`nativeChatLeafOwnsTabWideEvidence`).
    *  Splitting drops it for every pane, so it gates pickup, never cleanup. */
@@ -128,7 +128,8 @@ export function useNativeChatLaunchDraftAdoption(args: {
     // declines the seed permanently instead of resurrecting it on a later clear.
     useAppStore.getState().markNativeChatLaunchDraftAdopted(terminalTabId)
     if (draft === '') {
-      setDraft(launchDraft.text)
+      // Not saved untouched: after a reload no seed is left to replace the copy in the input line.
+      setDraft(launchDraft.text, { unsaved: true })
       setCaret(launchDraft.text.length)
     }
   }, [

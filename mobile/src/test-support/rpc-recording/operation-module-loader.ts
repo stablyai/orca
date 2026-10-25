@@ -1,10 +1,10 @@
-import { compileFunction } from 'node:vm'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import ts from 'typescript'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
 /** One anchored in-memory source edit, resolved by the caller so the loader needs no mutant table. */
@@ -32,7 +32,7 @@ export function operationModuleLoader(
   declared: ReadonlyMap<string, unknown> = new Map()
 ) {
   const cache = new Map<string, OperationModule>()
-  const natives = new Map([...nativeMountingSubstitutes(), ...declared])
+  let natives: Map<string, unknown> | undefined
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
   function pathFor(base: string): string {
@@ -45,12 +45,11 @@ export function operationModuleLoader(
     return file
   }
   function imported(base: string, name: string): unknown {
+    // Most registered adapters are never mounted in this recording.
+    natives ??= new Map([...nativeMountingSubstitutes(), ...declared])
     const native = natives.get(name)
     if (native !== undefined) {
       return native
-    }
-    if (name.startsWith('.') && pathFor(resolve(dirname(base), name)) === sharedModulePath) {
-      return deliveryAmbiguity
     }
     if (!name.startsWith('.')) {
       return new Proxy(
@@ -69,9 +68,21 @@ export function operationModuleLoader(
         }
       )
     }
+    const file = pathFor(resolve(dirname(base), name))
+    if (file === sharedModulePath) {
+      return deliveryAmbiguity
+    }
     return new Proxy(
       {},
-      { get: (_target, key) => load(pathFor(resolve(dirname(base), name)))[String(key)] }
+      {
+        get: (_target, key) => load(file)[String(key)],
+        // CommonJS star reexports enumerate the imported module's own exports.
+        ownKeys: () => Reflect.ownKeys(load(file)),
+        getOwnPropertyDescriptor: (_target, key) => {
+          const descriptor = Reflect.getOwnPropertyDescriptor(load(file), key)
+          return descriptor && { ...descriptor, configurable: true }
+        }
+      }
     )
   }
   function barrel(file: string, source: string): OperationModule {
@@ -106,7 +117,19 @@ export function operationModuleLoader(
               if (
                 new RegExp(`export (?:async )?(?:function|const|class) ${String(key)}\\b`).test(
                   text
-                )
+                ) ||
+                ts
+                  .createSourceFile(target, text, ts.ScriptTarget.Latest, true)
+                  .statements.some(
+                    (entry) =>
+                      ts.isExportDeclaration(entry) &&
+                      !entry.isTypeOnly &&
+                      entry.exportClause &&
+                      ts.isNamedExports(entry.exportClause) &&
+                      entry.exportClause.elements.some(
+                        (binding) => binding.name.text === key && !binding.isTypeOnly
+                      )
+                  )
               ) {
                 return load(target)[String(key)]
               }
@@ -139,17 +162,8 @@ export function operationModuleLoader(
     }
     const exports: OperationModule = {}
     cache.set(file, exports)
-    const output = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        // Product sources use the automatic runtime and never import React, so a classic
-        // `React.createElement` emit throws `React is not defined` on the first screen render.
-        jsx: ts.JsxEmit.ReactJSX
-      }
-    }).outputText
     const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
-    const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
+    const evaluate = compiledOperationModule(file, source, exposure)
     evaluate((name: string) => imported(file, name), exports)
     observeSalvagedReads(file, exports)
     return exports

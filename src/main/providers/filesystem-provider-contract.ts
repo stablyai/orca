@@ -4,7 +4,7 @@ import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult
 } from '../../shared/doc-preview-file-access'
-import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
+import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -12,6 +12,8 @@ export type FileStat = {
   type: 'file' | 'directory' | 'symlink'
   mtime: number
   mtimeMs?: number
+  /** Local only: SSH hosts do not report it. */
+  ctimeMs?: number
   dev?: number
   ino?: number
   nlink?: number
@@ -39,23 +41,12 @@ export type FileRangeReadResult = {
   bytesRead: number
 }
 
-/** Thrown by `readFileRange` when the host cannot serve a positional read.
- *  Callers that tail a file should probe `supportsFileRangeRead()` once and
- *  fall back to a single whole-file snapshot, NOT to a whole-file read per
- *  chunk -- that is quadratic on a growing file. */
-export class FileRangeReadUnsupportedError extends Error {
-  constructor(message = 'Positional file reads are unavailable on this host') {
-    super(message)
-    this.name = 'FileRangeReadUnsupportedError'
-  }
-}
-
 export type IFilesystemProvider = {
-  readDir(dirPath: string): Promise<DirEntry[]>
+  readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
   /** Positional read. Optional because an older remote host cannot serve one.
-   *  Strict by design: it throws `FileRangeReadUnsupportedError` rather than
+   *  Strict by design: it throws when unsupported rather than
    *  silently degrading, so a caller cannot accidentally pay a whole-file
    *  transfer per chunk while tailing.
    *
@@ -98,7 +89,7 @@ export type IFilesystemProvider = {
   renameNoClobber(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
-  search(opts: SearchOptions): Promise<SearchResult>
+  search(opts: SearchOptions, options?: { signal?: AbortSignal }): Promise<SearchResult>
   listFiles(
     rootPath: string,
     options?: {
@@ -106,9 +97,19 @@ export type IFilesystemProvider = {
       signal?: AbortSignal
       maxResults?: number
       searchQuery?: string
+      candidatePaths?: string[]
+      includeIgnored?: boolean
+      followSymlinks?: boolean
     }
   ): Promise<string[]>
-  supportsQuickOpenSearch?(options?: { signal?: AbortSignal }): Promise<boolean>
+  listMarkdownDocuments?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<MarkdownDocument[]>
+  supportsQuickOpenSearch?(options?: {
+    signal?: AbortSignal
+    minimumVersion?: number
+  }): Promise<boolean>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

@@ -45,6 +45,8 @@ export type EphemeralVmApi = {
         connectionType: 'ssh'
         runtime: EphemeralVmRuntimeRecord
         sshTargetId: string
+        /** The managed Orca server the host runs; its workspace lives there. */
+        environmentId?: string
         expectedRefHead?: string
         stderr: string
         warnings: EphemeralVmRecipeResultWarning[]
@@ -60,7 +62,6 @@ export type EphemeralVmApi = {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>

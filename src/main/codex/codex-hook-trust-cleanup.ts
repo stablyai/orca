@@ -26,6 +26,7 @@ import {
   removeStaleWslCodexManagedHookTrustEntries
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import type { CodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
 
 export function collectManagedTrustEntries(
@@ -95,7 +96,9 @@ export function removeStaleRuntimeHookTrustEntries(
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
-    if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
+    const expectedHash = expectedHashes.get(normalizeHookTrustKeyForLookup(key))
+    // Undefined hashes from conflicting tables must not match unexpected keys and survive cleanup.
+    if (expectedHash !== undefined && expectedHash === state.trustedHash) {
       continue
     }
     staleKeys.push(key)
@@ -107,31 +110,38 @@ export function removeStaleRuntimeHookTrustEntries(
 
 export function removeSystemManagedHookTrustEntries(
   systemHomePath: string,
-  hooksJsonPath: string
+  sourcePaths: readonly [string, ...string[]],
+  codexHashes: readonly CodexHookHashes[],
+  tomlPath: string = getSystemCodexConfigTomlPath()
 ): void {
   removeCodexManagedHookTrustEntries({
-    tomlPath: getSystemCodexConfigTomlPath(),
+    codexHashes,
+    tomlPath,
     runtimeHomePath: systemHomePath,
-    sourcePath: hooksJsonPath,
+    sourcePaths,
     command: getManagedCommand(getManagedScriptPath()),
     managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
     timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
   })
 }
 
-export function removeRuntimeManagedHookTrustEntries(configPath: string): void {
+export function removeRuntimeManagedHookTrustEntries(
+  configPath: string,
+  codexHashes: readonly CodexHookHashes[]
+): void {
   try {
     removeCodexManagedHookTrustEntries({
+      codexHashes,
       tomlPath: getCodexConfigTomlPath(),
       runtimeHomePath: getOrcaManagedCodexHomePath(),
-      sourcePath: configPath,
+      sourcePaths: [configPath],
       command: getManagedCommand(getManagedScriptPath()),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
       sourceUsesExplicitCodexHome: true
     })
   } catch (error) {
-    // Best effort — stale trust is harmless once hooks.json no longer references the hook; log so a programmer error isn't silent.
+    // Stale trust is inert once hooks.json no longer references the hook.
     console.warn('[codex-hook-service] failed to clean trust entries', error)
   }
 }
@@ -143,13 +153,13 @@ export function removeWslRuntimeManagedHookTrustEntries(
     removeCodexManagedHookTrustEntries({
       tomlPath: plan.tomlPath,
       runtimeHomePath: pathWin32.dirname(plan.tomlPath),
-      sourcePath: plan.trustConfigPath,
+      sourcePaths: [plan.trustConfigPath],
       command: wrapReadablePosixHookCommand(plan.commandScriptPath),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
     })
   } catch (error) {
-    // Why: best-effort like host cleanup; stale trust is inert once hooks.json no longer points at us.
+    // Stale trust is inert once hooks.json no longer references the hook.
     console.warn('[codex-hook-service] failed to clean WSL trust entries', error)
   }
 }

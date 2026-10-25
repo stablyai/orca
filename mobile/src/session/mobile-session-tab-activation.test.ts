@@ -13,7 +13,7 @@ function clientWith(sendRequest: RpcClient['sendRequest']): Pick<RpcClient, 'sen
 }
 
 describe('mobile session tab activation', () => {
-  it('retries terminal focus once on the authenticated replacement after cutover', async () => {
+  it('retries terminal focus once after cutover', async () => {
     const sendRequest = vi
       .fn<RpcClient['sendRequest']>()
       .mockRejectedValueOnce(new LogicalClientCutoverError())

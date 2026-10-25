@@ -11,6 +11,7 @@ describe('mobile session create warning state', () => {
       createMobileSessionCreateWarningState('Created, but setup failed')
     )
 
+    expect(dismissed).toEqual({ source: 'Created, but setup failed', visible: '' })
     expect(reconcileMobileSessionCreateWarningState(dismissed, 'Created, but setup failed')).toBe(
       dismissed
     )

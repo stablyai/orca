@@ -7,7 +7,6 @@
  * engine is a bundle on `window` and the page's is an import, and both answer exactly this.
  */
 
-/** One cell of a buffer line, as the document inspects it. */
 /** xterm's OSC 8 link service, reached through internals and always guarded. */
 export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: string } | undefined }
 
@@ -27,20 +26,30 @@ export type TerminalInitialOscLink = {
   text?: string
 }
 
+/**
+ * One cell of a buffer line, as the document inspects it.
+ *
+ * The attribute getters answer numbers, which is xterm's own signature for them and the reason
+ * every reader here is a truthiness test rather than a comparison.
+ */
 export type TerminalDocumentCell = {
+  getChars?: () => string
+  getWidth?: () => number
   isBgDefault: () => boolean
+  isBgRGB?: () => boolean
+  getBgColor?: () => number
   extended?: { urlId?: number }
-  isInverse: () => boolean
-  isUnderline?: () => boolean
-  isStrikethrough?: () => boolean
-  isOverline?: () => boolean
+  isInverse: () => number
+  isUnderline?: () => number
+  isStrikethrough?: () => number
+  isOverline?: () => number
 }
 
 /** One buffer line, as the document inspects it. */
 export type TerminalDocumentLine = {
   readonly length: number
   translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
-  getCell?: (x: number, cell?: TerminalDocumentCell | null) => TerminalDocumentCell | null
+  getCell?: (x: number, cell?: TerminalDocumentCell) => TerminalDocumentCell | undefined
 }
 
 /** One side of xterm's buffer, as the document reads it. */
@@ -82,6 +91,12 @@ export type TerminalDocumentTerminal = {
   readonly unicode: { activeVersion: string }
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
+  readonly parser?: {
+    registerOscHandler: (
+      ident: number,
+      callback: (data: string) => boolean
+    ) => TerminalDocumentDisposable
+  }
   readonly textarea?: {
     readOnly: boolean
     tabIndex: number
@@ -97,6 +112,7 @@ export type TerminalDocumentTerminal = {
   onLineFeed?: (listener: () => void) => TerminalDocumentDisposable
   onScroll?: (listener: () => void) => TerminalDocumentDisposable
   onWriteParsed?: (listener: () => void) => TerminalDocumentDisposable
+  onRender?: (listener: () => void) => TerminalDocumentDisposable
   resize: (cols: number, rows: number) => void
   refresh: (start: number, end: number) => void
   dispose: () => void

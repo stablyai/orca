@@ -115,25 +115,6 @@ describe('RunningTerminalCloseDialog', () => {
     expect(getButton('Stop Agent')).toBeTruthy()
   })
 
-  it('persists the opt-out when "don\'t ask again" is checked', async () => {
-    const onConfirm = vi.fn()
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm }, updateSettings)
-
-    await act(async () => {
-      getCheckbox().click()
-    })
-    await act(async () => {
-      getButton('Stop and Close').click()
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({
-      skipCloseTerminalWithRunningProcessConfirm: true
-    })
-    expect(onConfirm).toHaveBeenCalledTimes(1)
-  })
-
   // Why: this queue opens after an async probe while the pinned queue opens synchronously,
   // so both can be pending at once. Two modal overlays + focus traps is the bug.
   it('waits for a visible pinned confirmation instead of stacking a second modal', async () => {

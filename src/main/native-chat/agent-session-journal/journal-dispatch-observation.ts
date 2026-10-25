@@ -8,7 +8,6 @@ export type AgentJournalDispatchObservation = {
   recovered: boolean
 }
 
-/** Returns the latest write-ahead submission for the execution fence. */
 export function latestJournalDispatchObservation(
   journal: {
     submissions: () => readonly AgentJournalSubmission[]

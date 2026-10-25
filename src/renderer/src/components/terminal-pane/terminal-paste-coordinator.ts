@@ -16,27 +16,6 @@ import type {
   WindowsInputRecordNewline
 } from './terminal-paste-model'
 
-export {
-  TERMINAL_PASTE_CHUNK_MAX_BYTES,
-  TERMINAL_PASTE_DIRECT_MAX_BYTES,
-  TERMINAL_PASTE_MAX_BYTES,
-  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
-  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
-} from './terminal-paste-limits'
-export { executeTerminalPastePlan } from './terminal-paste-executor'
-export { getTerminalPasteOperationTimeoutMs } from './terminal-paste-executor'
-export { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
-export { createRedactedPasteDiagnostic } from './terminal-paste-diagnostics'
-export type {
-  TerminalPasteExecutionResult,
-  TerminalPastePayload,
-  TerminalPastePlan,
-  TerminalPasteRuntime,
-  TerminalPasteSource,
-  TerminalPasteTarget,
-  TerminalPasteTextOptions
-} from './terminal-paste-model'
-
 type PlanTerminalPasteArgs = {
   text: string
   source: TerminalPasteSource

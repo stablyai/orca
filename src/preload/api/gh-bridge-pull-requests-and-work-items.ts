@@ -59,6 +59,7 @@ export const ghPullRequestsAndWorkItemsApi = {
   workItemByOwnerRepo: (args: {
     repoPath: string
     repoId?: string | null
+    sourceContext?: TaskSourceContext | null
     owner: string
     repo: string
     host?: string

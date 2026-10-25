@@ -85,7 +85,7 @@ describe('the panel hook under a scope identity', () => {
   it('sends the identity and no path list', async () => {
     const within = { kind: 'project', projectKey: 'repo:repo-1' } as const
     const { unmount } = renderHook(() =>
-      useAiVaultPanelSearch('needle', AGENTS, within, 'ssh:build-box')
+      useAiVaultPanelSearch('needle', AGENTS, within, 'ssh:build-box', 'relevance')
     )
     await debounce()
     expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
@@ -97,7 +97,7 @@ describe('the panel hook under a scope identity', () => {
 
   it('does not restart the search while the identity holds', async () => {
     const { rerender, unmount } = renderHook(() =>
-      useAiVaultPanelSearch('needle', AGENTS, WORKSPACE, 'ssh:build-box')
+      useAiVaultPanelSearch('needle', AGENTS, WORKSPACE, 'ssh:build-box', 'relevance')
     )
     await debounce()
     rerender()

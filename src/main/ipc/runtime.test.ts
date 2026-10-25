@@ -23,6 +23,8 @@ vi.mock('electron', () => ({
 
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
+import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
 
 function runtimeCallEvent() {
   const mainFrame = {}
@@ -72,6 +74,46 @@ describe('registerRuntimeHandlers', () => {
     expect(result).toEqual({ graphStatus: 'ready' })
   })
 
+  it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
+    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    const event = { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame }
+    fromWebContentsMock.mockReturnValue({ id: 17 })
+    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+
+    handler(event, { ...graph, projectSectionCatalog: PROJECT_SECTION_PARITY_SERVED })
+    handler(event, graph)
+
+    expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
+  })
+
+  it('does not serve a catalog from a graph the runtime refused', () => {
+    const refused = { ...PROJECT_SECTION_PARITY_SERVED, projectOrderBy: 'recent' as const }
+    const runtime = {
+      syncWindowGraph: vi.fn(() => {
+        throw new Error('Runtime graph publisher does not match the authoritative window')
+      })
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    fromWebContentsMock.mockReturnValue({ id: 18 })
+
+    expect(() =>
+      handler(
+        { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame },
+        { tabs: [], leaves: [], rendererGeneration: 'renderer-2', projectSectionCatalog: refused }
+      )
+    ).toThrow()
+    expect(readMobileProjectSections().catalog).not.toEqual(refused)
+  })
+
   it('rejects a graph publication queued by a superseded main frame', () => {
     const runtime = {
       syncWindowGraph: vi.fn(),
@@ -107,9 +149,34 @@ describe('registerRuntimeHandlers', () => {
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 
+  it('answers runtime:getStatus only once the machine-name lookup has landed', async () => {
+    let machineName = 'm4-air.local'
+    let finishLookup: (() => void) | undefined
+    const runtime = {
+      machineNameReady: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishLookup = () => {
+              machineName = 'Friendly Name'
+              resolve()
+            }
+          })
+      ),
+      getStatus: vi.fn(() => ({ runtimeId: 'runtime-1', machineName }))
+    }
+
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:getStatus')![1]
+    const pending = handler()
+    finishLookup?.()
+
+    await expect(pending).resolves.toMatchObject({ machineName: 'Friendly Name' })
+  })
+
   it('routes generic local runtime RPC calls through the dispatcher', async () => {
     const runtime = {
       syncWindowGraph: vi.fn(),
+      machineNameReady: vi.fn(async () => undefined),
       getStatus: vi.fn().mockReturnValue({
         runtimeId: 'runtime-1',
         rendererGraphEpoch: 0,
@@ -147,7 +214,7 @@ describe('registerRuntimeHandlers', () => {
     }
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
+      getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
       restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
       listMobileSessionTabs: vi.fn(async () => ({
         worktree: 'workspace-1',
@@ -176,7 +243,7 @@ describe('registerRuntimeHandlers', () => {
       syncWindowGraph: vi.fn(),
       getStatus: vi.fn(),
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      listProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
+      listVisibleProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
     }
 
     registerRuntimeHandlers(runtime as never)

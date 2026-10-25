@@ -19,7 +19,6 @@ import {
   applyCommandMarkerBoundaries,
   clearCommandMarkerCacheForTests,
   commandMarkersAsMessages,
-  isCommandMarkerId,
   readCommandMarkerCache
 } from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
@@ -57,6 +56,39 @@ function imageMessage(id: string, ...paths: string[]): NativeChatMessage {
 const pendingOf = (id: string, text: string): NativeChatPendingSend => ({ id, text, sentAt: 100 })
 
 describe('prunePendingSends', () => {
+  it.each(['/remote/.orca/drops/Screenshot 2026-09-20 at 18.25.43.png', '/tmp/local photo.png'])(
+    'reconciles a pasted attachment path recorded as text: %s',
+    (path) => {
+      const pending = [
+        { ...pendingOf('pending', '看一下'), imagePaths: [path], afterMessageId: null }
+      ]
+      const user = userMessage('real', `${path} 看一下`, 101)
+      expect(pendingSendsAsMessages(pending, [user])).toEqual([])
+      expect(prunePendingSends(pending, [user])).toEqual(pending)
+      expect(prunePendingSends(pending, [user, assistantMessage('reply', '好的', 102)])).toEqual([])
+      expect(
+        prunePendingSends(pending, [
+          userMessage('unrelated', `${path}.other 看一下`, 101),
+          assistantMessage('reply', 'ok', 102)
+        ])
+      ).toEqual(pending)
+    }
+  )
+
+  it('reconciles image-only and multiple attachments without consuming a prior turn', () => {
+    const paths = ['/remote/a.png', '/remote/b.png']
+    const pending = [{ ...pendingOf('pending', ''), imagePaths: paths, afterMessageId: 'old' }]
+    const old = userMessage('old', paths.join(' '), 99)
+    expect(prunePendingSends(pending, [old, assistantMessage('old-reply', 'old', 100)])).toEqual(
+      pending
+    )
+    const messages = [
+      old,
+      userMessage('new', paths.join(''), 101),
+      assistantMessage('reply', 'ok', 102)
+    ]
+    expect(prunePendingSends(pending, messages)).toEqual([])
+  })
   it('returns the same reference when there is nothing pending', () => {
     const pending: NativeChatPendingSend[] = []
     expect(prunePendingSends(pending, [userMessage('m1', 'hi')])).toBe(pending)
@@ -300,6 +332,112 @@ describe('glued rapid sends', () => {
     expect(prunePendingSends(pending, advancedGlueTranscript('hi there'))).toEqual(pending)
   })
 
+  // A draft ending in `\` is a newline request to the agent TUI, not a submit:
+  // measured against Claude Code v2.1.234, `first\` + CR leaves the input open
+  // with the backslash dropped, so the next send lands in the SAME turn
+  // ("first\nsecond"). The echo keeps the backslash the transcript never has.
+  it('still retires literal-backslash sends glued by agents that retain it', () => {
+    const pending = [gluePending('p1', 'run\\'), gluePending('p2', 'again')]
+    expect(prunePendingSends(pending, advancedGlueTranscript('run\\ again'))).toEqual([])
+  })
+
+  it('keeps repeated continuation sends matched to separate transcript occurrences', () => {
+    const pending = [gluePending('p1', 'run\\'), gluePending('p2', 'run\\')]
+    expect(prunePendingSends(pending, advancedGlueTranscript('run again'))).toEqual([pending[1]])
+  })
+
+  it.each(['one\\ two three', 'one two\\ three'])(
+    'retires mixed literal and continuation backslashes in %s',
+    (text) => {
+      const pending = [
+        gluePending('p1', 'one\\'),
+        gluePending('p2', 'two\\'),
+        gluePending('p3', 'three')
+      ]
+      expect(prunePendingSends(pending, advancedGlueTranscript(text))).toEqual([])
+    }
+  )
+
+  it('retires a pair whose first send ended in a continuation backslash', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\'), gluePending('p2', 'continue')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke\ncontinue'))).toEqual(
+      []
+    )
+  })
+
+  it('hides a continuation-backslash pair as soon as its glued row lands', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\'), gluePending('p2', 'continue')]
+
+    expect(pendingSendsAsMessages(pending, glueTranscript('tell me a joke\ncontinue'))).toEqual([])
+  })
+
+  // The observed report: the rest of the turn was finished somewhere this queue
+  // cannot see (another client, or typed into the pane), so the echo is alone.
+  it('retires a lone continuation echo absorbed into a longer turn', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('tell me a joke\nabout cats'))
+    ).toEqual([])
+  })
+
+  it('keeps a continuation echo when a later row only shares its prefix', () => {
+    const pending = [gluePending('p1', 'hi\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('history repeats'))).toEqual(pending)
+  })
+
+  it('retires a continuation echo the user then submitted on its own', () => {
+    // `\` + Enter, then Enter again on the empty line it opened.
+    const pending = [gluePending('p1', 'tell me a joke\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke'))).toEqual([])
+  })
+
+  it('retires a pair when only the last of several backslashes was eaten', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\\\'), gluePending('p2', 'continue')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('tell me a joke\\\ncontinue'))
+    ).toEqual([])
+  })
+
+  it('retires a run of three sends chained by continuations', () => {
+    const pending = [
+      gluePending('p1', 'first\\'),
+      gluePending('p2', 'second\\'),
+      gluePending('p3', 'third')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('first\nsecond\nthird'))).toEqual([])
+  })
+
+  it('retires the reported prompt, whose text is not Latin', () => {
+    const pending = [
+      gluePending('p1', '사양을 올리는게 가능해? 이건 과금의 영역아니야?\\'),
+      gluePending('p2', '일단 퀵하게 되는 버전으로 반영되어야할거같아')
+    ]
+
+    expect(
+      prunePendingSends(
+        pending,
+        advancedGlueTranscript(
+          '사양을 올리는게 가능해? 이건 과금의 영역아니야?\n일단 퀵하게 되는 버전으로 반영되어야할거같아'
+        )
+      )
+    ).toEqual([])
+  })
+
+  it('keeps a continuation echo the row breaks mid-word', () => {
+    // The run must stop on the separator the TUI's newline normalizes to.
+    const pending = [gluePending('p1', 'tell me a jo\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke about cats'))).toEqual(
+      pending
+    )
+  })
+
   it('keeps a queued pair when an earlier turn splits across it (#14406 regression)', () => {
     // The row predates both sends: "run the tests"+"again" only looks glued.
     const pending = [pendingOf('p1', 'run the tests'), pendingOf('p2', 'again')]
@@ -480,6 +618,27 @@ describe('pendingSendsAsMessages', () => {
       'pending:new-send'
     ])
     expect(prunePendingSends(pending, history)).toEqual(pending)
+  })
+
+  // #11519: a first send into a settled empty transcript has no row to compare, and the
+  // host that writes the transcript may run a clock behind this one.
+  it('retires a send into a settled empty transcript whatever the host clock says', () => {
+    const fiveMinutes = 5 * 60_000
+    const pending = [
+      {
+        ...pendingOf('first-send', 'run tests'),
+        sentAt: 1_000_000,
+        afterMessageId: null,
+        afterEmptyTranscriptSessionId: 'session-1'
+      }
+    ]
+    const hostBehind = [
+      { ...userMessage('u1', 'run tests'), timestamp: 1_000_000 - fiveMinutes },
+      { ...assistantMessage('a1', 'passed'), timestamp: 1_000_000 - fiveMinutes + 10 }
+    ]
+
+    expect(pendingSendsAsMessages(pending, hostBehind)).toEqual([])
+    expect(prunePendingSends(pending, hostBehind)).toEqual([])
   })
 
   it('uses the transcript boundary clock after pagination, not the renderer send clock', () => {
@@ -694,11 +853,6 @@ describe('commandMarkersAsMessages', () => {
     const markers = commandMarkersAsMessages([{ id: 'c1', command: '/compact', sentAt: 1 }])
     expect(stripNoiseMessages(markers)).toEqual(markers)
   })
-
-  it('isCommandMarkerId recognizes the prefix', () => {
-    expect(isCommandMarkerId('command:c1')).toBe(true)
-    expect(isCommandMarkerId('pending:p1')).toBe(false)
-  })
 })
 
 describe('command marker cache', () => {
@@ -806,5 +960,16 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
     expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
       1
     )
+  })
+})
+
+describe('commandMarkersAsMessages with a host answer', () => {
+  it('shows the answer in place of the Ran line', () => {
+    const [message] = commandMarkersAsMessages([
+      { id: 'c2', command: '/context', sentAt: 9, output: 'Context: 54.6k / 200k tokens (27%)' }
+    ])
+    expect(message?.role).toBe('system')
+    // Plain text: it draws as the muted aside the Ran line would have been.
+    expect(message?.blocks).toEqual([{ type: 'text', text: 'Context: 54.6k / 200k tokens (27%)' }])
   })
 })

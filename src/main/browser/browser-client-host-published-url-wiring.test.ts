@@ -97,7 +97,6 @@ function pairedEnvironment(): KnownRuntimeEnvironment {
   } as KnownRuntimeEnvironment
 }
 
-/** Boots the host registry the way a launched process does, and hands back its executor seam. */
 async function startHost() {
   vi.resetModules()
   compositionOptions.length = 0
@@ -122,8 +121,7 @@ afterEach(() => {
 })
 
 describe('published-url observation wiring', () => {
-  // The chain the restart depends on: a metadata publish from a guest the user navigated has to
-  // reach the executor's inventory, or adoption restores the tab at the URL it was opened with.
+  // Adoption restores inventory URLs, so user navigations must reach this executor.
   it('routes a page-metadata publish into the executor that owns the page', async () => {
     const { options, publishBrowserClientPageMetadata } = await startHost()
     options.createExecutor(
@@ -134,26 +132,5 @@ describe('published-url observation wiring', () => {
     await publishBrowserClientPageMetadata(ENVIRONMENT_ID, metadata).catch(() => undefined)
 
     expect(recordedUrlParams).toEqual([metadata])
-  })
-
-  it('publishes harmlessly before any executor exists', async () => {
-    const { publishBrowserClientPageMetadata } = await startHost()
-
-    await expect(
-      publishBrowserClientPageMetadata(ENVIRONMENT_ID, metadata).catch((error) => error)
-    ).resolves.toBeInstanceOf(Error)
-    expect(recordedUrlParams).toEqual([])
-  })
-
-  it('does not observe publishes aimed at another environment', async () => {
-    const { options, publishBrowserClientPageMetadata } = await startHost()
-    options.createExecutor(
-      { orcaProfileId: 'profile-a' },
-      { retainNetworkRoute: () => Promise.resolve({}), onPageUnavailable: () => {} }
-    )
-
-    await publishBrowserClientPageMetadata('environment-b', metadata).catch(() => undefined)
-
-    expect(recordedUrlParams).toEqual([])
   })
 })

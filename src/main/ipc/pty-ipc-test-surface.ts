@@ -6,11 +6,7 @@ import {
   removeHandlerMock
 } from './pty-ipc-mock-registry'
 
-/**
- * The registration surface pty suites drive. Production injects Electron's `ipcMain`;
- * suites inject this so the existing `handlers` map keeps capturing registrations
- * exactly as it did when the module imported `ipcMain` directly.
- */
+/** Inject the same registration map used by split PTY suites. */
 export function testPtyIpcSurface(): PtyIpcSurface {
   return {
     handle: handleMock as unknown as PtyIpcSurface['handle'],

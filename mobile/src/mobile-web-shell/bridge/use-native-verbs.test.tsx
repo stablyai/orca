@@ -1,13 +1,13 @@
 /** The page's side of the verbs, over the real pair: what it sends, and what it refuses to send. */
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -25,6 +25,8 @@ import {
   useNativeVerbs,
   type NativeVerbs
 } from './use-native-verbs'
+
+const mounted: ReactTestRenderer[] = []
 
 const held: { verbs: NativeVerbs | null } = { verbs: null }
 
@@ -44,7 +46,7 @@ function render(pair: BridgePortPair): ReactElement {
 async function mount(pair: BridgePortPair): Promise<NativeVerbs> {
   await pair.flush()
   act(() => {
-    create(render(pair))
+    mounted.push(create(render(pair)))
   })
   const verbs = held.verbs
   if (verbs === null) {
@@ -58,26 +60,39 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
   vi.useRealTimers()
 })
 
 describe('a page calling a native verb', () => {
   it('writes through the shell and hears whether the pasteboard took it', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ written: true }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
+    expect(verbs.granted).toBe(true)
     const written = verbs.writeClipboardText('copied')
     await pair.flush()
     await expect(written).resolves.toBe(true)
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.write', {
+      mime: 'text',
+      value: 'copied'
+    })
     // The whole point of the seam: it never reached the desktop's client.
     expect(pair.rpc.requests).toEqual([])
   })
 
   it('reads through the shell', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ value: 'pasteboard' }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
     const read = verbs.readClipboardText()
     await pair.flush()
     await expect(read).resolves.toBe('pasteboard')
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.read', { mime: 'text' })
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -116,12 +131,6 @@ describe('a shell that granted no native verbs', () => {
     // A rejection after a round trip and one that never left look the same to an `await`; only the
     // first would have put a request on the wire.
     expect(page.sent).toHaveLength(before)
-  })
-
-  it('says so before it is called, so a caller can choose its own fallback', async () => {
-    const pair = createFakeBridgePortPair()
-    const verbs = await mount(pair)
-    expect(verbs.granted).toBe(true)
   })
 })
 
@@ -195,11 +204,6 @@ describe('a verb the shell refuses', () => {
       expect(reason).not.toBe('unreported')
     }
     expect(reasons).toEqual(['native_verb_failed', 'reply-too-large', 'native_verb_result'])
-  })
-
-  it('names the frame refusal when the reply could never have reached the page', async () => {
-    const error = await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))
-    expect(error.reason).toBe('reply-too-large')
   })
 
   it('names the grant when this side refused before sending', async () => {

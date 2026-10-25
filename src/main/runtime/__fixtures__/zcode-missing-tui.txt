@@ -1,0 +1,1 @@
+Error: Cannot find package '@zcode/tui' imported from /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs

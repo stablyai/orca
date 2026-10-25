@@ -9,6 +9,65 @@ import {
 import type { MobileDiffLine } from './mobile-diff-lines'
 
 describe('mobile file syntax highlighting', () => {
+  it.each([
+    ['.env', 'ini'],
+    ['.env.local', 'ini'],
+    ['.env.development', 'ini'],
+    ['.env.production', 'ini'],
+    ['.env.functions.local', 'ini'],
+    ['.env.staging', 'ini'],
+    ['.env.test.example', 'ini'],
+    ['config/.env.development.local', 'ini'],
+    ['.ENV', 'ini'],
+    ['.ENV.STAGING', 'ini'],
+    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'ini'],
+    ['\\\\server\\share\\.env.test.example', 'ini'],
+    ['.env.sh', 'shell'],
+    ['.ENV.SH', 'shell'],
+    ['.env.json', 'json'],
+    ['.env.local.ts', 'typescript'],
+    ['.env/CMakeLists.txt', 'cmake'],
+    ['C:\\repo\\.env.local\\Dockerfile', 'dockerfile'],
+    ['.envrc', 'plaintext'],
+    ['.environment', 'plaintext'],
+    ['env.staging', 'plaintext'],
+    ['dev.env', 'plaintext'],
+    ['other.env.local', 'plaintext'],
+    ['..env.local', 'plaintext'],
+    ['.env.staging/readme', 'plaintext'],
+    ['C:\\repo\\.env.local\\notes', 'plaintext'],
+    ['', 'plaintext']
+  ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
+    expect(detectMobileFileLanguage(filePath)).toBe(expected)
+  })
+
+  it('keeps a mobile language preference ahead of the dotenv fallback', () => {
+    expect(detectMobileFileLanguage('.env.staging', ' JSON ')).toBe('json')
+    expect(detectMobileFileLanguage('.env.staging', ' plaintext ')).toBe('ini')
+  })
+
+  it('highlights dotenv file and diff contents with the bundled ini grammar', () => {
+    const language = resolveMobileSyntaxLanguage('.env.functions.local', 'plaintext')
+    const content = '# Local settings\nAPI_URL="https://example.test"\nPORT=54321'
+    expect(language).toBe('ini')
+    const file = highlightMobileCode(content, language)
+    expect(file.highlighted).toBe(true)
+    expect(file.segments.map((segment) => segment.text).join('')).toBe(content)
+    expect(file.segments).toEqual(
+      expect.arrayContaining([
+        { text: '# Local settings', kind: 'comment' },
+        { text: 'API_URL', kind: 'variable' },
+        { text: '"https://example.test"', kind: 'string' }
+      ])
+    )
+    const [line] = highlightMobileDiffLines(
+      [{ kind: 'add', text: 'PORT=54321', newLineNumber: 3 }],
+      language
+    )
+    expect(line).toMatchObject({ kind: 'add', newLineNumber: 3, highlighted: true })
+    expect(line?.segments).toContainEqual({ text: 'PORT', kind: 'variable' })
+  })
+
   it('detects common source languages from file paths', () => {
     expect(detectMobileFileLanguage('src/App.tsx')).toBe('typescript')
     expect(detectMobileFileLanguage('config/vitest.config.mts')).toBe('typescript')

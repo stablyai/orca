@@ -5,6 +5,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { resolveOpenTabOccupantAgent } from './open-tab-occupant-agent'
 
 const TAB_ID = 'tab-1'
@@ -70,7 +71,7 @@ function retained(leafId: string, agentType: TuiAgent): RetainedAgentEntry {
 
 function resolve(
   overrides: Partial<Parameters<typeof resolveOpenTabOccupantAgent>[0]> = {}
-): TuiAgent | null {
+): TerminalAgent | null {
   return resolveOpenTabOccupantAgent({
     tabId: TAB_ID,
     agentStatusByPaneKey: {},
@@ -81,6 +82,19 @@ function resolve(
 }
 
 describe('resolveOpenTabOccupantAgent', () => {
+  it('recognizes a manually started DeepSeek Build tab whose task names Codex', () => {
+    expect(resolve({ title: '⠋ - Review Codex integration - DeepSeek Build' })).toBe('dsb')
+    expect(
+      resolve({
+        title: 'Terminal',
+        paneForegroundAgentByPaneKey: {
+          [makePaneKey(TAB_ID, LEAF_A)]: { agent: 'dsb', shellForeground: false }
+        },
+        layout: layout(LEAF_A)
+      })
+    ).toBe('dsb')
+  })
+
   it('uses launchAgent when no hook or sleeping record exists', () => {
     expect(resolve({ launchAgent: 'grok' })).toBe('grok')
   })

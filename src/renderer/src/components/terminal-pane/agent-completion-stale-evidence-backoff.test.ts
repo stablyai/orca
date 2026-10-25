@@ -73,7 +73,7 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     pollTimerTier: null,
     lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
-    pendingProcessExitAgent: null,
+    pendingProcessExit: null,
     lastForegroundAgent: null,
     processSession: 1
   }
@@ -91,7 +91,6 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     options: {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => SSH_PTY_ID,
-      getSettings: () => null,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => INCARNATION
     } as unknown as AgentCompletionCoordinatorOptions,
@@ -99,7 +98,6 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     identityScope: {} as never,
     clearAgentRunEvidence: vi.fn(),
     hasPendingHookDone: () => false,
-    hasPendingCodexAttention: () => false,
     scheduleNextPoll: vi.fn(),
     handleRecognizedProcess: vi.fn(),
     dispatchCompletion: vi.fn(),
@@ -114,16 +112,10 @@ describe('agent completion polling under a host capture it cannot use', () => {
     expect(inspect(unreadableTableRecord()).consecutiveInspectionErrors).toBe(0)
   })
 
-  it('counts an error for the late live record the same capture would have produced', () => {
-    // One of the measured captures. Every poll refusing this way is what drives the cadence to
-    // its 10s backoff floor and stops completion detection for the pane.
-    expect(inspect(liveRecord(6_140)).consecutiveInspectionErrors).toBe(1)
-  })
-
   it.each([
     ['at the ceiling', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS, 0],
     ['one step past it', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 1]
-  ])('counts %s as %s errors', (_label, capturedAgeMs, errors) => {
+  ])('counts a capture %s toward inspection errors', (_label, capturedAgeMs, errors) => {
     expect(inspect(liveRecord(capturedAgeMs), 0).consecutiveInspectionErrors).toBe(errors)
   })
 

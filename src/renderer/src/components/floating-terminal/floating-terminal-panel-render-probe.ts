@@ -20,7 +20,21 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
     return
   }
   cb(element)
-  visit(element.props.children, cb)
+  // Why: WorkspaceTabDragLayer takes a render prop; walk its children with an inert drag state
+  // so the titlebar strip and body tree stay reachable without invoking dnd-kit.
+  const children = element.props.children
+  if (typeof children === 'function') {
+    visit(
+      children({
+        isTabDragActive: false,
+        hoveredTabInsertion: null,
+        setDragRootNode: () => {}
+      }),
+      cb
+    )
+    return
+  }
+  visit(children, cb)
 }
 
 export function findByTypeName(node: unknown, typeName: string): ReactElementLike {
@@ -39,22 +53,6 @@ export function findByTypeName(node: unknown, typeName: string): ReactElementLik
   if (!found) {
     throw new Error(`${typeName} not found`)
   }
-  return found
-}
-
-export function findAllByTypeName(node: unknown, typeName: string): ReactElementLike[] {
-  const found: ReactElementLike[] = []
-  visit(node, (entry) => {
-    const candidate =
-      typeof entry.type === 'function' || typeof entry.type === 'object'
-        ? ((entry.type as { displayName?: string; name?: string }).displayName ??
-          (entry.type as { displayName?: string; name?: string }).name ??
-          '')
-        : entry.type
-    if (candidate === typeName) {
-      found.push(entry)
-    }
-  })
   return found
 }
 

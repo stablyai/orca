@@ -112,6 +112,43 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
+type HostListSettings = {
+  showPinnedWorktreesInGroups: boolean
+  compactWorktreeCards: boolean
+  newCardStyle: boolean
+}
+
+// Why `=== true` throughout: a host predating a setting sends no key, and each desktop default is off.
+const hostListSettingsReader: RpcCompatibleReader<
+  unknown,
+  'host-list-settings',
+  HostListSettings
+> = (raw) => {
+  const settings = raw == null ? undefined : settingsMember(raw)
+  const isOn = (key: string) => settings != null && settingsField(settings, key) === true
+  return {
+    compatible: true,
+    variant: 'host-list-settings',
+    value: {
+      showPinnedWorktreesInGroups: isOn('showPinnedWorktreesInGroups'),
+      compactWorktreeCards: isOn('compactWorktreeCards'),
+      newCardStyle: isOn('experimentalNewWorktreeCardStyle')
+    },
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  }
+}
+
+/** The desktop settings the workspace list mirrors: pinned placement, Card layout and card style. */
+export const hostListSettingsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.host-list-settings-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: hostListSettingsReader
+  })
+)
+
 export const botOverridesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.bot-logins-or-skip',

@@ -2,16 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  deletePtyOwnership,
-  setPtyOwnership,
-  setLocalPtyProvider,
-  rebindLocalProviderListeners,
-  getLocalPtyProvider
-} from './pty'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import type { RuntimePtyController } from '../runtime/runtime-pty-controller-contract'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { deletePtyOwnership, setPtyOwnership } from './pty/provider/ownership-state'
+import { setLocalPtyProvider, getLocalPtyProvider } from './pty/provider/registry'
+import { rebindLocalProviderListeners } from './pty/provider/listener-lifecycle'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -61,22 +57,6 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
     setupPtyIpcSuite()
 
-  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
-    const confirmForegroundProcess = vi.fn(async () => 'codex')
-    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
-    setPtyOwnership('remote-pty', 'ssh-1')
-    const runtime = { setPtyController: vi.fn() }
-    handlers.clear()
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
-    }
-
-    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
-    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
-    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
-    deletePtyOwnership('remote-pty')
-  })
   it('routes runtime exact liveness without enumerating provider sessions', () => {
     const provider = getLocalPtyProvider()
     const hasPty = vi.spyOn(provider, 'hasPty').mockImplementation((id) => id === 'live-pty')
@@ -92,75 +72,6 @@ describe('registerPtyHandlers', () => {
     expect(controller.hasPty('missing-pty')).toBe(false)
     expect(hasPty).toHaveBeenCalledTimes(2)
     expect(listProcesses).not.toHaveBeenCalled()
-  })
-  it('scopes runtime inventories to the requested provider', async () => {
-    const localList = vi
-      .spyOn(getLocalPtyProvider(), 'listProcesses')
-      .mockResolvedValue([{ id: 'local-pty', title: 'Local', cwd: '/local' }])
-    const sshAList = vi.fn(async () => [{ id: 'ssh-a-pty' }])
-    const sshBList = vi.fn(async () => {
-      throw new Error('ssh-b unavailable')
-    })
-    registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
-    registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
-    setPtyOwnership('ssh-b-pty', 'ssh-b')
-    const runtime = {
-      setPtyController: vi.fn(),
-      markPtyLivenessUnverifiable: vi.fn()
-    }
-    handlers.clear()
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-      listProcesses(connectionId?: string | null): Promise<{ id: string }[]>
-      listProcessesWithHostScope(): Promise<{ processes: { id: string }[]; hostIds: string[] }>
-    }
-
-    await expect(controller.listProcesses(null)).resolves.toEqual([
-      { id: 'local-pty', title: 'Local', cwd: '/local' }
-    ])
-    expect(localList).toHaveBeenCalledOnce()
-    expect(sshAList).not.toHaveBeenCalled()
-    expect(sshBList).not.toHaveBeenCalled()
-
-    await expect(controller.listProcesses('ssh-a')).resolves.toEqual([{ id: 'ssh-a-pty' }])
-    expect(sshAList).toHaveBeenCalledOnce()
-    expect(sshBList).not.toHaveBeenCalled()
-
-    // STA-517: the aggregate used to propagate ssh-b's failure, which cost the runtime the
-    // whole liveness inventory — so no PTY was ever proven dead and mobile kept every
-    // retained pane "active". One unreachable relay now drops out of the answer instead.
-    await expect(controller.listProcesses()).resolves.toEqual([
-      { id: 'local-pty', title: 'Local', cwd: '/local' },
-      { id: 'ssh-a-pty' }
-    ])
-    expect(sshBList).toHaveBeenCalledOnce()
-    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-      'ssh-b-pty',
-      'ssh-b unavailable'
-    )
-
-    await expect(controller.listProcessesWithHostScope()).resolves.toEqual({
-      processes: [{ id: 'local-pty', title: 'Local', cwd: '/local' }, { id: 'ssh-a-pty' }],
-      hostIds: [LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId('ssh-a')]
-    })
-    expect(sshBList).toHaveBeenCalledTimes(2)
-    deletePtyOwnership('ssh-b-pty')
-  })
-  it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
-    registerSshPtyProvider('ssh-1', {} as never)
-    setPtyOwnership('unsupported-pty', 'ssh-1')
-    setPtyOwnership('missing-pty', 'missing-connection')
-    const runtime = { setPtyController: vi.fn() }
-    handlers.clear()
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
-    }
-
-    await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
-    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
-    deletePtyOwnership('unsupported-pty')
-    deletePtyOwnership('missing-pty')
   })
   it('rethrows non-not-found local provider shutdown failures', async () => {
     setLocalPtyProvider({
@@ -191,6 +102,42 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
       'daemon unavailable'
     )
+  })
+  it('scopes runtime inventories to this machine', async () => {
+    const localList = vi
+      .spyOn(getLocalPtyProvider(), 'listProcesses')
+      .mockResolvedValue([{ id: 'local-pty', title: 'Local', cwd: '/local' }])
+    const runtime = {
+      setPtyController: vi.fn((_controller: RuntimePtyController) => {}),
+      markPtyLivenessUnverifiable: vi.fn()
+    }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0]
+
+    await expect(controller?.listProcesses?.('local')).resolves.toEqual([
+      { id: 'local-pty', title: 'Local', cwd: '/local' }
+    ])
+    await expect(controller?.listProcesses?.('ssh:ssh-a')).rejects.toThrow(
+      'No PTY provider for connection "ssh-a"'
+    )
+    await expect(controller?.listProcessesWithHostScope?.()).resolves.toEqual({
+      processes: [{ id: 'local-pty', title: 'Local', cwd: '/local' }],
+      hostIds: [LOCAL_EXECUTION_HOST_ID]
+    })
+    expect(localList).toHaveBeenCalledTimes(2)
+  })
+  it('returns unavailable runtime confirmation for an SSH-owned PTY', async () => {
+    setPtyOwnership('missing-pty', 'ssh:missing-connection')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
+    deletePtyOwnership('missing-pty')
   })
   it('rejects runtime terminal IDs before unowned local provider routing', async () => {
     const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
@@ -242,7 +189,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'local-pty',
-      code: -1
+      code: -1,
+      hostId: LOCAL_EXECUTION_HOST_ID
     })
   })
   it('does not synthesize a duplicate renderer exit when kill emits provider exit', async () => {
@@ -291,7 +239,7 @@ describe('registerPtyHandlers', () => {
       providerExitObserved: true
     })
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
-      [['pty:exit', { id: 'local-pty', code: 0 }]]
+      [['pty:exit', { id: 'local-pty', code: 0, hostId: LOCAL_EXECUTION_HOST_ID }]]
     )
   })
   it('reconciles a late provider exit without repeating the synthetic renderer exit', async () => {
@@ -341,7 +289,7 @@ describe('registerPtyHandlers', () => {
     })
     expect(runtime.markPtyStopRequested).toHaveBeenCalledTimes(2)
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
-      [['pty:exit', { id: 'local-pty', code: -1 }]]
+      [['pty:exit', { id: 'local-pty', code: -1, hostId: LOCAL_EXECUTION_HOST_ID }]]
     )
   })
   it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
@@ -374,7 +322,7 @@ describe('registerPtyHandlers', () => {
     expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
     expect(spawnMock).not.toHaveBeenCalled()
   })
-  // Why: cold-start teardown must select the daemon after startup, else fallback shutdown orphans the restored daemon PTY (#7742).
+  // Cold-start kills must await daemon selection or fallback shutdown orphans restored PTYs (#7742).
   it('waits for the desktop startup barrier before renderer local kills resolve the provider', async () => {
     const barrier = makeDeferred()
     const awaitLocalPtyStartup = vi.fn(() => new Promise<void>(() => {}))
@@ -541,7 +489,8 @@ describe('registerPtyHandlers', () => {
       })
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
         id: result.id,
-        code: 0
+        code: 0,
+        hostId: LOCAL_EXECUTION_HOST_ID
       })
     } finally {
       vi.useRealTimers()

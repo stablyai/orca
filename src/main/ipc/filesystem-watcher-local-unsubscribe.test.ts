@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ParcelWatcherProcess from './parcel-watcher-process'
 
@@ -31,17 +32,12 @@ vi.mock('./parcel-watcher-process', async (importOriginal) => {
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn(),
-  onSshFilesystemProviderRegistered: () => () => {}
-}))
-
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeLocalWatcherForWorktreePath,
-  registerFilesystemWatcherHandlers,
   restoreLocalWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-local-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
@@ -85,6 +81,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const sender = {
       isDestroyed: () => false,
       send: vi.fn(),
+      removeListener: vi.fn(),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
@@ -124,7 +121,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       watcherCallback = callback as typeof watcherCallback
       return { unsubscribe: unsubscribeMock } as never
     })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
     watcherCallback(new Error('root disappeared'), [])
@@ -157,6 +154,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const sender = {
       isDestroyed: () => false,
       send: vi.fn(),
+      removeListener: vi.fn(),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
@@ -197,18 +195,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
           subscribeResolvers.push(resolve as (subscription: { unsubscribe: () => void }) => void)
         })
     )
-    const senderOne = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
-    const senderTwo = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 2
-    }
+    const senderOne = createWatcherSender(1)
+    const senderTwo = createWatcherSender(2)
 
     const watchOne = handlers['fs:watchWorktree'](
       { sender: senderOne },
@@ -248,12 +236,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const unsubscribeMock = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
@@ -274,12 +257,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const unsubscribeMock = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
     await closeLocalWatcherForWorktreePath('/tmp/repo')
@@ -294,12 +272,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const unsubscribeMock = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: watchPath })
     await closeLocalWatcherForWorktreePath(closePath)
@@ -323,12 +296,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
         watcherCallback = callback as typeof watcherCallback
         return { unsubscribe: unsubscribeMock } as never
       })
-      const sender = {
-        isDestroyed: () => false,
-        send: vi.fn(),
-        once: vi.fn(),
-        id: 1
-      }
+      const sender = createWatcherSender(1)
 
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: watchPath })
       watcherCallback(null, [{ type: 'update', path: `${watchPath}\\file.txt` }])
@@ -349,7 +317,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const terminationError = new Error('watcher child did not exit')
     const unsubscribeMock = vi.fn().mockRejectedValue(terminationError)
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
@@ -372,6 +340,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const sender = {
       isDestroyed: () => false,
       send: vi.fn(),
+      removeListener: vi.fn(),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
@@ -413,6 +382,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const sender = {
       isDestroyed: () => false,
       send: vi.fn(),
+      removeListener: vi.fn(),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
@@ -448,7 +418,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       watcherCallback = callback as typeof watcherCallback
       return { unsubscribe }
     })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
     watcherCallback(terminationError, [])
@@ -478,7 +448,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
           hooks?.signal?.addEventListener('abort', () => reject(terminationError), { once: true })
         })
     )
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const watchPromise = handlers['fs:watchWorktree'](
       { sender },
       { worktreePath: '/tmp/repo' }
@@ -499,12 +469,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const unsubscribeMock = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
@@ -532,12 +497,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
           resolveSubscribe = resolve as typeof resolveSubscribe
         })
     )
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     const watchPromise = handlers['fs:watchWorktree'](
       { sender },
@@ -551,8 +511,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       { sender },
       { worktreePath: '/tmp/repo' }
     ) as Promise<unknown>
-    // Why: unwatch must abort the in-flight install so watchWorktree settles
-    // without waiting for the native subscribe crawl to finish.
+    // Unwatch must settle before the native subscribe crawl finishes.
     const watchSettledEarly = await Promise.race([
       watchPromise.then(() => true),
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 20))
@@ -581,8 +540,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
         replacementCallback = callback
         return { unsubscribe: replacementUnsubscribe }
       })
-    const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const replacementSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const firstSender = createWatcherSender(1)
+    const replacementSender = createWatcherSender(2)
 
     const firstWatch = handlers['fs:watchWorktree'](
       { sender: firstSender },
@@ -629,9 +588,9 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       .mockImplementationOnce(install as never)
       .mockImplementationOnce(install as never)
     const lateUnsubscribe = vi.fn()
-    const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const joinerSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
-    const reopenSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 3 }
+    const firstSender = createWatcherSender(1)
+    const joinerSender = createWatcherSender(2)
+    const reopenSender = createWatcherSender(3)
     const first = handlers['fs:watchWorktree'](
       { sender: firstSender },
       { worktreePath: '/tmp/repo' }
@@ -675,12 +634,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
           resolveSubscribe = resolve as typeof resolveSubscribe
         })
     )
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     const watchPromise = handlers['fs:watchWorktree'](
       { sender },
@@ -708,12 +662,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(subscribeParcelWatcher)
       .mockResolvedValueOnce({ unsubscribe: firstUnsubscribe } as never)
       .mockResolvedValueOnce({ unsubscribe: replacementUnsubscribe } as never)
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
     await closeLocalWatcherForWorktreePath('/tmp/repo')
@@ -723,7 +672,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(subscribeParcelWatcher).toHaveBeenCalledTimes(2)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/tmp/repo',
-      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }],
+      resync: true
     })
   })
 
@@ -731,7 +681,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     const firstUnsubscribe = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: firstUnsubscribe } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
     await closeLocalWatcherForWorktreePath('/tmp/repo')
@@ -751,6 +701,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     const sender = {
       isDestroyed: () => false,
       send: vi.fn(),
+      removeListener: vi.fn(),
       once: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
@@ -779,12 +730,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
           resolveSubscribe = resolve as typeof resolveSubscribe
         })
     )
-    const sender = {
-      isDestroyed: () => false,
-      send: vi.fn(),
-      once: vi.fn(),
-      id: 1
-    }
+    const sender = createWatcherSender(1)
 
     const watchPromise = handlers['fs:watchWorktree'](
       { sender },

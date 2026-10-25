@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -26,11 +25,11 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import {
-  getPRForBranch,
   _getTrackedUpstreamBranchCacheSizesForTests,
   __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+} from './client/lookup/tracked-upstream-cache'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {
@@ -39,7 +38,6 @@ const {
   getOwnerRepoForRemoteMock,
   resolvePRRepositoryCandidatesMock,
   gitExecFileAsyncMock,
-  getSshGitProviderMock,
   readLocalGitConfigSignatureMock
 } = clientMocks
 
@@ -113,7 +111,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -143,10 +141,6 @@ describe('getPRForBranch', () => {
   })
 
   it('releases tracked-upstream probe generations across runtime identities', async () => {
-    const sshGitProvider = {
-      exec: vi.fn().mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
-    }
-    getSshGitProviderMock.mockReturnValue(sshGitProvider)
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
@@ -155,15 +149,13 @@ describe('getPRForBranch', () => {
     await getPRForBranch('/repo-root', 'feature', null, null, null, {
       localGitExecOptions: { wslDistro: 'Ubuntu' }
     })
-    await getPRForBranch('/repo-root', 'feature', null, 'ssh-1')
 
     expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
-      snapshots: 3,
+      snapshots: 2,
       inFlight: 0,
       generations: 0
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(sshGitProvider.exec).toHaveBeenCalledTimes(1)
   })
 
   it('bounds unique tracked-upstream snapshots and sweeps expired identities', async () => {

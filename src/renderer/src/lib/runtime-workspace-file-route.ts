@@ -7,11 +7,10 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from './worktree-runtime-owner'
-import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-route'
+import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type RuntimeWorkspaceFileRoute = {
   worktreeId: string
@@ -26,9 +25,8 @@ function workspaceMatchesExecutionHost(
 ): boolean {
   const parsedHost = parseExecutionHostId(executionHostId)
   if (parsedHost?.kind === 'runtime') {
-    return (
-      getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId) === parsedHost.environmentId
-    )
+    // Why: a twin matches neither host, so a server's path never opens as the other twin's file.
+    return runtimeEnvironmentIdUnlessTwin(state, workspaceId) === parsedHost.environmentId
   }
   const explicit = resolveExplicitWorktreeOperationRouteResult(state, workspaceId)
   if (explicit.kind === 'resolved') {
@@ -44,12 +42,12 @@ export function findWorkspaceFileRoute(
   executionHostId: ExecutionHostId,
   absolutePath: string
 ): RuntimeWorkspaceFileRoute | null {
-  const roots = getIndexedAllWorktrees(state.worktreesByRepo).flatMap((worktree) =>
+  const roots = getIndexedAllWorktrees(selectWorktreesByRepo(state)).flatMap((worktree) =>
     workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
       ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }]
       : []
   )
-  for (const workspace of state.folderWorkspaces) {
+  for (const workspace of selectFolderWorkspaces(state)) {
     const workspaceId = folderWorkspaceKey(workspace.id)
     if (workspaceMatchesExecutionHost(state, workspaceId, executionHostId)) {
       roots.push({ workspaceId, rootPath: workspace.folderPath, executionHostId })

@@ -26,7 +26,7 @@ describe('repoIsRemote', () => {
     expect(repoIsRemote({ connectionId: null, executionHostId: 'runtime:vm-1' })).toBe(false)
   })
 
-  it('keeps plain local and WSL rows local', () => {
+  it('keeps plain local rows local', () => {
     expect(repoIsRemote({ connectionId: null, executionHostId: null })).toBe(false)
     expect(repoIsRemote({ connectionId: null, executionHostId: 'local' })).toBe(false)
   })

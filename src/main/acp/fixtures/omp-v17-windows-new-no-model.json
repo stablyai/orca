@@ -1,0 +1,57 @@
+{
+  "sessionId": "session-omp-windows",
+  "configOptions": [
+    {
+      "id": "mode",
+      "name": "Mode",
+      "category": "mode",
+      "type": "select",
+      "currentValue": "default",
+      "options": [
+        {
+          "value": "default",
+          "name": "Default",
+          "description": "Standard ACP headless mode"
+        },
+        {
+          "value": "plan",
+          "name": "Plan",
+          "description": "Read-only planning mode that drafts a plan to a markdown file before any code changes"
+        }
+      ]
+    },
+    {
+      "id": "thinking",
+      "name": "Thinking",
+      "category": "thought_level",
+      "type": "select",
+      "currentValue": "off",
+      "options": [
+        {
+          "value": "off",
+          "name": "Off"
+        },
+        {
+          "value": "auto",
+          "name": "Auto",
+          "description": "Auto-detect per prompt"
+        }
+      ]
+    }
+  ],
+  "modes": {
+    "availableModes": [
+      {
+        "id": "default",
+        "name": "Default",
+        "description": "Standard ACP headless mode"
+      },
+      {
+        "id": "plan",
+        "name": "Plan",
+        "description": "Read-only planning mode that drafts a plan to a markdown file before any code changes"
+      }
+    ],
+    "currentModeId": "default"
+  }
+}

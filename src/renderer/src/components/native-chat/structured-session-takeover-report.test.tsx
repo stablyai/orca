@@ -30,6 +30,7 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 
 function transport(): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
@@ -50,11 +51,11 @@ function send(structuredTransport: NativeChatStructuredComposerTransport): (text
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent: 'claude',
+      draftScopeKey: 'tab-1:pane',
       imageAttachments: [],
       structuredTransport,
-      clearImageAttachments: vi.fn(),
+      isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })

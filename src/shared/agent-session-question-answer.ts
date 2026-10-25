@@ -1,11 +1,120 @@
-import type { AgentJournalQuestion } from './agent-session-journal-types'
+import type { AgentJournalQuestion, AgentJournalQuestionItem } from './agent-session-journal-types'
 
 const GROUP_ANSWER_PREFIX = 'question-group:'
+
+/** A single-question item has no question list; the client and host must agree on its id. */
+const SINGLE_QUESTION_ID = 'q1'
+
+/** Longest option id a host takes, which also bounds an answer packed into one. */
+export const AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH = 1024
+
+/** Largest typed answer to one question, in UTF-8 bytes. */
+export const AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES = 64 * 1024
 
 export type AgentSessionQuestionAnswer = {
   questionId: string
   optionIds: string[]
   other?: string
+}
+
+/** What a client chose on a prompt: a decision id for an approval, per-question answers for a question. */
+export type AgentSessionPromptResponse =
+  | { kind: 'option'; optionId: string }
+  | { kind: 'answers'; answers: AgentSessionQuestionAnswer[] }
+
+/** The questions an item asks: its grouped list, or the item itself as one question. */
+export function agentSessionPromptQuestions(
+  body: Pick<
+    AgentJournalQuestionItem,
+    'question' | 'options' | 'questions' | 'freeTextQuestionId' | 'freeTextInput'
+  >
+): AgentJournalQuestion[] {
+  if (body.questions) {
+    return body.questions
+  }
+  return [
+    {
+      id: body.freeTextQuestionId ?? SINGLE_QUESTION_ID,
+      question: body.question,
+      options: body.options,
+      multiSelect: false,
+      ...(body.freeTextQuestionId ? { freeTextQuestionId: body.freeTextQuestionId } : {}),
+      ...(body.freeTextInput ? { freeTextInput: body.freeTextInput } : {})
+    }
+  ]
+}
+
+function encodeLegacyFreeTextAnswer(questionId: string, answer: string): string {
+  return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
+}
+
+function decodeLegacyFreeTextAnswer(
+  optionId: string
+): { questionId: string; answer: string } | null {
+  const separator = optionId.indexOf(':')
+  if (separator <= 0) {
+    return null
+  }
+  try {
+    return {
+      questionId: decodeURIComponent(optionId.slice(0, separator)),
+      answer: decodeURIComponent(optionId.slice(separator + 1))
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The answer packed into one option-id string, the only form older peers read: hosts that
+ * predate structured answers take it as `optionId`, and older clients render receipts from it.
+ */
+export function legacyAgentSessionSelectedOptionId(
+  body: Pick<AgentJournalQuestionItem, 'questions' | 'freeTextInput'>,
+  answers: readonly AgentSessionQuestionAnswer[]
+): string | null {
+  if (body.questions) {
+    return encodeAgentSessionQuestionAnswers(answers)
+  }
+  const [answer] = answers
+  if (!answer || answers.length !== 1) {
+    return null
+  }
+  const other = body.freeTextInput?.allowEmpty ? answer.other : answer.other?.trim()
+  return (
+    answer.optionIds[0] ??
+    (other !== undefined && (other.length > 0 || body.freeTextInput?.allowEmpty)
+      ? encodeLegacyFreeTextAnswer(answer.questionId, other)
+      : null)
+  )
+}
+
+/** Reads an answer an older client packed into `optionId`. */
+export function legacyAgentSessionQuestionAnswers(
+  body: Pick<
+    AgentJournalQuestionItem,
+    'question' | 'options' | 'questions' | 'freeTextQuestionId' | 'freeTextInput'
+  >,
+  optionId: string
+): AgentSessionQuestionAnswer[] | null {
+  const grouped = body.questions ? decodeAgentSessionQuestionAnswers(optionId) : null
+  if (grouped) {
+    return grouped
+  }
+  const questions = agentSessionPromptQuestions(body)
+  const questionId = questions.length === 1 ? questions[0]!.id : null
+  if (!questionId) {
+    return null
+  }
+  if (body.options.some((option) => option.id === optionId)) {
+    return [{ questionId, optionIds: [optionId] }]
+  }
+  const freeText = decodeLegacyFreeTextAnswer(optionId)
+  return body.freeTextQuestionId &&
+    freeText?.questionId === body.freeTextQuestionId &&
+    (freeText.answer.trim().length > 0 || body.freeTextInput?.allowEmpty === true)
+    ? [{ questionId, optionIds: [], other: freeText.answer }]
+    : null
 }
 
 export function encodeAgentSessionQuestionAnswers(
@@ -75,11 +184,13 @@ export function isValidAgentSessionQuestionAnswers(
     if (answer.optionIds.some((optionId) => !offered.has(optionId))) {
       return false
     }
-    const other = answer.other?.trim() ?? ''
-    if (other && !question.freeTextQuestionId) {
+    const hasOther =
+      answer.other !== undefined &&
+      (question.freeTextInput?.allowEmpty === true || answer.other.trim().length > 0)
+    if (hasOther && !question.freeTextQuestionId) {
       return false
     }
-    const answerCount = answer.optionIds.length + (other ? 1 : 0)
+    const answerCount = answer.optionIds.length + (hasOther ? 1 : 0)
     return answerCount > 0 && (question.multiSelect || answerCount === 1)
   })
 }

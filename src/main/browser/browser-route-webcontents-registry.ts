@@ -72,7 +72,8 @@ export class BrowserRouteWebContentsRegistry {
       installBrowserRouteGuestQuarantine(state, {
         getPartitionForSession: (routeSession) =>
           this.dependencies.getPartitionForSession(routeSession),
-        reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked)
+        reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked),
+        isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {
       state.popups?.dispose()
@@ -251,14 +252,12 @@ export class BrowserRouteWebContentsRegistry {
     })
   }
 
-  private navigationAllowed(state: GuestState, url: string): boolean {
-    return isBrowserRouteGuestNavigationAllowed(state, url, () =>
-      Boolean(
-        state.registration &&
-        this.registrationMatchesGuest(state, state.registration) &&
-        this.hasLivePageAuthority(state)
-      )
-    )
+  private navigationAllowed(state: GuestState, url: string, allowBlank = true): boolean {
+    const isCurrent = () =>
+      state.registration !== null &&
+      this.registrationMatchesGuest(state, state.registration) &&
+      this.hasLivePageAuthority(state)
+    return isBrowserRouteGuestNavigationAllowed(state, url, isCurrent, allowBlank)
   }
 
   private registrationMatchesGuest(state: GuestState, registration: GuestIdentity): boolean {
@@ -280,7 +279,6 @@ export class BrowserRouteWebContentsRegistry {
 
   private revokeGuest(state: GuestState): void {
     state.navigationGranted = false
-    // Popups are client-local transients of this page: revoking the page fences them too.
     state.popups?.closeAll()
     closeRouteGuest(state.guest)
     if (isRouteGuestDestroyed(state.guest)) {
@@ -294,7 +292,7 @@ export class BrowserRouteWebContentsRegistry {
     }
     state.retirementRequested = true
     state.navigationGranted = false
-    // Fence before the logical retirement round trip; a retiring page must not keep a live popup.
+    // Fence popups before the logical retirement round trip.
     state.popups?.closeAll()
     const registration = state.registration
     const pageAuthority = state.pageAuthority

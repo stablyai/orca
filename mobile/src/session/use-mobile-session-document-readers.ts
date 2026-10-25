@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type { RpcFailure } from '../transport/types'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
@@ -7,17 +7,50 @@ import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from './mobile-markdown-disk-fallback'
-import type { MobileSessionTab } from './mobile-session-route-types'
+import {
+  claimDocumentRead,
+  commitDocumentRead,
+  documentReadIsCurrent,
+  installDocumentReadPlaceholder,
+  keepFileVisibleDuringRead,
+  keepMarkdownVisibleDuringRead,
+  settleFileRead,
+  settleMarkdownRead
+} from './mobile-session-document-read-settlement'
+import type { FileDocState, MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+  const { worktreeId, client, markdownDocsRef, setMarkdownDocs, setFileDocs } = scope
+  const markdownReadSeqRef = useRef(new Map<string, number>())
+  const fileReadSeqRef = useRef(new Map<string, number>())
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
         return
       }
-      setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+      const seq = claimDocumentRead(markdownReadSeqRef.current, tab.id)
+      const visibleAtStart = markdownDocsRef.current.get(tab.id)
+      // Why: swapping a visible document for `loading` unmounts the WebView and drops the caret.
+      const loading: MarkdownDocState = { status: 'loading' }
+      setMarkdownDocs((prev) =>
+        installDocumentReadPlaceholder(prev, tab.id, loading, keepMarkdownVisibleDuringRead)
+      )
+      const publish = (nextDoc: MarkdownDocState) => {
+        setMarkdownDocs((prev) => {
+          if (!documentReadIsCurrent(markdownReadSeqRef.current, tab.id, seq)) {
+            return prev
+          }
+          return commitDocumentRead(
+            prev,
+            tab.id,
+            loading,
+            nextDoc,
+            (current, placeholder, result) =>
+              settleMarkdownRead(current, placeholder, result, visibleAtStart)
+          )
+        })
+      }
       try {
         const response = await markdownTabRead.request(client, {
           worktree: `id:${worktreeId}`,
@@ -25,18 +58,17 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         })
         if (response.ok) {
           const result = markdownTabRead.interpret(response)
-          setMarkdownDocs((prev) =>
-            new Map(prev).set(tab.id, {
-              status: 'ready',
-              content: result.content,
-              localContent: result.content,
-              baseVersion: result.version,
-              isDirty: false,
-              editable: result.editable === true,
-              stale: result.isDirty,
-              readOnlyReason: result.readOnlyReason
-            })
-          )
+          publish({
+            status: 'ready',
+            content: result.content,
+            localContent: result.content,
+            baseVersion: result.version,
+            isDirty: false,
+            editable: result.editable === true,
+            stale: result.isDirty,
+            readOnlyReason: result.readOnlyReason,
+            ...(result.truncated === true ? { truncated: true, byteLength: result.byteLength } : {})
+          })
           return
         }
         if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
@@ -53,23 +85,19 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           throw new Error('Unable to read markdown')
         }
         const fileResult = fallback.value
-        setMarkdownDocs((prev) =>
-          new Map(prev).set(
-            tab.id,
-            buildMarkdownDiskFallbackDoc({
-              content: fileResult.content,
-              truncated: fileResult.truncated,
-              tabIsDirty: tab.isDirty
-            })
-          )
-        )
-      } catch {
-        setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'error',
-            message: "Couldn't load markdown"
+        publish(
+          buildMarkdownDiskFallbackDoc({
+            content: fileResult.content,
+            truncated: fileResult.truncated,
+            byteLength: fileResult.byteLength,
+            tabIsDirty: tab.isDirty
           })
         )
+      } catch (err) {
+        publish({
+          status: 'error',
+          message: documentReadErrorMessage(err, "Couldn't load markdown")
+        })
       }
     },
     [client, worktreeId]
@@ -80,30 +108,34 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       if (!client) {
         return
       }
-      setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+      const seq = claimDocumentRead(fileReadSeqRef.current, tab.id)
+      const loading: FileDocState = { status: 'loading' }
+      setFileDocs((prev) =>
+        installDocumentReadPlaceholder(prev, tab.id, loading, keepFileVisibleDuringRead)
+      )
+      const publish = (nextDoc: FileDocState) => {
+        setFileDocs((prev) => {
+          if (!documentReadIsCurrent(fileReadSeqRef.current, tab.id, seq)) {
+            return prev
+          }
+          return commitDocumentRead(prev, tab.id, loading, nextDoc, settleFileRead)
+        })
+      }
       try {
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource
         })
-        setFileDocs((prev) => new Map(prev).set(tab.id, doc))
+        publish(doc)
       } catch (err) {
-        const message = err instanceof Error ? err.message : ''
-        const previewMessage =
-          message === 'binary_file'
-            ? 'Binary preview unavailable'
-            : message === 'file_too_large'
-              ? 'File too large for mobile preview'
-              : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
-                ? "Couldn't load diff preview"
-                : "Couldn't load file preview"
-        setFileDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'error',
-            message: previewMessage
-          })
+        const previewMessage = documentReadErrorMessage(
+          err,
+          tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+            ? "Couldn't load diff preview"
+            : "Couldn't load file preview"
         )
+        publish({ status: 'error', message: previewMessage })
       }
     },
     [client, worktreeId]
@@ -112,6 +144,18 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
     readMarkdownTab,
     readFileTab
   }
+}
+
+// Why: older desktops refuse oversize markdown as a bare runtime_error whose message is the code.
+function documentReadErrorMessage(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : ''
+  if (message === 'binary_file') {
+    return 'Binary preview unavailable'
+  }
+  if (message === 'file_too_large') {
+    return 'File too large for mobile preview'
+  }
+  return fallback
 }
 
 export type MobileSessionDocumentReadersModel = MobileSessionTabApplicationModel &

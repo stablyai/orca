@@ -1,36 +1,42 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import {
   filterSlashCommands,
   isSlashCommandDraft,
   applySlashSuggestion,
   slashCommandDispatchText,
+  type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
 import {
   buildNativeChatPickerItems,
   LEADING_SLASH_TRIGGER,
   MID_PROMPT_SLASH_TRIGGER,
+  matchSkillSigil,
   type NativeChatPickerItem,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 export type { SlashCommandSuggestion }
 export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
 export {
+  classifyNativeChatSend,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-slash-commands'
+export {
   applyPickerSuggestion,
   buildNativeChatPickerItems,
-  classifyNativeChatSend,
   type NativeChatPickerItem,
-  type NativeChatSendClassification,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 type PickerAutocomplete = {
   query: string
   items: NativeChatPickerItem[]
   triggerKey: string
-  prefix: '/'
+  /** `$` lists only the skills of an agent whose skills carry that sigil. */
+  prefix: '/' | '$'
   /** Only a draft-leading `/command` reaches the agent as a command. */
   dispatchable: boolean
   grouped: boolean
@@ -43,7 +49,7 @@ type PickerAutocomplete = {
 export type ComposerAutocomplete =
   | { mode: 'none' }
   | ({ mode: 'slash' } & PickerAutocomplete)
-  | { mode: 'mention'; query: string }
+  | { mode: 'mention'; query: string; triggerKey: string }
 
 const EMPTY_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
 
@@ -55,7 +61,11 @@ export function isSkillPickerTriggered(
   if (!profile) {
     return false
   }
-  return LEADING_SLASH_TRIGGER.test(before) || MID_PROMPT_SLASH_TRIGGER.test(before)
+  return (
+    LEADING_SLASH_TRIGGER.test(before) ||
+    MID_PROMPT_SLASH_TRIGGER.test(before) ||
+    (profile.skillPrefix === '$' && matchSkillSigil(before) !== null)
+  )
 }
 
 export function deriveComposerAutocomplete(
@@ -66,53 +76,61 @@ export function deriveComposerAutocomplete(
   profile: NativeChatAgentProfile | null = null,
   discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
   dismissedTriggerKey: string | null = null,
-  sessionSkillNames?: readonly string[]
+  sessionSkills?: readonly NativeChatSessionSkill[]
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
   const leadingMatch = before.match(LEADING_SLASH_TRIGGER)
   if (leadingMatch) {
     return deriveSlashAutocomplete(
+      '/',
       leadingMatch[1],
       0,
       agentCommands,
       profile,
       discovery,
       dismissedTriggerKey,
-      sessionSkillNames
+      sessionSkills
     )
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
-    return { mode: 'mention', query: mentionMatch[1] }
+    const triggerKey = `@:${before.length - mentionMatch[1].length - 1}`
+    return dismissedTriggerKey === triggerKey
+      ? { mode: 'none' }
+      : { mode: 'mention', query: mentionMatch[1], triggerKey }
   }
-  // Why: `/` is the whole composer grammar, so a mid-prompt token opens the same
-  // menu a leading one does — it just cannot dispatch.
-  const midPromptMatch = profile ? before.match(MID_PROMPT_SLASH_TRIGGER) : null
-  if (!midPromptMatch) {
+  // Why: `/` is the shared composer grammar, so a mid-prompt token opens the same
+  // menu a leading one does — it just cannot dispatch. `$` is the skill sigil's own
+  // skills-only menu.
+  const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
+  const query = sigilQuery ?? (profile ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1] : undefined)
+  if (query === undefined) {
     return { mode: 'none' }
   }
-  const query = midPromptMatch[1]
+  const isSigil = sigilQuery !== null
   return deriveSlashAutocomplete(
+    isSigil ? '$' : '/',
     query,
     before.length - query.length - 1,
-    agentCommands,
+    isSigil ? [] : agentCommands,
     profile,
     discovery,
     dismissedTriggerKey,
-    sessionSkillNames
+    sessionSkills
   )
 }
 
 function deriveSlashAutocomplete(
+  prefix: '/' | '$',
   query: string,
   triggerPosition: number,
   agentCommands: readonly SlashCommandSuggestion[],
   profile: NativeChatAgentProfile | null,
   discovery: NativeChatSkillDiscoverySnapshot,
   dismissedTriggerKey: string | null,
-  sessionSkillNames: readonly string[] | undefined
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
 ): ComposerAutocomplete {
-  const triggerKey = `/:${triggerPosition}`
+  const triggerKey = `${prefix}:${triggerPosition}`
   if (dismissedTriggerKey === triggerKey) {
     return { mode: 'none' }
   }
@@ -120,29 +138,41 @@ function deriveSlashAutocomplete(
   // inserts differs. The caller owns catalog policy (e.g. Grok ships skills-only
   // until a verified catalog lands), so this derivation must not re-gate per agent.
   const skillsEnabled = profile !== null
+  const namePrefix = profile?.skillNamePrefix
+  // Scanned names take the agent's prefix so they match the names its session reports.
+  const scannedSkills = !skillsEnabled
+    ? []
+    : namePrefix
+      ? discovery.skills.map((skill) => ({ ...skill, name: `${namePrefix}${skill.name}` }))
+      : discovery.skills
   const items = buildNativeChatPickerItems(
     agentCommands,
-    skillsEnabled ? discovery.skills : [],
+    scannedSkills,
     query,
     profile?.skillPrefix ?? '/',
-    skillsEnabled ? sessionSkillNames : []
+    skillsEnabled ? sessionSkills : [],
+    undefined,
+    prefix
   )
   return {
     mode: 'slash',
     query,
     triggerKey,
-    prefix: '/',
-    dispatchable: triggerPosition === 0,
-    grouped: skillsEnabled,
+    prefix,
+    dispatchable: prefix === '/' && triggerPosition === 0,
+    grouped: skillsEnabled && prefix === '/',
     commandsEnabled: agentCommands.length > 0,
     skillsEnabled,
     items,
-    skillStatus: skillsEnabled
-      ? discovery.status === 'idle'
-        ? 'loading'
-        : discovery.status
-      : 'ready',
-    ...(skillsEnabled && discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
+    skillStatus:
+      skillsEnabled && sessionSkills === undefined
+        ? discovery.status === 'idle'
+          ? 'loading'
+          : discovery.status
+        : 'ready',
+    ...(skillsEnabled && sessionSkills === undefined && discovery.errorKind
+      ? { skillErrorKind: discovery.errorKind }
+      : {})
   }
 }
 
@@ -196,37 +226,6 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
-  return { draft: nextBefore + after, caret: nextBefore.length }
-}
-
-export type HistoryState = { entries: readonly string[]; index: number | null }
-export const EMPTY_HISTORY: HistoryState = { entries: [], index: null }
-
-export function pushHistory(history: HistoryState, sent: string): HistoryState {
-  if (sent.trim() === '' || history.entries.at(-1) === sent) {
-    return { entries: history.entries, index: null }
-  }
-  return { entries: [...history.entries, sent], index: null }
-}
-
-export type HistoryRecall = { history: HistoryState; draft: string | null }
-
-export function recallPrevious(history: HistoryState): HistoryRecall {
-  if (history.entries.length === 0) {
-    return { history, draft: null }
-  }
-  const index = history.index === null ? history.entries.length - 1 : Math.max(0, history.index - 1)
-  return { history: { entries: history.entries, index }, draft: history.entries[index] }
-}
-
-export function recallNext(history: HistoryState): HistoryRecall {
-  if (history.index === null) {
-    return { history, draft: null }
-  }
-  const index = history.index + 1
-  if (index >= history.entries.length) {
-    return { history: { entries: history.entries, index: null }, draft: '' }
-  }
-  return { history: { entries: history.entries, index }, draft: history.entries[index] }
+  const nextBefore = `${before.slice(0, tokenStart)}${formatNativeChatFileReference(path)} `
+  return { draft: nextBefore + after.replace(/^ /, ''), caret: nextBefore.length }
 }

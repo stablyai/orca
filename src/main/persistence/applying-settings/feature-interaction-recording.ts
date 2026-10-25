@@ -12,7 +12,7 @@ import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 
 export type FeatureInteractionOperations = {
   state: PersistedState
-  scheduleSave: () => void
+  scheduleSave: (domains?: readonly string[]) => void
   notifyUIChanged: () => void
   getUI: () => PersistedState['ui']
 }
@@ -49,7 +49,7 @@ export function recordFeatureInteraction(
   operations.state.featureInteractionTelemetryBuckets = shouldEmit
     ? { ...telemetryBuckets, [id]: nextBucket }
     : telemetryBuckets
-  operations.scheduleSave()
+  operations.scheduleSave(['ui', 'featureInteractionTelemetryBuckets'])
   // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
   if (!existing) {
     operations.notifyUIChanged()

@@ -143,3 +143,7 @@ describe('assertBranchPrefixValid', () => {
     )
   })
 })
+
+it('keeps an unknown prefix strategy as the original implicit undefined result', () => {
+  expect(selectBranchPrefixInput({ branchPrefix: 'future-prefix' }, 'user')).toBeUndefined()
+})

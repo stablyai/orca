@@ -115,6 +115,30 @@ describe('buildDashboardSnapshot rows cache', () => {
     expect(cached).toEqual(buildDashboardSnapshot(titleWrite, NOW + 500))
   })
 
+  it('recomputes only the worktree whose pane foreground process changed', () => {
+    const cache = createWorktreeAgentRowsCache()
+    const state: DashboardSnapshotState = {
+      ...baseState(),
+      agentStatusByPaneKey: { [PANE_1]: entry(PANE_1, 'tab1', 'w1') },
+      runtimePaneTitlesByTabId: { tab1: { 0: 'shell' }, tab2: { 0: 'demo-repo' } }
+    }
+    buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
+
+    const codexStarted: DashboardSnapshotState = {
+      ...state,
+      paneForegroundAgentByPaneKey: {
+        [PANE_2]: { agent: 'codex', agentEvidence: 'process-read', shellForeground: false }
+      }
+    }
+    const cached = buildDashboardSnapshot(codexStarted, NOW + 500, {
+      rowsCache: cache,
+      rowsGeneration: 1
+    })
+    expect(cache.lastComputedWorktreeIds).toEqual(['w2'])
+    expect(cached.cards.find((card) => card.paneKey === PANE_2)?.agentType).toBe('codex')
+    expect(cached).toEqual(buildDashboardSnapshot(codexStarted, NOW + 500))
+  })
+
   it('keeps card-level fields fresh (acks, workspace statuses) without recomputing rows', () => {
     const cache = createWorktreeAgentRowsCache()
     const state = baseState()

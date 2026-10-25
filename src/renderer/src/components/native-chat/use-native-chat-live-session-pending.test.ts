@@ -25,8 +25,8 @@ vi.mock('./native-chat-session-transport', () => ({
   getNativeChatSessionTransport: () => transport
 }))
 
+import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import {
-  isNativeChatTranscriptUnsettled,
   NOTFOUND_RETRY_WINDOW_MS,
   useNativeChatLiveSession,
   type NativeChatLiveSession,

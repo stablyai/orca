@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import TerminalPane from './terminal-pane/TerminalPane'
+import { TerminalRestoringPlaceholder } from './terminal-pane/TerminalRestoringPlaceholder'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldMountBackgroundWorktreeTab } from './terminal/background-terminal-worktree-mount'
 import type { TerminalController } from './use-terminal-controller'
@@ -59,51 +60,54 @@ export function TerminalLegacyTerminalPanes({
               }
               aria-hidden={!isVisible}
             >
-              {(tabsByWorktree[workspace.id] ?? [])
-                .filter((tab) =>
-                  shouldMountBackgroundWorktreeTab(
+              {(tabsByWorktree[workspace.id] ?? []).map((tab) => {
+                const isActiveTerminalTab =
+                  isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+                if (
+                  !shouldMountBackgroundWorktreeTab(
                     backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null,
                     tab.id
                   )
+                ) {
+                  // Why only the startup hold lands here visible: reveal admits every other
+                  // visible deferred tab in the same render pass.
+                  return isActiveTerminalTab ? <TerminalRestoringPlaceholder key={tab.id} /> : null
+                }
+                const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+                  worktreeId: workspace.id,
+                  tabId: tab.id
+                })
+                const isActivityPortalTab = activityTerminalPortal !== null
+                if (
+                  shouldColdParkTerminalPanes &&
+                  !isActivityPortalTab &&
+                  !evictionExemptTerminalTabIds.has(tab.id)
+                ) {
+                  return null
+                }
+                const terminalPane = (
+                  <TerminalPane
+                    key={`${tab.id}-${tab.generation ?? 0}`}
+                    tabId={tab.id}
+                    worktreeId={workspace.id}
+                    cwd={tab.startupCwd ?? workspace.path}
+                    isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
+                    isVisible={isActiveTerminalTab || isActivityPortalTab}
+                    isWorktreeActive={isVisible || isActivityPortalTab}
+                    isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+                    onPtyExit={(ptyId, exitCode) => handlePtyExit(tab.id, ptyId, exitCode)}
+                    onCloseTab={() => handleCloseTab(tab.id)}
+                  />
                 )
-                .map((tab) => {
-                  const activityTerminalPortal = findActivityTerminalPortal(
-                    activityTerminalPortals,
-                    { worktreeId: workspace.id, tabId: tab.id }
+                if (activityTerminalPortal) {
+                  return createPortal(
+                    terminalPane,
+                    activityTerminalPortal.target,
+                    `activity-terminal-${tab.id}`
                   )
-                  const isActivityPortalTab = activityTerminalPortal !== null
-                  const isActiveTerminalTab =
-                    isVisible && tab.id === activeTabId && activeTabType === 'terminal'
-                  if (
-                    shouldColdParkTerminalPanes &&
-                    !isActivityPortalTab &&
-                    !evictionExemptTerminalTabIds.has(tab.id)
-                  ) {
-                    return null
-                  }
-                  const terminalPane = (
-                    <TerminalPane
-                      key={`${tab.id}-${tab.generation ?? 0}`}
-                      tabId={tab.id}
-                      worktreeId={workspace.id}
-                      cwd={tab.startupCwd ?? workspace.path}
-                      isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
-                      isVisible={isActiveTerminalTab || isActivityPortalTab}
-                      isWorktreeActive={isVisible || isActivityPortalTab}
-                      isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-                      onPtyExit={(ptyId, exitCode) => handlePtyExit(tab.id, ptyId, exitCode)}
-                      onCloseTab={() => handleCloseTab(tab.id)}
-                    />
-                  )
-                  if (activityTerminalPortal) {
-                    return createPortal(
-                      terminalPane,
-                      activityTerminalPortal.target,
-                      `activity-terminal-${tab.id}`
-                    )
-                  }
-                  return terminalPane
-                })}
+                }
+                return terminalPane
+              })}
             </div>
           )
         })}

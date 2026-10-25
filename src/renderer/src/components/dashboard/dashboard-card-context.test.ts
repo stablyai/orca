@@ -3,7 +3,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   resolveDashboardCardContext,

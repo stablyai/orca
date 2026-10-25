@@ -1,27 +1,18 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.workspace-ssh-local",
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
-  "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
+    "057cfe2200b5": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"repoId\":\"repo-1\"}}"
+    },
     "11405363c62d": {
       "name": "workspaceAgent",
       "ordinal": 1,
       "value": "claude"
-    },
-    "5da628eecd2f": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     },
     "7400f4eebe66": {
       "agent": "claude",
@@ -37,38 +28,6 @@
       "ordinal": 3,
       "value": {
         "$rpc": "null"
-      }
-    },
-    "9fdd4a87eb0b": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": ["codex", "claude"]
-        }
       }
     },
     "a9ec92743b9e": {
@@ -88,6 +47,38 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ebcf6c6d8d86": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
     }
   },
   "recording": {
@@ -96,8 +87,8 @@
       {
         "id": "local-agents-detected",
         "observation": {
-          "sender": ["9fdd4a87eb0b"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["ebcf6c6d8d86"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

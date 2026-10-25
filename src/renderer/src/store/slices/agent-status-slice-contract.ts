@@ -1,7 +1,6 @@
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
-  AgentLaunchConfigStatusMetadata,
   AgentProviderSessionRecordMetadata,
   AgentProviderSessionRouting,
   AgentProviderSessionTiming,
@@ -29,6 +28,7 @@ import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
+import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
@@ -94,6 +94,9 @@ export type AgentStatusSlice = {
     operation: (transaction: AgentStatusBatchTransaction) => Result
   ) => Result
 
+  /** Patch a live row's OSC 7501 facet only (`null` clears it); false when no row or no change. */
+  setAgentProgramStatus: (paneKey: string, programStatus: ProgramStatusFacet | null) => boolean
+
   /** Record resume identity without creating a visible turn-status row. */
   recordAgentProviderSession: (
     paneKey: string,
@@ -111,9 +114,6 @@ export type AgentStatusSlice = {
   ) => void
   getAgentLaunchConfigForStatusEntry: (
     entry: AgentStatusEntry
-  ) => SleepingAgentLaunchConfig | undefined
-  getAgentLaunchConfigForStatusMetadata: (
-    metadata: AgentLaunchConfigStatusMetadata
   ) => SleepingAgentLaunchConfig | undefined
   clearAgentLaunchConfig: (paneKey: string) => void
 
@@ -157,6 +157,8 @@ export type AgentStatusSlice = {
   /** Capture resumable agent sessions across every worktree for crash recovery or quit; mode sets live/quit precedence. */
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
+  /** Keeps a resume handle for a pane whose restore the host deferred; never replaces a record. */
+  rememberSleepingAgentSession: (record: SleepingAgentSessionRecord) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void

@@ -209,9 +209,10 @@ export function listTasksWithDispatch(
 
 // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
 export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tasks schema supplies the same TEXT id/deps columns as TaskRow.
   const candidates = this.db
-    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE status = 'pending'`)
-    .all() as TaskRow[]
+    .prepare("SELECT id, deps FROM tasks WHERE status = 'pending'")
+    .all() as Pick<TaskRow, 'id' | 'deps'>[]
 
   for (const task of candidates) {
     const deps: string[] = JSON.parse(task.deps)

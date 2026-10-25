@@ -4,6 +4,8 @@ import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-seri
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
 import type { ReattachPayloadContext } from './reattach-payload-context'
+import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 /**
  * A park-reveal of a remote-runtime pty arrives with `replay: ''`, so the host
@@ -35,6 +37,8 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
+// Main's resume banner has its own tests (main-pane-resume-banner.test.ts).
+vi.mock('./main-pane-resume-banner', () => ({ showMainPaneResumeOutcome: vi.fn() }))
 // Why: the payload handlers need a mounted xterm; what matters here is the
 // context the handler decided on, so capture it and report the payload applied.
 vi.mock('./apply-reattach-payload', () => ({
@@ -94,11 +98,7 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     authoritativeReattachGeneration: 0,
     // The reveal remount of a parked pane; consume-once in the handler.
     mountFollowsTerminalPark: true,
-    followsDirectSshReconnect: false,
-    connectionId: null,
     cacheKey: 'cache-1',
-    directSshRetryAttempt: undefined,
-    capturedDirectSshRetryPtyAccepted: false,
     pane: { id: 'pane-1', leafId: 'leaf-1', terminal: { options: { scrollback: 1000 } } },
     deps: {
       tabId: 'tab-1',
@@ -111,15 +111,15 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     },
     agentCompletionCoordinator: { startProcessTracking: vi.fn() },
     structuralReplayCoordinator: { run: structuralRun },
-    getSshMainModelSnapshotProbe: () => async () => null,
     serializeHiddenOutputSnapshot: vi.fn(),
     retryUnverifiableParkRevealSnapshot,
     warnParkRevealNoHostImage,
-    rejectObsoleteDirectSshReattach: () => false,
     registerEffectiveLaunchConfig: vi.fn(),
     clearExitedPanePtyLayoutBinding: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
     startFreshColdRestoreAgentResume: vi.fn(),
+    // Layout-owner build: the empty-reattach evidence reads the pane's record through this.
+    buildColdRestoreAgentResumeStartup: vi.fn(() => null),
     setPanePtyFitBinding: vi.fn(),
     reportPanePtyVisibility: vi.fn(),
     registerSideEffectFactConsumerForPty: vi.fn(),
@@ -331,5 +331,99 @@ describe('handleReattachResult park-reveal snapshot verdict', () => {
 
     expect(probe).toHaveBeenCalledOnce()
     expect(bag.retryUnverifiableParkRevealSnapshot).toHaveBeenCalledOnce()
+  })
+})
+
+// Retiring an empty reattach converges only locally: a remote disconnect() closes this viewer's
+// stream, so the resume would re-land on the same live host PTY and loop.
+describe('handleReattachResult empty reattach under a hibernation note', () => {
+  const record = {
+    paneKey: 'tab-1:leaf-1',
+    worktreeId: 'wt-1',
+    agent: 'codex',
+    providerSession: { key: 'session_id', id: 'conv-1' },
+    prompt: '',
+    state: 'done',
+    origin: 'worktree-sleep',
+    capturedAt: 1,
+    updatedAt: 1
+  } as const
+  const startup: ColdRestoreAgentResumeStartup = {
+    command: 'codex resume conv-1',
+    agent: 'codex',
+    resumeProviderSession: record.providerSession,
+    launchConfig: { agentArgs: '', agentEnv: {} },
+    launchToken: 'token-1',
+    useLiveEntry: false,
+    hasSleepingRecord: true,
+    sleepingRecordEntry: { paneKey: record.paneKey, record }
+  }
+
+  // The wake-hint row passes a non-remote stale id: only the result's remote id may decide.
+  it.each([
+    ['a fresh-spawn adoption', false, null],
+    ['a paired-parked reveal', true, REMOTE_PTY_ID],
+    ['a host wake-hint reattach', false, 'term_1']
+  ])('keeps the live remote PTY on %s', async (_label, mountFollowsTerminalPark, staleId) => {
+    const bag = buildParkRevealSession({
+      mountFollowsTerminalPark,
+      serializeHiddenOutputSnapshot: probeAnswers({ kind: 'snapshot', snapshot: HOST_IMAGE })
+    })
+
+    await expect(
+      bag.session.handleReattachResult(PARK_REVEAL_RESULT, staleId, startup)
+    ).resolves.toBe(true)
+
+    expect(bag.transport.disconnect).not.toHaveBeenCalled()
+    expect(bag.session.startFreshColdRestoreAgentResume).not.toHaveBeenCalled()
+    expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith(REMOTE_PTY_ID)
+  })
+
+  it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'keeps the shell main kept after its start, without asking main again',
+    async () => {
+      const bag = buildParkRevealSession({
+        mountFollowsTerminalPark: false,
+        buildColdRestoreAgentResumeStartup: vi.fn(() => startup),
+        mainStartAttach: {}
+      })
+
+      await expect(
+        bag.session.handleReattachResult({ id: 'local-pty-1', isReattach: true }, null, null)
+      ).resolves.toBe(true)
+
+      expect(bag.transport.disconnect).not.toHaveBeenCalled()
+      expect(bag.session.startFreshColdRestoreAgentResume).not.toHaveBeenCalled()
+      expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith('local-pty-1')
+    }
+  )
+
+  it('retires an empty local fresh-spawn adoption and resumes the provider session', async () => {
+    const bag = buildParkRevealSession({
+      mountFollowsTerminalPark: false,
+      // Layout-owner build: main's attach carries no resume, so the evidence reads the record.
+      buildColdRestoreAgentResumeStartup: vi.fn(() => startup)
+    })
+
+    await expect(
+      bag.session.handleReattachResult(
+        { id: 'local-pty-1', isReattach: true },
+        null,
+        ORCA_LAYOUT_OWNER_IS_MAIN ? null : startup
+      )
+    ).resolves.toBe(false)
+
+    expect(bag.transport.disconnect).toHaveBeenCalledOnce()
+    expect(bag.session.setPanePtyFitBinding).not.toHaveBeenCalled()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main retires the shell and resumes the agent in its place; the window unbinds nothing.
+      expect(bag.session.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(bag.session.startFreshColdRestoreAgentResume).toHaveBeenCalledExactlyOnceWith(null)
+      return
+    }
+    expect(bag.session.syncPanePtyLayoutBinding).toHaveBeenCalledWith(null)
+    expect(bag.session.startFreshColdRestoreAgentResume).toHaveBeenCalledExactlyOnceWith(startup, {
+      forceBlankRestoredViewport: true
+    })
   })
 })

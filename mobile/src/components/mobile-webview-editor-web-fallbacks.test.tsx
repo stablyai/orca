@@ -1,42 +1,57 @@
-/**
- * The two `react-native-webview` consumers on the page, pinned through the test renderer.
- *
- * Both native components put their surface inside a `WebView`, which has no browser counterpart:
- * importing it runs a codegen lookup that throws, and the route manifest imports every route, so
- * one such import takes the whole bundle down rather than one editor. Ruling 8 is that each gets
- * the plain state it already degrades to and no second renderer, so what is pinned here is the
- * degradation: the text is still there and still editable, the formatting toolbar and the rendered
- * preview are not, and nothing reaches a WebView.
- */
-import { createElement, createRef } from 'react'
+// @vitest-environment happy-dom
+import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// The unsuffixed path, which is what the component imports: under vitest that is the native
-// module, and the page's `.web.ts` is what the C7.2 closure census judges against the 16px floor.
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-
 vi.mock('react-native', async () => {
   const React = await import('react')
   const host =
     (name: string) =>
     ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement(name, props, children)
-  // The one mock that forwards a ref: the editor's `dismissKeyboard` blurs through it, and a
-  // function component would have swallowed it.
-  const TextInput = React.forwardRef<unknown, { children?: React.ReactNode }>(
-    ({ children, ...props }, ref) => React.createElement('TextInput', { ...props, ref }, children)
-  )
   return {
+    // The native preview's external-link opener reaches for this at module load, and a named import
+    // missing from a mocked module throws before any case runs.
+    Linking: { openURL: async () => true },
+    Pressable: host('Pressable'),
+    ScrollView: host('ScrollView'),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: host('Text'),
-    TextInput,
+    TextInput: host('TextInput'),
     View: host('View')
   }
 })
 
-import { MobileHtmlPreview } from './MobileHtmlPreview.web'
-import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor.web'
-import type { MobileRichMarkdownEditorHandle } from './MobileRichMarkdownEditor'
+// The preview's toggle carries two icons, and `lucide-react-native` imports a `LucideProvider` its
+// own context module does not export, so the real barrel does not load under vitest at all.
+vi.mock('lucide-react-native', () => ({
+  Bold: () => null,
+  Code: () => null,
+  Code2: () => null,
+  Eye: () => null,
+  FileCode2: () => null,
+  Heading1: () => null,
+  Heading2: () => null,
+  Heading3: () => null,
+  ImageIcon: () => null,
+  Italic: () => null,
+  Link: () => null,
+  List: () => null,
+  ListOrdered: () => null,
+  ListTodo: () => null,
+  Pilcrow: () => null,
+  Quote: () => null,
+  Strikethrough: () => null
+}))
+
+vi.mock('./TextInputModal', async () => {
+  const React = await import('react')
+  return {
+    TextInputModal: (props: Record<string, unknown>) => React.createElement('TextInputModal', props)
+  }
+})
+
+import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview'
+import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
 
 const renderers: ReactTestRenderer[] = []
 
@@ -46,12 +61,14 @@ function findHosts(renderer: ReactTestRenderer, type: string) {
   return renderer.root.findAll((node) => node.type === type)
 }
 
-/** `createNodeMock` is how a ref to a host element gets anything at all under this renderer, and
- *  the editor's `dismissKeyboard` reaches the field through one. */
-function render(element: React.ReactElement, node?: unknown): ReactTestRenderer {
+function render(
+  element: React.ReactElement,
+  node: HTMLElement = document.createElement('div')
+): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
+  document.body.appendChild(node)
   act(() => {
-    renderer = create(element, node === undefined ? undefined : { createNodeMock: () => node })
+    renderer = create(element, { createNodeMock: () => node })
   })
   if (renderer === null) {
     throw new Error('nothing mounted')
@@ -64,126 +81,119 @@ afterEach(() => {
   for (const renderer of renderers.splice(0)) {
     act(() => renderer.unmount())
   }
+  document.body.innerHTML = ''
+  document.head.innerHTML = ''
 })
 
 describe('the rich markdown editor on the page', () => {
-  it('renders the source in one editable field and reports every edit', () => {
+  it('mounts the editor document with its content and reports edits to the host', () => {
+    const host = document.createElement('div')
     const onChange = vi.fn()
     const renderer = render(
       createElement(MobileRichMarkdownEditor, {
         content: '# Title\n\nbody',
         editable: true,
         onChange
-      })
-    )
-
-    const inputs = findHosts(renderer, 'TextInput')
-    expect(inputs).toHaveLength(1)
-    expect(inputs[0]?.props.value).toBe('# Title\n\nbody')
-    expect(inputs[0]?.props.editable).toBe(true)
-    act(() => inputs[0]?.props.onChangeText('# Title\n\nedited'))
-    expect(onChange.mock.calls).toEqual([['# Title\n\nedited']])
-  })
-
-  it('renders no toolbar, which is the degradation rather than an omission', () => {
-    // Fifteen commands drive a rich document this page does not have; a toolbar that could not
-    // run them would be fifteen controls that do nothing.
-    const renderer = render(
-      createElement(MobileRichMarkdownEditor, {
-        content: 'body',
-        editable: true,
-        onChange: vi.fn()
-      })
-    )
-    expect(findHosts(renderer, 'Pressable')).toEqual([])
-    expect(findHosts(renderer, 'ScrollView')).toEqual([])
-  })
-
-  it('locks the field when the document is not editable', () => {
-    const renderer = render(
-      createElement(MobileRichMarkdownEditor, {
-        content: 'body',
-        editable: false,
-        onChange: vi.fn()
-      })
-    )
-    expect(findHosts(renderer, 'TextInput')[0]?.props.editable).toBe(false)
-  })
-
-  it('sits on the text-input seam rather than on a size of its own', () => {
-    // The floor itself is the `.web.ts` sibling's and is judged by the closure census; what is
-    // pinned here is that this field is bound to the seam at all, which is what makes it move.
-    const renderer = render(
-      createElement(MobileRichMarkdownEditor, {
-        content: 'body',
-        editable: true,
-        onChange: vi.fn()
-      })
-    )
-    expect(findHosts(renderer, 'TextInput')[0]?.props.style.fontSize).toBe(TEXT_INPUT_FONT_SIZE)
-  })
-
-  it('dismisses the keyboard by blurring the field the caret is actually in', () => {
-    // The native handle calls into the WebView's document; here the caret is in this field, and
-    // react-native-web's `Keyboard.dismiss` is a stub that would have done nothing.
-    const ref = createRef<MobileRichMarkdownEditorHandle>()
-    const blur = vi.fn()
-    render(
-      createElement(MobileRichMarkdownEditor, {
-        ref,
-        content: 'body',
-        editable: true,
-        onChange: vi.fn()
       }),
-      { blur }
+      host
     )
-    act(() => ref.current?.dismissKeyboard())
-    expect(blur).toHaveBeenCalledTimes(1)
+    const surface = host.querySelector<HTMLElement>('#editor')!
+    expect(surface.querySelector('h1')?.textContent).toBe('Title')
+    expect(surface.querySelector('p')?.textContent).toBe('body')
+    expect(surface.getAttribute('contenteditable')).toBe('true')
+    expect(onChange).not.toHaveBeenCalled()
+    expect(findHosts(renderer, 'TextInput')).toEqual([])
+
+    act(() => {
+      surface.innerHTML = '<p>edited</p>'
+      surface.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(onChange.mock.calls).toEqual([['edited']])
   })
 
-  it('never calls onKeyboardInsetChange, because there is no WebView to measure', () => {
-    const onKeyboardInsetChange = vi.fn()
-    render(
+  it('keeps the document and toolbar read-only until editing is enabled', () => {
+    const host = document.createElement('div')
+    const onChange = vi.fn()
+    const editor = (editable: boolean) =>
       createElement(MobileRichMarkdownEditor, {
         content: 'body',
-        editable: true,
-        onChange: vi.fn(),
-        onKeyboardInsetChange
+        editable,
+        onChange
       })
-    )
-    expect(onKeyboardInsetChange).not.toHaveBeenCalled()
+    const renderer = render(editor(false), host)
+    const surface = host.querySelector<HTMLElement>('#editor')!
+    const buttons = findHosts(renderer, 'Pressable')
+    expect(buttons.length).toBeGreaterThan(0)
+    expect(buttons.filter((node) => node.props.disabled !== true)).toEqual([])
+    expect(surface.getAttribute('contenteditable')).toBe('false')
+    act(() => {
+      surface.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(onChange).not.toHaveBeenCalled()
+
+    act(() => renderer.update(editor(true)))
+    const enabled = findHosts(renderer, 'Pressable')
+    expect(enabled).toHaveLength(buttons.length)
+    expect(enabled.filter((node) => node.props.disabled === true)).toEqual([])
+    expect(surface.getAttribute('contenteditable')).toBe('true')
+    act(() => {
+      surface.innerHTML = '<p>accepted</p>'
+      surface.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(onChange.mock.calls).toEqual([['accepted']])
   })
 })
 
 describe('the html preview on the page', () => {
-  it('renders the source the native component already falls back to', () => {
-    const renderSource = vi.fn(() => createElement('SourceView', null))
-    const renderer = render(createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource }))
-    expect(findHosts(renderer, 'SourceView')).toHaveLength(1)
-    expect(renderSource).toHaveBeenCalledTimes(1)
-  })
+  const renderSourceMarker = () => createElement('SourceView', null)
 
-  it('renders no toggle, because there is no preview to flip to', () => {
-    // A control that can only be in one position is a control that lies: the artifact has no
-    // sandbox on the page, so the Preview half of the toggle goes with it.
+  it('renders the artifact in a frame that can run nothing, and keeps the toggle', () => {
     const renderer = render(
-      createElement(MobileHtmlPreview, {
-        html: '<h1>hi</h1>',
-        renderSource: () => createElement('SourceView', null)
-      })
+      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
     )
-    expect(findHosts(renderer, 'Pressable')).toEqual([])
+    const frames = findHosts(renderer, 'iframe')
+    expect(frames).toHaveLength(1)
+    // The artifact reaches the frame as `srcDoc`, which the browser parses inside it. Neither
+    // `allow-scripts` nor `allow-same-origin`, which is the whole of what makes that safe.
+    expect(frames[0]?.props.srcDoc).toBe('<h1>hi</h1>')
+    expect(frames[0]?.props.sandbox).toBe(MOBILE_HTML_PREVIEW_SANDBOX)
+    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-scripts')
+    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-same-origin')
+    // Both positions of the toggle exist, which is what stops it being a control that lies.
+    expect(findHosts(renderer, 'Pressable')).toHaveLength(2)
   })
 
-  it('never renders the html itself, which is the whole of ruling 8', () => {
+  it('says which side of the toggle is showing', () => {
+    const renderer = render(
+      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
+    )
+    const toggles = () => findHosts(renderer, 'Pressable')
+    expect(toggles()).toHaveLength(2)
+    expect(toggles().map((node) => node.props.accessibilityRole)).toEqual(['tab', 'tab'])
+    // The pair's own container, so the two tabs are a set rather than two loose ones.
+    expect(
+      findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
+    ).toHaveLength(1)
+    // The showing side, which is what a screen reader has no other way to learn: the active
+    // position is styling and styling is not announced.
+    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([true, false])
+
+    act(() => toggles()[1]?.props.onPress())
+    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([false, true])
+  })
+
+  it('never puts the artifact anywhere but the frame', () => {
     const renderer = render(
       createElement(MobileHtmlPreview, {
         html: '<script>alert(1)</script>',
-        renderSource: () => createElement('SourceView', null)
+        renderSource: renderSourceMarker
       })
     )
-    // Agent-produced HTML, and the page has no frame to sandbox it in: the policy carries
-    // frame-src 'none' and child-src 'none'.
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('alert(1)')
+    const tree = JSON.stringify(renderer.toJSON())
+    // Once, as the frame's `srcDoc`, and nowhere else: not as a child, not as `dangerouslySetInnerHTML`,
+    // not in a prop of the surrounding view.
+    expect(findHosts(renderer, 'iframe')[0]?.props.srcDoc).toBe('<script>alert(1)</script>')
+    expect(tree.split('alert(1)')).toHaveLength(2)
+    expect(tree).not.toContain('dangerouslySetInnerHTML')
   })
 })

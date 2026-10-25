@@ -3,7 +3,8 @@ import type {
   LocalWindowsRuntimePreference,
   ProjectExecutionRuntimeResolution
 } from '../../../../shared/project-execution-runtime'
-import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
+import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'
 import { translate } from '@/i18n/i18n'
 
 // Pure display/state helpers for ProjectWindowsRuntimeSetting — extracted so the
@@ -121,23 +122,7 @@ export function getProjectRuntimeDescription(
   resolution: ProjectExecutionRuntimeResolution
 ): string {
   if (resolution.status === 'repair-required') {
-    if (resolution.repair.reason === 'wsl-unavailable') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.wslUnavailable',
-        'WSL is not available. Switch this project to Windows or repair WSL.'
-      )
-    }
-    if (resolution.repair.reason === 'wsl-distro-missing') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing',
-        '{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.',
-        { value0: resolution.repair.preferredRuntime.distro ?? 'WSL' }
-      )
-    }
-    return translate(
-      'auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired',
-      'Choose a WSL distro or switch this project to Windows.'
-    )
+    return projectRuntimeRepairSentence(resolution.repair, translate)
   }
 
   if (resolution.runtime.kind === 'wsl') {

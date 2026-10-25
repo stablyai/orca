@@ -1,10 +1,36 @@
 import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
 import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type {
   AiVaultSessionWorktreeInfo,
   AiVaultSessionWorktreeStatus
 } from './ai-vault-session-worktree'
+
+// Folder workspaces own sessions the way worktrees do, but a plain folder is never called a worktree.
+export function isAiVaultFolderWorkspaceId(workspaceId: string | null | undefined): boolean {
+  return Boolean(workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder')
+}
+
+export function aiVaultSessionWorkspaceHeading(workspaceId: string | null | undefined): string {
+  return isAiVaultFolderWorkspaceId(workspaceId)
+    ? translate('auto.components.right.sidebar.AiVaultSessionDetails.folder', 'Folder')
+    : translate('auto.components.right.sidebar.AiVaultSessionDetails.worktree', 'Worktree')
+}
+
+export function aiVaultResumeInSessionWorkspaceLabel(
+  workspaceId: string | null | undefined
+): string {
+  return isAiVaultFolderWorkspaceId(workspaceId)
+    ? translate(
+        'auto.components.right.sidebar.AiVaultSessionDetails.resumeInFolder',
+        'Resume in Folder'
+      )
+    : translate(
+        'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
+        'Resume in Worktree'
+      )
+}
 
 export function canJumpToAiVaultSessionWorktree(
   worktreeInfo: AiVaultSessionWorktreeInfo | null
@@ -28,7 +54,14 @@ export function isAiVaultSessionInCurrentWorktree(
 export function aiVaultWorktreeJumpTooltip(
   worktreeInfo: AiVaultSessionWorktreeInfo | null
 ): string {
+  const folder = isAiVaultFolderWorkspaceId(worktreeInfo?.worktreeId)
   if (canJumpToAiVaultSessionWorktree(worktreeInfo)) {
+    if (folder) {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToFolder',
+        'Jump to Folder'
+      )
+    }
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorktree',
       'Jump to Worktree'
@@ -41,6 +74,12 @@ export function aiVaultWorktreeJumpTooltip(
     )
   }
   if (worktreeInfo.status === 'archived') {
+    if (folder) {
+      return translate(
+        'auto.components.right.sidebar.AiVaultSessionWorktree.archivedFolderJumpUnavailable',
+        'This session is in an archived folder.'
+      )
+    }
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.archivedJumpUnavailable',
       'This session is in an archived worktree.'
@@ -97,7 +136,13 @@ export function shouldShowAiVaultWorktreeStatusBadge(
   return true
 }
 
-export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus): string {
+export function aiVaultWorktreeStatusLabel(
+  status: AiVaultSessionWorktreeStatus,
+  workspaceId?: string | null
+): string {
+  if (isAiVaultFolderWorkspaceId(workspaceId)) {
+    return aiVaultFolderStatusLabel(status)
+  }
   if (status === 'current') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorktree',
@@ -120,4 +165,20 @@ export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus)
     'auto.components.right.sidebar.AiVaultSessionWorktree.unavailableWorktree',
     'Unavailable worktree'
   )
+}
+
+function aiVaultFolderStatusLabel(status: AiVaultSessionWorktreeStatus): string {
+  if (status === 'current') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.currentFolder',
+      'Current folder'
+    )
+  }
+  if (status === 'archived') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedFolder',
+      'Archived folder'
+    )
+  }
+  return translate('auto.components.right.sidebar.AiVaultSessionWorktree.activeFolder', 'Folder')
 }

@@ -6,14 +6,14 @@ import type { OpenFile } from '../store/slices/editor'
 
 const closeWebRuntimeSessionTabMock = vi.fn(async (_args: unknown) => 'applied' as const)
 
-vi.mock('./web-runtime-session', () => ({
+vi.mock('./web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: (args: unknown) => closeWebRuntimeSessionTabMock(args)
 }))
 
 import { useAppStore } from '../store'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
 import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import {
   ENV,
   NOW,

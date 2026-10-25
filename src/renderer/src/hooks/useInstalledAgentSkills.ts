@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
@@ -6,14 +7,12 @@ import type {
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
-  getRuntimeScopedSkillDiscoveryKey,
-  getSkillDiscoveryTargetKey,
-  resetSkillDiscoveryCacheForTests
+  getRuntimeScopedSkillDiscoveryKey
 } from './installed-agent-skill-discovery'
 import {
   getInstalledAgentSkillVerdict,
@@ -36,6 +35,7 @@ export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
 ] as const satisfies readonly SkillSourceKind[]
 
 type InstalledAgentSkillOptions = {
+  runtimeTarget?: RuntimeClientTarget | null
   enabled?: boolean
   discoveryTarget?: SkillDiscoveryTarget
   sourceKinds?: readonly SkillSourceKind[]
@@ -105,13 +105,6 @@ export function notifyInstalledAgentSkillsRefreshed(): void {
   }
 }
 
-export const _installedAgentSkillDiscoveryInternalsForTests = {
-  discoverInstalledAgentSkills,
-  getSkillDiscoveryTargetKey,
-  isOrchestrationSkillName,
-  reset: resetSkillDiscoveryCacheForTests
-}
-
 export function useInstalledAgentSkill(
   skillName: string,
   options: InstalledAgentSkillOptions = {}
@@ -126,7 +119,9 @@ export function useInstalledAgentSkillNames(
   const { enabled = true, discoveryTarget, sourceKinds } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
-  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const activeRuntimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const runtimeTarget =
+    options.runtimeTarget === undefined ? activeRuntimeTarget : options.runtimeTarget
   const discoveryTargetKey = runtimeTarget
     ? getRuntimeScopedSkillDiscoveryKey(
         runtimeTarget,

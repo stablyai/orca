@@ -12,9 +12,9 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   indexWorktreeHostClaims,
-  mergeWorkspaceSessionsWithHostShadow,
-  pickPrimaryHostForClaims
+  mergeWorkspaceSessionsWithHostShadow
 } from './workspace-session-host-contention'
+import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import {
   buildHostIdByWorktreeId,
@@ -190,7 +190,6 @@ describe('writing a contested workspace id back', () => {
         set,
         get: vi.fn(),
         patch: vi.fn(),
-        setSync: vi.fn(),
         flush: vi.fn(async () => {})
       },
       livePayload(),
@@ -222,7 +221,6 @@ describe('writing a contested workspace id back', () => {
         set,
         get: vi.fn(),
         patch: vi.fn(),
-        setSync: vi.fn(),
         flush: vi.fn(async () => {})
       },
       {
@@ -241,7 +239,7 @@ describe('writing a contested workspace id back', () => {
   it('restores the parked rows on the debounced patch path too', () => {
     const patch: SessionPatchMock = vi.fn(async () => {})
     patchWorkspaceSessionByHost(
-      { patch, get: vi.fn(), setSync: vi.fn() },
+      { patch, get: vi.fn() },
       { tabsByWorktree: livePayload().tabsByWorktree },
       runtimeCoClaimantState()
     )
@@ -253,7 +251,7 @@ describe('writing a contested workspace id back', () => {
   it('omits a field the patch never touched so the partition keeps its own copy', () => {
     const patch: SessionPatchMock = vi.fn(async () => {})
     patchWorkspaceSessionByHost(
-      { patch, get: vi.fn(), setSync: vi.fn() },
+      { patch, get: vi.fn() },
       { activeTabId: 'tab-1' },
       runtimeCoClaimantState()
     )
@@ -339,7 +337,7 @@ describe('read-time primary is the one the write path honours', () => {
   it('does not strand the runtime co-claimant when the SSH row is written', async () => {
     const set: SessionWriteMock = vi.fn(async () => {})
     await persistWorkspaceSessionByHost(
-      { set, get: vi.fn(), patch: vi.fn(), setSync: vi.fn(), flush: vi.fn(async () => {}) },
+      { set, get: vi.fn(), patch: vi.fn(), flush: vi.fn(async () => {}) },
       sessionWithTabs({
         [SHARED_ID]: [tab('ssh-tab')],
         [RUNTIME_ONLY_ID]: [tab('runtime-only-tab', RUNTIME_ONLY_ID)]
@@ -362,7 +360,7 @@ describe('read-time primary is the one the write path honours', () => {
   it('writes a row back to the only partition that had it instead of copying it', async () => {
     const set: SessionWriteMock = vi.fn(async () => {})
     await persistWorkspaceSessionByHost(
-      { set, get: vi.fn(), patch: vi.fn(), setSync: vi.fn(), flush: vi.fn(async () => {}) },
+      { set, get: vi.fn(), patch: vi.fn(), flush: vi.fn(async () => {}) },
       sessionWithTabs({ [SHARED_ID]: [tab('runtime-tab')] }),
       {
         repos: [],

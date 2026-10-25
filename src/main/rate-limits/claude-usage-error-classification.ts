@@ -1,5 +1,5 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
-import { OAuthUsageError } from './claude-oauth-usage-error'
+import { ClaudeUsageRequestError, OAuthUsageError } from './claude-oauth-usage-error'
 
 export type ClaudeUsageErrorClassification = {
   failureKind: UsageRateLimitFailureKind
@@ -27,33 +27,10 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
     return terminal('usage-unavailable')
   }
 
-  if (error instanceof SyntaxError) {
-    return fallbackOnly('parse')
+  if (error instanceof ClaudeUsageRequestError) {
+    return fallbackOnly(error.failureKind)
   }
-
-  const message = error instanceof Error ? error.message : String(error)
-  if (/\babort|network|econn|enotfound|etimedout|fetch failed|dns\b/i.test(message)) {
-    return fallbackOnly('network')
-  }
-
   return fallbackOnly('unknown')
-}
-
-export function classifyClaudeCredentialAbsence(input: {
-  hasRefreshableCredentials: boolean
-  keychainUnavailable?: boolean
-  managedRefreshDeferredByLivePty?: boolean
-}): ClaudeUsageErrorClassification {
-  if (input.managedRefreshDeferredByLivePty) {
-    return terminal('deferred-by-live-session')
-  }
-  if (input.keychainUnavailable) {
-    return fallbackOnly('keychain-unavailable')
-  }
-  if (input.hasRefreshableCredentials) {
-    return recoverableAuth('refreshable-credentials-without-token')
-  }
-  return terminal('missing-credentials')
 }
 
 function recoverableAuth(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {

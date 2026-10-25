@@ -100,7 +100,6 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
       baselineWorkingSequence: 0
     }
   }
-  // Why: the delivery warnings only existed in the text formatter, so --json callers never saw them.
   const warnings = terminalSendWarnings(result.result.send)
   printResult(
     warnings.length > 0 ? { ...result, result: { ...result.result, warnings } } : result,

@@ -1,22 +1,13 @@
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import {
-  getAgentResumeArgv,
-  isResumableTuiAgent,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
+import type {
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
+import { resumeRecordFromStatus } from '../../../../shared/agent-resume-record-from-status'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
-
-export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
-  return {
-    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
-    agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
-  }
-}
 
 export function sleepingRecordFromEntry(args: {
   state: AppState
@@ -27,39 +18,11 @@ export function sleepingRecordFromEntry(args: {
   launchConfig?: SleepingAgentLaunchConfig
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
-  const agent = args.entry.agentType
-  if (
-    args.entry.terminalResumeEligible === false ||
-    !isResumableTuiAgent(agent) ||
-    !args.entry.providerSession
-  ) {
-    return null
-  }
-  if (!getAgentResumeArgv(agent, args.entry.providerSession)) {
-    return null
-  }
-  const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
-  return {
-    paneKey: args.entry.paneKey,
-    ...(tab ? { tabId: tab.id } : {}),
-    worktreeId: args.worktreeId,
-    agent,
-    providerSession: args.entry.providerSession,
-    ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
-    prompt: args.entry.prompt,
-    state: args.entry.state,
-    capturedAt: args.capturedAt,
-    updatedAt: args.entry.updatedAt,
-    ...((args.entry.terminalTitle ?? tab?.title)
-      ? { terminalTitle: (args.entry.terminalTitle ?? tab?.title)! }
-      : {}),
-    ...(args.entry.lastAssistantMessage
-      ? { lastAssistantMessage: args.entry.lastAssistantMessage }
-      : {}),
-    ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
-    ...(args.entry.interrupted ? { interrupted: true } : {}),
-    ...(args.origin ? { origin: args.origin } : {})
-  }
+  const { state, tab, ...record } = args
+  return resumeRecordFromStatus({
+    ...record,
+    tabOf: () => tab ?? findTabForAgentEntry(state, args.worktreeId, args.entry)
+  })
 }
 
 export type CollectSleepingAgentSessionRecordsOptions = {
@@ -79,7 +42,7 @@ export function normalizeSleepingAgentSessionCollectOptions(
 }
 
 export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
-  return entry.state === 'done' && entry.interrupted !== true
+  return entry.state === 'done' && !agentTurnEndedUncleanly(entry)
 }
 
 // Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
@@ -98,14 +61,18 @@ export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): bo
 }
 
 // Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
-// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
+// turn's verdict — and an explicitly slept workspace is never stale at wake, so a row the
 // user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
 // so a done pane wakes lazily in place instead of spawning a new tab.
 export function manualSleepCaptureEntry(
   entry: AgentStatusEntry,
   capturedAt: number
 ): AgentStatusEntry {
-  return { ...entry, updatedAt: capturedAt, interrupted: false }
+  if (!entry.mainAgent) {
+    return { ...entry, updatedAt: capturedAt, interrupted: false }
+  }
+  const { outcome: _outcome, ...mainAgent } = entry.mainAgent
+  return { ...entry, updatedAt: capturedAt, interrupted: false, mainAgent }
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(

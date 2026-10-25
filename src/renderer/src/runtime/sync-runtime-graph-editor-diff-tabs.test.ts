@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
 import type { AppState } from '../store/types'
 
@@ -498,15 +499,28 @@ describe('buildMobileSessionTabSnapshots', () => {
 
     const snapshot = buildMobileSessionTabSnapshots(state)[0]
 
+    // Layout-owner build (L280): a row goes out under its tab id only, so a diff no group shows
+    // gets no row; the same-path edit tab keeps its own.
+    const diffRows = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? []
+      : [
+          {
+            type: 'file',
+            id: diffId,
+            mode: 'diff',
+            diffSource: 'unstaged',
+            relativePath: 'src/app.ts'
+          }
+        ]
     expect(snapshot?.tabs).toMatchObject([
       { type: 'file', id: 'editor-tab-1', mode: 'edit', relativePath: 'src/app.ts' },
-      { type: 'file', id: diffId, mode: 'diff', diffSource: 'unstaged', relativePath: 'src/app.ts' }
+      ...diffRows
     ])
     expect(snapshot?.tabGroups).toEqual([
       {
         id: 'group-1',
         activeTabId: 'editor-tab-1',
-        tabOrder: ['editor-tab-1', diffId],
+        tabOrder: ['editor-tab-1', ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [] : [diffId])],
         recentTabIds: ['editor-tab-1']
       }
     ])
@@ -751,6 +765,12 @@ describe('buildMobileSessionTabSnapshots', () => {
       })
     )[0]
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Layout-owner build (L280): a file no group shows as a tab gets no row.
+      expect(terminalSnapshot?.tabs ?? []).toEqual([])
+      expect(editorSnapshot?.tabs ?? []).toEqual([])
+      return
+    }
     expect(terminalSnapshot?.tabs).toMatchObject([
       { type: 'file', id: fileId, relativePath: 'src/app.ts', isActive: false }
     ])

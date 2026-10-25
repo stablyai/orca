@@ -172,8 +172,10 @@ const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = n
 export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =
   new Set(['dirty-files', 'unpushed-commits', 'unknown-base'])
 
+// Why (STA-4686): deleting the active workspace hands focus off like a sidebar delete, and a live
+// agent gets an explicit stop confirmation at delete time, so both are plain labels here.
 export const WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS: ReadonlySet<WorkspaceCleanupBlocker> =
-  new Set(['active-workspace', 'live-agent', 'dismissed'])
+  new Set(['dismissed'])
 
 export function canQueueWorkspaceCleanupCandidate(
   candidate: Pick<WorkspaceCleanupCandidate, 'blockers'>
@@ -260,10 +262,15 @@ export function getWorkspaceCleanupInactivityReasons(
 export function getPersistedWorkspaceCleanupActivityAt(workspace: {
   createdAt?: number
   lastActivityAt: number
+  lastTerminalUseAt?: number
 }): number {
   const lastActivityAt = Number.isFinite(workspace.lastActivityAt) ? workspace.lastActivityAt : 0
   const createdAt = Number.isFinite(workspace.createdAt) ? (workspace.createdAt ?? 0) : 0
-  return Math.max(lastActivityAt, createdAt)
+  // Written only by a sidebar-inputs host; absent on every other build.
+  const terminalUseAt = Number.isFinite(workspace.lastTerminalUseAt)
+    ? (workspace.lastTerminalUseAt ?? 0)
+    : 0
+  return Math.max(lastActivityAt, createdAt, terminalUseAt)
 }
 
 export function isWorkspaceOldForCleanup(

@@ -1,15 +1,18 @@
 import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { defineMethod } from '../core'
-import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
+import {
+  CloseLifecycleTab,
+  CloseTab
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
-import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
+    permission: 'workspace',
     params: CloseTab,
     handler: async (params, context) => {
       if (context.clientKind) {
@@ -20,8 +23,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities,
-          isStructuredNativeChatEnabled(context.runtime)
+          context.clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -53,6 +55,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.tabId,
             {
               reason: 'user',
+              // Why explicit reason only: a reasonless legacy close never carried a confirmation.
+              ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
@@ -87,6 +91,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
   }),
   defineMethod({
     name: 'session.tabs.closeLifecycle',
+    permission: 'workspace',
     params: CloseLifecycleTab,
     handler: async (params, context) => {
       if (context.clientKind) {
@@ -97,8 +102,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
-          context.clientCapabilities,
-          isStructuredNativeChatEnabled(context.runtime)
+          context.clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(

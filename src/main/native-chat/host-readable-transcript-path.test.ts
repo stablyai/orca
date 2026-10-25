@@ -16,7 +16,7 @@ import {
   needsWslHostTranslation,
   resetHostReadableTranscriptPathCacheForTests,
   toHostReadableTranscriptPath,
-  wslCodexSessionsDirs
+  wslAgentSessionsDirs
 } from './host-readable-transcript-path'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
@@ -69,8 +69,7 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('never probes the bare guest path on Windows', async () => {
-    // Why: Win32 resolves `/home/...` against the current drive (`C:\home\...`),
-    // so probing first could bind chat to a local look-alike file.
+    // Win32 probes /home against the current drive, risking a local look-alike transcript.
     const seen: string[] = []
     await expect(
       toHostReadableTranscriptPath('/home/ada/x.jsonl', {
@@ -208,7 +207,6 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('prefers a later distro hit over an earlier gate refusal', async () => {
-    // Guest path under Debian's $HOME so the refusing Debian probe ranks first.
     await expect(
       toHostReadableTranscriptPath('/home/other/x.jsonl', {
         platform: 'win32',
@@ -252,8 +250,7 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('enumerates WSL homes once across repeated resolve-poll ticks', async () => {
-    // Why: getWslHomeAsync does not cache failures; re-spawning wsl.exe on every
-    // 500ms poll tick would hammer the main process.
+    // Failed WSL home discovery is uncached; polling must not spawn wsl.exe every 500ms.
     const listWslHomeDirs = vi.fn(async () => [UBUNTU_HOME])
     for (let tick = 0; tick < 5; tick += 1) {
       await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
@@ -262,14 +259,12 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs
       })
     }
-    await wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs })
+    await wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs })
     expect(listWslHomeDirs).toHaveBeenCalledTimes(1)
   })
 
   it('re-probes after the TTL so a distro that was booting is not excluded forever', async () => {
-    // Why: getWslHomeAsync returns null for a distro whose 5s $HOME probe timed
-    // out on a cold boot. Latching that partial list for the process lifetime
-    // would leave that distro's transcripts permanently unresolvable (#10326).
+    // Retry cold-boot discovery failures instead of excluding that distro for the session.
     vi.useFakeTimers()
     try {
       const listWslHomeDirs = vi
@@ -312,16 +307,22 @@ describe('toHostReadableTranscriptPath', () => {
   })
 })
 
-describe('wslCodexSessionsDirs', () => {
+describe('wslAgentSessionsDirs', () => {
   it('returns nothing off Windows', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'darwin', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'darwin',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([])
   })
 
   it('lists the managed and system Codex roots per distro home', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([
       `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
       `${UBUNTU_HOME}\\.codex\\sessions`
@@ -335,7 +336,10 @@ describe('wslCodexSessionsDirs', () => {
     })
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toContain(`${accountHome}\\sessions`)
   })
 
@@ -346,7 +350,7 @@ describe('wslCodexSessionsDirs', () => {
     wslMocks.filterPathsToRunningWslDistrosAsync.mockResolvedValue([])
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [] })
+      wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs: async () => [] })
     ).resolves.toEqual([])
   })
 })

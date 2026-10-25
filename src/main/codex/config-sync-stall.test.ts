@@ -10,6 +10,12 @@ import {
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 
+// Bypass platform-specific socket paths so asserted config bytes stay host-independent.
+vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 let root: string
 let homes: { runtimeHomePath: string; systemHomePath: string }
 
@@ -62,8 +68,7 @@ describe('getCodexConfigSyncStatus', () => {
   })
 
   it('reports a stall when the source config cannot be read', () => {
-    // Why: a directory at the config path survives existsSync but throws on
-    // read, standing in for a permission-denied or otherwise unreadable home.
+    // A directory at the config path simulates a present but unreadable file.
     mkdirSync(systemConfigPath(), { recursive: true })
     writeFileSync(runtimeConfigPath(), 'model = "runtime-model"\n', 'utf-8')
 
@@ -92,8 +97,6 @@ describe('getCodexConfigSyncStatus', () => {
     })
   })
 
-  // Why: the status must never claim a sync the mirror would decline, so pin it
-  // to the mirror's real behavior rather than to a duplicated predicate.
   it('reports a stall exactly when the mirror preserves the runtime config', () => {
     writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
     syncSystemConfigIntoManagedCodexHome(homes)
@@ -103,8 +106,6 @@ describe('getCodexConfigSyncStatus', () => {
     syncSystemConfigIntoManagedCodexHome(homes)
 
     expect(getCodexConfigSyncStatus(homes).state).toBe('stalled')
-    // The mirror keeps serving the last good settings — that is what makes the
-    // stall silent, and why it needs surfacing.
     expect(readFileSync(runtimeConfigPath(), 'utf-8')).toContain('model = "gpt-5"')
   })
 
@@ -123,8 +124,6 @@ describe('reportCodexConfigSyncOutcome', () => {
     resetCodexConfigSyncStallLatchForTests()
   })
 
-  // Why: a failing assertion skips an inline mockRestore, and a leaked
-  // console.warn spy makes every later case in this block fail spuriously.
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -155,14 +154,8 @@ describe('reportCodexConfigSyncOutcome', () => {
   })
 
   it('latches an unreadable source instead of logging the raw failure every pass', () => {
-    // Why: an unreadable source throws out of the mirror, so before the catch
-    // path reported it this stall logged the generic failure on every launch
-    // and quota poll and never surfaced its reason.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // Why: seed a baseline with one healthy pass first. Without it promotion
-    // no-ops before touching the source and the mirror is what throws — which
-    // is NOT the steady state every real install is in, where promotion reads
-    // the source first and throws there instead.
+    // Seed a baseline so the unreadable source fails during promotion, before the mirror.
     writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
     syncSystemConfigIntoManagedCodexHome(homes)
     warn.mockClear()
@@ -193,8 +186,6 @@ describe('reportCodexConfigSyncOutcome', () => {
   })
 
   it('clears a stall without claiming the source became readable', () => {
-    // Why: a removed runtime config also reads as synced, so "readable again"
-    // would be a false claim about a source that is still gone.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     writeFileSync(runtimeConfigPath(), 'model = "runtime-model"\n', 'utf-8')
     syncSystemConfigIntoManagedCodexHome(homes)
@@ -207,28 +198,21 @@ describe('reportCodexConfigSyncOutcome', () => {
     expect(String(cleared[0]?.[0])).not.toContain('readable again')
   })
 
-  // chmod on a directory does not block writes on Windows, so promotion would
-  // succeed there and the scenario could not be constructed.
+  // Windows directory chmod cannot simulate this write failure.
   it.skipIf(process.platform === 'win32')(
     'does not claim recovery on a pass where no mirror ran',
     () => {
-      // Why: promotion throwing still means the mirror was skipped, so the runtime
-      // config is not tracking the source. Clearing the latch there would claim a
-      // recovery that never happened and silence every later pass.
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
       syncSystemConfigIntoManagedCodexHome(homes)
 
-      // In-Codex change while the source is gone -> stall latches, and the change
-      // stays pending promotion.
       rmSync(systemConfigPath())
       writeFileSync(runtimeConfigPath(), 'model = "o4"\n', 'utf-8')
       syncSystemConfigIntoManagedCodexHome(homes)
       expect(warn.mock.calls.filter((c) => String(c[0]).includes('stalled'))).toHaveLength(1)
       warn.mockClear()
 
-      // Source returns readable, but promotion cannot write the pending change
-      // back into a read-only ~/.codex, so it throws and the mirror is skipped.
+      // Readable source plus an unwritable home fails promotion and skips the mirror.
       writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
       chmodSync(homes.systemHomePath, 0o555)
       try {
@@ -238,7 +222,6 @@ describe('reportCodexConfigSyncOutcome', () => {
       }
 
       expect(warn.mock.calls.filter((c) => String(c[0]).includes('stall cleared'))).toHaveLength(0)
-      // The runtime never picked up the source, so the change must still be there.
       expect(readFileSync(runtimeConfigPath(), 'utf-8')).toContain('model = "o4"')
     }
   )

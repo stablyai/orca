@@ -104,7 +104,7 @@ describe('shouldShowSessionHeaderChecksAction', () => {
       shouldShowSessionHeaderChecksAction({
         isFolderWorkspaceRoute: false,
         repoContextLoaded: false,
-        hostedChecksSupported: false
+        hostedChecksSupported: true
       })
     ).toBe(false)
   })

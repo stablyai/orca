@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
 import {
@@ -23,12 +23,12 @@ const router = vi.hoisted(() => ({
   canGoBack: vi.fn(() => false)
 }))
 
-vi.mock('expo-router', () => ({ useRouter: () => router }))
+vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 // The web file re-exports the screen hooks through the provider module, and reaching the real ones
 // imports the Expo runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -36,7 +36,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { useRouteHandoff, WRAPPED_HREF_MEMBERS } from './route-handoff.web'
+import { useRouteHandoff } from './route-handoff.web'
 
 const INIT = {
   v: BRIDGE_PROTOCOL_VERSION,
@@ -55,6 +55,9 @@ const INIT = {
   pageRoutes: ['/h/[hostId]']
 }
 
+const trees: ReactTestRenderer[] = []
+const clients: BridgeRpcClient[] = []
+
 const held: { handoff: RouteHandoff | null } = { handoff: null }
 
 function Screen(): null {
@@ -62,13 +65,21 @@ function Screen(): null {
   return null
 }
 
-function installChannel(): { posted: string[]; deliver: (frame: unknown) => void } {
+function installChannel(): {
+  posted: string[]
+  deliver: (frame: unknown) => void
+  failPosts: () => void
+} {
+  let failed = false
   const posted: string[] = []
   const channel: {
     postMessage: (json: string) => void
     onmessage: ((event: { data: string }) => void) | null
   } = {
     postMessage: (json) => {
+      if (failed) {
+        throw new Error('page port unavailable')
+      }
       posted.push(json)
     },
     onmessage: null
@@ -76,6 +87,9 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
   Object.defineProperty(globalThis, 'orcaBridge', { value: channel, configurable: true })
   return {
     posted,
+    failPosts: () => {
+      failed = true
+    },
     deliver: (frame) => {
       channel.onmessage?.({ data: JSON.stringify(frame) })
     }
@@ -83,21 +97,22 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
 }
 
 /** The page as the entry leaves it: one client, already holding a session. */
-function mount(init: unknown): { posted: string[]; handoff: RouteHandoff } {
+function mount(init: unknown): { posted: string[]; handoff: RouteHandoff; failPosts: () => void } {
   const channel = installChannel()
   const client = createShellPageClient()
   if (client === null) {
     throw new Error('no channel installed')
   }
+  clients.push(client)
   channel.deliver(init)
   act(() => {
-    create(render(client))
+    trees.push(create(render(client)))
   })
   const handoff = held.handoff
   if (handoff === null) {
     throw new Error('no screen mounted')
   }
-  return { posted: channel.posted, handoff }
+  return { posted: channel.posted, handoff, failPosts: channel.failPosts }
 }
 
 function render(client: BridgeRpcClient): ReactElement {
@@ -147,6 +162,14 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  for (const client of clients.splice(0)) {
+    client.close()
+  }
   restoreWarn?.()
   restoreWarn = null
   vi.useRealTimers()
@@ -346,8 +369,12 @@ describe('a back this document cannot serve', () => {
   })
 
   it('does not throw out of a tap handler when there is nowhere to post', () => {
-    const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
+    const { posted, handoff, failPosts } = mount(INIT)
+    failPosts()
     expect(() => handoff.back()).not.toThrow()
+    expect(backs(posted)).toEqual([])
+    expect(router.back).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(warned)).toContain('send-failed')
   })
 })
 
@@ -360,10 +387,25 @@ describe('a back this document cannot serve', () => {
  */
 describe('every member that takes a target', () => {
   it('is replaced rather than handed through, all of them', () => {
-    const { handoff } = mount(INIT)
-    for (const member of WRAPPED_HREF_MEMBERS) {
-      expect(typeof handoff[member], member).toBe('function')
-      expect(handoff[member], member).not.toBe(router[member])
+    const options = { withAnchor: false }
+    for (const member of ['push', 'replace', 'navigate', 'dismissTo'] as const) {
+      router[member].mockClear()
+      const { posted, handoff } = mount(INIT)
+      handoff[member]('/h/host-b', options)
+      expect(router[member], member).toHaveBeenCalledExactlyOnceWith('/h/host-b', options)
+      router[member].mockClear()
+      handoff[member]('/h/host-a/session/wt-1')
+      expect(navigations(posted), member).toEqual([
+        {
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: 'navigate',
+          href: '/h/host-a/session/wt-1'
+        }
+      ])
+      handoff[member]('/h/host-a/tasks#top')
+      expect(navigations(posted), member).toHaveLength(1)
+      expect(router[member], member).not.toHaveBeenCalled()
     }
   })
 
@@ -473,5 +515,109 @@ describe('navigation options', () => {
         href: '/h/host-a/session/wt-1'
       }
     ])
+  })
+})
+
+/**
+ * An in-page hop only to a route this session's grants already cover.
+ *
+ * Grants are resolved once, from the route the shell opened, so a push kept local runs the target
+ * under the opener's list. On a wide layout the sidebar reaches the tasks page from every `/h`
+ * route, so keeping that hop local runs tasks without `native.clipboard.write` and its copy actions
+ * refuse with nothing on screen to say why. Handing it to the shell opens it as its own session,
+ * with its own grants.
+ */
+describe('an in-page hop the session cannot cover', () => {
+  const TASKS = '/h/host-a/tasks'
+  const PAIRS = [
+    { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
+    {
+      pathname: '/h/[hostId]/tasks',
+      grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+    }
+  ]
+  const withPairs = (native: string[]) => ({
+    ...INIT,
+    grants: { ...INIT.grants, native },
+    pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks'],
+    pageRouteGrants: PAIRS
+  })
+
+  it('goes to the shell when the target needs a grant this session lacks', () => {
+    const { posted, handoff } = mount(withPairs(['navigate', 'storage', 'haptics']))
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
+    ])
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('stays in this document when the session already covers the target', () => {
+    const { posted, handoff } = mount(
+      withPairs(['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'])
+    )
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
+  })
+
+  it("hands off when the session lacks any one of the target's grants, not the clipboard alone", () => {
+    // The tasks route declares five grants and this session holds four. Without a case that
+    // withholds `externalLink` alone, a rule reading only the verb grants would pass every case.
+    const { posted, handoff } = mount(
+      withPairs(['navigate', 'storage', 'haptics', 'native.clipboard.write'])
+    )
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
+    ])
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('keeps a hop whose target declares a subset, which is C3.1 without its pairwise pin', () => {
+    // explorer ⊇ preview: the opener was granted more than the target asks for.
+    const { posted, handoff } = mount({
+      ...INIT,
+      grants: { ...INIT.grants, native: ['navigate', 'storage', 'externalLink', 'haptics'] },
+      pageRoutes: ['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'],
+      pageRouteGrants: [
+        { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage', 'haptics'] },
+        { pathname: '/h/[hostId]/files/preview/[worktreeId]', grants: ['navigate', 'haptics'] }
+      ]
+    })
+    handoff.push('/h/host-a/files/preview/wt-1')
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith('/h/host-a/files/preview/wt-1', undefined)
+  })
+
+  it('leaves a non-page route exactly as it was', () => {
+    const { posted, handoff } = mount(withPairs(['navigate', 'storage', 'haptics']))
+    handoff.push('/h/host-a/session/wt-1')
+    expect(navigations(posted)).toHaveLength(1)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('keeps the old rule when the shell named no grants, so an older shell is unchanged', () => {
+    // Absent, not empty: a shell that says nothing cannot be read as "this route needs nothing".
+    const { posted, handoff } = mount({
+      ...INIT,
+      grants: { ...INIT.grants, native: ['navigate', 'storage', 'haptics'] },
+      pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks']
+    })
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
+  })
+
+  it('hands off a target the shell lists with no entry of its own', () => {
+    // Listed as renderable but absent from the pairs: the page cannot show it is covered, and a
+    // hop it cannot justify goes to the shell rather than running on the opener's grants.
+    const { posted, handoff } = mount({
+      ...withPairs(['navigate', 'storage', 'haptics']),
+      pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }]
+    })
+    handoff.push(TASKS)
+    expect(navigations(posted)).toHaveLength(1)
+    expect(router.push).not.toHaveBeenCalled()
   })
 })

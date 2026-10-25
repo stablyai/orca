@@ -5,8 +5,8 @@ import { launchStructuredWorktreeSession } from './worktree-creation-structured-
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
-import { registerWorktreeActivationReset } from './worktree-activation-test-harness'
+} from './worktree-activation-created-agent.test-fixture'
+import { registerWorktreeActivationReset } from './worktree-activation.test-fixture'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 
 vi.mock('./worktree-creation-structured-session', () => ({
@@ -66,6 +66,10 @@ describe('native chat creation completed in the background', () => {
 
       await executeWorktreeCreation('creation-1', request)
 
+      const createArgs = vi.mocked(useAppStore.getState().createWorktree).mock.calls[0]
+      expect(createArgs[10]).toBe(agent)
+      expect(createArgs[16]).toBeUndefined()
+      expect(createArgs[25]).not.toHaveProperty('startupDraft')
       const state = useAppStore.getState()
       const tabs = state.tabsByWorktree[worktree.id]
       expect(tabs).toHaveLength(1)

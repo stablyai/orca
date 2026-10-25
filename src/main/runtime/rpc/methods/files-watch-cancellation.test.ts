@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'

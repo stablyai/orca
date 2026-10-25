@@ -16,8 +16,8 @@ import {
   assertWindowsProcessTreeRuntimeCreationTime,
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs,
   stageWindowsProcessTreeNodeAddonApiHeaders,
-  WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 import { writeFakeWindowsProcessTreeWithNodeAddonApi } from './rebuild-native-deps-test-fixtures.mjs'
@@ -46,6 +46,41 @@ describe('windows-process-tree node-gyp rebuild', () => {
     expect(args).toContain('--arch=arm64')
   })
 
+  it('preserves an external node-gyp entry and the physical addon cwd', () => {
+    const entry = join(tmpdir(), 'external-node-gyp', 'bin', 'node-gyp.js')
+    expect(nodeGypRebuildInvocation('arm64', import.meta.dirname, entry)).toEqual({
+      args: [entry, 'rebuild', '--arch=arm64'],
+      cwd: realpathSync(import.meta.dirname)
+    })
+  })
+
+  it('allows cold setup and compilation only for node-pty on a Windows ARM CI host', () => {
+    expect(
+      nodeGypRebuildTimeoutMs('node-pty', { platform: 'win32', arch: 'arm64', ci: 'true' })
+    ).toBe(600_000)
+  })
+
+  it.each([
+    { moduleName: 'node-pty', platform: 'win32', arch: 'x64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'linux', arch: 'arm64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'darwin', arch: 'arm64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: '' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: 'false' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: '1' },
+    { moduleName: '@orca/windows-registry', platform: 'win32', arch: 'arm64', ci: 'true' },
+    { moduleName: '@vscode/windows-process-tree', platform: 'win32', arch: 'arm64', ci: 'true' }
+  ])('keeps the five-minute bound for $moduleName on $platform/$arch with CI=$ci', (host) => {
+    expect(nodeGypRebuildTimeoutMs(host.moduleName, host)).toBe(300_000)
+  })
+
+  it('uses the execution host rather than an ARM cross-compilation target', () => {
+    const { args } = nodeGypRebuildInvocation('arm64', import.meta.dirname)
+    expect(args).toContain('--arch=arm64')
+    expect(
+      nodeGypRebuildTimeoutMs('node-pty', { platform: 'win32', arch: 'x64', ci: 'true' })
+    ).toBe(300_000)
+  })
+
   it('copies node-addon-api headers into the patched include dir', () => {
     const packageDir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-headers-'))
     try {
@@ -53,13 +88,14 @@ describe('windows-process-tree node-gyp rebuild', () => {
       mkdirSync(nodeAddonApiDir, { recursive: true })
       writeFileSync(join(packageDir, 'package.json'), '{"dependencies":{"node-addon-api":"*"}}\n')
       writeFileSync(join(nodeAddonApiDir, 'package.json'), '{"name":"node-addon-api"}\n')
-      for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
+      const headers = ['napi.h', 'napi-inl.h', 'napi-inl.deprecated.h']
+      for (const header of headers) {
         writeFileSync(join(nodeAddonApiDir, header), `// ${header}\n`)
       }
 
       const stagedDir = stageWindowsProcessTreeNodeAddonApiHeaders(packageDir)
       expect(stagedDir).toBe(join(packageDir, 'deps', 'node-addon-api'))
-      for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
+      for (const header of headers) {
         expect(readFileSync(join(stagedDir, header), 'utf8')).toBe(`// ${header}\n`)
       }
     } finally {
@@ -125,14 +161,22 @@ describe('windows-process-tree CreationTime patch assertion', () => {
     ).not.toThrow()
   })
 
-  it('rejects a package missing the process creation-time patch', () => {
-    writeFakeWindowsProcessTreeWithNodeAddonApi(dir, { creationTimePatchApplied: false })
+  it.each([
+    'src/process.h',
+    'src/process.cc',
+    'src/process_worker.cc',
+    'src/addon.cc',
+    'lib/index.js',
+    'lib/index.ts',
+    'typings/windows-process-tree.d.ts'
+  ])('rejects a package missing the process creation-time patch in %s', (relativePath) => {
+    writeFakeWindowsProcessTreeWithNodeAddonApi(dir)
+    const packageDir = join(dir, 'node_modules', '@vscode', 'windows-process-tree')
+    writeFileSync(join(packageDir, relativePath), '')
 
-    expect(() =>
-      assertWindowsProcessTreeCreationTimePatch(
-        join(dir, 'node_modules', '@vscode', 'windows-process-tree')
-      )
-    ).toThrow('process creation-time patch')
+    expect(() => assertWindowsProcessTreeCreationTimePatch(packageDir)).toThrow(
+      'process creation-time patch'
+    )
   })
 
   it('requires the runtime ProcessDataFlag.CreationTime enum', () => {

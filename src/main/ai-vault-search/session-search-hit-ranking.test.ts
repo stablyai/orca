@@ -39,13 +39,19 @@ describe('order', () => {
     expect(rankSessionHits(sessions, scores, 'newest').map((e) => e.session.id)).toEqual([2, 1])
   })
 
+  it('hands a relevance tie to the newer session before falling back to id', () => {
+    const sessions = [
+      session(1, { updated_at: '2026-09-01T00:00:00.000Z' }),
+      session(2, { updated_at: '2026-09-09T00:00:00.000Z' })
+    ]
+    const scores = matches(match(1, 5), match(2, 5))
+    expect(rankSessionHits(sessions, scores, 'relevance').map((e) => e.session.id)).toEqual([2, 1])
+  })
+
   it.each(['relevance', 'newest'] as const)(
     'breaks a %s tie by session, whatever order retrieval handed them over in',
     (sort) => {
-      // A cursor is an offset into this list, so two entries that tie must not
-      // be free to swap between pages. Retrieval hands sessions over in
-      // whatever order the `IN (...)` lookup produced, which SQL does not
-      // promise, so the order below is deliberately reversed.
+      // Reverse retrieval order to prove equal-score ties stay stable across cursor pages.
       const sessions = [6, 5, 4, 3, 2, 1].map((id) => session(id))
       const scores = matches(...sessions.map((entry) => match(entry.id, 5)))
       expect(rankSessionHits(sessions, scores, sort).map((entry) => entry.session.id)).toEqual([
@@ -55,7 +61,6 @@ describe('order', () => {
   )
 
   it('prefers the shorter session when two match equally well', () => {
-    // The length prior: `0.02 · ln(1 + messages)`, subtracted per session.
     const sessions = [session(1, { message_count: 5000 }), session(2, { message_count: 2 })]
     const ranked = rankSessionHits(sessions, matches(match(1, 5), match(2, 5)), 'relevance')
     expect(ranked.map((entry) => entry.session.id)).toEqual([2, 1])
@@ -95,7 +100,6 @@ describe('forks fold into one answer', () => {
 })
 
 it('scores a session that matched no text at zero, less its length prior', () => {
-  // The operator-only page: there is no relevance signal, only an order.
   const ranked = rankSessionHits([session(1, { message_count: 9 })], new Map(), 'newest')
   expect(ranked[0]!.message).toBeNull()
   expect(ranked[0]!.score).toBeLessThan(0)

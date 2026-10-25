@@ -1,11 +1,12 @@
 import { useAppStore } from '@/store'
-import type { PtyReplayDataMeta } from '../pty-transport'
+import type { PtyReplayDataMeta } from '../pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-paste'
-import { getTerminalPasteSshRemotePlatform } from '../terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './foreground-output-budgets'
@@ -18,6 +19,10 @@ import { bindReplayDataDrain } from './replay-data-drain'
 import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
+import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
+import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
+import { attachToMainResumedSleepPane, mainResumedSleepPane } from './main-resumed-sleep-pane'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -39,6 +44,15 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
+      // Switch point: main records the wake of this pane alone, the one this window resumed.
+      // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordPaneWakeThroughLayoutOwner(
+          useAppStore.getState(),
+          session.deps.worktreeId,
+          session.cacheKey
+        )
+      }
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
         startup.sleepingRecordEntry
@@ -57,16 +71,40 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
             : {})
         }
       : undefined
-  session.startFreshColdRestoreAgentResume = (
+  // Why ungated: a reveal, a restart replacement on show, or a phone wake already chose to run now.
+  session.spawnColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
-    session.applyColdRestoreAgentResumeStartup(startup)
-    return session.startFreshSpawn(startup, options)
+    const mainPane = mainResumedSleepPane(session, startup)
+    if (mainPane && startup?.sleepingRecordEntry) {
+      return attachToMainResumedSleepPane(
+        session,
+        mainPane,
+        startup.sleepingRecordEntry.paneKey,
+        options
+      )
+    }
+    return startPaneThroughMainThenAttach(session, () => {
+      session.applyColdRestoreAgentResumeStartup(startup)
+      const spawned = session.startFreshSpawn(startup, options)
+      // Switch point: main's layout shows this pane unbound while the start runs.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+      }
+      return spawned
+    })
   }
+  session.startFreshColdRestoreAgentResume = (
+    startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
+    options: FreshSpawnOptions = {}
+  ): Promise<string | null> =>
+    deferHiddenAgentResume(session, startup)
+      ? Promise.resolve(null)
+      : session.spawnColdRestoreAgentResume(startup, options)
   // Why: the hibernation wake fires from noteVisibilityResume in the outer
   // connection scope, long after this deferred-connect closure has run.
-  session.wakeHibernatedAgentPane = () => session.startFreshColdRestoreAgentResume()
+  session.wakeHibernatedAgentPane = () => session.spawnColdRestoreAgentResume()
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
@@ -80,8 +118,6 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       runtime: resolveTerminalPasteRuntime({
         platform: CLIENT_PLATFORM,
         ptyId,
-        connectionId: session.connectionId,
-        remotePlatform: getTerminalPasteSshRemotePlatform(session.connectionId),
         transport: session.transport,
         isWindowsConpty: session.isNativeWindowsConpty
       }),
@@ -91,7 +127,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
       return false
     }
-    return session.transport.sendInput('\r')
+    return session.transport.sendInput('\r', 'launch')
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
@@ -116,7 +152,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         const command = startup.command
         const submitted = session.shouldDeliverStartupViaTerminalPaste
           ? await runTerminalPasteStartupCommand(command)
-          : session.transport.sendInput(`${command}\r`)
+          : session.transport.sendInput(`${command}\r`, 'launch')
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
@@ -159,7 +195,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }
-        : {})
+        : {}),
+      ...(meta.carriesNormalBuffer ? { carriesNormalBuffer: true } : {}),
+      ...(meta.carriesHistory ? { carriesHistory: true } : {})
     }
     session.scheduleReplayDataDrain()
   }

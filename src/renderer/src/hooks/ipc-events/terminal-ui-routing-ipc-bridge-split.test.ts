@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
   hasRegisteredRuntimeTerminalTab: mocks.hasRegisteredRuntimeTerminalTab
 }))
 

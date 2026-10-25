@@ -20,14 +20,6 @@ const electronMocks = vi.hoisted(() => {
 })
 vi.mock('electron', () => electronMocks)
 
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
-}))
-
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -138,7 +130,6 @@ async function selectorTheCliWouldSend(
 }
 
 beforeEach(() => {
-  getSshGitProviderMock.mockReset()
   listWorktreesStrictMock.mockReset()
 })
 

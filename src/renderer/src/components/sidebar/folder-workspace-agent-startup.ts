@@ -1,25 +1,36 @@
-import { CLIENT_PLATFORM, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import {
+  resolveRepoExecutionHostPlatform,
+  type ExecutionHostPlatformFact
+} from '@/lib/execution-host-facts'
+import type { AppState } from '@/store/types'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 
-export function getFolderWorkspaceAgentLaunchPlatform(
-  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
-): NodeJS.Platform {
-  const parentPath = projectGroup.parentPath?.trim() ?? ''
-  if (projectGroup.connectionId) {
-    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
-  }
-  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
+/** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
+export function getFolderWorkspaceAgentLaunchFact(
+  state: Pick<
+    AppState,
+    'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
+  >,
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'executionHostId' | 'parentPath'>
+): ExecutionHostPlatformFact {
+  return resolveRepoExecutionHostPlatform(
+    state,
+    {
+      connectionId: projectGroup.connectionId,
+      executionHostId: projectGroup.executionHostId,
+      path: projectGroup.parentPath?.trim() ?? ''
+    },
+    () => undefined
+  )
 }
 
 /** Resolve the linked context that should appear in the agent input without submitting. */
@@ -38,7 +49,6 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
-  sessionOptions?: Record<string, SessionOptionValue>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   isRemote: boolean
@@ -51,7 +61,6 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
         cmdOverrides: args.agentCmdOverrides ?? {},
         agentArgs: args.agentArgs,
         agentEnv: args.agentEnv,
-        sessionOptions: args.sessionOptions,
         platform: args.platform,
         shell: args.shell,
         isRemote: args.isRemote
@@ -64,7 +73,6 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
       expectedProcess: draftLaunchPlan.expectedProcess,
       followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
-      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
@@ -79,7 +87,6 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     cmdOverrides: args.agentCmdOverrides ?? {},
     agentArgs: args.agentArgs,
     agentEnv: args.agentEnv,
-    sessionOptions: args.sessionOptions,
     platform: args.platform,
     shell: args.shell,
     isRemote: args.isRemote,

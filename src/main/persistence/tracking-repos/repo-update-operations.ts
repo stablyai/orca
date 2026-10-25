@@ -1,6 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
@@ -8,19 +9,72 @@ import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/wo
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
+import { isFolderRepo } from '../../../shared/repo-kind'
+import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
-  state: PersistedState
+  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo
 }
 
+/**
+ * Resolve the row a host-scoped write may touch, and report the one failure the `Repo | null` return
+ * cannot express: the row exists, but under a different host stamp.
+ *
+ * `hostId` is the row's own `executionHostId`, never the host a caller probed or a user selected. A
+ * caller that passes anything else gets the same `null` as a deleted row, so its write is discarded
+ * with no error and no failing test — how #22421 shipped an enrichment pass that never persisted.
+ */
+export function findRepoRowForHostScopedWrite(
+  repos: readonly Repo[],
+  id: string,
+  hostId: ExecutionHostId
+): Repo | undefined {
+  const matched = repos.find(
+    (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
+  )
+  if (matched) {
+    return matched
+  }
+  const storedHostIds = repos
+    .filter((candidate) => candidate.id === id)
+    .map((candidate) => getRepoExecutionHostId(candidate))
+  if (storedHostIds.length > 0) {
+    console.error(
+      `[persistence] Discarded a repo update for ${id}: requested host ${hostId}, but the row is stored on ${storedHostIds.join(', ')}. Address updateRepo by the row's own executionHostId stamp.`
+    )
+  }
+  return undefined
+}
+
+/**
+ * Every writer of `kind` lands here, so this is where a type change that would hide workspaces is
+ * refused. A Git project lists only `git worktree list`, and a listing that stops showing an id
+ * purges that workspace's saved tabs.
+ */
+function assertKindChangeKeepsFolderWorkspaces(
+  repo: Repo,
+  nextKind: Repo['kind'] | undefined,
+  worktreeMeta: PersistedState['worktreeMeta']
+): void {
+  if (nextKind !== 'git' || !isFolderRepo(repo)) {
+    return
+  }
+  const count = findExtraFolderWorkspaceIds(repo, worktreeMeta).length
+  if (count > 0) {
+    throw new Error(
+      `This folder project has ${count} other workspace${count === 1 ? '' : 's'} that a Git project can't show, so its type was not changed. Delete ${count === 1 ? 'that workspace' : 'those workspaces'} first, or keep it as a folder project.`
+    )
+  }
+}
+
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): PersistedState {
+  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> {
     return this.operations.state
   }
 
@@ -41,7 +95,7 @@ export class RepoUpdatePersistenceOperations {
   }
 
   updateRepo(
-    id: string,
+    target: RepoHostTarget,
     updates: Partial<
       Pick<
         Repo,
@@ -58,6 +112,7 @@ export class RepoUpdatePersistenceOperations {
         | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'defaultJiraProject'
         | 'forkSyncMode'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
@@ -74,16 +129,17 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
-    },
-    hostId?: ExecutionHostId
+    }
   ): Repo | null {
-    const repo = this.state.repos.find(
-      (candidate) =>
-        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
     )
     if (!repo) {
       return null
     }
+    assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     if (
@@ -205,7 +261,7 @@ export class RepoUpdatePersistenceOperations {
       }
     }
     Object.assign(repo, sanitizedUpdates)
-    this.bumpLocalWorktreeScanGeneration(id)
+    this.bumpLocalWorktreeScanGeneration(repo.id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

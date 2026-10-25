@@ -7,9 +7,9 @@ import {
   repoSetupHooksSchema,
   repoSparsePresetListSchema,
   repoSparsePresetSaveSchema,
-  SSH_CONNECTION_STATUS,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
+import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
 
 // Pins the SSH status degrade, the error tri-state beside it, and the preset requirement.
 
@@ -43,6 +43,14 @@ describe('the SSH connection record', () => {
       providerEpoch: 'epoch-1',
       remotePlatform: 'linux'
     })
+  })
+
+  it('keeps the record when its managed-server note is malformed', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { ...connected, managedServer: { serving: { detail: 7 } } }
+    })
+    expect(parsed.success && parsed.data).toMatchObject({ status: 'connected' })
+    expect(parsed.success && parsed.data?.managedServer?.serving?.detail).toBeUndefined()
   })
 
   it('answers undefined for a payload with no state member', () => {
@@ -256,15 +264,6 @@ describe('the orca.yaml hooks require nothing', () => {
 })
 
 describe('sparse presets', () => {
-  it('reads the recorded preset, which carries no repoId or timestamps', () => {
-    const parsed = repoSparsePresetListSchema.safeParse({
-      presets: [{ id: 'p1', name: 'docs', directories: ['docs'] }]
-    })
-    expect(parsed.success && parsed.data).toEqual([
-      { id: 'p1', name: 'docs', directories: ['docs'] }
-    ])
-  })
-
   it('drops a preset with no id, which the picker could not select', () => {
     const parsed = repoSparsePresetListSchema.safeParse({ presets: [{ name: 'docs' }] })
     expect(parsed.success && parsed.data).toEqual([])

@@ -674,9 +674,9 @@ describe('searchOpenTabs query guards', () => {
     expect(
       search({
         query,
-        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Zebra tab' })],
-        browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra page' })],
-        simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
+        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: query })],
+        browserPages: [makeBrowserPage({ id: 'page-1', title: query })],
+        simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: query })]
       })
     ).toEqual([])
   })

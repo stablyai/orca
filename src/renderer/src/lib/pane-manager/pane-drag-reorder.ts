@@ -4,6 +4,7 @@ import type {
   ManagedPaneInternal,
   PaneExternalDropHandler,
   PaneExternalDropResolver,
+  PaneDropTaker,
   PaneExternalDropTarget,
   PaneStyleOptions
 } from './pane-manager-types'
@@ -35,6 +36,8 @@ export type DragReorderCallbacks = {
   onDragActiveChange?: (active: boolean) => void
   resolveExternalDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  onDividerRatiosCommitted?: () => void
+  takePaneDrop?: PaneDropTaker
 }
 
 export function createDragReorderState(): DragReorderState {
@@ -114,9 +117,26 @@ export function handlePaneDrop(
   if (isPaneDropNoOp(sourcePaneId, targetPaneId, zone, panes)) {
     return
   }
+  if (!panes.has(sourcePaneId) || !panes.has(targetPaneId)) {
+    return
+  }
+  const move = (): void => movePaneNextTo(sourcePaneId, targetPaneId, zone, callbacks)
+  if (!callbacks.takePaneDrop?.({ sourcePaneId, targetPaneId, zone }, move)) {
+    move()
+  }
+}
+
+function movePaneNextTo(
+  sourcePaneId: number,
+  targetPaneId: number,
+  zone: DropZone,
+  callbacks: DragReorderCallbacks
+): void {
+  const panes = callbacks.getPanes()
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
-  if (!source || !target) {
+  // Why re-read: a taken drop moves later, when either pane may have closed.
+  if (!source || !target || callbacks.isDestroyed()) {
     return
   }
 

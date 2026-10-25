@@ -1,5 +1,5 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
-import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat-stream-unsubscribe'
+import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
@@ -10,6 +10,8 @@ import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-r
 
 export function createWebNativeChatApi(): NativeChatApi {
   return {
+    // The full output stays on the host that ran the agent; the web client shows the message.
+    getConversationNameFailureOutput: async () => null,
     readSession: async (agent, sessionId, limit, transcriptPath) =>
       parseRuntimeNativeChatReadSessionResult(
         await callRuntimeResult<unknown>('nativeChat.readSession', {

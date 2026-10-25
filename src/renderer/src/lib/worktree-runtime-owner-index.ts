@@ -6,7 +6,6 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 
@@ -23,7 +22,7 @@ type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'execu
 // immutable-slice indexes prevent unrelated store writes from rescanning.
 const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
-  ReadonlyMap<string, IndexedWorktreeOwnerResolution>
+  ReadonlyMap<string, IndexedWorktreeOwnerEntry>
 >()
 const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
@@ -58,12 +57,7 @@ export function getCatalogOwnerHostId(owner: {
   connectionId?: string | null
   executionHostId?: string | null
 }): ExecutionHostId {
-  const explicitHost = parseExecutionHostId(owner.executionHostId)
-  if (explicitHost) {
-    return explicitHost.id
-  }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  return getRepoExecutionHostId(owner)
 }
 
 function buildCatalogOwnerIndex<
@@ -97,19 +91,17 @@ export function findIndexedWorktreeOwner(
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
-export function findIndexedWorktreeOwnerForHost(
-  worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
+/** Returns the caller's own row type: the index records where the owner is listed. */
+export function findIndexedWorktreeOwnerForHost<T extends WorktreeOwnerRecord>(
+  worktreesByRepo: Record<string, readonly T[]> | undefined,
   worktreeId: string,
   executionHostId: ExecutionHostId
-): WorktreeOwnerRecord | null {
-  if (!worktreesByRepo) {
-    return null
-  }
+): T | null {
+  const hostKey = `${worktreeId}\0${executionHostId}`
   resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
-  const resolution = worktreeOwnerIndexCache
-    .get(worktreesByRepo)
-    ?.get(`${worktreeId}\0${executionHostId}`)
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  const entry = worktreesByRepo && worktreeOwnerIndexCache.get(worktreesByRepo)?.get(hostKey)
+  const row = entry?.kind === 'resolved' ? worktreesByRepo?.[entry.bucket]?.[entry.position] : null
+  return row ?? null
 }
 
 export type IndexedRepoOwnerResolution =
@@ -158,6 +150,11 @@ export type IndexedWorktreeOwnerResolution =
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
 
+// Where the owner is listed, so a typed caller reads its own row back without a cast.
+type IndexedWorktreeOwnerEntry =
+  | { kind: 'resolved'; owner: WorktreeOwnerRecord; bucket: string; position: number }
+  | { kind: 'ambiguous' }
+
 function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
   return JSON.stringify([
     owner.repoId,
@@ -167,13 +164,14 @@ function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
 }
 
 function addWorktreeOwnerIndexEntry(
-  index: Map<string, IndexedWorktreeOwnerResolution>,
+  index: Map<string, IndexedWorktreeOwnerEntry>,
   key: string,
-  owner: WorktreeOwnerRecord
+  owner: WorktreeOwnerRecord,
+  at: { bucket: string; position: number }
 ): void {
   const current = index.get(key)
   if (!current) {
-    index.set(key, { kind: 'resolved', owner })
+    index.set(key, { kind: 'resolved', owner, ...at })
   } else if (
     current.kind === 'resolved' &&
     worktreeOwnerIdentity(current.owner) !== worktreeOwnerIdentity(owner)
@@ -182,7 +180,7 @@ function addWorktreeOwnerIndexEntry(
   }
 }
 
-function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
+export function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
   const physicalHostId = parseExecutionHostId(owner.hostId)?.id
   const runtimeEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
   if (!runtimeEnvironmentId) {
@@ -204,15 +202,15 @@ export function resolveIndexedWorktreeOwner(
   }
   let index = worktreeOwnerIndexCache.get(worktreesByRepo)
   if (!index) {
-    const next = new Map<string, IndexedWorktreeOwnerResolution>()
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      for (const worktree of worktrees) {
+    const next = new Map<string, IndexedWorktreeOwnerEntry>()
+    for (const [bucket, worktrees] of Object.entries(worktreesByRepo)) {
+      worktrees.forEach((worktree, position) => {
         const id = worktree.id
-        addWorktreeOwnerIndexEntry(next, id, worktree)
+        addWorktreeOwnerIndexEntry(next, id, worktree, { bucket, position })
         for (const hostId of worktreeOwnerHostIds(worktree)) {
-          addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree)
+          addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree, { bucket, position })
         }
-      }
+      })
     }
     index = next
     worktreeOwnerIndexCache.set(worktreesByRepo, index)
@@ -279,24 +277,56 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
-  folderWorkspaces: readonly T[] | undefined,
+function catalogOwnerKey(id: string, executionHostId?: ExecutionHostId): string {
+  return executionHostId ? `${id}\0${executionHostId}` : id
+}
+
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedFolderWorkspaceOwner(
+  folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): T | null {
+): IndexedFolderWorkspaceOwnerResolution {
   if (!folderWorkspaces) {
-    return null
+    return { kind: 'missing' }
   }
   let index = folderWorkspaceOwnerIndexCache.get(folderWorkspaces)
   if (!index) {
     index = buildCatalogOwnerIndex(folderWorkspaces)
     folderWorkspaceOwnerIndexCache.set(folderWorkspaces, index)
   }
-  const resolution = index.get(
-    executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
+  return index.get(catalogOwnerKey(folderWorkspaceId, executionHostId)) ?? { kind: 'missing' }
+}
+
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedProjectGroupOwner(
+  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+  projectGroupId: string,
+  executionHostId?: ExecutionHostId
+): IndexedProjectGroupOwnerResolution {
+  if (!projectGroups) {
+    return { kind: 'missing' }
+  }
+  let index = projectGroupOwnerIndexCache.get(projectGroups)
+  if (!index) {
+    index = buildCatalogOwnerIndex(projectGroups)
+    projectGroupOwnerIndexCache.set(projectGroups, index)
+  }
+  return index.get(catalogOwnerKey(projectGroupId, executionHostId)) ?? { kind: 'missing' }
+}
+
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): T | null {
+  const resolution = resolveIndexedFolderWorkspaceOwner(
+    folderWorkspaces,
+    folderWorkspaceId,
+    executionHostId
   )
-  // The cache is keyed by this exact array, so its owner retains the caller's row type.
-  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
 export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
@@ -304,17 +334,7 @@ export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
   projectGroupId: string,
   executionHostId?: ExecutionHostId
 ): T | null {
-  if (!projectGroups) {
-    return null
-  }
-  let index = projectGroupOwnerIndexCache.get(projectGroups)
-  if (!index) {
-    index = buildCatalogOwnerIndex(projectGroups)
-    projectGroupOwnerIndexCache.set(projectGroups, index)
-  }
-  const resolution = index.get(
-    executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
-  )
-  // The cache is keyed by this exact array, so its owner retains the caller's row type.
-  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
+  const resolution = resolveIndexedProjectGroupOwner(projectGroups, projectGroupId, executionHostId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }

@@ -18,7 +18,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'omp',
   'droid',
   'hermes',
-  'devin'
+  'devin',
+  'zcode'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -75,6 +76,17 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Devin',
     permissionLabel: 'Devin - action required',
     idleLabel: 'Devin ready'
+  },
+  zcode: {
+    workingLabel: 'ZCode',
+    permissionLabel: 'ZCode - action required',
+    idleLabel: 'ZCode ready',
+    // Why every state synthesizes, unlike Codex/Pi: ZCode writes NO OSC title in any state
+    // — the captured transcript (`zcode-composer-ready.txt`) contains no OSC 0/1/2 at all —
+    // so there is no native title to fight with, and without this a `tui-idle` wait has no
+    // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
+    // lane never fires either.
+    synthesizeWorkingTitle: true
   }
 }
 

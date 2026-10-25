@@ -1,107 +1,57 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { RetryableProcessExitProof } from '../../shared/child-process/retryable-process-exit-proof'
-import { createProviderSpawnSpec } from './codex-app-server-posix-supervisor'
-import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
-import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
-import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
-import { terminateCodexAppServerProcessTree } from './codex-app-server-process-teardown'
-import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
+import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
+import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { buildCodexAppServerExitError } from './app-server/codex-app-server-exit-error'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
+import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
+import { CodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
-import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
+import { createProviderRecordReader } from '../provider-process/provider-record-reader'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
-} from './codex-app-server-connection-types'
+} from './app-server/codex-app-server-connection-types'
 
-export type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  CodexAppServerServerRequest
-} from './codex-app-server-connection-types'
-export {
-  CodexAppServerRequestError,
-  isCodexAppServerRequestError
-} from './codex-app-server-request-error'
-export { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+export { ROOT_ONLY_GRACEFUL_EXIT_MS as GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 
-// Structured chat needs a persistent bidirectional child and per-request deadlines;
-// the request-scoped app-server runner cannot carry approvals or streamed turns.
+// Structured chat needs a persistent transport for approvals and streamed turns.
+export type CodexAppServerLaunch = ProviderProcessLaunch
 
-export type CodexAppServerLaunch = {
-  command: string
-  args: string[]
-  /** Workspace directory used by the provider process itself. */
-  cwd?: string
-  /** Overlay on the inherited environment — the pinned CODEX_HOME lives here. */
-  env?: Record<string, string>
-  /** Keys stripped after the overlay, matching `CodexAppServerInvocation`. */
-  envToDelete?: readonly string[]
-}
+export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
-const GRACEFUL_EXIT_MS = 1_500
-const FORCED_EXIT_MS = 1_000
-const STDERR_TAIL_MAX_BYTES = 8192
-
-/**
- * Spawns `codex app-server`, completes the initialize handshake, and returns a
- * connection that stays open until `close()`. Rejects — after reaping the child
- * — when the handshake cannot complete.
- */
-export async function openCodexAppServerConnection(
+/** Builds the transport so an owner can record its process before initialization. */
+async function connectCodexAppServer(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess
+  spawnImpl: PipedProcessSpawner,
+  initialize: boolean
 ): Promise<CodexAppServerConnection> {
-  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...launch.env }
-  for (const key of launch.envToDelete ?? []) {
-    delete childEnv[key]
-  }
-  const spawnSpec = createProviderSpawnSpec(launch, childEnv, process.platform)
-  const child = spawnImpl(spawnSpec)
-  const spawnToken = launch.env?.[CODEX_SPAWN_TOKEN_ENV]
+  const managed = spawnManagedProviderProcess(launch, {
+    spawnImpl,
+    site: 'codex-app-server-teardown'
+  })
+  const { child } = managed
+  const tree = createClaudeChildTreeReaper(child, {
+    exited: () => managed.rootVerdict === 'exited'
+  })
 
-  function terminateProcessTree(): Promise<boolean> {
-    // The supervisor and provider own separate POSIX groups so the supervisor can prove the
-    // provider group empty before relaying its exit. Forced wrapper teardown uses descendant proof.
-    return terminateCodexAppServerProcessTree(child, spawnToken)
-  }
-
-  let stderrTail = ''
   let nextRequestId = 1
-  let exited = false
-  let exitObserved = false
   let closing = false
+  let closesInFlight = 0
   let exitReported = false
-  const exitProof = new RetryableProcessExitProof()
-  /** First terminal cause, or null while the transport is still usable. Set once:
-   *  a child that dies reaches us through several listeners, and the specific
-   *  first cause is the one worth reporting. */
+  // Several listeners can report one failure; preserve its first, specific cause.
   let terminalError: Error | null = null
 
-  let resolveExit = (): void => undefined
-  const exitPromise = new Promise<void>((resolve) => {
-    resolveExit = resolve
-  })
-
-  function observeExit(): void {
-    exited = true
-    exitObserved = true
-    resolveExit()
-  }
-
-  child.on('exit', () => {
-    observeExit()
-    handleUnexpectedEnd()
-  })
-
   function buildExitError(cause?: Error): Error {
-    return buildCodexAppServerExitError(stderrTail, cause)
+    const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
+    return managed.executableMissing ? withMissingProviderExecutable(error) : error
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
@@ -109,53 +59,37 @@ export async function openCodexAppServerConnection(
     writeResponse,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 
-  /** A death nobody asked for kills every in-flight call AND tells the owner,
-   *  which is the only signal the session has that its lease is now worthless.
-   *  Once only: a fatal handler failure kills the child before `close` arrives,
-   *  and a spawn failure arrives as both `error` and `close`. */
+  // Fail pending calls immediately, but notify the owner only once root exit is proven.
   function handleUnexpectedEnd(cause?: Error): void {
     if (!terminalError) {
       terminalError = buildExitError(cause)
       dispatcher.failPending(terminalError)
     }
-    // Transport/protocol failures make the connection unusable immediately so
-    // callers do not hang, but recovery must not treat that as a child exit
-    // until the execution host has observed `exit`/`close`.
-    if (exitObserved && !closing && !exitReported) {
+    if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
-      handlers.onExit?.(terminalError)
+      handlers.onExit?.(terminalError, { expected: closing })
     }
   }
 
   child.on('error', (error) => {
     handleUnexpectedEnd(error)
   })
-  child.on('close', () => {
-    observeExit()
-    handleUnexpectedEnd()
-  })
-  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
-    stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_BYTES)
-  })
+  managed.onExit(() => handleUnexpectedEnd())
   child.stdin.on('error', (error) => {
-    // A broken pipe is terminal, not one failed write: every later request can
-    // only error or time out, so the session must learn its lease is worthless
-    // instead of staying live in front of a child nobody can reach. During a
-    // close the reap is already under way and `exited` must stay honest, or
-    // `close` would skip the kill it still owes.
+    // Broken pipes invalidate the transport; during close, fail calls without claiming root exit.
     if (closing) {
       dispatcher.failPending(error)
       return
     }
     handleUnexpectedEnd(error)
-    void terminateProcessTree()
+    void managed.close()
   })
 
-  const recordReader = createCodexAppServerRecordReader({
+  const recordReader = createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -173,7 +107,7 @@ export async function openCodexAppServerConnection(
     },
     onFatal: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 
@@ -182,7 +116,7 @@ export async function openCodexAppServerConnection(
   }
 
   function notify(method: string, params?: Record<string, unknown>): void {
-    if (exited || terminalError) {
+    if (managed.rootVerdict === 'exited' || terminalError) {
       return
     }
     try {
@@ -195,7 +129,7 @@ export async function openCodexAppServerConnection(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number } = {}
+    options: { timeoutMs?: number | null; onReply?: () => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -203,19 +137,29 @@ export async function openCodexAppServerConnection(
     if (terminalError) {
       return Promise.reject(terminalError)
     }
-    if (exited) {
+    if (managed.rootVerdict === 'exited') {
       return Promise.reject(buildExitError())
     }
     const id = nextRequestId++
-    const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    const timeoutMs =
+      options.timeoutMs === undefined ? DEFAULT_CODEX_REQUEST_TIMEOUT_MS : options.timeoutMs
     return new Promise<unknown>((resolve, reject) => {
-      // Why: per request, not per session — a chat session outlives every call,
-      // so only the individual call can carry a deadline.
-      const timer = setTimeout(() => {
-        dispatcher.deletePending(id)
-        reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
-      }, timeoutMs)
-      dispatcher.addPending(id, { method, resolve, reject, timer })
+      // Null requests are bounded by their caller; timed requests belong to this call.
+      const timer =
+        timeoutMs === null
+          ? undefined
+          : setTimeout(() => {
+              dispatcher.timeOutPending(id)
+              reject(
+                withProviderRequestTimeout(
+                  new CodexAppServerTimeoutError(
+                    `codex app-server ${method} exceeded ${timeoutMs}ms`
+                  ),
+                  { method, timeoutMs }
+                )
+              )
+            }, timeoutMs)
+      dispatcher.addPending(id, { method, resolve, reject, timer, onReply: options.onReply })
       try {
         sendLine(params === undefined ? { method, id } : { method, id, params })
       } catch (error) {
@@ -227,7 +171,12 @@ export async function openCodexAppServerConnection(
   }
 
   function writeResponse(payload: Record<string, unknown>): void {
-    if (exited || terminalError || child.stdin.destroyed || !child.stdin.writable) {
+    if (
+      managed.rootVerdict === 'exited' ||
+      terminalError ||
+      child.stdin.destroyed ||
+      !child.stdin.writable
+    ) {
       return
     }
     try {
@@ -238,30 +187,24 @@ export async function openCodexAppServerConnection(
   }
 
   function close(): Promise<boolean> {
-    if (exitObserved) {
-      return Promise.resolve(true)
-    }
-    closing = true
-    return exitProof.run(async () => {
-      try {
-        child.stdin.end()
-      } catch {
-        // Already destroyed; the reap below still runs.
-      }
-      if (!exited) {
-        await waitForProcessExitUntil(exitPromise, GRACEFUL_EXIT_MS)
-        if (!exited) {
-          const treeExited = await terminateProcessTree()
-          if (!treeExited) {
-            dispatcher.failPending(new Error('codex app-server process-tree exit was not proven'))
-            return false
-          }
-          await waitForProcessExitUntil(exitPromise, FORCED_EXIT_MS)
+    closing ||= managed.rootVerdict !== 'exited'
+    closesInFlight += 1
+    return managed
+      .close(tree)
+      .then((result) => {
+        if (result.root === 'exited' && !exitReported) {
+          exitReported = true
+          handlers.onExit?.(terminalError ?? buildExitError(), { expected: closing })
         }
-      }
-      dispatcher.failPending(new Error('codex app-server connection closed'))
-      return exitObserved
-    })
+        dispatcher.failPending(new Error('codex app-server connection closed'))
+        return result.root === 'exited'
+      })
+      .finally(() => {
+        closesInFlight -= 1
+        if (managed.rootVerdict === 'exited') {
+          handleUnexpectedEnd()
+        }
+      })
   }
 
   const connection: CodexAppServerConnection = {
@@ -269,7 +212,17 @@ export async function openCodexAppServerConnection(
       return child.pid
     },
     get closed() {
-      return closing || exited || terminalError !== null
+      return closing || managed.rootVerdict === 'exited' || terminalError !== null
+    },
+    get processTreeUnproven() {
+      const result = connection.closeResult
+      return result?.root === 'exited' && result.tree !== 'exited'
+    },
+    get closeResult() {
+      const result = managed.lastCloseResult
+      return result && managed.rootVerdict === 'exited'
+        ? { ...result, root: 'exited' as const }
+        : result
     },
     request,
     notify,
@@ -280,16 +233,43 @@ export async function openCodexAppServerConnection(
     close
   }
 
+  let handshaking = false
   try {
-    await initializeCodexAppServerConnection(connection)
+    // A spawn that failed has no pid; the handshake below reports why.
+    if (child.pid !== undefined) {
+      await handlers.onSpawned?.(child.pid)
+    }
+    if (initialize) {
+      handshaking = true
+      // Direct opens cannot expose the connection for cancellation until initialization finishes.
+      await initializeCodexAppServerConnection(connection, 15_000)
+    }
   } catch (error) {
     if ((await close()) !== true) {
       throw new CodexAppServerHandshakeExitUnprovenError(connection, error)
     }
-    throw error instanceof CodexAppServerUnsupportedError ||
+    throw !handshaking ||
+      error instanceof CodexAppServerUnsupportedError ||
       error instanceof CodexAppServerTimeoutError
       ? error
       : buildExitError(error instanceof Error ? error : new Error(String(error)))
   }
   return connection
+}
+
+/** Publishes the transport after its process identity is recorded, before initialization. */
+export function spawnCodexAppServerConnection(
+  launch: CodexAppServerLaunch,
+  handlers: CodexAppServerConnectionHandlers = {},
+  spawnImpl: PipedProcessSpawner = spawnProcess
+): Promise<CodexAppServerConnection> {
+  return connectCodexAppServer(launch, handlers, spawnImpl, false)
+}
+
+export function openCodexAppServerConnection(
+  launch: CodexAppServerLaunch,
+  handlers: CodexAppServerConnectionHandlers = {},
+  spawnImpl: PipedProcessSpawner = spawnProcess
+): Promise<CodexAppServerConnection> {
+  return connectCodexAppServer(launch, handlers, spawnImpl, true)
 }

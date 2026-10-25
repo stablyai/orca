@@ -14,6 +14,7 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
+import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
@@ -110,6 +111,15 @@ export function installPreviewTerminalKeyHandler(args: {
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+      if (
+        isAppOwnedCopyChord(event, {
+          isMac: platform === 'darwin',
+          hasSelection: terminal.hasSelection(),
+          kittyKeyboardFlags: args.getShortcutContext().getKittyKeyboardFlags()
+        })
+      ) {
+        return true
+      }
       const selection = readTerminalClipboardSelection(terminal)
       if (
         !selection &&

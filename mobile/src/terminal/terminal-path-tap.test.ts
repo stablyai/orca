@@ -1,13 +1,10 @@
-import { Script, createContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
 } from '../../../src/shared/terminal-file-link-conformance'
-import { generatedDocumentModule } from './document/generated-document-region.test-support'
+import { matchFilePathAtColumn as documentMatchFilePathAtColumn } from './document/path-tap'
 import { matchFilePathAtColumn, parsePathWithOptionalLineColumn } from './terminal-path-tap'
-
-const pathTapSource = await generatedDocumentModule('path-tap')
 
 type InjectedPathMatcher = typeof matchFilePathAtColumn
 
@@ -181,10 +178,7 @@ describe('injected matchFilePathAtColumn', () => {
   )
 })
 
+/** The document's own copy of the matcher: a module now, so the comparison is an import. */
 function createInjectedPathMatcher(): InjectedPathMatcher {
-  const context = createContext({})
-  new Script(
-    `${pathTapSource}\nthis.__matchFilePathAtColumn = matchFilePathAtColumn;`
-  ).runInContext(context)
-  return (context as { __matchFilePathAtColumn: InjectedPathMatcher }).__matchFilePathAtColumn
+  return documentMatchFilePathAtColumn
 }

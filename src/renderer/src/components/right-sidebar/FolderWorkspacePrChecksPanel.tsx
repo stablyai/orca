@@ -14,6 +14,7 @@ import {
   runLimitedParentPrChecksRefreshes
 } from './parent-pr-checks-refresh'
 import { createParentPrChecksProjectionSelector } from './parent-pr-checks-projection-selector'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean
@@ -24,10 +25,10 @@ export default function FolderWorkspacePrChecksPanel({
 }: FolderWorkspacePrChecksPanelProps): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)

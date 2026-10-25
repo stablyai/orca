@@ -77,6 +77,11 @@ describe('workspace session worktree ownership', () => {
       'clientHostedBrowserCloseIntentsByEnvironment',
       { environment: [{ worktreeId: TARGET }] }
     ],
+    [
+      'paired-host tab close intent',
+      'pairedTerminalTabCloseIntentsByEnvironment',
+      { environment: [{ worktreeId: TARGET }] }
+    ],
     ['sleeping agent', 'sleepingAgentSessionsByPaneKey', { pane: { worktreeId: TARGET } }],
     ['terminal tombstone', 'terminalSurfaceTombstonesByPaneKey', { pane: { worktreeId: TARGET } }],
     [

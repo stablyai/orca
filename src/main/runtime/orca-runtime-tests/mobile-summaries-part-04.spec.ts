@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   OrcaRuntimeService,
-  registerSshGitProvider,
   setPlatform,
   worktreePathComparison
 } from '../orca-runtime-test-mocks.spec'
@@ -27,23 +26,17 @@ describe('OrcaRuntimeService', () => {
       isMainWorktree: false
     }))
     const pinnedPath = 'relative/zzz-pinned'
-    const pinnedWorktree = {
-      path: pinnedPath,
-      head: 'pinned',
-      branch: 'refs/heads/pinned',
-      isBare: false,
-      isMainWorktree: false
-    }
     const unreadPath = 'relative/zzz-unread'
-    const unreadWorktree = {
-      ...pinnedWorktree,
-      path: unreadPath,
-      head: 'unread',
-      branch: 'refs/heads/unread'
-    }
     const pinnedId = `${remoteRepo.id}::${pinnedPath}`
     const unreadId = `${remoteRepo.id}::${unreadPath}`
+    // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
     const metaById: Record<string, WorktreeMeta> = {
+      ...Object.fromEntries(
+        activeWorktrees.map((worktree) => [
+          `${remoteRepo.id}::${worktree.path}`,
+          makeWorktreeMeta()
+        ])
+      ),
       [pinnedId]: makeWorktreeMeta({ isPinned: true }),
       [unreadId]: makeWorktreeMeta({ isUnread: true })
     }
@@ -54,9 +47,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     }
-    registerSshGitProvider('ssh-pinned-limit', {
-      listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree, unreadWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>

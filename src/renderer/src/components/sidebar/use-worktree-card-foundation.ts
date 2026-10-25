@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getWorktreeCardDetails } from '../../../../shared/worktree/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -8,12 +9,9 @@ import {
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -32,6 +30,7 @@ export function useWorktreeCardFoundation({
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
@@ -45,7 +44,12 @@ export function useWorktreeCardFoundation({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  const cardDetails = useMemo(
+    () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
+    [cardProps, compactWorktreeCards, newCardStyle]
+  )
+  const { compactCards } = cardDetails
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -60,6 +64,21 @@ export function useWorktreeCardFoundation({
         currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'issue'
+      })
+    },
+    [worktree, openModal]
+  )
+
+  const handleManageLinks = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      openModal('edit-meta', {
+        worktreeId: worktree.id,
+        repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
+        currentDisplayName: worktree.displayName,
+        currentComment: worktree.comment,
+        focus: 'links'
       })
     },
     [worktree, openModal]
@@ -140,8 +159,10 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
+  // Why no hostId: the host-qualified lookup scans every row, and this runs per card per write.
+  // The chip only reads status, so a twin falls back to the direct SSH state.
   const sshOwnerEnvironmentId = useAppStore((s) =>
-    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+    repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
@@ -183,16 +204,7 @@ export function useWorktreeCardFoundation({
     : null
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(
-        s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
-      )
-    )
-  })
+  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
@@ -206,6 +218,7 @@ export function useWorktreeCardFoundation({
     openModal,
     openTaskPage,
     updateWorktreeMeta,
+    setWorkspaceUnreadByUser,
     deleteFolderWorkspace,
     setActiveWorktree,
     renamingWorktreeId,
@@ -219,7 +232,9 @@ export function useWorktreeCardFoundation({
     projectGroups,
     newCardStyle,
     compactCards,
+    cardDetails,
     handleEditIssue,
+    handleManageLinks,
     handleEditComment,
     handleOpenAutomation,
     handleOpenAutomationRun,

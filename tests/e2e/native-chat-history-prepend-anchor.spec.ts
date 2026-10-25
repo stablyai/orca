@@ -64,7 +64,7 @@ async function activateNewTerminalTab(page: Page, worktreeId: string): Promise<v
     const state = store.getState()
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
 }
 
@@ -76,7 +76,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     }
     const state = store.getState()
     state.setActiveTab(id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, tabId)
 }
 
@@ -137,6 +137,13 @@ test.describe('Native chat transcript anchoring', () => {
         worktreeId: descriptor.worktreeId,
         sessionId,
         transcriptPath
+      })
+      // Exercise the supported manual paging fallback while the reader stays mid-transcript.
+      await orcaPage.evaluate(() => {
+        Object.defineProperty(window, 'IntersectionObserver', {
+          value: undefined,
+          configurable: true
+        })
       })
       await toggleTerminalTabToChatView(orcaPage, {
         tabId,
@@ -283,7 +290,18 @@ test.describe('Native chat transcript anchoring', () => {
           )
         )
         .toBeGreaterThan(1_000)
-      const readingAt = await scroll.evaluate((element) => element.scrollTop)
+      // Rows the wheel mounted above the reader settle their measured heights frames later.
+      const readingAt = await scroll.evaluate(async (element) => {
+        let previousGeometry = ''
+        let stableFrames = 0
+        for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const geometry = `${element.scrollHeight}:${element.scrollTop}`
+          stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
+          previousGeometry = geometry
+        }
+        return element.scrollTop
+      })
       await expect(jump).toBeVisible()
 
       await activateNewTerminalTab(orcaPage, descriptor.worktreeId)

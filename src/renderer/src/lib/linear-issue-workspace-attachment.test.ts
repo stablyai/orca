@@ -181,3 +181,33 @@ describe('Linear issue workspace attachment', () => {
     expect(findLinearIssueWorkspaceAttachmentInIndex(index, { identifier: 'STA-9999' })).toBeNull()
   })
 })
+
+describe('multiple Linear attachments', () => {
+  it('indexes secondary identifiers and keeps organization scope', () => {
+    const attached = worktree({
+      linkedLinearIssue: 'STA-1',
+      linkedItems: [
+        {
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          identifier: 'STA-2',
+          linearOrganizationUrlKey: 'acme'
+        }
+      ]
+    })
+    const index = buildLinearIssueWorkspaceAttachmentIndex([attached])
+    expect(
+      findLinearIssueWorkspaceAttachmentInIndex(index, {
+        identifier: 'STA-2',
+        url: 'https://linear.app/acme/issue/STA-2'
+      })
+    ).toBe(attached)
+    expect(
+      findLinearIssueWorkspaceAttachmentInIndex(index, {
+        identifier: 'STA-2',
+        url: 'https://linear.app/other/issue/STA-2'
+      })
+    ).toBeNull()
+  })
+})

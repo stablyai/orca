@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import { applyWebSessionTabsSnapshot } from '../../runtime/web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from '../../runtime/web-session-tabs-sync/snapshot-api'
 import {
   ENV,
   LEAF_ID,

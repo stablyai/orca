@@ -14,16 +14,13 @@ export type DiscoverAndroidSdkOptions = {
   exists: (path: string) => boolean
 }
 
-// Pure/dependency-injected: every external input (env, platform, homedir, fs probe)
-// is a parameter so the resolver is unit-testable; Phase B wires the real I/O.
 export function discoverAndroidSdk(options: DiscoverAndroidSdkOptions): AndroidSdkPaths | null {
   const { env, platform, homedir, exists } = options
   const win32 = platform === 'win32'
 
   for (const sdkRoot of candidateSdkRoots(env, platform, homedir)) {
     const paths = resolveToolPaths(sdkRoot, win32)
-    // Require both tools the backend depends on: adb (devices/input/stream) and
-    // the emulator binary (boot + list AVDs). A partial SDK isn't usable.
+    // Both adb and the emulator binary are required for backend operations.
     if (exists(paths.adb) && exists(paths.emulator)) {
       return paths
     }

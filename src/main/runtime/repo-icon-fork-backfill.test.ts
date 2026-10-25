@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import * as client from '../github/client'
 import { OrcaRuntimeService } from './orca-runtime'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 vi.mock('../github/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -33,8 +34,8 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 function attachStore(runtime: OrcaRuntimeService, repos: Repo[]) {
-  const updateRepo = vi.fn((repoId: string, updates: Partial<Repo>) => {
-    const index = repos.findIndex((repo) => repo.id === repoId)
+  const updateRepo = vi.fn((target: Pick<Repo, 'id'>, updates: Partial<Repo>) => {
+    const index = repos.findIndex((repo) => repo.id === target.id)
     repos[index] = { ...repos[index], ...updates }
   })
   Object.assign(runtime, { store: { getRepos: () => repos, updateRepo } })
@@ -54,7 +55,7 @@ describe('startup fork-upstream backfill', () => {
 
     await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
       upstream: { owner: 'upstream-org', repo: 'rocket' },
       repoIcon: {
         type: 'image',
@@ -83,7 +84,7 @@ describe('startup fork-upstream backfill', () => {
 
     await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
       upstream: { owner: 'upstream-org', repo: 'rocket' },
       repoIcon: {
         type: 'image',
@@ -137,7 +138,7 @@ describe('startup fork-upstream backfill', () => {
     resolveSlug({ owner: 'acme', repo: 'rocket-pro' })
     await backfill
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
       upstream: { owner: 'upstream-org', repo: 'rocket' }
     })
   })

@@ -133,9 +133,15 @@ describe('createLinearSlice caching', () => {
       hasMore: true
     })
 
-    expect(linearListProjectIssues).toHaveBeenCalledWith(null, 'project-1', 120, 'workspace-1', {
-      force: undefined
-    })
+    expect(linearListProjectIssues).toHaveBeenCalledWith(
+      { kind: 'default-scope', settings: null },
+      'project-1',
+      120,
+      'workspace-1',
+      {
+        force: undefined
+      }
+    )
     expect(
       store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::120']?.data
     ).toMatchObject({ items: [{ id: 'LIN-120' }] })
@@ -234,9 +240,15 @@ describe('createLinearSlice caching', () => {
       hasMore: true
     })
 
-    expect(linearListCustomViewIssues).toHaveBeenCalledWith(null, 'view-1', 120, 'workspace-1', {
-      force: undefined
-    })
+    expect(linearListCustomViewIssues).toHaveBeenCalledWith(
+      { kind: 'default-scope', settings: null },
+      'view-1',
+      120,
+      'workspace-1',
+      {
+        force: undefined
+      }
+    )
     expect(
       store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::120']
         ?.data
@@ -315,9 +327,15 @@ describe('createLinearSlice caching', () => {
       store.getState().fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })
     ).resolves.toMatchObject({ id: 'view-1' })
 
-    expect(linearGetCustomView).toHaveBeenCalledWith(null, 'view-1', 'project', 'workspace-1', {
-      force: true
-    })
+    expect(linearGetCustomView).toHaveBeenCalledWith(
+      { kind: 'default-scope', settings: null },
+      'view-1',
+      'project',
+      'workspace-1',
+      {
+        force: true
+      }
+    )
     await vi.waitFor(() => {
       expect(store.getState().linearStatus.credentialError).toBeUndefined()
     })

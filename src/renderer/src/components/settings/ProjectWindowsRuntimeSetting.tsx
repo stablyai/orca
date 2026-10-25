@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
-import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 import {
   getDefaultRuntimeLabel,

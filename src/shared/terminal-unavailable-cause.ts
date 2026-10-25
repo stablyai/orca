@@ -55,33 +55,3 @@ export const TerminalUnavailableCauseSchema = z
   .strict()
 
 export type TerminalUnavailableCause = z.infer<typeof TerminalUnavailableCauseSchema>
-
-/** Null for anything that does not validate; a malformed cause must never be acted on. */
-export function parseTerminalUnavailableCause(value: unknown): TerminalUnavailableCause | null {
-  const parsed = TerminalUnavailableCauseSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
-}
-
-/**
- * The cause carried by a rejected JSON-RPC call, or null when there is none to act on.
- *
- * Reads `data`, never `code`: the dispatcher coerces a non-numeric error code to -32000 on the
- * way out, so the string code does not survive the wire. The strict schema is the whole gate —
- * no other published `data` shape validates against it.
- */
-export function terminalUnavailableCauseFromError(error: unknown): TerminalUnavailableCause | null {
-  if (typeof error !== 'object' || error === null || !('data' in error)) {
-    return null
-  }
-  return parseTerminalUnavailableCause((error as { data: unknown }).data)
-}
-
-/**
- * Whether the client may rewrite the host's `node_modules` on the strength of this cause.
- *
- * Deliberately re-derived here rather than trusting `repairable` alone: the flag arrives
- * from a peer, and only a `blocked` status is evidence of anything.
- */
-export function mayRepairFromCause(cause: TerminalUnavailableCause | null): boolean {
-  return cause !== null && cause.status === 'blocked' && cause.repairable
-}

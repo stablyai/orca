@@ -152,12 +152,15 @@ export function resolveMarkdownDocLink(
 }
 
 export function parseMarkdownDocLink(rawTarget: string): ParsedMarkdownDocLink | null {
+  if (/[[\]]/.test(rawTarget)) {
+    return null
+  }
   const separatorIndex = rawTarget.indexOf('|')
   const target =
     separatorIndex === -1 ? rawTarget.trim() : rawTarget.slice(0, separatorIndex).trim()
   const alias = separatorIndex === -1 ? null : rawTarget.slice(separatorIndex + 1).trim() || null
 
-  if (!target || /[\r\n[\]]/.test(target) || (alias !== null && /[\r\n[\]]/.test(alias))) {
+  if (!target || /[\r\n]/.test(target) || (alias !== null && /[\r\n]/.test(alias))) {
     return null
   }
   if (separatorIndex !== -1 && alias === null) {

@@ -2,7 +2,7 @@ import { homedir, platform } from 'node:os'
 import path from 'node:path'
 import { stat } from 'node:fs/promises'
 
-// Why: Ghostty honors XDG before native macOS paths; we replicate that precedence.
+// Ghostty gives XDG paths priority over native macOS paths.
 function xdgConfigDirs(home: string): string[] {
   if (process.env.XDG_CONFIG_HOME) {
     return [path.posix.join(process.env.XDG_CONFIG_HOME, 'ghostty')]
@@ -10,8 +10,7 @@ function xdgConfigDirs(home: string): string[] {
   return [path.posix.join(home, '.config', 'ghostty')]
 }
 
-// Why: Ghostty loads the modern filename before the legacy `config` fallback,
-// and later files in this order override earlier files.
+// Load config.ghostty before legacy config; later files override earlier ones.
 function withFilenames(dirs: string[]): string[] {
   return dirs.flatMap((dir) => [
     path.posix.join(dir, 'config.ghostty'),
@@ -26,7 +25,6 @@ export function getGhosttyConfigPaths(): string[] {
   switch (plat) {
     case 'darwin': {
       const dirs = xdgConfigDirs(home)
-      // Why: Native macOS path is the final fallback after XDG candidates.
       dirs.push(path.posix.join(home, 'Library', 'Application Support', 'com.mitchellh.ghostty'))
       return withFilenames(dirs)
     }
@@ -36,7 +34,6 @@ export function getGhosttyConfigPaths(): string[] {
     case 'win32': {
       const appData = process.env.APPDATA || home
       const base = path.win32.join(appData, 'ghostty')
-      // Why: path.win32.join preserves backslashes even when tests run on macOS/Linux.
       return [path.win32.join(base, 'config.ghostty'), path.win32.join(base, 'config')]
     }
     case 'aix':
@@ -60,7 +57,7 @@ export async function findGhosttyConfigPaths(): Promise<string[]> {
         found.push(p)
       }
     } catch {
-      // ENOENT or permission error — continue probing other paths.
+      // Unreadable candidates must not prevent probing the remaining locations.
     }
   }
   return found

@@ -4,7 +4,7 @@ import {
 } from './skill-discovery-wsl-observation'
 import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
-import { getDefaultWslDistro, getWslHome, parseWslPath, toLinuxPath } from '../wsl'
+import { getDefaultWslDistro, getWslHomeAsync, parseWslPath, toLinuxPath } from '../wsl'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
 import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
@@ -46,9 +46,9 @@ export type ResolvedSkillDiscoveryTarget =
       sourceKinds?: SkillDiscoveryTarget['sourceKinds']
     }
 
-export function resolveSkillDiscoveryTarget(
+export async function resolveSkillDiscoveryTarget(
   target: SkillDiscoveryTarget | undefined
-): ResolvedSkillDiscoveryTarget {
+): Promise<ResolvedSkillDiscoveryTarget> {
   const projectRuntime = target?.projectRuntime
   if (projectRuntime?.status === 'repair-required') {
     throw new Error(
@@ -79,7 +79,8 @@ export function resolveSkillDiscoveryTarget(
   if (process.platform !== 'win32') {
     throw new Error('WSL skill discovery is only available on Windows.')
   }
-  const homeDir = getWslHome(wslDistro)
+  // Why async: a synchronous probe blocks main and, on a booting distro, kills its first boot.
+  const homeDir = await getWslHomeAsync(wslDistro)
   if (!homeDir) {
     throw new Error(`Could not resolve the WSL home directory for ${wslDistro}.`)
   }

@@ -1,15 +1,10 @@
-import { useState } from 'react'
+import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
+import { useCallback, useState } from 'react'
+import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
+import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
-  ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_UPDATE_COMMAND
-} from '@/lib/orchestration-install-command'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -21,14 +16,8 @@ import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
-import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
@@ -38,6 +27,7 @@ import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
+import { OrchestrationChatErrorSetting } from './OrchestrationChatErrorSetting'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -60,26 +50,14 @@ export function OrchestrationPane({
   settings,
   updateSettings
 }: OrchestrationPaneProps): React.JSX.Element {
+  const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showNestedWorkerDepth = !isPairedWebClientWindow()
+  const showLocalRuntimeSettings = !isPairedWebClientWindow()
   const searchEntries = getOrchestrationPaneSearchEntries({
-    includeNestedWorkerDepth: showNestedWorkerDepth
+    includeLocalRuntimeSettings: showLocalRuntimeSettings
   })
   const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
-  const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const orchestrationUpdateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_UPDATE_COMMAND
 
   const {
     installed: orchestrationSkillDetected,
@@ -92,6 +70,25 @@ export function OrchestrationPane({
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
+  const renderCoverage = useCallback(
+    (plan: BundledSkillPlan | undefined) =>
+      plan || activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? (
+        <OrchestrationSkillAgentCoverage
+          embedded
+          plan={plan}
+          skills={discoveredSkills}
+          sources={discoveredSkillSources}
+          loading={orchestrationSkillLoading}
+        />
+      ) : null,
+    [
+      activeSkillRuntime.agentRuntime,
+      discoveredSkills,
+      discoveredSkillSources,
+      orchestrationSkillLoading
+    ]
+  )
 
   if (!showOrchestration) {
     return <div />
@@ -120,70 +117,38 @@ export function OrchestrationPane({
           'auto.components.settings.OrchestrationPane.9bedd2a6e5',
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
-        command={orchestrationInstallCommand}
-        installedCommand={orchestrationUpdateCommand}
-        terminalTitle="Orchestration setup"
-        terminalAriaLabel="Orchestration skill install terminal"
-        terminalWorktreeId="settings-orchestration-skill-terminal"
-        terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-        terminalRuntime={activeSkillRuntime.agentRuntime}
+        skillNames={[ORCHESTRATION_SKILL_NAME]}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
         error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
         installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
         icon={<Workflow className="size-5" />}
-        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-        getPrerequisiteStatus={() =>
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? window.api.cli.getWslInstallStatus(
-                getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-              )
-            : window.api.cli.getInstallStatus()
-        }
-        onBeforeOpenTerminal={async () => {
+        onBeforeInstall={() => {
           useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
-          await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-            : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
+        // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
         actionHint={
-          // Installed updates stay on the primary panel so there is only one update path.
-          activeSkillRuntime.installDisabledReason || orchestrationSkillDetected ? null : (
-            <p className="text-[12px] leading-snug text-muted-foreground">
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl' && !orchestrationSkillDetected ? (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              onClick={() => setSkillPromptOpen(true)}
+            >
               {translate(
-                'auto.components.settings.OrchestrationPane.832f1f3ee6',
-                'Prefer your own terminal?'
-              )}{' '}
-              <button
-                type="button"
-                className="font-medium text-foreground underline-offset-2 hover:underline"
-                onClick={() => {
-                  setSkillPromptOpen(true)
-                }}
-              >
-                {translate(
-                  'auto.components.settings.OrchestrationPane.7bc082f4de',
-                  'Copy install command'
-                )}
-              </button>
-            </p>
-          )
+                'auto.components.settings.OrchestrationPane.7bc082f4de',
+                'Copy install command'
+              )}
+            </button>
+          ) : undefined
         }
-        footer={
-          <OrchestrationSkillAgentCoverage
-            embedded
-            skills={discoveredSkills}
-            sources={discoveredSkillSources}
-            loading={orchestrationSkillLoading}
-          />
-        }
+        footer={renderCoverage}
         onRecheck={refreshOrchestrationSkill}
         freshnessSkillName={
-          activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
+          activeSkillRuntime.canUseSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
         }
       />
 
-      {showNestedWorkerDepth ? (
+      {showLocalRuntimeSettings ? (
         <NumberField
           label={getNestedWorkerDepthTitle()}
           description={getNestedWorkerDepthDescription()}
@@ -195,13 +160,18 @@ export function OrchestrationPane({
           }}
         />
       ) : null}
+      {showLocalRuntimeSettings ? (
+        <OrchestrationChatErrorSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
-      <OrchestrationSkillPromptDialog
-        command={orchestrationInstallCommand}
-        open={skillPromptOpen}
-        onOpenChange={setSkillPromptOpen}
-      />
-
+      {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}
+      {activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? (
+        <OrchestrationSkillPromptDialog
+          command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          open={skillPromptOpen}
+          onOpenChange={setSkillPromptOpen}
+        />
+      ) : null}
       <SkillUsageExamplesSection
         heading={translate(
           'auto.components.settings.OrchestrationPane.ae79504732',

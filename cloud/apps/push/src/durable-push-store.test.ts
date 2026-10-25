@@ -1,65 +1,14 @@
-import { randomUUID } from 'node:crypto'
-import pg from 'pg'
 import { afterEach, describe, expect, it } from 'vitest'
-import { openInMemoryPushDatabase, openPushDatabase, type PushDatabase } from './push-database.js'
+import { openPushDatabase } from './push-database.js'
 import { DurablePushStore, DELIVERY_LEASE_MS } from './durable-push-store.js'
-import type { PushNotification } from '@orca-cloud/push-contract'
+import {
+  cleanupDurablePushFixtures,
+  durablePushTestDatabaseUrl,
+  fixture,
+  notification
+} from './durable-push-store.test-fixture.js'
 
-const cleanups: (() => Promise<void>)[] = []
-afterEach(async () => {
-  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
-})
-const notification = (seq: number, kind: 'alert' | 'dismiss' = 'alert'): PushNotification => ({
-  notificationId: `notification-${seq}`,
-  notificationEpoch: 'epoch',
-  notificationSeq: seq,
-  source: 'agent-task-complete',
-  agentState: 'finished',
-  title: 'Done',
-  body: '',
-  kind
-})
-async function fixture() {
-  const databaseUrl =
-    process.env.ORCA_PUSH_DURABLE_TEST_POSTGRES_URL ?? process.env.ORCA_PUSH_TEST_DATABASE_URL
-  if (databaseUrl && !process.env.CI && new URL(databaseUrl).port !== '55440')
-    throw new Error('isolated_postgres_port_required')
-  let db: PushDatabase
-  if (databaseUrl) {
-    const admin = new pg.Client({ connectionString: databaseUrl })
-    await admin.connect()
-    const schema = `durable_${randomUUID().replaceAll('-', '')}`
-    let scoped: PushDatabase | undefined
-    cleanups.push(async () => {
-      try {
-        await scoped?.close()
-      } finally {
-        try {
-          await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
-        } finally {
-          await admin.end()
-        }
-      }
-    })
-    await admin.query(`CREATE SCHEMA ${schema}`)
-    const url = new URL(databaseUrl)
-    url.searchParams.set('options', `-c search_path=${schema}`)
-    db = scoped = await openPushDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax: 4 })
-  } else {
-    db = await openInMemoryPushDatabase()
-    cleanups.push(() => db.close())
-  }
-  let now = 1_000_000
-  const clock = () => now
-  return {
-    db,
-    store: new DurablePushStore(db, clock),
-    clock,
-    advance: (ms: number) => {
-      now += ms
-    }
-  }
-}
+afterEach(cleanupDurablePushFixtures)
 
 describe('durable push acceptance', () => {
   it('counts a logical event once across phones and separates the 300/15min dismissal budget', async () => {
@@ -164,8 +113,7 @@ describe('durable push acceptance', () => {
     const { db, store } = await fixture()
     await db.query('ALTER TABLE push_delivery_batches RENAME TO push_delivery_batches_unavailable')
     try {
-      const databaseUrl =
-        process.env.ORCA_PUSH_DURABLE_TEST_POSTGRES_URL ?? process.env.ORCA_PUSH_TEST_DATABASE_URL
+      const databaseUrl = durablePushTestDatabaseUrl
       if (databaseUrl) {
         const concurrent = await openPushDatabase({ databaseUrl, dataDir: '' })
         try {
@@ -267,14 +215,11 @@ it('fences late renew and finish after an expired claim is dismissed', async () 
         [stale.id]
       )
     )[0]
-  const cancelled = await read()
-  expect(cancelled).toMatchObject({ state: 'dismissed', payload_json: '{}' })
+  expect(await read()).toBeUndefined()
   await store.renew(stale)
-  expect(await read()).toEqual(cancelled)
   await store.finish(stale, 1000)
-  expect(await read()).toEqual(cancelled)
   await store.finish(stale)
-  expect(await read()).toEqual(cancelled)
+  expect(await read()).toBeUndefined()
   const dismissal = (await store.claim())!
   expect(dismissal.notification.kind).toBe('dismiss')
   await store.finish(dismissal)

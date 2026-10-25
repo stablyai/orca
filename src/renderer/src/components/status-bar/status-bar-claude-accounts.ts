@@ -94,7 +94,17 @@ export function buildClaudeStatusSwitchGroups(
           id: account.id,
           label: account.email,
           active: account.id === activeId,
-          runtimeTarget: target
+          runtimeTarget: target,
+          ...(account.needsSignIn
+            ? {
+                disabled: true,
+                needsSignIn: true,
+                hint: translate(
+                  'accounts.claude.signInRequired',
+                  'Sign in again to use this account'
+                )
+              }
+            : {})
         }))
       ]
     }
@@ -137,25 +147,31 @@ export function buildClaudeStatusSwitchGroups(
 }
 
 function getClaudeStatusAccountsFromSettings(
-  settings: GlobalSettings | null | undefined
+  settings: GlobalSettings | null | undefined,
+  runtimeState: ClaudeRateLimitAccountsState
 ): ClaudeRateLimitAccountsState | null {
   if (!settings) {
     return null
   }
+  // Why: settings carry the fresh selection; host rows own what only the host reads (login, cover).
+  const hostRows = new Map(runtimeState.accounts.map((account) => [account.id, account]))
   return {
     accounts: settings.claudeManagedAccounts
-      .map((account) => ({
-        id: account.id,
-        email: account.email,
-        managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-        wslDistro: account.wslDistro ?? null,
-        authMethod: account.authMethod ?? 'unknown',
-        organizationUuid: account.organizationUuid ?? null,
-        organizationName: account.organizationName ?? null,
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-        lastAuthenticatedAt: account.lastAuthenticatedAt
-      }))
+      .map(
+        (account): ClaudeStatusAccount =>
+          hostRows.get(account.id) ?? {
+            id: account.id,
+            email: account.email,
+            managedAuthRuntime: account.managedAuthRuntime ?? 'host',
+            wslDistro: account.wslDistro ?? null,
+            authMethod: account.authMethod ?? 'unknown',
+            organizationUuid: account.organizationUuid ?? null,
+            organizationName: account.organizationName ?? null,
+            createdAt: account.createdAt,
+            updatedAt: account.updatedAt,
+            lastAuthenticatedAt: account.lastAuthenticatedAt
+          }
+      )
       .sort((a, b) => b.updatedAt - a.updatedAt),
     activeAccountId:
       settings.activeClaudeManagedAccountIdsByRuntime?.host ??
@@ -173,12 +189,14 @@ function getClaudeStatusAccountsFromSettings(
 
 // Why: with a Remote Orca Server, local GlobalSettings describe this desktop, not the owner — the server snapshot wins (#7973).
 
+/** `ownerEnvironmentId` is the server owning the shown accounts; `null` is this desktop. */
 export function resolveClaudeStatusAccountState(
   settings: GlobalSettings | null | undefined,
-  runtimeState: ClaudeRateLimitAccountsState
+  runtimeState: ClaudeRateLimitAccountsState,
+  ownerEnvironmentId: string | null
 ): ClaudeRateLimitAccountsState {
-  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+  if (ownerEnvironmentId) {
     return runtimeState
   }
-  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
+  return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
 }

@@ -1,9 +1,10 @@
-import { Platform } from 'react-native'
 import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
+import { hostOs } from '../platform/host-os'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
   const {
@@ -25,9 +26,10 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameHeightRef,
+    terminalFrameRef,
     handleCreateTerminal,
-    visibleTabs
+    visibleTabs,
+    forceReconnectHost
   } = scope
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
@@ -55,11 +57,15 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     lastConnectedAt,
     endpoint: hostEndpoint
   })
-  const showConnectionRetry =
+  const connectionEscalated =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
+  // Not on the page: the shell owns the connection and the tap could only do nothing.
+  const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
 
+  // Why: a drop the client heals in a few seconds must not flip the header to Reconnecting and back.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const terminalSummary =
-    connState === 'connected'
+    presentedConnState === 'connected'
       ? showLoadingState
         ? 'Loading tabs'
         : visibleTabs.length === 1
@@ -67,25 +73,28 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
           : `${visibleTabs.length} tabs`
       : showConnectionRetry
         ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
-        : MOBILE_SESSION_STATUS_LABELS[connState]
+        : connectionEscalated
+          ? verdictDisplayLabel(connectionVerdict)
+          : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
 
   // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
   const keyboardLift =
     keyboardHeight > 0
-      ? Platform.OS === 'ios'
+      ? hostOs() === 'ios'
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
       : 0
   const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
     keyboardLift,
     metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameHeightRef.current
+    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
   })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
   }
   return {
+    presentedConnState,
     showLoadingState,
     showEmptyState,
     connectionVerdict,

@@ -7,7 +7,6 @@
  * the scheduler reads the store-derived one.
  */
 
-import type { AutomationHostCache } from './automation-host-cache'
 import type {
   AutomationHostCacheEntry,
   AutomationHostQueryErrorCode
@@ -122,11 +121,4 @@ export function automationHostLoadCounts(catalog: AutomationHostCatalog): Automa
     failedHostCount: counted.filter((entry) => FAILED_HEALTH.has(entry.authorityHealth)).length,
     totalHostCount: counted.length
   }
-}
-
-/** Adapter so callers can pass a live cache where a plain reader is expected. */
-export function automationHostCacheReader(
-  cache: AutomationHostCache
-): (stableKey: string) => AutomationHostCacheEntry | null {
-  return (stableKey) => cache.getByKey(stableKey)
 }

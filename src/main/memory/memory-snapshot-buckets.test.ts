@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
 import type { MemorySnapshotStore } from './collector'
 import { resolveWorktreeMemoryNames } from './memory-snapshot-buckets'
 
@@ -19,9 +18,10 @@ const folder: FolderWorkspace = {
   createdAt: 0,
   updatedAt: 0
 }
-const group = { id: 'documentation', name: 'Documentation' } as ProjectGroup
+const group = { id: 'documentation', name: 'Documentation' }
 
-function makeStore(): MemorySnapshotStore {
+function makeStore(): MemorySnapshotStore &
+  Required<Pick<MemorySnapshotStore, 'getFolderWorkspace' | 'getProjectGroups'>> {
   return {
     getRepo: vi.fn(),
     getWorktreeMeta: vi.fn(),
@@ -75,5 +75,55 @@ describe('memory snapshot workspace names', () => {
       repoId: 'repo',
       repoName: 'repo'
     })
+  })
+})
+
+describe('memory snapshot optional capability failures', () => {
+  it('keeps the direct folder call failure when that capability is absent', () => {
+    const store: MemorySnapshotStore = { getRepo: vi.fn(), getWorktreeMeta: vi.fn() }
+    expect(() => resolveWorktreeMemoryNames('folder:notes-folder', store)).toThrow(TypeError)
+    expect(store.getRepo).not.toHaveBeenCalled()
+    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('keeps the direct group call failure after the folder lookup', () => {
+    const getFolderWorkspace = vi.fn(() => folder)
+    const store: MemorySnapshotStore = {
+      getRepo: vi.fn(),
+      getWorktreeMeta: vi.fn(),
+      getFolderWorkspace
+    }
+    expect(() => resolveWorktreeMemoryNames('folder:notes-folder', store)).toThrow(TypeError)
+    expect(getFolderWorkspace).toHaveBeenCalledExactlyOnceWith(folder.id)
+    expect(store.getRepo).not.toHaveBeenCalled()
+  })
+
+  it('looks up and invokes folder before groups with the original receiver and arguments', () => {
+    const calls: string[] = []
+    const store: MemorySnapshotStore = {
+      getRepo: vi.fn(),
+      getWorktreeMeta: vi.fn(),
+      get getFolderWorkspace() {
+        calls.push('folder:get')
+        return function (this: MemorySnapshotStore, id: string) {
+          expect(this).toBe(store)
+          expect(arguments.length).toBe(1)
+          expect(id).toBe(folder.id)
+          calls.push('folder:call')
+          return folder
+        }
+      },
+      get getProjectGroups() {
+        calls.push('groups:get')
+        return function (this: MemorySnapshotStore) {
+          expect(this).toBe(store)
+          expect(arguments.length).toBe(0)
+          calls.push('groups:call')
+          return [group]
+        }
+      }
+    }
+    expect(resolveWorktreeMemoryNames('folder:notes-folder', store).repoName).toBe(group.name)
+    expect(calls).toEqual(['folder:get', 'folder:call', 'groups:get', 'groups:call'])
   })
 })

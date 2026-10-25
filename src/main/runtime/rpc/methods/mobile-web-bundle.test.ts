@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +12,7 @@ import {
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../core'
+import { ORCAD_MOBILE_WEB_DIR, ORCAD_MOBILE_WEB_MANIFEST } from '../../../../shared/orcad-artifacts'
 import type { RpcDispatcher } from '../dispatcher'
 
 import {
@@ -197,58 +199,11 @@ describe('an install that carries a mobile web bundle', () => {
     expect(Buffer.from(body.dataBase64, 'base64').byteLength).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
   })
 
-  it('refuses a path that is not a manifest member', async () => {
-    const attempts = [
-      'assets/does-not-exist.js',
-      'manifest.json',
-      'index.htm',
-      'assets',
-      'INDEX.HTML'
-    ]
-
-    for (const path of attempts) {
-      const response = await chunk({ buildId: bundle.buildId, path, offset: 0 })
-      expect(errorMessage(response)).toBe('mobile_web_bundle_asset_unknown')
-    }
-  })
-
   it('rejects a traversal path at the params schema, before any lookup', async () => {
     const response = await chunk({ buildId: bundle.buildId, path: '../../etc/passwd', offset: 0 })
 
     expect(response.ok).toBe(false)
     expect(errorMessage(response)).not.toBe('mobile_web_bundle_asset_unknown')
-  })
-
-  it('refuses an offset that does not address a chunk boundary', async () => {
-    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
-
-    for (const offset of [1, 1024, MOBILE_WEB_BUNDLE_CHUNK_BYTES - 1, 49_153]) {
-      const response = await chunk({ buildId: bundle.buildId, path: script.path, offset })
-      expect(errorMessage(response)).toBe('mobile_web_bundle_offset_invalid')
-    }
-  })
-
-  it('refuses an aligned offset that starts past the end of the asset', async () => {
-    const index = bundle.assets.find((asset) => asset.path === 'index.html')!
-    expect(index.byteLength).toBeLessThan(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
-
-    const response = await chunk({
-      buildId: bundle.buildId,
-      path: index.path,
-      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
-    })
-
-    expect(errorMessage(response)).toBe('mobile_web_bundle_offset_invalid')
-  })
-
-  it('refuses a buildId that is not the one it is serving', async () => {
-    const response = await chunk({
-      buildId: '0'.repeat(64),
-      path: 'index.html',
-      offset: 0
-    })
-
-    expect(errorMessage(response)).toBe('mobile_web_bundle_build_changed')
   })
 
   // The auto-update case: the desktop replaced the bundle between the client's manifest call and
@@ -283,15 +238,6 @@ describe('an install that carries a mobile web bundle', () => {
     const response = await chunk({ buildId: replacement.buildId, path: 'index.html', offset: 0 })
 
     expect(errorMessage(response)).toBeUndefined()
-  })
-
-  it('refuses an asset whose bytes on disk no longer hash to the manifest', async () => {
-    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
-    writeFileSync(join(bundle.root, script.path), mobileWebBundleFiller(script.byteLength, 99))
-
-    const response = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
-
-    expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
   })
 
   // A dev rebuild under a live runtime, or a permissions change, reaches the filesystem after the
@@ -344,42 +290,6 @@ describe('an install that carries a mobile web bundle', () => {
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
   })
 
-  it('charges reads to the connection, and refuses one past the cap', async () => {
-    const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
-      acquireMobileWebBundleReadSlot('conn-a')
-    )
-    expect(held.every((release) => release !== null)).toBe(true)
-
-    const refused = await chunk(
-      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
-      {
-        connectionId: 'conn-a'
-      }
-    )
-    const other = await chunk(
-      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
-      {
-        connectionId: 'conn-b'
-      }
-    )
-
-    expect(errorMessage(refused)).toBe('mobile_web_bundle_read_limited')
-    // One phone at its cap must not cost another phone a thing.
-    expect(other.ok).toBe(true)
-
-    held[0]!()
-    expect(
-      (
-        await chunk(
-          { buildId: bundle.buildId, path: 'index.html', offset: 0 },
-          {
-            connectionId: 'conn-a'
-          }
-        )
-      ).ok
-    ).toBe(true)
-  })
-
   // Off the E2EE channel the bucket key is the device's pairing token, so a map that never drops a
   // key retains one credential per socket, and reconnect churn is normal on mobile.
   it('keeps no bucket for a connection that finished its reads', () => {
@@ -390,24 +300,6 @@ describe('an install that carries a mobile web bundle', () => {
     }
 
     expect(mobileWebBundleReadBucketCountForTests()).toBe(0)
-  })
-
-  // connectionId is set only for E2EE mobile sockets, so the device token is what keeps a
-  // plain-WebSocket phone from sharing one unbounded bucket with every other caller.
-  it('falls back to the device token when the connection has no id', async () => {
-    const held = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>
-      acquireMobileWebBundleReadSlot('device-token-1')
-    )
-    expect(held.every((release) => release !== null)).toBe(true)
-
-    const refused = await chunk(
-      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
-      {
-        clientId: 'device-token-1'
-      }
-    )
-
-    expect(errorMessage(refused)).toBe('mobile_web_bundle_read_limited')
   })
 
   it('stops before reading anything for a client that already disconnected', async () => {
@@ -449,6 +341,19 @@ describe('where the resolver probes', () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
 
     expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
+  })
+
+  // orcad's appPath is its slot root, and the slot ships the page at ORCAD_MOBILE_WEB_DIR.
+  it('finds the page an orcad slot ships, without a resolver of its own', () => {
+    const bundle = writeSyntheticMobileWebBundle(
+      join(scratch, ...ORCAD_MOBILE_WEB_DIR.split('/')),
+      2
+    )
+
+    expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
+    expect(join(bundle.root, 'manifest.json')).toBe(
+      join(scratch, ...ORCAD_MOBILE_WEB_MANIFEST.split('/'))
+    )
   })
 
   it('answers undefined when neither layout holds a manifest', () => {

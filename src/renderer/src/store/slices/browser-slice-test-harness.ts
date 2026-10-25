@@ -49,11 +49,15 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store; browser actions touch only the fields seeded here.
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
         activeWorktreeId: 'wt-1',
         browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
+        layoutByWorktree: {},
+        activeGroupIdByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
         openFiles: [],

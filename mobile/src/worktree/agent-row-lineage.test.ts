@@ -13,6 +13,8 @@ function row(
     state: 'working',
     agentType: 'claude',
     prompt: '',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,

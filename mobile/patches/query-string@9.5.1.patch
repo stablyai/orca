@@ -1,0 +1,10 @@
+diff --git a/index.js b/index.js
+index 0480a96d718c997b0a5a54b775e635e2e048e796..85f71b13d3f0f31c3c2140581d1e4051afb21dc3 100644
+--- a/index.js
++++ b/index.js
+@@ -1,3 +1,5 @@
+ import * as queryString from './base.js';
+ 
+ export default queryString;
++
++export * from './base.js';

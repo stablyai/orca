@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -51,6 +51,12 @@ import {
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
+  const originalExitCode = process.exitCode
+
+  afterEach(() => {
+    process.exitCode = originalExitCode
+  })
+
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -117,8 +123,6 @@ describe('orca cli worktree awareness', () => {
 
   it('rejects conflicting automation session reuse flags', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       ['automations', 'edit', 'auto-1', '--reuse-session', '--fresh-session', '--json'],
@@ -126,11 +130,14 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Use either --reuse-session or --fresh-session, not both.'
-    )
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: expect.stringContaining('Use either --reuse-session or --fresh-session, not both.')
+      }
+    })
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 })

@@ -14,15 +14,9 @@ vi.mock('./AgentSkillSetupPanel', () => ({
 }))
 
 describe('BrowserUseSkillStep', () => {
-  it('forwards a single-skill installed command even when setup installs a bundle', () => {
-    const bundleInstallCommand =
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill orchestration --global'
-    const updateCommand = 'npx skills update orca-cli --global'
-
+  it('installs the orca-cli skill, which also updates it once installed', () => {
     renderToStaticMarkup(
       <BrowserUseSkillStep
-        command={bundleInstallCommand}
-        installedCommand={updateCommand}
         skillDetected
         skillLoading={false}
         skillError={null}
@@ -31,11 +25,8 @@ describe('BrowserUseSkillStep', () => {
     )
 
     expect(capturedPanel.props).toEqual(
-      expect.objectContaining({
-        command: bundleInstallCommand,
-        installedCommand: updateCommand,
-        installed: true
-      })
+      expect.objectContaining({ skillNames: ['orca-cli'], installed: true })
     )
+    expect(capturedPanel.props?.installedSkillNames).toBeUndefined()
   })
 })

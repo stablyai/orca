@@ -5,7 +5,6 @@ import {
 } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { app, BrowserWindow, nativeImage } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import classicIcon from '../../resources/icon.png?asset'
 import classicDevIcon from '../../resources/icon-dev.png?asset'
 import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
@@ -15,7 +14,7 @@ import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarU
 import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
 
 const APP_ICON_PATHS = {
-  classic: is.dev ? classicDevIcon : classicIcon,
+  classic: !app.isPackaged ? classicDevIcon : classicIcon,
   watercolor: watercolorIcon,
   blue: blueIcon
 } satisfies Record<AppIconId, string>
@@ -181,7 +180,7 @@ function runBoundedMacDockIconCommand({
         finishAfterFallback()
         return
       }
-      // Why: the queue must not release while an older icon process can still win.
+      // Hold the queue until an older icon process can no longer overwrite the result.
       childProcess.once('exit', finishAfterFallback)
       childProcess.once('close', finishAfterFallback)
       forceFallback = setTimeout(finishAfterFallback, MAC_DOCK_ICON_COMMAND_FALLBACK_MS)
@@ -261,7 +260,7 @@ function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): 
 
 export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOptions = {}): void {
   const platform = options.platform ?? process.platform
-  const isDevApp = options.isDevApp ?? (is.dev || !app.isPackaged)
+  const isDevApp = options.isDevApp ?? !app.isPackaged
   if (platform !== 'darwin' || isDevApp) {
     return
   }
@@ -273,7 +272,6 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   const iconId = normalizeAppIconId(value)
   const generation = ++macDockIconPersistenceGeneration
   enqueueMacDockIconPersistence(async () => {
-    // Why: stale queued writes must not reapply an older Dock pin icon.
     if (generation !== macDockIconPersistenceGeneration) {
       return
     }
@@ -281,8 +279,7 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
       await clearMacCustomIconMetadata(execFile, appBundlePath)
       return
     }
-    // Why: a stopped app's Dock tile is resolved from Finder metadata, not
-    // Electron's live app.dock.setIcon state.
+    // Finder metadata supplies the stopped app’s Dock icon; Electron only changes the live tile.
     await runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
   })
 }

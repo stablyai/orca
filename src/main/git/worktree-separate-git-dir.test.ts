@@ -5,9 +5,7 @@ import * as path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from './runner'
 
-// Why: spy on the git runner so we can count rev-parse invocations while still
-// running real git, proving the main-entry-equals-repoPath early return skips
-// the extra subprocess for an ordinary repo scanned at its own root.
+// Spy on real Git to count extra rev-parse calls without replacing path behavior.
 const revParseTopLevelCalls = { count: 0 }
 vi.mock('./runner', async () => {
   const actual = await vi.importActual<typeof GitRunner>('./runner')
@@ -25,7 +23,6 @@ vi.mock('./runner', async () => {
   }
 })
 
-// Imported after vi.mock so worktree.ts binds to the spied runner.
 const { listWorktrees } = await import('./worktree')
 
 const tempRoots: string[] = []
@@ -133,9 +130,7 @@ describe('git worktree separate git dir paths', () => {
   it.skipIf(process.platform === 'win32')(
     'leaves an ordinary repo reached via a symlinked path unchanged',
     async () => {
-      // A symlink alias of the checkout root defeats the path-string gate
-      // (git reports the realpath toplevel), so the git-common-dir gate must
-      // still skip the rewrite since the main entry is a real working root.
+      // A symlink defeats the path gate; the common-dir gate must still preserve the main row.
       const repoPath = await createNormalRepo()
       const linkRoot = await mkdtemp(path.join(tmpdir(), 'orca-symlink-worktree-'))
       tempRoots.push(linkRoot)
@@ -155,11 +150,7 @@ describe('git worktree separate git dir paths', () => {
   it.skipIf(process.platform === 'win32')(
     'leaves the main entry unchanged when scanned via a linked worktree',
     async () => {
-      // A linked worktree has a `.git` *pointer file* just like a
-      // separate-git-dir checkout, but its porcelain main entry is the real
-      // main working root — never the Git directory. The git-common-dir gate
-      // must skip the rewrite so the main entry is not overwritten with the
-      // linked worktree's own toplevel (which would collide / drop the main).
+      // Linked checkouts also use .git files; their toplevel must not replace the real main row.
       const repoPath = await createNormalRepo()
       const linkedWorktreePath = path.join(path.dirname(repoPath), 'linked')
       git(repoPath, ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'])
@@ -172,8 +163,42 @@ describe('git worktree separate git dir paths', () => {
         path: repoPath,
         isMainWorktree: true
       })
-      // The main entry must not be rewritten to the linked worktree's path.
       expect(mainWorktree?.path).not.toBe(resolvedLinked)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32').each([
+    ['bare', 'bare'],
+    ['separate-git-dir', 'separate-git-dir']
+  ] as const)(
+    'leaves the main entry unchanged when a %s repo is scanned via its linked worktree',
+    async (_label, kind) => {
+      // Bare/separate-git-dir main rows match the common dir, so the caller's own gitdir must distinguish them.
+      let mainPath: string
+      let repoForAdd: string
+      if (kind === 'bare') {
+        const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-linked-'))
+        tempRoots.push(root)
+        const sourcePath = await createCommittedRepo(root, 'source')
+        mainPath = path.join(root, 'project.git')
+        execFileSync('git', ['clone', '--bare', '--quiet', sourcePath, mainPath])
+        mainPath = await realpath(mainPath)
+        repoForAdd = mainPath
+      } else {
+        const { gitDirPath, worktreePath } = await createSeparateGitDirRepo()
+        mainPath = gitDirPath
+        repoForAdd = worktreePath
+      }
+      const linkedWorktreePath = path.join(path.dirname(mainPath), 'linked')
+      git(repoForAdd, ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'])
+      const resolvedLinked = await realpath(linkedWorktreePath)
+
+      const worktrees = await listWorktrees(resolvedLinked)
+
+      expect(worktrees.find((worktree) => worktree.isMainWorktree)?.path).toBe(mainPath)
+      expect(worktrees.filter((worktree) => worktree.path === resolvedLinked)).toEqual([
+        expect.objectContaining({ branch: 'refs/heads/feature', isMainWorktree: false })
+      ])
     }
   )
 

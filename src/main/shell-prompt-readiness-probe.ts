@@ -69,10 +69,7 @@ export function createShellPromptReadinessProbe(options: {
       return
     }
     if (shell.executablePath !== expectedPath) {
-      // Why widen past the launched path: a startup profile that `exec`s a second
-      // install of the same shell (Homebrew Bash over /bin/bash) keeps the pid but
-      // loses the wrapper's marker. Only installs this pane's own PATH resolves
-      // count, so a binary merely *named* bash/zsh outside it stays rejected.
+      // Profiles can exec another installed shell; accept only replacements found on this pane's PATH.
       const installedPaths = await resolveInstalledShellExecutablePaths(
         expectedShellName,
         shellCwd,

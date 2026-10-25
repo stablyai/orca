@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from './folder-workspace-types'
+import type { WorkspaceAttachment } from './worktree/types'
+import { getWorkspaceAttachments } from './workspace-attachments'
 import {
   folderWorkspaceRepoId,
+  getFolderWorkspaceHostIdentity,
   folderWorkspaceToWorktree,
   projectGroupIdFromRepoId
 } from './folder-workspace-worktree'
@@ -28,6 +31,41 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folderWorkspaceToWorktree', () => {
+  it.each([
+    [{}, 'local|folder:folder-workspace-1'],
+    [{ connectionId: 'ssh host' }, 'ssh:ssh%20host|folder:folder-workspace-1'],
+    [
+      { executionHostId: 'runtime:host' as const, connectionId: 'ignored' },
+      'runtime:host|folder:folder-workspace-1'
+    ],
+    [
+      { executionHostId: 'local' as const, connectionId: 'ignored' },
+      'local|folder:folder-workspace-1'
+    ]
+  ])('keeps folder row identity on its explicit or legacy host %j', (fields, identity) => {
+    const workspace = makeFolderWorkspace(fields)
+    expect(getFolderWorkspaceHostIdentity(workspace)).toBe(identity)
+    expect(folderWorkspaceToWorktree(workspace).hostId).toBe(identity.split('|')[0])
+  })
+  it('preserves multiple attachments and projects a bare Linear task without enabling review checks', () => {
+    const linkedItems: WorkspaceAttachment[] = [
+      { provider: 'github', type: 'pr', number: 7 },
+      {
+        provider: 'linear',
+        type: 'issue',
+        number: 0,
+        identifier: 'APP-42',
+        linearOrganizationUrlKey: 'acme'
+      },
+      { provider: 'github', type: 'issue', number: 8 }
+    ]
+    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ linkedItems }))
+    expect(worktree.linkedItems).toEqual(linkedItems)
+    expect(getWorkspaceAttachments(worktree)).toHaveLength(3)
+    expect(worktree.linkedLinearIssue).toBe('APP-42')
+    expect(worktree.linkedLinearIssueOrganizationUrlKey).toBe('acme')
+    expect(worktree.linkedPR).toBeNull()
+  })
   it('projects attached issue tasks without creating linked PR metadata', () => {
     const githubIssue = folderWorkspaceToWorktree(
       makeFolderWorkspace({

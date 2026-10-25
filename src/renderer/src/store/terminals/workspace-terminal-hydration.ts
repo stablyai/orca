@@ -10,7 +10,7 @@ import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydrati
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
-} from '../slices/degraded-repo-worktree-validity'
+} from '../../../../shared/worktree/degraded-repo-worktree-validity'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { buildRuntimeSessionPlaceholders } from './workspace-terminal-placeholders'
 import {
@@ -24,6 +24,8 @@ import { buildWorkspaceTerminalReconnectPlan } from './workspace-terminal-reconn
 import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-plan'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
 import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { restoreActiveTabIdByWorktree } from './workspace-terminal-active-tabs'
+import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/paired-terminal-tab-close-intents'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -67,7 +69,7 @@ export function createWorkspaceTerminalHydrationActions(
           sleepingAgentSessionsByPaneKey,
           tabsByWorktree,
           validTabIds
-        } = buildWorkspaceTerminalRowPlan(session, validWorktreeIds, options)
+        } = buildWorkspaceTerminalRowPlan(session, validWorktreeIds)
         const fallbackActiveWorktreeId =
           !session.activeWorktreeId &&
           session.activeRepoId &&
@@ -122,33 +124,15 @@ export function createWorkspaceTerminalHydrationActions(
           validWorktreeIds,
           worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo
         })
-        // Restore per-worktree active tab; validate ids when the map exists, else derive for legacy sessions.
-        let activeTabIdByWorktree: Record<string, string | null> = {}
-        if (session.activeTabIdByWorktree) {
-          for (const [wId, tabId] of Object.entries(session.activeTabIdByWorktree)) {
-            if (!validWorktreeIds.has(wId) || !tabId) {
-              continue
-            }
-            // Why: a subsumed row's canonical twin holds the same PTY, so follow the pointer there
-            // instead of forgetting which terminal the workspace last focused.
-            const restored = validTabIds.has(tabId)
-              ? tabId
-              : canonicalTabIdBySubsumedTabId.get(tabId)
-            if (restored && validTabIds.has(restored)) {
-              activeTabIdByWorktree[wId] = restored
-            }
-          }
-        } else {
-          // Legacy sessions: best-effort derivation
-          if (activeWorktreeId && activeTabId) {
-            activeTabIdByWorktree[activeWorktreeId] = activeTabId
-          }
-          for (const [wId, tabs] of Object.entries(tabsByWorktree)) {
-            if (!activeTabIdByWorktree[wId] && tabs.length > 0) {
-              activeTabIdByWorktree[wId] = tabs[0].id
-            }
-          }
-        }
+        const activeTabIdByWorktree = restoreActiveTabIdByWorktree({
+          session,
+          validWorktreeIds,
+          validTabIds,
+          canonicalTabIdBySubsumedTabId,
+          tabsByWorktree,
+          activeWorktreeId,
+          activeTabId
+        })
         const worktreesByRepo = addHydratedSshWorktreePlaceholders(
           runtimeSessionPlaceholders.repos,
           runtimeSessionPlaceholders.worktreesByRepo,
@@ -191,11 +175,22 @@ export function createWorkspaceTerminalHydrationActions(
             ...session.defaultTerminalTabsAppliedByWorktreeId,
             ...s.defaultTerminalTabsAppliedByWorktreeId
           },
-          // Why replace and not union: both callers hand over a map they derived from this store
-          // synchronously (the pull merge) or from disk before the store had one (startup), so there
-          // is no local tombstone to lose — and a union would resurrect the ones the merge just
-          // retired on the host's acknowledgement, which is the whole bound on this map.
-          closedTerminalTabTombstonesByTabId: session.closedTerminalTabTombstonesByTabId ?? {},
+          // Why keep the store's when absent: only main's session carries close records, and the
+          // pull merge's session does not, so re-hydrating from it must not clear the mirror.
+          closedTerminalTabTombstonesByTabId:
+            session.closedTerminalTabTombstonesByTabId ?? s.closedTerminalTabTombstonesByTabId,
+          // Why keep the store's when absent: as above, a pull merge's session carries no intents.
+          // Replaced wholesale, not through the replay's reveal path: only the startup read carries
+          // them, before any snapshot can have hidden a tab. A catalog that published first has
+          // already pruned, so a server removed while the app was closed is filtered here.
+          pairedTerminalTabCloseIntentsByEnvironment: retainPairedTerminalTabCloseIntentsForCatalog(
+            session.pairedTerminalTabCloseIntentsByEnvironment ??
+              s.pairedTerminalTabCloseIntentsByEnvironment,
+            {
+              hydrated: s.runtimeEnvironmentCatalogHydrated,
+              environmentIds: s.runtimeEnvironments.map((environment) => environment.id)
+            }
+          ),
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,

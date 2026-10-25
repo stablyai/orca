@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'

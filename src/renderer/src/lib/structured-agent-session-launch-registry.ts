@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
+import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
 import type {
   StructuredAgentLaunchOptions,
   StructuredLaunchCallerGroup
@@ -10,21 +13,37 @@ import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
+  structuredAgentLaunchRecordFor,
   writeStructuredAgentLaunchRecord,
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-persistence'
+import {
+  removeStructuredLaunchSlot,
+  type StructuredLaunchSlotOwner
+} from './structured-agent-session-launch-slot'
 import {
   markStructuredAgentLaunchCancellation,
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
-} from './structured-agent-session-launch-cancellation'
+} from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import {
+  cancelStructuredAgentLaunchOnLocalHost,
+  resetStructuredAgentLocalLaunchCancelsForTests
+} from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
   /** Fixed by the caller that opened this launch so coalesced prompts use one delivery mode. */
   promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
   callers: StructuredLaunchCallerGroup
+  /** The host's refusal behind the last failed attempt, worded beside Retry. Absent when the
+   *  failure named none. */
+  failure?: StructuredLaunchFailure
+  selection: StructuredLaunchSelection
+  /** A host list showed the chat, so its create reply needs no protection from older lists. */
+  hostListed?: true
 }
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -35,19 +54,18 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'published'
   | 'cancelled'
 
-const pendingStructuredLaunchesByIdentity = new Map<string, StructuredLaunchState>()
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
 const structuredLaunchListeners = new Set<() => void>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
-  pendingStructuredLaunchesByIdentity.clear()
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetStructuredAgentLaunchCancellationForTests()
+  resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
 export function notifyStructuredLaunchListeners(): void {
-  for (const state of pendingStructuredLaunchesByIdentity.values()) {
+  for (const state of structuredLaunchesBySessionId.values()) {
     persistStructuredLaunchState(state)
   }
   for (const listener of structuredLaunchListeners) {
@@ -64,16 +82,12 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 // Why keyed by conversation: a resume must not coalesce onto an unrelated blank launch.
 export function structuredLaunchIdentity(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   resumeFrom?: StructuredAgentSessionResumeSource
 ): string {
   return resumeFrom
     ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
     : `${agent}:${worktreeId}`
-}
-
-export function getStructuredLaunchState(identity: string): StructuredLaunchState | undefined {
-  return pendingStructuredLaunchesByIdentity.get(identity)
 }
 
 export function getStructuredLaunchStateBySessionId(
@@ -83,19 +97,15 @@ export function getStructuredLaunchStateBySessionId(
 }
 
 export function setStructuredLaunchState(state: StructuredLaunchState): void {
-  pendingStructuredLaunchesByIdentity.set(state.identity, state)
   structuredLaunchesBySessionId.set(state.intent.sessionId, state)
   persistStructuredLaunchState(state)
 }
 
 export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
-  if (pendingStructuredLaunchesByIdentity.get(state.identity) !== state) {
+  if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
     return false
   }
-  pendingStructuredLaunchesByIdentity.delete(state.identity)
-  if (structuredLaunchesBySessionId.get(state.intent.sessionId) === state) {
-    structuredLaunchesBySessionId.delete(state.intent.sessionId)
-  }
+  structuredLaunchesBySessionId.delete(state.intent.sessionId)
   deleteStructuredAgentLaunchRecord(state.intent.sessionId)
   return true
 }
@@ -106,17 +116,10 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     deleteStructuredAgentLaunchRecord(state.intent.sessionId)
     return
   }
-  const { envelope, resumeFrom } = state.intent.params
-  const record: StructuredAgentLaunchPersistedRecord = {
-    sessionId: state.intent.sessionId,
-    agent: state.intent.agent,
-    lifecycle,
-    clientOperationId: envelope.clientOperationId,
-    payloadFingerprint: envelope.payloadFingerprint,
-    expectedRuntimeFence: envelope.expectedRuntimeFence,
-    ...(resumeFrom ? { resumeFrom } : {})
-  }
-  writeStructuredAgentLaunchRecord(record)
+  writeStructuredAgentLaunchRecord({
+    ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
+    ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
+  })
 }
 
 export function getPersistedStructuredAgentLaunchRecord(
@@ -126,10 +129,12 @@ export function getPersistedStructuredAgentLaunchRecord(
 }
 
 export function structuredLaunchStates(): IterableIterator<StructuredLaunchState> {
-  return pendingStructuredLaunchesByIdentity.values()
+  return structuredLaunchesBySessionId.values()
 }
 
-function launchStateLifecycle(state: StructuredLaunchState): StructuredAgentSessionLaunchLifecycle {
+export function launchStateLifecycle(
+  state: StructuredLaunchState
+): StructuredAgentSessionLaunchLifecycle {
   if (state.cancelled || state.callers.outcome === 'cancelled') {
     return 'cancelled'
   }
@@ -163,6 +168,48 @@ export function getStructuredAgentSessionLaunchLifecycle(
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
 
+/** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
+export function getStructuredAgentSessionLaunchOwner(
+  sessionId: string
+): ExecutionHostId | undefined {
+  return (
+    getStructuredLaunchStateBySessionId(sessionId)?.intent.executionHostId ??
+    getPersistedStructuredAgentLaunchRecord(sessionId)?.executionHostId
+  )
+}
+
+/** The launch adopts an existing conversation, which may keep a model of its own. */
+export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  const resumeFrom = state
+    ? state.intent.params.resumeFrom
+    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
+  return resumeFrom !== undefined
+}
+
+export function getStructuredAgentSessionLaunchFailure(
+  worktreeId: string,
+  sessionId: string
+): StructuredLaunchFailure | null {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  return state &&
+    matchesLaunchWorktree(state, worktreeId) &&
+    launchStateLifecycle(state) === 'failed'
+    ? (state.failure ?? null)
+    : null
+}
+
+export function useStructuredAgentSessionLaunchFailure(
+  worktreeId: string,
+  sessionId: string
+): StructuredLaunchFailure | null {
+  return useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
+    () => null
+  )
+}
+
 export function useStructuredAgentSessionLaunchLifecycle(
   worktreeId: string,
   sessionId: string
@@ -182,69 +229,79 @@ export function shouldRetainStructuredAgentSessionLaunchTab(
   return lifecycle === 'pending' || lifecycle === 'visibility-unknown' || lifecycle === 'failed'
 }
 
-export function markStructuredAgentSessionLaunchPublished(
-  worktreeId: string,
-  sessionId: string
-): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (!state) {
-    const persisted = getPersistedStructuredAgentLaunchRecord(sessionId)
-    if (!persisted) {
-      return false
-    }
-    deleteStructuredAgentLaunchRecord(sessionId)
-    notifyStructuredLaunchListeners()
-    return true
-  }
-  if (!matchesLaunchWorktree(state, worktreeId) || state.cancelled) {
-    return false
-  }
-  if (state.callers.outcome === 'published') {
-    return true
-  }
-  state.callers.outcome = 'published'
-  deleteStructuredAgentLaunchRecord(sessionId)
-  state.callers.onSettled()
-  notifyStructuredLaunchListeners()
-  return true
-}
-
 function markStructuredAgentSessionLaunchCancelledInternal(
   worktreeId: string,
   sessionId: string,
-  notify: boolean
+  executionHostId: ExecutionHostId,
+  owner: StructuredLaunchSlotOwner | undefined
 ): boolean {
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
+  const surfaceAddress =
+    state?.intent.surfaceAddress ??
+    getPersistedStructuredAgentLaunchRecord(sessionId)?.surfaceAddress
   if (matchesLaunchWorktree(state, worktreeId) && state) {
-    markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled, state.promise)
+    // The launch's own owner outranks the caller's: it is the host the create was sent to.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && state.intent.executionHostId === LOCAL_EXECUTION_HOST_ID) {
+      cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
+    } else {
+      markStructuredAgentLaunchCancellation(
+        sessionId,
+        state.intent.executionHostId,
+        alreadyCancelled,
+        state.promise
+      )
+    }
     state.cancelled = true
     state.callers.outcome = 'cancelled'
     // The tombstone is the durable authority; drop the in-memory launch so bulk closes cannot
     // retain a dead promise for the lifetime of the renderer.
     deleteStructuredLaunchStateIfCurrent(state)
+  } else if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    !alreadyCancelled &&
+    executionHostId === LOCAL_EXECUTION_HOST_ID
+  ) {
+    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
   } else if (!alreadyCancelled) {
-    markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled)
+    markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
   }
-  if (!alreadyCancelled && notify) {
+  if (owner && surfaceAddress) {
+    removeStructuredLaunchSlot(owner, worktreeId, sessionId)
+  }
+  if (!alreadyCancelled && owner) {
     notifyStructuredLaunchListeners()
   }
   return !alreadyCancelled
 }
 
+/** `executionHostId` owns the chat; a launch still in memory names its own. */
 export function markStructuredAgentSessionLaunchCancelled(
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  executionHostId: ExecutionHostId,
+  owner: StructuredLaunchSlotOwner
 ): boolean {
-  return markStructuredAgentSessionLaunchCancelledInternal(worktreeId, sessionId, true)
+  return markStructuredAgentSessionLaunchCancelledInternal(
+    worktreeId,
+    sessionId,
+    executionHostId,
+    owner
+  )
 }
 
 /** Bulk workspace purges run inside a store updater; persist cancellation without notifying React. */
 export function markStructuredAgentSessionLaunchCancelledSilently(
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  executionHostId: ExecutionHostId
 ): boolean {
-  return markStructuredAgentSessionLaunchCancelledInternal(worktreeId, sessionId, false)
+  return markStructuredAgentSessionLaunchCancelledInternal(
+    worktreeId,
+    sessionId,
+    executionHostId,
+    undefined
+  )
 }
 
 export function hasStructuredAgentSessionLaunchCancellationTombstone(
@@ -268,31 +325,16 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
 
 export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   publishedSessionIds: ReadonlySet<string>,
-  authoritativeInventory: number
+  authoritativeInventory: number,
+  executionHostId: ExecutionHostId
 ): boolean {
   const changed = retireAbsentStructuredAgentLaunchCancellations(
     publishedSessionIds,
-    authoritativeInventory
+    authoritativeInventory,
+    executionHostId
   )
   if (changed) {
     notifyStructuredLaunchListeners()
   }
   return changed
-}
-
-export function getStructuredAgentLaunchStatus(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider
-): StructuredAgentLaunchStatus {
-  // Any launch for this pair, including adopted conversations, means a chat is starting here.
-  const states = [
-    getStructuredLaunchState(structuredLaunchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
-      .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
-      .map(([, state]) => state)
-  ].filter((state): state is StructuredLaunchState => Boolean(state))
-  if (states.length === 0) {
-    return 'idle'
-  }
-  return states.some((state) => state.visibilityUnknown) ? 'unknown' : 'pending'
 }

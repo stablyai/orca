@@ -3,11 +3,7 @@ import { normalizeImageTranscriptMessages } from '../../shared/native-chat-image
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
-// Verbatim shape of a pasted-image turn, Claude Code 2.1.237: the prompt row carries
-// `[Image #N]` markers plus base64 blocks (no url/path, so they decode to nothing), and
-// a SEPARATE companion row marked isMeta/turnCompanion carries one `[Image: source: ]`
-// text block per image. A survey of ~/.claude/projects found 238 of 241 image-source
-// rows marked isMeta, across every versioned release.
+// Claude 2.1.237 stores source paths in separate isMeta/turnCompanion rows; prompt base64 has no path.
 const PROMPT_ROW = JSON.stringify({
   type: 'user',
   uuid: 'prompt-uuid',
@@ -55,7 +51,6 @@ describe('Claude pasted-image companion row', () => {
       { type: 'image-ref', path: '/tmp/orca-paste-a.png' },
       { type: 'image-ref', path: '/tmp/orca-paste-b.png' }
     ])
-    // The caption survives with its markers stripped.
     const text = folded[0]!.blocks
       .filter((b) => b.type === 'text')
       .map((b) => b.text)

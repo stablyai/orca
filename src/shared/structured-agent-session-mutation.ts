@@ -1,4 +1,9 @@
 import { sha256 } from './sha256'
+import type {
+  StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionResumeSource
+} from './structured-agent-session-create'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -41,8 +46,11 @@ export function structuredAgentSessionDomainFingerprint(input: {
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: 'claude' | 'codex'
-  resumeFrom?: { providerSessionId: string }
+  agent: StructuredAgentId
+  resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -52,21 +60,14 @@ export function structuredAgentSessionCreateFingerprint(input: {
       agent: input.agent,
       // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
       // Adopting a conversation is a different intent and must not replay as a blank create.
-      resumeFrom: input.resumeFrom
+      resumeFrom: input.resumeFrom,
+      // The host digests the same field; a retry naming another tab still replays with the
+      // recorded one, since the host owns the id.
+      tabId: input.tabId,
+      firstMessage: input.firstMessage,
+      options: input.options
     }
   })
-}
-
-export function showStructuredAgentSessionChoice(input: {
-  hostCapability: boolean
-  workspaceSupport: boolean
-  agent: string
-}): boolean {
-  return (
-    input.hostCapability &&
-    input.workspaceSupport &&
-    (input.agent === 'claude' || input.agent === 'codex')
-  )
 }
 
 export function createStructuredAgentSessionOperationId(

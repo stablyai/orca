@@ -444,6 +444,7 @@ describe('buildSearchableBrowserPages', () => {
     })
 
     expect(entries.some((entry) => entry.workspace.id === 'ws-1')).toBe(false)
+    expect(entries.map((entry) => entry.workspace.id)).toEqual(['ws-2', 'ws-3'])
   })
 
   // Why: a workspace whose only unified tab belongs to another worktree must stay hidden here.

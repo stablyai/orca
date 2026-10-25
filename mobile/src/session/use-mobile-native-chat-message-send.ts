@@ -16,11 +16,13 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import { UNCONFIRMED_SEND_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText
 } from '../../../src/shared/agent-tui-input-clear'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -32,7 +34,10 @@ export type MobileNativeChatMessageSend = {
   sendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    // Only a structured send carries them; a terminal chat's images were pasted before this.
+    _attachments?: readonly unknown[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Answer to an agent question — never touches the composer draft. */
   answerQuestion: (text: string) => Promise<boolean>
@@ -56,7 +61,7 @@ export function useMobileNativeChatMessageSend(args: {
   /** Captured when a control send starts so a later tab switch cannot record its
    *  session-option effects against the newly active tab. */
   commandSendRef: MutableRefObject<(command: string) => void>
-  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string, sentAt?: number) => MobileNativeChatSendOrigin | null
   /** Launch-context text Orca parked on the agent's TUI input line, or null. Read
    *  at send time so the pre-clear can be sized to every line it occupies. */
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
@@ -92,7 +97,9 @@ export function useMobileNativeChatMessageSend(args: {
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
-      sharedDeadline?: number
+      sharedDeadline?: number,
+      requireWriteSettlement?: true,
+      sentAt?: number
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -100,7 +107,7 @@ export function useMobileNativeChatMessageSend(args: {
       // rejected send has to put back exactly that (#14819).
       const text = draftText.trimEnd()
       const handle = handleRef.current
-      const origin = captureSendOrigin(text)
+      const origin = captureSendOrigin(text, sentAt)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       // Why: the lease collapses one render after `connState`, so a question-card
@@ -175,6 +182,7 @@ export function useMobileNativeChatMessageSend(args: {
             client,
             terminal: handle,
             command: text,
+            ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             ...(mobileClient ? { mobileClient } : {}),
             deadline
@@ -182,7 +190,9 @@ export function useMobileNativeChatMessageSend(args: {
         : await sendMobileNativeChatMessageWithOutcome({
             client,
             terminal: handle,
-            text,
+            // Same bytes as the desktop composer: raw multi-line keystrokes lose text on ConPTY hosts.
+            text: buildNativeChatPasteBytes(text),
+            ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
             ...(mobileClient ? { mobileClient } : {})
@@ -195,9 +205,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (classification === 'chat') {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
-          holdUnconfirmedSend(origin, text, () =>
-            onSendError('Delivery unconfirmed — check chat before retrying')
-          )
+          holdUnconfirmedSend(origin, text, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
         }
         return 'unknown'
       }
@@ -237,8 +245,13 @@ export function useMobileNativeChatMessageSend(args: {
   )
 
   const sendWithOutcome = useCallback(
-    (text: string, images?: string[], deadline?: number) =>
-      sendMessage(text, images, true, true, deadline),
+    (
+      text: string,
+      images?: string[],
+      deadline?: number,
+      _attachments?: readonly unknown[],
+      sentAt?: number
+    ) => sendMessage(text, images, true, true, deadline, undefined, sentAt),
     [sendMessage]
   )
 
@@ -262,7 +275,7 @@ export function useMobileNativeChatMessageSend(args: {
         return false
       }
       try {
-        return (await sendMessage(text, undefined, false, true)) !== 'rejected'
+        return (await sendMessage(text, undefined, false, true, undefined, true)) === 'accepted'
       } finally {
         if (terminal) {
           releaseMobileNativeChatTerminalWrite(terminal)

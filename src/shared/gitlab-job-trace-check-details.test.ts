@@ -32,11 +32,18 @@ describe('gitLabJobTraceToCheckRunDetails', () => {
     expect(details.summary).toBeNull()
   })
 
-  it('copies status and conclusion from the row so the poll cache is not evicted', () => {
-    const details = gitLabJobTraceToCheckRunDetails(failedJob, 'boom', STRINGS)
+  it('copies a running row status and conclusion into both detail levels', () => {
+    const runningJob: PRCheckDetail = {
+      ...failedJob,
+      status: 'in_progress',
+      conclusion: 'pending'
+    }
+    const details = gitLabJobTraceToCheckRunDetails(runningJob, 'boom', STRINGS)
 
-    expect(details.status).toBe(failedJob.status)
-    expect(details.conclusion).toBe(failedJob.conclusion)
+    expect(details.status).toBe('in_progress')
+    expect(details.conclusion).toBe('pending')
+    expect(details.jobs[0]?.status).toBe('in_progress')
+    expect(details.jobs[0]?.conclusion).toBe('pending')
   })
 
   it('explains an empty trace instead of falling back to "no inline details"', () => {
@@ -88,7 +95,7 @@ describe('gitLabJobCanHaveTrace', () => {
         status,
         webUrl: '',
         duration: null
-      } as unknown as GitLabPipelineJob
+      } satisfies GitLabPipelineJob
       const [check] = gitLabPipelineJobsToPRChecks([job])
 
       expect(gitLabJobCanHaveTrace(check)).toBe(expected)

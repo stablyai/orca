@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-09-23T07:41:58.671Z",
+  "platform": "darwin",
+  "command": ["zcode"],
+  "cols": 120,
+  "rows": 32,
+  "note": "ZCode 0.16.9 CLI TUI, empty git folder, no model configured. Tail truncated at a byte-exact escape boundary: the retained prefix covers startup, the composer mount, and ~7s of continued ASCII-banner repainting afterwards, which is the evidence that ZCode never reaches a quiet render window. ZCode emits no OSC title.",
+  "exitCode": 129,
+  "truncated": true
+}

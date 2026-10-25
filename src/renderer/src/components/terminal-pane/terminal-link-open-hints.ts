@@ -1,4 +1,7 @@
-import { canSourceOwnerOpenInOrca } from '@/lib/http-link-destinations'
+import {
+  canSourceOwnerOpenInOrca,
+  type HttpLinkActionDestinations
+} from '@/lib/http-link-destinations'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 
 export function isMacPlatform(): boolean {
@@ -23,12 +26,16 @@ export function getTerminalOrcaFileOpenHint(showActions = true): string {
     : `${prefix}Ctrl+click to open in Orca`
 }
 
-// Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
-export function getTerminalHtmlFileOpenHint(showActions = true): string {
-  const prefix = terminalLinkActionHintPrefix(showActions)
-  return isMacPlatform()
-    ? `${prefix}⌘+click to open, or ⇧⌘+click for default browser`
-    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default browser`
+// Why: Shift+modifier on a local HTML file always takes the other link-routing destination.
+export function getTerminalHtmlFileOpenHint(
+  destinations: HttpLinkActionDestinations,
+  showActions = true
+): string {
+  return getTerminalUrlOpenHint({
+    openLinksInApp: destinations.primary === 'orca',
+    modifierInverts: true,
+    showActions
+  })
 }
 
 export type TerminalUrlOpenHintOptions = {

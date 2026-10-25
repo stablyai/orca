@@ -1,4 +1,5 @@
 import { pickMobileImage, pickMobileImages } from '../session/mobile-image-source-picker'
+import { pickMobileFiles } from '../session/mobile-file-source-picker'
 import type { MediaPicker } from './media-picker-contract'
 
 /**
@@ -14,7 +15,8 @@ import type { MediaPicker } from './media-picker-contract'
  */
 const devicePicker: MediaPicker = {
   pickImage: (source) => pickMobileImage(source),
-  pickImages: (source) => pickMobileImages(source)
+  pickImages: (source) => pickMobileImages(source),
+  pickFiles: () => pickMobileFiles()
 }
 
 export function useMediaPicker(): MediaPicker {

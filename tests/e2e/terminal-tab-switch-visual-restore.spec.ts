@@ -160,7 +160,7 @@ async function createAgentMarkedTerminalTab(
         }
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       return tab.id
     },
     { worktreeId, agent, command }
@@ -182,7 +182,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('Store unavailable')
     }
     store.getState().setActiveTab(id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, tabId)
   await expect
     .poll(

@@ -16,8 +16,7 @@ import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 import type { SessionSidecarStat } from './session-sidecar-stat'
 
-// The Devin CLI sessions.db schema (3000.10.x). Written out in full rather
-// than trimmed, because the reader probes every column it names.
+// Mirror the Devin CLI 3000.10.x schema so every probed column exists.
 const DEVIN_SESSIONS_SCHEMA = `
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -249,8 +248,7 @@ describe('devinSessionsIndexForSidecar', () => {
     expect(first.unreadable).toBe(false)
     expect(first.index?.get('apricot')?.title).toBe('old')
 
-    // A wal-mode write can leave the db stat untouched; restore it so only
-    // the wal observation differs between reads.
+    // Restore database mtime to isolate WAL-only invalidation.
     writeDevinSessionsDb(dbPath, [{ id: 'apricot', title: 'new' }])
     await utimes(dbPath, dbStatBefore.atimeMs / 1000, dbStatBefore.mtimeMs / 1000)
     await writeFile(walPath, 'wal-v2-longer')
@@ -443,8 +441,7 @@ describe('devin sessions.db through the scan', () => {
     }
     await scanAiVaultSessions(options)
 
-    // Unhide and retitle; bump mtime so the sidecar stat reads as changed even
-    // on a coarse-granularity filesystem.
+    // Bump mtime explicitly to detect the update on coarse filesystems.
     writeDevinSessionsDb(dbPath, [
       { id: 'shown', working_directory: '/srv/moved', title: 'Retitled' },
       {

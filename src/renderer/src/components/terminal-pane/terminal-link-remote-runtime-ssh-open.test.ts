@@ -15,7 +15,6 @@ const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
   deps,
-  authorizeExternalPathMock,
   statMock,
   openFileMock,
   openFilePathMock,
@@ -54,9 +53,13 @@ vi.mock('@/lib/file-preview', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
-  it('stats remote-runtime file links through the active runtime environment', async () => {
+  it("stats remote-runtime file links through the workspace owner's runtime, not the focused one", async () => {
     setPlatform('Macintosh')
-    storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    // Before: the focused server (env-2) answered for a link the workspace owner (env-1) holds.
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-2' }
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'wt-1', path: '/tmp', repoId: 'repo-1', hostId: 'runtime:env-1' }]
+    }
     runtimeEnvironmentCallMock.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
@@ -67,7 +70,6 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/tmp/src/main.ts', null, null, deps)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -130,7 +132,6 @@ describe('handleOscLink', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalledWith({
       filePath: '/home/me/repo/src/main.ts',
       connectionId: 'ssh-1'
@@ -172,7 +173,6 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalledWith({
       filePath: '/tmp/ssh-preview.png',
       connectionId: 'ssh-1'

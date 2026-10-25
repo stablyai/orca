@@ -25,14 +25,14 @@ describe('skillDeletePlacementSummary', () => {
               kind: 'canonical',
               rootLabel: 'Agent skills home'
             },
-            { path: '/home/.claude/skills/demo', kind: 'alias-dir', rootLabel: 'Claude home' }
+            { path: '/home/.claude/skills/demo', kind: 'alias-dir', rootLabel: 'Claude Code home' }
           ]
         }
       ])
     )
     expect(summary).toContain('1')
     expect(summary).toContain('Agent skills home')
-    expect(summary).toContain('Claude home')
+    expect(summary).toContain('Claude Code home')
   })
 
   it('drops the zero half so a link-only delete never reads "0 folders"', () => {

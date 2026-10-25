@@ -1,4 +1,3 @@
-// Spawn setup: node-pty launch options, Unix shell resolution and daemon cwd repair.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,9 +32,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -68,17 +65,12 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
 }))
 
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
-import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -183,16 +175,6 @@ describe('createPtySubprocess', () => {
     expect(onMacosTccSpawnStrategy).not.toHaveBeenCalled()
   })
 
-  it('uses a new daemon protocol for the macOS login preflight host behavior', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
-    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
-  })
-
-  it('uses a new daemon protocol for daemon-local Codex env ownership', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
-    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
-  })
-
   it('resolves a missing Unix default before spawning node-pty', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -239,8 +221,7 @@ describe('createPtySubprocess', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     delete process.env.SHELL
-    // Why: the test runner itself can execute inside an Orca-wrapped shell
-    // whose exported wrapper vars would leak through the process.env spread.
+    // Remove wrapper state inherited when the test runner starts inside an Orca pane.
     delete process.env.ORCA_SHELL_FEATURES
     delete process.env.ZDOTDIR
 
@@ -257,8 +238,6 @@ describe('createPtySubprocess', () => {
       const [shellPath, shellArgs, spawnOptions] = spawnMock.mock.calls[0]
       expect(shellPath).toBe('/bin/sh')
       expect(shellArgs).toEqual(['-l'])
-      // A launch config derived from the missing preferred zsh would inject
-      // ZDOTDIR and ORCA_SHELL_FEATURES; /bin/sh must spawn without them.
       expect(spawnOptions.env.ZDOTDIR).toBeUndefined()
       expect(spawnOptions.env.ORCA_SHELL_FEATURES).toBeUndefined()
       expect(spawnOptions.env.SHELL).toBe('/bin/sh')
@@ -379,8 +358,6 @@ describe('createPtySubprocess', () => {
       }
     }
 
-    // The sync subprocess layer consumes the capability prepared by its async
-    // daemon boundary; this cwd-repair test deliberately exercises it unprepared.
     expect(spawnMock).toHaveBeenCalledWith(
       '/bin/bash',
       expect.any(Array),
@@ -459,12 +436,10 @@ describe('createPtySubprocess', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     const origHome = process.env.HOME
-    // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
-    // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+    // Pin HOME to verify the exact safe-default candidate.
     process.env.HOME = '/home/testuser'
 
     try {
-      // Why: omitted cwd resolves to a safe default home; guard must not reject before fallback (#9578).
       await expect(
         createPtySubprocess({
           sessionId: 'test',
@@ -602,9 +577,7 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  // Why: a busy machine right after an upgrade can make one probe fail; the
-  // retry must keep a genuinely healthy daemon out of degraded mode. Windows
-  // short-circuits checkPtySpawnHealth, so this is a POSIX-only behavior.
+  // Windows skips this health check; transient probe failures are retried only on POSIX.
   itOnPosixHost(
     'retries once and resolves when the first probe fails but the second succeeds',
     async () => {

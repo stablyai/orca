@@ -5,6 +5,7 @@ import type { Repo } from '../shared/repo-types'
 import type { Worktree } from '../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../shared/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../shared/workspace-space-compaction'
+import { escapeRegex } from '../shared/string-utils'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
 import {
   scanWorkspaceSpaceEntryTree,
@@ -30,10 +31,23 @@ import {
 
 const LOCAL_FS_CONCURRENCY = 48
 
-export type ReadLocalDuDepthOne = (
-  rootPath: string,
-  signal?: AbortSignal
-) => Promise<Map<string, number>>
+function normalizeDuPath(pathValue: string): string {
+  const separator = platform === 'win32' ? '\\' : '/'
+  const trimmed = pathValue.replace(new RegExp(`${escapeRegex(separator)}+$`), '')
+  return trimmed.length > 0 ? trimmed : pathValue
+}
+
+function parseDuOutput(stdout: string): Map<string, number> {
+  const sizes = new Map<string, number>()
+  for (const line of stdout.split('\n')) {
+    const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
+    const match = /^(\d+)\s+(.+)$/.exec(normalizedLine)
+    if (match) {
+      sizes.set(normalizeDuPath(match[2]), Number(match[1]) * 1024)
+    }
+  }
+  return sizes
+}
 
 async function scanLocalEntry(
   entryPath: string,
@@ -68,7 +82,6 @@ async function scanLocalTopLevelEntry(
   entryPath: string,
   name: string,
   duSizes: Map<string, number>,
-  normalizeDuPath: (path: string) => string,
   signal?: AbortSignal
 ): Promise<WorkspaceSpaceEntryScan> {
   throwIfWorkspaceSpaceScanAborted(signal)
@@ -93,8 +106,7 @@ async function scanLocalWorktreeWithDu(
   repo: Repo,
   worktree: Worktree,
   scannedAt: number,
-  readDu: ReadLocalDuDepthOne,
-  normalizeDuPath: (path: string) => string,
+  duSizes: Map<string, number>,
   signal?: AbortSignal
 ): Promise<WorkspaceSpaceWorktree> {
   throwIfWorkspaceSpaceScanAborted(signal)
@@ -112,19 +124,15 @@ async function scanLocalWorktreeWithDu(
       ...compact
     })
   }
-  const [entries, duSizes] = await Promise.all([
-    opendir(worktree.path).then(async (directory) => {
-      const admission = await collectWorkspaceSpaceDirectoryEntries(
-        directory,
-        worktree.path,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget(),
-        () => throwIfWorkspaceSpaceScanAborted(signal)
-      )
-      return admission.entries
-    }),
-    readDu(worktree.path, signal)
-  ])
+  const directory = await opendir(worktree.path)
+  const admission = await collectWorkspaceSpaceDirectoryEntries(
+    directory,
+    worktree.path,
+    (entry) => entry.name,
+    createWorkspaceSpaceScanBudget(),
+    () => throwIfWorkspaceSpaceScanAborted(signal)
+  )
+  const entries = admission.entries
   throwIfWorkspaceSpaceScanAborted(signal)
   const childStats = await mapWithConcurrency(entries, LOCAL_FS_CONCURRENCY, async (entry) => {
     try {
@@ -132,7 +140,6 @@ async function scanLocalWorktreeWithDu(
         joinWorkspaceFilesystemPath(worktree.path, entry.name),
         entry.name,
         duSizes,
-        normalizeDuPath,
         signal
       )
     } catch (error) {
@@ -189,19 +196,17 @@ export async function scanLocalWorkspaceSpaceWorktree(
   repo: Repo,
   worktree: Worktree,
   scannedAt: number,
-  readDu: ReadLocalDuDepthOne,
-  normalizeDuPath: (path: string) => string,
+  duOutput: string | null,
   signal?: AbortSignal
 ): Promise<WorkspaceSpaceWorktree> {
   throwIfWorkspaceSpaceScanAborted(signal)
-  if (platform !== 'win32') {
+  if (platform !== 'win32' && duOutput !== null) {
     try {
       return await scanLocalWorktreeWithDu(
         repo,
         worktree,
         scannedAt,
-        readDu,
-        normalizeDuPath,
+        parseDuOutput(duOutput),
         signal
       )
     } catch (error) {

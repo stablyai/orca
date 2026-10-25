@@ -1,3 +1,4 @@
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
@@ -10,6 +11,7 @@ import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
   abandonLocalUnsubscribes,
+  registerWatcherSenderCleanup,
   clearLocalCapacityRetry,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
@@ -25,10 +27,12 @@ export async function closeLocalWatcherForWorktreePath(
     worktreePath,
     listeners: new Map<number, WebContents>()
   }
+  const waiters = watcherLifecycleState.cancelledLocalInstallWaiters.get(rootKey)
   for (const source of [
     watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)?.listeners,
     watcherLifecycleState.inFlightLocalInstalls.get(rootKey)?.listeners,
-    watcherLifecycleState.watchedRoots.get(rootKey)?.listeners
+    watcherLifecycleState.watchedRoots.get(rootKey)?.listeners,
+    new Map(Array.from(waiters?.values() ?? [], ({ sender }) => [sender.id, sender]))
   ]) {
     for (const [senderId, sender] of source ?? []) {
       if (!sender.isDestroyed()) {
@@ -36,6 +40,8 @@ export async function closeLocalWatcherForWorktreePath(
       }
     }
   }
+  // Restore owns retries after this close; waiters must not install independently.
+  watcherLifecycleState.cancelledLocalInstallWaiters.delete(rootKey)
   if (suspended.listeners.size > 0) {
     watcherLifecycleState.suspendedLocalWatcherListeners.set(rootKey, suspended)
   }
@@ -48,12 +54,12 @@ export async function closeLocalWatcherForWorktreePath(
 
   const inFlight = watcherLifecycleState.inFlightLocalInstalls.get(rootKey)
   if (inFlight) {
-    // Why: Windows locks watched directories; deletion must cancel an in-flight subscription before Git removes the tree.
+    // Windows locks watched directories; cancel installs before Git deletes their roots.
     inFlight.listeners.clear()
     inFlight.cancelled = true
     inFlight.abortController.abort()
   }
-  // Why: abort alone is not enough if the native subscribe never settles; bound so delete cannot hang the app.
+  // Abort cannot settle wedged native subscriptions; bound removal drains.
   const pendingInstall = watcherLifecycleState.pendingLocalInstallPromises.get(rootKey)
   const installDrain = await drainBeforeWatcherRemoval(
     pendingInstall,
@@ -62,9 +68,7 @@ export async function closeLocalWatcherForWorktreePath(
     { reserveMs: WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS }
   )
   if (installDrain === 'timeout') {
-    // Why: an abandoned install never runs its own cleanup, so leaving these entries would make every
-    // later watch of this root queue behind the same wedged promise. Identity-checked so a late settle
-    // can't evict a newer install.
+    // Retire abandoned install slots by identity so later watches do not inherit a wedge or lose newer installs.
     if (watcherLifecycleState.pendingLocalInstallPromises.get(rootKey) === pendingInstall) {
       watcherLifecycleState.pendingLocalInstallPromises.delete(rootKey)
     }
@@ -76,8 +80,7 @@ export async function closeLocalWatcherForWorktreePath(
   if (pendingUnsubscribes) {
     const draining = Array.from(pendingUnsubscribes)
     const unsubscribeDrain = await drainBeforeWatcherRemoval(
-      // Why the per-promise catch: an already-abandoned unsubscribe belongs to a delete that finished
-      // without it; re-raising its rejection here would fail a later close on stale news.
+      // Timed-out prior drains must not fail a later close with stale rejections.
       Promise.all(
         draining.map((unsubscribe) =>
           watcherLifecycleState.abandonedLocalUnsubscribes.has(unsubscribe)
@@ -103,9 +106,7 @@ export async function closeLocalWatcherForWorktreePath(
   }
   cancelLocalBatchFlush(root)
   watcherLifecycleState.watchedRoots.delete(rootKey)
-  // Why: the in-process Parcel fallback has no unsubscribe timeout of its own, so an unbounded await
-  // here would hang delete forever and hold the removal gate. The promise stays tracked in
-  // pendingLocalUnsubscribesByRoot, so a later close still observes its failure.
+  // Bound fallback unsubscribe too; retain its promise so later closes can observe non-abandoned failures.
   const finalUnsubscribe = trackDetachedLocalUnsubscribe(rootKey, root)
   const finalDrain = await drainBeforeWatcherRemoval(
     finalUnsubscribe,
@@ -123,30 +124,59 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
   if (!suspended) {
     return
   }
-  watcherLifecycleState.suspendedLocalWatcherListeners.delete(rootKey)
-  const failures: unknown[] = []
-  const failedListeners = new Map<number, WebContents>()
-  for (const sender of suspended.listeners.values()) {
-    if (sender.isDestroyed()) {
+  const failures: {
+    sender: WebContents
+    signal: AbortSignal
+    error: unknown
+  }[] = []
+  const owners = Array.from(suspended.listeners.values(), (sender) => ({
+    sender,
+    signal: registerWatcherSenderCleanup(sender)
+  }))
+  const suspendedByKey = watcherLifecycleState.suspendedLocalWatcherListeners
+  for (const { sender, signal } of owners) {
+    // Replaced snapshots belong to a newer removal.
+    if (suspendedByKey.get(rootKey) !== suspended) {
+      break
+    }
+    // Withdraw owners only at their turn; reject old page lifetimes before consuming reloaded-window entries.
+    if (!isCurrentWatcherSender(sender, signal) || !suspended.listeners.delete(sender.id)) {
       continue
     }
     try {
-      await subscribeLocalWatcher(suspended.worktreePath, sender)
+      await subscribeLocalWatcher(suspended.worktreePath, sender, undefined, signal)
+      if (!isCurrentWatcherSender(sender, signal)) {
+        continue
+      }
       sender.send('fs:changed', {
         worktreePath: suspended.worktreePath,
-        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }]
+        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }],
+        resync: true
       } satisfies FsChangedPayload)
     } catch (error) {
-      failures.push(error)
-      failedListeners.set(sender.id, sender)
+      if (!isCurrentWatcherSender(sender, signal)) {
+        continue
+      }
+      failures.push({ sender, signal, error })
     }
   }
-  if (failures.length > 0) {
-    watcherLifecycleState.suspendedLocalWatcherListeners.set(rootKey, {
+  // A retried removal may have added owners back into this snapshot.
+  if (suspendedByKey.get(rootKey) === suspended && suspended.listeners.size === 0) {
+    suspendedByKey.delete(rootKey)
+  }
+  const liveFailures = failures.filter(({ sender, signal }) =>
+    isCurrentWatcherSender(sender, signal)
+  )
+  if (liveFailures.length > 0) {
+    const current = suspendedByKey.get(rootKey) ?? {
       worktreePath: suspended.worktreePath,
-      listeners: failedListeners
-    })
-    throw failures[0]
+      listeners: new Map<number, WebContents>()
+    }
+    for (const { sender } of liveFailures) {
+      current.listeners.set(sender.id, sender)
+    }
+    suspendedByKey.set(rootKey, current)
+    throw liveFailures[0].error
   }
 }
 

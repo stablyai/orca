@@ -7,26 +7,18 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
+  resolveGitDirMock: vi.fn()
 }))
 
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
+vi.mock('../../shared/git-worktree-admin', () => ({
+  annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 
 vi.mock('./runner', () => ({
@@ -58,11 +50,7 @@ const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {
-  resetWorktreeRemovalState({
-    moveWorktreeDirectoryToTrashMock,
-    restoreWorktreeDirectoryFromTrashMock,
-    scheduleWorktreeTrashDeletionMock
-  })
+  resetWorktreeRemovalState()
 })
 
 describe('listWorktrees', () => {
@@ -104,9 +92,7 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    // Why: the non-sparse main worktree gets an fs probe of its sparse config
-    // file; the linked worktree short-circuits on the parsed `sparse` token and
-    // does not. Only one git subprocess runs regardless of worktree count.
+    // The parsed sparse token skips its filesystem probe; only the main worktree needs one.
     expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
     expect(statMock).toHaveBeenCalledTimes(1)
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
@@ -243,16 +229,12 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    // The second argument is what carries the distro when the caller has one; this listing has
-    // none, and the UNC repo path names the distro on its own.
+    // The UNC repo path carries the distro without an explicit option.
     const gitDirCall = resolveGitDirMock.mock.calls.find(
       ([probed]) => probed === featureWorktreePath
     )
     expect(gitDirCall).toBeDefined()
     expect(gitDirCall?.[1]?.wslDistro).toBeUndefined()
-    // Why: the detection path must not spawn a git subprocess per worktree —
-    // the perf regression in #1131 came from `git sparse-checkout list` firing
-    // on every poll.
     expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
   })
 
@@ -296,8 +278,7 @@ describe('listWorktrees', () => {
     }
     expect(pendingProbeResolves).toHaveLength(8)
 
-    // Why: each probe may chain extra microtasks after stat (e.g. core.sparseCheckout
-    // config reads). Drain until the list settles, not a fixed microtask budget.
+    // Drain until settlement: probes may chain additional microtasks after stat.
     for (let attempt = 0; !completed && attempt < 100; attempt += 1) {
       pendingProbeResolves.splice(0).forEach((resolve) => resolve())
       await Promise.resolve()
@@ -329,8 +310,7 @@ describe('listWorktrees', () => {
           'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
       }
     })
-    // Why: the fallback probes each linked worktree path for existence; keep
-    // the paths "present" so this test stays about parser selection.
+    // Keep linked paths present to isolate parser selection from stale-registration checks.
     statMock.mockImplementation(async (targetPath: string) => {
       if (String(targetPath).endsWith('sparse-checkout')) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -361,9 +341,7 @@ describe('listWorktrees', () => {
   })
 
   it('annotates missing linked worktrees as prunable via the line-block fallback', async () => {
-    // Why: Git <2.36 lacks the `prunable` porcelain field (issue #8389), so
-    // the fallback must probe each linked worktree path instead of treating a
-    // stale registration as a live workspace.
+    // Older Git omits prunable fields, so fallback must verify linked paths on disk.
     mockGitCommands({
       'git worktree list --porcelain -z': {
         error: Object.assign(new Error("unknown switch `z'"), {
@@ -377,15 +355,13 @@ describe('listWorktrees', () => {
           'worktree /repo-locked\nHEAD aaa789\nbranch refs/heads/agent\nlocked agent session\n'
       }
     })
-    // statMock default (beforeEach): every path is missing (ENOENT).
 
     const worktrees = await listWorktrees('/repo')
 
     expect(worktrees.find((worktree) => worktree.path === '/repo-feature')).toMatchObject({
       prunable: true
     })
-    // Locked registrations are shielded, mirroring git's own prunable rules;
-    // the main worktree is covered by the repo-level missing-path handling.
+    // Locks shield missing registrations; repo-level handling covers the main worktree.
     expect(worktrees.find((worktree) => worktree.path === '/repo-locked')?.prunable).toBeUndefined()
     expect(worktrees.find((worktree) => worktree.path === '/repo')?.prunable).toBeUndefined()
   })

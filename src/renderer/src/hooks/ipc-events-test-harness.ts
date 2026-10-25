@@ -37,6 +37,13 @@ export type RequestTerminalCreateRequest = {
   surfaceOwner?: boolean
 }
 
+/** A notification click sets userInitiated; a chat-completion courtesy reveal leaves it off. */
+export type FocusEditorTabRequest = {
+  tabId: string
+  worktreeId: string
+  userInitiated?: boolean
+}
+
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
 function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return new Proxy(overrides, {
@@ -49,7 +56,7 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
-  focusEditorTab: (request: { tabId: string; worktreeId: string }) => void
+  focusEditorTab: (request: FocusEditorTabRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
   /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
@@ -85,8 +92,7 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
-  let focusEditorTabListener: ((request: { tabId: string; worktreeId: string }) => void) | null =
-    null
+  let focusEditorTabListener: ((request: FocusEditorTabRequest) => void) | null = null
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
@@ -123,28 +129,37 @@ export async function loadIpcEventsHarness(
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
-    isEmptyFloatingWorkspacePanelVisible: () => false,
     isFloatingWorkspacePanelFocused: () => false
   }))
-  vi.doMock('@/runtime/web-runtime-session', () => ({
+  vi.doMock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
-    closeWebRuntimeSessionTab: vi.fn(),
-    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
-    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' }),
+    closeWebRuntimeSessionTab: vi.fn()
+  }))
+  vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
+    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
+  }))
+  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({
+    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' })
+  }))
+  vi.doMock('@/runtime/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-  vi.doMock('@/runtime/sync-runtime-graph', () => ({
+  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface: vi.fn(() => false)
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    api: new Proxy(
+    api: new Proxy<Record<string, unknown>>(
       {
         runtimeEnvironments: createApiNamespaceStub({
-          getStatusSnapshots: () => Promise.resolve([])
+          getStatusSnapshots: () => Promise.resolve([]),
+          subscribe: async () => ({ unsubscribe: () => {} })
+        }),
+        legacyRelayBridge: createApiNamespaceStub({
+          listPanes: () => Promise.resolve([])
         }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
@@ -236,9 +251,8 @@ export async function loadIpcEventsHarness(
         }),
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
-        }),
-        remoteWorkspace: createApiNamespaceStub({ clientId: () => Promise.resolve(null) })
-      } as Record<string, unknown>,
+        })
+      },
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
   })

@@ -4,6 +4,12 @@ import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
   homedirMock: vi.fn<() => string>()
@@ -29,6 +35,7 @@ import {
   syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
+import { escapeTomlString } from './config-toml-trust'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -44,6 +51,14 @@ function getSystemConfigPath(): string {
 
 function getRuntimeConfigPath(): string {
   return join(userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+}
+
+function systemUserHookTrustHeader(): string {
+  return `[hooks.state."${escapeTomlString(join(getSystemCodexHomePath(), 'hooks.json'))}:stop:0:0"]`
+}
+
+function getRuntimeBaselinePath(): string {
+  return join(userDataDir, 'codex-runtime-home', 'home', '.orca-config-settings-baseline.json')
 }
 
 beforeEach(() => {
@@ -73,13 +88,13 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
-  it('seeds a missing runtime config without copying system hook trust', () => {
+  it('seeds a missing runtime config without copying system user-hook trust', () => {
     writeFileSync(
       getSystemConfigPath(),
       [
         'model = "system-model"',
         '',
-        '[hooks.state."system-hooks:stop:0:0"]',
+        systemUserHookTrustHeader(),
         'enabled = true',
         'trusted_hash = "sha256:system"',
         '',
@@ -95,7 +110,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig).toContain('model = "system-model"')
     expect(runtimeConfig).toContain('[projects."/repo"]')
-    expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).not.toContain(systemUserHookTrustHeader())
   })
 
   it('normalizes deprecated codex_hooks feature flag only in runtime config', () => {
@@ -283,8 +298,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('preserves an existing runtime config when the system config is blank', () => {
-    // Why: a 0-byte config.toml is what a half-written or unhydrated
-    // cloud-synced home shows, not a deliberate "erase all my settings".
+    // A zero-byte cloud-synced config may be half-written or unhydrated.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     const runtimeConfig = ['model = "runtime-model"', '', '[features]', 'hooks = true', ''].join(
       '\n'
@@ -334,7 +348,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
         '[projects."/system-only"]',
         'trust_level = "trusted"',
         '',
-        '[hooks.state."system-hooks:stop:0:0"]',
+        systemUserHookTrustHeader(),
         'enabled = true',
         'trusted_hash = "sha256:system"',
         ''
@@ -351,11 +365,101 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain('[projects."/runtime-only"]')
     expect(runtimeConfig).toContain('[projects."/system-only"]')
     expect(runtimeConfig).toContain('[hooks.state."runtime-hooks:stop:0:0"]')
-    expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).not.toContain(systemUserHookTrustHeader())
     expect(runtimeConfig).toContain('# runtime-owned parent')
     expect(runtimeConfig).not.toContain('# system-owned parent')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
+  })
+
+  it('preserves runtime-only MCP servers and nested descendants with system precedence', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        '[mcp_servers.runtime_only]',
+        'command = "runtime-command"',
+        '',
+        '[mcp_servers.runtime_only.env]',
+        'MODE = "runtime"',
+        '',
+        '[mcp_servers.shared]',
+        'command = "runtime-shared"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        '[mcp_servers."shared"]',
+        'command = "system-shared"',
+        '',
+        '[mcp_servers.system_only]',
+        'command = "system-only"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('[mcp_servers.runtime_only]')
+    expect(runtimeConfig).toContain('[mcp_servers.runtime_only.env]')
+    expect(runtimeConfig).toContain('MODE = "runtime"')
+    expect(runtimeConfig).toContain('command = "system-shared"')
+    expect(runtimeConfig).not.toContain('runtime-shared')
+    expect(runtimeConfig.match(/\[mcp_servers\.(?:shared|"shared")\]/g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('[mcp_servers.system_only]')
+    expect(JSON.parse(readFileSync(getRuntimeBaselinePath(), 'utf-8'))).toMatchObject({
+      mcpServers: ['shared', 'system_only']
+    })
+  })
+
+  it('revokes a previously mirrored MCP server when the system source deletes it', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(getRuntimeConfigPath(), '[mcp_servers.revoked]\ncommand = "run"\n', 'utf-8')
+    writeFileSync(getSystemConfigPath(), '[mcp_servers.revoked]\ncommand = "run"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+    writeFileSync(getSystemConfigPath(), 'model = "system"\n', 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).not.toContain('[mcp_servers.revoked]')
+  })
+
+  it('keeps runtime-only MCP additions after a source refresh and remains byte-idempotent', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(getRuntimeConfigPath(), '[mcp_servers.runtime_only]\ncommand = "run"\n', 'utf-8')
+    writeFileSync(getSystemConfigPath(), 'model = "system"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+    const first = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(first)
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toContain('[mcp_servers.runtime_only]')
+  })
+
+  it('keeps an explicit system MCP disable canonical', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      '[mcp_servers.blocked]\ncommand = "runtime"\nenabled = true\n',
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      '[mcp_servers."blocked"]\ncommand = "system"\nenabled = false\n',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('enabled = false')
+    expect(runtimeConfig).not.toContain('enabled = true')
   })
 
   it('deduplicates basic and literal project headers by decoded Windows path', () => {
@@ -467,8 +571,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('applies a case-drifted WSL system revocation to the runtime trusted block', () => {
-    // Why: configs written before WSL tails compared case-sensitively can hold
-    // the revocation under drifted casing; err toward revoked, not trusted.
+    // Legacy WSL configs can hold revocations under drifted casing.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
       getRuntimeConfigPath(),
@@ -489,9 +592,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('keeps runtime trust when the system config re-trusts the exact-cased WSL project', () => {
-    // Why: after a user re-grants trust, markCodexProjectTrusted appends an
-    // exact-cased trusted block beside a legacy drifted-case revocation; the
-    // loose revocation match must not revert that grant on every mirror pass.
+    // Re-grants append an exact-cased block beside legacy revocations.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
       getRuntimeConfigPath(),
@@ -725,7 +826,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
         "# system example: ''' in a comment",
         'model = "system-model"',
         '',
-        '[hooks.state."system-hooks:stop:0:0"]',
+        systemUserHookTrustHeader(),
         'enabled = true',
         'trusted_hash = "sha256:system"',
         ''
@@ -739,7 +840,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain('model = "system-model"')
     expect(runtimeConfig).toContain('[hooks.state."runtime-hooks:stop:0:0"]')
     expect(runtimeConfig).toContain('trusted_hash = "sha256:runtime"')
-    expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).not.toContain(systemUserHookTrustHeader())
     expect(runtimeConfig).not.toContain('trusted_hash = "sha256:system"')
   })
 
@@ -791,7 +892,7 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
     ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
   })
 
-  it('rewrites relative paths against a Linux-side home and strips hook trust', () => {
+  it('rewrites relative paths against a Linux-side home and strips user-hook trust', () => {
     const prepared = prepareSystemConfigForFreshRuntimeMirror(
       [
         'model_instructions_file = "instructions.md"',
@@ -799,7 +900,7 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
         '[features]',
         'codex_hooks = true',
         '',
-        '[hooks.state."system-hooks:stop:0:0"]',
+        '[hooks.state."/home/alice/.codex/hooks.json:stop:0:0"]',
         'enabled = true',
         '',
         '[projects."/home/alice/repo"]',
@@ -809,12 +910,11 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
       '/home/alice/.codex'
     )
 
-    // Why: WSL configs are consumed inside the distro, so rewrites must use
-    // posix join semantics regardless of the host platform.
+    // WSL consumes the config inside Linux, so rewritten paths must use POSIX semantics.
     expect(prepared).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
     expect(prepared).toContain('hooks = true')
     expect(prepared).not.toContain('codex_hooks')
     expect(prepared).toContain('[projects."/home/alice/repo"]')
-    expect(prepared).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(prepared).not.toContain('[hooks.state."/home/alice/.codex/hooks.json:stop:0:0"]')
   })
 })

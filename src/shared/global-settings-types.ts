@@ -1,4 +1,8 @@
+import type { TelemetrySettings } from './telemetry-settings-types'
+import type { BrowserProfileScope } from './browser-profile-scope'
+import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
+import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault-search-settings'
@@ -12,6 +16,7 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
@@ -26,36 +31,26 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
   FloatingTerminalTriggerLocation,
+  JiraIssueKeyCasing,
   LeftSidebarAppearanceMode,
   OpenInApplication,
   SourceControlGroupOrder,
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { SetupScriptLaunchMode } from './worktree/launch-types'
-import type {
-  CustomWorktreeVisibilitySource,
-  ExternalWorktreeVisibility,
-  WorktreeVisibilitySourcePreferences
-} from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repo-types'
+
+export type { WorktreeVisibilityDefaults } from './repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type WorktreeVisibilityDefaults = {
-  /** Default for worktrees outside a recognized source. */
-  external?: ExternalWorktreeVisibility
-  /** Host-owned roots applied to every repository on that host. */
-  customSources?: CustomWorktreeVisibilitySource[]
-  /** Defaults for built-in and host-owned custom sources. */
-  sourcePreferences?: WorktreeVisibilitySourcePreferences
-}
-
-export type GlobalSettings = {
+export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -77,12 +72,16 @@ export type GlobalSettings = {
   autoRenameBranchFromWorkDefaultedOn?: boolean
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
+  /** Jira key casing for newly generated Jira-linked workspace and branch names.
+   *  Existing workspaces and user-typed names are never rewritten. */
+  jiraIssueKeyCasing?: JiraIssueKeyCasing
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage
+  uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -174,6 +173,8 @@ export type GlobalSettings = {
   terminalWindowsShell: string
   /** Optional shell executable for new terminals on macOS and Linux. */
   terminalDefaultShell?: string
+  /** Optional argv passed to the configured Unix shell for ordinary interactive panes. */
+  terminalDefaultShellArgs?: string[]
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */
@@ -199,13 +200,13 @@ export type GlobalSettings = {
   terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
   /** Experimental Claude Agent Teams; native panes use a tmux-compatible shim so teammate output stays on the normal PTY path. */
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
-  /** Where the repo setup script runs on workspace create; defaults to a background "Setup" tab to keep the main terminal usable. */
-  setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
   /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Optional mirror of nodejs.org/dist for the Node runtime Orca installs on SSH and WSL servers. */
+  nodeDistMirrorUrl?: string
   /** Why: corporate TLS-intercepting proxies can break HTTP/2 downloads; opt-in Chromium process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */
@@ -222,21 +223,32 @@ export type GlobalSettings = {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
-  openAgentTabsInChatByDefault?: boolean
-  /** Experimental native chat surface for Claude/Codex sessions; off by default. */
+  /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
   experimentalNativeChat?: boolean
-  /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
-  experimentalStructuredNativeChat?: boolean
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean
+  /** Chat-wide: hold a mid-turn send as an editable queued draft that goes when the turn ends
+   *  (capable hosts only). Absent = on; off keeps mid-turn sends immediate. */
+  nativeChatQueueFollowUps?: boolean
+  /** Teach newly started native chats to create inline visuals; absent means on. */
+  nativeChatInlineVisuals?: boolean
+  /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
+   *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
+  nativeChatInheritShellEnvironment?: boolean
+  /** Login-shell variable names structured chat inherits while the whole environment is off. */
+  nativeChatShellEnvironmentVariables?: string[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
+  /** New chats' permission mode, for agents whose chats offer modes; seeded once from Agent Permissions. */
+  nativeChatPermissionMode?: AgentChatPermissionMode
+  /** Per-agent new-chat defaults chosen alongside that agent's terminal permission mode. */
+  agentNativeChatPermissionModes?: Partial<Record<TuiAgent, AgentChatPermissionMode>>
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
@@ -260,6 +272,10 @@ export type GlobalSettings = {
    *  Renderer-writable only: omitted from the SettingsUpdate RPC schema so a worker
    *  cannot raise its own cap via `orca settings update`. */
   nestedWorkerMaxDepth?: number
+  /** Whether a native-chat worker's turn-ending error is sent to the Run that dispatched it.
+   *  Absent reads as on. Renderer-writable only, like the depth cap: a worker must not be able to
+   *  silence its own failures through `orca settings update`. */
+  orchestrationChatErrorEscalationEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -276,6 +292,8 @@ export type GlobalSettings = {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
+  /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
+  browserProfileScope?: BrowserProfileScope
   /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
   browserSshWorkspaceRoutingEnabled?: boolean
   /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
@@ -315,6 +333,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** Dismissed the "System default may hold a copied login" notice in Settings > Accounts. */
+  claudeCopiedSystemDefaultNoticeDismissed?: boolean
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
@@ -337,6 +357,8 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** @deprecated Retained for older peers; setup-only is now a per-create choice. */
+  newWorkspaceSetupOnly?: boolean
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
   /** Master switch for the experimental plugin system. Off by default: no
@@ -354,8 +376,8 @@ export type GlobalSettings = {
   devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
-  skipDeleteWorktreeConfirm: boolean
+  /** One-shot guard: hosts saved before the remote CLI control default flip were pinned off. */
+  sshRemoteCliControlExistingHostsMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
@@ -388,6 +410,8 @@ export type GlobalSettings = {
   minimaxUsageModels: string
   /** MiniMax account region; defaults to overseas for existing users. */
   minimaxEndpoint: MiniMaxEndpoint
+  /** GLM Coding Plan site whose API key is saved in AI Provider Accounts; defaults to the international Z.AI console. */
+  zcodePlanSite?: ZcodePlanSite
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -408,12 +432,26 @@ export type GlobalSettings = {
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
+  /** A local agent-state-rules.json that replaces downloaded and bundled rules, for testing a rule
+   *  change. */
+  agentStateRulesPath?: string | null
+  /** Off: rules are never downloaded and a cached download is ignored, so the bundled rules (or a
+   *  local override) apply. Absent reads as on. */
+  agentStateRulesLiveUpdates?: boolean
+  /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
+  agentWorkspaceTrustEnabled: boolean
+  /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
+  codexTerminalServerIsolation?: boolean
+  /** Off hides the banner on a typed `codex` that joined Codex's shared server. Absent reads as on. */
+  codexSharedServerWarning?: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */
   dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
+  editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
@@ -446,6 +484,8 @@ export type GlobalSettings = {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Name this runtime reports to paired clients; empty uses the host's detected name. */
+  machineName: string
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean
@@ -475,6 +515,8 @@ export type GlobalSettings = {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
+  /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
+  experimentalWslHosts?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
@@ -490,16 +532,8 @@ export type GlobalSettings = {
   sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
-  /** Anonymous product-telemetry state; optional until the one-shot Store.load() migration populates it.
-   *  Holds only consent + identity, not volatile counters — those would amplify the debounced settings write. */
-  telemetry?: {
-    /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
-    optedIn: boolean | null
-    /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
-    installId: string
-    /** Cohort marker: true for pre-existing profiles (gates the opt-in banner), false for fresh installs. */
-    existedBeforeTelemetryRelease: boolean
-  }
+  /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */
+  telemetry?: TelemetrySettings
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'
@@ -509,16 +543,7 @@ export type GlobalSettings = {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-export type OrcaWorkspaceLayout = {
-  path: string
-  nestWorkspaces: boolean
-}
-
-export type GhosttyImportPreview = {
-  found: boolean
-  configPath?: string
-  configPaths?: string[]
-  diff: Partial<GlobalSettings>
-  unsupportedKeys: string[]
-  error?: string
-}
+// Re-exported so existing importers keep one entry point; the shape lives in its
+// own file because this one is at the max-lines ceiling.
+export type { GhosttyImportPreview } from './ghostty-import-preview'
+export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

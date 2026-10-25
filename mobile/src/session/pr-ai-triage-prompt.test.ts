@@ -50,6 +50,8 @@ describe('buildFixChecksPrompt', () => {
     expect(prompt).toContain('"title": "Add feature"')
     expect(prompt).toContain('"url": "https://gh/pr/42"')
     expect(prompt).toContain('"name": "unit"')
+    expect(prompt).toContain('"checkRunId": 9')
+    expect(prompt).toContain('"url": "https://ci/unit"')
   })
 
   it('falls back to a refresh hint when nothing is broken', () => {

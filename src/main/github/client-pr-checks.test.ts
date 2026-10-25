@@ -57,7 +57,6 @@ vi.mock('./gh-utils', () => ({
   }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
-  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: (
     repoPath: string,
     remoteName: string,
@@ -84,12 +83,12 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
 }))
 
-import { getPRChecks, rerunPRChecks, _resetOwnerRepoCache } from './client'
+import { getPRChecks } from './client/check/get-pr-checks'
+import { rerunPRChecks } from './client/check/rerun-pr-checks'
+import { _resetOwnerRepoCache } from './gh-utils'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -208,6 +207,29 @@ function expectGraphQLRollupCall(callIndex = 1, noCache = false): void {
 }
 
 describe('getPRChecks', () => {
+  it('shares concurrent checks reads and honors explicit uncached refreshes', async () => {
+    vi.clearAllMocks()
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    acquireMock.mockResolvedValue(undefined)
+    const response = graphQLChecksResponse()
+    let finish: ((value: typeof response) => void) | undefined
+    ghExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise<typeof response>((resolve) => {
+          finish = resolve
+        })
+    )
+    const first = getPRChecks('/repo', 12)
+    const second = getPRChecks('/repo', 12)
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    finish?.(response)
+    await expect(Promise.all([first, second])).resolves.toEqual([[], []])
+    ghExecFileAsyncMock.mockResolvedValue(response)
+    await getPRChecks('/repo', 12, undefined, undefined, { noCache: true })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).not.toContain('--cache')
+  })
+
   beforeEach(() => {
     execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()

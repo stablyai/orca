@@ -20,7 +20,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -64,8 +63,7 @@ describe('agent hook completion fresh-working gate', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 

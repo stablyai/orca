@@ -12,7 +12,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from './layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
@@ -30,6 +30,8 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
 /** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
@@ -105,6 +107,15 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
+    // Switch point: in-tab pane moves and divider ratios go through main.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? layoutOwnerPaneGestures({
+          worktreeId,
+          tabId,
+          managerRef,
+          shouldPersistLayout: context.shouldPersistLayout
+        })
+      : {}),
     terminalLigaturesEnabled: () =>
       resolveTerminalLigaturesEnabled(
         settingsRef.current?.terminalLigatures,

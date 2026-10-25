@@ -5,8 +5,8 @@
  * Ubuntu 20.04, an arm64 box handed an x64 binary — so the classification has to be
  * testable from a machine that cannot reproduce any of them.
  *
- * Shared by the two places a node-pty load can fail: `orcad`'s boot precondition
- * (out of process, before anything requires node-pty) and the SSH relay's spawn path.
+ * Used by `orcad`'s boot precondition, which loads node-pty out of process before anything
+ * requires it.
  */
 import type { RuntimeTerminalUnavailableReason } from '../../shared/runtime-types'
 import {
@@ -16,7 +16,7 @@ import {
   parseUnmetGlibcVersion
 } from './native-host-abi'
 
-export type NodePtyLoadCause = {
+type NodePtyLoadCause = {
   reason: RuntimeTerminalUnavailableReason
   /** Short human phrase naming the actual values found, not a remedy. */
   detail: string
@@ -28,12 +28,10 @@ export type NodePtyLoadCause = {
  * miss — `Cannot find module` — even when the real failure was the dynamic loader
  * refusing `build/Release/pty.node`. Anything acting on that tail sends the operator to
  * install a module that is already installed.
+ *
+ * Returns the real cause a flattened message still carries, when the last attempt was the
+ * telling one.
  */
-export function isFlattenedNodePtyLoaderMessage(message: string): boolean {
-  return /Failed to load native module: (?:conpty|pty)\.node(?:,|:|$)/.test(message)
-}
-
-/** The real cause a flattened message still carries, when the last attempt was the telling one. */
 export function classifyNodePtyLoaderMessage(message: string): NodePtyLoadCause {
   const abiMismatch = parseNodeAbiMismatch(message)
   if (abiMismatch) {

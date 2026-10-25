@@ -36,6 +36,22 @@ describe('getActiveMarkdownExportPayload', () => {
     vi.unstubAllGlobals()
   })
 
+  it('rejects virtual, loading, and failed previews even if export eligibility is stale', async () => {
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<div class="markdown-body" data-markdown-preview-incomplete="true"><h1>Partial</h1><img src="blob:unmounted"></div>'
+    const subtree = root.firstElementChild
+    if (!subtree) {
+      throw new Error('Missing fixture subtree')
+    }
+    const clone = vi.spyOn(subtree, 'cloneNode')
+    expect(
+      await getActiveMarkdownExportPayload({ fileId: '/repo/docs/readme.md', root })
+    ).toBeNull()
+    expect(clone).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('embeds blob image sources so the PDF export window can render local images', async () => {
     const root = document.createElement('div')
     root.innerHTML =

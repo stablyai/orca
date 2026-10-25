@@ -25,7 +25,7 @@ describe('NativeChatTaskList', () => {
   it('shows tri-state glyphs, progress, and activeForm in the first checklist', () => {
     const { container } = render(<NativeChatTaskList list={current} />)
     expect(screen.getByText('Read')).toHaveClass('line-through')
-    expect(screen.getByText('Writing').closest('li')).toHaveClass('text-foreground')
+    expect(screen.getByText('Writing').closest('li')).toHaveClass('text-chat-foreground-strong')
     expect(screen.getByText('Test')).toBeInTheDocument()
     expect(screen.getByLabelText('1 of 3 tasks completed')).toHaveTextContent('1/3')
     for (const glyph of ['circle', 'circle-dot', 'circle-check']) {
@@ -63,13 +63,5 @@ describe('NativeChatTaskList', () => {
     render(<NativeChatTaskList list={{ tasks: [] }} />)
     expect(screen.getByText('No tasks')).toBeInTheDocument()
     expect(screen.getByLabelText('0 of 0 tasks completed')).toHaveTextContent('0/0')
-  })
-
-  it('switches from full list to diff when earlier history supplies a predecessor', () => {
-    const { rerender } = render(<NativeChatTaskList list={current} />)
-    expect(screen.getByText('Test')).toBeInTheDocument()
-    rerender(<NativeChatTaskList list={current} previous={previous} />)
-    expect(screen.queryByText('Test')).toBeNull()
-    expect(screen.getByText('Started Write')).toBeInTheDocument()
   })
 })

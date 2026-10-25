@@ -111,7 +111,7 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     await settleProbe()
 
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(expect.anything(), 'pty-a', {
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith('pty-a', {
       scanChildProcesses: true
     })
     expect(onClose).not.toHaveBeenCalled()
@@ -220,7 +220,7 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-b' ? 'claude' : 'zsh',
       hasChildProcesses: ptyId === 'pty-b'
     }))
@@ -242,7 +242,7 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-a' ? 'npm' : 'zsh',
       hasChildProcesses: ptyId === 'pty-a'
     }))

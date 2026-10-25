@@ -1,10 +1,18 @@
 import { useAppStore } from '../store'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import {
+  forgetDesktopCreatedServerTab,
+  noteDesktopCreatedServerTab
+} from '@/lib/desktop-created-server-tabs'
 
 /** Local rows minted for a browser tab whose host create RPC has not answered yet. */
 export type StagedWebRuntimeBrowserTab = {
   workspaceId: string
   pageId: string
   clientHosted: boolean
+  /** Its tab-bar entry, once staging drew one. */
+  tabId?: string
 }
 
 /**
@@ -21,6 +29,7 @@ export function stageWebRuntimeBrowserTab(args: {
   title?: string
   profileId?: string | null
   targetGroupId?: string
+  afterTabId?: string
   activate: boolean
   focusAddressBar?: boolean
   clientHosted?: boolean
@@ -31,6 +40,9 @@ export function stageWebRuntimeBrowserTab(args: {
       activate: args.activate,
       browserPageId: args.remotePageId,
       browserRuntimeEnvironmentId: args.environmentId,
+      // Why: the paired runtime owns this row; placement must not borrow the globally selected host.
+      executionHostId: toRuntimeExecutionHostId(args.environmentId),
+      ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
       ...(args.profileId !== undefined && args.profileId !== null
         ? { sessionProfileId: args.profileId }
@@ -48,7 +60,19 @@ export function stageWebRuntimeBrowserTab(args: {
       staged: true,
       ...(args.clientHosted ? { stagedClientHosted: true } : {})
     })
-    return { workspaceId: workspace.id, pageId, clientHosted: args.clientHosted === true }
+    const tabId = useAppStore
+      .getState()
+      .unifiedTabsByWorktree[args.worktreeId]?.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )?.id
+    const staged = {
+      workspaceId: workspace.id,
+      pageId,
+      clientHosted: args.clientHosted === true,
+      ...(tabId ? { tabId } : {})
+    }
+    holdStagedBrowserTab(args.environmentId, args.worktreeId, staged)
+    return staged
   } catch (error) {
     // Why: staging is an optimization; a store-side refusal must not fail the create itself.
     console.warn(
@@ -150,7 +174,7 @@ export function rehomeStagedWebRuntimeBrowserTab(
  */
 export function restageWebRuntimeBrowserTabHostingIntent(
   staged: StagedWebRuntimeBrowserTab,
-  args: { environmentId: string; remotePageId: string; clientHosted: boolean }
+  args: { environmentId: string; worktreeId: string; remotePageId: string; clientHosted: boolean }
 ): StagedWebRuntimeBrowserTab {
   if (staged.clientHosted === args.clientHosted) {
     return staged
@@ -166,6 +190,66 @@ export function restageWebRuntimeBrowserTabHostingIntent(
     ...(args.clientHosted ? { stagedClientHosted: true } : {})
   })
   return { ...staged, clientHosted: args.clientHosted }
+}
+
+const stagedTabIds = (staged: Pick<StagedWebRuntimeBrowserTab, 'workspaceId' | 'tabId'>) => [
+  staged.workspaceId,
+  ...(staged.tabId ? [staged.tabId] : [])
+]
+
+/**
+ * The server's frames keep a staged tab: a client-hosted page never enters its server's layout
+ * (L274), and a server-hosted one is not there until the server publishes it (L285).
+ */
+function holdStagedBrowserTab(
+  environmentId: string,
+  worktreeId: string,
+  staged: StagedWebRuntimeBrowserTab
+): void {
+  // Switch point: only a server's frames, which a layout-owner build draws, need the record.
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return
+  }
+  // By both ids: its browser workspace and its tab-bar entry.
+  for (const id of stagedTabIds(staged)) {
+    noteDesktopCreatedServerTab(environmentId, worktreeId, id)
+  }
+}
+
+/**
+ * A held browser tab whose page the server's layout now lists is the server's: its frames draw the
+ * page in their own tab and drop this one, which a create still in flight reads as the frames taking
+ * it over (L284). Also a tab the mirror adopted before the frames drew the workspace.
+ */
+export function releaseHeldBrowserTabsTheServerLists(
+  environmentId: string,
+  serverPageIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
+): void {
+  const state = useAppStore.getState()
+  const listed = [...serverPageIdsByWorkspace.values()]
+  const pageIds = new Set(
+    Object.entries(state.remoteBrowserPageHandlesByPageId).flatMap(([pageId, handle]) =>
+      handle?.environmentId === environmentId && listed.some((ids) => ids.has(handle.remotePageId))
+        ? [pageId]
+        : []
+    )
+  )
+  if (pageIds.size === 0) {
+    return
+  }
+  for (const worktreeId of serverPageIdsByWorkspace.keys()) {
+    for (const workspace of state.browserTabsByWorktree[worktreeId] ?? []) {
+      if (!workspace.pageIds?.some((pageId) => pageIds.has(pageId))) {
+        continue
+      }
+      const tabId = state.unifiedTabsByWorktree[worktreeId]?.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )?.id
+      for (const id of stagedTabIds({ workspaceId: workspace.id, ...(tabId ? { tabId } : {}) })) {
+        forgetDesktopCreatedServerTab(id)
+      }
+    }
+  }
 }
 
 /**

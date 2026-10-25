@@ -3,12 +3,13 @@ import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import {
   applyWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshots,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshots
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -337,7 +338,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       '/repo/a.ts',
       '/repo/bystander-2.ts',
       '/repo/a.ts',
-      '/repo/b.ts'
+      // A file the host opens now takes its owned id; a.ts keeps the id it already had.
+      buildOwnedEditorFileId('/repo/b.ts', WT, ENV)
     ])
     expect(
       batched.openFiles.find(
@@ -348,9 +350,8 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(batched.openFiles.some((file) => file.id === '/repo/second.ts')).toBe(false)
   })
 
-  it('seeds a mirrored editor file from the first duplicate open file, as find() did', () => {
-    // Why: two entries share (worktree, id) and differ only in a field the mirrored
-    // file inherits, so which duplicate seeds the spread is observable.
+  it('seeds a mirrored editor file from its own host in single and batched snapshots', () => {
+    // A legacy ID collision must not copy a different host’s disk baseline.
     const duplicate = (signature: string, environmentId: string | null): OpenFile =>
       ({
         id: '/repo/dup.ts',
@@ -385,7 +386,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
       const state = makeState({
-        openFiles: [duplicate('winner', 'other-env'), duplicate('loser', ENV)]
+        openFiles: [duplicate('other-host', 'other-env'), duplicate('current-host', ENV)]
       })
       const patch = (
         label === 'single'
@@ -395,7 +396,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       const mirrored = patch.openFiles?.find(
         (file) => file.id === '/repo/dup.ts' && file.runtimeEnvironmentId === ENV
       )
-      expect(mirrored?.lastKnownDiskSignature, label).toBe('winner')
+      expect(mirrored?.lastKnownDiskSignature, label).toBe('current-host')
     }
   })
 
@@ -512,7 +513,9 @@ describe('applyWebSessionTabsSnapshot', () => {
     const batched = { ...state, ...applyWebSessionTabsSnapshots(state, snapshots, ENV, NOW) }
 
     expect(batched.openFiles).toEqual(sequential.openFiles)
-    expect(batched.openFiles.map((file) => file.id)).toEqual(['/repo/a.ts'])
+    expect(batched.openFiles.map((file) => file.id)).toEqual([
+      buildOwnedEditorFileId('/repo/a.ts', WT, ENV)
+    ])
     expect(batched.openFiles[0]?.lastKnownDiskSignature).toBeUndefined()
   })
 

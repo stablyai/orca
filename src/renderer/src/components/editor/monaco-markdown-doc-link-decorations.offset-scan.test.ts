@@ -162,4 +162,74 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
     // than one tail scan per line.
     expect(indexOfCalls).toBeLessThanOrEqual(8)
   })
+
+  it('visits inline-code span offsets linearly across a generated link index', () => {
+    const pairs = 500
+    const content = '`[[hidden]]` [[shown]] '.repeat(pairs)
+    const realPush = Array.prototype.push
+    let spanReads = 0
+    Array.prototype.push = function <T>(this: T[], ...values: T[]): number {
+      const length = realPush.call(this, ...values)
+      // Why: the production scanner stores spans as flat numeric pairs; count their reads without changing values.
+      if (values.length === 2 && values.every((value) => typeof value === 'number')) {
+        for (let index = 0; index < values.length; index += 1) {
+          const value = values[index]
+          Object.defineProperty(this, length - values.length + index, {
+            configurable: true,
+            enumerable: true,
+            get: () => {
+              spanReads += 1
+              return value
+            }
+          })
+        }
+      }
+      return length
+    }
+    let ranges: IRange[]
+    try {
+      ranges = getMarkdownDocLinkDecorationRanges(content)
+    } finally {
+      Array.prototype.push = realPush
+    }
+    expect(ranges).toEqual(referenceDecorationRanges(content))
+    expect(ranges).toHaveLength(pairs)
+    expect(spanReads).toBeLessThanOrEqual(pairs * 8)
+  })
+
+  it('matches the frozen scan across random inline-code and link boundaries', () => {
+    const fragments = [
+      '[[note]]',
+      '[[note|label]]',
+      '[[invalid]',
+      '`code`',
+      '`[[note]]`',
+      '\\`',
+      '[[a]] [[b]]',
+      '\\[[x]]',
+      '```',
+      '~~~',
+      '\r\n',
+      '\n',
+      'α🐋',
+      ' ]] ',
+      '[[]]',
+      '[[a\nb]]',
+      '`'
+    ]
+    let seed = 182
+    const random = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      return seed >>> 16
+    }
+    for (let scenario = 0; scenario < 1_000; scenario += 1) {
+      let content = ''
+      for (let chunk = 0; chunk < 30; chunk += 1) {
+        content += fragments[random() % fragments.length]
+      }
+      expect(getMarkdownDocLinkDecorationRanges(content)).toEqual(
+        referenceDecorationRanges(content)
+      )
+    }
+  })
 })

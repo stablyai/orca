@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { renameRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import {
   beginEditorPathMove,
@@ -11,10 +12,11 @@ import {
 } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from '@/lib/open-editor-move-owner'
+import { documentFolderAccess } from '@/lib/local-file-access'
+import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 let moveOperationCounter = 0
 
@@ -31,6 +33,8 @@ export async function executeOpenEditorPathMove(args: {
   toPath: string
   worktreeId: string
   worktreePath: string
+  /** The moved file is a user-named document: main allows any destination, and the move back. */
+  documentScoped?: boolean
 }): Promise<void> {
   const { context, fromPath, toPath, worktreeId, worktreePath } = args
   const operationId = `editor-move-${(moveOperationCounter += 1)}`
@@ -38,11 +42,9 @@ export async function executeOpenEditorPathMove(args: {
   // Host-scoped: the same abs path on another host (2nd SSH connection, local vs
   // runtime) is a distinct file the rename never touched — keep it out of the move.
   const moveState = useAppStore.getState()
-  const initiatingHostId = getExecutionHostIdForWorktree(moveState, worktreeId)
+  const owner = editorMoveOwnerFromContext(context, worktreeId)
   const affected = moveState.openFiles.filter(
-    (f) =>
-      isPathInsideOrEqual(fromPath, f.filePath) &&
-      getExecutionHostIdForWorktree(moveState, f.worktreeId) === initiatingHostId
+    (f) => isPathInsideOrEqual(fromPath, f.filePath) && isOpenFileOnMoveOwner(moveState, f, owner)
   )
 
   // Suppress the move ROOT (prefix-matched) per scope, always including the
@@ -53,7 +55,7 @@ export async function executeOpenEditorPathMove(args: {
   const addScope = (wtId: string, owner: string | null): void => {
     scopes.set(`${wtId}::${owner ?? 'local'}`, { worktreeId: wtId, owner })
   }
-  addScope(worktreeId, getRuntimeEnvironmentIdForWorktree(moveState, worktreeId))
+  addScope(worktreeId, runtimeEnvironmentIdOrLocalUnlessTwin(moveState, worktreeId))
   for (const f of affected) {
     addScope(f.worktreeId, f.runtimeEnvironmentId?.trim() || null)
   }
@@ -73,7 +75,12 @@ export async function executeOpenEditorPathMove(args: {
   await Promise.all(affected.map((f) => requestEditorSaveQuiesce({ fileId: f.id })))
 
   try {
-    await renameRuntimePath(context, fromPath, toPath)
+    await renameRuntimePath(
+      context,
+      fromPath,
+      toPath,
+      args.documentScoped ? documentFolderAccess(fromPath) : undefined
+    )
   } catch (err) {
     // Rename never landed — release the source suppression immediately.
     for (const subOperationId of ownerSubOps) {
@@ -94,20 +101,34 @@ export async function executeOpenEditorPathMove(args: {
 
     // Commit: retarget the live sessions in place (the rekey installs the gate +
     // provenance on dirty destinations).
-    const rekeyResult = remapOpenEditorTabsForPathChange({
+    let rekeyResult = remapOpenEditorTabsForPathChange({
       fromPath,
       toPath,
       worktreePath,
       worktreeId,
+      owner,
       moveOperationId: operationId
     })
+    // Switch point: main renames the tabs; its frame rekeys the sessions, or main refused.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      rekeyResult.ok &&
+      !(await contentRekeyOutcome(affected.map((file) => file.id)))
+    ) {
+      rekeyResult = { ok: false, reason: 'stale' }
+    }
     if (!rekeyResult.ok) {
       // The disk rename succeeded but the editor state couldn't be retargeted
       // (a destination collision or stale plan). Undo the on-disk move so the
       // still-open source session isn't stranded pointing at a vanished path.
       let rollbackError: unknown
       try {
-        await renameRuntimePath(context, toPath, fromPath)
+        await renameRuntimePath(
+          context,
+          toPath,
+          fromPath,
+          args.documentScoped ? documentFolderAccess(toPath) : undefined
+        )
       } catch (err) {
         rollbackError = err
       }

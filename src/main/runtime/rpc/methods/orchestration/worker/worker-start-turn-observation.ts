@@ -19,6 +19,8 @@ export type WorkerTurnStartVerdict = 'observed' | 'permission' | 'unsupported' |
 export type WorkerTurnStartObservation = {
   verdict: WorkerTurnStartVerdict
   prompt?: RuntimeTerminalPromptDelivery
+  /** Why an `unobserved` start is unknown, when the default PTY wording does not fit. */
+  reason?: string
 }
 
 function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTurnStartVerdict {

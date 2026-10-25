@@ -1,8 +1,11 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
-  SetupDecision
+  SetupDecision,
+  WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
 import type {
@@ -14,6 +17,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
+import { translate } from '@/i18n/i18n'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -24,15 +28,12 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
-/**
- * Everything needed to run a worktree create in the background and reproduce it
- * verbatim on retry. Captured at the composer's submit cut point — after all
- * interactive preflight (trust/setup decisions) has resolved — so the modal can
- * close immediately and the work outlives it. Must stay plain-serializable
- * (no closures/refs) so a pending entry can hold it for the panel's Retry.
- */
+/** Serializable creation intent, including any script checks deferred until
+ * after the composer closes. Retained by the pending panel for Retry. */
 export type WorktreeCreationRequest = {
   repoId: string
+  /** Execution owner retained after script preparation, including retries. */
+  executionHostId?: ExecutionHostId
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
@@ -71,6 +72,16 @@ export type WorktreeCreationRequest = {
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  /** Inspect and confirm scripts on the captured host after the composer closes. */
+  hookPreparation?: {
+    executionHostId?: ExecutionHostId
+    confirmVmRecipe?: boolean
+    issueCommand?: {
+      provider: FolderWorkspaceLinkedTask['provider'] | null
+      issueNumber: number
+      artifactUrl: string | null
+    }
+  }
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
   linkedIssue?: number
@@ -115,6 +126,8 @@ export type WorktreeCreationRequest = {
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
   suppressTerminalFocusOnCompletion?: boolean
+  /** "None" in the composer: when setup runs, open only its tab instead of an extra shell. */
+  setupOnly?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree
@@ -138,6 +151,9 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
+  /** Git's checkout meter during a local `git worktree add`; absent when git
+   *  printed none (fast or sparse checkouts, SSH and runtime creates). */
+  checkoutProgress?: WorktreeCheckoutProgress
   request: WorktreeCreationRequest
 }
 
@@ -164,20 +180,46 @@ export function findPendingLinkedWorkItemCreationId(
   return match?.creationId ?? null
 }
 
+/** The checkout meter to show, or null. Gated on the live phase so a value left
+ *  from an earlier attempt never shows under another phase or on an error. */
+export function getVisibleCheckoutProgress(
+  entry: Pick<PendingWorktreeCreation, 'status' | 'phase' | 'checkoutProgress'>
+): WorktreeCheckoutProgress | null {
+  return entry.status === 'creating' && entry.phase === 'creating'
+    ? (entry.checkoutProgress ?? null)
+    : null
+}
+
 /** Human-readable progress line for an in-flight create, shared by the in-frame
  *  loader and the sidebar row so the two never drift. Caller handles the error
  *  case; this only covers the in-progress states. */
 export function getCreationProgressLabel(
-  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate' | 'request'>
+  entry: Pick<
+    PendingWorktreeCreation,
+    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress'
+  >
 ): string {
+  const checkout = getVisibleCheckoutProgress(entry)
+  if (checkout) {
+    return translate(
+      'auto.lib.pendingWorktreeCreation.checkingOutFiles',
+      'Checking out files… {{percent}}%',
+      { percent: checkout.percent }
+    )
+  }
   if (entry.phase === 'provisioning-vm') {
-    return 'Provisioning VM…'
+    return translate('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
   if (entry.indeterminate) {
-    return 'Setting up your workspace…'
+    return translate(
+      'auto.lib.pendingWorktreeCreation.settingUpWorkspace',
+      'Setting up your workspace…'
+    )
   }
   if (entry.phase === 'preparing') {
-    return 'Preparing workspace…'
+    return translate('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
   }
-  return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
+  return entry.phase === 'creating'
+    ? translate('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
+    : translate('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
 }

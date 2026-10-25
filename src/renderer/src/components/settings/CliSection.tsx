@@ -1,18 +1,10 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
-} from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -24,14 +16,7 @@ import { Switch } from '../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getAgentSkillTerminalShellOverride,
-  getSelectedAgentRuntime,
-  getSkillDiscoveryTargetForRuntime,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { getSelectedAgentRuntime, getSkillDiscoveryTargetForRuntime } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
@@ -89,8 +74,12 @@ export function CliSection({
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
   const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
-  const cliSkillDiscoveryTarget = useMemo(
-    () => getSkillDiscoveryTargetForRuntime(agentRuntime),
+  const skillRuntime = useMemo(
+    () => ({
+      discoveryTarget: getSkillDiscoveryTargetForRuntime(agentRuntime),
+      discoveryRuntimeTarget: { kind: 'local' } as const,
+      bundledSkillTarget: agentRuntime.runtime === 'wsl' ? null : ({ kind: 'local' } as const)
+    }),
     [agentRuntime]
   )
   const {
@@ -99,30 +88,10 @@ export function CliSection({
     error: cliSkillError,
     refresh: refreshCliSkill
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-    discoveryTarget: cliSkillDiscoveryTarget,
+    discoveryTarget: skillRuntime.discoveryTarget,
+    runtimeTarget: skillRuntime.discoveryRuntimeTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const cliSkillInstallCommand = buildSkillCommandForRuntime(
-    ORCA_CLI_SKILL_INSTALL_COMMAND,
-    agentRuntime
-  )
-  const cliSkillUpdateCommand = buildSkillCommandForRuntime(
-    ORCA_CLI_SKILL_UPDATE_COMMAND,
-    agentRuntime
-  )
-  const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
-    currentPlatform,
-    settings,
-    agentRuntime
-  )
-  const getCliSkillPrerequisiteStatus = useCallback(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-        : window.api.cli.getInstallStatus(),
-    [agentRuntime]
-  )
-
   const handleStatusChange = useCallback(
     (nextStatus: CliInstallStatus): void => {
       if (mountedRef.current) {
@@ -185,8 +154,8 @@ export function CliSection({
         </h2>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.CliSection.6930feda9e',
-            'Use Orca from your terminal to open the app, manage worktrees, and interact with Orca terminals.'
+            'auto.components.settings.CliSection.outsideOrcaDescription',
+            'Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.'
           )}
         </p>
       </div>
@@ -308,7 +277,11 @@ export function CliSection({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void window.api.shell.openPath(status.commandPath as string)}
+              onClick={() => {
+                if (status.commandPath) {
+                  void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
+                }
+              }}
               disabled={loading || !canRevealCommandPath}
               className="gap-2"
             >
@@ -340,26 +313,13 @@ export function CliSection({
                 'auto.components.settings.CliSection.e8012c03a1',
                 'Enables agents to use Orca workspace, terminal, and progress commands.'
               )}
-              command={cliSkillInstallCommand}
-              installedCommand={cliSkillUpdateCommand}
-              terminalTitle="CLI skill setup"
-              terminalAriaLabel="CLI skill install terminal"
-              terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}
-              terminalShellOverride={cliSkillTerminalShellOverride}
+              skillNames={[ORCA_CLI_SKILL_NAME]}
+              target={skillRuntime.bundledSkillTarget}
+              // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
               terminalRuntime={agentRuntime}
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              getPrerequisiteStatus={getCliSkillPrerequisiteStatus}
-              isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
-              onBeforeOpenTerminal={async () => {
-                await (agentRuntime.runtime === 'wsl'
-                  ? ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-                  : ensureOrcaCliAvailableForAgentSkillTerminal({
-                      onStatusChange: handleStatusChange
-                    }))
-              }}
               onRecheck={refreshCliSkill}
               freshnessSkillName={cliSkillFreshnessName}
             />

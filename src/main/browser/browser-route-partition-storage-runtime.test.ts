@@ -90,8 +90,7 @@ describe('route partition storage runtime with local SSH scopes', () => {
   })
 
   it('skips the sweep entirely when no target list is available', async () => {
-    // Why: without the target list, a live SSH jar is indistinguishable from an
-    // orphan — deleting user cookies is the one unrecoverable mistake here.
+    // Without the target list, live SSH storage is indistinguishable from orphaned storage.
     expect(await collectOrphanedBrowserRoutePartitionStorage()).toEqual([])
     expect(mocks.cleared).toEqual([])
     expect(mocks.bindings.size).toBe(3)
@@ -107,8 +106,6 @@ describe('route partition storage runtime with local SSH scopes', () => {
   })
 
   it('honors the retention-probe union: a retained partition survives every destructive path', async () => {
-    // Why (review): the earlier mocks substituted the union wiring away; this
-    // exercises the REAL retention module through the runtime's isPartitionLive.
     const { registerBrowserRoutePartitionRetentionProbe } =
       await import('./browser-route-partition-retention')
     const unregister = registerBrowserRoutePartitionRetentionProbe(

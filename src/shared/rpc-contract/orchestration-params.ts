@@ -106,6 +106,18 @@ export const DispatchParams = z.object({
   run: OptionalString
 })
 
+/** An Orca agent session id; the answer is its conversation's Orca session ID. */
+export const SessionAddressParams = z.object({
+  sessionId: requiredString('Missing sessionId')
+})
+
+/** A party's mailbox address, as a message's sender recorded it, and the mail that message
+ *  carried from it: a handle from an earlier run is found again through that mail's sender pane. */
+export const PartyLocationParams = z.object({
+  address: requiredString('Missing address'),
+  messageIds: z.array(z.string().min(1).max(256)).max(50).optional()
+})
+
 export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,

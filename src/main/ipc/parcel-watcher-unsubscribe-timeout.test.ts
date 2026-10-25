@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './parcel-watcher-child-termination'
+import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './filesystem/watcher-process/parcel-watcher-child-termination'
 import { WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS } from './parcel-watcher-host-subscriptions'
 import {
   acknowledgeWatcherSubscribe as ackSubscribe,
@@ -95,15 +95,14 @@ describe('watcher native unsubscribe timeout', () => {
       expect(first.kill).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_EXIT_DEADLINE_MS)
       expect(first.kill).toHaveBeenLastCalledWith('SIGKILL')
-      // Why: removal callers still fail closed on the unproven exit.
+      // Destructive removal must fail closed when physical exit is unproved.
       const error = (await unsubscribe) as Error & { physicalExit?: Promise<void> }
       expect(error).toMatchObject({
         message: 'file watcher process did not exit after termination deadline',
         physicalExit: expect.any(Promise)
       })
 
-      // Why: the idle child owned zero records, so its zombie must not poison
-      // the shared supervisor — the next subscribe gets a fresh child.
+      // The idle child owned no records; its zombie must not prevent a fresh supervisor child.
       const respawnPromise = subscribeViaWatcherProcess('/repo2', vi.fn(), {})
       expect(forkMock).toHaveBeenCalledTimes(2)
       const second = currentChild()

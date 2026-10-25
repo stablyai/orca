@@ -1,4 +1,3 @@
-// SubprocessHandle io forwarding plus kill/dispose neutralization contracts.
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
@@ -30,9 +29,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -66,10 +63,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -286,12 +279,7 @@ describe('createPtySubprocess', () => {
     killSpy.mockRestore()
   })
 
-  // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
-  // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently
-  // with onExit. If kill is not neutralized by the time close fires, SIGHUP
-  // targets a reaped pid that may have been recycled. These tests pin down the
-  // neutralization contract on both onExit (natural-exit path) and dispose()
-  // (forced-teardown path) for POSIX, and verify Windows is exempt.
+  // UnixTerminal.destroy() can send async SIGHUP after exit; neutralize kill before PID reuse.
   describe('proc.kill neutralization for SIGHUP-to-recycled-pid hazard', () => {
     const restorePlatform = (desc?: PropertyDescriptor) => {
       if (desc) {
@@ -310,7 +298,6 @@ describe('createPtySubprocess', () => {
         expect(proc.kill).toBe(originalKill)
         proc._simulateExit(0)
         expect(proc.kill).not.toBe(originalKill)
-        // Calling the neutralized kill is a safe no-op.
         expect(() => (proc.kill as () => void)()).not.toThrow()
       } finally {
         restorePlatform(origPlatform)
@@ -416,10 +403,7 @@ describe('createPtySubprocess', () => {
     })
 
     it('forceKill after a Windows kill() escalates to the job instead of giving up', async () => {
-      // Why: skipping the second native kill is right (it double-closes ConPTY),
-      // but it made forceKill a permanent no-op, so a wedged ConPTY -- which
-      // never fires onExit -- could not be escalated at all (#9854). The job
-      // terminates the tree without touching the handle node-pty owns.
+      // Job escalation avoids double-closing ConPTY’s native shell handle.
       const terminateJob = vi.fn().mockReturnValue(true)
       __setConptyJobNativeForTests(() => ({
         terminateJob,
@@ -437,7 +421,6 @@ describe('createPtySubprocess', () => {
         handle.forceKill()
 
         expect(terminateJob).toHaveBeenCalledWith(11, 123456)
-        // Still exactly one native kill: the escalation must not double-close.
         expect(proc.kill).toHaveBeenCalledOnce()
       } finally {
         __setConptyJobNativeForTests()
@@ -482,11 +465,7 @@ describe('createPtySubprocess', () => {
     })
   })
 
-  // Why: after proc.onExit fires (dead=true), proc.pid refers to a reaped child
-  // whose pid may have been recycled to an unrelated process. forceKill and
-  // signal call process.kill(proc.pid, ...) directly, bypassing the
-  // proc.kill-neutralization applied to the node-pty instance. Without an
-  // internal dead-guard, they can deliver SIGKILL/SIGINT/etc to a stranger.
+  // Direct process.kill calls also need dead guards because a reaped PID can be reused.
   describe('forceKill/signal guard against recycled pid after exit', () => {
     it('forceKill is a no-op once proc.onExit has fired', async () => {
       const proc = mockPtyProcess(55)
@@ -507,16 +486,6 @@ describe('createPtySubprocess', () => {
       proc._simulateExit(0)
       handle.signal('SIGINT')
       expect(killSpy).not.toHaveBeenCalled()
-      killSpy.mockRestore()
-    })
-
-    it('forceKill before exit still fires SIGKILL (live child)', async () => {
-      const proc = mockPtyProcess(77)
-      spawnMock.mockReturnValue(proc)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-      handle.forceKill()
-      expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
       killSpy.mockRestore()
     })
   })

@@ -15,6 +15,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, type Page } from '@stablyai/playwright-test'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 export type RuntimeRpcCall = <TResult>(method: string, params: unknown) => Promise<TResult>
 
@@ -63,12 +64,16 @@ export function createRetentionFixtureDirectory(): string {
 
 /** Long-lived stand-in for the agent a CLI dispatch spawns: it never exits, so
  *  a pruned tab is never explained away by a dead PTY. */
-export function writeRetentionFixture(directory: string): string {
+export function writeRetentionFixture(
+  directory: string,
+  options: { processTitle?: string } = {}
+): string {
   const fixturePath = path.join(directory, 'host-created-agent-terminal.mjs')
   writeFileSync(
     fixturePath,
     [
       "import { appendFileSync } from 'node:fs'",
+      ...(options.processTitle ? [`process.title = ${JSON.stringify(options.processTitle)}`] : []),
       'const sink = process.argv[2]',
       'const record = (line) => appendFileSync(sink, `${line}\\n`)',
       'record(`READY:${process.pid}`)',
@@ -90,16 +95,12 @@ export function writeRetentionFixture(directory: string): string {
   return fixturePath
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 export function retentionFixtureCommand(fixturePath: string, sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? // PowerShell needs the call operator when the executable is quoted; cmd.exe also accepts it.
       `& ${command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')}`
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 export function readSink(sinkPath: string): string {
@@ -232,7 +233,7 @@ export async function createHostRendererTerminalTab(
     store.getState().setActiveWorktree(id)
     const tab = store.getState().createTab(id)
     store.getState().setActiveTab(tab.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect

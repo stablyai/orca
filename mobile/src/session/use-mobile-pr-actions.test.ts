@@ -198,12 +198,15 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
     expect(engine.error).toBe('connection lost')
   })
 
-  it('keeps the optimistic value through success until refetch', async () => {
-    const mutations = fakeMutations()
+  it('shows the optimistic toggle while pending and clears it on success', async () => {
+    const pending = deferred<{ ok: true }>()
+    const mutations = fakeMutations({ setPRAutoMerge: vi.fn(() => pending.promise) })
     const { engine, refetch } = makeEngine(mutations)
-    await engine.setAutoMerge(true)
-    // After success the optimism clears to authoritative (refetch supplies truth).
-    expect(engine.resolveAutoMerge(true)).toBe(true)
+    const operation = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    pending.resolve({ ok: true })
+    await operation
+    expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(refetch).toHaveBeenCalledOnce()
   })
 })

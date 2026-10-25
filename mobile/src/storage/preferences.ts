@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { noteMirroredWrite } from './mirrored-storage-keys'
+import { persistMirrored } from './mirrored-storage-keys'
+import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 
 const PINS_PREFIX = 'orca:pins:'
 // Consent to the push service is separate from the old socket notification choice.
@@ -71,14 +72,9 @@ export async function saveRemotePushHostRegistrations(
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
-// Why: the mobile terminal fits the desktop's full column count to the phone
-// width with a CSS scale, so xterm's raw fontSize is cancelled out and can't
-// drive apparent size. Instead we persist a baseline zoom multiplier ("text
-// size") that the WebView applies on top of the fit. Discrete presets keep the
-// settings picker simple and bound the value to ones the zoom logic handles;
-// pinch-to-zoom in the terminal snaps to these same presets. Sub-1 steps shrink
-// below fit-to-width (more columns visible with side margins).
-export const TERMINAL_TEXT_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+// Declared beside the terminal that applies them, because the document is bundled for the WebView
+// and must not reach this module's storage import; re-exported here for the settings screen.
+export { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 const DEFAULT_TEXT_SCALE = 1
 
 export async function loadTerminalTextScale(): Promise<number> {
@@ -97,7 +93,10 @@ export async function loadTerminalTextScale(): Promise<number> {
 }
 
 export async function saveTerminalTextScale(scale: number): Promise<void> {
-  await AsyncStorage.setItem(TEXT_SCALE_KEY, String(scale))
+  const value = String(scale)
+  // Through the one write path: the hybrid shell hands this key to the page on every `init`,
+  // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
+  await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
 const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
@@ -115,31 +114,8 @@ export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
 }
 
 export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
-}
-
-const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
-
-// Why: the hybrid shell route is dark. Default-off means a store build never fetches, writes or
-// sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
-// `'true'`, including an unreadable store, is off.
-export async function loadMobileWebShellEnabled(): Promise<boolean> {
-  // A release build never reads the key at all: it shares its bundle id with the development build
-  // and the iOS data container survives an install-over, so a flag a developer left on would
-  // otherwise follow the store build in and mount the shell on a deep link.
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
-    return false
-  }
-  try {
-    const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveMobileWebShellEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(MOBILE_WEB_SHELL_KEY, String(enabled))
+  const value = String(enabled)
+  await persistMirrored(AUTOCOMPLETE_KEY, value)
 }
 
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
@@ -183,10 +159,9 @@ export async function saveDisabledTerminalLiveInputHandles(
   worktreeId: string,
   handles: ReadonlySet<string>
 ): Promise<void> {
-  await AsyncStorage.setItem(
-    terminalLiveInputDisabledKey(hostId, worktreeId),
-    JSON.stringify([...handles])
-  )
+  const key = terminalLiveInputDisabledKey(hostId, worktreeId)
+  const value = JSON.stringify([...handles])
+  await persistMirrored(key, value)
 }
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
@@ -218,7 +193,8 @@ export async function loadHostSidebarWidth(): Promise<number> {
 }
 
 export async function saveHostSidebarWidth(width: number): Promise<void> {
-  await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
+  const value = String(clampHostSidebarWidth(width))
+  await persistMirrored(SIDEBAR_WIDTH_KEY, value)
 }
 
 const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
@@ -252,15 +228,18 @@ export async function loadHostDockWidth(): Promise<number> {
 }
 
 export async function saveHostDockWidth(width: number): Promise<void> {
-  await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
+  const value = String(clampHostDockWidth(width))
+  await persistMirrored(DOCK_WIDTH_KEY, value)
 }
 
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+let terminalLinkWriteBarrier: Promise<void> | null = null
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  await terminalLinkWriteBarrier
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
     return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
@@ -269,8 +248,18 @@ export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpen
   }
 }
 
-export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  const write = (terminalLinkWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+  )
+  const barrier = write.catch(() => undefined)
+  terminalLinkWriteBarrier = barrier
+  void barrier.then(() => {
+    if (terminalLinkWriteBarrier === barrier) {
+      terminalLinkWriteBarrier = null
+    }
+  })
+  return write
 }
 
 function stringArray(value: unknown): string[] {
@@ -294,8 +283,5 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   const key = PINS_PREFIX + hostId
   const value = JSON.stringify([...ids])
-  // Noted before it is persisted: the hybrid shell hands this key to the page on every `init`,
-  // built synchronously, so a write that only reached the store would be one `init` behind.
-  noteMirroredWrite(key, value)
-  await AsyncStorage.setItem(key, value)
+  await persistMirrored(key, value)
 }

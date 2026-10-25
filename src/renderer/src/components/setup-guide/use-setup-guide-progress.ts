@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
@@ -11,7 +12,7 @@ import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -29,6 +30,7 @@ import {
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   readSetupScriptProbeCache,
   setSetupScriptProbeCache,
@@ -44,7 +46,7 @@ export function useSetupGuideProgress(
 ): FeatureWallSetupProgress {
   const settings = useAppStore((s) => s.settings)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
@@ -170,7 +172,9 @@ export function useSetupGuideProgress(
 
     async function refreshSetupScriptState(): Promise<void> {
       for (const repo of orderedGitRepos) {
-        const hooksResult = await checkRuntimeHooks(settings, repo.id).catch(() => null)
+        const hooksResult = await checkRuntimeHooks(getRepoExecutionHostId(repo), repo.id).catch(
+          () => null
+        )
         if (stale) {
           return
         }

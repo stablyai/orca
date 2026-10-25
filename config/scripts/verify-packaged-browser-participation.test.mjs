@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  verifyPackagedBrowserParticipation,
-  PACKAGED_BROWSER_TEST_TITLES
-} from './verify-packaged-browser-participation.mjs'
+import { verifyPackagedBrowserParticipation } from './verify-packaged-browser-participation.mjs'
 
 function report() {
   return {
@@ -11,7 +8,10 @@ function report() {
       {
         suites: [
           {
-            specs: PACKAGED_BROWSER_TEST_TITLES.map((title) => ({
+            specs: [
+              'keeps an old packaged client on the current server-hosted path',
+              'keeps a current client on an old packaged server-hosted path'
+            ].map((title) => ({
               title,
               tests: Array.from({ length: 3 }, () => ({
                 expectedStatus: 'passed',

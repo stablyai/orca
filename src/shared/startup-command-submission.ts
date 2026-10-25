@@ -3,12 +3,12 @@
  * submit a startup command (agent launch, setup script, etc.).
  *
  * Why bracketed paste: agent launch prompts are single-quoted, but their
- * literal embedded newlines survive quoting. bash readline / zsh zle read every
- * raw LF as accept-line (Enter), so the first newline inside a multiline prompt
+ * literal embedded newlines survive quoting. bash readline / zsh zle read a raw
+ * LF as accept-line by default, so the first newline inside a multiline prompt
  * submits an unterminated single-quoted command and drops the shell into PS2
  * continuation — the prompt is executed piecemeal and mangled. Wrapping the
  * payload in bracketed-paste markers (ESC[200~ … ESC[201~) tells the line
- * editor to insert the whole multiline text literally; only the trailing CR/LF
+ * editor to insert the whole multiline text literally; only the trailing CR
  * written after the end marker submits it. Single-line commands keep the proven
  * raw-write path unchanged so the fast path never regresses.
  */
@@ -16,12 +16,11 @@
 // DEC 2004 bracketed-paste bracket sequences.
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
+// Why CR on every platform: it is the byte the Enter key sends. A line editor reads
+// the tty raw, so LF arrives as Ctrl+J — a key users rebind (e.g. vi-mode newline).
+const STARTUP_COMMAND_SUBMIT = '\r'
 
 export type StartupCommandSubmissionOptions = {
-  /** Byte that submits the line: CR on Windows (PSReadLine/cmd.exe), LF on
-   *  POSIX; SSH relays remote shells with CR. A caller-supplied trailing submit
-   *  byte on `command` is preserved as-is. */
-  submit: string
   /** Whether the target line editor has bracketed-paste mode active (Orca's
    *  wrapped bash/zsh/fish). Only wrap multiline payloads when true — a shell
    *  without bracketed paste would echo the ESC[200~ markers as literal garbage. */
@@ -52,15 +51,14 @@ export function isBracketedPasteSafeShell(args: {
 
 export function buildStartupCommandSubmission(
   command: string,
-  { submit, bracketedPasteSafe }: StartupCommandSubmissionOptions
+  { bracketedPasteSafe }: StartupCommandSubmissionOptions
 ): string {
-  // Strip a full CRLF (or lone CR/LF) terminator so a single-line command ending
-  // in \r\n isn't misread as multiline by the \r/\n body check below.
-  const trailingTerminator = /\r\n$|\r$|\n$/.exec(command)?.[0] ?? ''
-  const endsWithSubmit = trailingTerminator.length > 0
-  const body = endsWithSubmit ? command.slice(0, -trailingTerminator.length) : command
+  // Why replace a caller's terminator: a trailing LF is Ctrl+J again, and CRLF submits twice.
+  const body = command.replace(/\r\n$|\r$|\n$/, '')
   if (bracketedPasteSafe && (body.includes('\n') || body.includes('\r'))) {
-    return `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}${submit}`
+    return `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}${STARTUP_COMMAND_SUBMIT}`
   }
-  return endsWithSubmit ? command : `${command}${submit}`
+  // Why normalise interior breaks too: without bracketed paste each line submits itself, and an
+  // interior LF is the same remappable Ctrl+J as a trailing one.
+  return `${body.replace(/\r?\n/g, STARTUP_COMMAND_SUBMIT)}${STARTUP_COMMAND_SUBMIT}`
 }

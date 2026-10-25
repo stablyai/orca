@@ -1,9 +1,3 @@
-// Fixtures shared by the restart-resume suites: one durable record, one journal, one marker.
-//
-// Kept in one place so the predicate suite and the claim suite cannot drift into disagreeing about
-// what a resumable session looks like — a divergence there would let one suite pass on a shape the
-// other rejects.
-
 import type {
   AgentJournalApprovalItem,
   AgentJournalRenderItem,
@@ -11,20 +5,25 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 export const SESSION = 'session-working-1'
 export const THREAD = 'thread-1'
 export const HANDLE_ROOT = `codex:${JSON.stringify(THREAD)}`
 export const NOW = 1_700_000_000_000
-/** Distinct teardown identities; neither encodes launch ancestry. */
+/** Opaque teardown IDs do not encode ancestry. */
 export const TEARDOWN_PREVIOUS = 'teardown-previous'
 export const TEARDOWN_CURRENT = 'teardown-current'
 
 export function turnItem(
   turnId: string,
   state: 'running' | 'completed' | 'interrupted' | 'unverifiable',
-  /** The provider key of the user item that opened this turn — how a submission is followed
-   *  forward to the turn it became. Absent models an older host that recorded no link. */
+  /** Link submission to its opening turn; absent models older hosts. */
   userItemId?: string
 ): AgentJournalRenderItem {
   return {
@@ -51,7 +50,7 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
     providerHandleChain: overrides.chain ?? [
       {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW
@@ -69,7 +68,6 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
       leaseDeadlineAt: NOW,
       lastRenewedAt: NOW,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'released',
       unreconciled: false,
@@ -80,7 +78,6 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
   } as unknown as AgentSessionRecord
 }
 
-/** The same record with its lease already re-taken, modelling a pane that bound after the offer. */
 export function liveLeaseRecord(): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the base fixture is already record-shaped; only claimStatus is overridden.
   return {
@@ -89,7 +86,6 @@ export function liveLeaseRecord(): AgentSessionRecord {
   } as AgentSessionRecord
 }
 
-/** A prompt the agent is blocked on. The chat is waiting on the USER, not on itself. */
 export function pendingApproval(): AgentJournalRenderItem & { body: AgentJournalApprovalItem } {
   return {
     itemId: 'approval:1',
@@ -109,7 +105,7 @@ export function pendingApproval(): AgentJournalRenderItem & { body: AgentJournal
 export const CLAUDE_PROVIDER_SESSION = 'prov-session-1'
 export const CLAUDE_ROOT = `claude:${JSON.stringify(CLAUDE_PROVIDER_SESSION)}`
 
-/** Claude's handle carries a leaf uuid, and the adapter's close path advances it. */
+/** Claude close can advance the leaf UUID without changing conversation identity. */
 export function claudeRecord(
   leafUuid: string | null,
   providerSessionId = CLAUDE_PROVIDER_SESSION
@@ -122,7 +118,7 @@ export function claudeRecord(
     providerHandleChain: [
       {
         linkId: 'link-1',
-        handle: { provider: 'claude', sessionId: providerSessionId, leafUuid },
+        handle: claudeProviderHandle(providerSessionId, leafUuid),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW
@@ -131,28 +127,29 @@ export function claudeRecord(
   } as unknown as AgentSessionRecord
 }
 
-/** The fake journal's own shape, so callers can wire `appendItem` without reaching into `unknown`.
- *  The code under test sees the real `AgentSessionJournal` type; tests see this. */
 export type HarnessJournal = {
-  isReadOnly: boolean
-  snapshot: () => { items: AgentJournalRenderItem[]; submissions: AgentJournalSubmission[] }
+  snapshot: () => {
+    items: AgentJournalRenderItem[]
+    submissions: AgentJournalSubmission[]
+    cursor: { epoch: string; sequence: number }
+  }
   submissions: () => AgentJournalSubmission[]
   appendItem: (envelope: unknown, body: { kind: string; text: string }) => Promise<void>
 }
 
-export type HarnessSession = { journal: HarnessJournal; hasProviderChild: boolean; fence?: number }
+export type HarnessSession = { journal: HarnessJournal; child: { fence: number } | null }
 
 export function journal(
   items: AgentJournalRenderItem[],
-  isReadOnly = false,
   submissions: AgentJournalSubmission[] = []
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only isReadOnly, snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions(), appendItem() and the provenance reads; a real AgentSessionJournal needs an on-disk SQLite store.
   return {
-    isReadOnly,
-    snapshot: () => ({ items, submissions }),
+    snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
-    appendItem: async () => undefined
+    appendItem: async () => undefined,
+    itemFence: () => undefined,
+    wroteBeforeOpen: () => false
   } as never
 }
 
@@ -171,11 +168,9 @@ export function marker(
   }
 }
 
-/** A journalled send, in whichever dispatch state the test needs. */
 export function submission(
   clientMessageId: string,
   dispatchState: 'pending' | 'accepted' | 'rejected' | 'unknown',
-  /** The provider's key for the sent message. A turn names the same key in `userItemId`. */
   providerItemId: string | null = null
 ): AgentJournalSubmission {
   return {
@@ -188,4 +183,36 @@ export function submission(
     submittedAt: NOW,
     resolvedAt: null
   }
+}
+
+export function childRecord(
+  child: Pick<AgentChildWorkView, 'id' | 'kind'> & Partial<AgentChildWorkView>
+): AgentChildWorkView {
+  return {
+    state: 'working',
+    membership: child.state === 'done' || child.state === 'idle' ? 'settled' : 'live',
+    firstObservedAt: NOW,
+    observedAt: NOW,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${child.id}`, generation: 1 },
+    ...child
+  }
+}
+
+export const EPOCH = 'epoch-1'
+
+export function resumableSet(input: {
+  markers: AgentSessionResumeMarker[]
+  items?: AgentJournalRenderItem[]
+  chain?: AgentSessionRecord['providerHandleChain']
+  savedByNewerOrca?: string[]
+}) {
+  return structuredAgentSessionResumableSet({
+    markers: input.markers,
+    getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
+    supportsRecord: () => true,
+    latestPrompt: () => 'fix the auth bug',
+    movedOn: () => false,
+    savedByNewerOrca: (sessionId) => input.savedByNewerOrca?.includes(sessionId) === true
+  })
 }
