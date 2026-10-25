@@ -84,12 +84,17 @@ function createCachedCharacterJoiner(
     }
     const generationBeforeJoin = cache.generation
     const ranges = joiner(text)
-    // Why: the addon refreshes when async font discovery completes. If that
-    // happened during this call, do not repopulate the cleared fallback data.
+    // Why (#13473): some programming fonts (e.g. JetBrains Mono) ship a `calt`
+    // feature that connects runs of underscores into a single glyph, which the
+    // canvas renderer then draws as one near-invisible cluster. Drop joiner
+    // ranges that are purely underscores so each `_` renders on its own cell;
+    // real ligatures (=>, !=, …) are untouched because they contain non-underscore
+    // characters.
+    const filtered = ranges.filter(([start, end]) => !/^_+$/.test(text.slice(start, end + 1)))
     if (cache.generation === generationBeforeJoin) {
-      cache.set(text, ranges)
+      cache.set(text, filtered)
     }
-    return ranges
+    return filtered
   }
 }
 
