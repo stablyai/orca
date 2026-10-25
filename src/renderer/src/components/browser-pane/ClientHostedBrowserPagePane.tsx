@@ -1,3 +1,4 @@
+import { useClientHostedBrowserViewport } from './use-client-hosted-browser-viewport'
 import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
@@ -19,24 +20,22 @@ import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-int
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
-import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
+import { useClientHostedBrowserGuestTools } from './annotate/use-client-hosted-browser-guest-tools'
+import { BrowserGuestAnnotateOverlays } from './annotate/browser-guest-annotate-overlays'
 import BrowserFind from './assemble-chrome/BrowserFind'
-import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
-import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
+import { ClientHostedBrowserPageToolbar } from './assemble-chrome/client-hosted-browser-page-toolbar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-address-bar-edit-session'
 import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
-import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
-import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
+import { useBrowserPageKeyboardShortcuts } from './host-guest/use-browser-page-keyboard-shortcuts'
 import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
@@ -57,6 +56,7 @@ export function ClientHostedBrowserPagePane({
   onSetUrl
 }: ClientHostedBrowserPagePaneProps): React.JSX.Element {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const viewportScrollerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Why: a worktree switch unmounts this pane while main keeps the guest, so the failure has to
@@ -79,6 +79,21 @@ export function ClientHostedBrowserPagePane({
     environmentId: runtimeEnvironmentId,
     placementPending: placement === null
   })
+  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
+  const { grab, markup, annotationSend, grabAnnotations, browserOverlayViewport, ...tools } =
+    useClientHostedBrowserGuestTools({
+      browserPageId: browserTab.id,
+      worktreeId,
+      webviewRef,
+      viewportRef,
+      runtimeEnvironmentId,
+      placement,
+      isActive,
+      unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+      showFailureOverlay,
+      documentUrl: browserTab.url
+    })
+  const bindAnnotationDocument = useEffectEvent(tools.bindAnnotationDocument)
   // Why: a client-hosted guest is created by main's host runtime, so there is no local guest to
   // recreate — a lost one is page unavailability, whose panel offers the reopen-on-server escape.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
@@ -121,13 +136,20 @@ export function ClientHostedBrowserPagePane({
   // Why: the tour points at controls that cannot work yet, and recording the interaction is a
   // one-way write that would burn the tour on a pane the user has not really seen.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
-  useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
-  useBrowserPageWebviewShortcuts({
+  useBrowserPageFindShortcuts({
+    ...shortcutOwner,
+    setFindOpen
+  })
+  useBrowserPageKeyboardShortcuts({
     ...shortcutOwner,
     isActiveRef,
+    markupIsActive: markup.isActive,
     webviewRef,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
-    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest
+    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
+    startGrabIntent: grabAnnotations.startGrabIntent,
+    handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
+    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error'
   })
 
   const navigateToUrl = useClientHostedPageUrlSubmission({
@@ -251,9 +273,11 @@ export function ClientHostedBrowserPagePane({
         updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
       }
     )
+    const unbindAnnotationDocument = bindAnnotationDocument(webview)
     const unbind = bindBrowserClientPageGuestEvents(webview, onStart, syncNavigation, onFailLoad)
     const cleanupGuest = (): void => {
       unbind()
+      unbindAnnotationDocument()
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
@@ -278,19 +302,17 @@ export function ClientHostedBrowserPagePane({
 
   useClientHostedGuestActivationFocus({ isActive, guestFocus, keepAddressBarFocusRef })
 
-  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
     feedbackVisible: zoom.browserZoomFeedbackVisible
   })
 
-  const markup = useClientHostedBrowserMarkup({
-    webviewRef,
+  useClientHostedBrowserViewport({
     browserPageId: browserTab.id,
-    runtimeEnvironmentId,
-    placement,
-    isActive,
-    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
-    showFailureOverlay
+    presetId: browserTab.viewportPresetId ?? null,
+    pageHostGeneration,
+    contentRef: viewportRef,
+    scrollerRef: viewportScrollerRef,
+    webviewRef
   })
 
   // Why the unrecovered case reads not-loading: nothing is coming, and a loading cue nobody
@@ -312,45 +334,46 @@ export function ClientHostedBrowserPagePane({
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
-        <BrowserNavigationControlRow
-          controls={{
-            canGoBack: browserTab.canGoBack,
-            canGoForward: browserTab.canGoForward,
-            goBack: () => webviewRef.current?.goBack(),
-            goForward: () => webviewRef.current?.goForward(),
-            reload: () => reload.runReloadTrigger('button'),
-            navigate: navigateToUrl
-          }}
-          addressSlot={
-            <BrowserAddressBar
-              pageId={browserTab.id}
-              value={addressBarValue}
-              onChange={setAddressBarValue}
-              onSubmit={() => navigateToUrl(addressBarValue)}
-              onNavigate={navigateToUrl}
-              onOpenWorkspaceDoc={(docLocation) =>
-                convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
-              }
-              inputRef={addressBarInputRef}
-              editSession={addressBarEditSession}
-              leadingIcon={
-                <RemoteRuntimeEgressIndicator
-                  runtimeEnvironmentId={runtimeEnvironmentId}
-                  presentation="client-hosted"
-                />
-              }
-              loading={loading}
-              loadFailed={browserTab.loadError !== null}
-            />
-          }
-          reloadLabel={reload.reloadButtonLabel}
-          reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
-        >
-          {markup.drawButton}
-        </BrowserNavigationControlRow>
+        <ClientHostedBrowserPageToolbar
+          browserPageId={browserTab.id}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          viewportPresetId={browserTab.viewportPresetId ?? null}
+          canGoBack={browserTab.canGoBack}
+          canGoForward={browserTab.canGoForward}
+          // Why the unrecovered case reads not-loading: nothing is coming, and a spinner nobody
+          // will ever stop is the one state this pane must not sit in.
+          loading={loading}
+          loadFailed={browserTab.loadError !== null}
+          webviewRef={webviewRef}
+          reload={reload}
+          navigate={navigateToUrl}
+          addressBarValue={addressBarValue}
+          onAddressBarChange={setAddressBarValue}
+          addressBarInputRef={addressBarInputRef}
+          addressBarEditSession={addressBarEditSession}
+          elementTools={tools.elementTools}
+          markup={tools.markupTool}
+        />
       </div>
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
-        {markup.overlay}
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div
+          ref={viewportScrollerRef}
+          data-browser-page-scroller=""
+          className="scrollbar-sleek relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+        >
+          <div ref={viewportRef} className="relative mx-auto">
+            <BrowserGuestAnnotateOverlays
+              markup={markup}
+              grab={grab}
+              annotationSend={annotationSend}
+              grabAnnotations={grabAnnotations}
+              containerRef={viewportRef}
+              webviewRef={webviewRef}
+              browserOverlayViewport={browserOverlayViewport}
+              worktreeId={worktreeId}
+            />
+          </div>
+        </div>
         <BrowserPageZoomIndicator
           state={browserZoomIndicatorState}
           percent={zoom.browserZoomPercent}

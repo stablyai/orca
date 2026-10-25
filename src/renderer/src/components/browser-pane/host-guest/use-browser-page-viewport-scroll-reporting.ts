@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 import {
   getBrowserPageViewportScrollState,
   type BrowserPageViewportScrollState
@@ -7,14 +7,17 @@ import {
 export function useBrowserPageViewportScrollReporting(
   browserPageId: string,
   scroller: HTMLDivElement | null,
-  viewportPresetId: string | null
+  viewportPresetId: string | null,
+  scrollerRef?: RefObject<HTMLDivElement | null>
 ): void {
   useEffect(() => {
+    const activeScroller = scrollerRef?.current ?? scroller
     let reportFrame: number | null = null
     const send = (): void => {
       reportFrame = null
-      const state: BrowserPageViewportScrollState | null =
-        getBrowserPageViewportScrollState(browserPageId)
+      const state: BrowserPageViewportScrollState | null = scrollerRef
+        ? getBrowserPageViewportScrollState(browserPageId, activeScroller ?? undefined)
+        : getBrowserPageViewportScrollState(browserPageId)
       if (state) {
         window.api.browser.reportViewportScrollState?.({ browserPageId, state })
       }
@@ -29,22 +32,22 @@ export function useBrowserPageViewportScrollReporting(
       }
     }
     report()
-    if (!scroller) {
+    if (!activeScroller) {
       return () => {
         if (reportFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
           cancelAnimationFrame(reportFrame)
         }
       }
     }
-    scroller.addEventListener('scroll', report, { passive: true })
+    activeScroller.addEventListener('scroll', report, { passive: true })
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
-    resizeObserver?.observe(scroller)
+    resizeObserver?.observe(activeScroller)
     return () => {
-      scroller.removeEventListener('scroll', report)
+      activeScroller.removeEventListener('scroll', report)
       resizeObserver?.disconnect()
       if (reportFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
         cancelAnimationFrame(reportFrame)
       }
     }
-  }, [browserPageId, scroller, viewportPresetId])
+  }, [browserPageId, scroller, viewportPresetId, scrollerRef])
 }

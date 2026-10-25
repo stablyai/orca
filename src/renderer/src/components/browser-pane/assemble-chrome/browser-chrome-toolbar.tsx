@@ -93,6 +93,7 @@ export function BrowserChromeToolbar({
   addressSlot,
   reloadControl,
   reloadLabel,
+  reloadShowsStop,
   importControl,
   elementTools,
   markup,
@@ -107,6 +108,7 @@ export function BrowserChromeToolbar({
   addressSlot: React.ReactNode
   reloadControl?: React.ReactNode
   reloadLabel?: string
+  reloadShowsStop?: boolean
   /** Cookie import — a browsing session concept; null where there is no session to import into. */
   importControl?: ((compact: boolean) => React.ReactNode) | null
   elementTools: BrowserChromeElementTools | null
@@ -217,6 +219,7 @@ export function BrowserChromeToolbar({
       addressSlot={addressSlot}
       reloadControl={reloadControl}
       reloadLabel={reloadLabel}
+      reloadShowsStop={reloadShowsStop}
       showTourAnchors={showTourAnchors}
     >
       {folded.has('import') ? null : importControl?.(folded.has('import-label'))}

@@ -194,6 +194,30 @@ describe('browser client page retained registry', () => {
     expect(registry.getMemoryProfile().attachedPageCount).toBe(1)
   })
 
+  it('clips an oversized preset host to its pane without moving the guest', async () => {
+    const { registry, webviews } = createRig()
+    const mounting = registry.mountPage(PAGE)
+    const webview = webviews[0]!
+    attach(webview)
+    await mounting
+    const host = webview.parentElement!
+    const scroller = document.createElement('div')
+    scroller.dataset.browserPageScroller = ''
+    const content = document.createElement('div')
+    scroller.appendChild(content)
+    document.body.appendChild(scroller)
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 60, 300, 200))
+    vi.spyOn(content, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 50, 500, 400))
+    const attachment = registry.attachPage(PAGE, content)
+    expect(host.style.clipPath).toBe('inset(10px 180px 190px 20px)')
+    expect(webview.parentElement).toBe(host)
+    attachment.detach()
+    scroller.removeAttribute('data-browser-page-scroller')
+    registry.attachPage(PAGE, content)
+    expect(host.style.clipPath).toBe('')
+    expect(webviews).toHaveLength(1)
+  })
+
   it('keeps metadata revisions monotonic across visible detach and reattach', async () => {
     const { registry, webviews } = createRig()
     const mounting = registry.mountPage(PAGE)
