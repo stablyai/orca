@@ -146,6 +146,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'browserDevToolsDock',
   'windowBounds',
   'windowMaximized',
+  'windowFullscreen',
   'dashboardPopoutBounds',
   'starNagBaselineAgents',
   'starNagAppVersion',
