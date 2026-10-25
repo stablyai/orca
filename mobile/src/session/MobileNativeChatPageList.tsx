@@ -37,7 +37,7 @@ import {
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
 const DRAW_AHEAD_SCREENS = 3
-// At the tail, rows drawn on the way back through history are dropped past this many screens.
+// While following, rows drawn past this many screens above the tail are dropped.
 const TRIM_SCREENS = 6
 // Fetch ahead far enough for multi-screen phone flicks.
 const FETCH_AHEAD_ROWS = 40
@@ -246,8 +246,8 @@ export function MobileNativeChatPageList({
         next = Math.max(0, at - DRAW_BATCH)
       } else if (at < opening && screens > TRIM_SCREENS && isFollowing()) {
         // Cut at a row wholly above the draw-ahead line so drawing never wants it back.
-        const kept = mobileNativeChatRowAbove(s, DRAW_AHEAD_SCREENS * s.clientHeight)
-        next = Math.min(rowAt.get(kept ?? '') ?? at, opening)
+        const cut = mobileNativeChatRowAbove(s, DRAW_AHEAD_SCREENS * s.clientHeight)
+        next = Math.min(rowAt.get(cut ?? '') ?? at, opening)
       }
       if (next !== at) {
         const { scope } = latest.current.rowKeys
