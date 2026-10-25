@@ -4,7 +4,7 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
+  refusedReason?: 'no-agent' | 'permission' | 'mobile-driving'
   prompt?: RuntimeTerminalPromptDelivery
   writeSettlement?: WriteSettlement
 }

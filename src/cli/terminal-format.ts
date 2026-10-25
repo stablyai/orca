@@ -174,6 +174,9 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
   if (!result.send.accepted) {
+    if (result.send.refusedReason === 'mobile-driving') {
+      return `Input refused by ${result.send.handle}: a phone is driving this terminal, so desktop and CLI input is paused. Take it back in Orca on desktop (the "Take back" button on the terminal), then retry.`
+    }
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
     return `Input refused by ${result.send.handle}${reason}.`
   }

@@ -136,7 +136,8 @@ describe('terminal send RPC', () => {
       send: {
         handle: 'terminal-1',
         accepted: false,
-        bytesWritten: 0
+        bytesWritten: 0,
+        refusedReason: 'mobile-driving'
       }
     })
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
@@ -847,7 +848,8 @@ describe('terminal send RPC', () => {
       send: {
         handle: 'terminal-1',
         accepted: false,
-        bytesWritten: 0
+        bytesWritten: 0,
+        refusedReason: 'mobile-driving'
       }
     })
   })

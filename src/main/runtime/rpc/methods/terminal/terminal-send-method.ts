@@ -11,6 +11,7 @@ import {
   getTerminalSendGuardRefusedReason,
   isTerminalInputLockedForClient,
   isTerminalSendGuardNotWritable,
+  mobileLockRefusedSend,
   resolveMobileFloorClientId,
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
@@ -77,6 +78,8 @@ export const TERMINAL_SEND_METHODS = [
       // Why: a stale handle must fail with terminal_handle_stale, not evaluate driver/lock state against the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
+      const lockRefused = () =>
+        mobileLockRefusedSend(runtime, params.terminal, leaf?.ptyId ?? undefined, params.client)
       if (
         params.inputKind === 'query-reply' &&
         leaf?.ptyId &&
@@ -91,13 +94,7 @@ export const TERMINAL_SEND_METHODS = [
         }
       }
       if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
-        return {
-          send: {
-            handle: params.terminal,
-            accepted: false,
-            bytesWritten: 0
-          }
-        }
+        return lockRefused()
       }
       if (
         leaf?.ptyId &&
@@ -125,13 +122,7 @@ export const TERMINAL_SEND_METHODS = [
         )
         // Why: a stream-less request can't safely create ownership, so never write at stale geometry.
         if (!claim.updated || isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0
-            }
-          }
+          return lockRefused()
         }
       }
       const hasText = typeof params.text === 'string' && params.text.length > 0
@@ -167,13 +158,7 @@ export const TERMINAL_SEND_METHODS = [
           await assertSendPreconditions?.(leaf?.ptyId ?? undefined)
         } catch (error) {
           if (isTerminalSendGuardNotWritable(error)) {
-            return {
-              send: {
-                handle: params.terminal,
-                accepted: false,
-                bytesWritten: 0
-              }
-            }
+            return lockRefused()
           }
           const refusedReason = getTerminalSendGuardRefusedReason(error)
           if (!refusedReason) {
@@ -271,13 +256,7 @@ export const TERMINAL_SEND_METHODS = [
           }
         }
         if (isTerminalSendGuardNotWritable(error)) {
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0
-            }
-          }
+          return lockRefused()
         }
         throw error
       }

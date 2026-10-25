@@ -23,6 +23,24 @@ export function isTerminalInputLockedForClient(
   return runtime.getDriver(ptyId).kind === 'mobile'
 }
 
+// Why: a bare accepted:false hides that a phone owns the terminal; callers can't tell it from a dead pane.
+export function mobileLockRefusedSend(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  ptyId: string | undefined,
+  client: TerminalViewportClient | undefined
+): { send: RuntimeTerminalSend } {
+  const locked = ptyId !== undefined && isTerminalInputLockedForClient(runtime, ptyId, client)
+  return {
+    send: {
+      handle,
+      accepted: false,
+      bytesWritten: 0,
+      ...(locked ? { refusedReason: 'mobile-driving' as const } : {})
+    }
+  }
+}
+
 export async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
   if (!text) {
     return

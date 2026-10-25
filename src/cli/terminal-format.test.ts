@@ -89,6 +89,20 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
+  it('tells the caller a phone is driving the terminal and how to recover', () => {
+    const text = formatTerminalSend({
+      send: {
+        handle: 'term_worker',
+        accepted: false,
+        bytesWritten: 0,
+        refusedReason: 'mobile-driving'
+      }
+    })
+    expect(text).toContain('Input refused by term_worker')
+    expect(text).toContain('phone is driving')
+    expect(text).toContain('Take back')
+  })
+
   it('exposes the provider and healthy delivery observation', () => {
     expect(
       formatTerminalSend({
