@@ -76,10 +76,7 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   return null
 }
 
-/**
- * Resolves true once all of the text is in the field. False means it was skipped or cut short,
- * and for terminals and queued-message edits, whose insertion completes elsewhere, that delivery is unconfirmed.
- */
+// Resolves true only after confirmed delivery; terminal and queued-edit inserts land elsewhere, unconfirmed.
 export function insertText(text: string, target: DictationInsertionTarget): Promise<boolean> {
   if (target.kind === 'composer') {
     target.insert(text)
@@ -179,16 +176,17 @@ function insertContentEditableDictationChunk(
     return true
   }
   const selection = element.ownerDocument.getSelection()
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = element.ownerDocument.createTextNode(text)
-    range.insertNode(textNode)
-    range.setStartAfter(textNode)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  if (!selection || !range || !element.contains(range.commonAncestorContainer)) {
+    return false
   }
+  range.deleteContents()
+  const textNode = element.ownerDocument.createTextNode(text)
+  range.insertNode(textNode)
+  range.setStartAfter(textNode)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
   editorElement.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
   )

@@ -8,6 +8,7 @@ import {
   resolveDictationAutoSendDelayMs,
   resolveDictationAutoSendElement
 } from './dictation-auto-send'
+import { insertText } from './dictation-insertion-target'
 
 let submitted: HTMLElement[] = []
 const recordSubmit = (event: Event): void => {
@@ -137,13 +138,29 @@ describe('armDictationAutoSend', () => {
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
-  it('does not send when the text never reached the editor', async () => {
+  // happy-dom has no execCommand, so insertText takes the selection fallback.
+  it.each([
+    ['sends once dictation lands at the caret', 'editor', true],
+    ['does not send when there is no caret to insert at', 'none', false],
+    ['does not send when the caret is outside the editor', 'outside', false]
+  ] as const)('%s', async (_name, caret, sends) => {
     const editor = appendComposerEditor()
-    const { onCountdown, onSettled } = arm(editor, Promise.resolve(false))
+    editor.textContent = 'Old draft'
+    const selection = document.getSelection()
+    selection?.removeAllRanges()
+    if (caret !== 'none') {
+      selection?.selectAllChildren(caret === 'editor' ? editor : appendOtherButton())
+      selection?.collapseToEnd()
+    }
+
+    const { onSettled } = arm(
+      editor,
+      insertText(' new', { kind: 'contentEditable', element: editor })
+    )
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(onCountdown).not.toHaveBeenCalled()
-    expect(submitted).toEqual([])
+    expect(submitted).toEqual(sends ? [editor] : [])
+    expect(editor.textContent).toBe(sends ? 'Old draft new' : 'Old draft')
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
