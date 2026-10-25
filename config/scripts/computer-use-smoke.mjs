@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { resolveDevCliUserDataPath } from './dev-instance-isolation.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const cliPath =
@@ -148,7 +148,8 @@ function runCli(cliArgs, options = {}) {
     env: {
       ...process.env,
       ORCA_USER_DATA_PATH:
-        process.env.ORCA_COMPUTER_SMOKE_USER_DATA_PATH ?? defaultDevUserDataPath()
+        process.env.ORCA_COMPUTER_SMOKE_USER_DATA_PATH ??
+        resolveDevCliUserDataPath({ repoRoot, env: { ...process.env } })
     }
   })
   if (child.status !== 0) {
@@ -166,16 +167,6 @@ function runCli(cliArgs, options = {}) {
     const detail = error instanceof Error ? error.message : String(error)
     fail(`Could not parse CLI JSON for ${cliArgs.join(' ')}: ${detail}\n${child.stdout}`)
   }
-}
-
-function defaultDevUserDataPath() {
-  if (process.platform === 'darwin') {
-    return resolve(homedir(), 'Library', 'Application Support', 'orca-dev')
-  }
-  if (process.platform === 'win32') {
-    return resolve(process.env.APPDATA ?? resolve(homedir(), 'AppData', 'Roaming'), 'orca-dev')
-  }
-  return resolve(process.env.XDG_CONFIG_HOME ?? resolve(homedir(), '.config'), 'orca-dev')
 }
 
 function unwrapResult(value) {

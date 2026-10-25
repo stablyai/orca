@@ -79,6 +79,15 @@ export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}
     .join(', ')
 }
 
+/** A spawn refused because its folder is gone, as the daemon reports it back across its wire. */
+export function isMissingWorkingDirectoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : ''
+  return (
+    message.startsWith('Working directory "') &&
+    (message.includes('" does not exist.') || message.endsWith('" is not a directory.'))
+  )
+}
+
 function throwMissingWorkingDirectory(cwd: string): never {
   throw new Error(
     `Working directory "${cwd}" does not exist. ` +

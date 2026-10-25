@@ -1,8 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
 import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
 import { takePendingSubscribe } from './parcel-watcher-pending-subscribe'
-import type { WatcherProcessFailure } from '../../parcel-watcher-process-failure'
-import type { WatcherProcessSubscriptionRecord } from '../../parcel-watcher-process-subscription'
+import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 
 type CancelPendingWatcherSubscribeOptions = {
   record: WatcherProcessSubscriptionRecord

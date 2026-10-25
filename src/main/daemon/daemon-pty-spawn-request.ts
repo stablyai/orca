@@ -18,6 +18,8 @@ import {
 } from './terminal-history-seed-chunks'
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
+import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { isMissingWorkingDirectoryError } from '../providers/working-directory-validation'
 
 /** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
 function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent {
@@ -202,7 +204,22 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       }
       return requestCreateOrAttach(undefined, transferId)
     }
-    const result = await deliverSeedAndCreate()
+    const requestedCwd = context.opts.cwd ?? resolveSafePtyDefaultCwd()
+    const result = await deliverSeedAndCreate().catch((error: unknown) => {
+      const recovered = context.restoreInfo
+      // Why: the folder a pane slept in can be deleted before it wakes; it then opens where it
+      // was asked to, as it did before the folder was kept.
+      if (
+        !recovered ||
+        context.effectiveCwd === requestedCwd ||
+        !isMissingWorkingDirectoryError(error)
+      ) {
+        throw error
+      }
+      context.effectiveCwd = requestedCwd
+      context.restoreInfo = { ...recovered, cwd: requestedCwd }
+      return deliverSeedAndCreate()
+    })
     return historySeedUnavailable && result.historySeeded === undefined
       ? { ...result, historySeeded: false }
       : result

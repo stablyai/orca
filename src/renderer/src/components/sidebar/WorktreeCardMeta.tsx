@@ -89,6 +89,7 @@ export function WorktreeCardDetailsHover({
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
+  const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
     issueMenuOpen,
@@ -97,11 +98,9 @@ export function WorktreeCardDetailsHover({
     handleIssueMenuOpenChange,
     handleReviewMenuOpenChange,
     closeHover
-  } = hoverControl ?? internalHoverControl
-  const { linkActionRequest, onOpenLink, closeLinkActions } = useWorkspaceReferenceLinkActions(
-    workspace?.id,
-    closeHover
-  )
+  } = detailsHoverControl
+  const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
+    useWorkspaceReferenceLinkActions(workspace?.id, detailsHoverControl)
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
   const handleWorkspaceTitleEditingChange = React.useCallback(
@@ -191,7 +190,7 @@ export function WorktreeCardDetailsHover({
       closeDelay={closeDelay}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
-        <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
+        <LinkActionPopover {...linkActionPopoverProps} />
       </span>
       <HoverCardTrigger
         asChild
@@ -207,6 +206,7 @@ export function WorktreeCardDetailsHover({
         {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
+        onAuxClickCapture={onAuxClickCapture}
       >
         <SelectedTextCopyMenu className="space-y-3">
           {showIdentityHeader && (

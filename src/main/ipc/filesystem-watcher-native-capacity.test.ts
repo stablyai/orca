@@ -11,7 +11,7 @@ const { handleMock, statMock, subscribeViaWatcherProcessMock, disposeWatcherProc
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
-vi.mock('./parcel-watcher-process', () => ({
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: subscribeViaWatcherProcessMock,
   disposeWatcherProcess: disposeWatcherProcessMock
 }))

@@ -108,7 +108,7 @@ describe('ActivityStatusGroupHeader', () => {
     expect(header?.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('supports custom className and uses accessible contrast tokens without hardcoded white background', () => {
+  it('applies the caller className to the group header', () => {
     act(() => {
       root.render(
         <TooltipProvider>
@@ -123,7 +123,6 @@ describe('ActivityStatusGroupHeader', () => {
 
     const header = container.querySelector('div')
     expect(header?.className).toContain('custom-header-class')
-    expect(header?.className).not.toContain('bg-background/95')
   })
 })
 

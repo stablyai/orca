@@ -110,7 +110,7 @@ describe('collectAgentTitleEvidence', () => {
       expect(reasonFor('✳ Consolidate Codex subagent sidebar rows')).toBe('vendor-marker')
     })
 
-    it('lets an anchored name outrank a foreign vendor marker', () => {
+    it('keeps the Claude marker when the remaining bare name is unanchored', () => {
       expect(agentFor('✳ agy')).toBe('claude')
       expect(reasonFor('✳ agy')).toBe('vendor-marker')
       expect(agentFor('✳ codex')).toBe('claude')

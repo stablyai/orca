@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu'
 import {
+  forceUpdateMessage,
   managedServerOutcomeLabel,
   migrationPhaseLabel,
   recoveryLabel,
@@ -19,6 +20,7 @@ export function managedServerVersionLabel(
 ): string {
   if (status) {
     return (
+      status.activeAppVersion ??
       status.activeVersion ??
       translate('auto.components.settings.managedServers.row.notRunning', 'Not running')
     )
@@ -100,10 +102,22 @@ export function ManagedServerDetailLines({
   )
 }
 
+// Why not during a migration: an update restarting the server would race its cutover.
+function managedServerUpdateOffered(lifecycle: ManagedServerLifecycle): boolean {
+  return (
+    lifecycle.recovery === null &&
+    !lifecycle.status?.migration &&
+    Boolean(lifecycle.status?.availableUpdate) &&
+    lifecycle.confirmingForceUpdate === null
+  )
+}
+
 export function managedServerHasPrimaryAction(lifecycle: ManagedServerLifecycle): boolean {
   const { recovery } = lifecycle
   return (
-    recovery !== null && (recovery.operation === 'decommission' || !lifecycle.confirmingRestore)
+    (recovery !== null &&
+      (recovery.operation === 'decommission' || !lifecycle.confirmingRestore)) ||
+    managedServerUpdateOffered(lifecycle)
   )
 }
 
@@ -114,6 +128,20 @@ export function ManagedServerPrimaryAction({
   lifecycle: ManagedServerLifecycle
 }): React.JSX.Element | null {
   const { recovery, busy, run } = lifecycle
+  if (!recovery && managedServerUpdateOffered(lifecycle)) {
+    return (
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        disabled={busy !== null}
+        onClick={() => void run('update')}
+      >
+        {busy === 'update' || busy === 'forceUpdate' ? <LoadingSpinner className="size-3" /> : null}
+        {translate('auto.components.settings.managedServers.row.update', 'Update')}
+      </Button>
+    )
+  }
   if (!recovery || !managedServerHasPrimaryAction(lifecycle)) {
     return null
   }
@@ -139,6 +167,7 @@ function ConfirmStrip({
   confirmLabel,
   keepLabel,
   disabled,
+  tone = 'destructive',
   onConfirm,
   onKeep
 }: {
@@ -146,6 +175,7 @@ function ConfirmStrip({
   confirmLabel: string
   keepLabel: string
   disabled: boolean
+  tone?: 'destructive' | 'default'
   onConfirm: () => void
   onKeep: () => void
 }): React.JSX.Element {
@@ -156,13 +186,7 @@ function ConfirmStrip({
         <Button type="button" size="xs" variant="ghost" onClick={onKeep}>
           {keepLabel}
         </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant="destructive"
-          disabled={disabled}
-          onClick={onConfirm}
-        >
+        <Button type="button" size="xs" variant={tone} disabled={disabled} onClick={onConfirm}>
           {confirmLabel}
         </Button>
       </div>
@@ -172,6 +196,7 @@ function ConfirmStrip({
 
 export function managedServerHasConfirmation(lifecycle: ManagedServerLifecycle): boolean {
   return (
+    lifecycle.confirmingForceUpdate !== null ||
     lifecycle.confirmingStop ||
     (lifecycle.statusError !== null && lifecycle.confirmingForget) ||
     (lifecycle.recovery !== null && lifecycle.confirmingRestore)
@@ -186,6 +211,23 @@ export function ManagedServerConfirmations({
 }): React.JSX.Element | null {
   const { recovery, statusError, busy, run } = lifecycle
   const disabled = busy !== null
+  const forceUpdate = lifecycle.confirmingForceUpdate
+  if (forceUpdate) {
+    return (
+      <ConfirmStrip
+        message={forceUpdateMessage()}
+        confirmLabel={translate(
+          'auto.components.settings.managedServers.row.updateAnyway',
+          'Update anyway'
+        )}
+        keepLabel={translate('auto.components.settings.managedServers.row.notNow', 'Not now')}
+        disabled={disabled}
+        tone="default"
+        onConfirm={() => void run('forceUpdate')}
+        onKeep={() => lifecycle.setConfirmingForceUpdate(null)}
+      />
+    )
+  }
   if (lifecycle.confirmingStop) {
     return (
       <ConfirmStrip

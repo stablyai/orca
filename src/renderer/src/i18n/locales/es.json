@@ -1147,6 +1147,11 @@
         "openInChat": "Esta conversación de {{value0}} está abierta en un chat. Actualiza el historial de sesiones para abrirla.",
         "ownershipUnknown": "Orca no pudo confirmar quién es el propietario de esta conversación de {{value0}}. Actualiza el historial de sesiones e inténtalo de nuevo."
       },
+      "composerCreateHandoff": {
+        "reopen": "Reabrir",
+        "preparationTimedOut": "Se agotó el tiempo de preparación del worktree.",
+        "needsInput": "No se creó el worktree porque necesita más información."
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "Extrayendo archivos… {{percent}}%",
         "provisioningVm": "Provisionando VM…",
@@ -11921,7 +11926,8 @@
           "failed": "Update failed",
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Las compilaciones de desarrollo deben actualizarse desde su copia del código fuente.",
-          "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor."
+          "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor.",
+          "managedOverSshHelp": "Este escritorio actualiza este servidor por SSH. Usa Actualizar en su fila de Servidores remotos de Orca."
         },
         "BrowserLinkRoutingSetting": {
           "description": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca. {{shortcut}} siempre usa el navegador del sistema.",
@@ -12695,7 +12701,10 @@
             "forgetDescription": "Desvincula este servidor aquí sin contactar con su host. Si el host vuelve, es posible que el servidor siga ejecutándose allí.",
             "orcaVersion": "Orca en este host: {{version}}",
             "stopOrcaDescription": "Detiene Orca en el host SSH y lo quita de esta lista.",
-            "updateOrcaOnHost": "Actualizar Orca en este host"
+            "updateOrcaOnHost": "Actualizar Orca en este host",
+            "updateAnyway": "Actualizar de todos modos",
+            "notNow": "Ahora no",
+            "forceUpdate": "Hay terminales en ejecución en este host. Seguirán ejecutándose durante la actualización y sus paneles se reconectarán cuando se reinicie el servidor de Orca."
           },
           "title": "Orca en tus hosts SSH",
           "description": "Orca se instala en un host SSH vacío y se mantiene actualizado.",

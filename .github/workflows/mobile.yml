@@ -32,6 +32,10 @@ on:
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      # Mobile typechecks run through the root compiler selection.
+      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
@@ -76,6 +80,9 @@ on:
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/setup-pnpm/**'
@@ -114,7 +121,7 @@ jobs:
       # from the Gemfile, which is how the release jobs could land on different
       # fastlane versions in the first place. Fail here instead.
       BUNDLE_FROZEN: 'true'
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
 
     defaults:
       run:
@@ -171,9 +178,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
@@ -182,8 +187,6 @@ jobs:
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # This includes the bridged replay of the whole recording corpus, which used to be a second
@@ -256,10 +259,55 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+  # Reports, never gates: flags in the job summary when a pull request changes the Expo fingerprint,
+  # i.e. dev clients need a native rebuild. Only mobile's install, without scripts: the fingerprint
+  # hashes project sources and dependency paths, never installed package contents.
+  native-fingerprint:
+    name: Mobile native fingerprint
+    if: github.event_name == 'pull_request'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      # The base commit may predate the fingerprint tools, so run the head's copy against both.
+      - name: Compare native fingerprint with the base
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/native-fingerprint"
+          mkdir -p "$tools"
+          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
+          git checkout --quiet --detach HEAD^1
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
+          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
+            --project . --summary "$GITHUB_STEP_SUMMARY"
+
   main-tests:
     name: Mobile tests on main
     env:
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: blacksmith-4vcpu-ubuntu-2404-arm
@@ -286,15 +334,11 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # The whole suite, not only the recordings: the mutant and page-bridge suites read the goldens

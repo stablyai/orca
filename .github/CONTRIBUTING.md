@@ -26,6 +26,44 @@ pnpm install
 pnpm dev
 ```
 
+### Dev Profiles and Parallel Instances
+
+`pnpm dev` in a linked Git worktree uses its own userData profile, renderer port, and remote
+debugging (CDP) port, so dev instances in different worktrees run side by side. The main checkout
+keeps the shared `orca-dev` profile. Ports are derived from the worktree path and move to the next
+free port when taken: renderer ports start at 15200 and CDP ports at 9333.
+
+On startup the runner prints one stdout line and writes the same JSON to `out/dev-instance.json`:
+
+```text
+ORCA_DEV_INSTANCE {"userData":".../orca-dev-wt/1d3830d4d3","profile":"worktree","rendererPort":15339,"rendererUrl":"http://localhost:15339","cdpPort":9513,"cdpUrl":"http://127.0.0.1:9513","repoRoot":"...","runnerPid":4242}
+```
+
+| Option                                                                  | Effect                                                     |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `pnpm dev --shared-profile` or `ORCA_DEV_PROFILE=shared`                | Use the shared `orca-dev` profile                          |
+| `pnpm dev --worktree-profile` or `ORCA_DEV_PROFILE=worktree`            | Use a per-worktree profile, including in the main checkout |
+| `ORCA_DEV_USER_DATA_PATH=<dir>`                                         | Use an explicit profile directory                          |
+| `REMOTE_DEBUGGING_PORT=<port>`, `ORCA_DEV_RENDERER_PORT=<port>`         | Pin a port                                                 |
+| `pnpm dev --seed-profile[=<dir>]` or `ORCA_DEV_SEED_PROFILE=<dir or 1>` | Seed an empty profile on first launch                      |
+
+Per-worktree profiles live in `orca-dev-wt/<hash>` next to `orca-dev` (`~/Library/Application
+Support` on macOS, `%APPDATA%` on Windows, `$XDG_CONFIG_HOME` or `~/.config` on Linux). The
+automatic storage cleanup removes them once their worktree is gone and nothing still runs from
+them. `config/scripts/orca-dev.mjs` and the `orca-dev` terminal wrapper target the profile this
+checkout's `pnpm dev` used.
+
+Seeding copies a slim set of state from another profile: projects, workspaces, settings, SSH
+targets, and the Orca account session. Terminal sessions, PTY leases, automations, caches, logs,
+and lock files are not copied, and the source profile is only read. The default source is
+`orca-dev`, or the installed app's profile when `orca-dev` is empty. Seed from `orca-dev` when you
+need the signed-in account session: dev builds cannot decrypt secrets the installed app encrypted.
+
+```bash
+pnpm dev:seed-profile [--from=<profile dir>] [--to=<profile dir>] [--reset]
+pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, removed on exit
+```
+
 ### Targeting Local Tests
 
 Use a test file or directory when you know the relevant suites. For dependency-based

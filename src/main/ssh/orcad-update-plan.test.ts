@@ -75,6 +75,22 @@ describe('planOrcadUpdate', () => {
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
   })
 
+  it('passes only counted live terminals when forced past them, never an unknown census', () => {
+    const forced = (liveSessions: number | null) =>
+      planOrcadUpdate({
+        candidateDaemonProtocol: PROTOCOL,
+        record: record(),
+        candidateVersion: '0.3.0+cc01',
+        census: { liveSessions, startedSinceActivation: null, daemonProtocolVersion: 3 },
+        force: 'live-terminals'
+      })
+    expect(forced(null)).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    expect(forced(2)).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+  })
+
   it('carries the daemon across a forced update with live terminals', () => {
     const plan = planOrcadUpdate({
       candidateDaemonProtocol: PROTOCOL,

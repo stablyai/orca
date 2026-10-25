@@ -126,7 +126,8 @@ async function startOrcadRuntime(
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
-  const { disposeWatcherProcessAndWait } = await import('../ipc/parcel-watcher-process')
+  const { disposeWatcherProcessAndWait } =
+    await import('../ipc/filesystem/watcher-process/parcel-watcher-process')
 
   let paneGridsForShutdown: { flushPaneGrids(): Promise<void> | null } | null = null
   let profileStoreForShutdown:

@@ -34,11 +34,15 @@ export type LocalBaseBranchInspection =
       remoteOid: string
       ownerWorktreePath?: string
     }
-  | { status: Exclude<LocalBaseRefRefreshStatus, 'updated'>; ownerWorktreePath?: string }
+  | {
+      status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
+      ownerWorktreePath?: string
+      shallowHistory?: true
+    }
 
 export type LocalBaseBranchFastForwardOutcome =
   | { status: 'nothing_to_do' }
-  | { status: LocalBaseRefRefreshStatus; ownerWorktreePath?: string }
+  | { status: LocalBaseRefRefreshStatus; ownerWorktreePath?: string; shallowHistory?: true }
 
 // Why: an update Orca makes on the user's behalf must be a plain fast-forward whatever the user's
 // merge settings say: no post-merge hooks (the create waits on it), auto-gc or autostash, no
@@ -91,7 +95,9 @@ export async function inspectLocalBaseBranch(
     )
     const counts = parseGitRevListAheadBehindCounts(stdout)
     if (counts.status !== 'ok' || counts.ahead !== 0 || counts.behind === 0) {
-      return { status: 'skipped_not_fast_forward' }
+      return (await isHistoryCutByShallowClone(git, repoPath, localOid, remoteOid))
+        ? { status: 'skipped_not_fast_forward', shallowHistory: true }
+        : { status: 'skipped_not_fast_forward' }
     }
     behind = counts.behind
   } catch {
@@ -186,7 +192,8 @@ export function toLocalBaseRefRefreshResult(
     baseRef: names.baseRef,
     localBranch: names.localBranch,
     status: outcome.status,
-    ...(outcome.ownerWorktreePath ? { ownerWorktreePath: outcome.ownerWorktreePath } : {})
+    ...(outcome.ownerWorktreePath ? { ownerWorktreePath: outcome.ownerWorktreePath } : {}),
+    ...('shallowHistory' in outcome && outcome.shallowHistory ? { shallowHistory: true } : {})
   }
 }
 
@@ -221,6 +228,31 @@ async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string):
     worktreePath
   )
   return stdout.trim().length > 0
+}
+
+// Why: past a shallow boundary every older local commit counts as "ahead", so only a missing
+// merge base in a shallow repo proves the comparison itself is blind rather than local diverged.
+async function isHistoryCutByShallowClone(
+  git: LocalBaseBranchGit,
+  repoPath: string,
+  localOid: string,
+  remoteOid: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await git.exec(['rev-parse', '--is-shallow-repository'], repoPath)
+    if (stdout.trim() !== 'true') {
+      return false
+    }
+  } catch {
+    return false
+  }
+  try {
+    await git.exec(['merge-base', localOid, remoteOid], repoPath)
+    return false
+  } catch (error) {
+    // merge-base reports no common ancestor like show-ref reports no ref: exit 1, silent stderr.
+    return isShowRefNoMatchError(error)
+  }
 }
 
 async function isRefProvenAbsent(
@@ -272,9 +304,12 @@ export function parseLocalBaseBranchFastForwardOutcome(
     return { status: 'skipped_error' }
   }
   const ownerWorktreePath = 'ownerWorktreePath' in value ? value.ownerWorktreePath : undefined
-  return typeof ownerWorktreePath === 'string' && ownerWorktreePath
-    ? { status, ownerWorktreePath }
-    : { status }
+  const shallowHistory = 'shallowHistory' in value && value.shallowHistory === true
+  return {
+    status,
+    ...(typeof ownerWorktreePath === 'string' && ownerWorktreePath ? { ownerWorktreePath } : {}),
+    ...(shallowHistory ? { shallowHistory: true } : {})
+  }
 }
 
 /** How many commits a relay's inspection says local is behind, when it may be fast-forwarded. */
