@@ -35,6 +35,7 @@ import { managedServerOutcomeLabel } from './managed-server-copy'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from './runtime-server-list-row'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
 import { WslMoveUnfinishedNotice } from '../wsl-move/WslMoveUnfinishedNotice'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -106,7 +107,8 @@ export function WslHostsSection({
       await api.connect({ environmentId, ...(intent ? { intent } : {}) })
       onChanged()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      // The main process's message is for the user; Electron's wrapper and the class name aren't.
+      toast.error(readIpcErrorDetail(error) ?? String(error))
     } finally {
       setConnectingId(null)
     }
