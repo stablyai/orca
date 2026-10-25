@@ -160,7 +160,7 @@ describe('typed main-process errors', () => {
   })
 })
 
-describe('readIpcErrorDetail', () => {
+describe('readIpcErrorDetail for an unsupported WSL host', () => {
   it("leaves only an unsupported distro's fix for the user", () => {
     const error = new Error(
       "Error invoking remote method 'wslHosts:connect': OrcadHostUnsupportedError: Ubuntu-18.04 has glibc 2.27; Orca's WSL host needs 2.28 or newer. Upgrade the distro, or keep this project on Windows."
