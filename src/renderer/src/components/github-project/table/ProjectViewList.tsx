@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
@@ -105,6 +105,13 @@ export default function ProjectViewList({
   >({})
   const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
 
+  useEffect(() => {
+    const current = collapsedByScope[scopeKey]
+    if (current !== undefined) {
+      saveCollapsedGroups(scopeKey, current)
+    }
+  }, [collapsedByScope, scopeKey])
+
   const toggleGroup = useCallback(
     (groupKey: string): void => {
       setCollapsedByScope((prev) => {
@@ -115,7 +122,6 @@ export default function ProjectViewList({
         } else {
           next.add(groupKey)
         }
-        saveCollapsedGroups(scopeKey, next)
         return { ...prev, [scopeKey]: next }
       })
     },

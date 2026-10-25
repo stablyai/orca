@@ -80,6 +80,13 @@ export default function ProjectRoadmap({
   >({})
   const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
 
+  useEffect(() => {
+    const current = collapsedByScope[scopeKey]
+    if (current !== undefined) {
+      saveCollapsedGroups(scopeKey, current)
+    }
+  }, [collapsedByScope, scopeKey])
+
   const toggleGroup = useCallback(
     (groupKey: string): void => {
       setCollapsedByScope((previous) => {
@@ -88,7 +95,6 @@ export default function ProjectRoadmap({
         if (!next.delete(groupKey)) {
           next.add(groupKey)
         }
-        saveCollapsedGroups(scopeKey, next)
         return { ...previous, [scopeKey]: next }
       })
     },
