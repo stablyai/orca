@@ -198,7 +198,6 @@ describe('Switch to Terminal launch', () => {
     expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
   })
 
-  // A host whose guard predates the fork refuses it as a second writer.
   it('asks for a host update, once, when an older paired host refuses the fork', async () => {
     mocks.launchAiVaultSessionInNewTab.mockReturnValue({
       tabId: null,

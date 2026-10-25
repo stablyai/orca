@@ -146,13 +146,12 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setBranchNameOverridePreservesNameEdits(Boolean(nextBranchNameOverride))
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
-      // Why: a Start-from PR pick is also a linkedWorkItem assignment; reuse applyLinkedWorkItem so auto-name and linkedPR stay one code path.
-      // Provider picks already linked the source; a delayed base result must not replay its name.
+      // Reuse linked-item application for PR auto-name/link state; delayed bases must not replay names already applied by provider picks.
       if (!options.sourceAlreadyLinked) {
         smartSourceSelectionRef.current = null
         applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
       }
-      // Why: prefill the note from the PR (only when empty or still an auto-fill) so the sidebar surfaces it without clobbering user text.
+      // Replace notes only while empty or still auto-filled; preserve user instructions.
       const identity = resolveGitHubWorkItemIdentity(item)
       if (identity.type === 'pr') {
         const suggestedNote = `PR #${identity.number} — ${item.title}`
@@ -180,7 +179,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     ]
   )
 
-  // Why: GitLab parallel of handleBaseBranchPrSelect; note prefill uses GitLab's `!N` MR convention so the sidebar makes the provider obvious.
+  // Use GitLab !N in auto-prefilled notes to identify the provider.
   const handleBaseBranchMrSelect = useCallback(
     (
       nextBaseBranch: string,

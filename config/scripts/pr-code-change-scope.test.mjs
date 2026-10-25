@@ -360,8 +360,7 @@ describe('per-job path classification', () => {
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
-    // build:mobile-web is defined there, so the job has to run on an edit to it. A prefix
-    // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
+    // package.json defines build:mobile-web and is already in GLOBAL_FORCE_FILES; no broad prefix is needed.
     expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
   })
 
@@ -444,10 +443,7 @@ describe('per-job path classification', () => {
     }
   })
 
-  // Why: static analysis lints changed mobile files with a type-aware pass, and
-  // mobile is a separate pnpm project. Without its node_modules every mobile type
-  // resolves to an `error` type and the changed-code gate fails on phantom
-  // findings, which is exactly how a react-test-renderer union broke a PR.
+  // Changed-mobile type-aware lint needs its separate node_modules; root-only types resolve as error and yield phantom findings.
   it('installs mobile dependencies exactly when mobile files change', () => {
     expect(classifyPrJobs([]).mobile_dependencies).toBe(true)
     expect(classifyPrJobs(['README.md']).mobile_dependencies).toBe(false)
@@ -455,16 +451,13 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
     ).toBe(true)
-    // Why true: a mobile-only diff still skips the desktop suite, but the repo-wide audits lint
-    // mobile/, so static analysis runs and its changed-code pass needs the mobile types.
+    // Mobile-only diff still needs mobile types for repo-wide static audits despite skipping desktop suites.
     expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(true)
     expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
     expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(true)
   })
 
-  // Why: `mobile/` is desktop-irrelevant for every other job, so a mobile-only diff used to skip
-  // the audits that do lint it. That is how #20702 landed two duplicate imports which then failed
-  // this gate on every later PR's merge ref until #20895 swept them.
+  // Mobile-only edits must run audits that lint mobile; skipped audits let #20702 duplicate imports break later merge refs.
   it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
     const result = classifyPrJobs([
       'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
@@ -512,9 +505,7 @@ describe('per-job path classification', () => {
     expect(result.stdout).toContain('test=true\n')
   })
 
-  // A long-lived PR whose base.sha has gone stale diffs thousands of files, so the writer
-  // outruns one pipe buffer. A single fd-0 read then returns early, breaks the writer's pipe,
-  // and still exits 0 -- emitting no pairs at all, which silently skips every lane.
+  // Stale-base diffs exceed pipe buffer; one fd-0 read can exit 0 with no pairs, silently skipping every lane.
   it('classifies a path that arrives after the first pipe buffer', async () => {
     const filler = Array.from(
       { length: 12_000 },
@@ -582,8 +573,7 @@ describe('PR Checks skip wiring', () => {
     )
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
-    // HEAD is the merge commit, so HEAD^1 is the base side and no merge base is computed.
-    // That is what lets this job check out shallowly, which every other job waits on.
+    // Merge HEAD^1 is the base; no merge-base computation permits shallow checkout on critical path.
     expect(classify.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
     expect(classify.run).toContain('"$DIFF_BASE" HEAD')
     expect(classify.run).not.toContain('--merge-base "$')
@@ -613,8 +603,7 @@ describe('PR Checks skip wiring', () => {
     expect(steps[install].if).toBe(
       "needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'"
     )
-    // The install itself moved into the action the packaging jobs share; assert it there so
-    // this job cannot keep the step while the action stops installing anything.
+    // Assert install in shared packaging action, or caller can retain a step that installs nothing.
     const action = parse(
       readFileSync(
         join(projectDir, '.github/actions/install-mobile-dependencies/action.yml'),

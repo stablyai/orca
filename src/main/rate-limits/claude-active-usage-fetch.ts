@@ -32,7 +32,7 @@ export async function fetchActiveClaudeRateLimits(
     credentialSource: credentials.source,
     authProvenance: options?.authPreparation?.provenance ?? 'system'
   }
-  // Why: System Default with no Claude login is an API-key or non-Claude user, not a signed-out account.
+  // System Default without login may be an API-key/non-Claude user, not a signed-out account.
   if (
     !credentials.token &&
     !credentials.unavailable &&
@@ -62,12 +62,12 @@ export async function fetchActiveClaudeRateLimits(
     return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
-    // Why: the 429 wait gates the poll, and both messages tell the user why usage is missing.
+    // Retain both the 429 polling delay and its user-visible cause.
     const retryAfterMs = error instanceof OAuthUsageError ? error.retryAfterMs : null
     return makeClaudeUsageResult(
       'error',
       failureKind === 'stale-token'
-        ? // Why: Claude refreshes its own login when it next runs; System Default has no "account".
+        ? // Claude refreshes on next use; System Default has no managed account to reauthenticate.
           metadata.authProvenance === 'system'
           ? 'Claude usage updates the next time Claude runs.'
           : 'Claude usage has expired. Start Claude in this account to refresh it.'

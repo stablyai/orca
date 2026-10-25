@@ -125,8 +125,7 @@ export function RepositoryHostSetupsSection({
         (setup) => setup.projectId === selectedProjectHostSetup.projectId
       )
     : []
-  // Why: a sibling entry's setups can't be opened from this pane; not-set-up
-  // placeholders belong to the project, not a checkout, so every entry keeps them.
+  // Exclude sibling checkout setups, but retain project-level not-set-up placeholders for each entry.
   const projectHostSetups = setupsByOwnedExecutionHost(
     allProjectHostSetups.filter(
       (setup) =>
@@ -145,10 +144,9 @@ export function RepositoryHostSetupsSection({
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
-  // Why: split clone entries share a projectId, so each keeps its own selection.
+  // Split clones share project IDs but need independent selections.
   const selectionKey = settingsSelectionKey ?? selectedProjectHostSetup?.projectId
-  // Why: the single project pane switches host in place — set the ephemeral
-  // per-entry selection instead of navigating to a separate repo section.
+  // Switch hosts within the project pane through ephemeral per-entry selection.
   const selectHost = (hostId: ExecutionHostId) => {
     if (selectionKey) {
       setSettingsProjectHostSelection(selectionKey, hostId)
@@ -232,8 +230,7 @@ export function RepositoryHostSetupsSection({
           const runtimeOwnerEnvironmentId =
             setup.runtimeOwnerEnvironmentId?.trim() ||
             (transportHost?.kind === 'runtime' ? transportHost.environmentId : null)
-          // Why: share one host-health derivation with the status bar so a degraded
-          // owner can never read "Ready" here and "Connected"/"Disconnected" there.
+          // Share status-bar health derivation so degraded owners cannot appear Ready here.
           const runtimeOwnerStatusEntry = runtimeOwnerEnvironmentId
             ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
             : undefined
@@ -335,8 +332,7 @@ export function RepositoryHostSetupsSection({
                     )}
                 </p>
                 {runtimeOwnerWorkspaceWindowClosed ? (
-                  // Why: no runtime RPC can open a remote desktop window, so the only
-                  // honest affordance is telling the user what to do on that host.
+                  // RPC cannot open a remote desktop window; direct users to the owning host.
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     {translate(
                       'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',

@@ -1,9 +1,4 @@
-/**
- * Leaving a detail session for the host route: the page's back chevron (`leaveSession`, which
- * replaces to `/h/<host>` when nothing is below it) and the missing-worktree bounce
- * (`/h/<host>?notice=…`). That hop reaches the shell, which must land on one host route rather than
- * stack a second host-area session on the session.
- */
+// Session exit and missing-worktree bounces must land on one host route instead of stacking another host-area session.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
@@ -52,10 +47,8 @@ const BOUNCE = '/h/host-1?notice=worktree-missing'
 const IPAD = { width: 1180, height: 820 }
 const PHONE = { width: 390, height: 844 }
 
-/** A stack entry: the route's pathname and its search, as the native stack holds them. */
 type Entry = string
 
-/** The entries as the navigation container holds them: the host stack inside the root one. */
 function rootStateOf(stack: readonly Entry[]): NativeStackState {
   const routes = stack.map((entry, index) => {
     const [path = '', search = ''] = entry.split('?')
@@ -73,12 +66,7 @@ function rootStateOf(stack: readonly Entry[]): NativeStackState {
   return { key: 'root-stack', index: 0, routes: [{ key: 'h', name: 'h', state: hostStack }] }
 }
 
-/**
- * The native stack the screen's calls act on, with expo-router 55's semantics: `push` adds, a
- * dispatched `POP` removes that many, and `dismissTo` is react-navigation's POP_TO — pop back to
- * the nearest entry of that route and take the new params, or replace the current entry when there
- * is none below it.
- */
+// Model Expo Router 55: dismissTo pops to the nearest matching route with new params, or replaces the current entry when no match exists.
 function applied(stack: readonly Entry[]): Entry[] {
   const next = [...stack]
   for (const [href] of dependencies.push.mock.calls) {
@@ -100,7 +88,6 @@ function applied(stack: readonly Entry[]): Entry[] {
   return next
 }
 
-/** The session page on screen, asking the shell for `href`. */
 async function hopFromSession(
   viewport: { width: number; height: number },
   stack: readonly Entry[],

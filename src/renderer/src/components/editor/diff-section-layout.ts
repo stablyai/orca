@@ -25,17 +25,11 @@ export function isIntrinsicHeightImageDiff(diffResult: GitDiffResult | null | un
 }
 
 export function getLargeDiffFallbackBodyHeight(): number {
-  // Why: section measurements may be stale Monaco heights from before a diff
-  // crossed the render limit; the fallback must always stay bounded.
+  // Ignore stale pre-limit Monaco heights so render-limit fallback rows stay bounded.
   return LARGE_DIFF_FALLBACK_BODY_HEIGHT
 }
 
-/**
- * Rows that size from the bounded fallback instead of their (absent) content:
- * render-limited rows, rows still waiting behind the load prompt, and — while
- * the fetch is in flight — rows the user just loaded, so starting a load does
- * not shrink the section to the empty-content minimum and shift the list.
- */
+/** Keep deferred, limited and newly loading rows at bounded fallback height so empty in-flight content cannot shrink the list. */
 export function usesLargeDiffFallbackHeight(
   section: Pick<
     DiffSection,
@@ -76,9 +70,7 @@ export function getDiffSectionBodyHeight({
         )
       : Math.min(fullLineCount, MAX_UNMEASURED_TEXT_BODY_LINES)
 
-  // Why: combined diffs hide unchanged regions inside Monaco. Before Monaco
-  // reports its collapsed content height, sizing from full file length makes
-  // large files flash open and forces the virtualizer to jump on scroll.
+  // Estimate collapsed regions before Monaco reports height so full-file size cannot flash or jump the virtualizer.
   return Math.max(
     MIN_DIFF_SECTION_BODY_HEIGHT,
     estimatedLineCount * DIFF_LINE_HEIGHT + DIFF_SECTION_PADDING_HEIGHT
@@ -119,11 +111,7 @@ export function getDiffSectionEstimatedHeight({
   )
 }
 
-/**
- * Single virtualizer estimate for a diff row, shared by the worktree and
- * PR-review viewers so no viewer estimates a row the row's own layout metrics
- * (useDiffSectionLayoutMetrics) would size from the bounded fallback instead.
- */
+/** Share estimates across worktree and review viewers, matching the row’s bounded fallback sizing. */
 export function getDiffSectionRowEstimatedHeight(
   section: Pick<
     DiffSection,

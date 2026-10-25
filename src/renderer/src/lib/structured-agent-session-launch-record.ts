@@ -45,8 +45,7 @@ export function parseStructuredLaunchSurfaceAddress(
 export type StructuredAgentLaunchPersistedRecord = {
   surfaceAddress?: StructuredLaunchSurfaceAddress
   sessionId: string
-  /** The host the chat was created on. Records written before paired hosts could hold a chat lack
-   *  it and load as local, the only host a chat could then be launched on. */
+  // Older records lack host because chats could only launch locally then; restore them as local.
   executionHostId: ExecutionHostId
   agent: TuiAgent
   lifecycle: StructuredAgentLaunchPersistedLifecycle
@@ -63,7 +62,6 @@ export type StructuredAgentLaunchPersistedRecord = {
   failedAt?: number
 }
 
-/** What survives a reload of an unpublished launch. */
 export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle

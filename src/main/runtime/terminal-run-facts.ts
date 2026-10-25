@@ -3,7 +3,7 @@ import {
   type PtySpawnCommitOrigin
 } from '../persistence/loading-store/pty-binding-span'
 import { isUntypedTerminalInput } from '../../shared/terminal-untyped-input'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import { isDrivingInputKind, type TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type TerminalRunFacts = {
   /** This process was started for its pane, not reattached, adopted or cold-restored. */
@@ -42,6 +42,7 @@ export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
+  private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
     { incarnationId: string | null; firstInputAt: number | null }
@@ -74,8 +75,7 @@ export class TerminalRunFactsRegister {
     }
   }
 
-  /** Once per process: a re-registration of the same incarnation keeps its facts, and so does a
-   *  reattach or adoption of the running process unless its incarnation shows another process. */
+  /** Preserve facts on same-incarnation registration/reattach/adoption; only a different process resets them. */
   recordSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
     const incarnationId = commit.incarnationId ?? null
     const previous = this.runsByPtyId.get(commit.id)
@@ -89,6 +89,7 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      this.lastDrivingInputAtByPtyId.delete(commit.id)
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -106,16 +107,17 @@ export class TerminalRunFactsRegister {
     })
   }
 
-  /** The one record point both write funnels call just before the provider write, because input
-   *  such as `exit` can end the process before the write returns. The payload check backs up a
-   *  writer that labels a reply or focus report as driving. */
+  /** Record before provider write because exit input can end the process before return; filter replies even if mislabeled driving. */
   recordInput(ptyId: string, inputKind: TerminalInputKind, data: string, now = Date.now()): void {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return
     }
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
-    if (inputKind === 'driving') {
+    if (isDrivingInputKind(inputKind)) {
+      if (inputKind === 'driving') {
+        this.lastDrivingInputAtByPtyId.set(ptyId, now)
+      }
       for (const listener of this.inputListeners) {
         listener(ptyId, now)
       }
@@ -126,7 +128,7 @@ export class TerminalRunFactsRegister {
         this.pendingByPtyId.set(ptyId, { incarnationId: null, firstInputAt: now })
       }
     }
-    if (run && inputKind === 'driving') {
+    if (run && isDrivingInputKind(inputKind)) {
       run.firstUserInputAt ??= now
     }
   }
@@ -135,6 +137,11 @@ export class TerminalRunFactsRegister {
    *  included; null if none has. */
   readLastInputAt(ptyId: string): number | null {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
+  readLastDrivingInputAt(ptyId: string): number | null {
+    return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
   }
 
   /** A run main never saw committed reads as not fresh, which keeps today's close-on-exit. */
@@ -163,6 +170,7 @@ export class TerminalRunFactsRegister {
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
+    this.lastDrivingInputAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }
 }

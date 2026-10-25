@@ -118,7 +118,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     setLinearIssuePage
   ])
 
-  // Why: fetch Linear issues when the tab is active and connected; empty search uses the `all` list with server-side filters.
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -298,7 +297,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     setLinearLoading
   ])
 
-  // Why: Has Worktree loads Linear tickets linked on local worktrees, not a Linear list/search query.
   return model
 }
 export type TaskPageLinearListEffectsModel = ReturnType<typeof useTaskPageLinearListEffects>

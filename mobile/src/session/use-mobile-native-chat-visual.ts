@@ -21,11 +21,7 @@ function initialState(
   return cached ? { kind: 'ready', ...cached } : { kind: 'loading' }
 }
 
-/**
- * One visual's content: painted from the phone's cache when it has one, revalidated against the
- * owning host on every mount, and retried a bounded number of times when the host does not answer.
- * Nothing latches: `retry` (or a new client after a reconnect) asks again.
- */
+// Render cached content while revalidating with the owning host; bound automatic retries but let explicit retry or a new client start again.
 export function useMobileNativeChatVisual(
   source: MobileNativeChatVisualSource,
   file: string

@@ -51,9 +51,7 @@ describe('mobile direct endpoint probe', () => {
   })
 
   it('fails a whole dead LAN in seconds instead of holding the 12s bound', async () => {
-    // Incident 2026-09-04: foregrounding on a dead LAN produced an instant 1006 and
-    // the direct client's 500/1000/2000ms redials, while the probe sat on the
-    // 'connecting' phase and held the supervisor mutex for the whole 12s bound.
+    // A dead LAN can immediately close into client backoff; the probe must not hold the recovery mutex for its full outer bound.
     const clients: FakeClient[] = []
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
@@ -69,13 +67,11 @@ describe('mobile direct endpoint probe', () => {
 
     expect(clients).toHaveLength(1)
     expect(clients[0]!.close).toHaveBeenCalledOnce()
-    // No 12s timer is left behind to fire into a settled probe.
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('rides out one access-point flap that the first redial recovers', async () => {
-    // 'reconnecting' is published on any socket close, so a single RST on the first
-    // dial must not book a direct failure and its 60s cooldown.
+    // Allow one redial so an access-point flap does not immediately incur direct-failure cooldown.
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
@@ -92,13 +88,11 @@ describe('mobile direct endpoint probe', () => {
   })
 
   it('extends the grace once when the redial reaches a handshake', async () => {
-    // The redial fires at 500ms, but 'connected' waits on the Noise handshake and a
-    // capability RPC, so real work needs more than one grace window.
+    // Extend for handshake progress because connection also waits for capability RPC completion.
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('handshaking'), 1_500)
-      // Past the first grace window: only the re-arm keeps this probe alive.
       setTimeout(() => client.publishState('connected'), 3_000)
       return client
     })
@@ -114,7 +108,6 @@ describe('mobile direct endpoint probe', () => {
       const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
       setTimeout(() => client.publishState('handshaking'), 1_500)
-      // A restarted handshake must not buy a second extension.
       setTimeout(() => client.publishState('handshaking'), 2_500)
       return client
     })

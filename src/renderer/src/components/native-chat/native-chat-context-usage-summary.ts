@@ -1,7 +1,6 @@
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 
-/** What the composer ring renders: the session's context usage with the
- *  provider's breakdown reduced to the rows worth showing. */
+/** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
   usedTokens: number
   windowTokens: number

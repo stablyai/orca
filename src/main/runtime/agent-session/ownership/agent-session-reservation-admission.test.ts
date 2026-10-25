@@ -1,5 +1,3 @@
-// Adoption admission inside the reservation transaction: which conversation a new record may claim.
-
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionLeaseFixture,
@@ -32,7 +30,6 @@ const LOCATION: AgentSessionExecutionLocation = {
 }
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
-/** The link an adopting create seeds: fence 1, because that is a new record's first. */
 function adoptedLink(
   overrides: Partial<AgentSessionProviderHandleLink> = {}
 ): AgentSessionProviderHandleLink {
@@ -86,7 +83,6 @@ describe('adopted handle chain seeding', () => {
 
     expect(disposition).toBe('created')
     expect(record.providerHandleChain).toEqual([link])
-    // The owner probe requires the head link to carry the record's current fence.
     expect(record.providerHandleChain[0]?.mintedAtFence).toBe(record.lease.runtimeFence)
   })
 
@@ -114,8 +110,7 @@ describe('floating launch directory reservation', () => {
 
 describe('adopted conversation ownership', () => {
   it('refuses when another record already holds the same conversation root', () => {
-    // The held link names a leaf; the adoption names none. Same root is the whole test: keying on
-    // the exact handle would let two writers onto one conversation on different branches.
+    // Compare conversation roots, not exact leaves, or branches could admit two writers onto one conversation.
     const holder = agentSessionRecordFixture()
 
     expect(() =>
@@ -144,9 +139,7 @@ describe('adopted conversation ownership', () => {
   })
 
   it('preserves the adopted chain and launch pin when retrying an existing reservation', () => {
-    // Pins the guard's own contract. No wire shape reaches it today: `adopt` is accepted only on
-    // create-by-intent, which always carries a null expected fence, and an existing record with a
-    // null expected fence is refused a few lines below anyway.
+    // Pin self-exemption directly; create-by-intent has null expectedFence and rejects existing ids before this can act as replay.
     const link = adoptedLink()
     const committed: AgentSessionRecord = {
       ...agentSessionRecordFixture(
@@ -215,8 +208,7 @@ describe('adopted conversation ownership', () => {
     ).toThrow('agent_session_conflict')
   })
 
-  // `opencode` and `opencode2` run one OpenCode under two names, so an id either mints is one
-  // conversation; two adoptions racing are serialized by the store, so the second sees the first.
+  // OpenCode variants share one conversation namespace; serialized adoption must reject the second writer.
   it.each([
     ['opencode', 'opencode2', true],
     ['opencode2', 'opencode', true],
@@ -292,7 +284,7 @@ describe('re-create over a failed create', () => {
     const unproven = failedCreate({
       lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'recovering' }
     })
-    // Released so a send can start over, but nothing proved the attempt gone.
+    // Release alone does not prove the old attempt gone.
     const releasedUnproven = failedCreate({ lease: { ...EXITED, deathEvidence: null } })
 
     for (const record of [bound, unproven, releasedUnproven]) {

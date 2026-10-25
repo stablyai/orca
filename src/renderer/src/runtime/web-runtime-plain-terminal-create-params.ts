@@ -6,7 +6,6 @@ import type { CreateWebRuntimeSessionTerminalArgs } from './web-runtime-session-
 
 export type CreateTerminalShellParams = { command?: string; shell?: string }
 
-/** How a session.tabs.createTerminal call carries the user's shell pick to this host. */
 export async function resolveCreateTerminalShellParams(
   environmentId: string,
   args: { command?: string; shell?: string }
@@ -22,11 +21,10 @@ export async function resolveCreateTerminalShellParams(
   ) {
     return { command: args.command, shell: args.shell }
   }
-  // Why: an older host drops `shell`; typing the pick still reaches it, nested in the default shell.
+  // Old hosts drop shell; typing the pick still starts it inside their default shell.
   return { command: args.command ?? args.shell }
 }
 
-/** session.tabs.createTerminal params for a plain (non-agent) terminal. */
 export async function buildPlainCreateTerminalParams(
   environmentId: string,
   args: CreateWebRuntimeSessionTerminalArgs
@@ -43,7 +41,7 @@ export async function buildPlainCreateTerminalParams(
     ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
     ...(args.launchToken ? { launchToken: args.launchToken } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-    // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
+    // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
     activate: false,
     select: args.activate !== false,
     navigation: 'caller'

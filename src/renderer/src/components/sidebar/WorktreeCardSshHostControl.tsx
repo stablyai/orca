@@ -29,13 +29,12 @@ type WorktreeCardSshHostControlProps = {
   targetRemoved: boolean
   /** Non-null when the SSH target belongs to a remote Orca server; routes connect to that runtime. */
   sshOwnerEnvironmentId: string | null
-  /** True when the row cannot afford a visible label: icon-only with an sr-only label. */
+  /** Use only the accessible label when dense rows cannot fit visible text. */
   iconOnly: boolean
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
 }
 
-// One shape for every state, from the sibling rename-failed control in the same title row
-// (WorktreeCard.tsx). States differ only by color token, so the pill never changes height.
+// Match neighboring 16px pills in every state so reconnecting cannot change row height.
 const PILL_BASE =
   'h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none has-[>svg]:!px-0.5'
 const PILL_QUIET =
@@ -79,8 +78,7 @@ export function WorktreeCardSshHostControl({
   onPointerDown
 }: WorktreeCardSshHostControlProps): React.JSX.Element | null {
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
-  // Why: shared registry, not local state — the terminal overlay and every other card on
-  // this host dial the same connection, and the store status lags a click by one IPC hop.
+  // Share in-flight state across all host surfaces; store IPC lags the initial click.
   const inFlight = useSshConnectInFlight(targetId)
 
   const handleConnect = useCallback(async () => {
@@ -89,22 +87,18 @@ export function WorktreeCardSshHostControl({
     }
     try {
       if (sshOwnerEnvironmentId) {
-        // Bucket state is written inside the helper, mirroring the local path.
         await trackSshConnect(
           targetId,
           connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
         )
       } else {
-        // Why: track the connect request, not this bounded wait — the backend is still
-        // dialing after the UI timeout fires, so releasing here would let the next click
-        // raise a second credential prompt.
+        // Track backend connection beyond the UI timeout so another click cannot raise duplicate credential prompts.
         const connectState = await withUiConnectTimeout(
           trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
           SSH_RECONNECT_UI_TIMEOUT_MS
         )
         if (connectState) {
-          // Why: ssh.connect can resolve before the global state-change IPC lands;
-          // the waiting deferred PTY reattach path keys off this renderer store.
+          // Publish early connection results because deferred PTY reattach may precede state-change IPC.
           setSshConnectionState(targetId, connectState)
         }
       }
@@ -118,10 +112,7 @@ export function WorktreeCardSshHostControl({
         ),
         sshOwnerEnvironmentId
       )
-      // Why: a failed connect usually means the renderer's target metadata is stale
-      // (target removed, or re-added under a new id). Resync so the control converges to
-      // the removed state instead of offering the same failing Connect forever (STA-1468).
-      // Apply the target list first — a removed-labels failure must not discard it.
+      // Refresh stale target metadata after failure; apply targets before removed labels so partial refresh can still converge.
       if (sshOwnerEnvironmentId) {
         void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
       } else {
@@ -135,9 +126,7 @@ export function WorktreeCardSshHostControl({
     }
   }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
 
-  // A live connection outranks a stale removal tombstone. A null status is a runtime-owned
-  // target: no renderer-reachable connect, and the card has always shown the plain host glyph
-  // there rather than a false disconnected state.
+  // Live connection outranks stale removal; runtime-owned null status stays passive without claiming disconnection.
   if (status === null || status === 'connected') {
     return (
       <PassiveGlyph
@@ -156,9 +145,7 @@ export function WorktreeCardSshHostControl({
     )
   }
 
-  // Why: a removed host can never connect, so it is checked before any failure status —
-  // offering Connect there is the exact bug targetRemoved exists to prevent. It also drops the
-  // destructive tint: a removed host is a settled fact, not an error to act on.
+  // Removed hosts cannot reconnect; suppress failing Connect actions and treat removal as settled, not actionable error.
   if (targetRemoved) {
     return (
       <PassiveGlyph
@@ -180,8 +167,6 @@ export function WorktreeCardSshHostControl({
   const connecting = inFlight || isConnectingSshStatus(status)
   const canConnect = canConnectSshStatus(status)
   if (!connecting && !canConnect) {
-    // Defensive: every remaining member is either connecting or recoverable, but never
-    // render a dead button if the union grows.
     return null
   }
 
@@ -232,8 +217,7 @@ export function WorktreeCardSshHostControl({
         <Button
           type="button"
           variant="ghost"
-          // Why: icon-xs defaults to size-6 (24px); the pill is 16px, and the densest
-          // card mode must not become the tallest.
+          // Override icon-xs’s 24px size so dense cards keep the shared 16px row height.
           className={cn(
             PILL_BASE,
             failed ? PILL_FAILED : PILL_QUIET,
@@ -242,22 +226,16 @@ export function WorktreeCardSshHostControl({
           aria-label={accessibleName}
           data-ssh-target-label={targetLabel}
           aria-busy={connecting || undefined}
-          // Why: aria-disabled, not disabled — `disabled` adds pointer-events-none, so an
-          // impatient second click would fall through to the card (activating the workspace,
-          // or opening Edit metadata on a double-click), drop focus to <body>, and kill the
-          // tooltip for the entire in-flight window.
+          // Keep aria-disabled clickable to retain focus/tooltips and prevent second clicks falling through to card actions.
           aria-disabled={connecting || undefined}
           onPointerDown={onPointerDown}
           onKeyDown={(event) => {
-            // Why: the sidebar scroll root treats a bubbled Enter as "focus the terminal"
-            // (WorktreeList handleContainerKeyDown), which would cancel this button's own
-            // activation and move focus off the card.
+            // Stop activation keys before sidebar terminal-focus handling steals the button’s activation.
             if (event.key === 'Enter' || event.key === ' ') {
               event.stopPropagation()
             }
           }}
           onClick={(event) => {
-            // Reconnecting a host and navigating to a workspace are separate intents.
             event.stopPropagation()
             event.preventDefault()
             if (connecting) {
@@ -271,8 +249,6 @@ export function WorktreeCardSshHostControl({
           ) : (
             iconOnly && <ServerOff className="size-2.5" />
           )}
-          {/* Why: aria-label already names the control, so a second sr-only copy would be
-              dead markup; the label span exists only for sighted users. */}
           {!iconOnly && <span className="text-left">{label}</span>}
         </Button>
       </TooltipTrigger>

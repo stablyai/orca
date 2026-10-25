@@ -403,7 +403,6 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenLastCalledWith(
       expect.objectContaining({
         spawnIntent: 'automatic-restore',
-        // The spawn names the session it resumes, so the host can publish it before a hook.
         resumeProviderSession: expect.objectContaining({ id: 'provider-session-intent' })
       })
     )
@@ -511,12 +510,10 @@ describe('OrcaRuntimeService', () => {
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID
     })
     expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
-    // The spawn builder pre-trusts the workspace for the declared launch agent.
     expect(spawnCall?.launchAgent).toBe('codex')
   })
 
-  // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
-  // the CLI Orca can host (issue #11926).
+  // cursor is the desktop launcher; cursor-agent is the hostable CLI (#11926).
   it('launches the configured agent CLI for a startupAgent id, not the raw id', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtimeStore = {
@@ -587,8 +584,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: [],
         terminalWindowsShell: 'cmd.exe',
         agentCmdOverrides: {},
-        // Why: pin the arg here rather than inherit the shared yolo default, so
-        // this test tracks Windows quoting and not an unrelated default's value.
+        // Pin args to isolate Windows quoting from Settings defaults.
         agentDefaultArgs: { cursor: '--force' },
         agentDefaultEnv: {}
       })
@@ -604,14 +600,11 @@ describe('OrcaRuntimeService', () => {
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
-    // Why: assert the cmd.exe double quoting too — a platform-insensitive prefix
-    // match would pass on any OS and prove nothing about the reported platform.
+    // Exact cmd.exe quoting catches accidental use of another platform quoting family.
     expect(spawnCall?.command).toBe('cursor-agent "--force"')
   })
 
-  // Why: claude-agent-teams is the only agent whose launcher name varies by
-  // platform (launchCmdByPlatform), so it is what proves resolution is
-  // platform-aware rather than a fixed string.
+  // claude-agent-teams has platform-specific launchers, making it a useful platform-resolution fixture.
   it.each([
     { platform: 'win32' as const, expected: 'orca.cmd claude-teams' },
     { platform: 'linux' as const, expected: 'orca-ide claude-teams' },
@@ -647,8 +640,6 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  // Why: a user who worked around this bug by pointing the override at their own
-  // cursor-agent path must keep that override once the id resolves properly.
   it('honors an agentCmdOverrides entry for a startupAgent', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService({
@@ -674,8 +665,6 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe("cursor-agent --beta '--force'")
   })
 
-  // Why: a saved launch recipe carries its own arguments, and the host previously read only the
-  // Settings default, so there was no way to express one over the wire.
   it('prefers a per-call agentArgs over the agentDefaultArgs setting', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService({
@@ -704,8 +693,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe("cursor-agent --beta '--headless'")
   })
 
-  // Why: `null` is "no arguments"; treating it as absent would restore the Settings default and
-  // launch the agent with arguments the caller explicitly cleared.
+  // Explicit null clears arguments; absence inherits Settings defaults.
   it('launches with no arguments when a per-call agentArgs is null', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService({
@@ -734,8 +722,6 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe('cursor-agent --beta')
   })
 
-  // Why: with no selector the launch is never resolved, so a dropped startupAgent
-  // would reach the renderer as a bare shell — the failure this option prevents.
   it('rejects a startupAgent create with no workspace selector', async () => {
     const runtime = new OrcaRuntimeService({
       ...store,
@@ -751,8 +737,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // Why: folder workspaces have no repo, so command sniffing skipped them entirely
-  // and spawned the bare string; an explicit agent must still resolve.
+  // Folder workspaces have no repo, but explicit agent selection must still resolve.
   it('resolves a startupAgent in a repo-less folder workspace', async () => {
     const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-startup-agent-'))
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
@@ -784,8 +769,6 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.launchAgent).toBe('cursor')
   })
 
-  // Why: silently returning the caller's opts would spawn a bare shell that can
-  // only time out at agent readiness — the failure startupAgent exists to stop.
   it('rejects a startupAgent create that also supplies its own launch', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService({
@@ -805,9 +788,7 @@ describe('OrcaRuntimeService', () => {
 
     for (const conflicting of [
       { env: { SOME_VAR: 'set' } },
-      // Why: a raw command would be silently overwritten by the built launch.
       { command: 'cursor-agent --resume' },
-      // Why: resume identity paired with a freshly built launch is incoherent.
       { resumeProviderSession: { key: 'session_id', id: 'prior-session' } as never },
       { launchAgent: 'cursor' as const },
       { launchConfig: { agentArgs: '', agentEnv: {} } as never },

@@ -3,7 +3,6 @@ import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/a
 import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notification-burst-cooldown'
 import type { NotificationDispatchResult } from '../../../shared/notification-settings-types'
 
-/** Sends one request and reports main's answer (null: none); returns false when nothing was sent. */
 export type HookLaneCompletionSubmit = (
   onResult: (result: NotificationDispatchResult | null) => void
 ) => boolean
@@ -24,7 +23,7 @@ type PaneRequests = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
-// Why: these answers mean a later request would be refused too, so a held revision is dropped.
+// Drop revisions whose response proves future requests would also be refused.
 const TERMINAL_REFUSALS: ReadonlySet<NotificationDispatchResult['reason']> = new Set([
   'disabled',
   'source-disabled',
@@ -54,7 +53,7 @@ function armHeldTimer(requests: PaneRequests, submitAfterCooldown: () => void): 
     requests.held = null
     return
   }
-  // Why: a fixed expiry, never extended by later revisions, also drops one whose answer never came.
+  // Use fixed expiry so repeated revisions cannot retain an unanswered request forever.
   const dueAt = cooldownEndsAt ?? held.expiresAt
   requests.timer = setTimeout(
     () => {
@@ -82,7 +81,7 @@ function submitNow(
     if (requestsByPaneKey.get(paneKey) !== requests || requests.requestSeq !== seq) {
       return
     }
-    // Why: main reserved its cooldown before answering, so counting from the answer is conservative.
+    // Main reserves cooldown before replying; counting from reply conservatively waits longer.
     requests.cooldownEndsAt = Date.now() + NOTIFICATION_COOLDOWN_MS
     if (result && !result.delivered && TERMINAL_REFUSALS.has(result.reason)) {
       requests.held = null
@@ -105,12 +104,7 @@ function submitHeld(paneKey: string, requests: PaneRequests): void {
   }
 }
 
-/**
- * The hook lane's completion requests for one pane. A later turn end in the same done segment
- * (a Stop re-entered after a blocking Stop hook) that arrives while main's cooldown from the
- * preceding request still runs would be dropped there; the latest one is held and sent once,
- * after that cooldown, through main's unchanged gates. Everything else is sent at once.
- */
+/** Hold only the latest same-done-segment hook revision through main’s previous-request cooldown, then retry once through unchanged gates; send all other ends immediately. */
 export function submitHookLaneCompletion(
   paneKey: string,
   snapshot: AgentCompletionStatusSnapshot | undefined,

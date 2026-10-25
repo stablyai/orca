@@ -6,7 +6,6 @@ import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
-/** Copy the displayed prose, excluding tool activity and image attachments. */
 export function nativeChatMessagePlainText(
   message: Pick<NativeChatMessage, 'role' | 'blocks'>
 ): string {

@@ -1,5 +1,4 @@
-// Stored partitions older writers leave disagreeing with themselves, one Loader rule each, so a
-// test can compare what the window shows for each before and after the Loader rewrites it.
+// Legacy inconsistencies for comparing window restore against the Loader’s repairs.
 
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -21,7 +20,6 @@ function twoTabs(): WorkspaceSessionState {
   ])
 }
 
-/** Drops a terminal's tab-bar entry, leaving its row and pane layout. */
 function withoutTabBarEntry(session: WorkspaceSessionState, tabId: string): WorkspaceSessionState {
   session.unifiedTabs![GIT_KEY] = session.unifiedTabs![GIT_KEY]!.filter((tab) => tab.id !== tabId)
   const group = session.tabGroups![GIT_KEY]![0]!

@@ -5,10 +5,7 @@ import type {
   PRCheckStep
 } from '../../../../src/shared/github/check-types'
 
-// Pure mapping from the github.prCheckDetails payload to the rows the mobile
-// expanded check detail renders. No React/native imports so it stays unit-testable
-// under the node Vitest config (KTD5). Ports the desktop CheckDetailExpanded logic
-// (conclusion/title/summary + annotations + failed-job/step summary), not its JSX.
+// Map check payload to desktop-equivalent summary/annotations/failed jobs without React/RN imports for Node tests.
 
 // Desktop caps the inline lists so a noisy check can't break the layout; match it.
 const MAX_ANNOTATIONS = 20
@@ -19,7 +16,6 @@ function isFailureState(state: string | null | undefined): boolean {
 }
 
 export type CheckDetailAnnotation = {
-  // Path:line locator (or "Annotation" when the host omits a path).
   locator: string
   level: string | null
   title: string | null
@@ -34,18 +30,14 @@ export type CheckDetailStep = {
 export type CheckDetailJob = {
   name: string
   state: string
-  // Failed steps within the job; empty when none reported as failing.
   failedSteps: CheckDetailStep[]
   logTail: string | null
 }
 
 export type CheckDetailContent = {
-  // Conclusion/title/summary lines, in render order (matches the prior mobile detail).
   summaryLines: string[]
   annotations: CheckDetailAnnotation[]
-  // True when the host returned more annotations than we render.
   annotationsTruncated: boolean
-  // "Failed jobs" when only failing jobs are shown, else "Jobs" (matches desktop label).
   jobsLabel: 'Failed jobs' | 'Jobs'
   jobs: CheckDetailJob[]
   jobsTruncated: boolean
@@ -81,8 +73,7 @@ export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailConte
     details.summary
   ].filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
 
-  // Why: prefer failing jobs (the actionable ones); fall back to all jobs only
-  // when nothing is failing, matching the desktop panel.
+  // Prefer actionable failed jobs; show all only when none fail, matching desktop.
   const failedJobs = details.jobs.filter((job) => isFailureState(job.conclusion ?? job.status))
   const visibleJobs = failedJobs.length > 0 ? failedJobs : details.jobs
 

@@ -10,8 +10,7 @@ import type {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { AgentTerminalDialog, AgentTerminalPanel } from './AgentTerminalDialog'
 
-// Stub the preview so the assertion is on the props the dialog hands it, with
-// no xterm / IPC machinery in the way.
+// Stub xterm/IPC to inspect the routing props passed to the preview.
 vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
@@ -66,9 +65,7 @@ afterEach(() => {
   cleanup()
 })
 
-// Why: this is the only seam carrying the relayed host profile into the
-// emulator. Dropping the prop degrades every preview to client-OS byte routing
-// silently — nothing else in the app reads DashboardCard.terminalInput.
+// This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
 describe('AgentTerminalDialog', () => {
   it("hands the card's relayed host-input profile to the preview terminal", () => {
     render(

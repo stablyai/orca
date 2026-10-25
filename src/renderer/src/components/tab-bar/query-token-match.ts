@@ -1,5 +1,4 @@
-// Shared token matching for the new-tab open entry: the create-menu actions and
-// the agent launch options both rank a query against a set of candidate strings.
+// Share query ranking between create-menu actions and agent launch options.
 
 export type QueryTokenMatch = {
   allTokensMatched: boolean
@@ -10,8 +9,7 @@ export function normalizeMatchQuery(value: string): string {
   return foldMatchQueryWhitespace(value).toLowerCase()
 }
 
-// Why: tab-create queries can come from large pasted text; keep whitespace
-// folding linear without whole-string regex replacement.
+// Keep whitespace folding linear for large pasted queries.
 function foldMatchQueryWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -52,8 +50,7 @@ export function tokenizeMatchValue(value: string): string[] {
     .filter(Boolean)
 }
 
-// Scores each query token against the best-matching candidate token: an exact
-// token wins over a prefix, which wins over a mid-string substring.
+// Rank each query token by its best candidate: exact, then prefix, then substring.
 export function scoreQueryTokens(query: string, values: readonly string[]): QueryTokenMatch {
   const candidateTokens = values.flatMap(tokenizeMatchValue)
   if (candidateTokens.length === 0) {

@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// The resume tree's shape: levels, depth, where child workspaces go, and when machines show.
-
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -71,7 +69,6 @@ it('keeps every checkbox in the left column and indents what follows it 18px a l
     const row = item.querySelector('label')!
     const cell = (n: number) => row.querySelector<HTMLElement>(`:scope > :nth-child(${n})`)
     const disclosure = cell(3)
-    // The checkbox cell comes first, before any indent.
     expect(cell(1)?.querySelector('[role="checkbox"]')).not.toBeNull()
     const level = Number(item.getAttribute('aria-level'))
     expect(cell(2)?.style.width).toBe(`${(level - 1) * 18}px`)
@@ -92,7 +89,6 @@ it('reads levels apart by weight, with no row dividers or bands', () => {
 
   expect(itemOf(nodeBox('orca')).querySelector('.font-semibold')?.textContent).toBe('orca')
   expect(itemOf(nodeBox('parent')).querySelector('.font-medium')?.textContent).toBe('parent')
-  // Every row element but the checkboxes, which keep their own outline.
   const rows = container.querySelectorAll(
     '[role="treeitem"], [role="treeitem"] *:not([role="checkbox"])'
   )
@@ -131,7 +127,6 @@ it('heads a single SSH host with its machine node, named and marked SSH', () => 
   expect(itemOf(nodeBox('parent')).textContent).not.toContain(machine)
 })
 
-// A paired Orca server's runtime host is not this machine, but it is not SSH either.
 it('heads a runtime host with its machine node and no SSH chip', () => {
   const runtime: ExecutionHostId = 'runtime:env-1'
   render({ candidates: seedTree({ parent: runtime, child: runtime }) })
@@ -141,7 +136,6 @@ it('heads a runtime host with its machine node and no SSH chip', () => {
   expect(itemOf(nodeBox(machine)).textContent).not.toContain('SSH')
 })
 
-// A target saved through Add SSH target gets a generated id; the sidebar names it by its label.
 it('names an SSH machine by its saved name, not its target id', () => {
   const targetId = 'ssh-1728291234567-abc12d'
   const remote: ExecutionHostId = `ssh:${targetId}`
@@ -313,7 +307,7 @@ it('gives workspaces the store cannot place no project node', () => {
   expect(container.querySelector('[aria-label="Select all chats in "]')).toBeNull()
 })
 
-// Why: the sidebar nests a child only under a parent on its own host; no host id matches only none.
+// Nest only same-host workspaces; unknown host matches only unknown host, as in the sidebar.
 it.each([
   ['both local', 'local', 'local', true],
   ['neither with a host id', undefined, undefined, true],

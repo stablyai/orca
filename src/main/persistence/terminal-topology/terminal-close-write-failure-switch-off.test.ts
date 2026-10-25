@@ -5,7 +5,7 @@ import {
   fixture
 } from '../loading-store/profile-state-delayed-authority-fixture'
 
-// Pins the shipped build's behaviour, whichever build runs the suite.
+// Preserve switch-off behavior regardless of the active build switch.
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({

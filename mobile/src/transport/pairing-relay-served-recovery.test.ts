@@ -74,8 +74,7 @@ function servedPhysicalClient(relay: PairingRelay): PairingCandidateClient {
     deviceToken: 'device-token',
     desktopPublicKeyB64: Buffer.alloc(32, 7).toString('base64'),
     createSocket: (url) => {
-      // Why: production cells require TLS; the black-box test only substitutes
-      // a loopback plaintext transport while preserving the served upgrade path.
+      // Use plaintext loopback for the test while preserving the production TLS upgrade route.
       return new NodeWebSocket(url.replace('wss:', 'ws:')) as unknown as WebSocket
     }
   })

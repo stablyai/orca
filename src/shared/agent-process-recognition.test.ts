@@ -195,8 +195,7 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/Users/dev/.ante/bin/ante', 'ante')).toBe(true)
     expect(isRecognizedAgentType('ante')).toBe(true)
-    // Why: 'ante' is a common token in directory and binary names; only the
-    // exact normalized basename may classify as the agent.
+    // Ante occurs in ordinary names; require its exact normalized basename.
     expect(recognizeAgentProcess('ante-obsidian')).toBeNull()
     expect(recognizeAgentProcess('antechamber')).toBeNull()
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
@@ -304,6 +303,16 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/home/dev/.kimi-code/bin/kimi', 'kimi')).toBe(true)
     expect(isRecognizedAgentType('kimi-code')).toBe(true)
+  })
+
+  // #31311: the npm install on Windows runs as node.exe, observed with this exact .bin shim path.
+  it('recognizes Kimi Code launched by its npm shim on Windows', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\dev\\proj\\node_modules\\.bin/../@moonshot-ai/kimi-code/dist/main.mjs --session session_1'
+      )
+    ).toEqual({ agent: 'kimi', processName: 'kimi' })
+    expect(recognizeAgentProcessFromCommandLine('node C:\\tools\\app\\dist\\main.mjs')).toBeNull()
   })
 
   it('recognizes Qwen Code by its installed qwen executable', () => {
@@ -426,6 +435,29 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
   })
 
+  // Command lines captured from a live Windows Qwen Code 0.26.1 session (#17326).
+  it.each([
+    String.raw`"node"   "C:\Users\dev\AppData\Local\Temp\q\node_modules\.bin\\..\@qwen-code\qwen-code\cli-entry.js"`,
+    String.raw`"node"   "C:\Users\dev\AppData\Roaming\npm\\node_modules\@qwen-code\qwen-code\cli-entry.js"`,
+    String.raw`"C:\Program Files\nodejs\node.exe" --expose-gc C:\Users\dev\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\cli.js`,
+    String.raw`"C:\Users\dev\AppData\Local\qwen-code\qwen-code\node\node.exe" "C:\Users\dev\AppData\Local\qwen-code\qwen-code\bin\..\lib\cli-entry.js"`,
+    String.raw`C:\Users\dev\AppData\Local\qwen-code\qwen-code\node\node.exe --expose-gc C:\Users\dev\AppData\Local\qwen-code\qwen-code\lib\cli.js`,
+    'node /usr/local/lib/node_modules/@qwen-code/qwen-code/cli.js'
+  ])('recognizes a node-launched Qwen Code entrypoint: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+  })
+
+  it.each([
+    'node /tmp/node_modules/@qwen-code/qwen-code/fzfWorker.js',
+    'node /tmp/node_modules/@other/qwen-code/cli.js',
+    'node /tmp/not-qwen-code/lib/cli.js'
+  ])('does not recognize a Qwen Code entrypoint lookalike: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+  })
+
   it('recognizes Prime Agent by its binary and npm entrypoint', () => {
     expect(recognizeAgentProcess('prime-agent')).toEqual({
       agent: 'prime-agent',
@@ -469,8 +501,7 @@ describe('agent process recognition', () => {
       agent: 'prime-agent',
       processName: 'prime-agent'
     })
-    // Why: the CLI only parses `--mode <value>` as separate tokens, so `--mode=json`
-    // is ignored by it and still starts the interactive mode.
+    // This CLI parses only --mode VALUE; joined --mode=json is ignored and remains interactive.
     expect(recognizeAgentProcessFromCommandLine('prime-agent --mode=json')).toEqual({
       agent: 'prime-agent',
       processName: 'prime-agent'
@@ -608,8 +639,7 @@ describe('agent process recognition', () => {
         '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
       )
     ).toBeNull()
-    // Why: `exec` past any position is never the TUI — `muse exec` dispatches headless
-    // while `muse <flags> exec` fails fast with an arg error (verified on Muse 1.3.0).
+    // Muse1.3.0 exec is headless; exec after flags/-- fails fast instead of hosting a TUI.
     expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse --yolo exec "hi"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({

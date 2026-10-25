@@ -1,7 +1,4 @@
-// Replays hook payloads recorded from Claude Code 2.1.287 over a real PTY
-// (__fixtures__/claude-task-notification-hooks.jsonl, sidecar beside it). Claude owes the main
-// agent one <task-notification> for every background task that ends, and delivers it after the
-// task stops running — so "nothing running" is not "finished" (#23942).
+// Replay real Claude 2.1.287 PTY hooks from the adjacent fixture: ended background tasks still owe main-agent notifications, so no running work does not imply completion (#23942).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -319,8 +319,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     teams: '团队',
     passing: '通过',
     'opened this issue': '创建了此议题',
-    // No blanket "Open" override: it is a verb on buttons (打开) and a state next to 已关闭 (开放),
-    // so a single value-wide mapping is wrong for half the call sites. Per-key catalog values decide.
+    // Open is action 打开 or state 开放 beside 已关闭; resolve by key, never blanket value override.
     'Join Discord': '加入 Discord',
     'Pull request merged': '拉取请求已合并',
     'Agent Skills': '智能体技能',

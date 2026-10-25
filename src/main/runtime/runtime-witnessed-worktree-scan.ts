@@ -11,20 +11,13 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {
-  /** A worktree change landed while this scan ran; its rows describe a catalog that is gone. */
+  /** A concurrent worktree change made these scan rows stale. */
   superseded: boolean
   scanGeneration: number
   metadataPruneExpectation: NativeLocalWorktreeMetadataScanExpectation | undefined
 }
 
-/**
- * The destructive scan expectation for one repo, or undefined when this repo must not carry one.
- *
- * WSL-routed repos are excluded for the same reason the desktop listing excludes them: the listing
- * runs in the distro and reports Linux paths while metadata can hold UNC ones, and v1 cannot prove
- * those aliases equivalent. A runtime that needs repair throws rather than resolving routing, which
- * is likewise no basis for deleting rows.
- */
+/** Refuse destructive pruning on unresolved routes or WSL, whose Linux paths v1 cannot equate with stored UNC aliases. */
 function captureLocalMetadataPruneExpectation(
   store: RuntimeStore,
   repo: Repo
@@ -42,16 +35,13 @@ function captureLocalMetadataPruneExpectation(
   return store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
 }
 
-// Why the witness is the process-wide scan generation: it is what every worktree change
-// invalidator bumps, in the desktop and the headless host alike, and the runtime scan cache the
-// scan reads through is cleared by the same invalidators, so a re-run lists again.
+// Desktop and headless invalidators share this generation and clear the runtime scan cache, so retries list afresh.
 async function scanRuntimeWorktreesWithMutationWitness(
   store: RuntimeStore,
   repo: Repo,
   scanRepo: (repo: Repo) => Promise<RuntimeWorktreeScanResult>
 ): Promise<WitnessedRuntimeWorktreeScan> {
-  // Why capture before the scan: listing can mutate metadata synchronously before its first
-  // await, and the prune revalidates against the rows as they stood when the scan was issued.
+  // Capture before listing can mutate metadata synchronously; pruning revalidates the original rows.
   const scanGeneration = getLocalWorktreeScanGeneration(repo.id)
   const metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
   let scan: RuntimeWorktreeScanResult
@@ -62,14 +52,14 @@ async function scanRuntimeWorktreesWithMutationWitness(
   }
   return {
     ...scan,
-    // Why only a scan that succeeded: a failed one is already published non-authoritative.
+    // Failed scans are already non-authoritative.
     superseded: scan.ok && !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration),
     scanGeneration,
     metadataPruneExpectation
   }
 }
 
-/** The repo's scan, re-run under the shared bound while a worktree change overtakes it. */
+/** Rerun overtaken scans within the shared retry bound. */
 export function scanRuntimeWorktreesUntilNotOvertaken(
   store: RuntimeStore,
   repo: Repo,

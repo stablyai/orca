@@ -1,8 +1,4 @@
-// Each pane's binding generation (`LayoutLeaf.ptyGeneration`): it rises on every pty bind, layout-
-// command binds included (`persistPtyBinding` past its fast lane, a command that changes a pane's
-// ptyId), retire and rollback of that pane in this process, a same-id respawn included. Layout
-// commands that move or drop a pane do not bump it. In memory
-// only; layout-owner builds only.
+// In-memory generations advance on bind, retirement or rollback, including same-ID respawns; moves/removals do not.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -17,7 +13,6 @@ export function bumpPtyBindingGeneration(
   hostId: ExecutionHostId,
   leafId: string
 ): void {
-  // Switch point: a window-owned build publishes no generation, so it counts none.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return
   }
@@ -25,7 +20,7 @@ export function bumpPtyBindingGeneration(
   runtime.ptyBindingGenerations.set(key, (runtime.ptyBindingGenerations.get(key) ?? 0) + 1)
 }
 
-/** Undefined for a pane whose binding this process never wrote. */
+/** Undefined until this process writes the pane binding. */
 export function ptyBindingGenerationOf(
   runtime: GenerationRuntime,
   hostId: ExecutionHostId,

@@ -11,8 +11,7 @@ import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-/** The conversation rows the list draws, and each subagent's rows apart, placed in turns by
- *  the journal when the lane has one. */
+/** Separate conversation/subagent rows, using journal turn placement when available. */
 export function useNativeChatTranscriptProjection(
   session: NativeChatLiveSession,
   journalItems: readonly AgentJournalRenderItem[] | undefined,

@@ -8,8 +8,7 @@ export function serializeRichMarkdownSliceForClipboard(
   if (typeof view.serializeForClipboard === 'function') {
     return { html: view.serializeForClipboard(slice).dom.innerHTML }
   }
-  // Why: lightweight unit-test views predate ProseMirror's public clipboard
-  // serializer; production always takes the metadata-preserving branch above.
+  // Legacy unit-test views lack the public serializer; production uses the metadata-preserving branch.
   const fragment = DOMSerializer.fromSchema(view.state.schema).serializeFragment(slice.content)
   const container = document.createElement('div')
   container.appendChild(fragment)

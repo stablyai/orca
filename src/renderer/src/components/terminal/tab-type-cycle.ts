@@ -18,13 +18,7 @@ type GetNextTabWithinActiveTypeParams = {
   direction: number
 }
 
-/**
- * The backing entity id of the active tab, in the same id domain the cyclable entries use.
- *
- * `activeAgentSessionEntityId` is optional because a caller that only compares type-matched
- * entries stays correct without it; a caller that searches a pre-filtered single-type list must
- * pass it, or a structured tab resolves to a live background terminal (see the branch below).
- */
+/** Use the matching entity-ID domain; single-type callers need activeAgentSessionEntityId to avoid selecting a background terminal under a structured tab. */
 export function getActiveEntityIdForTabType(
   activeTabType: TabCycleType,
   activeTabId: string | null,
@@ -38,8 +32,7 @@ export function getActiveEntityIdForTabType(
   if (activeTabType === 'browser') {
     return activeBrowserTabId
   }
-  // Why: `activeTabId` is terminal-only state that keeps naming a live background terminal while a
-  // structured tab is active, so falling through here cycles from a tab the user is not on.
+  // activeTabId can still name a background terminal while a structured tab is active.
   if (activeTabType === 'agent-session') {
     return activeAgentSessionEntityId
   }
@@ -59,10 +52,7 @@ type GetNextTabAcrossAllTypesParams = {
   direction: number
 }
 
-// Why: companion to getNextTabWithinActiveType for the "cycle across every tab"
-// chord (Cmd/Ctrl+Shift+]/[ on fresh installs). Keeps the same dual-id matching semantics
-// (prefer the active group's unified tabId to disambiguate split layouts, fall
-// back to the backing entity id) so behavior matches what the TabBar renders.
+// Match TabBar dual-ID semantics: prefer unified tab ID for split disambiguation, then backing entity ID.
 export function getNextTabAcrossAllTypes({
   tabs,
   activeTabType,

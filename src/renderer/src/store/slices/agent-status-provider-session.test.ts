@@ -64,8 +64,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: mobile Chat UI keys its transcript subscription on providerSession.id, so a
-  // metadata-less end-of-turn `done` used to blank the chat every turn (#10630).
+  // Mobile transcript keys on providerSession.id; metadata-less done must not blank chat (#10630).
   it('keeps the provider session when the turn completes without session metadata', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
@@ -91,9 +90,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: `done` is the resting state, and both OSC 9999 repaints and reconnect snapshot
-  // replays re-deliver a metadata-less `done` onto an already-done row. Retaining only the
-  // first one still blanked the chat the moment a second landed (#10630).
+  // Repeated metadata-less done repaints/reconnects must retain resting session too, beyond the first done (#10630).
   it('keeps the provider session across repeated metadata-less done pings', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
@@ -119,8 +116,7 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  // Why: retention stops at the turn boundary. A metadata-less `working` after `done` starts
-  // fresh work, so the finished session must not ride along into it.
+  // Retention ends at turn boundary; fresh working after done must not inherit finished session.
   it('does not carry a completed session into the next turn', () => {
     const store = createTestStore()
 
@@ -278,8 +274,7 @@ describe('recordAgentProviderSession', () => {
       }
     )
 
-    // The pane is not retired here — only its live status becomes a sleeping record. Dropping
-    // these maps would replay history the user already cleared on the next heartbeat.
+    // Live-to-sleeping preserves pane identity; clearing read maps replays dismissed history on heartbeat.
     expect(store.getState().activityClearedAtByPaneKey['tab-1:leaf-1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-1:leaf-1']).toBeGreaterThan(0)
   })
@@ -697,8 +692,7 @@ describe('quit-time capture for newly resumable agents', () => {
       }
     )
 
-    // Why: this is the #15155 regression — without kimi in RESUMABLE_TUI_AGENTS no sleeping
-    // record is ever captured, so restart drops the session instead of resuming it.
+    // Kimi must be resumable or no sleeping record survives restart (#15155).
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       agent: 'kimi',
       worktreeId: 'wt-1',

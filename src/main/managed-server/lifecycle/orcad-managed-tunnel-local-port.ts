@@ -8,10 +8,7 @@ import { notifyManagedOrcadPairingRepaired } from './orcad-managed-pairing-repai
 // Reservation reports the bind error code as `cause`; Windows excluded ranges answer EACCES.
 const UNBINDABLE_LOCAL_PORT_CODES = new Set<unknown>(['EADDRINUSE', 'EACCES'])
 
-/**
- * Builds once more on a free local port when the saved one cannot be bound. The port is local to
- * this desktop, so the move keeps the pairing, the server's identity and its projects.
- */
+// Retry an unbindable desktop-local port without changing the server’s pairing, identity or projects.
 export async function buildOnBindableLocalPort<T>(
   userDataPath: string,
   environmentId: string,

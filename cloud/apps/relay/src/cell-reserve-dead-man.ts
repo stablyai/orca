@@ -2,14 +2,11 @@ import { createHash } from 'node:crypto'
 import type { CellFlags } from './cell-flags.js'
 import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 
-// A reserve-mode cell keeps its hosts in memory only while a placing director is there to
-// book and supersede them. With none for this long (a director rolled back, or placement
-// turned off) it flips itself back to db and re-registers, as a switch flip would.
+// Without placing-director contact, memory-only reserve ownership cannot supersede hosts; flip back to db and re-register as a switch flip would.
 export const RESERVE_DEAD_MAN_MS = 60_000
 const RESERVE_DEAD_MAN_SPREAD_MS = 60_000
 
-// 60-120 s, fixed per cell: when every director goes at once, the cells trip (and start
-// re-registering against the database) spread over a minute, not together.
+// Stable 60–120s per-cell windows stagger fleet-wide fallback DB re-registration over one minute.
 export function reserveDeadManWindowMs(cellId: string): number {
   const digest = createHash('sha256').update(cellId).digest()
   return RESERVE_DEAD_MAN_MS + (digest.readUInt32BE(0) % (RESERVE_DEAD_MAN_SPREAD_MS + 1))
@@ -40,8 +37,7 @@ export class ReserveDeadMan {
     this.permittedGeneration = null
   }
 
-  // The admitMode the cell acts on. Latched per switch-file generation: once tripped, only a
-  // new write brings reserve back, so a director that returns cannot flap the cell.
+  // Latch fallback per switch generation; returning directors cannot flap mode until a new reserve write.
   mode(applied: AppliedControlFlags<CellFlags>): 'db' | 'reserve' {
     if (applied.flags.admitMode !== 'reserve') {
       this.reserveGeneration = null

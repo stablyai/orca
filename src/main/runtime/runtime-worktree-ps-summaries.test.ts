@@ -137,7 +137,6 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     expect(summary('provisioned')?.defaultBranch).toBe(false)
     expect(summary('automation')?.automationCreated).toBe(true)
     expect(summary('cli')?.cliCreated).toBe(true)
-    // Kind facts go on the wire only when true.
     expect(summary('main')).not.toHaveProperty('automationCreated')
     expect(summary('main')).not.toHaveProperty('cliCreated')
     expect(summary('main')).not.toHaveProperty('detachedHead')
@@ -192,7 +191,6 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     }).get(worktree.id)
 
     expect(summary?.automationName).toBe('Nightly dependency bump')
-    // Only what the phone's details read; the rest of the cached PR stays on the host.
     expect(summary?.linkedPR).toEqual({
       number: 7,
       state: 'open',

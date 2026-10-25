@@ -31,7 +31,12 @@ it('limits typecheck to the projects a tree reaches', () => {
     'config/tsconfig.node.json',
     'config/tsconfig.tc.web.json'
   ])
-  expect(plan(['src/packages/process-host/src/run-process.ts']).typecheckProjects).toHaveLength(4)
+  expect(plan(['src/packages/process-host/src/run-process.ts']).typecheckProjects).toEqual([
+    'config/tsconfig.node.json',
+    'config/tsconfig.tc.web.json',
+    'config/tsconfig.tc.cli.json',
+    'src/packages/process-host/tsconfig.test.json'
+  ])
 })
 
 it('keeps Vitest full-run triggers out of the related set and runs their colocated tests', () => {

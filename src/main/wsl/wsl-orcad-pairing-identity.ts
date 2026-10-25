@@ -19,10 +19,7 @@ export type WslOrcadPairingRecovery = Omit<ManagedOrcadPairingRecovery, 'ensure'
   environmentId: string
 }
 
-/**
- * Reconnect with the enrolled grant and host key; startup offers only enroll new clients. A token
- * the host refuses re-pairs through the gate once, then must verify under the new pairing.
- */
+/** Reconnect with enrolled token/pinned host key. Repair refusal once through the gate and verify the replacement; startup offers are for enrollment only. */
 export async function resolveWslOrcadPairing(
   launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
   localPort: number,
@@ -32,7 +29,7 @@ export async function resolveWslOrcadPairing(
 ): Promise<string> {
   const verified = (offer: PairingOffer | null) =>
     verifyWslOrcadPairing(launch, localPort, offer, verifyIdentity)
-  // Why only an enrolled token: a first pairing has nothing to repair.
+  // First-time pairing has no enrolled token to repair.
   if (!recovery || !paired) {
     return verified(paired)
   }

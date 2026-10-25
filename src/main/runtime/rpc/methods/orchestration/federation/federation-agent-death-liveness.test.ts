@@ -7,8 +7,7 @@ import { eraseRpcMethods } from '../../../core'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 
-// #24353: the execution host must report `exited` once it can prove the worker's agent is gone —
-// killed inside a PTY that survives it, or taken down with the PTY by a reboot.
+// Host proof must report agent exit whether its PTY survives the kill or disappears on reboot (#24353).
 
 const HOME_FINGERPRINT = 'home-peer-fingerprint'
 const DISPATCH_ID = 'ctx_federation_agent_death'

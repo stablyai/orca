@@ -1,8 +1,4 @@
-/**
- * The relaunch half of WSL orcad liveness: C4's deploy-and-launch on a bounded ladder, then the
- * terminal census before anything is marked. A background recovery (nothing user-visible needs
- * the distro) relaunches only into a distro confirmed running, so it can never boot one.
- */
+/** C4 recovery uses bounded relaunch backoff, then census before publishing terminal verdicts. Background recovery requires confirmed-running distros and never boots them. */
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -72,7 +68,7 @@ export async function recoverWslOrcad(
       if (!context.current()) {
         return null
       }
-      // Before marking anything: orcad's daemon may have kept every terminal through the crash.
+      // Recount before marking terminals; the daemon may have preserved all sessions across orcad loss.
       const census = await context.collectCensus(connection)
       await context.arm(connection)
       if (context.current()) {

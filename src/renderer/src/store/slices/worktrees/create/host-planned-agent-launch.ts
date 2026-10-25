@@ -12,10 +12,7 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 
-/**
- * `worktree.create` on a paired host, the one place that decides who plans the agent launch: the
- * host from its own settings, or the desktop's prebuilt command, which every host accepts.
- */
+/** Choose one planner for paired-host create: capable host settings or universally accepted desktop-built command. */
 export async function createWorktreeOnRuntimeHost(
   environmentId: string,
   request: WorktreeCreateRequest,

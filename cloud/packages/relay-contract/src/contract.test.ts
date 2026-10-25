@@ -337,7 +337,6 @@ describe('pending connection details capability', () => {
         pendingConns: [{ ...identifiers, kind: 'resume', relayDeviceId: 'device-1' }]
       }).success
     ).toBe(true)
-    // Still strict otherwise: an unannounced key must not slip through as data.
     expect(
       HostHelloAckSchema.safeParse({
         ...ack,
@@ -350,7 +349,6 @@ describe('pending connection details capability', () => {
     expect(parseRelayHostCapabilities(' pending-conn-details , future-thing')).toEqual(
       new Set(['pending-conn-details', 'future-thing'])
     )
-    // A host that predates the header sends nothing; absence is never capable.
     expect(parseRelayHostCapabilities(undefined).size).toBe(0)
     expect(parseRelayHostCapabilities('').size).toBe(0)
     expect(parseRelayHostCapabilities('x'.repeat(65)).size).toBe(0)

@@ -70,8 +70,7 @@ it.each(['throw', 'rpc refusal'])(
 )
 
 it('a report that changed nothing still arms the gate, so plain terminals pay once per window', async () => {
-  // Why: the host answers `changed: 0` for every ordinary terminal; reopening on that turned
-  // every accepted key into an RPC and a host write transaction (round 6 measurement: 100 for 100).
+  // Ordinary terminals answer changed: 0; reopening on that would issue one RPC and host write per key.
   const client = {
     sendRequest: vi.fn().mockResolvedValue({ id: 'report', ok: true, result: { changed: 0 } })
   }

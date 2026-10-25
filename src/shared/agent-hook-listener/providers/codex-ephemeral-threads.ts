@@ -5,12 +5,8 @@ import { readString } from '../tool-input-preview'
 // Enough for any run of /side chats in one pane; the oldest ended long ago.
 const MAX_FORKS_PER_PANE = 16
 
-/**
- * Whether a root Codex hook comes from an ephemeral thread that is not the pane's own, such as a
- * /side fork. That thread shares the pane and process but must not move the pane's status.
- * The fork's own SessionStart names it; when that start was missed, the stored row, which outlives
- * an Orca restart, names the pane's thread. Neither depends on the parsed rollout.
- */
+// A /side thread shares the pane/process but cannot change its status; identify it from SessionStart or the persisted pane thread.
+// Persisted identity survives restart and does not depend on parsed rollout availability.
 export function isForeignEphemeralCodexThread(
   state: HookListenerState,
   paneKey: string,

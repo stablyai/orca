@@ -1,6 +1,4 @@
-// An item of a kind this build does not know is kept and drawn by nobody: no client renders it,
-// and nothing the host or a client decides from items (a running turn, a pending prompt, status)
-// reads it.
+// Retain unknown item kinds for compatibility without rendering them or deriving host/client work state from them.
 
 import { expect, it } from 'vitest'
 import { isAdmissibleAgentJournalItemBody } from './agent-session-journal-schemas'

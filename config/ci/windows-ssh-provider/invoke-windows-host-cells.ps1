@@ -1,6 +1,4 @@
-# Ephemeral CI only. Runs each Windows host cell (src/main/ssh/ssh-windows-host-cells.ts) against the
-# private sshd prove-preview-openssh.ps1 provisioned: one account, one DefaultShell and one vitest
-# process per cell, so every cell starts from an empty runtime store.
+# Ephemeral CI only: one private-sshd account, DefaultShell and vitest process per host cell for an empty runtime store.
 param(
  [Parameter(Mandatory=$true)][string]$SourceRoot,
  [Parameter(Mandatory=$true)][hashtable]$Context,
@@ -48,18 +46,14 @@ function Set-PrivateDefaultShell([string]$Shell) {
   }
 }
 
-# Diagnostic only: Orca must launch orcad without WMI, which refuses a standard user's SSH
-# (network) logon unless an administrator grants Remote Enable on root\cimv2. The cells run with no
-# such grant, so a launch that still needs WMI fails its cell. Prints ORCA_WMI=<ReturnValue>
-# or ORCA_WMI=denied.
+# Diagnostic ORCA_WMI=<ReturnValue>|denied: standard SSH logons lack root\cimv2 Remote Enable; Orca must launch without WMI.
 function Test-PrivateWmiLaunch([string]$Account) {
   $out=Invoke-PrivateSsh $Account 'powershell.exe -NoProfile -NonInteractive -Command "try{$r=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=''cmd.exe /d /c exit 0''} -ErrorAction Stop;''ORCA_WMI=''+$r.ReturnValue}catch{''ORCA_WMI=denied''}"'
   $match=[regex]::Match($out,'ORCA_WMI=(\S+)')
   if($match.Success){return $match.Groups[1].Value}else{return 'no-output'}
 }
 
-# App-level cells (tests/e2e/ssh-orcad-auto-convert.spec.ts, ssh-orcad-windows-cli-matrix.spec.ts). Last
-# in the run: they switch native modules to Electron's ABI, which the vitest cells cannot load.
+# Run app-level cells last: the e2e build switches natives to Electron’s ABI, which vitest cannot load.
 function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,[string]$Grep) {
   $ready=Invoke-PrivateSsh $Account.name 'git init -q orca-convert-repo && git -C orca-convert-repo -c user.name=orca -c user.email=orca@example.invalid commit -q --allow-empty -m init && echo ORCA_REPO_READY'
   if($ready -notmatch 'ORCA_REPO_READY'){throw 'Could not create the convert cell repository as the account'}

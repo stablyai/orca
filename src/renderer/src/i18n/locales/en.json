@@ -15006,6 +15006,17 @@
                 }
               }
             }
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "Couldn't start: {{value0}}",
+                  "4c119f5e2a": "Not started yet",
+                  "b817a96fcf": "Stopped: {{value0}}"
+                }
+              }
+            }
           }
         }
       },

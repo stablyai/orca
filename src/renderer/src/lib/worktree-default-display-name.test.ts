@@ -14,8 +14,7 @@ describe('resolveWorktreeBranchLabel', () => {
   })
 
   it('returns empty instead of throwing when branch is absent at runtime', () => {
-    // The palette renders every row on an empty query, before any branch search runs,
-    // so an unguarded branchName() here crashed the whole palette.
+    // Empty-query rows reach render before branch search; branchName() must tolerate missing branches there too.
     expect(resolveWorktreeBranchLabel({ branch: undefined as unknown as string })).toBe('')
   })
 })

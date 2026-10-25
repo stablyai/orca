@@ -96,8 +96,7 @@ export async function assertProjectHostSetupMutationRuntimeCapabilities(
   )
 }
 
-// Why: twins share `id`. A paired server's setups all carry its one `runtime:` hostId, so they
-// stay matched by id there, as before (the server's own by-id answer decides which one it was).
+// Twins share IDs; paired server setups all use one client runtime hostId, so server-side by-ID resolution remains authoritative.
 export function isSameProjectHostSetup(a: ProjectHostSetup, b: ProjectHostSetup): boolean {
   return a.id === b.id && a.hostId === b.hostId
 }
@@ -111,11 +110,7 @@ export function upsertProjectHostSetup(
     : [...setups, setup]
 }
 
-/**
- * Where a setup edit or removal goes. This computer's catalog stamps every row with its real
- * host, so a named host or a same-id twin goes on the wire; a paired server keeps the by-id
- * request, because its rows' client-side host ids cannot name its twins.
- */
+/** Local named/twin setup edits send real host identity; paired requests stay by-ID because client runtime hostIds cannot name server-side twins. */
 export async function prepareProjectHostSetupMutation<T extends ProjectHostSetupTarget>(
   setups: readonly ProjectHostSetup[],
   args: T

@@ -3,13 +3,7 @@ import { removeGroupLayoutLeaf } from '../../../shared/workspace-layout/tab-grou
 import type { NewGroupSplit } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { TabsSlice } from '@/store/slices/tabs/tabs-slice-contract'
 
-/**
- * The split that made a just-opened tab's group, when the group holds no other tab. Main stores no
- * empty group, so it lacks that group (the window made it with the tab, or empty before) and makes
- * it with the tab, beside the sibling branch, read off the window's tree without the other empty
- * groups main lacks too. None for what is then the workspace's only group. `state` may predate
- * the tab (an editor open passes the store from before it).
- */
+/** Describe the sole tab’s new group beside its sibling, omitting empty groups main never stores. None for the workspace’s only group. state may predate tab creation, as editor opens do. */
 export function newGroupSplitOf(
   state: Pick<TabsSlice, 'groupsByWorktree' | 'layoutByWorktree'>,
   worktreeId: string,

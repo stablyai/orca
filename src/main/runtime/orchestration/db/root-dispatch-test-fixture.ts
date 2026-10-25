@@ -1,13 +1,7 @@
 import type { DispatchContextRow } from '../types'
 import type { OrchestrationDb } from './orchestration-db'
 
-/**
- * Dispatch as a root coordinator with no nesting cap.
- *
- * Tests that predate nesting depth care about dispatch behaviour, not the cap;
- * this keeps them at their original call shape instead of repeating the same
- * creator/maxDepth pair at every site.
- */
+/** Legacy tests dispatch as an uncapped root; nesting-specific tests supply their own authority. */
 export function createRootDispatch(
   db: OrchestrationDb,
   taskId: string,

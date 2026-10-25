@@ -59,7 +59,6 @@ describe('tab agent launch options', () => {
   it('matches agents on a partial prefix so the launcher actually searches', () => {
     const options = buildTabAgentLaunchOptions(['claude', 'codex', 'gemini', 'antigravity'])
 
-    // Each is one character short of the full agent name.
     expect(findMatchingTabAgentLaunchOptions('gemin', options).map((o) => o.agent)).toEqual([
       'gemini'
     ])
@@ -86,8 +85,7 @@ describe('tab agent launch options', () => {
   it('does not match on a mid-string substring that would hijack file results', () => {
     const options = buildTabAgentLaunchOptions(['opencode', 'claude'])
 
-    // "ode" is inside "opencode" but not a prefix — agents rank above files, so
-    // a noisy mid-string hit must not surface.
+    // Agent rows outrank files, so broad mid-string hits must not hijack the result list.
     expect(findMatchingTabAgentLaunchOptions('ode', options)).toEqual([])
   })
 
@@ -96,7 +94,6 @@ describe('tab agent launch options', () => {
 
     // A lone "c" must not surface (and auto-launch) an agent.
     expect(findMatchingTabAgentLaunchOptions('c', options)).toEqual([])
-    // Two characters is enough to start searching.
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot'])
     )

@@ -16,7 +16,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: spawnProcessMock
 }))
 
-// Why: the installed-app path is real on a Mac, and the park would register in the real home.
+// Real macOS installs would register a park in the developer’s home.
 vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
@@ -30,7 +30,6 @@ let chromiumExecutable: string
 let sidecarMode: string | undefined
 let provider: OrcadBrowserProvider | null
 
-/** Strips the session/profile/args prefix the agent-browser invocation carries. */
 function commandFromArgs(args: readonly string[]): string[] {
   let index = 0
   while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {

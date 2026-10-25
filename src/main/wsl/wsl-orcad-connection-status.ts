@@ -2,11 +2,7 @@ import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { WslHostConnectIntent, WslHostDeferredUpdate } from '../../shared/wsl-host-types'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
 
-/**
- * What C7's UI shows for one WSL host, published with every `onChange`. `terminals` is the
- * verdict the distro itself proves for every terminal in it; null leaves terminals to orcad
- * (after a reconnect, `census` says how many its daemon still runs).
- */
+/** C7 publishes terminal verdicts proven by the distro; null leaves ownership to orcad, whose reconnect census reports surviving daemon sessions. */
 export type WslOrcadConnectionStatus =
   | { state: 'connecting' }
   | { state: 'ready'; census: OrcadTerminalCensus | null }
@@ -43,7 +39,7 @@ export type WslOrcadConnectionStatus =
 /** What a user-initiated connect asks of the host's update. */
 export type WslOrcadConnectIntent = { intent?: WslHostConnectIntent }
 
-/** A connect that failed; one the host deferred keeps its deferral, the retry nothing else offers. */
+/** Retain failed-connect deferrals so Update/Force remains available when nothing serves. */
 export function wslConnectFailedStatus(
   reason: string,
   deferral: WslHostDeferredUpdate | null

@@ -12,8 +12,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
-// Why: the real entry-action module pulls in runtime IPC + the app store; the
-// keyboard behavior under test only needs a controllable option list.
+// Stub runtime IPC/store-backed actions to isolate keyboard option handling.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
@@ -43,8 +42,7 @@ const fileOption = (relativePath: string): TabEntryOption => ({
   classification: { kind: 'existing-file', matchKind: 'fuzzy', relativePath }
 })
 
-// A worktree with two open terminals, so the no-query case is exercised against a
-// store that would otherwise produce switch rows.
+// Seed open terminals so an empty query must suppress otherwise available switch rows.
 function seedOpenTabs(): void {
   const worktree = {
     id: 'wt-1',
@@ -134,8 +132,7 @@ function setQuery(value: string): void {
   if (!input) {
     throw new Error('input not found')
   }
-  // Why: React patches the input value setter to track changes; bypass it with
-  // the native setter so the synthetic onChange actually fires.
+  // Use the native value setter to bypass React tracking and trigger synthetic onChange.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
@@ -195,9 +192,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={onOpenEntry} />)
 
-    // The pre-fix `> 1` guard left a single result unhandled: the arrow leaked to
-    // the input cursor / Radix. Now it must be consumed (preventDefault) and Enter
-    // still opens the row.
+    // Even one result must consume arrow navigation before the input cursor or Radix handles it.
     const event = pressKey(container.querySelector('input')!, 'ArrowDown')
     expect(event.defaultPrevented).toBe(true)
 
@@ -249,8 +244,6 @@ describe('TabBarCreateEntry keyboard navigation', () => {
       />
     )
 
-    // A partial query surfaces the agent (issue #1); it is the top row, so Enter
-    // launches it.
     setQuery('gem')
     submitForm()
 
@@ -318,7 +311,6 @@ describe('TabBarCreateEntry keyboard navigation', () => {
       </div>
     )
 
-    // Only the create actions the menu already renders remain.
     expect(container.querySelectorAll('[role="option"]')).toHaveLength(0)
     expect(container.querySelectorAll('[role="menuitem"]')).toHaveLength(1)
     expect(container.querySelector('input')!.value).toBe('')

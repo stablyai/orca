@@ -5,9 +5,7 @@ import {
   unwrapPowerShellScript
 } from './tui-agent-startup-script.test-fixture'
 
-// Hermes is the only agent whose launch Orca rewrites token by token — it owns the startup query,
-// the TUI mode, and where an override's flags may sit relative to the chat subcommand. Its cases
-// outgrew the general startup-plan file.
+// Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
   it('moves Hermes command override flags after the chat subcommand', () => {

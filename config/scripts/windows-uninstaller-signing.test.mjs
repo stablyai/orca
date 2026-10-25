@@ -16,8 +16,7 @@ const {
 const makeDir = () => mkdtempSync(join(tmpdir(), 'orca-uninstaller-signing-'))
 
 describe('isNsisUninstallerArtifact', () => {
-  // The name app-builder-lib's NsisTarget.computeScriptAndSignUninstaller gives
-  // the intermediate uninstaller; the hook keys off nothing else.
+  // Match app-builder-lib’s exact intermediate uninstaller naming; hook ignores other executables.
   it('matches only electron-builder intermediate uninstallers', () => {
     expect(isNsisUninstallerArtifact('C:\\dist\\orca-windows-setup.__uninstaller.exe')).toBe(true)
     expect(isNsisUninstallerArtifact('/dist/orca-windows-setup.__uninstaller.exe')).toBe(true)
@@ -63,8 +62,7 @@ describe('relayNsisUninstaller', () => {
     expect(readFileSync(filePath, 'utf8')).toBe('signpath-signed')
   })
 
-  // The receipt is the evidence gate's only handle on the embedded uninstaller:
-  // NSIS hides it in a compressed section the bundled 7za cannot read.
+  // Receipt is only evidence for embedded compressed NSIS uninstaller; bundled 7za cannot extract it.
   it('records the digest of the bytes it handed makensis', () => {
     const dir = makeDir()
     const filePath = writeUninstaller(dir, 'rebuild-unsigned')
@@ -88,8 +86,7 @@ describe('relayNsisUninstaller', () => {
     expect(existsSync(`${signedPath}${EMBEDDED_RECEIPT_SUFFIX}`)).toBe(false)
   })
 
-  // Import wins so the rebuild pass embeds the signed bytes even though it also
-  // regenerates an unsigned uninstaller of its own.
+  // Import signed bytes even when rebuild regenerated unsigned intermediate.
   it('prefers importing over exporting when both are configured', () => {
     const dir = makeDir()
     const filePath = writeUninstaller(dir, 'rebuild-unsigned')
@@ -103,8 +100,7 @@ describe('relayNsisUninstaller', () => {
     expect(readFileSync(filePath, 'utf8')).toBe('signpath-signed')
   })
 
-  // Fail-open: a missing or unwritable relay must leave the build with today's
-  // unsigned uninstaller, never throw.
+  // Missing/unwritable relay must preserve unsigned build without throwing.
   it('leaves the unsigned uninstaller in place when no signed copy came back', () => {
     const dir = makeDir()
     const filePath = writeUninstaller(dir, 'unsigned-uninstaller')
@@ -140,10 +136,7 @@ describe('relayNsisUninstaller', () => {
   })
 })
 
-// Why a suite of its own: this is the function electron-builder actually calls,
-// and it runs inside `Build Windows release artifacts`, which has no
-// continue-on-error. If it throws, the release job dies before a single
-// SignPath request is made. Nothing else in the chain guards that.
+// Exercise actual hook’s fail-open behavior: Windows build has no continue-on-error and throwing prevents any SignPath request.
 describe('signWindowsUninstallerViaSignPath', () => {
   const RELAY_VARS = ['ORCA_WIN_UNINSTALLER_EXPORT_PATH', 'ORCA_WIN_UNINSTALLER_SIGNED_PATH']
 
@@ -182,8 +175,7 @@ describe('signWindowsUninstallerViaSignPath', () => {
     })
   })
 
-  // electron-builder calls the hook once per signing hash (sha1 then sha256),
-  // so both legs have to survive running twice over the same file.
+  // Run both signing-hash passes over same file as electron-builder does.
   it('is idempotent across the sha1 and sha256 invocations on both legs', () => {
     const dir = makeDir()
     const filePath = writeBuiltUninstaller(dir)
@@ -209,8 +201,7 @@ describe('signWindowsUninstallerViaSignPath', () => {
     )
   })
 
-  // An unwritable destination is the realistic filesystem failure, and it must
-  // cost the uninstaller signature rather than the release job.
+  // Unwritable destination may cost signature, never release job.
   it('never throws when the export destination cannot be created', () => {
     const dir = makeDir()
     const filePath = writeBuiltUninstaller(dir)

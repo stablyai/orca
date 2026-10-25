@@ -121,7 +121,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       const persistedWorktree = persistedWorktreeId
         ? findResolvedWorktree(persistedWorktreeId)
         : undefined
-      // Why: the floating sentinel never resolves as a worktree, so without this its cwd re-files it (#23428).
+      // Floating workspaces do not resolve as worktrees; retain their sentinel instead of re-filing by cwd (#23428).
       const recordedFloating =
         persistedWorktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
         floatingPtyBindings.has(session.id) ||
@@ -133,7 +133,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         inferredWorktreeId &&
         worktreeIdsEqual(session.worktreeId, inferredWorktreeId)
       )
-      // Why: an unresolved explicit provider owner remains authoritative unless the session id proves it was frozen before a persisted rename migration.
+      // Explicit unresolved provider ownership wins unless the session id proves it predates a persisted rename.
       const worktreeId = providerWorktree
         ? providerWorktree.id
         : hasMigrationEvidence
@@ -191,7 +191,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         pty.controllerTitle = session.title?.trim() || null
         this.reconcileSubscriberDrivenProviderAttach(session.id)
       }
-      // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
+      // Do not serialize relay probes or let one throw abort inventory cleanup.
       if (inventoryOptions?.refreshForegroundAgents !== false) {
         this.refreshPtyForegroundAgent(session.id)
       }
@@ -244,9 +244,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         }
         this.setPtyConnected(pty, false)
         pty.agentSessionOwners = []
-        // Why: this list only enumerates registered providers, so a dropped relay
-        // clears `connected` for every one of its PTYs at once. Only `false` here
-        // is an observed absence; `null` means no provider could be asked.
+        // Registered-provider inventory omits dropped relays: false means observed absence, null means no provider answered.
         if (observed === false) {
           // A restarted relay can omit surviving shells; its session map cannot prove exit.
           this.forgetPtyLivenessVerdict(pty.ptyId)

@@ -19,11 +19,7 @@ type WorkerMessage =
   | { type: 'stop' }
   | { type: 'teardown' }
 
-// Why: the main sherpa-onnx npm package uses WASM which cannot access the host
-// filesystem to load model files. We use the platform-specific native addon
-// (e.g. sherpa-onnx-darwin-arm64) which has a flat C-style API and direct
-// filesystem access. The main thread resolves the correct absolute path
-// (dev vs packaged) and passes it via workerData.
+// Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
 let sherpa: any = null
 let recognizer: any = null
 let stream: any = null
@@ -172,8 +168,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   }
 }
 
-// Why: an offline stream is single-use — always mint a fresh stream after an
-// attempt so a failed decode cannot leave a spent stream on a warm worker.
+// Offline streams are single-use; refresh even after failed decodes on a warm worker.
 function decodeOfflineChunk(samples: Float32Array): string {
   try {
     sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
@@ -188,8 +183,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
   }
 }
 
-// Why: warm-worker reuse must not see residual audio or a spent offline stream.
-// Recovery failures are swallowed so they cannot skip the stopped lifecycle signal.
+// Discard residual audio and spent streams; recovery must still deliver stopped.
 function resetOfflineSessionState(): void {
   try {
     offlineChunker = new OfflineAudioChunker(offlineSampleRate)
@@ -197,7 +191,7 @@ function resetOfflineSessionState(): void {
       stream = sherpa.createOfflineStream(recognizer)
     }
   } catch {
-    // Non-fatal: prefer posting stopped over stranding stopDictation for 60s.
+    // Preserve stopped so stopDictation does not wait 60s.
   }
 }
 
@@ -208,9 +202,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
 
   try {
     const inputRate = msg.sampleRate || offlineSampleRate
-    // Why: sherpa's native stream aborts the process if one recognizer sees
-    // different input rates across chunks. Normalize before crossing the
-    // native boundary so device/context changes become recoverable JS state.
+    // Normalize rates before native decode: mixed rates on one recognizer abort the process.
     const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
     if (isStreaming) {
       sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
@@ -234,14 +226,9 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
         sherpa.reset(recognizer, stream)
       }
     } else {
-      // Why: decoding one unbounded capture in a single call makes ONNX tensor
-      // sizes scale with dictation length until a >=2 GiB allocation SIGTRAPs
-      // the whole app (#7925). Decode bounded chunks as they fill instead;
-      // each consumer already appends multiple 'final' segments per session.
+      // Bound ONNX allocations below Chromium's >=2GiB crash threshold (#7925); consumers append final segments.
       const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
-      // Why: keep decoding later ready windows after one failure — push() has
-      // already removed them from the chunker, and decodeOfflineChunk refreshes
-      // the stream in finally so a spent stream cannot poison the next attempt.
+      // push() already consumed these windows; decode later ones after failures using the refreshed stream.
       let firstError: unknown = null
       for (const chunk of readyChunks) {
         try {
@@ -282,8 +269,7 @@ function handleStop(): void {
       }
       stream = sherpa.createOnlineStream(recognizer)
     } else {
-      // Why: the remainder is below the chunk limit by construction, so this
-      // last decode is bounded too.
+      // flush() leaves less than one bounded chunk.
       const remaining = offlineChunker?.flush()
       if (remaining && remaining.length > 0) {
         const text = decodeOfflineChunk(remaining)
@@ -299,7 +285,7 @@ function handleStop(): void {
     }
     parentPort?.postMessage({ type: 'error', error: String(err) })
   } finally {
-    // Why: stopDictation waits on this signal; recovery must never prevent it.
+    // Recovery must not suppress the stopped signal awaited by stopDictation.
     parentPort?.postMessage({ type: 'stopped' })
   }
 }

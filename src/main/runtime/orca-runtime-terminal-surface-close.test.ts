@@ -72,7 +72,7 @@ afterEach(async () => {
   }
 })
 
-/** A real store whose repo already has host-authoritative membership, as any repo with an exit does. */
+/** Real store with host-authoritative terminal membership, as after a repo exit. */
 function createPersistedRuntime(session: WorkspaceSessionState) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-surface-close-'))
   directories.push(directory)
@@ -99,7 +99,6 @@ function createPersistedRuntime(session: WorkspaceSessionState) {
   }
 }
 
-/** What a renderer save carries after its own close: membership without the closed surface. */
 function rendererSaveWithout(
   session: WorkspaceSessionState,
   leafId?: string
@@ -158,7 +157,6 @@ describe('renderer close intents', () => {
     )
   })
 
-  // e.g. the exited-pane overlay's Close, after main's exit handling already retired that leaf.
   it.each([
     ['its exit already retired the pane', () => splitSessionAfterExitRetired()],
     ['the tab is pinned', () => withPinnedTab(splitSessionAfterExitRetired())],
@@ -185,7 +183,7 @@ describe('CLI close of one pane in a split tab', () => {
   it('commits the pane removal without waiting for its process exit', async () => {
     const harness = createHarness()
     harness.syncSplitFixtureGraph()
-    // A verified stop that never reports an exit: membership must not ride on one.
+    // Verified stop can lack an exit event; retirement must not depend on it.
     harness.setVerifiedStopResult(true)
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
       (candidate) => candidate.ptyId === PTY_ID
@@ -202,7 +200,6 @@ describe('CLI close of one pane in a split tab', () => {
       root: { type: 'leaf', leafId: SIBLING_LEAF_ID },
       ptyIdsByLeafId: { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
     })
-    // No exit arrives to remove the pane, so the desktop is told to drop that leaf.
     expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
   })
@@ -210,7 +207,6 @@ describe('CLI close of one pane in a split tab', () => {
   it('commits the pane removal when the handle names a live PTY', async () => {
     const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
     harness.syncSplitFixtureGraph()
-    // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
     harness.syncFixtureTabWithoutLeaf()
     harness.setVerifiedStopResult(true)
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
@@ -240,7 +236,7 @@ describe('CLI close of one pane in a split tab', () => {
       harness.syncSplitFixtureGraph()
       harness.syncFixtureTabWithoutLeaf()
       harness.setVerifiedStopResult(stopResult)
-      // A renderer that honours a whole-tab close, so a widened close shows as the lost sibling.
+      // Honor erroneous tab close so widening destroys the sibling and fails visibly.
       harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
       const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
         (candidate) => candidate.ptyId === PTY_ID
@@ -248,7 +244,6 @@ describe('CLI close of one pane in a split tab', () => {
 
       const receipt = await harness.runtime.closeTerminal(terminal.handle)
 
-      // A stale renderer save that still lists the pane can neither restore it nor drop the sibling.
       const saved = sanitizeWorkspaceSessionTerminalRetirements(
         { ...harness.getSession(), terminalLayoutsByTabId: { [TAB_ID]: splitLayout } },
         harness.getSession()
@@ -260,7 +255,7 @@ describe('CLI close of one pane in a split tab', () => {
       })
       expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
       expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-      // The owed stop still goes out through the controller's kill, which records SSH pending kills.
+      // Controller kill also records pending SSH stops; it must still run.
       expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
       expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
       expect(receipt).toMatchObject({
@@ -271,7 +266,7 @@ describe('CLI close of one pane in a split tab', () => {
     }
   )
 
-  // L255: switch-on bug waiting on the close PR.
+  // L255: expected main-owned headless pane-close failure until its fix lands.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
     'drops only that pane from paired clients on a host with no renderer listing the tab',
     async () => {
@@ -282,7 +277,6 @@ describe('CLI close of one pane in a split tab', () => {
         (candidate) => candidate.ptyId === PTY_ID
       )!
       harness.syncEmptyGraph()
-      // No exit arrives to retire the pane from the published snapshot.
       harness.setVerifiedStopResult(new Error('ssh_host_unreachable'))
 
       await harness.runtime.closeTerminal(terminal.handle)
@@ -341,12 +335,12 @@ describe('mobile close of one pane in a split tab', () => {
 })
 
 describe('mobile close of a tab the desktop renderer lists', () => {
-  // Pins are renderer presentation that main's session can lag, so only the renderer can refuse.
+  // Legacy renderer owns pin presentation and must be allowed to refuse close.
   it('still asks the renderer, whose pin guard can refuse it', async () => {
     const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
     harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main's layout holds the pin and refuses the close itself; the renderer is not asked.
+      // Main-owned layout has its own pin guard, requiring no renderer acknowledgement.
       harness.editSession((session) => ({
         ...session,
         tabsByWorktree: {

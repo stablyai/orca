@@ -5,10 +5,7 @@ import { canAutoSaveOpenFile, isAutosaveSuspendedForFile } from './editor-autosa
 
 export type EditorAutoSaveDue = { file: OpenFile; draft: string }
 
-/**
- * Record id → the view and draft its autosave timer writes. A record is decided by its first view
- * that may autosave, so a read-only or preview view never cancels the timer of its record.
- */
+/** Choose the first autosave-capable view per record; read-only/preview siblings must not cancel that record’s timer. */
 export function editorAutoSaveDueRecords(
   state: AppState,
   isHeld: (state: AppState, file: OpenFile) => boolean

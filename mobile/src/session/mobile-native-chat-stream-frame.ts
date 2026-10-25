@@ -7,9 +7,7 @@ export type MobileNativeChatStreamFrame = {
   messages?: NativeChatMessage[]
   hasMore?: boolean
   beforeOffset?: number
-  /** Snapshot only: no transcript file exists behind this window yet (the agent
-   *  has not flushed, or was never prompted). The empty list is real enough to
-   *  render, but it is not a settled read of the session's history. */
+  // No transcript exists yet; render the empty window without treating it as settled history.
   pending?: boolean
   error?: string
   message?: string
@@ -24,12 +22,9 @@ export type AppliedMobileNativeChatFrame =
       hasMore?: boolean
       beforeOffset?: number
       cursorInvalidated?: boolean
-      /** The frame replaced the whole retained window (replacement, first
-       *  snapshot, or a replay snapshot disjoint from local history) — the
-       *  caller must reset its paging window/cursor to the frame's. */
+      // Reset paging to the frame’s cursor when the retained window is replaced.
       windowReplaced?: boolean
-      /** The transcript behind this window does not exist yet: show it, but keep
-       *  the read open — the real snapshot follows on the same subscription. */
+      // Keep the read open until this subscription delivers the real transcript.
       pending?: boolean
     }
 
@@ -42,8 +37,7 @@ function replayRetainedTailStart(
   if (firstIndex === undefined) {
     return null
   }
-  // `hasMore: false` is authoritative: retained rows before the replay window
-  // were removed while disconnected, even when the newest IDs still match.
+  // hasMore false proves older retained rows were removed, even if the newest ids still match.
   if (hasMore === false && firstIndex > 0) {
     return null
   }
@@ -62,12 +56,7 @@ function replayRetainedTailStart(
   return expectedIndex === merger.list.length ? firstIndex : null
 }
 
-/** Applies runtime stream frames while preserving the initial-snapshot versus
- *  reconnect-replay distinction owned by the session hook. A replay snapshot
- *  that extends a contiguous retained tail merges in by id — paged-in history
- *  survives a socket blip instead of collapsing to the replayed window. A
- *  discontinuous replay (long outage, compaction while away) can't be stitched
- *  without a gap, so it falls back to the fresh authoritative window. */
+// Merge contiguous reconnect replays to retain paged history; gaps/compaction require a fresh authoritative window.
 export function applyMobileNativeChatStreamFrame(args: {
   merger: NativeChatMerger
   frame: MobileNativeChatStreamFrame
@@ -78,7 +67,7 @@ export function applyMobileNativeChatStreamFrame(args: {
   if (frame.type === 'error') {
     return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
   }
-  // Why: a feed's token is its own, so an end that reaches here was not asked for; the feed is dead.
+  // The subscription owns its token, so an unsolicited end means its feed died.
   if (frame.type === 'end') {
     return { kind: 'error', error: 'Transcript stream ended' }
   }
@@ -115,11 +104,9 @@ export function applyMobileNativeChatStreamFrame(args: {
     kind: 'messages',
     messages,
     ...(pending ? { pending: true } : {}),
-    // Why: once the bounded live window drops its oldest row, the snapshot's
-    // byte cursor no longer describes the oldest retained message.
+    // Trimming the oldest row invalidates the snapshot byte cursor.
     ...(cursorInvalidated ? { cursorInvalidated: true } : {}),
-    // A trimmed replay creates page-able history even if the prior window had
-    // none; otherwise only a replay sharing our oldest row owns its metadata.
+    // Trimmed replays create page-able history; otherwise only a replay sharing our oldest row owns its metadata.
     ...(frame.type === 'snapshot' && cursorInvalidated
       ? { hasMore: true }
       : replayStillStartsAtOldest

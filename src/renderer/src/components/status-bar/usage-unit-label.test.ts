@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { getUsageUnitLabelState, usageChipShowsPercentage } from './usage-unit-label'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 vi.mock('@/hooks/useResetCountdownClock', () => ({ useResetCountdownClock: () => 0 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({ DropdownMenuItem: () => null }))

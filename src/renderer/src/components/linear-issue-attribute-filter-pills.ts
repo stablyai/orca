@@ -1,5 +1,4 @@
-// Why: the pills are the only place an applied Linear facet filter is visible once the
-// popover closes, so they carry the same coverage truth the picker shows inline.
+// Keep coverage visible on pills after the picker’s detailed notice closes.
 import { translate } from '@/i18n/i18n'
 import {
   canonicalizeLinearIssueAttributeFilter,

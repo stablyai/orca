@@ -1,5 +1,4 @@
-// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' because
-// Metro cannot resolve Node builtins in a React Native bundle.
+// Use the buffer polyfill: Metro cannot resolve node:buffer in React Native.
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc-client'
@@ -26,8 +25,7 @@ export type UseMobileDictationResult = {
 
 export const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
-/** Shown when the composer stops accepting input under a start the user tapped: the tap has to end
- *  in something the composer can render, and only the user's own cancel may end in silence. */
+// An interrupted user tap needs a renderable error; only explicit user cancellation may end silently.
 export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
   'Voice dictation stopped because this session is no longer accepting input. Try again.'
 
@@ -49,8 +47,7 @@ export function isCurrentMobileDictationStart(
   return currentGeneration === generation && enabled && activeId === dictationId
 }
 
-/** A finish is still this dictation's while nothing has superseded it: `cancel`, a disable, an
- *  unmount and a newer start each bump the generation or clear the active id, and most do both. */
+// Generation and active id fence finish results against cancellation, disable, unmount and newer starts.
 export function isCurrentMobileDictationFinish(
   currentGeneration: number,
   generation: number,

@@ -15,11 +15,8 @@ describe('resolvePaneAgentOwner', () => {
   })
 
   it('falls through to the durable host-stamped hook identity when launch intent is gone', () => {
-    // The mirror/restore case: launchAgent dropped, live hook is the anchor.
     expect(resolvePaneAgentOwner({ hookAgent: 'omp' })).toBe('omp')
-    // Live hook cleared: the last completed hook carries the identity.
     expect(resolvePaneAgentOwner({ completedHookAgent: 'omp' })).toBe('omp')
-    // Nothing live at all: the hibernated session record is the last resort.
     expect(resolvePaneAgentOwner({ sleepingSessionAgent: 'omp' })).toBe('omp')
   })
 

@@ -16,10 +16,7 @@ import { RemoteServerOutageNotice } from './RemoteServerOutageNotice'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
-/**
- * What a pane's Reconnect does: pair again first when the server refused us, sign in first when
- * the SSH host waits for it, and otherwise retry the pane.
- */
+/** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
   getTransport: () => PtyTransport | undefined,
   pairingRefusedEnvironmentId: string | null,
@@ -39,8 +36,7 @@ export function createPaneRecoveryReconnect(
     }
     const signInEnvironmentId = awaitingSignIn ? getTransport()?.getRuntimeEnvironmentId?.() : null
     if (signInEnvironmentId) {
-      // Why no retry on failure: a rejected password must not re-dial into a second prompt;
-      // the control-ready revival starts the pane once sign-in succeeds.
+      // Do not retry rejected sign-in into another prompt; successful control-ready revival starts the pane.
       void window.api.runtimeEnvironments
         .connect({ selector: signInEnvironmentId })
         .then((response) => {
@@ -86,10 +82,7 @@ export function TerminalPaneRecoveryPortals({
     setNoticeEnvironmentId(ownerEnvironmentId)
   }
   const revealed = useCalmStatusReveal(notice.speaks, false, notice.since)
-  // Why gated on canSpeak: the hold is for a server that answered, not for a surface that lost its
-  // turn (hidden, sign-in, WSL), whose own cards must not land under a lingering notice.
-  // Why: a surface that lost the lead while the server is still down handed its notice to
-  // another; only the leader when the outage ends may hold, so a handoff never shows two.
+  // Hold only on the eligible outage leader; hidden/sign-in/WSL surfaces and handoffs must not overlap another notice or card.
   const [handedOff, setHandedOff] = useState(false)
   if (notice.speaks && handedOff) {
     setHandedOff(false)

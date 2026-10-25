@@ -34,12 +34,7 @@ function usageSource(session: CursorAuthSession): UsageRateLimitSource {
   return session.source === 'desktop' ? 'web' : 'cli'
 }
 
-/**
- * Stable, non-secret fingerprint of the signed-in account. Hashed because this
- * rides `usageMetadata` into the renderer and mobile snapshots, where the raw
- * WorkOS subject would be an account identifier nobody needs to see. Readers
- * only compare it, so a digest is enough.
- */
+/** Hash the account subject: renderer/mobile snapshots only need equality, not the raw identifier. */
 function accountFingerprint(session: CursorAuthSession): string {
   return createHash('sha256').update(session.token.subject).digest('hex').slice(0, 12)
 }
@@ -60,11 +55,7 @@ function result(
   }
 }
 
-/**
- * Dashboard routes answer 403 to a bare session cookie — they check the request
- * origin as CSRF defence. Sending what the dashboard itself sends is what they
- * expect; without these headers every /api route fails on a valid session.
- */
+/** Match dashboard CSRF origin headers; bare session cookies receive 403. */
 function requestHeaders(session: CursorAuthSession): Record<string, string> {
   return {
     Cookie: cursorSessionCookie(session.token),
@@ -85,9 +76,7 @@ async function fetchDashboardJson(
   method: 'GET' | 'POST' = 'GET'
 ): Promise<FetchOutcome> {
   const source = usageSource(session)
-  // Why on failures too: the account-switch guard downstream can only drop a
-  // previous account's figures when the fresh result names an account, and a
-  // switch whose first refresh 401s or 5xxs is exactly when it must.
+  // Even failed refreshes need account provenance so switching accounts can discard stale quota.
   const provenance = accountFingerprint(session)
   const res = await getMainHttpClient().fetch(url, {
     // Keep dashboard redirects visible without forwarding session credentials.
@@ -166,7 +155,7 @@ type CurrentPeriodOutcome =
   | { kind: 'result'; result: ProviderRateLimits }
   | { kind: 'summary' }
 
-/** Unified plans trust the period strictly; other plans only use it when Cursor reports a sub-monthly period. */
+/** Unified plans use the period; other plans use it only for sub-monthly billing. */
 async function fetchCurrentPeriodUsage(
   session: CursorAuthSession,
   signal: AbortSignal | undefined,
@@ -182,8 +171,7 @@ async function fetchCurrentPeriodUsage(
     return { kind: 'summary' }
   }
   if (current.kind === 'result') {
-    // Why: only a retired endpoint falls back (Cursor serves unknown dashboard routes as
-    // 200 HTML); other failures must not publish obsolete zeros as healthy usage.
+    // Only retired routes (including HTML app-shell replies) justify fallback; other failures must not publish obsolete zeros.
     const retired =
       [404, 405, 501].includes(current.httpStatus ?? 0) ||
       current.result.usageMetadata?.failureKind === 'parse'
@@ -206,8 +194,7 @@ function credentialFailure(readResult: CursorAuthReadResult): ProviderRateLimits
       usageMetadata: { failureKind: 'missing-credentials' }
     })
   }
-  // Why: cursor-agent refreshes its own token on use; Orca only reads, so a
-  // lapsed session is reported instead of spending a request that must 401.
+  // Orca reads tokens only; report expiry and let cursor-agent refresh on next use.
   if (isCursorSessionTokenExpired(readResult.session.token)) {
     return result('error', EXPIRED_MESSAGE, {
       usageMetadata: {
@@ -221,10 +208,7 @@ function credentialFailure(readResult: CursorAuthReadResult): ProviderRateLimits
   return null
 }
 
-/**
- * Reads the Cursor plan allowance for the account this machine is signed into.
- * Orca never runs `cursor-agent login` and never writes Cursor's credentials.
- */
+/** Read Cursor allowance without running login or writing credentials. */
 export async function fetchCursorRateLimits(
   options: { signal?: AbortSignal; authReadResult?: CursorAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {
@@ -252,8 +236,7 @@ export async function fetchCursorRateLimits(
     const planPools = mapped.buckets.filter(
       (bucket) => bucket.name !== CURSOR_ON_DEMAND_BUCKET_NAME
     )
-    // Why: weekly plans keep obsolete monthly zeros in the summary, so only idle pools justify a request.
-    // Unlimited non-unified plans keep main's no-bar result without the extra request.
+    // Weekly plans can leave obsolete monthly zeros; probe idle finite pools while retaining unlimited plans' no-bar result.
     const summaryPoolsIdle =
       !mapped.isUnlimited &&
       planPools.length > 0 &&
@@ -277,8 +260,7 @@ export async function fetchCursorRateLimits(
       }
     }
 
-    // Why: an unlimited plan has no ceiling to divide by. Publish the plan so the
-    // roster still lists the account, with no misleading bar.
+    // Unlimited plans retain account/plan identity without a misleading quota bar.
     if (mapped.isUnlimited) {
       return result('ok', null, { planType: mapped.planType, usageMetadata: metadata })
     }
@@ -291,9 +273,7 @@ export async function fetchCursorRateLimits(
       })
     }
 
-    // Why: accounts still on request-quota billing report nothing under
-    // individualUsage, so try the older per-model endpoint before concluding
-    // the account has no visible quota.
+    // Older request-quota plans lack individualUsage; try per-model quotas before declaring no allowance.
     const legacy = await fetchDashboardJson(
       `${LEGACY_USAGE_URL}?user=${encodeURIComponent(session.token.subject)}`,
       session,
@@ -311,9 +291,7 @@ export async function fetchCursorRateLimits(
       })
     }
 
-    // Why: a 200 with no allowance means the plan exposes no quota (API-key or
-    // team-billed accounts). 'unavailable' hides the bar the way Claude does on
-    // API-key billing; 'error' would paint a permanent alert for a healthy account.
+    // Successful allowance-free plans are unavailable, not permanently failing; hide their bar.
     return result('unavailable', 'Cursor reported no usage allowance for this account', {
       planType: mapped.planType,
       usageMetadata: { ...metadata, failureKind: 'usage-unavailable' }

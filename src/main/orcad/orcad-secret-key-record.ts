@@ -1,4 +1,3 @@
-/** orcad's key record on disk: naming, reading, and exclusive first publication. */
 import { createHash, randomBytes } from 'node:crypto'
 import {
   linkSync,
@@ -23,7 +22,7 @@ import { ORCAD_MASTER_KEY_BYTES } from './orcad-secret-sealing'
 import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
 import { errorMessage } from '../../shared/error-message'
 
-// `os-keyring`: written only by older builds; read to migrate it (see orcad-legacy-keyring-key.ts).
+// Read legacy keyring records only for migration.
 export type StoredKeyState =
   | { version: 1; backend: 'os-keyring'; account: string; check: string }
   | {
@@ -89,11 +88,7 @@ function machineTag(machineId: string | null): string {
     .slice(0, 16)
 }
 
-/**
- * Why one record per machine: hosts sharing a home (NFS) each keep their own key instead of
- * overwriting one another's, and a credential sealed elsewhere fails to unseal rather than
- * being silently re-keyed.
- */
+/** Machine-specific records prevent hosts sharing a home from overwriting each other's keys. */
 export function orcadSecretStateFileName(machineId: string | null): string {
   return `orcad-secret-store-${machineTag(machineId)}.json`
 }
@@ -103,7 +98,6 @@ function isInside(root: string, path: string): boolean {
   return !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
 }
 
-/** A throwaway key directory (tests, smoke runs) must not take over the user's real credential home. */
 export function isTemporaryKeyDir(keyDir: string): boolean {
   const roots = [tmpdir(), '/tmp', '/var/tmp'].flatMap((root) => {
     try {
@@ -115,9 +109,7 @@ export function isTemporaryKeyDir(keyDir: string): boolean {
   let target = resolve(keyDir)
   try {
     target = realpathSync(target)
-  } catch {
-    // Not created yet; the lexical path is what will be created.
-  }
+  } catch {}
   return roots.some((root) => isInside(root, target) || isInside(root, resolve(keyDir)))
 }
 
@@ -126,7 +118,7 @@ export function readStoredRecord(statePath: string): RecordRead {
   try {
     raw = readFileSync(statePath, 'utf8')
   } catch (error) {
-    // Why only ENOENT: EACCES on an existing record must never be mistaken for "no key yet".
+    // Permission failures must not trigger key creation over an existing record.
     if (hasErrorCode(error, 'ENOENT')) {
       return { kind: 'absent' }
     }
@@ -136,7 +128,7 @@ export function readStoredRecord(statePath: string): RecordRead {
     }
   }
   const stored = parseStoredState(raw)
-  // Why not regenerate: the record may hold the only copy of the key.
+  // Never regenerate an unreadable record: it may contain the only key copy.
   return stored
     ? { kind: 'record', stored }
     : {
@@ -145,11 +137,10 @@ export function readStoredRecord(statePath: string): RecordRead {
       }
 }
 
-/** Creates the record only if none exists, already restricted; otherwise says why not. */
 export function publishRecordExclusively(path: string, record: StoredKeyState): string {
   const staging = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.staging`
   try {
-    // Why refuse an unrestricted write: the record may carry the master key itself.
+    // Master-key bytes must never be published with unrestricted permissions.
     if (!writeSecureFile(staging, JSON.stringify(record), { durable: true })) {
       return `its key record ${path} could not be restricted to this user`
     }
@@ -170,7 +161,6 @@ export function publishRecordExclusively(path: string, record: StoredKeyState): 
   }
 }
 
-/** Replaces the record only while it is still `expected`; otherwise says why not. */
 export function replaceRecord(
   path: string,
   record: StoredKeyState,
@@ -199,11 +189,7 @@ export function replaceRecord(
   }
 }
 
-/**
- * Removes staging files a crashed write of this record left beside it; they can hold a master key.
- * Why only this record's: on a shared (NFS) home another machine's writer PID means nothing here.
- * Only this user's regular files, whose local writer is gone.
- */
+/** Sweep only this machine's dead-writer staging files; NFS peer PIDs cannot be judged locally. */
 export function sweepStaleRecordStaging(statePath: string): void {
   const dir = dirname(statePath)
   const prefix = `${basename(statePath)}.`
@@ -227,15 +213,13 @@ export function sweepStaleRecordStaging(statePath: string): void {
       if (stat.isFile() && (uid === null || stat.uid === uid)) {
         rmSync(path, { force: true })
       }
-    } catch {
-      // Gone already, or not ours to remove.
-    }
+    } catch {}
   }
 }
 
 export async function restrictExistingRecord(path: string): Promise<boolean> {
   try {
-    // Why verify on Windows: the hardening helper does not report a failed ACL restriction.
+    // Verify Windows ACL changes explicitly; the general hardening helper cannot confirm them.
     if (process.platform === 'win32') {
       return await restrictWindowsFile(path)
     }

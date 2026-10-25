@@ -13,8 +13,7 @@ function trimToContextBudget(value: string): string {
   if (value.length <= MAX_FORK_CONTEXT_CHARS) {
     return value
   }
-  // Why: terminal scrollback can be very large; keep the newest turns where
-  // the current user intent and latest findings are most likely to live.
+  // Keep newest turns within the capture bound, where current intent and findings are likeliest.
   const omitted = value.length - MAX_FORK_CONTEXT_CHARS
   const marker = `\n\n[Earlier terminal output omitted: ${omitted} characters]\n\n`
   return `${marker}${value.slice(-(MAX_FORK_CONTEXT_CHARS - marker.length))}`
@@ -38,8 +37,7 @@ function tailBoundForkCapture(value: string): string {
   if (value.length <= MAX_FORK_CAPTURE_SANITIZE_CHARS) {
     return value
   }
-  // Why: fork prompts keep newest terminal turns. Bound the raw capture before
-  // ANSI/OSC cleanup so a huge scrollback cannot run several full-output scans.
+  // Bound raw capture before ANSI/OSC cleanup to avoid repeated scans of huge scrollback.
   return value.slice(-MAX_FORK_CAPTURE_SANITIZE_CHARS)
 }
 

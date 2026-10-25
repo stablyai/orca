@@ -29,10 +29,7 @@ import {
   type CloseContinuityHarness
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
-/**
- * A CLI close of a tab's last pane. Switch-off the renderer's tab close retires the tab, then
- * acknowledges; switch-on it is main's layout close, durable before any stop goes out.
- */
+/** Last-pane close retires the tab: legacy renderer acknowledges, main-owned layout persists before stopping. */
 async function closeLastPane(
   harness: CloseContinuityHarness,
   handle: string
@@ -62,7 +59,6 @@ async function closeLastPane(
   return close
 }
 
-/** A refusal of a close the user may not make. Switch-off the renderer's pin guard; switch-on main's. */
 function refuseTabClose(harness: CloseContinuityHarness): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
@@ -91,7 +87,6 @@ describe('terminal close and handle incarnation continuity', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's layout close of the tab that holds the terminal now; the window follows it.
       expect(harness.closeTerminalTab).not.toHaveBeenCalled()
       expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
     } else {
@@ -99,7 +94,7 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   })
 
-  // L259a: switch-on bug waiting on its ledger row's fix.
+  // L259a: expected failure until main-owned close handles stale spawn-time tabs.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
     'kills and removes a stale spawn-time tab through its current headless surface',
     async () => {
@@ -140,12 +135,11 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   )
 
-  // L259a: switch-on bug waiting on its ledger row's fix.
+  // L259a: expected failure until main-owned close handles stale spawn-time tabs.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
     'still kills and keeps the removal when the durable headless close fails to flush',
     async () => {
       const harness = await createStaleTabCloseHarness({ headless: true })
-      // Switch-on main's layout close stands and is saved again later; switch-off the runtime's does.
       const errorSpy = vi
         .spyOn(console, ORCA_LAYOUT_OWNER_IS_MAIN ? 'warn' : 'error')
         .mockImplementation(() => undefined)
@@ -158,8 +152,7 @@ describe('terminal close and handle incarnation continuity', () => {
         closeMode: 'tab'
       })
 
-      // Why: a failed flush is bookkeeping; the user's close still stops its process and the
-      // in-memory removal stays for the next flush to write.
+      // Flush failure cannot undo the user's stop; retain in-memory retirement for the next write.
       expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
       expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
       const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -174,7 +167,7 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   )
 
-  // L255: switch-on bug waiting on its ledger row's fix.
+  // L255: expected failure until main-owned close publishes leaf-specific handles.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
     'publishes each split leaf retirement with its own terminal handle',
     async () => {
@@ -214,7 +207,7 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   )
 
-  // L259b: switch-on bug waiting on its ledger row's fix.
+  // L259b: expected failure until main-owned close accepts exact hot-state surfaces without persistence.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it).each(['pane', 'tab'] as const)(
     'closes an exact hot-state %s whose failed reveal left no persisted row',
     async (closeMode) => {
@@ -253,8 +246,7 @@ describe('terminal close and handle incarnation continuity', () => {
     const { terminal } = harness
     const register = () =>
       ORCA_LAYOUT_OWNER_IS_MAIN
-        ? // The crossing commit binds a new pane in the other workspace first, as every registration
-          // does; main's workspace fence (terminalHoldsPane, P2) refuses it the pane (L256).
+        ? // New spawn commit binds across workspaces; main's terminalHoldsPane fence must reject it (L256).
           registerBoundPty(harness.runtime, RUNTIME_OWNED_PTY_ID, OTHER_WORKTREE_ID, null, {
             tabId: 'tab-close-continuity-crossing',
             leafId: '44444444-4444-4444-8444-444444444444',
@@ -284,7 +276,6 @@ describe('terminal close and handle incarnation continuity', () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's layout close answers once its write is durable, and stops the terminal after it.
       await expect(closeLastPane(harness, handle)).resolves.toMatchObject({
         handle,
         tabId: TAB_ID,
@@ -334,7 +325,6 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.setVerifiedStopResult(true)
     harness.setStopAndWaitAction((stoppingPtyId) => {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main's layout close: the tab is out of the session, and main's panes, before the stop.
         if (!harness.getSession().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)) {
           order.push('session-retirement')
         }
@@ -414,8 +404,7 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
   })
 
-  // Switch-on main's layout, not the window's graph, says what a close ends; terminal-surface-replies-
-  // main.test.ts "close a tab by a pane handle in main, with no session row from the window" covers it.
+  // Main-owned layout decides close scope; terminal-surface-replies-main.test.ts covers graphless tab close.
   it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'requests a stop for every live tab PTY after retirement when the renderer graph is stale',
     async () => {
@@ -454,8 +443,7 @@ describe('terminal close and handle incarnation continuity', () => {
   it('reports an unconfirmed stop on the close receipt rather than a bare uncertain false', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    // Mirrors pty.ts when the SSH provider is gone: the lease is tombstoned, the
-    // stop reports false, and the PTY is marked as contact we lost — not a kill.
+    // Match lost SSH provider: tombstone the lease, report unverified stop and lost contact, never a proven kill.
     harness.kill.mockReturnValue(false)
     harness.setVerifiedStopResult(false)
     harness.runtime.markPtyLivenessUnverifiable(PTY_ID, 'its SSH provider is no longer registered')
@@ -525,7 +513,6 @@ describe('terminal close and handle incarnation continuity', () => {
     const { handle } = terminal
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's layout close commits, then the store goes away before the stop finishes.
       harness.setStopAndWaitAction(() => harness.makeSessionUnavailable())
       await expect(harness.runtime.closeTerminal(handle)).resolves.toMatchObject({
         handle,
@@ -634,7 +621,6 @@ describe('terminal close and handle incarnation continuity', () => {
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
 
     harness.runtime.markRendererReloading(1)
-    // A same-id respawn's commit stamps the pane with the incarnation it now runs.
     harness.replaceIncarnation('33333333-3333-4333-8333-333333333333')
     harness.replacePersistedIncarnation('33333333-3333-4333-8333-333333333333')
     harness.syncFixtureGraph()
@@ -760,7 +746,7 @@ async function closeByPty(harness: CloseContinuityHarness): Promise<unknown> {
   return harness.runtime.closeTerminal(terminal.handle)
 }
 
-/** A PTY-backed tab with no paired-viewer surface: the path orcad serves to the CLI. */
+/** CLI/headless path: PTY-backed tab without a paired-viewer surface. */
 function headlessPtyTab(): CloseContinuityHarness {
   const harness = createHarness({ registerPtyBacked: true })
   harness.syncFixtureTabWithoutLeaf()

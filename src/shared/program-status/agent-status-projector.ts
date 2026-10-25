@@ -78,9 +78,8 @@ export type ProgramStatusPayload = {
 }
 
 type ProgramStatusProjector = {
-  /** Feed one chunk; returns, in byte order with chunk offsets, the lifecycle payloads it produced and
-   *  every root record change (including ones the store would not see as news), plus the chunk's net
-   *  facet change: the new facet, `null` once the root record is gone, absent when unchanged. */
+  /** Return lifecycle payloads/root changes in chunk order (including unchanged store projections); facet is new, null when removed,
+   * or absent when unchanged. */
   process: (data: string) => {
     payloads: ProgramStatusPayload[]
     rootChanges: ProgramStatusRootChange[]
@@ -120,9 +119,8 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       case 'error':
         return { state: 'done', outcome: 'failure' }
       case 'idle':
-        // Why no cancellation verdict: idle also follows startup work (Codex reports a working blip
-        // while it boots), so it only proves the program is at rest. Orca infers a user's cancel
-        // from the interrupt keystroke itself. Idle after a finished turn keeps the unseen `done`.
+        // Idle may follow startup work (Codex), so it proves rest, not cancellation; interrupt keystrokes own that verdict.
+        // Keep unseen done results when the same invocation rests.
         return !newInvocation && lastRoot?.state === 'done' && lastRoot.sessionBoundary !== true
           ? lastRoot
           : { state: 'done', sessionBoundary: true }
@@ -201,7 +199,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
         stateStartedAt: rootStateStartedAt
       }
     }
-    // Why a key: redraws re-send identical reports, and only changes are news to the store.
+    // Deduplicate redraw reports so only changed payloads reach the store.
     const key = JSON.stringify(payload)
     if (key === lastKey) {
       return null

@@ -46,7 +46,6 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     githubListRestoreWriteRef,
     taskListPositionRef
   } = model
-  // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')

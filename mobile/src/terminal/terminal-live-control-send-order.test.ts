@@ -3,7 +3,6 @@ import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-contro
 
 describe('terminal live control send order', () => {
   it('Given a failed pending text flush When control bytes follow Then skips the control bytes', async () => {
-    // Given
     const events: string[] = []
     const flushPendingText = vi.fn(async () => {
       events.push('flush')
@@ -14,13 +13,11 @@ describe('terminal live control send order', () => {
       return true
     })
 
-    // When
     const result = await sendTerminalLiveControlAfterPendingFlush(
       flushPendingText,
       sendControlBytes
     )
 
-    // Then
     expect(result).toBe(false)
     expect(sendControlBytes).not.toHaveBeenCalled()
     expect(events).toEqual(['flush'])
@@ -53,7 +50,6 @@ describe('terminal live control send order', () => {
   })
 
   it('Given a failed control byte send When pending text flushed Then reports failure', async () => {
-    // Given
     const events: string[] = []
     const flushPendingText = vi.fn(async () => {
       events.push('flush')
@@ -64,13 +60,11 @@ describe('terminal live control send order', () => {
       return false
     })
 
-    // When
     const result = await sendTerminalLiveControlAfterPendingFlush(
       flushPendingText,
       sendControlBytes
     )
 
-    // Then
     expect(result).toBe(false)
     expect(events).toEqual(['flush', 'control'])
   })

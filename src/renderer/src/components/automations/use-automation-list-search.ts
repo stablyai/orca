@@ -21,12 +21,7 @@ export type AutomationListSearchCounts = {
   searchActive: boolean
 }
 
-/**
- * Rebuilds indexes only when the fingerprint changes, so a refresh tick that
- * replaces arrays with equal search content re-renders without re-indexing.
- * The cache is keyed by fingerprint rather than array identity, which useMemo
- * cannot express on its own.
- */
+/** Cache by capped search-content fingerprint so equivalent refresh arrays do not rebuild indexes; array-identity useMemo cannot express this. */
 function useAutomationSearchRows(
   sources: AutomationListSearchRowSource[]
 ): AutomationListSearchRow[] {
@@ -67,8 +62,7 @@ export function useAutomationListSearch({
   hasFilteredListItems: boolean
   searchCounts: AutomationListSearchCounts
 } {
-  // Why: keep the input snappy; matching is deferred so caret never waits on
-  // index scans. Only the normalized active query can fire a search.
+  // Defer matching so index scans cannot delay input/caret; only normalized active queries search.
   const deferredListSearchQuery = useDeferredValue(listSearchQuery)
   const liveListSearchResolution = useMemo(
     () => resolveAutomationListSearchQuery(listSearchQuery),
@@ -78,8 +72,7 @@ export function useAutomationListSearch({
     () => resolveAutomationListSearchQuery(deferredListSearchQuery),
     [deferredListSearchQuery]
   )
-  // Why: field feedback tracks the live value so a huge paste is labeled
-  // immediately; list filtering stays on the deferred resolution.
+  // Report oversized pastes from live input while filtering follows deferred resolution.
   const isListSearchQueryTooLarge = liveListSearchResolution.status === 'too_large'
   // Why: null means search must not run (empty, whitespace, or too large).
   const activeListSearchQuery =
@@ -98,8 +91,7 @@ export function useAutomationListSearch({
   )
   const externalAutomationSearchRows = useAutomationSearchRows(externalAutomationSearchSources)
 
-  // Why: matching runs only when the normalized query or search content changes —
-  // never on relativeNow / nextRunAt / usage refresh alone.
+  // Match only on normalized query/search-content changes, ignoring clock/next-run/usage refreshes.
   const filteredRowKeys = useMemo(
     (): readonly string[] | null =>
       activeListSearchQuery === null
@@ -123,8 +115,7 @@ export function useAutomationListSearch({
     if (filteredRowKeys.length === 0) {
       return []
     }
-    // Keyed by row, not automation id: a bare-id map holds one entry for two
-    // hosts' copies, so one host's row would be dropped and the other doubled.
+    // Use authority-qualified row keys; bare IDs would drop one host’s copy and duplicate another.
     const byKey = new Map(rows.map((row) => [row.key, row]))
     const next: AutomationListRow[] = []
     for (const key of filteredRowKeys) {
@@ -157,8 +148,7 @@ export function useAutomationListSearch({
   const hostRowCount = rows.length + externalAutomationEntries.length
   const visibleRowCount = filteredRows.length + filteredExternalAutomationEntries.length
 
-  // Why: when search hides the current row, move selection to the first visible
-  // match so list highlight and detail stay aligned. No matches → keep detail.
+  // Align detail/highlight with the first visible match when search hides selection; no matches preserve detail.
   useEffect(() => {
     if (activeListSearchQuery === null) {
       return
@@ -203,8 +193,6 @@ export function useAutomationListSearch({
     filteredExternalAutomationEntries,
     hasListItems: hostRowCount > 0,
     hasFilteredListItems: visibleRowCount > 0,
-    // Why: the empty-state view reads rows-before and rows-after from here
-    // rather than recomputing either count from its own props.
     searchCounts: { hostRowCount, visibleRowCount, searchActive: isListSearchActive }
   }
 }

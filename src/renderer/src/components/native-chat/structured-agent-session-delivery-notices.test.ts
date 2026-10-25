@@ -79,7 +79,6 @@ describe('the line under each of the chat own messages', () => {
     expect(texts(notices({ pending: [pending('a', 'sending')] }))).toEqual({
       [agentJournalSubmissionKey('a')]: SENDING
     })
-    // The host's row draws a recorded one.
     expect(texts(notices({ pending: [pending('c', 'recorded')] }))).toEqual({})
   })
 

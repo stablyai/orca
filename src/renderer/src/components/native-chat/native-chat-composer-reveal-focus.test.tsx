@@ -26,7 +26,6 @@ let root: Root
 let frames: (() => void)[] = []
 let focusCalls = 0
 
-/** Drain queued frames; each drained frame may queue the next. */
 function drainFrames(max = 20): void {
   for (let i = 0; i < max && frames.length > 0; i += 1) {
     const queued = frames
@@ -359,7 +358,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     outside.remove()
   })
 
-  // Non-editable, so only the inside-the-pane check can stop this one.
   it('leaves focus on a non-editable control inside the pane', () => {
     render({ isVisible: false, isFocusedGroup: true })
     const button = container.querySelector('button')

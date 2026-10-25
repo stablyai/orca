@@ -35,8 +35,7 @@ type StreamRecord = {
 
 type StreamUnsubscribe = { method: string; params: Record<string, unknown> }
 
-/** The host cleanup slot an unsubscribe names. Every envelope field counts as routing, so the whole
- *  envelope is part of the slot, read in sorted key order so equal envelopes name one slot. */
+// Include the whole envelope in cleanup-slot identity; sort keys so equivalent routing names the same slot.
 function unsubscribeSlot(
   { method, params }: StreamUnsubscribe,
   envelope: RpcEnvelopeFields | undefined
@@ -53,7 +52,6 @@ function unsubscribeSlot(
   return JSON.stringify([method, params.subscriptionId, clientId, routing])
 }
 
-/** Unsubscribe derived from the subscribe params alone (no server-assigned id). */
 function buildParamsUnsubscribe(
   method: string,
   params: unknown,
@@ -264,7 +262,7 @@ export class MobileRelayRpcStreams {
     if (this.hasNewerSlotOwner(unsubscribe, sendOrder, envelope)) {
       return
     }
-    // Why: added after the sibling check; an old host strips it and would evict the live sibling.
+    // Check siblings first: older hosts strip requestId and would otherwise evict the live same-slot stream.
     const params = terminalRequestId
       ? { ...unsubscribe.params, requestId: terminalRequestId }
       : unsubscribe.params

@@ -1,7 +1,6 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-/** Pi compacts between a finished reply's agent_end and its settle; stamping that compaction
- *  with the reply's finish lets the host announce it before the compaction ends. */
+/** Attribute between-turn compaction to the finished reply so the host can announce completion before compaction ends. */
 export function getPiAgentStatusCompactionHandlerSourceLines(kind: PiAgentKind): string[] {
   if (kind !== 'pi') {
     return []
@@ -29,7 +28,7 @@ export function getPiAgentStatusCompactionHandlerSourceLines(kind: PiAgentKind):
     '',
     "  onStatus('session_before_compact', (event, ctx) => {",
     '    if (replyFinishedAt === undefined || isHeldByChildren()) return',
-    // Why: overflow recovery retries the turn and queued messages continue it after the compaction.
+    // Overflow retries and queued messages continue the turn after compaction.
     "    if (event?.willRetry === true || event?.reason === 'overflow') return",
     "    if (typeof ctx?.hasPendingMessages === 'function' && ctx.hasPendingMessages()) return",
     "    post('compaction_start', { turn_completed_at: replyFinishedAt })",

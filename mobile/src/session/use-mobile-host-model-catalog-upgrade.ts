@@ -13,13 +13,7 @@ import { callAgentSession } from './mobile-structured-agent-session-rpc'
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
 
-/**
- * The desktop's host-catalog upgrade on the phone: the picker lists the account's models from the
- * host store while the session's own options read may still wait on its attach. Until the host
- * answers it shows the quiet placeholder; it never waits on a listing: a first listing still
- * running lands in place. An older host refuses the method, and the built-in list stands, naming
- * nothing, until the options read lands.
- */
+// Show host model listings as they arrive without waiting for session attach; unsupported hosts retain a nameless built-in list until options load.
 export function useMobileHostModelCatalogUpgrade(args: {
   agent: string | null
   client: RpcClient | null

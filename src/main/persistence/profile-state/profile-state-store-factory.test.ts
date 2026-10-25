@@ -263,7 +263,7 @@ describe('profile state Store authority factory', () => {
       const first = createProfileStateStore({ ...options })
       expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
 
-      // Why: a later Chat UI change must never move a profile into or out of the audience.
+      // Later Chat UI changes must not alter the profile's upgrade-tip audience.
       first.store.updateSettings({ experimentalNativeChat: laterChatUi })
       first.store.flushOrThrow()
       rmSync(options.dataFile)

@@ -215,9 +215,7 @@ const single = (options: string[], multiSelect = false): AskPrompt => ({
 
 describe('buildAskAnswerKeys', () => {
   it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
-    // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
-    // '2' is the selector marker Claude commits on; a label + Enter committed the
-    // highlighted default (option 1) instead.
+    // Claude commits numbered selector markers; label-plus-Enter would choose the highlighted default instead.
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
       { raw: '2' }
     ])

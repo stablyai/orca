@@ -27,8 +27,7 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
     return null
   }
 
-  // Why: the resolve action lives in the triage strip above; this section is
-  // purely the informational conflict file list so the action isn't duplicated.
+  // The triage strip owns Resolve; avoid duplicating it in this file list.
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
@@ -155,7 +154,7 @@ function MergeabilityRecalculationCommandBox({
         }, 1500)
       })
       .catch(() => {
-        /* best-effort */
+        /* Clipboard failure leaves copying available for retry. */
       })
   }, [clearCopiedResetTimer, commands])
 

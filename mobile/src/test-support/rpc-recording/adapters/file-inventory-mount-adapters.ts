@@ -4,7 +4,6 @@ import type { MountOptions } from '../mounted-operation-module'
 import { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-/** The native-chat file search behind the legacy inventory seeds. */
 export function fileInventoryMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>,
   options: MountOptions

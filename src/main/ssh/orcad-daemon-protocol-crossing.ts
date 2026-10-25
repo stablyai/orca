@@ -1,11 +1,4 @@
-/**
- * D7: whether live terminals survive an orcad restart onto another build.
- *
- * The daemon outlives every orcad restart, so after the swap the incoming build must route
- * sessions owned by a daemon that may speak another protocol. It can only when it speaks that
- * protocol or lists it as previous — the same rule `config/scripts/daemon-protocol-facts.mjs`
- * (`canAttach`) applies to release pairs in CI.
- */
+/** Daemons outlive orcad swaps; incoming builds can attach only current/previous daemon protocols, matching config/scripts/daemon-protocol-facts.mjs canAttach. */
 import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION
@@ -17,7 +10,6 @@ export type OrcadDaemonProtocolFacts = {
   previousProtocolVersions: readonly number[]
 }
 
-/** This client's build, which is also the orcad bundle it deploys. */
 export const CURRENT_ORCAD_DAEMON_PROTOCOL: OrcadDaemonProtocolFacts = {
   protocolVersion: PROTOCOL_VERSION,
   previousProtocolVersions: PREVIOUS_DAEMON_PROTOCOL_VERSIONS

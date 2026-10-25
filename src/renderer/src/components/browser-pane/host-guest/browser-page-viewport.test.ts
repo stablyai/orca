@@ -79,8 +79,7 @@ describe('ensureBrowserPageViewport', () => {
     expect(rebuilt.scroller.style.overflow).toBe('auto')
   })
 
-  // STA-7568: the CSS variable keeps the host box in window DIP while the stylesheet
-  // divides by the live UI zoom factor.
+  // Keep preset dimensions in window DIP; CSS divides them by live UI zoom.
   it('stores preset host dimensions as window-DIP CSS variables', () => {
     mountSlotViewport('workspace-1')
 
@@ -198,8 +197,7 @@ describe('ensureBrowserPageViewport', () => {
   it('builds a fresh viewport when a revisit follows guest-budget eviction', () => {
     const root = mountSlotViewport('workspace-1')
     const evicted = ensureBrowserPageViewport('page-1', 'workspace-1')!
-    // Eviction destroys the guest (destroyPersistentWebview removes the viewport);
-    // the slot stays mounted and registered, so the revisit rebuilds into the same root.
+    // Eviction removes the viewport but retains the slot; revisiting must rebuild into that root.
     removeBrowserPageViewport('page-1')
 
     const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')

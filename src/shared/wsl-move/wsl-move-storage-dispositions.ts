@@ -4,10 +4,7 @@ import {
   type WslMoveFieldDisposition
 } from './wsl-move-dispositions'
 
-/**
- * Renderer modules that use localStorage, by what they keep. A new module fails the census test
- * until it is listed here.
- */
+/** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
   'src/renderer/src/lib/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',

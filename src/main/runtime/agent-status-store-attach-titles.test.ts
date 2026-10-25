@@ -1,4 +1,3 @@
-// Layout-owner build: attaching the hook server's store also follows its rows for main's tab titles.
 import { describe, expect, it, vi } from 'vitest'
 import { setupMainOwnedWorkspace } from './main-owned-workspace-runtime-fixture'
 

@@ -130,8 +130,7 @@ export function useCreatePullRequestFieldGeneration({
       generationRequestIdRef.current = requestId
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const requestContext = {
-        // Why: PR generation belongs to the visible worktree owner. Global
-        // focused-host changes must not retarget an in-flight generation.
+        // Pin generation to the worktree owner so focused-host navigation cannot retarget it.
         target,
         prefs: settings,
         worktreeId,

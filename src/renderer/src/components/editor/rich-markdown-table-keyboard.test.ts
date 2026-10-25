@@ -12,7 +12,6 @@ const TABLE = `| A | B |
 | a2 | b2 |
 `
 
-// Middle body row parses to two empty cells.
 const TABLE_WITH_EMPTY_ROW = `| Name | Value |
 | --- | --- |
 | keep | a |
@@ -50,7 +49,6 @@ function hasTable(editor: Editor): boolean {
   return found
 }
 
-/** Caret at the start of the text node holding `text`. */
 function caretAtText(editor: Editor, text: string): number {
   let position: number | null = null
   editor.state.doc.descendants((node, pos) => {
@@ -236,7 +234,6 @@ describe('handleRichMarkdownTableBackspace', () => {
 
   it('steps to the previous cell from an empty cell in a row that has content', () => {
     withEditor(TABLE, (editor) => {
-      // Empty the "b1" cell, leaving "a1" in place.
       const cellStart = caretAtText(editor, 'b1')
       editor.view.dispatch(editor.state.tr.delete(cellStart, cellStart + 'b1'.length))
 
@@ -257,7 +254,6 @@ describe('handleRichMarkdownTableBackspace', () => {
 
       editor.commands.setTextSelection(caretInRow(editor, (text) => text.length === 0))
       expect(handleRichMarkdownTableBackspace(editor)).toBe(true)
-      // Row keeps the image cell; Backspace steps back instead of deleting.
       expect(countRows(editor)).toBe(4)
     })
   })

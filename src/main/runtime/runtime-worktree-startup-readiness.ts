@@ -16,11 +16,9 @@ import type {
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
-// Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
-// command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
+// Shells enable bracketed paste at their prompt; only markers after the last command handoff (?2004l) belong to the agent.
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
-// Why: the deadline's last settle check is one foreground read, which over SSH could otherwise hold
-// a past-due wait for the channel's 30 s timeout.
+// Bound the final foreground read so a past-due wait cannot hang on SSH's 30s channel timeout.
 const DEADLINE_SETTLE_CHECK_MS = 2_000
 
 export type WorktreeStartupReadinessHost = {
@@ -110,14 +108,9 @@ export type StartupDraftReadinessOptions = {
   timeoutMs?: number
   requireComposerMarker?: boolean
   signal?: AbortSignal
-  /** Vetoes a ready signal whose screen still holds something the input must not answer; the
-   *  scan continues, so the agent's next marker or quiet window asks again. */
+  /** Veto unsafe screen input while continuing to scan for the next marker or quiet window. */
   accept?: (ptyId: string) => boolean | Promise<boolean>
-  /**
-   * For a launched agent. With it, only output after the shell's last `?2004l` counts, since the
-   * shell's own prompt enables bracketed paste too, and a ready signal is dropped while a shell is
-   * proven in front: the launch line has not run yet, or the agent exited.
-   */
+  /** Ignore shell-owned bracketed paste before the last ?2004l and reject signals while a shell is proven in front. */
   isShellInFront?: (ptyId: string) => Promise<boolean>
   /** Enter follows the paste, so the agent's submit signal is waited for instead of its draft one. */
   submit?: boolean
@@ -139,14 +132,13 @@ export function waitForWorktreeStartupDraft(
     let settled = false
     let scanner = createDraftPasteReadyScanner(signal)
     let quietTimer: NodeJS.Timeout | null = null
-    // A submit signal's fallback: once its grace elapses, every read that still asks for it is a
-    // ready signal, settled like any other.
+    // After submit grace expires, each subsequent matching read is a signal and must pass settle checks.
     let graceTimer: NodeJS.Timeout | null = null
     let graceElapsed = false
     let hardTimer: NodeJS.Timeout | null = null
     let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
-    // Bumped at each shell hand-off: a check begun before one must not settle the wait after it.
+    // A check begun before a shell handoff cannot settle after it.
     let handoffs = 0
     let handoffCarry = ''
     let checking = false
@@ -194,7 +186,7 @@ export function waitForWorktreeStartupDraft(
           finish(ptyId)
         }
       } catch {
-        // A check that failed is no settle; the agent's next signal asks again.
+        // Failed settle checks wait for the next agent signal.
       } finally {
         checking = false
         const next = recheckAt
@@ -214,7 +206,7 @@ export function waitForWorktreeStartupDraft(
     /** The part of a chunk after the shell's last hand-off in it, resetting the scan at one. */
     const sinceShellHandoff = (chunk: string): string => {
       const window = handoffCarry + chunk
-      // Why 7: one short of the sequence, so a split one is rejoined and never counted twice.
+      // Retain one byte less than the sequence to rejoin split handoffs without double counting.
       handoffCarry = window.slice(-(DECRST_BRACKETED_PASTE.length - 1))
       const handoff = window.lastIndexOf(DECRST_BRACKETED_PASTE)
       if (handoff === -1) {
@@ -260,7 +252,7 @@ export function waitForWorktreeStartupDraft(
     }
     options.signal?.addEventListener('abort', onAbort)
     unsubscribe = host.subscribeToData(ptyId, observe)
-    // A deadline inside a pending grace is the box rule's verdict, so it gets one last settle check.
+    // A deadline during submit grace gets one final settle check.
     const onDeadline = (): void => {
       if (!graceTimer && !graceElapsed) {
         return finish(null)

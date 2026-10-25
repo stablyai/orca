@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PortForwardEntry, SavedPortForward } from '../../../shared/ssh-types'
 
 const h = vi.hoisted(() => {
-  const conn = { id: 'conn', generation: 1, getConnectGeneration: () => conn.generation }
+  const conn = {
+    id: 'conn',
+    generation: 1,
+    getConnectGeneration: () => conn.generation,
+    isDisposed: () => false
+  }
   const saved: { portForwards?: SavedPortForward[] } = {}
   const active: PortForwardEntry[] = []
   return {
@@ -73,7 +78,11 @@ vi.mock('../../ssh/ssh-host-server-status', async (importOriginal) => ({
 }))
 
 import { persistPortForwards, restorePortForwards } from './ssh-port-forward-persistence'
-import { forgetForwardFailures } from './ssh-port-forward-unrestored'
+import {
+  forgetForwardFailures,
+  listUnrestoredPortForwards,
+  recordForwardFailure
+} from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { connectInFlight } from './ssh-connect-attempt-registry'
 import { getSshProviderAuthority } from '../../ssh/ssh-provider-authority'
@@ -239,11 +248,12 @@ describe('saved port forward restore', () => {
     }
   })
 
-  it('backs off a forward that keeps failing', async () => {
+  it('backs off a forward that keeps failing, and lists it with why', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       h.portForwardManager.addForward.mockRejectedValue(new Error('port in use'))
       await restoreManagedHostPortForwards('t1')
+      expect(listUnrestoredPortForwards('t1')).toEqual([{ ...FORWARD, error: 'port in use' }])
       vi.setSystemTime(Date.now() + 30_000)
       await restoreManagedHostPortForwards('t1')
       expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(2)
@@ -319,5 +329,49 @@ describe('saved port forward restore', () => {
     h.conn.generation += 1
     await restoreManagedHostPortForwards('t1')
     expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps backing off a forward whose ssh restarts and exits again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      // Starts, then its ssh dies after the start grace; the close callback records it.
+      await restoreManagedHostPortForwards('t1')
+      h.active.length = 0
+      recordForwardFailure('t1', FORWARD, 'exited unexpectedly')
+      vi.setSystemTime(Date.now() + 30_000)
+      await restoreManagedHostPortForwards('t1')
+      expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(2)
+      // The restart succeeds, then dies again: the streak continues, so the wait doubles.
+      h.active.length = 0
+      recordForwardFailure('t1', FORWARD, 'exited unexpectedly')
+      vi.setSystemTime(Date.now() + 30_000)
+      await restoreManagedHostPortForwards('t1')
+      expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(2)
+      vi.setSystemTime(Date.now() + 30_000)
+      await restoreManagedHostPortForwards('t1')
+      expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('starts a fresh backoff for a forward that stayed up before it died', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      recordForwardFailure('t1', FORWARD, 'exited unexpectedly', 'exit')
+      recordForwardFailure('t1', FORWARD, 'exited unexpectedly', 'exit')
+      vi.setSystemTime(Date.now() + 60_000)
+      await restoreManagedHostPortForwards('t1')
+      expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(1)
+      // Healthy for 5 minutes, then it dies: the next retry waits the base 30 s, not 120 s.
+      vi.setSystemTime(Date.now() + 5 * 60_000)
+      h.active.length = 0
+      recordForwardFailure('t1', FORWARD, 'exited unexpectedly', 'exit')
+      vi.setSystemTime(Date.now() + 30_000)
+      await restoreManagedHostPortForwards('t1')
+      expect(h.portForwardManager.addForward).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

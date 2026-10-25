@@ -1,13 +1,4 @@
-/**
- * #11994 follow-up: the host-side `reposChanged` broadcast added by this change makes every
- * paired client refetch a remote catalog after any host-local repo mutation, and the client
- * now tolerates `repo_not_found` while purging its own row. Both must stay host-scoped.
- *
- * Two collisions are legal in this codebase and are pinned here:
- *  - the same project *name* on a local host and one or more remotes (ids are per-host UUIDs);
- *  - the same repo *id* on two execution hosts (see persistence.ts `removeProjectForHost`).
- * Deleting on one host must never take another host's row, in either direction.
- */
+/** Host-change refetch and repo_not_found ghost cleanup must isolate owners (#11994). Pin both same-name distinct-ID projects and same-ID cross-host rows; removal may never affect another host. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -252,8 +243,7 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
   })
 
   it('keeps the row when the owner cannot disambiguate a duplicate id', async () => {
-    // A host holding the id on two of its own hosts answers selector_ambiguous; that is a
-    // real failure, not a ghost, so the tolerance must not swallow it.
+    // selector_ambiguous is a real refusal, not missing-project proof; keep row and report failure.
     answerRepoRm({ failingSelector: 'env-a', code: 'selector_ambiguous' })
     const store = seed([duplicateLocal, duplicateRemote], 'env-a')
 

@@ -93,7 +93,6 @@ describe('SshConnection retry after wake or network return', () => {
     await spendLadderWhileAsleep(conn)
     const clientsBefore = clientInstances.length
 
-    // Nothing retries a spent ladder on its own.
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(clientInstances).toHaveLength(clientsBefore)
 
@@ -128,7 +127,6 @@ describe('SshConnection retry after wake or network return', () => {
     await connectWithFakeTimers(conn)
     failHandshakes()
     emitSshEvent('close')
-    // Climb to the 30 s step.
     for (const delayMs of RECONNECT_BACKOFF_MS.slice(0, 7)) {
       await advanceToNextSshClient(delayMs)
     }
@@ -150,7 +148,6 @@ describe('SshConnection retry after wake or network return', () => {
     await advanceToNextSshClient(RECONNECT_BACKOFF_MS[0])
     expect(conn.getState().status).toBe('connecting')
 
-    // A handshake the first wake signal just started is left alone.
     expect(conn.retryAfterNetworkReturn()).toBe(false)
 
     await vi.advanceTimersByTimeAsync(10_000)
@@ -178,7 +175,7 @@ describe('SshConnection retry after wake or network return', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')
 
-    // Closing a system-SSH channel only signals the process; its close lands after the replacement.
+    // System-channel close can arrive after its replacement; stale cleanup must not overwrite it.
     stale.emit('close', null)
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')

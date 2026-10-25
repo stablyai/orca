@@ -1,5 +1,4 @@
-// Reads a build's daemon protocol version and the older versions it can still attach to.
-// Parsed from source text so a release tag and a candidate tree are read the same way.
+// Parse source text identically for release tags/candidate trees.
 // Usage: node daemon-protocol-facts.mjs <daemon-protocol-version.ts> [output.json]
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'

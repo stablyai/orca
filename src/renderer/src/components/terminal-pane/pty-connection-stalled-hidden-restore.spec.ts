@@ -125,8 +125,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const combinedLiveIndex = written.indexOf(firstLive + secondLive)
       expect(warningIndex).toBeGreaterThanOrEqual(0)
       expect(written[warningIndex - 1]).toBe(ABANDONED_RESTORE_GAP)
-      // Exactly one: writeRestoreUnavailableWarning already grounds the gap, so a
-      // second unconditional write here was pure duplication.
+      // Warning already grounds the gap; a second unconditional reset would duplicate it.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(combinedLiveIndex).toBeGreaterThan(warningIndex)
 
@@ -145,11 +144,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       disposable.dispose()
     })
 
-    // STA-4042: the hidden-delivery gate drops renderer-bound bytes, so the span it
-    // ate can contain the `ESC[22m` closing a bold run. Abandoning the restore means
-    // no snapshot will rebuild the buffer, so unless the pen is cleared here every
-    // drained and subsequent cell inherits bold — the "regular text renders bold"
-    // field report.
+    // A dropped span can swallow bold reset; abandonment must ground the pen when no snapshot will restore it (STA-4042).
     it('clears the SGR pen before draining abandoned foreground chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
@@ -245,8 +240,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const liveIndex = written.indexOf(live)
       expect(resetIndex).toBeGreaterThanOrEqual(0)
       expect(liveIndex).toBeGreaterThan(resetIndex)
-      // The re-arm arm grounds in rearmRemoteHiddenOutputRestoreInsteadOfWarning,
-      // so the abandon body must not ground a second time.
+      // Remote re-arm already grounds the gap; abandonment must not do it again.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(written.join('')).not.toContain('main recovery was unavailable')
 
@@ -307,8 +301,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(4)
       expect(warningIndex).toBeGreaterThanOrEqual(0)
       expect(liveIndex).toBeGreaterThan(warningIndex)
-      // This arm gives up on recovery too, so the gap is grounded exactly once
-      // before the blocked foreground is drained under it.
+      // Ground the abandoned gap once before draining blocked foreground bytes.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(written.indexOf(ABANDONED_RESTORE_GAP)).toBeLessThan(liveIndex)
       disposable.dispose()

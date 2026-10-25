@@ -23,7 +23,6 @@ const base: BridgedParityEvidence = {
   refusalReleasedStream: false
 }
 
-/** What the ten scenarios that script an `undefined`-valued param look like when the bridge drops it. */
 const droppedUndefinedKey: BridgedParityEvidence = {
   ...base,
   threwWhileRecording: true,
@@ -64,9 +63,7 @@ describe('classifying one diverging golden', () => {
   })
 
   it('refuses the class to a run where something else moved in the same params', () => {
-    // A seeded wire bug — one extra own key on every request's params — throws the same message
-    // inside the same ten scenarios. A rule that asked only whether the scenario scripts an
-    // `undefined` key called all of them this class and reported none of them.
+    // Seed a real extra-key bug inside undefined-param scenarios so classification must compare moved keys, not just scenario membership.
     expect(
       classifyBridgedParity({
         ...droppedUndefinedKey,
@@ -100,11 +97,9 @@ describe('classifying one diverging golden', () => {
       refusalReleasedStream: true
     }
     expect(classifyBridgedParity(released)).toBe('result-absent-stream-release')
-    // Without the injected partition there is nothing to refuse, so a release is somebody's bug.
     expect(classifyBridgedParity({ ...released, scriptsAbsentResultReply: false })).toBe(
       'unclassified'
     )
-    // A stream released with no refusal behind it is not this class either.
     expect(classifyBridgedParity({ ...released, refusalReleasedStream: false })).toBe(
       'unclassified'
     )
@@ -140,9 +135,7 @@ describe('what the pin still admits', () => {
   })
 
   it('accounts for every golden in the corpus, once each', () => {
-    // What ties the numbers to the corpus they describe. Each is pinned exactly, but only to a
-    // number in this file; the sum being the size of the goldens directory is what says the pin
-    // covers every golden, once each, rather than a subset the run happened to reach.
+    // Pin the class sum to corpus size so a partial run cannot satisfy per-class expectations.
     const goldens = readdirSync(resolve(import.meta.dirname, '../../../rpc-foundation/goldens'))
     const counted = Object.values(BRIDGED_PARITY_BASELINE).reduce((sum, count) => sum + count, 0)
     expect({ counted }).toEqual({
@@ -164,7 +157,6 @@ describe('what the pin still admits', () => {
     }
   })
 
-  /** The membership a run that diverges exactly as the pin says would hand the rule. */
   function asPinned(): Map<string, readonly string[]> {
     const run = new Map<string, readonly string[]>()
     for (const name of classes) {
@@ -177,10 +169,7 @@ describe('what the pin still admits', () => {
   }
 
   it('holds such a class to which goldens are in it, not only to how many', () => {
-    // The trade a count cannot see: every predicate reads the scenario rather than the frame the
-    // page refused — `scriptsAbsentResultReply` asks whether the scenario scripts the injected
-    // shape anywhere — so a real refusal in a stream golden lands in an excluded class. Let one
-    // golden leave as it arrives and the count, the sum and the `identical` pin all hold.
+    // Swap class membership without changing totals; per-id pins must catch real refusals hidden by scenario-wide predicates.
     expect(bridgedParityMembershipDrift(asPinned())).toEqual([])
     const pinned = BRIDGED_PARITY_MEMBERS['write-ordinal'] ?? []
     const traded = asPinned()
@@ -197,7 +186,6 @@ describe('what the pin still admits', () => {
     expect(bridgedParityMembershipDrift(run)).toEqual([])
   })
 
-  /** The tally a run that lands exactly on the pin hands the rule. */
   function asCounted(): BridgedParityTally {
     const counts: Record<BridgedParityClass, number> = {
       'reply-meta-required': 0,
@@ -219,9 +207,7 @@ describe('what the pin still admits', () => {
   })
 
   it('goes red on a golden that stopped diverging, which every other check lets through', () => {
-    // The direction the rest of the suite cannot see. One `result-absent-settlement` golden
-    // reported `identical` instead: nothing is unclassified, every diverging golden is still in an
-    // excluded class, and the corpus size is unchanged. Only these two numbers moved.
+    // Excluded-to-identical moves leave broad parity gates satisfied; exact tallies must detect that direction too.
     const tally = asCounted()
     const moved: BridgedParityTally = {
       identical: tally.identical + 1,
@@ -246,7 +232,6 @@ describe('what the pin still admits', () => {
         counts: { ...tally.counts, unclassified: 1 }
       })
     ).toEqual(['unclassified: pinned 0, ran 1'])
-    // A golden whose `it` threw before it was counted anywhere: the run is a golden short.
     expect(bridgedParityTallyDrift({ ...tally, identical: tally.identical - 1 })).toEqual([
       `identical: pinned ${tally.identical}, ran ${tally.identical - 1}`
     ])

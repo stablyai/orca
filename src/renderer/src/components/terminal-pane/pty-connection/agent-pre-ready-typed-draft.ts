@@ -1,6 +1,4 @@
-// Keys typed into an agent pane before its PTY binds would land ahead of the launch line, so they
-// are kept as an unsubmitted draft and pasted once the agent is ready. Keys typed after the bind
-// always go live; the draft is dropped instead of pasted over a screen the user is driving.
+// Pre-bind keys would prefix the launch command; draft until agent readiness and discard if the user starts driving the live screen.
 
 import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
@@ -18,11 +16,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 const BACKSPACE = '\x7f'
 const CTRL_H = '\b'
 
-/**
- * Adds typed bytes to a draft: printable text only. Enter, Tab, other control keys and escape
- * sequences are dropped so nothing submits or edits; Backspace deletes the last character. Line
- * breaks inside a multi-character chunk (a paste) become one space so words don't run together.
- */
+/** Ignore control/escape input so drafts cannot submit; Backspace deletes and pasted line breaks become spaces. */
 export function appendTypedDraftText(draft: string, data: string, maxCodeUnits: number): string {
   if (data.startsWith('\x1b')) {
     return draft
@@ -96,8 +90,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       // Why always live: a trust or permission prompt on screen must take the user's keys.
       liveInputSinceBind ||= wasUserInput
       if (phase === 'capturing') {
-        // Only keys before the first bind are held; a later unbind (exit, hibernation, a remote
-        // re-attach) keeps today's path, where the host may hold and deliver them itself.
+        // Capture only before first bind; later unbinds leave input holding/delivery to the host.
         phase = draft === '' ? 'closed' : 'delivering'
       }
       return false
@@ -164,8 +157,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     liveInputSinceBind = false
     phase = 'delivering'
     if (!freshSpawn) {
-      // Why drop: an attached pane can still be at the shell before main types the launch line,
-      // where a paste would prefix the command.
+      // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
       dropDraft(draftAgent)
       return
     }

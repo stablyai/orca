@@ -1,17 +1,11 @@
-// The transcript's projection of a conversation's messages into the rows it draws:
-// ordered, tool runs folded into the turn that made them, harness turns dropped.
-// Shared so the host's conversation outline asks "which user messages draw a row?"
-// of exactly what the renderer's transcript runs, not a second reading of it.
-//
-// A session's subagents write into its journal, but their rows are not part of its
-// conversation: each subagent's rows are that subagent's, kept apart and folded on
-// their own, for the surface that shows them beside the spawn that ran it.
+// Share ordered/filter/fold projection with the host conversation outline so visible user rows agree with renderers.
+// Journal subagent rows belong to separate agent transcripts and fold beside their spawn, never into the conversation.
 
 import { nativeChatSemanticRowId, type NativeChatMessage } from './native-chat-types'
 import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
+import { foldToolMessages } from './native-chat/tools/native-chat-tool-fold'
 import { foldSubagentItems } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
@@ -40,11 +34,8 @@ export function compareNativeChatMessagesByTime(
   return Number(bReasoning) - Number(aReasoning)
 }
 
-/** Rows the journal holds read in the journal's own order, never its clock: a
- *  batch shares one timestamp, and a row recovered after a crash carries an
- *  earlier one. A row not in the journal yet — a send still on its way — was
- *  made after everything the journal holds, so it follows them; only such rows,
- *  and terminal-backed transcripts, which have no journal, order by time. */
+/** Journal position outranks clocks: batches share timestamps and crash recovery can backdate rows.
+ * Unadmitted optimistic sends follow journal rows; only those and journal-less terminal transcripts sort by time. */
 export function compareNativeChatTranscriptMessages(
   a: NativeChatMessage,
   b: NativeChatMessage
@@ -106,8 +97,7 @@ export function projectNativeChatTranscriptMessages(
   return projectNativeChatTranscript(messages, compare).conversation
 }
 
-/** `journal`: what places the conversation's rows in their turns
- *  (`nativeChatTurnMembership`), so a subagent's row sits in the turn a parent row there would. */
+/** Use conversation turn membership for each subagent row, as though it were a parent row at that position. */
 export function projectNativeChatTranscript(
   messages: readonly NativeChatMessage[],
   compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
@@ -143,8 +133,7 @@ export function projectNativeChatTranscript(
   const turnOf = new Map(sorted.map((message, index) => [message, turnKeys[index]]))
   const subagentRows = new Map<string, NativeChatSubagentRow[]>()
   for (const [agentId, rows] of byAgent) {
-    // Folded one parent turn at a time: a run the subagent carries across a turn
-    // boundary splits there, so each of its edits counts in the turn it was made.
+    // Split subagent folds at parent turn boundaries so edits count in the turn that produced them.
     const projected: NativeChatSubagentRow[] = []
     let chunk: NativeChatMessage[] = []
     let chunkTurn: string | undefined

@@ -12,11 +12,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Device keys add keyed rows (no token) to orca-devices.json and a key-auth shape inside E2EE v2.
- * A released build must keep keyed rows intact and inert, keep authenticating token rows, and
- * refuse key auth with bad_auth so an updated client can report "host downgraded" and keep its key.
- */
+// Across downgrade, preserve keyed rows inertly and keep token auth; refuse unsupported key auth with bad_auth so clients retain their keys.
 const SUITE_TIMEOUT_MS = 180_000
 
 type RegistryLike = {

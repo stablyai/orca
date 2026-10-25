@@ -207,7 +207,6 @@ describe('useMobileStructuredPromptResponses', () => {
       }
     }
 
-    // Records what was sent; the verdict is irrelevant to the wire shape under test.
     function recordingMutate() {
       const sent: { method: string; fields: Record<string, unknown> }[] = []
       const mutate: StructuredAgentSessionMutate = async (method, _fingerprint, fields) => {
@@ -360,7 +359,7 @@ describe('useMobileStructuredPromptResponses', () => {
       })
     })
 
-    // Claude always sends a question list, so this is the path a long typed Claude answer takes.
+    // Claude always uses grouped questions, including for a single long typed answer.
     it.each([
       [true, true],
       [null, true],

@@ -117,10 +117,7 @@ export function buildWorkspaceSessionPatch(
   ) {
     const terminalSessionData = buildTerminalSessionData(snapshot)
     Object.assign(patch, terminalSessionData)
-    // Why: the reconnect list is derived from persisted remote session ids as
-    // well as live SSH state. Recompute it alongside remoteSessionIdsByTabId
-    // so a crash between patches cannot leave a target on disk whose sessions
-    // were all closed (or vice versa).
+    // Persist recomputed reconnect targets with remote-session IDs so crash between patches cannot leave closed targets or omit surviving sessions.
     patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
       snapshot,
       terminalSessionData.remoteSessionIdsByTabId ?? null
@@ -151,8 +148,7 @@ export function buildWorkspaceSessionPatch(
       )
     )
   }
-  // Why: withoutStagedBrowserTabs hides rows based on the handle map, so clearing a staged flag
-  // changes which browser and tab rows persist even when the rows themselves are untouched.
+  // Staged-browser filtering depends on handles; clearing staged status changes persisted rows even when browser/tab objects are unchanged.
   const stagedVisibilityChanged = changed.has('remoteBrowserPageHandlesByPageId')
   if (stagedVisibilityChanged || changed.has('browserTabsByWorktree')) {
     patch.browserTabsByWorktree = buildPersistedBrowserTabsByWorktree(

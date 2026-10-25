@@ -700,8 +700,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    // Review of #33425: Sleep's adoption of an unattached session must not re-adopt one this
-    // client suspended after a seed failure, or Wake loses everything before the restore.
+    // Do not re-adopt panes suspended after seed failure: Wake must retain their restore history (#33425).
     it('keeps a seed-failed session suspended when it is slept after an adapter restart', async () => {
       const sessionId = 'cold-restore-seed-failure-sleep'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

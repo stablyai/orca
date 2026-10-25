@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
   useShortcutKeyDetails: vi.fn(),
-  /** Counts evaluations of the feedback chunk; a dynamic import evaluates it exactly once. */
   feedbackChunkLoads: 0,
   setupProgress: {
     ready: true,
@@ -326,8 +325,7 @@ describe('SidebarSettingsHelpMenu', () => {
     })
   })
 
-  // No other test in this file opens the menu or selects Send Feedback, so the 0 -> 1
-  // transition below is this warm and nothing else, whatever order the tests run in.
+  // Only this test opens the menu, so its first warm must cause the chunk’s sole evaluation regardless of order.
   it('warms the feedback chunk when the menu opens, before Send Feedback is selected', async () => {
     const container = await renderMenu()
     expect(mocks.feedbackChunkLoads).toBe(0)
@@ -337,7 +335,6 @@ describe('SidebarSettingsHelpMenu', () => {
     })
 
     expect(mocks.feedbackChunkLoads).toBe(1)
-    // Warming must not mount the dialog: it stays behind its own open state.
     expect(document.body.querySelector('[data-testid="feedback-dialog"]')).toBeNull()
   })
 

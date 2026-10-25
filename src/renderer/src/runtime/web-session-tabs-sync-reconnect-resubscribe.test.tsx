@@ -178,9 +178,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     clearRuntimeEnvironmentConnectionGenerationsForTests()
   })
 
-  // Direction 1: the resubscribe trigger. The transport took both streams with it and nothing
-  // else revives them -- an 'end' frame resubscribes nothing and the parking layer retries only
-  // a rejected subscribe -- so regaining contact has to reinstall them itself.
+  // Recovered contact must reinstall dead streams: end frames and parking retries cannot revive them.
   it('reinstalls both session-tabs subscriptions when the host answers again', async () => {
     await connectThenLoseContact()
     const stranded = {
@@ -196,8 +194,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mirroredSubscriptions('session.tabs.subscribe')).toHaveLength(stranded.active + 1)
   })
 
-  // A create whose reply was lost may have landed: the host's census on the new stream is when
-  // this client can ask it again, once per return.
+  // Lost create replies may hide accepted terminals; the fresh census permits one recheck per return.
   it('re-checks unconfirmed chat starts on that host when its reinstalled stream opens', async () => {
     await connectThenLoseContact()
     const census = async (): Promise<void> => {
@@ -222,8 +219,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith(`runtime:${ENV_A}`)
   })
 
-  // Direction 2: the mirror's cache key. #19647 -- recovery is not a second connection, so every
-  // retained-state stamp cut from this key stays valid and the mirror is never rebuilt.
+  // Recovery keeps the connection identity/cache key, preserving retained-state stamps (#19647).
   it('holds the mirror environment key across the outage and the recovery', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(async () => {
@@ -245,8 +241,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mirrorKeys().environmentKey).toBe(connectedKey)
   })
 
-  // The two values only look alike: a replacement runtime is a new connection, so the key moves
-  // and the mirror is meant to be rebuilt.
+  // Replacement runtimes change connection identity and must rebuild the mirror.
   it('still rebuilds the mirror key when the host returns as a replacement runtime', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(async () => {

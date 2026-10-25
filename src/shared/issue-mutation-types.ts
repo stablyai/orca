@@ -14,9 +14,7 @@ export type GitHubIssueUpdate = {
   stateReason?: GitHubIssueCloseReason
   duplicateOf?: number
   title?: string
-  // Why: body writes use the REST issue endpoint instead of `gh issue edit`
-  // because that command does not consistently cover every body-edit case the
-  // dialog needs.
+  // REST supports body edits that gh issue edit does not consistently cover.
   body?: string
   addLabels?: string[]
   removeLabels?: string[]

@@ -1,8 +1,4 @@
-/**
- * A launch from a paired client moves that client's view to the new tab and nobody else's: the view
- * intent belongs to the connection that asked. In-process callers and worktree-creating launches
- * keep today's behaviour.
- */
+/** Paired launches select only the caller's view; existing/folder targets select the tab, while worktree creates retain background provisioning. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -107,7 +103,7 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
-  // Why: a pasted prompt waits up to a minute for the agent; the caller's view must not wait with it.
+  // Prompt delivery can take a minute; caller navigation must not wait.
   it.each([
     ['terminal', {}, deliverTerminalPrompt],
     ['chat', STRUCTURED_PREFERENCE, commitChatPrompt]
@@ -141,7 +137,7 @@ describe('a paired client launching into an existing workspace', () => {
     warn.mockRestore()
   })
 
-  // Why: a headless `--serve` host has no window to reveal into; the caller mirrors the tab anyway.
+  // Headless hosts have no window to reveal, but the caller still mirrors the tab.
   it('does not pass on the host’s own reveal warning, since the caller shows the tab itself', async () => {
     const runtime = selectionRuntime({
       settings: {},

@@ -1,10 +1,4 @@
-/**
- * The wire shape of the launch inputs a host cannot derive.
- *
- * Params are validated by the HOST, which makes every closed arm set here a refusal a future client
- * walks into. `launchSource` is the case that matters: it is a telemetry label, and a host that
- * rejected an unfamiliar one would fail the user's launch over bookkeeping.
- */
+// Unknown telemetry labels from newer clients must not block launches on older hosts.
 
 import { describe, expect, it } from 'vitest'
 import { AgentLaunch } from './agent-launch-params'
@@ -24,15 +18,12 @@ describe('agent.launch params', () => {
   })
 
   it('accepts a launchSource this build has never heard of', () => {
-    // The arm set is open ON PURPOSE. A newer client naming a surface this host predates must still
-    // get its agent started; the label is re-checked where it is used and dropped if unknown.
     const parsed = AgentLaunch.safeParse({ ...BASE, launchSource: 'a_surface_added_later' })
     expect(parsed.success).toBe(true)
     expect(parsed.data?.launchSource).toBe('a_surface_added_later')
   })
 
   it('still parses a payload from a client that sends none of these fields', () => {
-    // Rule 1: the fields are optional, so a shipped client that predates them is unaffected.
     const parsed = AgentLaunch.parse(BASE)
     expect(parsed).not.toHaveProperty('cwd')
     expect(parsed).not.toHaveProperty('launchSource')
@@ -46,7 +37,6 @@ describe('agent.launch params', () => {
     })
     expect(parsed.placement).toEqual({ groupId: 'group-1', afterTabId: 'tab-1' })
     expect(parsed.presentation).toBe('background')
-    // A word added later reads as absent: it is about the view, not whether the agent runs.
     expect(AgentLaunch.parse({ ...BASE, presentation: 'peek' }).presentation).toBeUndefined()
   })
 

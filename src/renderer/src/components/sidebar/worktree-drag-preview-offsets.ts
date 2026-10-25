@@ -69,9 +69,7 @@ function getPreviewLayoutDraggedIds(
 
 export type WorktreeDragPreviewLayout = {
   offsets: Map<string, number>
-  // Top of the slot the dragged card lands in, in the same coordinate space as
-  // `rects`. Null when the drop is a no-op. The drop indicator draws here so the
-  // line marks the gap the offsets actually open.
+  // Insertion slot in rect coordinates, or null for no-op; the indicator must match the opened gap.
   placeholderTop: number | null
 }
 
@@ -93,8 +91,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
     return { offsets: new Map(), placeholderTop: null }
   }
 
-  // Why: dragging a large multi-select batch should advertise the insertion
-  // point without opening a giant hole that makes the sidebar jump around.
+  // Advertise large-batch insertion without opening a gap that makes the whole sidebar jump.
   const layoutDraggedIds = getPreviewLayoutDraggedIds(
     args.groupIds,
     args.draggedIds,
@@ -164,8 +161,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
   const firstGroupRect = groupRects[0]
   let baseTop = firstGroupRect?.top ?? 0
   if (firstGroupRect) {
-    // Why: virtualized leading rows are absent from rects, so derive the full
-    // list origin from the first mounted row before replaying its order.
+    // Virtualized leading rows are unmounted; recover the full-list origin from the first rendered row.
     for (let index = 0; index < firstGroupRect.groupIndex; index++) {
       const id = args.groupIds[index]
       if (id) {
@@ -176,8 +172,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
 
   const targetTopById = new Map<string, number>()
   let nextTop = baseTop
-  // Why: lineage drag units can be much taller than ordinary cards, so replay
-  // layout with measured heights instead of mapping indexes to old slot tops.
+  // Lineage units vary in height; replay measured strides instead of reusing old slot tops.
   for (const id of nextIds) {
     targetTopById.set(id, nextTop)
     nextTop += getStride(id)

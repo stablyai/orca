@@ -6,10 +6,7 @@ export function shouldShowNativeChatWorking(args: {
   return args.isConversation && args.working && !args.interrupted
 }
 
-/**
- * Clear local Stop suppression when live work ends, or when a newer working
- * epoch starts while suppressed (Stop → immediate next turn without a ready gap).
- */
+/** Release Stop suppression when work ends or a newer working epoch starts without an intervening ready state. */
 export function shouldClearNativeChatWorkingSuppression(args: {
   working: boolean
   interrupted?: boolean
@@ -21,8 +18,7 @@ export function shouldClearNativeChatWorkingSuppression(args: {
   if (!args.working) {
     return true
   }
-  // Why: interrupt + next-turn can coalesce so `working` never goes false; a
-  // newer epoch means the user started another generation and must see it.
+  // Stop and next-turn updates can coalesce without working ever becoming false.
   if (
     args.interrupted === true &&
     args.workingEpoch != null &&

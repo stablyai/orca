@@ -4,8 +4,7 @@ import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agen
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
 
-// Shape seen on a paired host with Codex 0.164: the main turn's last hook (PreToolUse for a long
-// exec), then `/side` shows an idle side chat, so the title loses its spinner after the hook.
+// Codex 0.164: idle /side output after a long main-turn PreToolUse hook incorrectly cleared the paired-host spinner.
 function runningExec(hookAt: number, agentType: string): AgentStatusEntry {
   return {
     state: 'working',

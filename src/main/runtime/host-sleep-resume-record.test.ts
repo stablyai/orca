@@ -1,9 +1,8 @@
-// A paired client's sleep stops the host's PTYs; the host must keep the session to resume on open.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -64,9 +63,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
       live.delete(ptyId)
-      // A PTY's exit clears its hook row, as the host's teardown does.
       rows = []
-      // Why: stopAndWait resolves after the provider's exit; main's layout keeps the pane bound.
       runtime.onPtyExit(ptyId, 0)
       return true
     },
@@ -78,7 +75,6 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const reportAgent = (): void => {
     rows = [row]
   }
-  // The session resumed by hand in another pane whose shell outlived it; main's layout holds it.
   const reportHolder = (): void => {
     const [tabId = '', leafId = ''] = HOLDER_PANE_KEY.split(':')
     bindPaneFirst(runtime, { worktreeId: TEST_WORKTREE_ID, tabId, leafId, ptyId: 'holder-pty' })
@@ -121,7 +117,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawnCommand(spawn, 1).includes(SESSION_ID)).toBe(resumes)
-    // A hand-typed `claude` recorded no recipe; the settings default bypass must not widen it.
+    // Hand-typed launches have no saved bypass recipe; defaults must not widen their permissions.
     expect(spawnCommand(spawn, 1)).not.toContain('--dangerously-skip-permissions')
   })
 
@@ -167,7 +163,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       reportAgent()
       await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
       await userActivate(runtime)
-      // The resumed agent has not reported yet, so the host holds no row for the pane.
       setVerdict(v)
       await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
 

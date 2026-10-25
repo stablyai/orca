@@ -6,10 +6,6 @@ import { useSourceControlRemoteActionRunner } from '../sync/use-remote-action-ru
 import { useSourceControlCommitAction } from './use-commit-action'
 import { useSourceControlCommitMessageGeneration } from './use-commit-message-generation'
 
-/**
- * Everything that writes to the local branch: the commit itself, the message it gets, the remote
- * ops that follow it, and the escape hatch out of a conflicted merge or rebase.
- */
 export function useSourceControlCommitFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,
@@ -100,8 +96,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   })
   const { handleCommit: commitStagedChanges } = commitAction
   const { handleCancelGenerate } = commitMessageGeneration
-  // Why: committing the box's own message makes a running generation moot; cancel it so its late
-  // reply cannot refill the box the commit empties. Create PR commits carry their own target.
+  // Cancel box generation when committing its draft so a late reply cannot refill it; Create PR has its own target.
   const handleCommit = useCallback<typeof commitStagedChanges>(
     (messageOverride, options) => {
       if (!options?.target) {

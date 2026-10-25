@@ -9,7 +9,6 @@ vi.mock('@/store', () => ({
 const { readTerminalClipboardSelection } = await import('./terminal-clipboard-selection-text')
 const { copyTerminalSelection } = await import('./terminal-selection-copy')
 
-// The gutter an agent CLI paints its message behind, as xterm reports it.
 const GUTTERED = ['  Retry limit is now 5.', '  Backoff starts at 2s.'].join('\n')
 const UNGUTTERED = ['Retry limit is now 5.', 'Backoff starts at 2s.'].join('\n')
 

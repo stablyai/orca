@@ -3,10 +3,7 @@ import { createHmac } from 'node:crypto'
 import vector from '../../../../cloud/packages/push-contract/src/push-host-proof-vector.json'
 import { answerPushHostChallenge } from './push-host-proof'
 
-// Why: the gateway builds the challenge and this file answers it, in two
-// workspaces that cannot import each other in CI. Both replay one checked-in
-// vector; a transcript field drift on either side fails here and in the
-// gateway's copy of this test.
+// Replay one vector in both workspaces to catch host/gateway transcript drift despite isolated CI imports.
 describe('push host proof vector', () => {
   it('answers the checked-in gateway challenge with the expected proof', () => {
     const secret = Buffer.from(vector.challengeSecretB64, 'base64')

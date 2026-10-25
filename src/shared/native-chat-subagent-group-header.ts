@@ -1,5 +1,4 @@
-// One spawn group's header line — headline, verdict, alert, clock and tokens — decided once for
-// every transcript that draws a roster row (desktop and the phone). Each passes its own `say`.
+// Share spawn-group headline/verdict/alert/clock/token derivation; callers supply platform translations.
 
 import { normalizeSubagentState, summarizeSubagentGroup } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry, NativeChatSubagentState } from './native-chat-types'
@@ -46,10 +45,7 @@ export function formatSubagentTokens(tokens: number): string {
   return `${scaled.toFixed(1).replace(/\.0$/, '')}${suffix}`
 }
 
-/** The group's one-line verdict. A single-child group reads as a bare word; any
- *  larger group always carries the count, because "working" alone would not say
- *  how many of the children it covers. `completed` never takes one: every child
- *  finishing is the whole group finishing. */
+/** Single-child verdicts omit count; multi-child verdicts include it, except completed means the whole group finished. */
 export function subagentStateLabel(
   state: NativeChatSubagentState,
   count: number,
@@ -130,12 +126,8 @@ export function nativeChatSubagentGroupHeader(
     alertState === null
       ? null
       : subagentStateLabel(alertState, summary.adverseCount, summary.total, say)
-  // A child settled with no terminal stamp — swept by the reopen, or given the
-  // provider's verdict after that — stopped being observable at an unknown
-  // moment. Measuring to `now` would report the time since the host died as how
-  // long the child ran, on a row that is not even counting. A sibling's stamp is
-  // no better: in a mixed group it would present that sibling's duration as the
-  // group's while a child's run length is still unknown.
+  // Any settled child without a terminal timestamp makes group duration unknown. Measuring to now includes host downtime;
+  // a sibling’s timestamp would substitute its duration for an unobserved child’s run.
   const runLengthUnknown = agents.some(
     (agent) =>
       normalizeSubagentState(agent.state) !== 'working' && typeof agent.settledAt !== 'number'

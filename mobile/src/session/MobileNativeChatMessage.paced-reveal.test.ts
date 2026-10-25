@@ -43,7 +43,6 @@ const second = first + 'more '.repeat(40)
 describe('a growing reply on the phone', () => {
   let renderer: ReactTestRenderer | undefined
   let chat: MobileNativeChatReplyReveals
-  // The page's hold on growth, as a reader who scrolled up moves.
   let growth = createMobileNativeChatGrowthHold()
 
   function render(text: string | string[], working = true, runningTool = false): void {
@@ -107,7 +106,6 @@ describe('a growing reply on the phone', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
     vi.stubGlobal('requestAnimationFrame', (step: () => void) => setTimeout(step, 16))
     vi.stubGlobal('cancelAnimationFrame', (frame: number) => clearTimeout(frame))
-    // A reply that began while the chat was open.
     const tracker = createNativeChatReplyRevealTracker()
     trackNativeChatReplyRows(tracker, ['u1'], new Set(['u1']))
     const reveals = trackNativeChatReplyRows(tracker, ['u1', 'a1'], new Set(['u1', 'a1']))
@@ -136,7 +134,6 @@ describe('a growing reply on the phone', () => {
     const before = drawn()
     expect(before).toBeGreaterThan(first.length)
     expect(before).toBeLessThan(second.length)
-    // The list recycles the row while it is still revealing.
     remount(second)
     expect(drawn()).toBeGreaterThanOrEqual(before)
     expect(drawn()).toBeLessThan(second.length)
@@ -181,7 +178,6 @@ describe('a growing reply on the phone', () => {
     expect(chat.drawn.has('a1')).toBe(false)
     act(() => renderer?.unmount())
     renderer = undefined
-    // The question clears while the row remains outside the virtualized window.
     render(first)
     expect(drawn()).toBe(first.length)
     render(second)

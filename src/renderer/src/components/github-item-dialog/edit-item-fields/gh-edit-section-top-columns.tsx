@@ -73,7 +73,6 @@ export function GHEditSectionTopColumns({
   onAssigneeToggle: (login: string) => void
   onLabelToggle: (label: string) => void
 }): React.JSX.Element {
-  // Why: lay property fields as top columns so the description isn't squeezed by a right rail.
   return (
     <aside className="grid grid-cols-2 gap-x-6 gap-y-5 text-[13px] sm:grid-cols-4">
       <section className="min-w-0">
@@ -119,7 +118,7 @@ export function GHEditSectionTopColumns({
         onToggle={onLabelToggle}
       />
       <section className="min-w-0">
-        {/* Why: property columns are metadata only; the primary open/start CTA lives solely in the issue header. */}
+        {/* Keep the primary workspace action in the issue header; these columns show metadata. */}
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
         </div>

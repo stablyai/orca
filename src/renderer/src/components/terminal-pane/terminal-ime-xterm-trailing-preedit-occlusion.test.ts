@@ -1,21 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Issue #12729 — typing `가나다라` leaves the last syllable inside an opaque block.
- *
- * The report reads the block as a mis-placed cursor, but no cursor can produce it: the cursor sits
- * on the column the application asked for and a block cursor carries the whole wide glyph
- * (`terminal-cjk-cursor-cell-placement.test.ts`). What sits there is the preedit overlay.
- *
- * macOS 2-set Korean keeps the trailing syllable composing until a terminator, so after four
- * keystrokes only `가나다` has reached the pty; `라` lives in `.composition-view`, an opaque box
- * anchored to the cursor cell. Stock xterm styles that box `#000`/`#FFF` in its own stylesheet,
- * which is the black block the report measured, and no cursor setting can reach it — matching the
- * report's second claim that `terminalCursorStyle` / `terminalCursorOpacity` do nothing.
- *
- * #15014 themed the overlay from `options.theme`; this pins the end-of-row arm of that, which is
- * the shape #12729 hits. happy-dom performs no layout, so the cell size is supplied and only the
- * anchor is asserted, not glyph geometry.
- */
+/** macOS Korean’s trailing syllable remains in preedit until a terminator, so its opaque box is independent of cursor settings (#12729). Verify live-theme overlay at row end (#15014); happy-dom checks supplied metrics and anchor, not glyph geometry. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

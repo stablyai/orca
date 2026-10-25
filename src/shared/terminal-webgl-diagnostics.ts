@@ -1,11 +1,4 @@
-/**
- * Lib-safe sink for WebGL renderer breadcrumbs (context loss/restore, atlas
- * resets). The renderer breadcrumb ring lives in the components layer
- * (terminal-freeze-breadcrumbs.ts), which may import from lib/pane-manager but
- * not the reverse. This indirection lets lib-layer WebGL code record a crumb
- * without a backward import: components registers the recorder at startup;
- * until then (and in non-renderer contexts) recording is a silent no-op.
- */
+/** Register a component-owned breadcrumb sink so lib WebGL code can record diagnostics without a backward import. No-op until registration or outside the renderer. */
 
 /** Crash-report breadcrumb name these crumbs are mirrored under. */
 export const TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB = 'terminal_webgl_diagnostic'

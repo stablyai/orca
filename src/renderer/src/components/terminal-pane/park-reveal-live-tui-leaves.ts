@@ -1,8 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
-/** Leaves whose captured TUI frame a park-reveal remount should keep painting.
- *  Why remote only: a parked remote TUI outlives the park on its host, and every remote
- *  reattach paint leaves alt itself when the host's screen no longer uses it. */
+/** Preserve captured remote TUI frames across park; the host remains live and reattach leaves alt-screen mode when needed. */
 export function resolveParkRevealLiveTuiLeafIds(
   mountFollowsTerminalPark: boolean,
   ptyIdsByLeafId: Record<string, string> | undefined

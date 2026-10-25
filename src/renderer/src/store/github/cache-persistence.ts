@@ -4,11 +4,7 @@ import type { AppState } from '../types'
 const SAVE_WINDOW_MS = 1000
 const persistedStores = new WeakSet<object>()
 
-/**
- * Mirrors the PR and issue caches to main whenever either changes, so every writer is covered.
- * Main derives the sidebar's PR facts from this copy. A fixed window, not a resettable debounce:
- * a steady stream of results still reaches main within a second. Once per store.
- */
+/** Mirror both caches to main for sidebar PR facts. Use a fixed one-second window per store so steady results cannot postpone writes indefinitely. */
 export function persistGitHubCacheChanges(
   store: Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 ): void {

@@ -47,8 +47,7 @@ describe('parseWslListEntriesOutput', () => {
   })
 
   it('refuses an unreadable directory rather than reporting it empty', () => {
-    // An empty listing tells the planner "nothing left here"; the guest marks
-    // an unreadable directory with `X` so it fails like native EACCES instead.
+    // Unreadable X must refuse like native EACCES; empty output would falsely authorize parent removal.
     expect(() => parseWslListEntriesOutput(records('D', '0', 'X'), ['/a'])).toThrow(
       WslEnumerationProtocolError
     )

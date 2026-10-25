@@ -124,9 +124,7 @@ describe('a Windows Codex prompt held in its paste burst', () => {
     await vi.runAllTimersAsync()
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
-    await expect(runtime['readCurrentTerminalWaitScreen']('pty-prompt')).resolves.toMatchObject({
-      draft: 'Explain this codebase'
-    })
+    expect((await runtime['readCurrentTerminalWaitScreen']('pty-prompt'))?.draft).toBeUndefined()
     expect(writes.filter((write) => write === '\r')).toHaveLength(1)
   })
 })

@@ -411,9 +411,7 @@ describe('EditorFileTab rename menu', () => {
     const firstRender = expandNode((await renderEditorFileTab(file, onActivate)).element)
     const renameItem = findMenuItemByText(firstRender, 'Rename')
 
-    // Why: New Markdown tabs are real on-disk files even while marked
-    // isUntitled; the tab menu must let users rename the screenshot-style
-    // "untitled-N.md" files directly.
+    // Untitled Markdown tabs already exist on disk and must remain renameable.
     expect(renameItem.props.disabled).toBe(false)
     selectRenameFromMenu(firstRender)
 

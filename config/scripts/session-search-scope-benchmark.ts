@@ -17,15 +17,8 @@ import { sessionCandidate } from '../../src/main/ai-vault-search/session-search-
 import type SyncDatabase from '../../src/main/sqlite/sync-database'
 import { writeToolHeavyCorpus, type ToolHeavyCorpus } from './session-search-tool-heavy-corpus'
 
-// What each scope costs on an index the size of a real transcript tree.
-//
-// The 10.5 MB corpus in `session-search-query-benchmark.ts` sizes the route
-// ladder; this one sizes the corpus. `conversation` is a column filter over the
-// one FTS table rather than a second table of its own, and the whole cost of
-// that decision is how much of `messages_fts` a conversation query has to read
-// past — which is set by how much of a transcript is tool output.
-//
-// Synthetic, always: this must never be pointed at a real transcript.
+// Measure real-sized synthetic corpus only; never use real transcripts. Conversation queries filter one FTS table, so tool share determines postings discarded.
+// Query benchmark sizes route ladder; this benchmark sizes corpus.
 
 const WARMUP = 5
 
@@ -70,8 +63,7 @@ async function indexCorpus(
     )
   }
   return {
-    // The store's own handle, which is what a composed reader gets: every
-    // retrieval is one synchronous statement, so nothing pins a WAL snapshot.
+    // Composed-reader handle uses one synchronous statement per retrieval, avoiding pinned WAL snapshot.
     db: store.connection,
     release: () => {
       unregister()
@@ -93,36 +85,23 @@ function timing(samples: readonly number[]): Timing {
   return { p50: at(0.5), p95: at(0.95) }
 }
 
-/**
- * The query sets, one per rung of the ladder the engine may take.
- *
- * Which rung each one reaches is not forced, it is observed: samples are
- * bucketed by the route the engine reports, so the table says what was measured
- * rather than what was intended, and a query that lands on a different rung
- * than expected shows up as a bucket rather than as a wrong number.
- */
+// Bucket by observed engine route rather than intended ladder rung so unexpected routing remains visible.
 function queries(): string[] {
   const run = (index: number, length: number): string =>
     Array.from({ length }, (_unused, step) => QUERIES[(index + step) % QUERIES.length]).join(' ')
   return [
     // Two terms, unquoted: not literal, so straight to OR.
     ...QUERIES,
-    // Two terms, quoted: literal, and on this corpus any two of fourteen words
-    // sit next to each other somewhere, so the phrase rung answers.
+    // Quoted pair reaches phrase: fourteen-word corpus contains every pair.
     ...QUERIES.map((query) => `"${query}"`),
-    // Eight terms, quoted: an ordered run that long does not occur in 105 MB of
-    // draws from fourteen words, so the phrase rung misses and AND answers.
+    // Quoted eight-term run is absent from corpus, forcing phrase miss then AND.
     ...QUERIES.map((_query, index) => `"${run(index, 4)}"`)
   ]
 }
 
 type Bucket = { samples: number[]; hits: number }
 
-/**
- * Both scopes over the same queries, interleaved scope by scope: run back to
- * back, the first one pays for every page the OS cache had not seen and the
- * ordering moves p95 more than the scope does.
- */
+// Interleave both scopes on identical queries to share OS-cache warming instead of favoring second batch.
 function scopeReport(db: SyncDatabase): Record<string, unknown> {
   const engine = new SessionSearchEngine(db)
   const scopes: SessionSearchScope[] = ['all', 'conversation']

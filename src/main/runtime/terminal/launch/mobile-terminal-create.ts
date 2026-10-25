@@ -76,13 +76,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     if (!mutationId) {
       result = await startRun()
     } else {
-      // Why: idempotency is caller-owned; two paired devices may reuse the same mutation id without sharing a result.
+      // Idempotency belongs to the caller; paired devices may reuse mutation ids independently.
       const mutationKey = `${opts.clientNavigationId ?? 'local'}\0${worktreeSelector}\0${mutationId}`
-      // Why: a retried create (double-tap, reconnect replay) with the same
-      // idempotency key must return the in-flight operation instead of spawning a
-      // duplicate terminal. Successes are kept briefly so a retry whose response
-      // was lost in transit reuses the created terminal; failures are dropped
-      // immediately so a retry can start a fresh create.
+      // Join in-flight creates and briefly retain successes for lost-response retries; drop failures so a genuine retry can start fresh.
       const inflight = this.mobileTerminalCreateByMutationId.get(mutationKey)
       const run = inflight ?? startRun()
       if (!inflight) {
@@ -131,8 +127,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       launchAgent: opts.launchAgent,
       resumeProviderSession: opts.resumeProviderSession,
       worktreeId: pty.worktreeId,
-      // Why 0: the pane exists only for this resume, so any row on it is the agent's own; a retry
-      // that reconciles a live pane must not replace its report.
+      // This resume owns the new pane from time zero; reconciled live retries must retain the agent's own report.
       launchedAt: 0
     })
   }

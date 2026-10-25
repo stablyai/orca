@@ -54,9 +54,7 @@ export const continueAgentSessionFromMenuPane = (
   }
 }
 
-// Why: the captured session transcript is often wanted on its own — to paste
-// into another tool — so copy the bounded transcript directly, without the
-// fork prompt's framing or the fork dialog detour (issue #5020).
+// Copy standalone bounded context without fork framing or opening the fork dialog (#5020).
 export const copyAgentSessionContextFromMenuPane = async (
   pane: ManagedPane | null
 ): Promise<void> => {

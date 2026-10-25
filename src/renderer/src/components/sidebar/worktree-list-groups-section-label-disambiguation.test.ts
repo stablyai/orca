@@ -1,10 +1,4 @@
-/**
- * Sidebar section headers disambiguate identical display names by appending
- * parent path segments. Every tracked repo is projected into a project, so
- * `project:` headers — not just `repo:` ones — are where collisions surface;
- * stabilising which model layer supplies the label (#16127) must not turn the
- * disambiguation off.
- */
+/** Disambiguate equal names by parent paths on projected project headers as well as legacy repo headers. */
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { project, projectHostSetups, repo, worktree } from './worktree-list-groups-test-fixtures'

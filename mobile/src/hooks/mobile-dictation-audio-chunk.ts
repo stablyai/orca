@@ -21,7 +21,6 @@ export function enqueueMobileDictationAudioChunk(
   chunk: DictationCaptureChunk,
   queue: MobileDictationAudioChunkQueue
 ): void {
-  // The seam normalises what the engine handed over, so there is nothing to widen here.
   const bytes = chunk.data
   const byteLength = bytes.byteLength
   if (!queue.pendingAudioBudget.tryReserve(byteLength)) {

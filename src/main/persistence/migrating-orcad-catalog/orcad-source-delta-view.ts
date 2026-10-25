@@ -1,8 +1,4 @@
-/**
- * The source as a delta move sees it: a copy of the profile with everything earlier migrations of
- * the host already moved subtracted from it. What is left is what an older build added, and only
- * that is exported, censused and later committed.
- */
+// Export only additions from older builds by subtracting prior migrations from a profile copy.
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
@@ -36,7 +32,7 @@ export type OrcadMigrationDeltaView = {
   ) => OrcadMigrationSourceDependencyCensus
 }
 
-/** `moved` re-exports what the earlier migrations own today, including later edits to it. */
+/** moved includes today's edits to previously migrated rows. */
 export function createOrcadMigrationDeltaView(
   runtime: Pick<StoreRuntimeState, 'state' | 'terminalScrollbackSnapshotStorage'>,
   moved: OrcadMigrationManifest

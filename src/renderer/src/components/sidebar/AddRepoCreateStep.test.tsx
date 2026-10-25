@@ -45,7 +45,6 @@ describe('CreateStep', () => {
     expect(html).toContain('Create a new project')
     expect(html).toContain('Name')
     expect(html).toContain('Git repository in ~/orca/projects')
-    // The summary card itself is the collapsed disclosure for the uncommon settings.
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('Project kind')
     expect(html).not.toContain('Location</span>')

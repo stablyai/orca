@@ -1,16 +1,5 @@
 #!/usr/bin/env node
-// Benchmark: cost of sorting the Source Control changed-file list.
-//
-// compareGitStatusEntries called `a.path.localeCompare(b.path, undefined, {numeric:true})`.
-// Passing an options object makes each call resolve a fresh ICU collator, so a
-// sort paid for one per O(n log n) comparison. The fix hoists a single
-// Intl.Collator, which is the idiom TaskPage.tsx already uses for Jira labels.
-//
-// The sort runs in a useMemo keyed on the entry list, so it re-runs on every git
-// refresh that changes the working tree.
-//
-// Both arms sort the same generated list and their outputs are compared before
-// timing, so a comparator that changed the order cannot be reported as a win.
+// Compare per-comparison localeCompare options with hoisted Intl.Collator on Source Control refresh; assert identical sorted output before timing.
 import { execFileSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -50,9 +39,7 @@ function compareAfter(a, b) {
   return conflictRank(a) - conflictRank(b) || collator.compare(a.path, b.path)
 }
 
-// Why real repo paths in git's own order: `git status` emits byte-sorted paths,
-// and a shuffled fixture inflates the win — a nearly-sorted array is the case
-// this actually has to beat.
+// Use real byte-sorted Git paths: shuffled input inflates win over nearly sorted production arrays.
 const REPO_PATHS = execFileSync('git', ['ls-files'], {
   cwd: fileURLToPath(new URL('../..', import.meta.url)),
   maxBuffer: 256 * 1024 * 1024
@@ -96,8 +83,7 @@ console.log('Source Control changed-file sort, per git refresh. Lower is better.
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} (median of 5 rounds)`)
 console.log(`${pad('files', 7)} ${pad('per-call', 11)} ${pad('hoisted', 11)} ${pad('speedup', 9)}`)
 
-// Sizes from the real distribution over 7,324 non-merge commits on this repo:
-// p50 3, p75 7, p90 17, p95 26, p99 63, max 1626.
+// Fixture sizes follow 7,324 non-merge commits: p50 3, p75 7, p90 17, p95 26, p99 63, max 1626.
 for (const count of [3, 17, 26, 63, 308, 1000]) {
   const entries = makeEntries(count)
   const before = [...entries].sort(compareBefore).map((entry) => entry.path)

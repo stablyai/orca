@@ -19,7 +19,6 @@ import {
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONE_STORAGE_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'
 const records = new Map<string, StructuredAgentLaunchPersistedRecord>()
-/** Cancelled session id -> the host that owns it. */
 const tombstones = new Map<string, ExecutionHostId>()
 /** When each paired-host tombstone was written, so one whose host never answers again expires. */
 const remoteTombstoneCancelledAt = new Map<string, number>()
@@ -122,7 +121,7 @@ function writeRecords(): void {
       localStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify([...records.values()]))
     }
   } catch {
-    // Why: persistence is recovery bookkeeping and must never block a launch.
+    // Recovery bookkeeping must never prevent launch.
     console.warn('[structured-agent-launch] could not persist launch state')
   }
 }
@@ -145,7 +144,7 @@ function writeTombstones(): void {
       )
     }
   } catch {
-    // Why: persistence is recovery bookkeeping and must never block close.
+    // Recovery bookkeeping must never prevent close.
     console.warn('[structured-agent-launch] could not persist cancellation tombstones')
   }
 }

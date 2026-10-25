@@ -135,8 +135,7 @@ export function BrowserLoadFailureOverlay({
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
-  // Why: Chromium's error-page fallback can replace the diagnostic code with
-  // -1 after main has already captured an exact live certificate challenge.
+  // Chromium can replace the diagnostic code with -1 after main captures an exact certificate challenge.
   const presentationLoadError =
     matchingCertificateFailure && loadError.code === -1
       ? {

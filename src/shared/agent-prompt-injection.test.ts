@@ -10,8 +10,7 @@ import {
   getTerminalPasteIngestMs,
   isHeldAgentPromptDraft,
   iterateAgentPromptPasteChunks,
-  resolveAgentPromptSubmitDelayForAgent,
-  sanitizeAgentPromptText
+  resolveAgentPromptSubmitDelayForAgent
 } from './agent-prompt-injection'
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
@@ -64,8 +63,7 @@ describe('agent prompt injection bytes', () => {
   })
 
   it.each([
-    // The slower of the two measured Win11 hosts at each size. Dipping under any of these
-    // reopens the mid-paste Enter bug, so pin all of them, not just the top end.
+    // Pin the slower measured Win11 ingest samples so Enter cannot race incomplete paste.
     [2_000, 25],
     [8_000, 89],
     [40_000, 440],
@@ -133,10 +131,6 @@ describe('agent prompt injection bytes', () => {
     const bytes = buildAgentPromptPasteBytes('before\x1b[201~after\x1b')
     expect(bytes).toBe(`${BEGIN}before<ESC>[201~after<ESC>${END}`)
     expect(bytes.slice(BEGIN.length, -END.length)).not.toContain('\x1b')
-  })
-
-  it('exposes the sanitizer for tests and diagnostics', () => {
-    expect(sanitizeAgentPromptText('a\x1bb')).toBe('a<ESC>b')
   })
 
   it('chunks a sanitized paste frame within the UTF-8 byte limit', () => {

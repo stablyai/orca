@@ -1,8 +1,4 @@
-/**
- * WSL distros as hosts (WSL-via-orcad C7): add and remove them, persist what each connection
- * reports, and connect only for the user. A stopped distro boots on an explicit add or connect,
- * or while a project or terminal the user has open needs it; never for background work.
- */
+/** C7: persist WSL hosts and connect for explicit Add/Connect or visible project/terminal demand. Never boot stopped distros for background work. */
 import { errorMessage } from '../../shared/error-message'
 import { removeWslHostEnvironment } from '../../shared/runtime-environment-wsl-host-store'
 import {
@@ -36,7 +32,7 @@ export type WslHostConnector = {
   readOrcadPublicKey(distro: string): Promise<string | null>
   /** User-initiated; may boot the distro. An intent retries or forces a skipped update. */
   connect(distro: string, options?: { intent?: WslHostConnectIntent }): Promise<WslOrcadConnection>
-  /** The user asked again: a standing pairing-repair failure or spent cap must not answer it. */
+  /** Explicit retry must clear pairing-repair failures and spent caps. */
   forgetPairingFailures?(environmentId: string): void
   get(distro: string): WslOrcadConnection | null
   /** Checks the paired server without starting a stopped or unconfirmed distro. */
@@ -68,7 +64,7 @@ export class WslHostService {
   private readonly adding = new Map<string, Promise<WslHostAddResult>>()
   private visible = new Set<string>()
   private readonly removing = new Set<string>()
-  // Bumped on disable so an Add that started before it cannot finish as a ready host.
+  // Invalidate in-flight Adds when disabled so they cannot later publish ready hosts.
   private disableGeneration = 0
   private readonly statusListeners = new Set<() => void>()
 
@@ -160,7 +156,7 @@ export class WslHostService {
     if (!record) {
       throw new Error('This server is not a WSL host.')
     }
-    // First: nothing may reconnect it while it is being stopped (open work, liveness, calls).
+    // Block reconnect from visible work, liveness and calls before stopping.
     this.removing.add(environmentId)
     const connector = this.connector
     let serverStop: WslHostServerStop = { stopped: true }
@@ -176,7 +172,7 @@ export class WslHostService {
       removeWslHostEnvironment(this.deps.userDataPath(), environmentId)
       this.visible.delete(environmentId)
     } finally {
-      // Why: a failed removal (e.g. EBUSY on Windows) must leave the host usable and removable.
+      // Failed removal must leave the host usable and allow another removal attempt.
       this.removing.delete(environmentId)
     }
     this.statuses.delete(environmentId)
@@ -185,10 +181,7 @@ export class WslHostService {
     return serverStop
   }
 
-  /**
-   * Turning the experiment off ends every connection and liveness watch and releases the
-   * holders, so distros idle-stop; turning it on resumes only hosts open work needs.
-   */
+  /** Disable closes connections/watches and releases holders; reenable resumes only hosts needed by visible work. */
   async enabledChanged(enabled: boolean): Promise<void> {
     const connector = this.connector
     if (!connector) {
@@ -223,10 +216,7 @@ export class WslHostService {
     await this.wsl.connect(record.distro, options)
   }
 
-  /**
-   * Before a call to a WSL host: a live connection serves it; otherwise connect only for open
-   * work, and say why not instead of letting the call fail as an unreachable network server.
-   */
+  /** Serve existing connections; reconnect only for visible work, otherwise return a WSL-specific refusal rather than an unreachable-network error. */
   async ensureForRuntimeCall(environmentId: string): Promise<void> {
     const record = this.recordForEnvironment(environmentId)
     const connector = this.connector
@@ -265,7 +255,7 @@ export class WslHostService {
 
   hasUserVisibleWork(distro: string): boolean {
     const record = this.recordForDistro(distro)
-    // Why the gate: liveness relaunches only for visible work, and none may run while off.
+    // Liveness needs visible demand, an enabled gate and no removal in progress.
     const id = record?.environmentId
     return id ? this.canRun() && this.visible.has(id) && !this.removing.has(id) : false
   }

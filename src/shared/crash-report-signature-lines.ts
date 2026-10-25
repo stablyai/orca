@@ -1,13 +1,6 @@
-// Type-only, so this erases at compile time and creates no import cycle.
 import type { CrashReportDetailValue } from './crash-reporting'
 
-/**
- * Promotes the Crashpad-derived fields out of the details blob.
- *
- * Why: for a Chromium CHECK the exit code is only 0x80000003 (STATUS_BREAKPOINT),
- * so the fatal log line is the actual diagnosis and must not be buried in a
- * detail list the reader scrolls past.
- */
+/** Surface Crashpad fatal lines above details: Chromium CHECK’s bare STATUS_BREAKPOINT cannot identify the cause. */
 export function appendMinidumpSignatureLines(
   lines: string[],
   details: Record<string, CrashReportDetailValue>

@@ -1,5 +1,3 @@
-/** The page's outbound notify surface: what it posts, what it stays quiet about, and what it
- *  answers when the shell granted nothing or the port refused the frame. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BridgeClientNotReadyError } from './bridge-client-errors'
 import {
@@ -34,7 +32,6 @@ afterEach(() => {
 })
 
 describe('bridge client page faults', () => {
-  /** A shell that says it will act on a fault, which is the only kind the page posts one to. */
   function startGranted(page: ReturnType<typeof createPageClient>): void {
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_FAULT_GRANT] } })
   }
@@ -85,18 +82,10 @@ describe('bridge client page faults', () => {
   })
 })
 
-/**
- * Which notifies reach the mount-order throw, pinned because the grant check is what decides it.
- *
- * A grant is read off the session, so before `init` there is no grant either and the two gated
- * notifies answer false without ever asking for the session. That is the answer their callers
- * already handle, and it must stay the answer: `useRouteHandoff` calls `notifyNavigate` uncaught
- * inside `push`, where a throw would take down a tap handler nobody wrapped.
- */
+// Before init, gated notifies return false before requiring a session; route-handoff tap handlers rely on that fallback and do not catch throws.
 describe('the notify guard before init', () => {
   it('answers false for the grant-gated notifies and posts nothing', () => {
     const page = createPageClient()
-    // Against what the handshake already put on the port, so this counts the notifies alone.
     const beforeNotifies = page.sent.length
     expect(page.client.notifyNavigate('/h/host-1')).toBe(false)
     expect(page.client.notifyNavigateBack()).toBe(false)
@@ -134,14 +123,7 @@ describe('the notify guard before init', () => {
   })
 })
 
-/**
- * The second verb of one grant, which is the only reason the page can ask for it at all.
- *
- * A shell too old to know the name still granted `navigate`, so the page posts and that shell
- * refuses the whole frame as `unrecognised-message`. Nothing here can tell those two apart: the
- * caller falls back to its own router either way, which on the page goes nowhere and is exactly
- * what a Back button already did.
- */
+// Older shells may grant navigate but reject the newer Back notify; false retains the caller’s router fallback, which has no native history to pop on page.
 describe('navigate-back', () => {
   it('posts under the navigate grant, with no target of its own', () => {
     const page = createPageClient()
@@ -170,13 +152,7 @@ describe('navigate-back', () => {
   })
 })
 
-/**
- * The verb whose refusal the caller has to hear about.
- *
- * Nothing crosses back for a notify, so the boolean is the only answer a tap gets. A URL outside
- * the three schemes is refused here rather than posted and dropped at the frame, because the page
- * reporting "opened" into a frame the shell threw away is the dead tap the grant exists to rule out.
- */
+// Reject invalid URL calls before posting; notify has no reply and true must not claim a tap succeeded when the shell will drop its frame.
 describe('externalLink', () => {
   function granted(): ReturnType<typeof createPageClient> {
     const page = createPageClient()
@@ -230,14 +206,7 @@ describe('externalLink', () => {
   })
 })
 
-/**
- * The haptic the page asks for and hears nothing back about.
- *
- * Gated at the call site as well as at the frame, for the reason every gated notify is: `notify` is
- * a closed list, so a shell that granted no haptics refuses the whole frame, and a caller told the
- * frame left would be told a lie. Unlike `externalLink` nobody reads the answer — a tap that did
- * not buzz is every tap on every phone before this page existed — so it is returned and not logged.
- */
+// Check haptic grants before posting into the closed notify union. Return refusal silently to avoid a warning per scrolling-row tap.
 describe('bridge client haptics', () => {
   const granted = (page: ReturnType<typeof createPageClient>): void => {
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })

@@ -79,8 +79,7 @@ async function main() {
       maxTotalRssKiB: MAX_QUARANTINE_RSS_KIB,
       maxTotalCpuPercent: MAX_QUARANTINE_CPU_PERCENT
     })
-    // Four live quarantine children leave four reservations before the global
-    // eight-physical-child ceiling rejects the next launch.
+    // Four live quarantine children reserve slots before global eight-child ceiling rejects another launch.
     assertRegistryCapacity(reserveWatcherChild, 4)
 
     result = {

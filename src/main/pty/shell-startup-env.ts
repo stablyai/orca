@@ -1,23 +1,16 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { posix } from 'node:path'
 
-// Why: only files the user's actual shell would source. Mixing zsh and bash
-// files breaks the "last assignment wins matches the live shell" guarantee —
-// a stale .bash_profile on a zsh user would clobber the real .zshrc value.
+// Scan only the active shell family; mixing files lets unused config override the real startup value.
 const ZSH_ENV_FILE = '.zshenv'
 const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
-// Why: Orca launches bash as a login shell (see local-pty-shell-ready.ts
-// getBashShellReadyRcfileContent and daemon/shell-ready.ts) which sources
-// .bash_profile / .bash_login / .profile but intentionally does NOT force
-// .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
+// Orca login Bash sources the first available login file and does not force .bashrc.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
-// Why: fish sources conf.d/*.fish (sorted by name) before config.fish, for
-// login and non-login shells alike — verified against fish 4.7.
+// fish reads sorted conf.d snippets before config.fish for login and non-login shells.
 const FISH_SNIPPET_DIR = 'conf.d'
 const FISH_SNIPPET_SUFFIX = '.fish'
 const FISH_CONFIG_FILE = 'config.fish'
 
-/** Assignment grammar of a startup file: `export NAME=value` vs fish `set -gx NAME value`. */
 type StartupFileSyntax = 'export' | 'fish-set'
 
 type ShellStartupFiles = {
@@ -43,12 +36,10 @@ function parseAssignedValue(
     if (!match?.[2] || (syntax === 'fish-set' && !fishFlagsExport(match[1] ?? ''))) {
       continue
     }
-    // Why: strip trailing unquoted `# comment` first so quoted values like
-    // `"$HOME/.opencode" # note` survive intact for unquoteShellValue.
+    // Strip only unquoted trailing comments before unquoting the value.
     const decommented = stripTrailingComment(match[2])
     const { text, quoted } = unquoteShellValue(decommented)
-    // Why: $HOME / ${HOME} / ~ expansion mimics what the live shell would
-    // do for double-quoted and unquoted values; single-quoted is literal.
+    // Single quotes preserve HOME/tilde literally.
     const expanded = quoted === "'" ? text : expandHome(text, home)
     if (expanded.length > 0) {
       lastMatch = expanded
@@ -62,8 +53,7 @@ function parseExportedValue(content: string, name: string, home: string): string
   return parseAssignedValue(content, name, home, 'export')
 }
 
-// Why: only `set -x` / `--export` reaches child processes; `set -g`, `set -l`
-// and function-local sets never appear in the PTY's environment.
+// Only exported fish assignments reach child processes.
 function fishFlagsExport(flags: string): boolean {
   return flags
     .trim()
@@ -90,7 +80,7 @@ function shellStartupFiles(
   configHome: string | undefined
 ): ShellStartupFiles {
   if (!shell) {
-    // Why: Orca's POSIX default shell is /bin/zsh when $SHELL is unset.
+    // Match Orca's /bin/zsh fallback when SHELL is unset.
     return { paths: zshStartupFilePaths(home), syntax: 'export' }
   }
 
@@ -110,9 +100,7 @@ function shellStartupFiles(
       syntax: 'fish-set'
     }
   }
-  // Why: unsupported explicit shells (nushell, custom wrappers) do not use
-  // Orca's zsh/bash/fish shell-ready startup files, so scanning those files
-  // would mirror values the live PTY shell never sees.
+  // Unsupported explicit shells do not read Orca's Bash/zsh/fish startup files.
   return { paths: [], syntax: 'export' }
 }
 
@@ -138,9 +126,7 @@ function fishSnippetPaths(snippetDir: string): readonly string[] {
 function zshStartupFilePaths(home: string): readonly string[] {
   const zshEnvPath = posix.join(home, ZSH_ENV_FILE)
   const zshEnv = readStartupFile(zshEnvPath)
-  // Why: zsh sources ~/.zshenv first, then uses any ZDOTDIR exported there
-  // for .zprofile/.zshrc/.zlogin. Mirror that enough for static env discovery
-  // so users who keep zsh config in ~/.config/zsh do not lose overlay sources.
+  // .zshenv can redirect later startup files through ZDOTDIR.
   const zshDir = zshEnv ? (parseExportedValue(zshEnv, 'ZDOTDIR', home) ?? home) : home
   return [zshEnvPath, ...ZSH_AFTER_ENV_FILES.map((file) => posix.join(zshDir, file))]
 }
@@ -159,9 +145,7 @@ function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | n
 }
 
 export function stripTrailingComment(value: string): string {
-  // Why: shells only treat `#` as a comment delimiter when it begins a word
-  // (unquoted, preceded by whitespace). Walk the string so `#` inside quotes
-  // and `path/with#hash` (no preceding whitespace) are preserved literally.
+  // Preserve quoted hashes and hashes within words; only unquoted word-boundary # starts a comment.
   let inSingle = false
   let inDouble = false
   for (let i = 0; i < value.length; i++) {
@@ -181,8 +165,7 @@ export function stripTrailingComment(value: string): string {
 }
 
 function expandHome(value: string, home: string): string {
-  // Why: word boundary on $HOME so $HOMER / $HOMEPATH / $HOME_DIR are NOT
-  // partially expanded into a path that doesn't match the live shell.
+  // Expand HOME only at its boundary, never inside HOMER/HOMEPATH/HOME_DIR.
   return value
     .replace(/^~(?=$|\/)/, home)
     .replace(/\$\{HOME\}/g, home)
@@ -192,31 +175,10 @@ function expandHome(value: string, home: string): string {
 export const SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES = 256
 const cache = new Map<string, string | undefined>()
 
-/**
- * Best-effort static read of a single env-var assignment from the user's
- * POSIX shell startup files.
- *
- * Why: GUI-launched Orca does not inherit interactive shell exports, but the
- * PTY's startup file will later re-export them and override our overlay. By
- * peeking at the assignment up-front we can preserve the user's source value
- * before installing the overlay.
- *
- * Limits (callers should treat the result as a hint, not authoritative):
- * - Conditionals (`[[ ... ]] && export FOO=...`), sourced files, and
- *   `$VAR` substitution beyond `$HOME` / `${HOME}` / `~` are not evaluated.
- * - Bare assignments (no `export` keyword, or fish `set` without `-x`) are
- *   ignored because they never reach child processes.
- * - Files are scanned in shell evaluation order for the user's $SHELL family
- *   only (zsh OR bash OR fish, never mixed); unsupported explicit shells scan
- *   nothing. LAST matching assignment wins.
- * - fish universal variables (`set -Ux` stored in fish_variables) are only
- *   seen when the assignment is also written in a config file.
- * - Windows has no POSIX default shell and reads nothing; Git Bash goes
- *   through readBashStartupEnvVar, PowerShell through powershell-profile-env.ts.
- *
- * Results are memoized per (name, home, shell, configHome); a bounded recent
- * window keeps SSH/WSL home churn from retaining every historical key.
- */
+/** Discover exported overlay sources before GUI-launched Orca's PTY rc files overwrite the overlay.
+ * Static hint only: active-shell startup order, last assignment wins; no conditionals, sourcing or expansion beyond HOME/tilde.
+ * fish universal values require a config assignment; Windows defaults read nothing (Git Bash/PowerShell use separate probes).
+ * Bounded memoization keys by name, home, shell and configHome. */
 export function readShellStartupEnvVar(
   name: string,
   home = process.env.HOME,
@@ -242,8 +204,7 @@ function readStartupFilesEnvVar(
   if (!home) {
     return undefined
   }
-  // Why: the regex above is fixed; rejecting unsafe names is cheap defense
-  // for the day a future caller passes something with regex metacharacters.
+  // Validate names before interpolating into assignment regexes.
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return undefined
   }
@@ -283,21 +244,13 @@ function readStartupFilesEnvVar(
   return lastMatch
 }
 
-/** The env keys that decide which startup files a shell would actually source. */
 export type ShellStartupEnvSource = {
   HOME?: string | undefined
   SHELL?: string | undefined
   XDG_CONFIG_HOME?: string | undefined
 }
 
-/**
- * Same probe, resolved against a session/PTY env with process.env as fallback.
- *
- * Why this exists rather than three inline `??` chains per call site: dropping
- * XDG_CONFIG_HOME silently scans a *different* fish config than the shell will,
- * so local launches and relay launches disagree about the same user's
- * `set -gx` — a divergence with no visible symptom until it is wrong.
- */
+/** Include session XDG_CONFIG_HOME with HOME/SHELL so local and relay probes inspect the same fish config. */
 export function readSessionShellStartupEnvVar(
   name: string,
   sessionEnv: ShellStartupEnvSource | undefined,
@@ -311,11 +264,6 @@ export function readSessionShellStartupEnvVar(
   )
 }
 
-/**
- * Test-only helper to reset the per-process cache between cases.
- * Why: production callers never invalidate (rc files don't change at
- * runtime), but tests need clean state per case.
- */
 export function __resetShellStartupEnvCache(): void {
   cache.clear()
 }

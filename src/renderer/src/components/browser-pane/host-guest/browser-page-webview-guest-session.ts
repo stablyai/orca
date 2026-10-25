@@ -265,8 +265,7 @@ export function createBrowserPageWebviewGuestSession({
   }
 
   const handleGuestDestroyed = (): void => {
-    // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
-    // guest-side close). Skip intentional teardown, where the element already left the DOM.
+    // Guest close or detach races can destroy without render-process-gone; recover only while still connected, excluding intentional teardown.
     if (webview.isConnected) {
       guestRecovery.recoverRenderer()
     }

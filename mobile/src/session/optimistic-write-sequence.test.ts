@@ -13,18 +13,15 @@ describe('OptimisticField — last-intent-wins', () => {
 
   it('two rapid writes A then B: A resolving after B must NOT win (B is latest)', () => {
     const field = createOptimisticField<boolean>()
-    // authoritative = false
-    const seqA = field.begin(true) // intent A: enable
-    const seqB = field.begin(false) // intent B: disable (newer)
-    expect(field.resolve(false)).toBe(false) // shows B's optimistic value
+    const seqA = field.begin(true)
+    const seqB = field.begin(false)
+    expect(field.resolve(false)).toBe(false)
 
-    // A's response arrives LATE and succeeds — it must not overwrite B.
-    expect(field.settleSuccess(seqA)).toBe(false) // not applied (stale)
-    expect(field.resolve(false)).toBe(false) // still B's optimistic value
+    expect(field.settleSuccess(seqA)).toBe(false)
+    expect(field.resolve(false)).toBe(false)
 
-    // B's response arrives and is the latest — clears optimism to authoritative.
     expect(field.settleSuccess(seqB)).toBe(true)
-    expect(field.resolve(false)).toBe(false) // authoritative now
+    expect(field.resolve(false)).toBe(false)
   })
 
   it('reverts only the latest write on failure', () => {
@@ -33,13 +30,11 @@ describe('OptimisticField — last-intent-wins', () => {
     const seqB = field.begin(false)
     expect(field.resolve(false)).toBe(false)
 
-    // A fails late — it is not the latest, so it must NOT revert B's optimism.
     expect(field.settleFailure(seqA)).toBe(false)
-    expect(field.resolve(false)).toBe(false) // B's optimistic value preserved
+    expect(field.resolve(false)).toBe(false)
 
-    // B fails as the latest — revert to authoritative (clear optimism).
     expect(field.settleFailure(seqB)).toBe(true)
-    expect(field.resolve(true)).toBe(true) // authoritative shows through
+    expect(field.resolve(true)).toBe(true)
   })
 
   it('a stale failure does not clear a newer optimistic value', () => {

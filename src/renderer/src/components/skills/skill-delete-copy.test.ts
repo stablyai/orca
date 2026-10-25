@@ -54,8 +54,6 @@ describe('skillDeletePlacementSummary', () => {
   })
 
   it('is null when the plan removes nothing', () => {
-    // Otherwise the dialog read "0 folders and 0 links across " with an empty
-    // tail, beside a red button that could not do anything.
     expect(
       skillDeletePlacementSummary(
         plan([
@@ -172,8 +170,7 @@ it('sorts deletion roots once with unchanged case, accent, and number ordering',
       ])
     )
     expect(summary).toContain(expected.join(', '))
-    // The shared renderer collator is memoised process-wide, so it is built at
-    // most once here and never per comparison.
+    // The process-wide renderer collator must be constructed at most once, never per comparison.
     expect(construct.mock.calls.length).toBeLessThanOrEqual(1)
     for (const call of construct.mock.calls) {
       expect(call).toEqual([undefined, { sensitivity: 'base' }])

@@ -201,8 +201,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('2\r\n')).toEqual([])
   })
 
-  // Why: the carry scan only looks at the trailing MAX_CARRY_LENGTH (512) bytes,
-  // so these pin both sides of that cap and the drop arm behind it.
+  // Pin both sides of the 512-character carry cap and the overlong-URL drop path.
   it('still joins a PR URL split across chunks after a large scheme-free chunk', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
@@ -230,9 +229,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('keeps carry when the scheme-to-end tail is exactly at the cap', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    // Scheme-to-end tail is exactly MAX_CARRY_LENGTH, so the carry survives and
-    // the URL joins on the next chunk. Shrinking the window by one byte drops it.
-    // Padding goes in the repo segment so the trailing PR number stays finite.
+    // Exactly at the cap, the carry must survive. Pad the repo segment to keep the PR number finite.
     const stem = `https://github.com/acme/${'r'.repeat(481)}/pull/7`
     expect(stem).toHaveLength(512)
     expect(observe(`noise\n${stem}`)).toEqual([])
@@ -273,8 +270,6 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('ttps://github.com/zz/yy/pull/9\n')).toEqual([])
   })
 
-  // Why both schemes: the carry scan checks every entry of HTTP_SCHEME_PREFIXES,
-  // so http:// needs its own carry coverage or half the loop goes unpinned.
   it('joins a plain http:// PR URL split across chunks', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 

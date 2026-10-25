@@ -42,7 +42,6 @@ describe('resolveNativeChatTerminalTurn', () => {
     })
   })
 
-  // Stop is the reader's word that the turn is over, whatever the hook still says.
   it('ends the turn on local Stop, wait included', () => {
     expect(
       resolveNativeChatTerminalTurn({
@@ -66,12 +65,11 @@ describe('resolveNativeChatTerminalTurn', () => {
 describe('nativeChatHookTurnStartedAt', () => {
   const entry = { state: 'working' as const, stateStartedAt: 3_000 }
 
-  // Answered in the terminal: the current state began at 3s, the turn at 1s.
   it("dates the turn by the host's stamp, not the state it came back from", () => {
     expect(nativeChatHookTurnStartedAt({ ...entry, turnStartedAt: 1_000 })).toBe(1_000)
   })
 
-  // A background task held the row 'working' since 500; the main agent's turn began at 8s.
+  // Child work predates the main agent’s turn and must not supply its start stamp.
   it('keeps the stamp when child work holds the row open', () => {
     expect(
       nativeChatHookTurnStartedAt({
@@ -119,7 +117,6 @@ describe('nativeChatHookLatestTurnWorkedSeconds', () => {
     ).toBe(30)
   })
 
-  // Staleness ages the row out of the pane, not the host's record that the turn finished.
   it('keeps a host-ended duration once the row is stale', () => {
     expect(nativeChatHookLatestTurnWorkedSeconds(done, true)).toBe(90)
   })
@@ -133,7 +130,6 @@ describe('nativeChatHookLatestTurnWorkedSeconds', () => {
     ).toBeNull()
   })
 
-  // A pane-side end (Stop, the transcript's end marker) is the pane's own word; keep what it saw.
   it('keeps the local reading while the host is fresh and the turn not host-ended', () => {
     expect(
       nativeChatHookLatestTurnWorkedSeconds(
@@ -187,7 +183,6 @@ describe('nativeChatTranscriptSettledTurns', () => {
     expect(settled.get('u1')).toEqual({ startedAt: 0, workedSeconds: 12 })
   })
 
-  // An attachment row sits beside the next prompt; it does not stretch the turn before it.
   it('does not end a turn at a system row the agent did not write', () => {
     const settled = nativeChatTranscriptSettledTurns([
       row('u1', 'user', 0),
@@ -198,7 +193,6 @@ describe('nativeChatTranscriptSettledTurns', () => {
     expect(settled.get('u1')).toEqual({ startedAt: 0, workedSeconds: 5 })
   })
 
-  // A harness notice (task notification, reminder) is user-role in the transcript but not a prompt.
   it('times a turn across a harness notice injected mid-turn', () => {
     const settled = nativeChatTranscriptSettledTurns([
       row('u1', 'user', 0),

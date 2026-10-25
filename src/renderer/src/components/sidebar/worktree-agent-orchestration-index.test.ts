@@ -17,25 +17,15 @@ type IndexState = Parameters<typeof selectWorktreeAgentOrchestration>[0]
 
 const EMPTY_RECORD = {}
 
-// Pane keys that reach this selector unvalidated. `__proto__` is the one whose
-// meaning depends on how the output record is built.
+// Include __proto__ because ordinary object assignment can treat it as a prototype mutation.
 const MALFORMED_RUNTIME_KEYS = ['__proto__', 'constructor', 'toString', 'no-colon', 'a:b:c']
 
-// Why not plain assignment: writing `__proto__` onto an object literal hits the
-// prototype setter, so the fixture itself would lose the key under test.
+// Define __proto__ as data rather than invoking the object prototype setter.
 function defineKey<T>(map: Record<string, T>, key: string, value: T): void {
   Object.defineProperty(map, key, { value, enumerable: true, writable: true, configurable: true })
 }
 
-/**
- * The pre-index per-card selector, transcribed from the revision this index
- * replaced. Kept as the oracle so equivalence is asserted against real prior
- * behavior rather than against a restatement of the new implementation.
- *
- * One deliberate correction: the original accumulated into `{}`, so a pane key
- * of `__proto__` hit the prototype setter and vanished. This builds a
- * null-prototype record so the oracle expresses intended attribution.
- */
+/** Use the pre-index selector as an independent oracle, correcting only __proto__ storage with a null-prototype record. */
 function legacySelectForWorktree(
   state: IndexState,
   worktreeId: string
@@ -66,12 +56,9 @@ function legacySelectForWorktree(
   return out
 }
 
-// Why a seeded PRNG: a randomized differential must reproduce exactly when it
-// reports a divergence.
+// Seed the differential test so failures reproduce exactly.
 function createRandom(seed: number): () => number {
-  // Why the multiply: xorshift32 needs a high-entropy state. Seeding it with a
-  // small integer keeps the first output under 0.019, so `1 + pick(5)` was 1 for
-  // every seed here and the suite only ever built single-worktree stores.
+  // Mix small seeds so the first pick does not always produce a single-worktree store.
   let state = Math.imul(seed >>> 0 || 1, 0x9e37_79b1) >>> 0 || 1
   return () => {
     state ^= state << 13
@@ -131,8 +118,7 @@ describe('selectWorktreeAgentOrchestration', () => {
         const tabCount = pick(3)
         const tabs: TerminalTab[] = []
         for (let tabIndex = 0; tabIndex < tabCount; tabIndex += 1) {
-          // Why a small shared id space: tab ids collide across worktrees on
-          // 131 of these 300 seeds, which is the multi-attribution path.
+          // Shared tab IDs exercise attribution to multiple worktrees.
           const tabId = `tab-${pick(4)}`
           tabs.push(makeTab(tabId))
           tabIds.push(tabId)
@@ -147,9 +133,7 @@ describe('selectWorktreeAgentOrchestration', () => {
       for (let index = 0; index < contextCount; index += 1) {
         const ownerTabId =
           random() < 0.7 && tabIds.length > 0 ? tabIds[pick(tabIds.length)] : 'tab-orphan'
-        // Why malformed runtime keys: a pane key that is not `tab:uuid` reaches
-        // this selector unvalidated, and `__proto__` is the one that changes
-        // meaning depending on how the output record is built.
+        // Unvalidated runtime keys include __proto__, which is unsafe in ordinary object records.
         const keyRoll = random()
         const paneKey =
           keyRoll < 0.08
@@ -190,8 +174,7 @@ describe('selectWorktreeAgentOrchestration', () => {
         retainedAgentsByPaneKey
       } as unknown as IndexState
 
-      // Why the extra id: worktrees with no tabs are still reachable through a
-      // live or retained attribution, and must resolve identically.
+      // Live or retained attribution must also reach worktrees without tabs.
       for (const worktreeId of [...worktreeIds, `wt-${worktreeCount}`, 'missing']) {
         const expected = legacySelectForWorktree(state, worktreeId)
         const actual = selectWorktreeAgentOrchestration(state, worktreeId)
@@ -248,9 +231,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     expect(selectWorktreeAgentOrchestration(retainedChurn, 'wt-1')).toBe(first)
   })
 
-  // Why a build counter and not record identity: `reuseRecordIfOrderedEqual` hides a rebuild
-  // from every identity assertion, so the wasted O(tabs + contexts) pass under `agentStatus:set`
-  // — several a second on a busy install, with a fresh live map each time — was invisible.
+  // Record reuse can hide full rebuilds; count builds to catch wasted work on status-map churn.
   it('does not rebuild when agentStatus:set replaces the live map without moving a pane', () => {
     const paneKey = paneKeyFor('tab-1', 0)
     const context = { taskId: 't', dispatchId: 'd' }
@@ -271,8 +252,7 @@ describe('selectWorktreeAgentOrchestration', () => {
     const buildsAfterFirst = _getWorktreeAgentOrchestrationIndexBuildCountForTest()
 
     for (let tick = 0; tick < 25; tick += 1) {
-      // A fresh live map every tick, exactly as `agentStatus:set` replaces the slice, plus a
-      // stable entry for the orchestrated pane so the projection is non-trivially equal.
+      // Publish new live maps with equal, nontrivial attribution for the orchestrated pane.
       const published = publish({
         [paneKey]: makeEntry(paneKey, 'wt-1'),
         [`unrelated-${tick}`]: makeEntry(`unrelated-${tick}`, 'wt-9')
@@ -281,15 +261,13 @@ describe('selectWorktreeAgentOrchestration', () => {
     }
     expect(_getWorktreeAgentOrchestrationIndexBuildCountForTest()).toBe(buildsAfterFirst)
 
-    // ...and the projection is still load-bearing: moving that pane must re-attribute it.
+    // Changing attribution must still rebuild and move the pane.
     const moved = publish({ [paneKey]: makeEntry(paneKey, 'wt-2') })
     expect(selectWorktreeAgentOrchestration(moved, 'wt-2')[paneKey]).toBe(context)
     expect(_getWorktreeAgentOrchestrationIndexBuildCountForTest()).toBe(buildsAfterFirst + 1)
   })
 
-  // Why counted rather than timed: the projection is the index's per-publication work, and
-  // recomputing it per card would put the O(contexts) scan back on the per-card path that the
-  // index exists to remove — which no identity or correctness assertion would notice.
+  // Count projection work because correct identities alone cannot detect per-card O(contexts) scans.
   it('projects the live and retained maps once per publication, not once per card', () => {
     const cardCount = 8
     const contextCount = 6
@@ -449,8 +427,7 @@ describe('selectWorktreeAgentOrchestration', () => {
   })
 
   it('treats a __proto__ pane key as data instead of a prototype write', () => {
-    // Why: writing this key into a normal object silently drops the entry and
-    // repoints the record's prototype at the orchestration context.
+    // Treat __proto__ as data so the pane cannot replace the result’s prototype.
     const context = { taskId: 't', dispatchId: 'd' }
     const state = {
       tabsByWorktree: {},
@@ -466,8 +443,7 @@ describe('selectWorktreeAgentOrchestration', () => {
   })
 
   it('keeps the entries cache warm while the orchestration map is empty', () => {
-    // Why: the empty map is the common case, so re-enumerating it per card is
-    // exactly the per-publication cost this index exists to remove.
+    // An empty runtime map must stay cached rather than be enumerated once per card.
     let enumerations = 0
     const runtimeAgentOrchestrationByPaneKey = new Proxy(
       {},
@@ -494,9 +470,7 @@ describe('selectWorktreeAgentOrchestration', () => {
   })
 
   it('never mutates a record already handed to a subscriber', () => {
-    // Why: buildIndex fills record objects in place and can hand back a previous
-    // build's record. A mounted card holds that object across renders, so a later
-    // build writing into it would break React's snapshot contract silently.
+    // Previously published records must remain immutable for React subscribers holding those snapshots.
     const paneKey = paneKeyFor('tab-1', 0)
     const base = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },

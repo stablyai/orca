@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { workspaceOptionsBadgeText } from '../worktree/workspace-options-copy'
 
-/** The active-filter count in the chip's corner, as on the desktop trigger (the chip must not clip). */
+/* Keep the trigger unclipped so the corner badge remains visible. */
 export function WorkspaceOptionsCountBadge({ count }: { count: number }) {
   const text = workspaceOptionsBadgeText(count)
   if (text === null) {

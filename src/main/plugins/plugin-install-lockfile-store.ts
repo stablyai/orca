@@ -37,8 +37,7 @@ async function serializeLockfileAccess<T>(
   }
 }
 
-/** Reads the install index through a byte cap so a corrupt local file cannot
- * turn every plugin-list refresh into an unbounded main-process allocation. */
+/** Cap index reads so corrupt files cannot force unbounded main-process allocation on refresh. */
 export async function readPluginLockfile(pluginsDir: string): Promise<PluginLockfile> {
   return serializeLockfileAccess(pluginsDir, () => readPluginLockfileUnserialized(pluginsDir))
 }

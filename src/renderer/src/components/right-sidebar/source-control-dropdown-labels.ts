@@ -1,5 +1,3 @@
-// Why: label/title wording for the dropdown rows, kept apart from the priority ladder so copy edits
-// do not touch the state machine.
 import { translate } from '@/i18n/i18n'
 
 export function describePushCount(ahead: number): string {

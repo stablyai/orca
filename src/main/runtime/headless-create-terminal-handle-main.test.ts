@@ -1,11 +1,10 @@
-// Layout-owner build, no window: a phone's terminal create on a server answers with the running
-// terminal, not terminal_handle_stale, once main's layout lists the new pane.
+// Main-owned headless create must bind the pane before returning its usable terminal handle.
 import { expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } = await import('./orca-runtime-test-fixtures.spec')
@@ -39,7 +38,6 @@ it.each([
   const { runtime, bindPane } = surfaceRuntime()
   setup(runtime)
   runtime.setPtyController({
-    // As the PTY host's spawn commit: it binds the pane before the spawn answers.
     spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
       await bindPane({
         worktreeId: args.worktreeId!,
@@ -57,7 +55,6 @@ it.each([
       ['pty-a', 'pty-b', 'pty-new'].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
   })
 
-  // A subscribed phone: each row publication names its terminal's handle.
   const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone')
   const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
     activate: false,

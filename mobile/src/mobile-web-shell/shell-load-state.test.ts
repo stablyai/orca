@@ -29,7 +29,6 @@ describe('parseMobileWebShellLoadState', () => {
     expect(parseMobileWebShellLoadState({ state: 'failed' })).toBeNull()
   })
 
-  // A native layer that learns a fifth state must not be read as one of the four.
   it('rejects an unknown state, a non-string state, and a non-object payload', () => {
     expect(parseMobileWebShellLoadState({ state: 'loaded' })).toBeNull()
     expect(parseMobileWebShellLoadState({ state: 3 })).toBeNull()

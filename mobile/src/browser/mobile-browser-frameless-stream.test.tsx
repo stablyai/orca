@@ -11,8 +11,7 @@ import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
-// The seam ruling 5 put between the pane and a shell that may have no encoder behind the lane the
-// pane would ask for. Native answers yes always; mocked here so both answers are reachable.
+// Mock binary-lane negotiation: native always supports it, but older shells may have no encoder behind requested lane (ruling 5).
 vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
 }))
@@ -36,8 +35,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// Why: covers icons reached transitively too (the view-mode switch), not just the pane's own
-// imports — vitest throws on the first unmocked export rather than rendering without it.
+// Mock transitive icons too: Vitest throws on first unmocked export, including view-mode switch.
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronLeft: 'ChevronLeft',
@@ -152,8 +150,7 @@ function errorMessages(renderer: ReactTestRenderer): string[] {
 }
 
 describe('MobileBrowserPane with a stream that reports ready but sends no frames', () => {
-  // Why: a host that stops painting still reports `ready`, so the pane used to clear its
-  // indicator and leave an unexplained black rectangle.
+  // Ready without frames must retain indicator instead of unexplained blank pane.
   it('keeps showing the loading indicator instead of an empty black pane', async () => {
     const { renderer, stream } = await renderStreamingPane()
 
@@ -186,8 +183,7 @@ describe('MobileBrowserPane with a stream that reports ready but sends no frames
 })
 
 describe('MobileBrowserPane against a shell with no binary screencast lane', () => {
-  // Ruling 5: the grant is the negotiation. Subscribing anyway leaves the pane on a stream that
-  // can never produce a frame, and the startup timeout is the only thing that would ever say so.
+  // Grant is negotiation: subscribing without encoder yields no frames until startup timeout (ruling 5).
   it('never subscribes, and says so with the stream-error state it already has', async () => {
     vi.mocked(useBrowserBinaryScreencastGrant).mockReturnValue(false)
     try {

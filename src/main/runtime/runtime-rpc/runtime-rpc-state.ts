@@ -45,12 +45,11 @@ export class RuntimeRpcState {
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
-  // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
+  // Track actual WS bind host for pairing exposure transitions (STA-2370).
   protected wsBoundHost: string | null = null
-  // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
+  // Share one pending rebind across concurrent pairing offers (STA-2370).
   protected networkExposurePromise: Promise<void> | null = null
-  // Why: STA-2370 — set by stop() so a racing pairing widen can't recreate a live wide listener into the
-  // cleared transport arrays after shutdown; stop() also awaits any in-flight widen before snapshotting.
+  // Stop fences new exposure and waits pending rebind before taking transport snapshots (STA-2370).
   protected stopping = false
   protected readonly authToken = randomBytes(24).toString('hex')
   protected readonly keepaliveIntervalMs: number
@@ -70,8 +69,7 @@ export class RuntimeRpcState {
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
-  // Why: detaches the current WebSocketTransport from the session wiring so a pairing rebind can swap
-  // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.
+  // Rebind swaps transports inside session wiring so captured relay sockets remain attached.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   // Why nullable: launch sets both for every runtime process; in-process test servers may not.
@@ -95,7 +93,7 @@ export class RuntimeRpcState {
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
   >()
-  // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
+  // Count long-running dispatches separately from socket maxConnections (design §§3.1, 7).
   protected activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   protected activeAskLongPolls = 0
@@ -136,7 +134,7 @@ export class RuntimeRpcState {
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
-    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
+    // Derive reservation from any caller-selected cap; do not make it independently configurable.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.browserHostLongPollCap = Math.max(
       1,

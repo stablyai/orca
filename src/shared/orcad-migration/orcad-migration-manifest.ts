@@ -24,10 +24,7 @@ export type OrcadMigrationSshManifestSource = {
   targetLabel: string
 }
 
-/**
- * Local WSL projects on this desktop, moving to the orcad that runs inside their distro. Scope is
- * explicit so a destination never infers it from paths, and `generation` orders delta moves.
- */
+/** Explicit desktop WSL project scope prevents destination path inference; generation orders delta moves. */
 export type OrcadMigrationLocalWslManifestSource = {
   kind: 'local-wsl'
   distro: string

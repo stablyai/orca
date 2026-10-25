@@ -1,7 +1,4 @@
-// One workspace can hold mirrored rows from several paired runtimes at once — an SSH host's server
-// for its terminals and another desktop's app for a browser tab it hosts there (#31983). A
-// runtime's frame speaks only for the rows that runtime owns; rows owned by another live runtime
-// are left for that runtime's own frames to keep or retire.
+// Shared workspaces mirror multiple runtimes; each frame can retire only its own rows (#31983).
 
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -11,10 +8,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
 import type { WebSessionTabsSyncState } from './state'
 import { environmentIdsMirroringLocalTab } from './tracking-mappings'
 
-/**
- * The sync state is the app store at runtime; minimal assemblies omit the catalog, and then every
- * runtime a row names counts as live.
- */
+// Without a catalog, conservatively treat every runtime named by a row as live.
 export type MirrorRowOwnershipState = WebSessionTabsSyncState &
   Partial<
     Pick<
@@ -34,11 +28,8 @@ function isLiveEnvironment(state: MirrorRowOwnershipState, environmentId: string
   return state.runtimeEnvironments.some((environment) => environment.id === environmentId)
 }
 
-/**
- * A mirrored terminal belongs to the runtime its pane bindings name — the one whose PTYs it
- * streams. One still awaiting its first handle belongs to the runtimes whose last applied frames
- * published it. A frame may not retire a row that only another live runtime owns.
- */
+// Pane bindings determine ownership; before the first handle, use the last publishing frames.
+// Preserve rows owned only by another live runtime.
 export function isMirroredTerminalOfAnotherEnvironment(
   state: MirrorRowOwnershipState,
   tab: TerminalTab,

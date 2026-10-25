@@ -21,7 +21,7 @@ describe('scheduleMobileClaudeAnswer', () => {
   it('writes each question body then its Enter, paced per step, one Enter per line', () => {
     const events: string[] = []
     const timers = scheduleMobileClaudeAnswer(
-      ['', 'b', 'c'], // A blank answer still gets its own body + Enter.
+      ['', 'b', 'c'],
       (line) => events.push(`body:${line}`),
       () => events.push('enter')
     )

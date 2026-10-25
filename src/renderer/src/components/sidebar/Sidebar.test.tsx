@@ -10,7 +10,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
-  // Stable callback identities so companion-board Effects only re-run on real state changes.
+  // Keep callback identities stable so companion-board effects track real state changes only.
   closeWorkspaceBoard: vi.fn(),
   dropOwnerRef: vi.fn(),
   panel: {
@@ -110,7 +110,6 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
     setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
-    // The toolchain banner indexes this map. The real store always has one.
     detectedWorktreesByRepo: {},
     setSidebarWidth: vi.fn(),
     settings,

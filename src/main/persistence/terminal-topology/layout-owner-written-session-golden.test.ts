@@ -24,7 +24,7 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-// Ids main mints while it applies the commands are numbered, so the written bytes are stable.
+// Deterministic minted IDs keep persisted bytes stable.
 const minting = vi.hoisted(() => ({ on: false, next: 0 }))
 vi.mock('node:crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeCrypto>()
@@ -50,7 +50,6 @@ afterEach(() => {
   }
 })
 
-/** Two groups, a split, an editor file, a browser tab, a renamed tab and a closed tab. */
 const COMMANDS: LayoutCommand[] = [
   { ...on, type: 'createTerminalTab', tabId: 'tab-shell', leafId: leaf(1), createdAt: 1 },
   { ...on, type: 'createTerminalTab', tabId: 'tab-build', leafId: leaf(2), createdAt: 2 },
@@ -119,7 +118,6 @@ async function apply(store: Store, command: LayoutCommand): Promise<void> {
   expect(result.ok, command.type).toBe(true)
 }
 
-/** The session main wrote to disk, as the profile database holds it. */
 function writtenSession(directory: string): string {
   const authority = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'topology')
   const serialized = authority.readSerializedState()
@@ -128,7 +126,7 @@ function writtenSession(directory: string): string {
   return `${JSON.stringify(profile.workspaceSession, null, 2)}\n`
 }
 
-// Proves the current switch-off code reads a switch-on save, not that older released builds do.
+// This probes current switch-off readers, not compatibility with older releases.
 describe('the session a layout-owner build writes (downgrade probe, ledger L8)', () => {
   it('is the checked-in golden, byte for byte', async () => {
     expect(WORKTREE).toBe(FIXTURE_GIT_WORKTREE_ID)
@@ -159,7 +157,7 @@ describe('the session a layout-owner build writes (downgrade probe, ledger L8)',
       ptyId: 'pty-shell',
       incarnationId: 'inc-shell'
     })
-    // A closed tab keeps the terminals its panes held, for an exit after the close (L80).
+    // Retain closed terminals for exit events arriving after close.
     await store.persistPtyBinding({
       worktreeId: WORKTREE,
       tabId: 'tab-scratch',
@@ -175,20 +173,20 @@ describe('the session a layout-owner build writes (downgrade probe, ledger L8)',
       recordClose: 'user'
     })
     minting.on = false
-    // The window's own save (session:set): its selection and the page its browser tab shows.
+    // Simulate session:set with renderer selection and browser-page state.
     const stored = store.getWorkspaceSession()
     store.setWorkspaceSession(windowViewSaveForMain(stored, windowSave(stored), undefined))
     await store.flushPendingOrThrowAsync()
     await store.freezeWritesAsync()
 
     const written = writtenSession(directory)
-    // Times are pinned (fake Date) and minted ids numbered; no machine path may reach the golden.
+    // Reject machine-specific paths; clocks and minted IDs are deterministic.
     expect(written).not.toContain(tmpdir())
     if (process.env[UPDATE_ENV] === '1') {
       writeFileSync(LAYOUT_OWNER_WRITTEN_SESSION_GOLDEN_PATH, written)
     }
     const golden = JSON.parse(readFileSync(LAYOUT_OWNER_WRITTEN_SESSION_GOLDEN_PATH, 'utf8'))
-    // Re-serialized so the formatter's line breaks do not count; key order and values do.
+    // Ignore formatter whitespace while retaining key order and values.
     expect(
       written,
       `the switch-on save format changed: regenerate with ${UPDATE_ENV}=1, then the switch-off ` +

@@ -1,12 +1,4 @@
-/**
- * Why `pty.inspectProcess` is not in-flight coalesced (#18419). The host mints one
- * `observationEpoch` per request and this reader commits that epoch per read, so a reply shared by
- * two overlapping probes reads as a stale replay to the second reader to settle and its would-be
- * `live` identity read degrades to `unverifiable`. The pane foreground tracker overlaps its own
- * probes on purpose (`cancelPendingRead` bumps the generation but lets the in-flight probe finish,
- * then reissues after a 350 ms settle), so that path is reachable. The provider-side ratchet that
- * fails if the dedupe returns lives in `src/main/providers/ssh-pty-inspect-observation-identity.test.ts`.
- */
+/** Do not coalesce inspectProcess: each read commits a unique host observationEpoch, so a shared reply becomes replay for the second reader (#18419). Provider ratchet: src/main/providers/ssh-pty-inspect-observation-identity.test.ts. */
 import { describe, expect, it } from 'vitest'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 
@@ -61,8 +53,7 @@ describe('pane foreground inspect observation identity', () => {
   it('keeps a reissued read `live` when it overlaps the probe it superseded', async () => {
     const { readProcess, settle } = createOverlappingReader({ shared: false })
 
-    // The tracker cancels the first read (generation bump) but lets it run to completion, then
-    // reissues after the settle window — so both are in flight against the same pane.
+    // Cancel bumps the generation without ending the probe; the reissued read overlaps it after the settle window.
     const superseded = readProcess(APP_PTY_ID, false)
     const reissued = readProcess(APP_PTY_ID, false)
     await flush()

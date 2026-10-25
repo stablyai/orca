@@ -37,8 +37,7 @@ export function applyTerminalGitCredentialPromptGuard(
     return true
   }
 
-  // Why: the daemon must append indexed config after merging its own inherited
-  // environment; the sparse wire carries only the guard decision and scalars.
+  // The daemon must append indexed config after merging inherited env; send only the policy and scalar guards.
   env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV] = 'guard'
   for (const [key, value] of Object.entries(guarded)) {
     if (typeof value !== 'string' || GIT_CONFIG_PROTOCOL_KEY_RE.test(key)) {

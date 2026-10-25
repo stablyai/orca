@@ -210,7 +210,7 @@ export function selectReferenceWorkspace(
         (row.branch && branchSelectorMatches(row.branch, selector))
     )
   }
-  // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
+  // Deduplicate same-host path registrations; identical paths on different hosts remain distinct.
   if (
     (selector === 'current' || selector.startsWith('path:')) &&
     matches.length > 1 &&

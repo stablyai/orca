@@ -13,7 +13,6 @@ describe('deriveHostFingerprint', () => {
   })
 
   it('produces url-safe characters only, so a fingerprint survives a JSON payload', () => {
-    // This digest prefix contains both '/' and '+' before URL normalization.
     const dense = new Uint8Array(32).fill(87)
     const fingerprint = deriveHostFingerprint(Buffer.from(dense).toString('base64'))
 

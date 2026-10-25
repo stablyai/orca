@@ -26,9 +26,7 @@ export function openSharedControlSocket(
     onTextFrame: (frame: string) => void
     /** Any inbound frame, ping or pong on the current socket. */
     onActivity?: () => void
-    // Why: reconnect is edge-triggered on `close`, but a half-open tunnel
-    // never delivers one. Liveness pings and declares the socket dead when
-    // the server goes silent, so the close/reconnect path can run (#7718).
+    // Half-open tunnels never emit close; liveness must trigger the close/reconnect path (#7718).
     liveness?: {
       options?: RemoteRuntimeSocketLivenessOptions
       onRoundTrip?: (rttMs: number) => void

@@ -3,8 +3,7 @@ export type RemoteRuntimeClientErrorLike = { code?: string; message: string }
 export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
 export const RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT = 'remote runtime call queue is full'
 
-// Exported so the transport-error corpus guard can name the offending entry when a
-// code and its message disagree; see remote-runtime-transport-error-agreement.test.ts.
+// Export for the transport-error corpus guard’s code/message agreement check.
 export const RECOVERABLE_CODES: ReadonlySet<string> = new Set([
   'remote_runtime_unavailable',
   // A client-side admission cap that frees as pending work settles; fatal would dead-end panes.

@@ -114,10 +114,7 @@ export function listUnitTestFiles() {
   return files.filter((file) => UNIT_INCLUDE.some((pattern) => posix.matchesGlob(file, pattern)))
 }
 
-/**
- * Vitest's CLI filter match (a case-insensitive path substring). Also tries each filter without
- * a `:line` suffix, so the selection is never narrower than the one Vitest runs.
- */
+// Match Vitest's case-insensitive path substrings, also stripping :line so the scan never misses selected tests.
 export function matchesRunFilter(file, filters) {
   const testFile = file.toLowerCase()
   const absolute = resolve(root, file).replaceAll('\\', '/')
@@ -134,12 +131,9 @@ export function matchesRunFilter(file, filters) {
   )
 }
 
-/**
- * Unit tests that import a SQLite module or harness directly, as repo-relative paths. With CLI
- * `filters`, only the tests those filters can select are classified.
- */
+// Classify direct SQLite/harness imports only among tests the CLI filters can select.
 export function findSqliteRuntimeTests({ filters } = {}) {
-  // Why: reading every test costs about a second; unchanged files reuse their last verdict.
+  // Reuse unchanged verdicts; full test-source scan costs about a second.
   const version = createHash('sha256')
     .update(readFileSync(import.meta.filename))
     .digest('hex')
@@ -176,7 +170,7 @@ export function findSqliteRuntimeTests({ filters } = {}) {
       // Only a full scan knows which files were deleted; a scoped one keeps verdicts it skipped.
       const merged = scoped ? { ...cached, ...files } : files
       writeFileSync(temporary, JSON.stringify({ version, files: merged }))
-      // Why: parallel runs each rename a whole file, so a reader never sees a partial write.
+      // Atomic whole-file rename prevents concurrent runs from exposing partial cache.
       renameSync(temporary, CACHE_FILE)
     } catch {
       // The cache only saves time; the verdicts above are already complete.

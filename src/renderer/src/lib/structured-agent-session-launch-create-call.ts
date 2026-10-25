@@ -52,12 +52,7 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
   return null
 }
 
-/**
- * Only the host that will execute the session can answer whether it supports creating one there.
- * Both providers ask: the host classifies per agent, and Codex inherits the
- * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
- * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
- */
+/** Only the executing host can classify create support for either provider. Retry unresolvable selectors; unknown attempts stay recoverable because create may have succeeded with a lost reply. Return the actual create seed. */
 async function requireHostCreateSupport(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<LaunchSeed> {
@@ -81,8 +76,7 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
-/** A paired host that would run the chat with more access than asked for gets nothing to start.
- *  The chat's own permission gate says why, so this refusal carries no words of its own. */
+/** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
 async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
@@ -106,8 +100,7 @@ async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent)
   )
 }
 
-/** Told the seed a paired server says this create will use, which may differ from an earlier
- *  attempt's; a local launch reads its own settings instead. */
+// Use each paired attempt’s actual seed; local creates read local settings instead.
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
 export async function launchStructuredAgentSession(

@@ -11,11 +11,7 @@ import { isHostAuthoritativeLayout } from './terminal-live-layout-reconciliation
 import { reconcileMountedPanesToLayout } from './terminal-pane-frame-reconciliation'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
-/**
- * A layout-owner build's mounted local tab follows main's pane tree, which frames write to the
- * store. A paired server's tab keeps the host-authoritative reconciler; a tab the window's own
- * command holds waits for that command's answer.
- */
+/** Local tabs follow main’s framed tree; paired tabs use host reconciliation, and pending local commands hold their tab until answered. */
 export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController): void {
   const {
     closePaneLocally,

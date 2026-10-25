@@ -50,10 +50,7 @@ describe('reading the refused frames back', () => {
   })
 
   it('changes no verdict on a reply, now that the field is not what the page reads for', () => {
-    // The class this counterfactual was built to measure is closed: the page's reader is
-    // `isRpcResponse`, which asks for no `_meta` on either arm. The lane stays because it is what
-    // tells a future narrowing apart from a payload that genuinely moved, and a run where it
-    // changes a verdict is that narrowing coming back.
+    // The current reader accepts replies without meta; retain the counterfactual lane to detect a future narrowing regression.
     const reply = JSON.stringify({
       v: 1,
       type: 'reply',

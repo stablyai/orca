@@ -29,7 +29,6 @@ type Props = Pick<
   hasHeader: boolean
 }
 
-/** The chat's rows: the page's list is anchored at its end, a native list recycles through FlatList. */
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView } = props

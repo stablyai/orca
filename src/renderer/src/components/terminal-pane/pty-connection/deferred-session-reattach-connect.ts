@@ -79,8 +79,7 @@ function connectDeferredSessionReattach(
   session.allowInitialIdleCacheSeed = true
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
-  // Why: pre-signal (declare) before the reattach connect so the cooperation gate suppresses the daemon seed for this paneKey; Electron preserves IPC order.
-  // See docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite requirement #4).
+  // Declare before connect; Electron’s ordered IPC suppresses daemon seeding before reattach (docs/mobile-prefer-renderer-scrollback.md, prerequisite #4).
   const preSignalPromise =
     session.runtimeEnvironmentId || isRemoteRuntimePtyId(deferredReattachSessionId)
       ? Promise.resolve(null)

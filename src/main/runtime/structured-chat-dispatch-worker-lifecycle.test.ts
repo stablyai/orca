@@ -1,6 +1,4 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// What happens to a chat assignee's Dispatch after the task is handed over, on the
-// coordinator-mail rig: its reports, its liveness, a stop, and the chat being closed.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'

@@ -73,7 +73,6 @@ describe('structured provider supervision', () => {
   })
 
   it('keeps the resolved Node options out of the supervisor env and in the provider spec', () => {
-    // The launch's override goes through the one env rule, then only the provider gets it.
     const spec = createProviderSpawnSpec(
       { ...command, env: { NODE_OPTIONS: '--require /missing.js' } },
       {

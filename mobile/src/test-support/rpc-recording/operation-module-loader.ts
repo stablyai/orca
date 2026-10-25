@@ -18,9 +18,7 @@ export type OperationMutation = {
 /** Source appended to a mounted module after transpile, keyed by the file suffix it applies to. */
 export type OperationExposure = readonly [suffix: string, source: string]
 
-// Why shared rather than evaluated: the delivery-unknown mark is a WeakSet keyed on the rejection
-// object, so a second copy of the module has a second, empty registry and every marked rejection
-// reads as a definite failure inside the mounted operation. Same reason React is shared.
+// Share delivery ambiguity’s WeakSet registry; evaluating another copy would turn marked unknown deliveries into definite failures.
 const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
@@ -55,10 +53,7 @@ export function operationModuleLoader(
       return new Proxy(
         {},
         {
-          // Answering `__esModule` binds this trap as the module itself in every import form; the
-          // rule is in the `__esModule` paragraph of `native-module-traps.ts`. The refusal then
-          // lands on the first member the emit reads, which for a default import is `.default`
-          // rather than whichever member the product went on to touch.
+          // Preserve the import proxy through interop; refuse the first member actually read, including .default.
           get: (_target, key) => {
             if (key === '__esModule') {
               return true
@@ -152,7 +147,7 @@ export function operationModuleLoader(
       return result
     }
     if (mutation && file.endsWith(mutation.file)) {
-      // Counting occurrences, not replace calls: `replace` would silently take only the first.
+      // Require exactly one anchor occurrence; replace alone would silently ignore duplicates.
       const occurrences = source.split(mutation.before).length - 1
       if (occurrences !== 1) {
         throw new Error(`Mutant anchor matched ${occurrences} sites, expected 1: ${mutation.name}`)

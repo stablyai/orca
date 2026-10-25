@@ -43,8 +43,7 @@ import {
   SkillsGetInstallProgressParams
 } from '../../../../shared/rpc-contract/skills-params'
 
-/** Exported so the delete plan's root rebuild resolves its target exactly the
- *  way `skills.discover` resolved the scan's — including WSL. */
+// Use the same target resolution for discovery and delete-plan roots, including WSL.
 export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
   runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
@@ -74,9 +73,7 @@ export const SKILL_METHODS = [
     permission: 'workspace',
     params: SkillsDiscoverParams,
     handler: async (params, { runtime }) => {
-      // Why: the executing runtime owns WSL project preferences. Remote callers
-      // send worktree identity only; trusting their projectRuntime absence
-      // would scan this host's native filesystem for a WSL-configured project.
+      // Resolve WSL preferences on the executing host; remote clients provide workspace identity, not trusted runtime absence.
       const resolvedTarget = await resolveDiscoveryTarget(params, runtime)
       return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),

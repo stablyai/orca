@@ -75,7 +75,7 @@ export function applyOpenFileToState(
       isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
       (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
   )
-  // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
+  // Already-open owner tabs outrank stale reopenId shapes; bare/namespaced drift otherwise points selection at no OpenFile.
   const id = existing
     ? existing.id
     : options?.reopenId && !s.openFiles.some((candidate) => candidate.id === options.reopenId)
@@ -105,7 +105,6 @@ export function applyOpenFileToState(
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
   if (existing) {
-    // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false
     const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
     const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
@@ -118,9 +117,7 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
-    // View Log is the only read-only open path. A normal open of the same path
-    // is an explicit request to edit it, so drop the log-only restrictions while
-    // keeping View Log from downgrading an already writable tab.
+    // Normal open explicitly enables editing of a View Log; View Log must never downgrade an already writable tab.
     const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
     const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
     const needsExistingUpdate =
@@ -199,7 +196,6 @@ export function applyOpenFileToState(
         markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
       } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
-      // Replace in-place to preserve tab position
       newFiles = s.openFiles.map((f, i) =>
         i === existingPreviewIdx
           ? {
@@ -212,7 +208,6 @@ export function applyOpenFileToState(
             }
           : f
       )
-      // Swap the old preview ID for the new one in the stored tab bar order
       const prevOrder = s.tabBarOrderByWorktree?.[worktreeId]
       const previewTabBarUpdate = prevOrder
         ? {
@@ -222,7 +217,7 @@ export function applyOpenFileToState(
             }
           }
         : {}
-      // Why: push the evicted preview onto the recently-closed stack so Cmd/Ctrl+Shift+T can reopen it; gated to keep file-explorer clicks silent.
+      // Capture evicted previews for Cmd/Ctrl+Shift+T only when requested; explorer single-clicks stay silent.
       let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
       let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
       if (recordReplacedPreview && replacedPreview.id !== id) {

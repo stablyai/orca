@@ -38,8 +38,7 @@ export function normalizeGitHubReviewerLogins(
   )
 }
 
-// Why: pasted reviewer lists share the request-review hot path; reject oversized
-// text before tokenizing and avoid regex splitting accepted multiline input.
+// Reject oversized pasted input before tokenization and avoid multiline regex splitting on this hot path.
 export function parseGitHubReviewerInputLogins(
   input: string,
   maxBytes = GITHUB_PR_REVIEWER_INPUT_MAX_BYTES

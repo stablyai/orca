@@ -64,8 +64,7 @@ describe('surfaceNativeChatCommandOutputs', () => {
   })
 
   it('pairs each reply with the row it links to, whatever the timestamps say', () => {
-    // One batch, one timestamp, sorted by id: each reply sits beside the other
-    // command, and the /model command is the newest row at the /context reply.
+    // Equal timestamps/id sorting place each reply by the wrong command; only the explicit link identifies its answer.
     const modelReply = userTurn('a-model-out', MODEL_STDOUT, 100, 'd-model')
     const messages = [
       modelReply,

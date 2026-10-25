@@ -309,7 +309,6 @@ describe('MobileNativeChatView: tail-follow', () => {
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1_300 })
   })
 
-  // The view stays mounted across chat tabs, so the reader's place in one must not carry over.
   it('opens another chat at its newest message, following', async () => {
     const toolTurn = (id: string): ReturnType<typeof assistantTurn> => ({
       ...assistantTurn(id, ''),

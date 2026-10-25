@@ -64,9 +64,7 @@ describe('decoding a bundle range', () => {
     )
   })
 
-  // The vectors the native codec's Kotlin and Swift tests run. Where their `native` answer is a
-  // refusal and `js` is not (bad CRC or length, trailing bytes), this pins fflate's leniency on
-  // the fallback path.
+  // Pin fflate’s leniency against shared native vectors for CRC/length/trailing bytes; native decoding is stricter.
   it('answers the shared gunzip vectors as fflate does', () => {
     for (const vector of gunzipVectors) {
       let actual: string | null

@@ -1,6 +1,3 @@
-// Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
-// this suite keeps the diagnostic bundle contract in one place.
-
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type RequestListener, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -134,7 +131,7 @@ describe('bundle — collection', () => {
   })
 
   it('drops spans older than the lookback window', () => {
-    const oldNanos = BigInt(Date.now() - 60 * 60 * 1000) * 1_000_000n // 1h ago
+    const oldNanos = BigInt(Date.now() - 60 * 60 * 1000) * 1_000_000n
     writeFileSync(
       traceFile,
       makeNDJSON([
@@ -156,7 +153,6 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
-    // Header + recent only.
     expect(bundle.spanCount).toBe(1)
     expect(bundle.payload).toContain('"name":"recent"')
     expect(bundle.payload).not.toContain('"name":"old"')
@@ -176,7 +172,6 @@ describe('bundle — collection', () => {
         },
         {
           src: 'daemon',
-          // 1h ago — outside the 30m window, must be dropped.
           ts: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
           pid: 1,
           event: 'session-exited'
@@ -233,7 +228,6 @@ describe('bundle — collection', () => {
     expect(bundle.payload).toContain('"name":"git.exec"')
     expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
     expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
-    // An almost-empty daemon log leaves the rest of the cap to traces.
     expect(bundle.bytes).toBeGreaterThan(_internalsForTests.MAX_BUNDLE_BYTES - 8192)
   })
 
@@ -265,7 +259,7 @@ describe('bundle — collection', () => {
       orcaChannel: 'stable'
     })
     expect(bundle.payload).toContain('"name":"recent"')
-    // All ~3 MiB of daemon lines fit beside one span; the share is a floor, not a cap.
+    // The daemon share is a floor, not a cap.
     expect(bundle.payload).toContain('"event":"session-attached-0"')
     expect(bundle.payload).toContain('"event":"session-attached-2999"')
     expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
@@ -310,7 +304,6 @@ describe('bundle — collection', () => {
     expect(bundle.payload).toContain('"name":"git.exec"')
     expect(bundle.payload).toContain('"event":"session-attached-5999"')
     expect(daemonBytes).toBeGreaterThan(_internalsForTests.DAEMON_LOG_BUDGET_BYTES - 4096)
-    // Plus the sliver spans could not use: less than one 4 KiB span record.
     expect(daemonBytes).toBeLessThan(_internalsForTests.DAEMON_LOG_BUDGET_BYTES + 8192)
     expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
   })
@@ -330,11 +323,8 @@ describe('bundle — collection', () => {
   })
 
   it('runs the redactor on the merged payload (belt-and-suspenders)', () => {
-    // Simulate a sink-write bug that leaked a secret through. The bundle
-    // pass should still strip it.
     const span = makeSpan({
       attributes: {
-        // raw secret embedded in serialized form — bypass the API surface.
         leaked: `sk-ant-api03-${'a'.repeat(50)}`
       }
     })
@@ -648,8 +638,7 @@ describe('uploadBundle and deleteBundle', () => {
 
   it('does not include transport error details in thrown errors', async () => {
     const baseUrl = await listen((req) => {
-      // Why: external DNS failures are CI-timing dependent; destroying a local
-      // socket exercises the same transport-error redaction path deterministically.
+      // Destroy a local socket to test transport redaction without DNS timing dependence.
       req.socket.destroy(new Error('transport detail with sk-ant-api03-secret'))
     })
     await expect(

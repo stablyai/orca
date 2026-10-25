@@ -54,8 +54,7 @@ describe('remote agent-session launch routing', () => {
       const legacy = vi.fn().mockResolvedValue('legacy')
       mocks.supportsCapability.mockResolvedValue(false)
 
-      // Why: an old host rejects the widened agent enum with invalid_argument, which is not a
-      // fallback code — so the probe, not the error handler, has to keep the pane alive.
+      // Old hosts reject widened enums with non-fallback invalid_argument; capability probes must prevent the bad launch.
       await expect(
         runRemoteAgentSessionLaunch({
           environmentId: 'env-1',

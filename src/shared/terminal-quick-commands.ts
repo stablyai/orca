@@ -100,8 +100,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
       record.action === 'agent-prompt' ? 'agent-prompt' : 'terminal-command'
     const hasCommand = typeof record.command === 'string'
     const hasPrompt = typeof record.prompt === 'string'
-    // Why: settings saves on every edit; preserve incomplete rows so a newly
-    // added command is not deleted before the user fills in the command text.
+    // Settings save on every edit; retain incomplete rows while the user fills them in.
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
@@ -202,8 +201,7 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   )
 }
 
-// Why: a full-list client must reject any "authoritative" payload that would
-// change under normalization, or its next mutation could persist silent loss.
+// Reject normalization changes in authoritative full lists or the next mutation could persist silent loss.
 export function parseNormalizedTerminalQuickCommands(
   input: unknown
 ): TerminalQuickCommand[] | null {

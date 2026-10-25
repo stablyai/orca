@@ -170,10 +170,7 @@ try {
   if ($profile) { $networkCategory = [string]$profile.NetworkCategory }
 } catch {}`
     : ''
-  // Why: NetSecurity filter properties are stable across localized Windows
-  // display output and keep every rule's address scope independent. ActiveStore
-  // includes GPO-applied rules the default persistent store hides, so managed
-  // Block rules cannot produce a false success after repair.
+  // Use stable NetSecurity properties and independent scopes; ActiveStore includes GPO Block rules that could defeat repair.
   return `$ErrorActionPreference = 'Stop'
 $matchingRuleScopes = @()
 $blockingRuleDetected = $false
@@ -207,10 +204,7 @@ $networkCategory = 'Unknown'${addressLookup}
 }
 
 function buildRepairScript(port: number, executablePath: string): string {
-  // Why: Windows gives explicit Block rules precedence over narrower Allow
-  // rules, so the user's repair action must remove exact-app conflicts first.
-  // Removal deliberately ignores the Block rule's remote-address scope,
-  // mirroring the fail-closed inspection (the phone address is unknown).
+  // Explicit Blocks outrank Allows; remove exact-app conflicts regardless of scope because the phone IP is unknown.
   return `$ErrorActionPreference = 'Stop'
 $blockingRules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShellLiteral(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
 foreach ($rule in $blockingRules) {
@@ -226,11 +220,7 @@ Get-NetFirewallRule -Name ${quotePowerShellLiteral(FIREWALL_RULE_NAME)} -ErrorAc
 New-NetFirewallRule -Name ${quotePowerShellLiteral(FIREWALL_RULE_NAME)} -DisplayName ${quotePowerShellLiteral(FIREWALL_RULE_DISPLAY_NAME)} -Description 'Allows Orca Mobile to connect to this Orca desktop on private networks.' -Direction Inbound -Action Allow -Enabled True -Profile Private -Protocol TCP -LocalPort ${port} -Program ${quotePowerShellLiteral(executablePath)} -EdgeTraversalPolicy Block | Out-Null`
 }
 
-// Why the elevated child keeps `-EncodedCommand` while the local runner does not: `Start-Process
-// -ArgumentList` joins its array into one ShellExecuteEx parameter string without quoting, and
-// PowerShell then re-splits it on whitespace — measured to collapse `C:\My  App\...` to
-// `C:\My App\...`, which would silently write the firewall rule for the wrong program. Node's
-// argv path (createPowerShellRunner) preserves runs of spaces, so only this hop needs base64.
+// Start-Process re-splits arguments and collapses path whitespace; base64 protects this elevated hop, while the direct Node argv path needs none.
 function buildElevationScript(powershellPath: string, encodedRepairScript: string): string {
   return `$ErrorActionPreference = 'Stop'
 try {

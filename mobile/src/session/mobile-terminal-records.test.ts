@@ -160,8 +160,6 @@ describe('mobile terminal records', () => {
   })
 
   it('treats a launch draft appearing or retracting as a session-tab change', () => {
-    // The route keeps `prev` when these compare equal, so a frame whose only
-    // delta is the draft would never reach the chat composer.
     const base: MobileTerminalSessionTab = {
       type: 'terminal',
       id: 'term-1::leaf-1',
@@ -259,7 +257,6 @@ describe('mobile terminal records', () => {
 
     expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
     expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
-    // A status-only frame must still reach the tab strip's dot.
     expect(
       mobileSessionTabsEqual([base], [{ ...base, chatStatus: { state: 'working', updatedAt: 1 } }])
     ).toBe(false)
@@ -294,8 +291,7 @@ describe('mobile terminal records', () => {
       record({ handle: 'pty-2', connected: false })
     ]
 
-    // A worktree with no live PTY lists every parked leaf while tabs publish none;
-    // treating that as absence would pin the caller to the fast cadence forever.
+    // Parked leaves legitimately lack tabs; counting them as missing live PTYs would force fast polling forever.
     expect(hasConnectedTerminalAbsentFromSessionTabs(parked, [])).toBe(false)
   })
 

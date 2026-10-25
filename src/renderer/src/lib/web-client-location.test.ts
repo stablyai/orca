@@ -11,9 +11,7 @@ describe('isWebClientLocation', () => {
     expect(isWebClientLocation()).toBe(false)
   })
 
-  // Why: this runs on the launch-routing path, where a throw is swallowed and
-  // silently becomes a failed launch. A window without a usable `location`
-  // must answer the question, not throw.
+  // Partial window.location must return safely; routing callers swallow throws into silent failed launches.
   it('does not throw when window exists without a location', () => {
     vi.stubGlobal('window', { api: {} })
     expect(() => isWebClientLocation()).not.toThrow()

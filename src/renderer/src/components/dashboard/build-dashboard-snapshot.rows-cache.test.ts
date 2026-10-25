@@ -150,8 +150,7 @@ describe('buildDashboardSnapshot rows cache', () => {
       acknowledgedAgentsByPaneKey: { [PANE_1]: NOW }
     }
     const after = buildDashboardSnapshot(acked, NOW + 500, { rowsCache: cache, rowsGeneration: 1 })
-    // Why asserted: acks and statuses are card-assembly inputs the rows cache deliberately
-    // does not key — they must still flow into every rebuild.
+    // Acknowledgments/status affect fresh card assembly even when the row cache hits.
     expect(cache.lastComputedWorktreeIds).toEqual([])
     expect(after.cards.find((card) => card.paneKey === PANE_1)?.unseen).toBe(false)
     expect(after).toEqual(buildDashboardSnapshot(acked, NOW + 500))

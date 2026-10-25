@@ -10,15 +10,12 @@ export function selectDiscoveredSkills(
   selectors: readonly string[]
 ): DiscoveredSkill[] {
   const selected = new Map<string, DiscoveredSkill>()
-  // Indexed only for the selectors actually asked for: a share request carries at
-  // most 512 of them while discovery can return every skill on the machine, and
-  // indexing the whole set costs more than the scans it replaces for the
-  // one-or-two-selector requests agents actually send.
+  // Index only requested selectors: discovery may be huge while typical requests select one or two.
   const requested = new Set(selectors)
   const byId = new Map<string, DiscoveredSkill>()
   const discoveredByName = new Map<string, DiscoveredSkill[]>()
   for (const skill of skills) {
-    // First writer wins, matching the `find` this replaces.
+    // Retain first-match semantics for duplicate ids.
     if (requested.has(skill.id) && !byId.has(skill.id)) {
       byId.set(skill.id, skill)
     }

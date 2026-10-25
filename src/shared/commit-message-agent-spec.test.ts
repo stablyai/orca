@@ -240,8 +240,7 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('exposes no tools to a prompt that is a staged patch', () => {
-    // Why: the prompt is attacker-influenced text, and jcode's default profile exposes
-    // shell/read/write/MCP. Every sibling generator is already read-only.
+    // Staged patches are attacker-influenced; jcode defaults expose shell/read/write/MCP unlike read-only sibling generators.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'default' })
     expect(args.slice(args.indexOf('--tool-profile'), args.indexOf('--tool-profile') + 2)).toEqual([
       '--tool-profile',
@@ -251,9 +250,7 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('keeps every jcode flag ahead of the subcommand', () => {
-    // Why: --no-update/--quiet/--no-selfdev are jcode global options; clap only
-    // accepts them before `run`, and --model rides the same position so the argv
-    // has one shape rather than two.
+    // jcode global flags must precede run; keep model in the same position for one argv shape.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'claude-haiku-4-5' })
     const runIndex = args.indexOf('run')
     expect(runIndex).toBeGreaterThan(0)
@@ -691,10 +688,7 @@ describe('buildArgs (Antigravity)', () => {
     expect(args[0]).toBe('--print=-fix: something')
   })
 
-  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
-  // that exactly matches a registered flag name (its own heuristic, independent of this
-  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
-  // literally a bare flag name, so this doesn't affect actual generation.
+  // argv construction only: agy 1.2.1 still rejects a print value equal to a flag, even --print=--sandbox; real generation prompts are not bare flags.
   it('still glues a prompt that collides with a flag name onto --print', () => {
     const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
     expect(args[0]).toBe('--print=--sandbox')

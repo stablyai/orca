@@ -49,8 +49,7 @@ function initializeGitRepo(repoPath: string): void {
 }
 
 async function createProjectHeaderSortFixture(): Promise<string[]> {
-  // Why: match the app's canonical repo.path on macOS, where os.tmpdir()
-  // can resolve through /var -> /private/var.
+  // Canonicalize macOS temp symlinks to match the app’s repo.path.
   const root = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-project-sort-')))
   tempRoots.push(root)
   const repoPaths = PROJECT_NAMES.map((name) => path.join(root, name))
@@ -79,12 +78,7 @@ async function seedProjectHeaderSortScenario(
     state.setSidebarOpen(true)
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
-    // Why: repos.add broadcasts repos:changed, which schedules background
-    // fetchRepos() calls; those bump reposFetchGeneration and can make our awaited
-    // fetchRepos() drop its own complete result as superseded (#7020), leaving the
-    // store transiently missing the last-added repo. Re-fetch until every seeded
-    // repo is present rather than racing a single fetch (converges once the adds
-    // stop firing repos:changed).
+    // #7020: repos:changed can supersede awaited fetch generations; refetch until every seeded repo appears.
     const findSeededRepos = () =>
       paths.map((repoPath) =>
         store.getState().repos.find((candidate) => candidate.path === repoPath)
@@ -140,8 +134,7 @@ async function seedDuplicateTabOrderProjectGroups(
       if (!created) {
         throw new Error(`Failed to create Project Group: ${name}`)
       }
-      // Why: existing profiles can have several groups with the same legacy rank;
-      // the drag must still be able to insert one between its siblings.
+      // Legacy profiles can share ranks; insertion must still work between siblings.
       await state.updateProjectGroup(created.id, { tabOrder: 0 })
       groupIds.push(created.id)
     }
@@ -314,10 +307,7 @@ test.describe('Project Group manual sorting', () => {
       })
       .toEqual([projects.alphaId, projects.bravoId, projects.charlieId])
 
-    // Dragging alpha into bravo's expanded body drops the pointer 32px below
-    // bravo's header. Both nearest boundaries (bravo's section bottom and
-    // charlie's top) map to the slot after bravo, so alpha lands between bravo
-    // and charlie deterministically regardless of the exact section height.
+    // Drop 32px into bravo’s body so both nearest boundaries choose the slot before charlie, independent of section height.
     await dragProjectIntoProjectBody({
       page: orcaPage,
       draggedProjectId: projects.alphaId,

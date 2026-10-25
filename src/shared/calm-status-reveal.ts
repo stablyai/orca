@@ -1,18 +1,12 @@
-/**
- * When a self-healing outage is worth announcing, and for how long. Pure and clock-driven so the
- * desktop banner and the mobile header share one schedule and tests need no wall clock.
- */
+// Share one clock-driven outage reveal schedule between desktop and mobile.
 
-// Why 5 s: measured drop-to-resubscribed for the shared control socket through a delay proxy was
-// ~0.3 s + 5.5 RTT (1.4 s at 200 ms RTT, 2.5 s at 400 ms). A pane's own resubscribe and snapshot
-// add ~2 RTT, and a relay's TLS ~2 more: ~4.1 s for one clean reconnect at 400 ms. Anything
-// longer means an attempt failed, which is an outage worth saying.
+// Clean reconnect measured ~4.1s at 400ms RTT including resubscribe/snapshot/TLS; beyond 5s likely includes a failed attempt.
 export const CALM_STATUS_REVEAL_DELAY_MS = 5_000
 
-// Why: shorter than this reads as a flash; long enough to finish reading a title.
+// Avoid a flash and allow enough time to read the title.
 export const CALM_STATUS_MIN_VISIBLE_MS = 2_000
 
-// Why: a link that answers and drops again inside this window is one outage, not two.
+// A quick redrop remains part of the same outage.
 export const CALM_STATUS_HEALTHY_HOLD_MS = 1_000
 
 export type CalmStatusReveal = {

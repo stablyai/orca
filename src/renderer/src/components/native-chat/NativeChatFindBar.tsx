@@ -7,7 +7,6 @@ import { translate } from '@/i18n/i18n'
 import type { NativeChatFind } from './use-native-chat-find'
 import { useNativeChatFindMatches } from './use-native-chat-find-matches'
 
-/** Find over the chat transcript, at the top-right of the transcript area like the terminal's search. */
 export function NativeChatFindBar({
   find,
   isVisible

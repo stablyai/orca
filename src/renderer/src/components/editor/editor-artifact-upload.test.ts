@@ -99,7 +99,6 @@ describe('Editor artifact upload', () => {
     expect(editorArtifactContentType('/repo/notes.md', true)).toBe('text/markdown')
     expect(editorArtifactContentType('/repo/report.html', false)).toBe('text/html')
     expect(editorArtifactContentType('/repo/REPORT.HTM', false)).toBe('text/html')
-    // Why: JSP highlights as HTML but is not a page a share link can render.
     expect(editorArtifactContentType('/repo/index.jsp', false)).toBeNull()
     expect(editorArtifactContentType('/repo/main.ts', false)).toBeNull()
   })

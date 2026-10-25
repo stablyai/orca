@@ -3,8 +3,7 @@ import { findProseUrlEnd, splitAtProseUrlTerminators } from '../../../src/shared
 
 type Linkify = MarkdownIt['linkify']
 
-// Why: linkify-it lets non-ascii punctuation run on in a url path, so `…/1078）。` kept `）。`;
-// matching only the text between prose punctuation lets linkify's own trim run on just the url.
+// Split at prose punctuation before linkify; otherwise non-ASCII suffixes like ）。 remain in URL path.
 export function endLinkifyUrlsAtProsePunctuation(linkify: Linkify): void {
   const match = linkify.match.bind(linkify)
   const matchAtStart = linkify.matchAtStart.bind(linkify)

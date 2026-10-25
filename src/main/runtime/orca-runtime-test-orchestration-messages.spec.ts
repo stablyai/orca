@@ -1,6 +1,6 @@
 import type { MessagePriority, MessageRow, MessageType } from './orca-runtime-test-mocks.spec'
 
-// Why: these tests only need message-queue semantics; real SQLite would make them fail on unrelated native runtime ABI drift.
+// Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {
   private sequence = 0
 

@@ -34,22 +34,14 @@ function parseWindowsBuildNumber(osRelease: string | null | undefined): number |
 function buildXtermWindowsPtyOptions(
   buildNumber: number | undefined
 ): NonNullable<ITerminalOptions['windowsPty']> {
-  // Why: old system ConPTY does not provide reliable wrap markers; passing the
-  // low build number makes xterm mark full-width status rows as wrapped.
+  // Old ConPTY lacks reliable wrap markers; low build numbers make xterm misclassify full-width rows as wrapped.
   if (buildNumber === undefined || buildNumber < 21376) {
     return { backend: 'conpty' }
   }
   return { backend: 'conpty', buildNumber }
 }
 
-/**
- * xterm options that select the native-Windows ConPTY backend, returned only for
- * a genuine local Windows pane and `{}` otherwise.
- *
- * Why it requires `executionHostId`: a serve/remote-runtime pane on a Windows
- * client looks local to the raw heuristic (no SSH `connectionId`, Linux `cwd`),
- * so gating on the execution host keeps the ConPTY backend off remote PTYs.
- */
+/** Apply ConPTY options only to genuine local Windows panes. executionHostId excludes serve/runtime panes that look local to raw connectionId/cwd heuristics. */
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): Partial<ITerminalOptions> {
@@ -59,18 +51,14 @@ export function buildWindowsPtyCompatibilityOptions(
   return buildLocalConptyTerminalOptions(context.osRelease)
 }
 
-/** ConPTY backend options for a pane already known to be local native Windows —
- *  the dashboard preview resolves that verdict upstream and reuses this. */
+/** Reuse ConPTY options after dashboard preview has already resolved local native-Windows ownership. */
 export function buildLocalConptyTerminalOptions(
   osRelease: string | null | undefined
 ): Partial<ITerminalOptions> {
   return { windowsPty: buildXtermWindowsPtyOptions(parseWindowsBuildNumber(osRelease)) }
 }
 
-/** Mirror of main's effectiveShellOverride fold (pty.ts spawn handlers): a
- *  tab-level shell override wins, else the global Windows shell setting
- *  applies — so renderer and main classify a global-WSL default identically
- *  (the main-side twin is isNativeWindowsLocalPtySpawn). */
+/** Match main’s effectiveShellOverride/isNativeWindowsLocalPtySpawn: tab override wins, else global Windows setting, so global WSL classifies identically. */
 export function resolveWindowsShellOverride(
   tabShellOverride: string | null | undefined,
   globalWindowsShell: string | null | undefined
@@ -92,18 +80,7 @@ export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext)
   )
 }
 
-/**
- * Whether a pane is a genuine local native Windows ConPTY that needs the ConPTY
- * cursor/synchronized-output workarounds.
- *
- * Why this is gated on the execution host: a serve/remote-runtime pane on a
- * Windows client has no SSH `connectionId` and a Linux `cwd`, so
- * `isLocalNativeWindowsPty` misfires and classifies it as local. The execution
- * host is the authoritative signal: only a `'local'` host is a real local
- * native PTY. Remote panes resolve to `runtime:<env>` (or `ssh:<target>`) and
- * must be excluded, otherwise ConPTY transient cursor-show (`?25h`) stripping is
- * wrongly applied to them and a repainting agent's cursor disappears.
- */
+/** Require local execution host plus native-Windows heuristics. Serve/runtime panes lack SSH IDs and can appear local by cwd, but must not receive ConPTY cursor/synchronized-output workarounds that hide remote agent cursors. */
 export function isLocalNativeWindowsConpty(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): boolean {

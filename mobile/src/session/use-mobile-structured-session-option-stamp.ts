@@ -4,7 +4,7 @@ import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-s
 
 const noSubscription = (): (() => void) => () => {}
 
-/** The host status's option values as one stamp; another device's pick moves it, off `enabled` never. */
+// Track other devices’ picks only while the host status feed is enabled.
 export function useMobileStructuredSessionOptionStamp(args: {
   client: RpcClient | null
   sessionId: string | null

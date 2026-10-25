@@ -95,11 +95,7 @@ type DetachTerminalPaneToTabArgs = {
 // Leaves whose move main is committing; a repeat drop meanwhile is a no-op.
 const leavesMovingToNewTab = new Set<string>()
 
-/**
- * Moves a pane into a new tab. Main commits the move (leaf, binding and pane-keyed records) before
- * the target tab exists here, so the moved pane's reattach never races a second owner (STA-9259).
- * Once main has moved it, this window only rolls forward: it never asks main to put it back.
- */
+/** Main commits leaf/binding/pane records before target tab creation so reattach cannot race another owner (STA-9259). After commitment the window only rolls forward. */
 export async function detachTerminalPaneToTab(
   args: DetachTerminalPaneToTabArgs
 ): Promise<DetachedTerminalPaneTab | null> {
@@ -132,8 +128,7 @@ async function moveLeafToNewTab(
   const cwdDeferred = Boolean(
     args.sourcePaneCwd?.pendingCwd || args.sourcePaneCwd?.deferredSplitSpawn
   )
-  // Why: a spawn result landing after the move binds SOURCE:leaf, and that bind grafts the leaf
-  // back into the source tab beside its moved copy.
+  // A late source spawn would bind SOURCE:leaf and graft the moved leaf back beside its duplicate.
   if ((cwdDeferred || args.sourceConnectPending) && !persistedPtyId && !args.livePtyId) {
     return null
   }
@@ -169,8 +164,7 @@ async function moveLeafToNewTab(
   if (answer?.status === 'not_held') {
     return applyMove(args, request, false, request.ptyId)
   }
-  // A failed write rolls main back; one whose outcome is unknown faults persistence, and the next
-  // load converges on whichever side main kept.
+  // Failed persistence rolls main back; unknown outcomes fault persistence and reload converges on main’s committed side.
   console.warn('[terminal-pane-detach] main did not move the pane', answer)
   reportMoveFailed()
   return null
@@ -192,16 +186,14 @@ function applyMove(
   const lastPane = panes.length === 1
   const split = lastPane ? null : detachTerminalLayoutLeaf(sourceLayout, leafId)
   const movedLayout = lastPane ? sourceLayout : split?.detachedLayout
-  // Why: remove the renderer pane only after the layout handoff is computed; the close callback
-  // detaches listeners but must not kill the PTY.
+  // Compute handoff before removing the source pane; its close must detach listeners without killing the PTY.
   if (
     !manager ||
     paneId === undefined ||
     !movedLayout ||
     (!lastPane && !manager.detachPaneForExternalMove(paneId))
   ) {
-    // Why: the pane or its tab is gone here (or would not detach), so the tab main moved it into
-    // holds nothing; close it the way any tab close reaches main.
+    // If source removal failed or the pane/tab vanished, close main’s otherwise-empty target through normal tab-close routing.
     if (mainMoved) {
       commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: targetTabId }, 'cleanup')
     }

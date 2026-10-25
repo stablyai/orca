@@ -5,8 +5,7 @@ import {
 } from './terminal-file-link-detection-ranges'
 import type { ParsedTerminalFileLink } from './terminal-links'
 
-// Mirrors VSCode's terminal word separators, with `:` handled by the existing
-// line/column suffix parser instead of acting as a raw separator.
+// Match VS Code separators except colon, which belongs to the existing line/column suffix parser.
 const WORD_TOKEN_REGEX = /[^\s()[\]{}'",;<>|`]+/g
 
 const EXTENSIONLESS_FILENAMES = new Set([
@@ -42,8 +41,7 @@ function looksLikeFilename(token: string): boolean {
   return EXTENSIONLESS_FILENAMES.has(token)
 }
 
-// Bare words are filesystem-validated by the provider, so reject obvious prose
-// before paying for a stat while retaining common extensionless project files.
+// Reject obvious prose before filesystem probes while retaining common extensionless project filenames.
 export function detectBareFilenameLinks(
   lineText: string,
   claimedRanges: readonly [number, number][]
@@ -53,8 +51,7 @@ export function detectBareFilenameLinks(
     if (terminalFileLinkRangesOverlap(range, claimedRanges)) {
       continue
     }
-    // Why: huge terminal blobs can be one unbroken token; parse only bounded
-    // bare-filename candidates so hover link detection stays interactive.
+    // Bound bare-file candidates before parsing; unbroken terminal blobs must not block hover interaction.
     if (range.text.length > MAX_BARE_FILENAME_TOKEN_LENGTH) {
       continue
     }

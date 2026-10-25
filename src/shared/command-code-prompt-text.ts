@@ -11,8 +11,7 @@ export function isCommandCodeIdlePromptCandidate(value: string): boolean {
   )
 }
 
-// Why: this runs inside PTY output observation; prompt labels only need
-// collapsed display whitespace, not regex normalization on every status frame.
+// Collapse display whitespace without regex normalization on every PTY status frame.
 function foldCommandCodePromptWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false

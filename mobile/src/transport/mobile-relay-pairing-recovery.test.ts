@@ -245,8 +245,6 @@ describe('mobile relay pairing recovery', () => {
     expect(saved.metadata.authorizationMode).toBe('authenticated-direct')
     expect(deps.updateJournal).toHaveBeenCalledTimes(2)
   })
-  // Why: a journal stranded by a relay outage used to block every later pairing
-  // with "recovery pending" forever, because recovery only ever deferred.
   it('abandons a journal once its invite expired and no credential can reconcile', async () => {
     const saved = journal()
     const unreachable = client(async () => {
@@ -261,8 +259,6 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: a desktop that rotated its QR revokes the pending device; the relay then
-  // rejects every credential, and waiting out the invite only locked the phone out.
   it('abandons at once when the relay rejects every credential', async () => {
     const saved = journal()
     const rejected = client(async () => {
@@ -274,7 +270,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: the relay also closes 4401 on a first-frame timeout, with no relay-hello.
+  // A bare 4401 can mean first-frame timeout and is not authoritative credential rejection.
   it('keeps a journal whose 4401 closes carried no relay-hello refusal', async () => {
     const saved = journal()
     const timedOut = client(async () => {
@@ -347,8 +343,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
-  // Why: a committed install whose local persistence failed is the one case the
-  // journal must survive — it is the only record left to retry the write from.
+  // Keep the only retry record when the install committed but local persistence failed.
   it('keeps a journal when the server committed but the local write failed', async () => {
     const saved = journal()
     const directInstalled = installed(saved, 'authenticated-direct')

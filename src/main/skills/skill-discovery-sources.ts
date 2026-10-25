@@ -18,7 +18,6 @@ import {
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
 
-// Re-exported so existing importers keep one entry point for discovery helpers.
 export {
   sortDiscoveredSkills,
   sortSkillDiscoverySources,
@@ -104,10 +103,7 @@ export function buildSkillDiscoverySources(
   const cwd = args.cwd ?? process.cwd()
   const providerRootOverrides =
     args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
-  // Why: HERMES_HOME moves the whole profile tree, so the default home path
-  // finds nothing for `hermes -p <profile>`. Only this process's own host can
-  // read it — a custom pathApi means the home belongs to another host, whose
-  // Hermes install is POSIX-shaped even when this process runs on Windows.
+  // Read HERMES_HOME only on this process's host; a custom path adapter describes another host with POSIX Hermes defaults.
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
@@ -137,8 +133,7 @@ export function buildSkillDiscoverySources(
       ['codex', 'agent-skills'],
       'codex'
     ),
-    // Why: `npx skills add --global` writes into each agent's own home skills
-    // directory, so coverage misses them unless we scan every provider root.
+    // Provider home roots also receive global npx installs; canonical roots alone miss them.
     ...providerHomeSources(home, pathApi, providerRootOverrides),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(

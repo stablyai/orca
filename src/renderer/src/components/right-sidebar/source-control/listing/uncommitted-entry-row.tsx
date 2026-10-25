@@ -24,13 +24,6 @@ import {
 } from './row-layout'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
 
-/**
- * Renders one uncommitted change row: file identity, conflict/diff badges, and the hover actions
- * (discard, stage, unstage) that the entry's own state permits.
- *
- * Clicking opens the file unless `onSelect` claims the click for bulk selection, or the row is a
- * dirty submodule, in which case it toggles `submoduleExpansion` instead.
- */
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
@@ -79,11 +72,10 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const conflictLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
     : null
-  // Why: Stage is suppressed for unresolved conflicts because `git add` erases the `u` record (the only live conflict signal) before review.
-  // Why: Discard is hidden for unresolved (too easy to misfire) and resolved_locally (can silently re-create the conflict or lose the resolution) rows in v1.
+  // Stage clears unresolved u records; discard can recreate conflicts or lose local resolutions, so gate both.
   const canDiscard = canDiscardStatusEntry(entry)
   const canStage = canStageStatusEntry(entry)
-  // Why: a submodule-internal staged row is read-only from the parent worktree, so don't offer Unstage (mirrors bulk unstage).
+  // Parent Git cannot unstage submodule-internal files; match bulk gating.
   const canUnstage = canUnstageStatusEntry(entry)
 
   return (
@@ -105,7 +97,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-testid="source-control-entry"
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
-        // Why: open file gets the strongest accent, outranking the bulk-selection tint so it always reads as active.
+        // Open-file accents outrank bulk selection so the active file stays identifiable.
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
@@ -128,7 +120,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         }}
         onClick={(e) => {
           if (submoduleExpansion) {
-            // Why: a double-click emits two click events; without this guard it expands then immediately collapses.
+            // Ignore the second click of a double-click or expansion immediately collapses again.
             if (e.detail > 1) {
               return
             }
@@ -172,7 +164,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
           {isSubmoduleWorktreeOnly && (
-            // Why: parent git stages the changed gitlink but not nested worktree dirtiness; keep that boundary visible.
+            // Parent Git stages gitlinks, not nested dirtiness; make that boundary visible.
             <div
               className="truncate text-[11px] text-muted-foreground"
               title={SUBMODULE_WORKTREE_ONLY_TOOLTIP}
@@ -182,7 +174,6 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           )}
         </div>
         {commentCount > 0 && (
-          // Why: surface a per-row marker so files with review notes are visible without opening the Notes tab.
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
             title={translate('sourceControl.noteCount', '{{count}} notes', {

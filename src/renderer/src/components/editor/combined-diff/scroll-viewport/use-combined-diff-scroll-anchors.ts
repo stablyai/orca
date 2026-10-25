@@ -136,13 +136,10 @@ export function useCombinedDiffScrollAnchors({
     [recordDomScrollAnchor, writeScrollAnchor]
   )
 
-  // Why: restore only on structural changes — restoring on measurement churn overwrote scrollTop during active wheel input.
+  // Restore on structural changes only; measurement churn must not overwrite active wheel scrolling.
   const combinedDiffRestoreSignal = useMemo(
     () =>
-      // Why: a single-section reload drops that row's measured height, so it shifts rows
-      // below it — still a structural change even though `generation` no longer moves.
-      // structureRevision moves iff a section key/collapsed/contentGeneration moved, so this is
-      // the same signal the per-section join produced without rebuilding it once per load.
+      // Reload generations invalidate row heights; structureRevision captures those and collapse/key changes without full key joins.
       `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${structureRevision}`,
     [clampRestoreCount, generation, sideBySide, structureRevision]
   )
@@ -171,7 +168,7 @@ export function useCombinedDiffScrollAnchors({
       scrollAnchorRef.current = null
       latestDomScrollAnchorRef.current = null
       virtualizer.scrollToIndex(index, { align: 'start' })
-      // Why: this jump is programmatic (no scroll event records an anchor); snapshot the destination once layout settles.
+      // Programmatic jumps emit no anchor-recording scroll; snapshot the destination after layout settles.
       window.requestAnimationFrame(() => {
         scrollContainerRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
       })

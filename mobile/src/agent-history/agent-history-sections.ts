@@ -9,21 +9,15 @@ import {
   type MobileAgentHistoryCard
 } from './agent-history-session-card'
 
-// Why: `data` (not `cards`) is the field name React Native's SectionList reads
-// for each section's rows — naming it anything else renders empty sections.
+// SectionList requires data field; naming it cards renders no rows.
 export type MobileAgentHistorySection = {
   key: string
   label: string
   data: MobileAgentHistoryCard[]
 }
 
-// Why: the host treats scopePaths as a WIDENING union (it adds in-scope sessions
-// beyond the recency cap, never restricts), so the Workspace/Project tabs must
-// narrow on the client like the desktop panel does. Mobile has no project-key
-// metadata, so both scoped tabs narrow by cwd path-prefix: Workspace = the active
-// worktree path, Project = the active worktree + same-repo siblings (the same set
-// deriveMobileAiVaultScopePaths produces). 'all' applies no path narrowing.
-// hideEmptySessions matches the desktop default.
+// Host scopePaths only widen discovery, so narrow Workspace/Project by cwd prefix client-side (active path / same-repo siblings); All stays unfiltered.
+// Mobile lacks project-key metadata; hideEmptySessions matches desktop default.
 export function buildMobileAgentHistorySections(
   sessions: readonly AiVaultSession[],
   options: {
@@ -34,10 +28,7 @@ export function buildMobileAgentHistorySections(
     now: number
   }
 ): MobileAgentHistorySection[] {
-  // Why: narrow scoped tabs by cwd path-prefix. When the worktree list hasn't
-  // loaded yet, scopeFilterPaths is empty — fall back to unnarrowed rather than
-  // filtering everything out (which would flash an empty list); the memo re-runs
-  // with real paths once worktree.ps resolves.
+  // Until worktree.ps supplies prefixes, leave scoped tabs unfiltered rather than flash empty; memo reruns when paths arrive.
   const narrowByPath = options.scope !== 'all' && options.scopeFilterPaths.length > 0
   const filtered = filterAiVaultSessions(sessions, {
     query: options.query,

@@ -1,7 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
-// A chat at rest, through the RPC surface a client actually calls: opening it starts nothing, what
-// it can answer without an agent it answers, and the first send is what starts one.
+// Exercise real chat RPC: reads at rest start nothing; the first message starts the agent.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
@@ -124,7 +123,6 @@ describe('opening a chat at rest (P2-01)', () => {
     expect(held).toMatchObject({ ok: true, result: { held: true } })
   })
 
-  // Worktree activation asks this for every chat tab in the worktree.
   it('answers the owner check from the record without opening the chat', async () => {
     await restingChat()
 
@@ -150,7 +148,6 @@ describe('opening a chat at rest (P2-01)', () => {
 
 describe('the accessor', () => {
   it('opens a closed conversation once, however many readers arrive together (P2-02)', async () => {
-    // Written by the provider alone, so nothing but the readers below ever opens it here.
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     rig.adapter.acquire.mock.calls
@@ -254,7 +251,7 @@ describe('the accessor', () => {
         expect(reply).toMatchObject({
           ok: false,
           error: {
-            // Not a passthrough code: released clients read the message, which stays the code.
+            // Released clients still read this refusal code from the message, not passthrough code.
             code: 'runtime_error',
             message: 'agent_session_journal_unreadable',
             data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
@@ -368,7 +365,6 @@ describe('options at rest', () => {
 
   it('answers the provider-level features of a chat at rest (P2-17)', async () => {
     await restingChat()
-    // A runtime that declares Codex's goal and rewind, as production registers it.
     setStructuredAgentSessionHost(await rig.restart({ agents: claudeAndCodexDeclared() }))
     Object.assign(rig.host.deps.adapter, {
       rewindSupport: (_id: string, agent?: string) =>
@@ -418,7 +414,7 @@ describe('an agent exit', () => {
         { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     await rig.host.flushStreamedEvents(SESSION)
-    // The exit's own write and the retry recording the exit queues are both refused.
+    // Refuse both the exit write and its queued retry to test retained death evidence.
     vi.spyOn(open.journal, 'appendLifecycleBatch')
       .mockRejectedValueOnce(new Error('disk full'))
       .mockRejectedValueOnce(new Error('disk full'))
@@ -469,7 +465,6 @@ describe('every close withdraws what is queued (P2-29)', () => {
     ]
   ])('%s rejects a message accepted before any start, and starts nothing', async (_, close) => {
     await restingChat()
-    // The delivery loop has not reached its first start yet.
     const { loop } = rig.host.collaboratorsForTests().conversationDelivery
     vi.spyOn(loop, 'wake').mockImplementation(() => Promise.resolve())
     const reader: unknown[] = []

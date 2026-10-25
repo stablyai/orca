@@ -244,8 +244,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
-    // Declares the scope parameter so mock.calls keeps it — the runtime passes a deadline
-    // alongside it, and a bare `async () =>` would type the call tuple as empty.
+    // Declare the scope parameter so mock.calls retains its type alongside the runtime deadline.
     const listProcesses = vi.fn(async (_connectionId?: string | null) => [
       {
         id: 'pty-wsl-legacy',
@@ -305,7 +304,6 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('restores orphan pane and group topology without replacing a newer host-owned tab', async () => {
-    // Pane ids are unique in a partition; the newer tab's pane has its own.
     const newerLeafId = '44444444-4444-4444-8444-444444444444'
     const session: WorkspaceSessionState = {
       ...makeWorkspaceSessionWithHeadlessTerminal({
@@ -500,7 +498,6 @@ describe('OrcaRuntimeService', () => {
       'tab-agent',
       'tab-shell'
     ])
-    // Each adopted tab gets its tab-bar entry, in the group that lists it.
     expect(
       getSession().unifiedTabs?.[TEST_WORKTREE_ID]?.map((tab) => [tab.id, tab.groupId])
     ).toEqual([

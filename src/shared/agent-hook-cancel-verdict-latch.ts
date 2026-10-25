@@ -12,7 +12,7 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
   if (next.payload.agentType !== 'claude' && next.payload.agentType !== 'codex') {
     return false
   }
-  // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.
+  // Same-prompt retries submit anew; late Ctrl+C progress arrives as tool lifecycle events.
   return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
@@ -24,8 +24,7 @@ export type CancelVerdictLatchDecision =
 
 const HOLD: CancelVerdictLatchDecision = { hold: true }
 
-/** Derived from the row, never stored: a row whose main agent reads cancelled (or, from a host too
- *  old to publish `mainAgent`, a done row flagged interrupted). */
+/** Derive cancellation from mainAgent, or interrupted done rows on older hosts; never store another latch. */
 function isCancelVerdictLatched(previous: CancelledRow): boolean {
   const mainAgent = previous.payload.mainAgent
   return mainAgent
@@ -70,8 +69,7 @@ function refoldUnderLatchedMainAgent(
   }
 }
 
-/** A main agent's own prompt submission always opens a turn, including a harness-injected one that
- *  keeps the cached prompt (the task notification Claude starts when background work ends). */
+/** Main-agent submissions open turns even when harness notifications reuse the cached prompt. */
 export function opensNewTurn(event: AgentHookEventPayload): boolean {
   return (
     event.hookEventName === 'SessionStart' ||
@@ -95,13 +93,7 @@ export function restatesAnotherPrompt(
   return prompt !== previous.payload.prompt && (prompt !== '' || !isChildAttributed(incoming))
 }
 
-/**
- * The store's hold on a cancel verdict against restatements that predate it: a relay never learns
- * of the cancel the desktop infers, and TUIs emit late same-turn hooks after Ctrl+C. The latch dies
- * on the provider's own verdict (any settled `mainAgent`) or a new turn (another prompt, an
- * explicit prompt, a prompt submission, a session start). Child-attributed and replayed events keep the latched main
- * agent and are re-folded with their own child evidence; late main agent work is held.
- */
+/** Hold inferred cancellation against late same-turn hooks/replays until a provider verdict or new turn. Child events retain the main verdict and refold child evidence; relays do not know desktop-inferred cancellation. */
 export function resolveCancelVerdictLatch(
   previous: CancelledRow | undefined,
   incoming: AgentHookEventPayload,

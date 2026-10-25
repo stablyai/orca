@@ -10,7 +10,7 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
 
-// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+// Descriptor status probes need RPC stubs these clients do not provide.
 const descriptorProbe = vi.hoisted(() => {
   const stop = vi.fn()
   return {
@@ -253,8 +253,7 @@ describe('useHostClient', () => {
       })
       expect(stateByRenderTick.get(0)).toBe('connected')
 
-      // Why (S2): the unresolved-open window is amber, not grey — 'disconnected'
-      // here made every host swap flash a dead host while the Keychain read ran.
+      // Keep host swaps amber during asynchronous profile/keychain loading.
       selectedHostId = 'missing-host'
       renderTick = 1
       await act(async () => {
@@ -281,9 +280,7 @@ describe('useHostClient', () => {
     expect(harness.hook.client).not.toBeNull()
     expect(harness.hook.state).toBe('connected')
 
-    // Regression (STA-1511): disconnect deletes the entry; before the fix the
-    // hook kept handing out the closed client, so mounted screens kept
-    // driving requests that could never resolve.
+    // Disconnect must retire the entry so mounted screens cannot reuse a permanently closed client.
     await act(async () => {
       harness.disconnectHost(HOST.id)
     })
@@ -456,7 +453,6 @@ describe('useHostClient', () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
         await Promise.resolve()
       })
-      // A failed post-save re-prime leaves the pre-edit profile cached.
       act(() => primeHosts?.([HOST]))
       loadHostsMock.mockResolvedValue([edited])
       states.length = 0
@@ -469,7 +465,6 @@ describe('useHostClient', () => {
       expect(relayClient.closeMock).toHaveBeenCalled()
       expect(relayClient.notifyForeground).not.toHaveBeenCalled()
       expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
-      // The owner reads amber through the rebuild, never a grey flash.
       expect(states).not.toContain('disconnected')
     } finally {
       act(() => renderer?.unmount())
@@ -605,7 +600,7 @@ describe('useAllHostClients', () => {
     let renderer!: ReturnType<typeof create>
 
     function Probe(): null {
-      // Why: a screen holds the host client and reads the metric hooks beside it.
+      // Model a screen holding its client while observing metric hooks.
       useAllHostClients([HOST.id])
       status = useRelayRecoveryStatus(HOST.id)
       return null
@@ -622,8 +617,7 @@ describe('useAllHostClients', () => {
       relayHostReachability: 'connecting'
     })
 
-    // Why: the desktop refusing the credential is a status-only change — no
-    // transport state moves, so only the connection-path signal can carry it.
+    // Credential refusal changes status without transport state; the path signal must carry it.
     act(() => client.emitPairingRejected(true))
     expect(status).toEqual({
       pendingPath: 'relay',

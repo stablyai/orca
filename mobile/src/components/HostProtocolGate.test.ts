@@ -26,13 +26,11 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
-  // native form is this hook. Its web form is what posts the target to the shell.
+  // Mock native handoff’s router hook; web sibling posts target to shell.
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
-// Why: mock only client acquisition; the gate must exercise the real
-// useHostStatusGates → evaluateCompat → ProtocolBlockScreen wiring.
+// Mock client acquisition only; keep real status-gates→compatibility→block-screen wiring.
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))

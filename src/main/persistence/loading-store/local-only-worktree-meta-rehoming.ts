@@ -14,12 +14,7 @@ import {
   resolveAliasIdentityKey
 } from './worktree-identity-metadata'
 
-/**
- * Older builds left floating and setup terminal rows unstamped, or stamped them with whichever host
- * read them first. Either way the row projected onto a remote host and blocked its SSH access
- * (#31498), and a remote stamp hid it from this machine. Load moves them home: an existing local
- * or unstamped row wins, otherwise the newest remote one is re-keyed for the local host.
- */
+/** Rehome floating/setup metadata locally; prefer local/unstamped rows, then the newest remote copy. */
 export function rehomeLocalOnlyWorktreeMetadata(state: PersistedState): boolean {
   let changed = false
   const dropped = new Set<string>()
@@ -75,7 +70,7 @@ export function rehomeLocalOnlyWorktreeMetadata(state: PersistedState): boolean 
       state,
       composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId)
     )
-    // A fresh object: the old row may be shared with a remote identity row being dropped.
+    // Clone shared metadata so dropping remote identities cannot retain a remote stamp locally.
     state.worktreeMeta[worktreeId] = (localKey && state.worktreeMetaByIdentity?.[localKey]) || {
       ...meta,
       hostId: LOCAL_EXECUTION_HOST_ID
@@ -88,7 +83,6 @@ export function rehomeLocalOnlyWorktreeMetadata(state: PersistedState): boolean 
   return changed
 }
 
-// An unstamped locator row is what local reads returned before, so it outranks a remote copy.
 function isLocalLocatorRow(state: PersistedState, worktreeId: string): boolean {
   const locator = state.worktreeMeta[worktreeId]
   return (
@@ -96,7 +90,7 @@ function isLocalLocatorRow(state: PersistedState, worktreeId: string): boolean {
   )
 }
 
-// Same order as resolveAliasIdentityKey: newest activity, then the greater key.
+// Match alias resolution ordering: newest activity, then greatest key.
 function isNewer(
   identityKey: string,
   meta: WorktreeMeta,

@@ -127,7 +127,6 @@ function createListeningSocket(): EventEmitter {
   return socket
 }
 
-/** The probe command over the route answers like a remote shell with this exit code. */
 function answerProbe(proc: FakeProcess, code: number): void {
   setImmediate(() => {
     if (code === 0) {

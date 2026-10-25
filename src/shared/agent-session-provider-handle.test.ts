@@ -83,8 +83,7 @@ describe('chain append', () => {
   })
 
   it('refuses to record a fork as a resume', () => {
-    // --fork-session keeps the original item ids; calling it a resume would claim continuity the
-    // provider never gave.
+    // --fork-session copies item IDs without proving continuity; never record it as a resume.
     const chain = [link()]
     expect(() =>
       appendAgentSessionProviderHandleLink(
@@ -293,8 +292,7 @@ describe('chain lookup and validation', () => {
 })
 
 describe('adopted chain heads', () => {
-  // What a resume-from-history builds: the create seeds an `adopted` head, then the provider's own
-  // proof lands on top of it.
+  // History resume seeds an adopted head before the provider's proof arrives.
   const adopted = (overrides: Partial<AgentSessionProviderHandleLink> = {}) =>
     link({
       linkId: 'claude-1-sess-1-empty',

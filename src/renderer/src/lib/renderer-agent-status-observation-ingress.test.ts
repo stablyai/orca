@@ -55,8 +55,7 @@ function titleRowObservation(now: number): AgentStatusObservation {
 
 describe('renderer-side observation origins', () => {
   it('tags a title-derived row as title-origin, not as a hook row', () => {
-    // Why: this is the tag that makes the row's own contradiction findable — the entry it
-    // fabricates reports `working` for a pane whose row state is idle.
+    // Pin the contradiction tag: fabricated working evidence belongs to a pane whose row is idle.
     expect(titleRowObservation(2_000)).toEqual({
       origin: 'title',
       authorityId: TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID,
@@ -68,8 +67,7 @@ describe('renderer-side observation origins', () => {
   })
 
   it('keeps the title-row stamp deterministic in `now` so re-deriving it does not churn', () => {
-    // Why: these rows are recomputed every render; a counter here would mint a new revision
-    // per frame and invalidate memoization that compares rows.
+    // Per-render rows need stable revisions; counters would invalidate memoized comparisons every frame.
     expect(titleRowObservation(2_000)).toEqual(titleRowObservation(2_000))
     expect(titleRowObservation(3_000).revision).toBeGreaterThan(titleRowObservation(2_000).revision)
   })

@@ -30,7 +30,6 @@
 2 test-no-polling-loop:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
 2 test-no-polling-loop:src/main/git/repo-ref-maintenance-real-git.test.ts
 1 test-no-polling-loop:src/main/git/worktree-removal-large-tree.bench.test.ts
-1 test-no-polling-loop:src/main/ipc/filesystem-watcher-real.test.ts
 1 test-no-polling-loop:src/main/ipc/folder-repo-git-upgrade.test.ts
 1 test-no-polling-loop:src/main/ipc/native-chat.test.ts
 1 test-no-polling-loop:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
@@ -271,9 +270,6 @@
 1 test-no-real-time-wait:src/main/ipc/created-worktree-reconciliation.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem-auth.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem-watcher-local-events.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem-watcher-real.test.ts
 5 test-no-real-time-wait:src/main/ipc/filesystem/local-disk-write-precondition.test.ts
 2 test-no-real-time-wait:src/main/ipc/folder-repo-git-upgrade.test.ts
 2 test-no-real-time-wait:src/main/ipc/native-chat.test.ts
@@ -353,7 +349,6 @@
 1 test-no-real-time-wait:src/main/runtime/launched-agent-foreground.test.ts
 1 test-no-real-time-wait:src/main/runtime/launched-agent-shell-handoff-readiness.test.ts
 3 test-no-real-time-wait:src/main/runtime/layout-command-pane-starts-layout-owner.test.ts
-1 test-no-real-time-wait:src/main/runtime/mobile-cloud-relay/relay-auth-coordinator.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.test.ts
 1 test-no-real-time-wait:src/main/runtime/orca-runtime-files-mobile-explorer-reads.test.ts
@@ -577,7 +572,7 @@
 1 test-no-real-time-wait:tests/e2e/native-chat-history-prepend-anchor.spec.ts
 3 test-no-real-time-wait:tests/e2e/notification-sound-replay.spec.ts
 1 test-no-real-time-wait:tests/e2e/onboarding.spec.ts
-7 test-no-real-time-wait:tests/e2e/orchestration-idle-mail-delivery.spec.ts
+6 test-no-real-time-wait:tests/e2e/orchestration-idle-mail-delivery.spec.ts
 1 test-no-real-time-wait:tests/e2e/orchestration-idle-mail-restore.spec.ts
 4 test-no-real-time-wait:tests/e2e/paced-terminal-typing.ts
 1 test-no-real-time-wait:tests/e2e/paired-client-hosted-browser-double-restart.spec.ts
@@ -640,7 +635,7 @@
 6 test-no-real-time-wait:tests/e2e/terminal-codex-cursor-jitter-repro.spec.ts
 7 test-no-real-time-wait:tests/e2e/terminal-codex-local-typing-latency.spec.ts
 8 test-no-real-time-wait:tests/e2e/terminal-codex-skill-preview-artifact-repro.spec.ts
-11 test-no-real-time-wait:tests/e2e/terminal-column-desync-repro.spec.ts
+9 test-no-real-time-wait:tests/e2e/terminal-column-desync-repro.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-column-probes.ts
 2 test-no-real-time-wait:tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
@@ -836,7 +831,6 @@
 2 test-no-wall-clock:src/main/hook-archive-timeout-observation.test.ts
 1 test-no-wall-clock:src/main/hooks-runner.test.ts
 1 test-no-wall-clock:src/main/ipc/ai-vault.test.ts
-2 test-no-wall-clock:src/main/ipc/filesystem-watcher-real.test.ts
 3 test-no-wall-clock:src/main/ipc/folder-repo-git-upgrade.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat.test.ts
@@ -969,7 +963,6 @@
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-interactive-wait.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-list-pagination.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-output.test.ts
-1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/worker-start-readiness-settlement.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/pairing.test.ts
 1 test-no-wall-clock:src/main/runtime/runtime-agent-row-main-agent-projection.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-client-agent-launch-settings-durability.test.ts
@@ -1275,7 +1268,6 @@
 2 test-timeout-needs-reason:src/main/hook-archive-timeout-observation.test.ts
 2 test-timeout-needs-reason:src/main/hook-termination-real-process.test.ts
 2 test-timeout-needs-reason:src/main/ipc/filesystem/filesystem-quick-open-options.integration.test.ts
-1 test-timeout-needs-reason:src/main/ipc/filesystem-watcher-lifecycle-model.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
 1 test-timeout-needs-reason:src/main/ipc/runtime-environments/runtime-environment-federated-read-transport.bench.test.ts
 1 test-timeout-needs-reason:src/main/ipc/runtime-environments/runtime-environment-session-tabs-delta.integration.test.ts

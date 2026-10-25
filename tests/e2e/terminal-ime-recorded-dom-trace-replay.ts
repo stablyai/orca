@@ -4,14 +4,7 @@ import {
   type PreeditOverlaySample
 } from './terminal-ime-preedit-overlay-probe'
 
-/**
- * Replays a recorded IME DOM trace against the live terminal one event at a time, sampling the
- * preedit overlay after every composition event.
- *
- * Each event costs a CDP round-trip. That is deliberate: it lets xterm's deferred composition
- * timers and the renderer's layout run between events the way they do under a real IME, so a
- * per-event geometry sample measures an overlay that has actually been positioned.
- */
+// Replay recorded events with per-composition geometry samples. CDP round-trips intentionally allow deferred positioning/layout between events.
 export type RecordedImeDomEvent = {
   type: string
   data?: string
@@ -82,18 +75,14 @@ async function dispatchRecordedEvents(
       throw new Error('xterm helper textarea is not focused')
     }
     for (const event of events) {
-      // The recorded value/selection is what the recorder observed *during* this event, so it has
-      // to be in place before dispatch. xterm reads `textarea.value` inside its own handlers rather
-      // than off the event, so applying it afterwards hands every handler the previous event's
-      // state.
+      // Apply recorded value/selection before dispatch: xterm reads textarea.value inside handlers, so applying afterward supplies stale state.
       if (event.value !== undefined) {
         textarea.value = event.value
       }
       if (event.selectionStart !== undefined && event.selectionEnd !== undefined) {
         textarea.setSelectionRange(event.selectionStart, event.selectionEnd)
       }
-      // keypress is recorded on Windows, where the IME lets Enter through to the textarea's own
-      // default action; replaying it as a CompositionEvent would invent an event no IME ever sent.
+      // Replay Windows keypress as a keyboard event for textarea’s Enter default action; CompositionEvent would invent an unrecorded shape.
       if (event.type === 'keydown' || event.type === 'keyup' || event.type === 'keypress') {
         const keyboard = new KeyboardEvent(event.type, {
           key: event.key,
@@ -127,19 +116,9 @@ async function dispatchRecordedEvents(
   }, recorded as RecordedImeDomEvent[])
 }
 
-/**
- * Groups a `compositionend` with the `beforeinput`/`input` events that immediately follow it.
- *
- * Chromium dispatches a commit's `compositionend` and the `input` carrying the committed text
- * inside one task. The replay's per-event round-trip inserts a task boundary the IME never
- * produced, and xterm arms a deferred finalizer on `compositionend` that reads the textarea when it
- * runs — so a boundary there lets the finalizer settle the commit against a textarea the committed
- * text has not reached yet. On IBus, whose `compositionend` is empty and whose text arrives only in
- * the following `insertText`, that swallowed every syllable and made a working build look broken.
- *
- * Only the commit tail is fused. Composition updates keep their own round-trip, which is what lets
- * xterm's deferred overlay positioning run before each geometry sample.
- */
+// Fuse compositionend with its immediate beforeinput/input tail, matching Chromium’s single-task commit.
+// A CDP task boundary lets xterm’s deferred finalizer read before IBus’s empty compositionend is followed by insertText, swallowing syllables.
+// Keep update round-trips separate so deferred positioning runs before geometry samples.
 function nextRecordedEventGroup(
   dom: readonly RecordedImeDomEvent[],
   start: number

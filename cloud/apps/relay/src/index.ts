@@ -81,9 +81,7 @@ const {
 if (process.env.K_SERVICE) {
   void readCloudRunInstanceZone().then((zone) => observability.setInstanceZone(zone))
 }
-// Same owner as the assignment sweep: the cleanup only expires credentials that every reader
-// already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
-// without changing any answer.
+// Only assignment-maintenance owner reaps credentials; readers already enforce expiry, so cell-wide copies multiplied scans without changing answers.
 const cleanupTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(
       () =>

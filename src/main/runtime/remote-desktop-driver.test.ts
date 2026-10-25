@@ -1,16 +1,4 @@
-/**
- * Tests for the remote-desktop viewer width driver.
- *
- * A remote (relay/shared-control) desktop viewer takes the PTY width floor so
- * the host's own fit cascade stops resizing the viewed PTY out from under it
- * (the remote alt-screen "porridge"). Mirrors the mobile presence lock but
- * suppresses only RESIZE, never input. Covers:
- *   - idle → remote-desktop on register; release to idle on last unregister
- *   - multi-viewer: driver survives until the last viewer detaches
- *   - a live mobile driver outranks a remote-desktop viewer
- *   - isPtyResizeDrivenRemotely gates host resize for mobile AND remote-desktop
- *   - PTY exit clears the remote-desktop registry
- */
+/** Desktop viewers suppress host resize, never input; mobile drivers retain priority and the final viewer releases its floor. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -109,7 +97,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     kill: () => true,
     getForegroundProcess: async () => null,
     resize: (ptyId, cols, rows) => {
-      // Why: the production controller returns false when the provider throws — a dropped SSH/WSL provider or an exited PTY.
+      // Production resize returns false after provider failure or PTY exit.
       if (!resizeSucceeds) {
         return false
       }
@@ -159,8 +147,7 @@ describe('remote desktop viewer width driver', () => {
 
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
-    // It is deliberately NOT a driver kind: the presence-lock state machine and
-    // its cross-layer driver-change notifications stay untouched.
+    // Remote viewing suppresses resize without adding a driver kind or driver-change event.
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     expect(driverEvents).toHaveLength(0)
   })
@@ -175,7 +162,6 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
   })
 
-  // #27425: a pane taller than 120 rows must get a PTY of the same height.
   it('keeps a tall desktop viewport through resize', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 137)
@@ -191,15 +177,12 @@ describe('remote desktop viewer width driver', () => {
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
 
-    // Activity on the narrower viewer transfers ownership to it.
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 30)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
 
-    // Later activity on the wide viewer transfers ownership back.
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 140, 50)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 140, rows: 50 })
 
-    // A passive peer leaving cannot disturb the active owner.
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-B')
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 140, rows: 50 })
   })
@@ -210,11 +193,9 @@ describe('remote desktop viewer width driver', () => {
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 40)
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
 
-    // First viewer leaves — another remote viewer still holds the floor.
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
 
-    // Last viewer leaves — the host reclaims its own width (next pty:resize applies).
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-B')
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
   })
@@ -224,13 +205,11 @@ describe('remote desktop viewer width driver', () => {
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
 
-    // A desktop viewer registering must NOT disturb the mobile driver.
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
 
-    // When the phone leaves, the surviving viewer keeps host resize suppressed
-    // (the registry is independent of the mobile driver state).
+    // After phone departure, an independent desktop-viewer floor still suppresses host resize.
     runtime.onClientDisconnected('phone-A')
     vi.advanceTimersByTime(10_000)
     expect(runtime.getDriver('pty-1').kind).not.toBe('mobile')
@@ -348,7 +327,7 @@ describe('remote desktop viewer width driver', () => {
     ptyOwnership.set('pty-1', 'local')
     try {
       const input = createPtyWriteInput({ runtime })
-      // A query reply is not the host driving; only the typed command revokes the resume.
+      // Query replies do not revoke resume ownership; actual typed commands do.
       await input.writePtyInput({ id: 'pty-1', data: '\x1b[?1;2c', inputKind: 'query-reply' })
       await input.writePtyInput({ id: 'pty-1', data: 'top\r', inputKind: 'driving' })
       expect(hostProviderWrite).toHaveBeenCalledWith('pty-1', 'top\r')
@@ -385,15 +364,12 @@ describe('remote desktop viewer width driver', () => {
 
   it('reclaims the host width when the last viewer detaches', async () => {
     const { runtime } = createRuntime()
-    // The viewer drives the source PTY to its own 80-wide viewport.
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 40)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 40 })
-    // While the viewer owns width, the blocked host fit records the host's
-    // latest reclaim geometry.
+    // Blocked host fits still update the geometry to reclaim when viewing ends.
     runtime.recordRemoteDesktopHostReclaimTarget('pty-1', 120, 40)
 
-    // Detaching the last viewer must actively resize the PTY back to the host's
-    // OWN width (120), not the departed viewer's polluted 80.
+    // Reclaim the host's measured width, not the departing viewer's PTY width.
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 120, rows: 40 })
   })
@@ -402,8 +378,7 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
 
-    // pty:resize is suppressed for mobile too, but this measurement must not
-    // seed the separate remote-viewer cache when no desktop viewer exists.
+    // Phone-fit suppression must not seed a desktop-viewer reclaim cache.
     runtime.recordRemoteDesktopHostReclaimTarget('pty-1', 120, 35)
     runtime.onClientDisconnected('phone-A')
     await vi.advanceTimersByTimeAsync(10_000)
@@ -419,16 +394,14 @@ describe('remote desktop viewer width driver', () => {
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
-    // The host pane can change after remote ownership ends while phone-fit
-    // remains active; its trusted measurement becomes the deferred target.
+    // Host measurements after viewing ends can update a deferred phone-fit reclaim.
     runtime.recordRendererGeometry('pty-1', 140, 38)
 
     runtime.onClientDisconnected('phone-A')
     await vi.advanceTimersByTimeAsync(10_000)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 140, rows: 38 })
 
-    // A later viewer must capture the new host geometry, not reuse the prior
-    // session's already-consumed 140-column reclaim target.
+    // Consume prior reclaim targets so later viewers start from current host geometry.
     runtime.onExternalPtyResize('pty-1', 130, 36)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24)
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-B')
@@ -456,8 +429,7 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
 
-    // Do not await the reclaim before the next viewer joins. The serialized
-    // host resize can finish after sub-B has established a newer viewer cycle.
+    // Let a newer viewer cycle start before the old serialized reclaim finishes.
     const firstReclaim = runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     const secondAttach = runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 90, 30)
     await Promise.all([firstReclaim, secondAttach])
@@ -529,29 +501,22 @@ describe('remote desktop viewer width driver', () => {
 
   it('refresh never creates a floor (one-shot viewport cannot leak host suppression)', async () => {
     const { runtime } = createRuntime()
-    // A one-shot terminal.updateViewport (refresh) from a viewer with no stream
-    // floor must NOT register one — that floor would leak (nothing releases a
-    // one-shot RPC's state), pinning the host at a stale width forever.
+    // One-shot viewport refresh owns no cleanup and must never create a persistent floor.
     const created = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-A', 90, 30)
     expect(created).toBe(false)
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
 
-    // Once the client's STREAM registers the floor (and owns its cleanup), a
-    // refresh updates that same floor by clientId.
     await runtime.updateRemoteDesktopViewer('pty-1', 'stream:1', 'viewer-A', 100, 40)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
     const refreshed = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-A', 70, 25)
     expect(refreshed).toBe(true)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 70, rows: 25 })
 
-    // A refresh for a DIFFERENT client that owns no floor is a no-op.
     const other = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-Z', 60, 20)
     expect(other).toBe(false)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 70, rows: 25 })
 
-    // The stream cleanup releases the sole floor — the refresh left no orphan,
-    // so the host reclaims (suppression drops).
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'stream:1')
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
   })
@@ -587,20 +552,16 @@ describe('remote desktop viewer width driver', () => {
       getSize: (ptyId) => ptySizes.get(ptyId) ?? null
     })
 
-    // A viewer drives the PTY to 80; while it owns width, the host reports its
-    // own 120-wide reclaim geometry.
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 40)
     runtime.recordRemoteDesktopHostReclaimTarget('pty-1', 120, 40)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 40 })
 
-    // The last viewer leaves but the reclaim resize fails: the PTY is stuck at
-    // 80, so the recorded host target (120) MUST be retained for a later retry.
+    // Failed reclaim must retain true host geometry for a later retry.
     resizeSucceeds = false
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 40 })
 
-    // A retry once resize works restores the TRUE host width (120), not the
-    // stale viewer width (80) that a dropped target would have resolved to.
+    // Retry must restore measured host width rather than the stale viewer grid.
     resizeSucceeds = true
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 40)
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-B')
@@ -632,8 +593,7 @@ describe('remote desktop viewer width driver', () => {
     resizeSucceeds = false
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
 
-    // pty:resize has already resized the provider before this runtime mirror
-    // hook runs; that successful host geometry supersedes the retained 120.
+    // A successful provider resize supersedes the older retained reclaim target.
     resizeSucceeds = true
     ptySizes.set('pty-1', { cols: 140, rows: 42 })
     runtime.onExternalPtyResize('pty-1', 140, 42)
@@ -651,14 +611,12 @@ describe('remote desktop viewer width driver', () => {
     runtime.onPtyExit('pty-1', 0)
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
 
-    // A fresh viewer on the same id re-establishes suppression cleanly (no stale set).
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 100, 40)
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
   })
 
   it('held phone-fit take-back releases the lock when the remote reclaim resize fails', async () => {
-    // Why: the local held branch releases unconditionally (mobile-presence-lock.test.ts scenario 4).
-    // The remote branch rolled the lock back instead, so the banner survived and every retry was a no-op.
+    // Release held locks even after resize failure so take-back cannot become a permanent no-op.
     const { runtime, fitOverrideEvents, setResizeSucceeds } = createRuntime(null)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
@@ -675,13 +633,11 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
     expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
-    // A second click must not be needed, and must stay idempotent.
     await expect(runtime.reclaimTerminalForDesktop('pty-1')).resolves.toBe(false)
   })
 
   it('driving take-back reports success when the trailing remote layout cannot converge', async () => {
-    // Why: the lock is already released here, so returning false told the desktop renderer
-    // "nothing was reclaimed" and it skipped the post-take-back refit and focus.
+    // Report released ownership even if resize fails so the renderer still refits and focuses.
     const { runtime, setResizeSucceeds } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
@@ -696,16 +652,11 @@ describe('remote desktop viewer width driver', () => {
   })
 
   it('take-back during the resubscribe grace still resizes the PTY off the phone grid', async () => {
-    // Why: both take-back tests above force the resize to fail, so nothing pinned that a
-    // converging remote reclaim reaches the host. A phone that unsubscribes cleanly holds
-    // driver=mobile for the 250ms resubscribe grace, and applyRemoteDesktopLayout no-ops on
-    // a mobile driver — so without the idle flip the lock drops and `true` is still reported
-    // while the PTY stays stranded at the phone grid.
+    // Flip mobile to idle during the 250ms unsubscribe grace or successful take-back can leave the phone grid stranded.
     const { runtime, resizeCalls } = createRuntime(null)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
-    // Inside the grace window on purpose: the driver still reads mobile here.
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
     expect(runtime.getTerminalFitOverride('pty-1')).toMatchObject({ mode: 'mobile-fit' })
     const resizesBefore = resizeCalls.length

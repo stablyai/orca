@@ -19,10 +19,7 @@ async function readRejectedApiKeyIds(configFile: string): Promise<readonly unkno
   }
 }
 
-/**
- * Non-interactive Claude always bills ANTHROPIC_API_KEY, while the TUI skips a key the user
- * rejected; drop only that key so chat follows the same login as the terminal.
- */
+/** Non-interactive Claude bills even rejected API keys; omit them to match the TUI’s login. */
 export async function withoutRejectedClaudeApiKey(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform

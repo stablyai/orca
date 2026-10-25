@@ -116,7 +116,6 @@ export type TabsSlice = {
     }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
-  /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
   /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */
   toggleTabViewMode: (tabId: string) => void

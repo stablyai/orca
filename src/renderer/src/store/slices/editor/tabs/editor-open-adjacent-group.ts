@@ -100,11 +100,7 @@ type AdjacentEditorOpenInput = {
   contentType: EditorTabContentType
 }
 
-/**
- * Minimum-rank destination for a file link: neighbor with the file, any group with the
- * file, neighbor showing an editor, any neighbor, then the source. Null when the source
- * is not a live leaf of this layout.
- */
+/** Rank live-source destinations: neighboring file copy, any file copy, neighboring editor, any neighbor, source. Null for nonlive source leaves. */
 export function pickAdjacentEditorOpenGroupId(input: AdjacentEditorOpenInput): string | null {
   const leaves = projectLayoutLeaves(input.layout)
   const source = leaves.find((leaf) => leaf.groupId === input.sourceGroupId)

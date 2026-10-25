@@ -34,7 +34,6 @@ export function feedRow(overrides: Partial<WorkspaceRow> & Pick<WorkspaceRow, 'i
   }
 }
 
-/** Two local workspaces (one pinned, one its nested child), one on an SSH host. */
 export const FEED_ROWS = {
   parent: feedRow({
     id: 'orca::/w/parent',
@@ -55,7 +54,6 @@ export const FEED_ROWS = {
   remote: feedRow({ id: 'lab::/w/gpu', hostId: 'ssh:gpu', repoId: 'lab', manualOrder: 3 })
 }
 
-/** A row identity written as its text, as the feed carries it. */
 export function feedKey(identity: string): HostScopedWorktreeKey {
   const key = parseWorktreeHostIdentity(identity)
   if (!key) {
@@ -124,7 +122,6 @@ export function phoneView(overrides: Partial<MobileViewState> = {}): MobileViewS
   return { ...INITIAL_MOBILE_VIEW, groupBy: 'repo', sortBy: 'manual', ...overrides }
 }
 
-/** A row worktree.ps served, with the live content the list draws. */
 export function liveRow(overrides: Partial<Worktree> & Pick<Worktree, 'worktreeId'>): Worktree {
   return {
     repoId: 'orca',

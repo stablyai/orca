@@ -1,5 +1,4 @@
-// One desktop scenario and the replies CLI, paired desktops and orcad read about it, normalised so
-// a switch-off capture and a switch-on run compare byte for byte.
+// Normalize one desktop scenario's CLI, paired and orcad replies for byte-identical comparison across layout ownership modes.
 import { readFileSync } from 'node:fs'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
@@ -173,10 +172,7 @@ function normaliseHandles(value: unknown, ignored: readonly string[]): unknown {
   })
 }
 
-/**
- * Every reply the scenario's readers get, in one JSON document. `ignore` drops fields a newer host
- * adds, which older readers skip, so the fields they do read compare byte for byte.
- */
+/** Capture every reply, omitting newer fields only when modeling readers that skip them; compare all older wire fields byte for byte. */
 export async function captureSurfaceReplies(
   runtime: Runtime,
   opts: { ignore?: readonly string[] } = {}

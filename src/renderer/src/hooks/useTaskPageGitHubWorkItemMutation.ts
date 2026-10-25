@@ -25,7 +25,6 @@ import { useMountedRef } from './useMountedRef'
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string
   query: ParsedTaskQuery
-  /** Local gh viewer login only; may be null. */
   viewerLogin: string | null
   patchWorkItem: TaskPageGitHubPatchWorkItem
 }
@@ -34,7 +33,7 @@ export function shouldSkipLocalViewerQualifiers(sourceContext?: TaskSourceContex
   if (!sourceContext) {
     return false
   }
-  // Why: local gh viewer must not evaluate @me soft-hide for SSH/environment rows.
+  // The local gh viewer cannot evaluate @me soft-hide for SSH/environment rows.
   const hostKind = parseExecutionHostId(sourceContext.hostId)?.kind
   if (hostKind === 'ssh' || hostKind === 'runtime') {
     return true
@@ -160,7 +159,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           serverEntity,
           patchWorkItem,
           sourceContext: input.sourceContext,
-          // Quiet revalidate: mark dirty; TaskPage runner is registered separately.
+          // The separately registered TaskPage runner performs the revalidation.
           scheduleQuiet: false
         })
         if (confirmed === 'confirmed') {

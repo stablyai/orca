@@ -1,9 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
-// Why: the sidebar card, the terminal overlay, the host-header menu, and the status-bar row
-// can all be on screen at once. One vocabulary here stops them describing the same click
-// three different ways.
+// Share vocabulary across simultaneous sidebar, pane, host-menu and status-bar controls.
 export function sshConnectVerb(status: SshConnectionStatus | null | undefined): string {
   switch (status) {
     case 'auth-failed':

@@ -36,7 +36,6 @@ export type BundledSkillInstallActionState =
 const LOADING: BundledSkillInstallActionState = { kind: 'loading' }
 const UNKNOWN: BundledSkillInstallActionState = { kind: 'unknown' }
 
-/** What a setup screen's button would do for `skillNames` on the agents' host, from its plan. */
 export function useBundledSkillInstallAction(
   skillNames: readonly string[],
   options: { enabled: boolean; refreshKey: string; target?: BundledSkillTarget | null }

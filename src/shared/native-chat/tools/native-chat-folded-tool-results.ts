@@ -1,5 +1,5 @@
 import { unpairedToolResultIndices } from './native-chat-tool-pairs'
-import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../native-chat-types'
 
 type ToolContribution = {
   source: NativeChatMessage

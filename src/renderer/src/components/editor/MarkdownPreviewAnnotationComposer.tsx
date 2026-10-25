@@ -58,7 +58,6 @@ export function MarkdownPreviewAnnotationComposer({
   const mountedRef = useMountedRef()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: scope the add-review-note chord to this composer subtree.
   useEffect(() => {
     const composer = composerRef.current
     if (!composer) {

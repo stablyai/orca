@@ -4,7 +4,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from './native-chat-types'
+} from '../../native-chat-types'
 
 const call = (name: string): NativeChatToolCallBlock => ({ type: 'tool-call', name, input: {} })
 const result = (output: string): NativeChatToolResultBlock => ({ type: 'tool-result', output })

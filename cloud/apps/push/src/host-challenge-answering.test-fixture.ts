@@ -9,8 +9,7 @@ import nacl from 'tweetnacl'
 import { decodeCanonicalBase64 } from './canonical-base64.js'
 import { deriveHostFingerprint } from './host-fingerprint.js'
 
-// The desktop side of the push challenge, written the way the shipped host
-// will answer it, so the gateway is exercised against a real box-opening peer.
+// Model shipped desktop challenge answering so gateway tests use a real box-opening peer.
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 

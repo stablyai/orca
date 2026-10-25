@@ -5,8 +5,7 @@ import {
 } from '@/components/github/work-item-state-badge'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
-// Why: closed issues stay neutral here (may be completed/resolved); red is reserved
-// for PR closed-without-merge.
+// Closed issues stay neutral; reserve red for unmerged closed PRs.
 export function getStateTone(item: GitHubWorkItem): string {
   return getWorkItemStateTone(item, 'neutral')
 }

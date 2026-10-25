@@ -1,7 +1,4 @@
-// Why: a fixed menu width wraps labels onto a second line once the label or its
-// shortcut chip grows — worst on Windows/Linux, where `Ctrl+Alt+W` is far wider
-// than `⌘⌥W`, and in locales with longer copy. Size to content instead, capped
-// so a long label still can't run off screen.
+// Size menus to localized labels and platform shortcut widths, capped to the viewport.
 export const TAB_CONTEXT_MENU_CONTENT_CLASS =
   'min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap'
 

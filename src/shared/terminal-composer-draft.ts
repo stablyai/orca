@@ -85,6 +85,23 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
   return -1
 }
 
+// Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).
+const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  'Ask Codex to do anything',
+  'Ask a follow-up question',
+  'Explain this codebase',
+  'Summarize recent commits',
+  'Implement {feature}',
+  'Find and fix a bug in @filename',
+  'Write tests for @filename',
+  'Improve documentation in @filename',
+  'Run /review on my current changes',
+  'Use /skills to list available skills',
+  'Check recently modified functions for compatibility',
+  'How many files have been modified?',
+  'Will this algorithm scale well?'
+])
+
 function isStockPlaceholder(
   afterCursor: string,
   continuationRows: { text: string; wrapped: boolean }[]
@@ -93,11 +110,7 @@ function isStockPlaceholder(
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return (
-    /^Try\s+["\u201C]/.test(text) ||
-    text === 'Ask Codex to do anything' ||
-    text === 'Ask a follow-up question'
-  )
+  return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
 function detectTerminalComposer(

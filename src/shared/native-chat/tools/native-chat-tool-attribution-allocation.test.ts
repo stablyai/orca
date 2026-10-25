@@ -5,7 +5,7 @@ import type {
   NativeChatBackgroundTaskBlock,
   NativeChatBlock,
   NativeChatMessage
-} from './native-chat-types'
+} from '../../native-chat-types'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return {

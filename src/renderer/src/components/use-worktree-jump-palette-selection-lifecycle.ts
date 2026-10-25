@@ -163,8 +163,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     },
     [setSelectedItemId]
   )
-  // A late cmdk callback can restore the old cursor after handleQueryChange clears it.
-  // Commit the new list head explicitly when the deferred query changes.
+  // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes.
   useLayoutEffect(() => {
     setSelectedItemId(
       getNextWorktreePaletteSelection({

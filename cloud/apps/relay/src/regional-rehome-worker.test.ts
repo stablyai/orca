@@ -178,7 +178,6 @@ describe('regional rehome worker', () => {
   })
 })
 
-// Answers each POST with the next scripted body, repeating the last one.
 function respondWith(bodies: { outcome: string; reason?: string }[]) {
   let index = 0
   return vi.fn(async () => {
@@ -192,8 +191,7 @@ function respondWith(bodies: { outcome: string; reason?: string }[]) {
 function collectSummaries() {
   const entries: Record<string, unknown>[] = []
   let arrived: (() => void) | undefined
-  // The worker polls once the moment it is constructed, so the poll under test
-  // is that one; `first` is how a test waits for it rather than for a tick.
+  // Construction immediately polls; await first instead of waiting for a timer tick.
   const first = new Promise<void>((resolve) => {
     arrived = resolve
   })

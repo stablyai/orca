@@ -45,6 +45,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/worker-terminal-wrap-provenance.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
+  'tests/e2e/cross-version-wire/host-model-catalog-released-phone.unit.test.ts',
   'src/main/acp/acp-structured-host-live-listing.test.ts',
   'src/main/acp/acp-structured-host-configured-default.test.ts',
   'src/main/pi/rpc-session-adapter.test.ts',

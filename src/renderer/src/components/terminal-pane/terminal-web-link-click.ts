@@ -45,16 +45,14 @@ export function handleTerminalWebLinkClick(
       linkActionContext: deps.linkActionContext,
       actionDestinations: deps.actionDestinations
     })
-    // Why: WebLinksAddon only knows the physical row; Orca's logical hit-test
-    // preserves the complete URL rendered across hard-wrapped TUI rows.
+    // Use logical hit testing because WebLinksAddon knows only a physical row of wrapped URLs.
     event.preventDefault()
   } else {
     handled = handleOscLink(url, event, deps)
   }
 
   if (handled) {
-    // Why: link navigation can steal focus before xterm's mouseup cleanup;
-    // clearing selection also detaches its pending drag-selection listeners.
+    // Clear selection/listeners before navigation can steal focus ahead of xterm mouseup cleanup.
     deps.terminal?.clearSelection()
   }
   return handled

@@ -95,8 +95,7 @@ export function useEmulatorFrameStream(
       }
     })
 
-    // Why: a device switch gets a fresh stream identity, so stale frames from
-    // the previous device are hidden while the new MJPEG stream starts.
+    // Hide the previous device’s frames while the new stream starts.
     setState({ error: null, frameUrl: null, streamIdentity })
     void emulatorApi
       .startFrameStream({ streamUrl, streamKey })

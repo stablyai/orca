@@ -25,7 +25,7 @@ export function MobileFilePreviewEditableSource({
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null)
   const [revealedTargetKey, setRevealedTargetKey] = useState('')
 
-  // Why: line/column opens should reveal once, then user cursor movement owns selection.
+  // Reveal the requested position once; subsequent cursor movement owns selection.
   useEffect(() => {
     if (!lineColumn || !selectionTargetKey || revealedTargetKey === selectionTargetKey) {
       return

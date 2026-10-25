@@ -7,8 +7,7 @@ import { createDesktopRelayServiceInstaller } from '../runtime/mobile-cloud-rela
 import { publishDesktopRelayStatus } from './main-process-relay-status'
 import { mainProcessState as state } from './main-process-state'
 
-// Registers the on-demand Relay installer and starts the first install, which
-// waits for the persisted proxy itself, so it can run before the proxy lands.
+// Register before proxy readiness; the installer waits before its first request.
 export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
   const installer = createDesktopRelayServiceInstaller({
     runtimeRpc,
@@ -32,8 +31,7 @@ export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void
   })
   state.desktopRelayInstaller = installer
   runtimeRpc.setMobileRelayPairingProviderInstaller(() => installer.ensure())
-  // Why: sleeping past relay-token expiry kills the broker with no retry
-  // timer; resume is the moment that state becomes recoverable.
+  // Sleep can expire the token with no retry timer; resume is the recovery opportunity.
   powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
   void installer.ensure()
 }

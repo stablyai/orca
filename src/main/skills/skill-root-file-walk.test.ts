@@ -66,11 +66,7 @@ describe('findSkillFiles', () => {
 
     expect(await findSkillFiles(root, 4)).toEqual([join(edge, 'SKILL.md')])
     expect(statPaths).toEqual([])
-    // Why not a fixed array: `readdir` order is filesystem-dependent, and both
-    // the result order and which link survives dedup follow it. NTFS enumerates
-    // its name index alphabetically, so `link00` precedes `SKILL.md` on Windows
-    // and follows it on APFS/ext4. All 32 links share one realpath, so the
-    // visited set collapses them to a single entry beside the real file.
+    // readdir order varies across NTFS/APFS/ext4; assert membership because 32 realpath-equivalent links collapse to whichever is visited first.
     const withinDepth = await findSkillFiles(root, 5)
     expect(withinDepth).toContain(join(edge, 'SKILL.md'))
     expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(1)
@@ -82,10 +78,7 @@ describe('findSkillFiles', () => {
     expect(await findSkillFiles(join(await makeTree(), 'absent'), 4)).toEqual([])
   })
 
-  // The name is load-bearing, not incidental: `isSkillRootUnavailableError` matches
-  // on it to decide whether a root degrades to `unavailable` or fails the discovery.
-  // Callers elsewhere fabricate this shape, so this is the one place that pins a
-  // real abort actually producing it.
+  // Pin real AbortError naming: discovery relies on it to classify unavailable roots.
   it('stops walking once its signal aborts, rejecting with an AbortError', async () => {
     const root = join(await makeTree(), 'skills')
     await writeFileAt(join(root, 'one', 'SKILL.md'))
@@ -98,11 +91,7 @@ describe('findSkillFiles', () => {
     expect(isSkillRootUnavailableError(await walk.catch((error: unknown) => error))).toBe(true)
   })
 
-  // The broken-link catch around the symlink branch must not swallow the abort a
-  // nested visit throws, or the walk returns a truncated listing as success. The
-  // abort has to land inside the symlink's stat — after the entry loop's check and
-  // before the nested visit's — and the link must be the last entry, so nothing
-  // afterwards re-checks the signal.
+  // Abort inside the last symlink's stat so only nested propagation can catch it; broken-link handling must not swallow it as successful truncation.
   it('propagates an abort thrown while following a symlinked directory', async () => {
     const base = await makeTree()
     const root = join(base, 'skills')
@@ -123,8 +112,7 @@ describe('findSkillFiles', () => {
     await expect(findSkillFiles(root, 4, controller.signal)).rejects.toThrow()
   })
 
-  // Why not a truncated list: a caller that cached one would publish "these skills
-  // no longer exist" for a root that was merely slow.
+  // Partial cached results would falsely report missing skills from a merely slow root.
   it('rejects rather than returning the entries it had already collected', async () => {
     const root = join(await makeTree(), 'skills')
     await writeFileAt(join(root, 'one', 'SKILL.md'))

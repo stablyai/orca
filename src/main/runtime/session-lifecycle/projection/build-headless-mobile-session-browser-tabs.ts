@@ -28,11 +28,7 @@ import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
-  // Why: headless serve backs browser panes with offscreen WebContents that live
-  // only in the BrowserManager, never in a renderer graph. Without surfacing them
-  // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
-  // paired browser tab and closing it fails with tab_not_found. Synthesize browser
-  // session tabs from the live bridge so they are first-class alongside terminals.
+  // Offscreen browser pages live outside renderer graphs; expose session rows or snapshots prune them and close fails with tab_not_found.
   protected buildHeadlessMobileSessionBrowserTabs(
     worktreeId: string
   ): RuntimeMobileSessionBrowserTab[] {
@@ -51,8 +47,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       )
       return {
         type: 'browser' as const,
-        // Why: an offscreen page has no separate workspace identity, so the page id
-        // is its own workspace id (matches the server's browserWorkspaceId fallback).
+        // Offscreen pages lack separate workspace identity; use page id like the server browserWorkspaceId fallback.
         id: tab.browserPageId,
         title: tab.title || tab.url || 'Browser',
         browserWorkspaceId: tab.browserPageId,
@@ -117,10 +112,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     })
   }
 
-  /**
-   * The one close transaction every explicit terminal close reaches: durably commits the membership
-   * removal in the owning host's partition. Callers publish and kill afterwards.
-   */
+  /** Commit explicit-close membership removal durably in the owning host partition before callers publish and kill. */
   protected async closeTerminalSurface(
     worktreeId: string,
     target: TerminalSurfaceCloseTarget,
@@ -130,7 +122,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
       throw new Error('workspace_session_unavailable')
     }
-    // Why: a tab its layout owner already removed has no newer owner; refusing would only strand it.
+    // Already-removed layout tabs have no newer owner to protect; refusing would strand them.
     const acknowledgeTabRetirement =
       target.kind === 'tab' && !options.closedByLayoutOwner
         ? this.captureTerminalTabRetirement(worktreeId, target.tabId)
@@ -199,10 +191,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     })
   }
 
-  /**
-   * Commits a split pane's close that main started, then tells the desktop renderer to drop that
-   * pane. Never touches the tab: a pane the session no longer lists commits nothing.
-   */
+  /** Commit only this pane's membership removal, then notify the renderer; absent panes commit nothing and the tab is untouched. */
   protected async closeTerminalPane(
     worktreeId: string,
     target: TerminalPaneCloseTarget
@@ -216,8 +205,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         throw error
       }
     }
-    // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
-    // renderer's exit handling are each a no-op after the other.
+    // Exit may never arrive; leaf-addressed retirement and renderer exit handling are mutually idempotent.
     this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, target.tabId, target.leafId)
     this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
   }
@@ -227,12 +215,12 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): Promise<void> {
-    // Why best-effort, as for a tab: a failed kill must not keep a pane the user closed.
+    // Failed kill must not retain a pane the user explicitly closed.
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
     if (pty) {
       this.ptyController?.kill(pty.ptyId)
     } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
-      // Why: with no renderer to own the kill, a dormant SSH pane's durable id is its stop order.
+      // Without renderer kill ownership, a dormant SSH pane's durable id is the stop authority.
       this.ptyController?.kill(tab.ptyId)
     }
     await this.closeTerminalPane(worktreeId, {
@@ -286,13 +274,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     }
   }
 
-  /**
-   * Answers one client's session-tabs question: whether this runtime has taken back *that* client's
-   * client-hosted pages yet and can say which chats exist, then that client's own tab selection.
-   *
-   * The holds are decided here and nowhere else, and each is set or cleared rather than only set,
-   * so a frame built for one client can never carry another client's, or an earlier, answer.
-   */
+  /** Recompute this client's reconciliation holds and selection, setting and clearing flags so earlier frames or other clients cannot leak authority. */
   protected projectMobileSessionTabsForClient(
     result: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
@@ -329,8 +311,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       if (pending) {
         return pending
       }
-      // Why: reconnect exit bursts share one authoritative daemon inventory
-      // instead of multiplying a full cross-generation list RPC per stale tab.
+      // Coalesce reconnect exit bursts into one authoritative daemon inventory instead of one cross-generation RPC per stale tab.
       const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
         if (this.pendingMobileSessionPtyAggregateInventoryRefresh === refresh) {
           this.pendingMobileSessionPtyAggregateInventoryRefresh = null

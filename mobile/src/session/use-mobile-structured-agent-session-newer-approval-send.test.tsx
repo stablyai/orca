@@ -1,6 +1,4 @@
-// A host's queue waits on any pending prompt. While every pending prompt is an approval this build
-// cannot answer, nothing here can settle it, so a send goes out without `delivery` and starts a
-// turn, whose card cancel then works.
+// When only unsupported approvals block the host queue, omit delivery to start an answerable turn with working card Cancel.
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -132,9 +130,7 @@ const RUNNING_TURN: AgentJournalRenderItem = {
   body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
 }
 
-/** What the composer says a send does while this phone's Stop is still in flight. */
 async function afterStop(items: AgentJournalRenderItem[]): Promise<unknown> {
-  // The Stop's request stays in flight, so the phone keeps reading Stopping.
   sendRequest.mockImplementation(async (method) =>
     method === 'agentSession.cancel'
       ? new Promise(() => undefined)

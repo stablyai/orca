@@ -9,8 +9,7 @@ export function shouldShowOsc52ClipboardDefaultOnNotice(input: {
   persistedUIReady: boolean
   noticePending: boolean
 }): boolean {
-  // Why gate on hydration: before ui.get() lands the flag reads false, and firing
-  // on the default would nag every profile that was never opted out.
+  // Wait for hydration: the default false would notify profiles that never opted out.
   return input.persistedUIReady && input.noticePending
 }
 
@@ -28,19 +27,14 @@ export function useOsc52ClipboardDefaultOnNotice(persistedUIReady: boolean): voi
         'TUI clipboard writes are now on by default'
       ),
       {
-        // Why a stable id: StrictMode re-runs this effect against the same closure, so
-        // the early return can't catch the second pass — sonner dedupes it instead.
+        // A stable ID lets sonner dedupe StrictMode’s repeat against the same closure.
         id: 'osc52-clipboard-default-on-notice',
         description: translate(
           'auto.components.terminal.pane.osc52.clipboard.default.on.notice.description',
           'Zellij, tmux, Neovim and other terminal programs can now copy to your clipboard. Turn it off in Terminal settings.'
         ),
         duration: 15_000,
-        // Why consume on close rather than on enqueue: this is the profile's one notice that
-        // a security posture changed under it, and the flag can never re-arm once the settings
-        // stamp lands. Clearing at enqueue spends it on launches where nothing was ever seen —
-        // a quit inside the 15s, a crash in the gap. Clearing on close costs at most a repeat
-        // next launch, which the user ends by dismissing it.
+        // Consume this one-time security-posture notice on close; enqueue could spend it on an unseen toast before a quit or crash.
         onAutoClose: clearNotice,
         onDismiss: clearNotice,
         action: {
@@ -49,8 +43,7 @@ export function useOsc52ClipboardDefaultOnNotice(persistedUIReady: boolean): voi
             'Open Setting'
           ),
           onClick: () => {
-            // Why clear here too: sonner's action path deletes the toast without firing
-            // onDismiss, so acting on the notice would otherwise leave it armed.
+            // Sonner actions omit onDismiss, so consume the notice here too.
             clearNotice()
             const store = useAppStore.getState()
             store.setSettingsSearchQuery('')

@@ -116,8 +116,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     const returnedIds = this.collectPublicMobileSessionTabIds(snapshot)
     const expected = targetGroup.tabOrder
       .map((tabId) => this.resolveMobileSessionHostTabId(snapshot, tabId) ?? tabId)
-      // Why: clients reorder the sanitized session.tabs.list model; raw groups
-      // can still contain stale browser ids hidden from paired web clients.
+      // Reorder the sanitized client model; raw groups may contain browser ids hidden from paired web clients.
       .filter((tabId) => returnedIds.has(tabId))
     const structuredIds = expected.filter((tabId) =>
       snapshot?.tabs.some((tab) => tab.type === 'agent-session' && tab.id === tabId)
@@ -138,8 +137,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
       }
       return normalized
     }
-    // Why: reorder is a pure permutation of one existing group. Missing or
-    // extra ids would let a paired web client silently move/lose host tabs.
+    // Only permute this group; missing/extra ids could move or lose host tabs.
     if (normalized.length !== expected.length || expected.some((tabId) => !seen.has(tabId))) {
       throw new Error('invalid_tab_order')
     }
@@ -252,10 +250,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     })
   }
 
-  // Why: `getRepo(id)` is host-blind and never read `worktree.hostId`, which outranks every repo
-  // row. One id can name rows on local, SSH and runtime hosts at once, so an arbitrary row decided
-  // the execution host for ~36 downstream Git dispatches: a worktree on one SSH host routed to
-  // another, and a runtime host's *nested* target got dialled in this client's namespace (#11163).
+  // Route by worktree host before repo id: same-id host twins and runtime-nested targets cannot use this client's arbitrary repo row (#11163).
   protected async resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
@@ -279,15 +274,12 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     return { worktree, repo, executionHostId, localGitOptions }
   }
 
-  // Why: same defect as `resolveRuntimeGitTarget` above, in ~30 filesystem dispatches. `getRepo(id)`
-  // is host-blind and never read `worktree.hostId`, and the `connectionId` it returned spelled
-  // "runtime host", "unresolved" and "genuinely local" all as `undefined` (#11163).
+  // Resolve the worktree's filesystem host; getRepo(id) conflates host twins, runtime targets, unresolved owners and local paths (#11163).
   async resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
   }> {
-    // The floating workspace has no row to resolve. Answering here rather than at each caller
-    // keeps one resolver authoritative for "where does this workspace live".
+    // Floating workspaces have no row; resolve their authority centrally.
     if (isFloatingWorkspaceSelector(worktreeSelector)) {
       return {
         worktree: this.floatingWorkspaceToResolvedWorktree(
@@ -298,8 +290,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     }
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
     if (folderScope?.folderWorkspace) {
-      // A folder workspace has no repo row to disagree with; its own inference already threw on an
-      // ambiguous one, and it is never hosted by a runtime environment.
+      // Folder inference already rejects ambiguity; no repo row or runtime-environment owner can override it.
       return {
         worktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace),
         executionHostId: getConnectionExecutionHostId(folderScope.connectionId)

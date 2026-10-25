@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
       constructor(public current: number) {}
     },
     View: 'AnimatedView',
-    // Lazy like a real Animated node, so translateX tracks later timing updates.
+    // Keep Animated values lazy so later timing updates reach translateX.
     multiply: (value: { current: number }, factor: number) => ({ value, factor }),
     timing: mocks.animatedTiming
   },
@@ -112,7 +112,6 @@ describe('MobileOnboardingScreen', () => {
 
   function translateX(): number {
     const { value, factor } = trackStyle().transform[0].translateX
-    // + 0 normalises -0 on the first slide.
     return value.current * factor + 0
   }
 
@@ -220,7 +219,6 @@ describe('MobileOnboardingScreen', () => {
   })
 
   it('sizes slides from the modal viewport rather than the wider window', async () => {
-    // iPad presents the modal as a centred sheet narrower than the window.
     mocks.windowWidth = 1024
     await renderScreen(540)
 

@@ -183,7 +183,6 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     [jiraTaskSourceContext, openTaskPage]
   )
 
-  // Linear tab state
   const nextModel = model as typeof model & {
     selectedLinearIssueId: typeof selectedLinearIssueId
     setSelectedLinearIssueId: typeof setSelectedLinearIssueId

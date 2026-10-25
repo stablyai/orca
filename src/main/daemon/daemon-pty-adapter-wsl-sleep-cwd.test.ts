@@ -162,8 +162,7 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     expect(woken.coldRestore).toBeTruthy()
   })
 
-  // awin verify-10, X2: production never calls reconcileOnStartup, so after a relaunch a pane the
-  // window has not reopened is known only from the inventory; its Sleep wrote no checkpoint at all.
+  // After relaunch, unopened panes exist only in daemon inventory; Sleep must still checkpoint their history and folder.
   it('reads it for a pane a relaunched app only listed, never adopted or reattached', async () => {
     const before = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
     const { id } = await before.spawn({
@@ -177,6 +176,28 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     await before.disconnectOnly()
     adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
     expect((await adapter.listProcesses()).map((process) => process.id)).toContain(id)
+
+    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+
+    expect(readRows).toHaveBeenCalledWith('Ubuntu', expect.any(Number), { running: true })
+    expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep\\er`)
+  })
+
+  // awin verify-11, 5e: a pane the relaunched window reattached (no spawn env, so no pane key)
+  // slept at its spawn folder.
+  it('reads it for a pane a relaunched app reattached without its spawn environment', async () => {
+    const before = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
+    const { id } = await before.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: WSL_CWD,
+      env: { ORCA_PANE_KEY: PANE_KEY },
+      sessionId: 'repo::/repo@@reattached'
+    })
+    lastSubprocess._simulateData('$ cd deep/er\r\n')
+    await before.disconnectOnly()
+    adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
+    await adapter.attach(id)
 
     await adapter.shutdown(id, { immediate: true, keepHistory: true })
 

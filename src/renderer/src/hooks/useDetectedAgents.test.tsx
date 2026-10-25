@@ -206,12 +206,10 @@ describe('useDetectedAgents (ssh call site)', () => {
   it('fires remote detection once on mount and does not thrash after an empty result', async () => {
     const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
 
-    // The effect fires detection once; an empty [] is stored (not null), so the
-    // detectedIds===null guard prevents a re-detect loop on the same surface.
+    // Empty detection is settled rather than null, preventing repeat probes on the same surface.
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
     expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
 
-    // Re-rendering the same connection must not trigger another probe.
     await act(async () => {
       root.render(createElement(HookProbe, { target: { kind: 'ssh', connectionId: 'ssh-1' } }))
     })

@@ -1,26 +1,17 @@
-// Encodes a user's answer to a pending question for delivery: the pasted text
-// for agents that take a message, and the keystrokes that drive Claude's and
-// Codex's terminal selectors.
+// Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
 
-/** One question's chosen answer, normalized for delivery: the selected option
- *  indices (in option order) plus any free-text "other" answer. Index-based (not
- *  label text) so the answer can be delivered by the selector's stable option
- *  number — see `buildAskAnswerKeys`. */
+/** Option indices in display order plus free text; selectors address stable numbers rather than labels. */
 export type AskAnswerSelection = { indices: number[]; other?: string }
 
-/** A single keystroke group to write to the agent PTY. `raw` bytes (option
- *  numbers, Enter, arrows) are written verbatim as keystrokes; `text` is a
- *  free-text answer the caller runs through its paste sanitizer before writing. */
+/** raw is verbatim PTY input; text must pass through the caller’s paste sanitizer. */
 export type AskAnswerKeyGroup = { raw: string } | { text: string }
 
-/** True when this question is answered (a picked option or typed free text). */
 function isAnswered(sel: AskAnswerSelection | undefined): boolean {
   return (sel?.indices.length ?? 0) > 0 || (sel?.other ?? '').trim().length > 0
 }
 
-/** The picked labels + trimmed free text for one question, in option order. */
 function answerLabels(question: AskQuestion, sel: AskAnswerSelection | undefined): string[] {
   const labels = (sel?.indices ?? [])
     .map((i) => question.options[i]?.label ?? '')
@@ -29,12 +20,7 @@ function answerLabels(question: AskQuestion, sel: AskAnswerSelection | undefined
   return other ? [...labels, other] : labels
 }
 
-/** Build the human-readable answer text: one line per question, in question
- *  order, each the selected label(s) + free text joined by ", ". Empty answers
- *  stay empty lines so N lines always == N questions. Used for agents whose
- *  question tool commits a pasted answer (not Claude's arrow-navigate selector).
- *  A `replyAsMessage` answer arrives detached from its question, so it quotes each
- *  answered question in the `> question\n\nanswer` form Codex's own clients send. */
+/** One answer line per question, including unanswered empty lines. Message replies quote answered questions as > question\n\nanswer, matching Codex clients. */
 export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): string {
   if (prompt.replyAsMessage) {
     return prompt.questions
@@ -47,15 +33,8 @@ export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelectio
   return prompt.questions.map((q, i) => answerLabels(q, selections[i]).join(', ')).join('\n')
 }
 
-// Claude's AskUserQuestion is an arrow-navigate selector: a bare Enter commits
-// the HIGHLIGHTED default (the first option), and pasted label text does not move
-// the highlight — so answering by label silently delivered every non-first pick
-// as the first option (STA-1860). Instead we drive the selector by each option's
-// stable 1-based number (which matches the card's badge), the marker it commits
-// on. Right-arrow steps to the next question / the Submit tab. Verified live
-// against Claude Code's TUI; groups are written spaced apart (see the senders)
-// because a navigation keystroke batched with Enter commits before the selector
-// has applied it.
+// Claude commits the highlighted default on Enter; pasted labels do not select it (STA-1860).
+// Use stable 1-based option numbers and right-arrow between tabs. Space navigation/Enter writes so rendering applies selection before commit; verified live.
 const ASK_ENTER = '\r'
 const ASK_NEXT_TAB = '\x1b[C'
 const ASK_PREVIOUS_ROW = '\x1b[A'
@@ -63,22 +42,10 @@ const ASK_NEXT_ROW = '\x1b[B'
 const ASK_NOTES = '\t'
 const ASK_PREVIEW_NOTES = 'n'
 
-/** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
- *  Each group is written a step apart so the selector applies it before the next.
- *
- *  - single-select pick  → the option number (selects AND commits; in a
- *    multi-question prompt it auto-advances to the next question)
- *  - free-text answer    → the "Type something" row number, the text, then Enter
- *  - multi-select        → each option number TOGGLES its checkbox, then a step
- *    to the Submit tab
- *  - preview single-select → the option number focuses it, free text becomes a
- *    note on that row (a "(notes only)" answer when none is picked), and Enter
- *    commits
- *  - a multi-question prompt (and a lone multi-select) finishes on a Submit
- *    confirmation, so it ends with one Enter
- *
- *  (Option counts are ≤ the tool's cap of a few, so single-digit numbers always
- *  address every row.) */
+/** Pace selector groups so each step renders before the next. Single-select digits commit/advance;
+ * free text uses Type something + Enter; multi-select digits toggle before the next/Submit tab.
+ * Preview picks focus a row, attach optional notes, then commit with Enter. Multi-question/lone
+ * multi-select prompts end with Submit confirmation; tool caps keep all row numbers single-digit. */
 export function buildAskAnswerKeys(
   prompt: AskPrompt,
   selections: AskAnswerSelection[]
@@ -111,12 +78,10 @@ export function buildAskAnswerKeys(
       if (other) {
         groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
       }
-      // A multi-select never auto-advances; step to the next tab (the Submit tab
-      // when this is the last question).
+      // Multi-select never auto-advances; move to the next question or final Submit tab.
       groups.push({ raw: ASK_NEXT_TAB })
     } else if (other) {
-      // Single-select can only carry one value, so route any answer that
-      // includes free text through the "Type something" row as one string.
+      // Route single-select answers containing free text through Type something as one string.
       groups.push(
         { raw: typeSomething },
         { text: answerLabels(q, sel).join(', ') },
@@ -138,12 +103,7 @@ export function buildAskAnswerKeys(
   return groups
 }
 
-/** Build keystrokes for Codex's request_user_input overlay.
- *
- * Unlike Claude, Codex submits on the final option digit and attaches free text
- * as notes to the highlighted row. The overlay starts on the first row, so note
- * answers move to the target without committing, open notes with Tab, then
- * submit with Enter. */
+/** Codex commits on the final option digit; notes attach to the highlighted row. Start at row one, navigate without commit, Tab to notes, then Enter. */
 export function buildCodexAskAnswerKeys(
   prompt: AskPrompt,
   selections: AskAnswerSelection[]

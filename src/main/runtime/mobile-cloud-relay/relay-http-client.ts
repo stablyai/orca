@@ -38,7 +38,6 @@ const AssignmentResponseSchema = z
       .string()
       .min(1)
       .max(8 * 1024),
-    // Optional correction must not make a healthy assignment depend on a future policy.
     regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined)
   })
   .strict()
@@ -56,8 +55,7 @@ export class RelayHttpError extends Error {
   }
 }
 
-// Distinct message so log censuses can tell a locally-enforced wait from a real
-// director 429 — one server 429 would otherwise print several identical lines.
+// Distinguish local pacing from director 429s so one refusal does not look like many.
 export class RelayAssignLocallyPacedError extends RelayHttpError {
   constructor(retryAfterMs: number) {
     super('assignment', 429, retryAfterMs)
@@ -70,8 +68,6 @@ function relayRetryAfterMs(value: string | null): number | null {
 }
 
 export function shouldRetryRelayConnectionError(error: unknown): boolean {
-  // A staleness abort means the caller was superseded — retrying it would
-  // spend rate-gate slots on work whose owner is gone.
   if (error instanceof RelayAssignAbortedError) {
     return false
   }
@@ -117,7 +113,6 @@ export async function exchangeRelayAuthorization(input: {
       authorization: `Bearer ${input.accessToken}`,
       'content-type': 'application/json'
     },
-    // A blackholed request must settle so the coordinator can advance its bounded retry state.
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
@@ -142,7 +137,6 @@ type RelayAssignmentRequest = {
   regionCorrection?: RelayRegionCorrectionRequest
   fetch?: typeof globalThis.fetch
   requestDeadlineMs?: number
-  // Fencing for the throttle wait: a superseded caller aborts instead of assigning.
   isCurrent?: () => boolean
   assignRateGate?: RelayAssignRateGate
 }
@@ -159,10 +153,7 @@ export async function requestRelayAssignment(
     await gate.reserve(rateKey, input.isCurrent)
   } catch (error) {
     if (error instanceof RelayAssignRateLimitedError) {
-      // Surface a long local wait as the 429 it stands in for, so the existing
-      // schedulers pace with retryAfterMs instead of parking the caller inline.
-      // Reachable only while a director Retry-After beyond the inline cap is
-      // still in force — local booking alone never exceeds ~5.5s.
+      // Expose over-budget Retry-After as paced 429 so schedulers retry without parking pairing IPC.
       throw new RelayAssignLocallyPacedError(error.retryAfterMs)
     }
     throw error
@@ -170,15 +161,13 @@ export async function requestRelayAssignment(
   return await sendRelayAssignment(input, gate, rateKey)
 }
 
-// The field-fallback retries below are one logical attempt against one booked
-// slot; re-entering the gate would stall rolled-back-director compatibility 5s.
+// Compatibility field retries are one logical attempt/slot; rebooking would add 5s per fallback.
 async function sendRelayAssignment(
   input: RelayAssignmentRequest,
   gate: RelayAssignRateGate,
   rateKey: string
 ): Promise<RelayAssignment> {
-  // A caller superseded after reserving — or between field-fallback retries —
-  // must not spend more requests on an assignment nobody will consume.
+  // Superseded callers cannot assign after booking or between compatibility retries.
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
@@ -194,8 +183,6 @@ async function sendRelayAssignment(
       relayHostId: input.relayHostId,
       ...(input.regionCorrection ? { regionCorrection: input.regionCorrection } : {}),
       ...(input.preferredRegion ? { preferredRegion: input.preferredRegion } : {}),
-      // Declares likely reconnection so the director can verify and admit
-      // through its bounded fast lane instead of the placement queue.
       ...(input.reconnect ? { reconnect: true } : {})
     })
   })
@@ -209,12 +196,9 @@ async function sendRelayAssignment(
       return await sendRelayAssignment({ ...input, regionCorrection: undefined }, gate, rateKey)
     }
     if (input.preferredRegion && response.status === 400) {
-      // A rolled-back director rejects the regional hint; preserve the
-      // reconnect lane while retrying without only that field.
       return await sendRelayAssignment({ ...input, preferredRegion: undefined }, gate, rateKey)
     }
     if (input.reconnect && response.status === 400) {
-      // A rolled-back director rejects unknown fields; retry once unhinted.
       return await sendRelayAssignment({ ...input, reconnect: false }, gate, rateKey)
     }
     throw new RelayHttpError('assignment', response.status, retryAfterMs)

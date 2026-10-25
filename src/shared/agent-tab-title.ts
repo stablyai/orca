@@ -32,8 +32,7 @@ function truncateAtWordBoundary(value: string, maxLength: number): string {
   return sliced
 }
 
-// Why: generated titles are derived from pasted agent prompts on renderer
-// state paths; collapse display whitespace without a regex replacement pass.
+// Collapse pasted-prompt whitespace without a regex pass on renderer state paths.
 function foldGeneratedTabTitleWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -69,16 +68,11 @@ function isGeneratedTabTitleWhitespace(code: number): boolean {
 }
 
 export function deriveGeneratedTabTitle(prompt: string): string | null {
-  // Why: agent prompts can be paste-sized. Generated tab titles are previews,
-  // so title cleanup must not scan the full prompt on the renderer state path.
+  // Bound renderer title cleanup before scanning paste-sized prompts.
   const promptPreview = prompt.slice(0, GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT)
   const firstClause = promptPreview
     .trim()
-    // Strip URLs before markdown punctuation: a GitLab URL like
-    // `/merge_requests/42` contains `_`, and folding that to a space first would
-    // split the URL and leak fragments ("requests") into the title. No `\b`
-    // anchor: a URL wrapped in markdown emphasis (`_https://…_`) is preceded by
-    // a word char, where `\bhttps` would fail to match and leak the whole URL.
+    // Strip URLs before punctuation: underscores in /merge_requests would leak fragments. Avoid a word boundary so _https://…_ also matches.
     .replace(/https?:\/\/\S+/gi, ' ')
     .replace(/[`*_~#>[\]{}()]/g, ' ')
     .replace(/^(?:issue|task|bug|feature|pr)\s*(?:#?\d+)?\s*[:-]\s*/i, '')

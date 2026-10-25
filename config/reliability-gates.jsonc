@@ -6031,14 +6031,9 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/editor/EditorPanelShell.header.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/renderer/src/components/link-actions/LinkActionPopover.test.tsx src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/store/slices/tabs-hydration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
-        // STA-5681 address-bar convergence: conversion is page replacement (fresh id, one store
-        // commit flips page + mirror + mobile observables), typed workspace paths convert via the
-        // lexical-containment classifier, and doc history carries document identities with no url
-        // field at all. The chip now answers to "Edit address".
+        // STA-5681: atomic page/mirror/mobile replacement, lexical typed-path conversion, document-identity history; chip says “Edit address”.
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-page-conversion.test.ts src/renderer/src/runtime/sync-runtime-graph-conversion-publish.test.ts src/renderer/src/lib/workspace-doc-address-input.test.ts src/shared/workspace-doc-history.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.test.ts",
-        // The convergence journey with real clicks and typing: chip → address bar → URL converts in
-        // place, Back returns across the conversion, a typed path converts a runtime-owned tab, the
-        // dropdown's doc row dedupe-activates. Caught the remote-pane routing gap before it shipped.
+        // Real chip/address/Back/path/deduplication journey caught remote-pane routing before release.
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-preview-address-bar-convergence.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=list",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
@@ -17071,16 +17066,29 @@
       "oracle": "Apply snapshots onto adversarially dirty pane states (already on the alternate screen, stale content occupying cells the new frame leaves blank, scrollback present, wide glyphs, revived sessions with restarted PTY seq counters) and assert exact buffer equality with the snapshot frame; fault injection interleaves hidden chunks, live output, metadata-only replay, and clear-before-replay, then asserts ordered terminal buffer content, clear decisions, and replay diagnostics. Marker-presence checks are not acceptable evidence on restore paths.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/pty-connection-hidden-restore-fit-overflow.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection-hidden-restore-fit-overflow.test.ts",
         "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
         "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-restore-fit-overflow.test.ts",
+          "assertions": [
+            "recovers small live output when the deadline interrupts an answered snapshot",
+            "recovers partially covered live output when the deadline interrupts an answered snapshot",
+            "recovers unmapped live output when the deadline interrupts an answered snapshot",
+            "recovers unhide gap live output when the deadline interrupts an answered snapshot",
+            "recovers fresh snapshot gap live output when the deadline interrupts an answered snapshot",
+            "recovers overflowed live output when the deadline interrupts an answered snapshot"
+          ]
+        },
         {
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
           "assertions": [
@@ -18330,9 +18338,7 @@
       "coveredProviders": [],
       "coverageNotes": "Local macOS unit evidence over the shared main-process delivery pipeline in registerPtyHandlers. The oracle drives a local mock PTY, but the in-flight/pending accounting is provider-agnostic and daemon PTYs ride the identical pipeline (the manual dev repro that proved the freeze was daemon-backed). SSH is a separate relay/credit path and never enters these counters; mobile/relay ride unaffected paths; WSL terminals ride this same local/daemon pipeline and are covered by the same accounting (no dedicated provider-contract test yet). Motivated by a production incident on v1.4.131 (three frozen/broken terminal panes in one desktop session) diagnosed to leaked in-flight/pending accounting across a renderer reload (rendererGraphEpoch 3). Live validation of the fix on a rebuilt dev instance surfaced a second leak mode (the boot window): after the reset ran, main resumed flushing a flooding PTY into the still-booting page before its pty:data listener re-registered, so those sends were dropped yet counted and re-pinned rendererInFlightChars at 524288. The gate now also covers holding sends until the renderer's pty:rendererDispatcherReady handshake. A watchdog self-heals a lost handshake: on each reset a one-shot ~10s timer arms and, if the handshake never arrives, force-opens the gate (rendererDispatcherReadyForcedCount increments) so a dropped handshake degrades to pre-handshake behavior instead of a permanent hold; the real handshake or a re-registration cancels it. Two new diagnostics — rendererPtyDispatcherReady and rendererDispatcherReadyForcedCount — expose the otherwise-invisible boot-window hold, which early-returns before ackGatedFlushSkipCount increments.",
       "motivatingLinks": [
-        // #5787 introduced the renderer-reload delivery-accounting path this gate hardens;
-        // kept for lineage, not the primary motivation. THIS fix is motivated by the
-        // v1.4.131 three-frozen-panes incident (see coverageNotes).
+        // #5787 is delivery-accounting lineage; this gate addresses v1.4.131’s three-frozen-panes incident (coverageNotes).
         "https://github.com/stablyai/orca/pull/5787",
         "https://github.com/stablyai/orca/pull/8034"
       ],

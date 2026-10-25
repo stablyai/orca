@@ -129,7 +129,7 @@ describe('readWslOrcadIncumbent', () => {
     expect(deps.wake).toHaveBeenCalledTimes(1)
     expect(deps.listen).toHaveBeenCalledTimes(2)
     expect(close).toHaveBeenCalledTimes(2)
-    // Only the recount closes admission, so no terminal starts between it and the stop.
+    // Only final recount closes admission, preventing terminal creation between census and stop.
     expect(vi.mocked(deps.census).mock.calls[1]?.[3]).toEqual({
       releaseFinishedAutomationTerminals: true,
       closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS

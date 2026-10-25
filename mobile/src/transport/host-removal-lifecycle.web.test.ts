@@ -40,8 +40,7 @@ describe('removing a host from the page', () => {
   })
 
   it('touches no store, no push subsystem and no client', async () => {
-    // The page storage adapter drops writes and reports it, and push needs a device token this
-    // document has none of: the refusal is what keeps either from being attempted at all.
+    // Refuse before storage/push work because the page has neither native writable state nor a device token.
     const forgetHostClient = vi.fn()
     await removeHostAndCloseClient('host-1', forgetHostClient).catch(() => {})
     expect({

@@ -1,7 +1,4 @@
-// Codex's own frames go through the event sink; the settlements they prove (a failed turn's
-// rejection, an echo's acceptance) are written straight to the journal. Each settlement must land
-// after the frame that proved it, even with an earlier streamed write issued in the same read.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// With only the Codex child faked, verify direct settlements follow the streamed frames that prove them, including coalesced writes.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

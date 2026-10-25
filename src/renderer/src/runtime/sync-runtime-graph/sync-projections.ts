@@ -215,11 +215,7 @@ export function buildRuntimeMobileBrowserProjection(state: AppState): string {
   )},"pagesByWorkspace":${buildBrowserPagesProjection(getBrowserPagesByWorkspace(state))}}`
 }
 
-/**
- * Why memoized per file id: `setEditorDraft` fires on every Monaco keystroke and re-spreads
- * `editorDrafts`, so an unmemoized rebuild re-hashed every open dirty file's full text on the
- * input path. Only the typed file's draft string changes identity, so only it needs rehashing.
- */
+// Monaco re-spreads drafts per keystroke; memoize each file’s unchanged string so typing does not rehash all dirty files.
 function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): EditorDraftHashCache {
   const cached = graphState.cachedEditorDraftHashes
   if (cached?.source === editorDrafts) {

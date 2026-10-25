@@ -8,11 +8,7 @@ import { OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
-/**
- * Backfilling to 1 rather than 0 is the whole point: every pre-v30 row belongs to
- * a worker that was already dispatched, so reading it as a root coordinator would
- * hand every in-flight worker a free generation of sub-workers at upgrade.
- */
+/** Backfill old workers to depth 1; depth 0 would grant an extra generation of nested workers on upgrade. */
 describe('nested worker depth migration (v30)', () => {
   let db: OrchestrationDb | undefined
   let tempDir: string | undefined
@@ -93,8 +89,7 @@ describe('nested worker depth migration (v30)', () => {
   })
 
   it('does not mistake a real v29 database for a broken v30 one', () => {
-    // An unconditional column check here would report the schema incomplete and
-    // replay migrations from v6 instead of starting at 29.
+    // Unconditional new-column probes would replay from v6 instead of isolating v29 migration.
     const dbPath = createV29Database()
     const oldDb = new Database(dbPath)
     dropDerivedDeliverySchema(oldDb)

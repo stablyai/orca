@@ -1,7 +1,4 @@
-// Why not write(''): xterm 6.1's resize() drains the queue through WriteBuffer.flushSync, whose
-// `while (chunk = shift())` loop stops at an empty-string chunk and clears the rest of the queue,
-// so the barrier's callback never fires and every write queued behind it is lost
-// (xtermjs/xterm.js#6201). A zero-length Uint8Array parses as nothing but is a truthy chunk.
+// Empty-string barriers are lost by xterm 6.1 flushSync’s truthiness loop, which also drops following writes (#6201). Use a truthy zero-length Uint8Array that parses no bytes.
 const PARSE_BARRIER = new Uint8Array(0)
 
 type XtermWriter = { write(data: string | Uint8Array, callback?: () => void): void }

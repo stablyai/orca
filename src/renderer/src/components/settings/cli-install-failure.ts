@@ -1,8 +1,6 @@
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
-// Why: Electron re-wraps a rejected `ipcMain.handle` as
-// `Error invoking remote method '<channel>': Error: <message>`, so the installer's
-// own sentence is buried behind transport noise by the time it reaches the panel.
+// Strip Electron’s invoke wrapper to expose the installer’s own reason and remedy.
 const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/
 
 export type CliInstallFailure = {
@@ -12,11 +10,7 @@ export type CliInstallFailure = {
   conflictCommandPath: string | null
 }
 
-/**
- * A registration call that resolved without landing. The main process already
- * reported why in `detail`, so this only decides that it failed — it does not
- * re-classify the reason.
- */
+/** Treat resolved-but-unregistered calls as failure while retaining main’s supplied reason. */
 export function readCliInstallFailure(
   status: CliInstallStatus,
   fallbackReason: string

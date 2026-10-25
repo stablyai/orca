@@ -191,7 +191,7 @@ const TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS = 6
 
 /** The host a {@link getTaskSourceCacheScope} scope was built for, or null when `scope` isn't a whole one. */
 export function taskSourceCacheScopeHostId(scope: string): ExecutionHostId | null {
-  // Why count parts: empty parts put `::` inside a scope, so a truncated prefix must not parse as one.
+  // Empty scope parts contain ::; require full arity so truncated prefixes cannot parse as whole scopes.
   const parts = scope.split(':')
   const whole =
     parts.length === TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS ||

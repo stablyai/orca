@@ -7,8 +7,7 @@ import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
 
-// Why: an ancestor skip is provisional while every blocking descendant is still
-// removing; it hardens or lifts once the blockers settle authoritatively.
+// Ancestor skips remain provisional while blockers remove; authoritative settlement hardens or lifts them.
 export type SkippedWorkspaceCleanupAncestor = {
   candidate: WorkspaceCleanupCandidate
   failure: WorkspaceCleanupFailure

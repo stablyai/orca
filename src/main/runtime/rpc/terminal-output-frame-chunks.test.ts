@@ -23,7 +23,7 @@ describe('terminal output frame chunks', () => {
   })
 
   it('keeps every emitted frame within the wire cap and reassembles to the input', () => {
-    const data = `${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`
+    const data = `${'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES - 3)}${SURROGATE_PAIR}${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`
     const frames = [
       ...iterateTerminalOutputFrameChunks(data, seqPreservingMeta(data, 999_999), 'span')
     ]

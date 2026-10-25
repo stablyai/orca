@@ -68,7 +68,6 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      // Local connection: no connectionId
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -82,10 +81,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       expect(capturedDataCallback.current).not.toBeNull()
 
-      // Simulate PTY output (shell prompt arriving)
       capturedDataCallback.current?.('(base) user@host $ ')
 
-      // Even after the debounce, the renderer must not inject the command (main already wrote it via writeStartupCommandWhenShellReady).
       expect(transport.sendInput).not.toHaveBeenCalledWith(
         expect.stringContaining("claude 'say test'")
       )

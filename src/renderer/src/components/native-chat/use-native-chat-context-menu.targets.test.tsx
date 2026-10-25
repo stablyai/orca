@@ -116,7 +116,6 @@ describe('native chat right-click targets', () => {
     expect(mocks.writeClipboardText).toHaveBeenCalledWith('https://example.com/docs')
 
     await rightClick('docs link')
-    // The same destinations, in the same order, as the click popover in use-native-chat-link-actions.
     expect(menuItemNames().slice(0, 3)).toEqual(['System Browser', 'Orca Browser', 'Copy link'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Orca Browser' }))
     expect(mocks.openRoutedHttpLink).toHaveBeenCalledWith('https://example.com/docs', {

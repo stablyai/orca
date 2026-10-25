@@ -43,8 +43,7 @@ import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-cat
 import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
-// Grok, OpenCode and OMP chats were used, but none has a saved model pick: the user's report was
-// that these painted the "Model" placeholder, then the host's pills.
+// Previously used agents without saved picks should paint cached host models immediately.
 const REGISTERED = ['claude', 'codex', 'grok', 'opencode', 'omp'].map((agent) => ({ agent }))
 const EFFORTS = [
   { value: 'low', label: 'Low' },
@@ -132,7 +131,6 @@ describe('a new chat of an agent with no saved pick', () => {
       },
       runtimeStatusByEnvironmentId: new Map()
     })
-    // Each read answers what the host saved: the preload's and the pane's own alike.
     mocks.call.mockImplementation(
       async (_target: unknown, method: string, params: { agent: string }) =>
         method === 'agentSession.modelCatalog'
@@ -162,7 +160,6 @@ describe('a new chat of an agent with no saved pick', () => {
       const reads = mocks.call.mock.calls.length
       const { frames, unmount } = renderNewChat(agent)
       expect(frames[0]).toEqual(final)
-      // The pane's own read lands the same answer: no frame ever showed anything else.
       await waitFor(() => expect(mocks.call.mock.calls.length).toBeGreaterThan(reads))
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(final))).toBe(true)

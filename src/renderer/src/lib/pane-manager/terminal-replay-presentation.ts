@@ -29,12 +29,7 @@ type ReplayPresentation = {
 
 const presentations = new WeakMap<HTMLElement, ReplayPresentation>()
 
-/**
- * Hides the xterm screen behind a copy of its last frame for one structural
- * replay, so the clear and the source-grid paint ahead of the destination fit
- * are never presented. Returns the release; the last release (or the hold cap)
- * repaints and shows the screen again.
- */
+/** Hold one structural replay behind a copy of the last frame, hiding clear/source-grid paints until destination fit. The last release or hold cap shows and repaints the screen. */
 export function beginTerminalReplayPresentation(
   terminal: TerminalReplayPresentationTarget
 ): (present: boolean) => void {
@@ -87,8 +82,7 @@ export function beginTerminalReplayPresentation(
       held.frame?.remove()
     }
   }
-  // Why: unhiding mid-DEC 2026 publishes the TUI's half-built frame over the
-  // retained copy; the hold cap still unhides a frame that never closes.
+  // Unhiding mid-DEC 2026 replaces the retained copy with unfinished TUI pixels; only the cap forces a never-closing frame visible.
   const unhideWhenFrameComplete = (held: ReplayPresentation): void => {
     if (held.frameWait !== null) {
       return

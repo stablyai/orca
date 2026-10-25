@@ -21,11 +21,11 @@ export type RunScopeParams = {
   callerSession: OrchestrationSessionCaller | undefined
   requireCurrentConsumer: boolean
   legacyCoordinatorRunId?: string
-  // Why: the caller's declared handle is a user param; this is the attested one to check it against.
+  // Attest user-supplied handles against this trusted handle.
   callerEvidence?: OrchestrationCompatibilityEvidence
 }
 
-// Why: declared handles select mutable Run bindings, so attested callers may only name themselves.
+// Mutable Run bindings require attested callers to name only themselves.
 export function assertCallerHandleMatchesEvidence(
   runtime: OrcaRuntimeService,
   callerTerminalHandle: string,
@@ -44,10 +44,7 @@ export function assertCallerHandleMatchesEvidence(
   }
 }
 
-/**
- * The caller as Run binding and mail routing see it. A session the dispatch entry resolved is the
- * caller outright; otherwise it is the party the declared handle names, at the pane it resolved to.
- */
+/** Use the dispatch-resolved session outright; otherwise resolve the declared handle's party and pane. */
 export function orchestrationCallerIdentity(
   runtime: OrcaRuntimeService,
   caller: {
@@ -70,11 +67,7 @@ export type OrchestrationCallerParams = {
   callerSession: OrchestrationSessionCaller | undefined
   /** Preserve legacy callers that treated a missing pane as an ordinary fence. */
   requireStablePane?: boolean
-  /**
-   * Skip attestation here because the caller performs it itself — run-use must run
-   * its legacy-takeover check between pane resolution and attestation. Setting this
-   * without asserting elsewhere reopens the hole this helper exists to close.
-   */
+  /** Only skip attestation when the caller does it after the legacy-takeover check (run-use); omitting that reopens impersonation. */
   evidenceAssertedByCaller?: boolean
 }
 

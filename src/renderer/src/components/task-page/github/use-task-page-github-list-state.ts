@@ -43,13 +43,10 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   // Why: when every refresh fails (GitHub outage/network/rate limit), attribute it to GitHub instead of showing an empty or stale list as current.
   const [githubUnavailable, setGithubUnavailable] = useState(false)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
-  // Why: quiet success revalidate must never share taskRefreshNonce / tasksFiltering
-  // (K23) — membership exits and merge success refresh without filter skeletons.
+  // Quiet success refreshes avoid the filter nonce/skeleton so membership exits do not blank the list.
   const [quietRefreshNonce, setQuietRefreshNonce] = useState(0)
   const [githubViewerLogin, setGitHubViewerLogin] = useState<string | null>(null)
-  // Why: the fetch effect uses this to detect when a nonce bump is from the
-  // user clicking the refresh button (force=true) vs. re-running for any
-  // other reason — e.g. a repo change while the nonce happens to be > 0.
+  // Distinguish explicit refresh nonce changes from repo/filter reruns while the nonce is already positive.
   const lastFetchedNonceRef = useRef(-1)
   // Why: invalidation-nonce analog of lastFetchedNonceRef; a preference flip must force past fetch-dedupe or the fan-out collapses onto a stale in-flight request from the pre-flip source.
   const lastFetchedInvalidationNonceRef = useRef(0)
@@ -68,7 +65,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     query: appliedTaskSearch.trim(),
     pageSize: githubPageSize
   })
-  // Why: null entries are pages not fetched yet; numbered provider pages let a high-page click load directly without reading intermediate pages.
+  // Null slots permit direct numbered-page loading without reading intermediate pages.
   const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
@@ -107,12 +104,9 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
   const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
-  // Proven window-422 page limit — separate from the count so a late count
-  // can't resurrect proven-unreachable pages, nor be pinned by a speculative
-  // withdrawal (see deriveAdvertisedTotalPages).
+  // Keep proven 422 limits separate so late counts replace speculation without resurrecting unreachable pages.
   const [provenPageLimit, setProvenPageLimit] = useState<number | null>(null)
-  // Why: synchronous mirror of countedTotalPages — the empty-page branch needs
-  // the committed value, not a click-time closure, and refs update immediately.
+  // Mirror committed counts synchronously so empty-page handling cannot use a stale click-time closure.
   const countedTotalPagesRef = useRef<number | null>(null)
   const hardRefreshEpochRef = useRef(0)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
@@ -159,11 +153,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     []
   )
 
-  // Why: keyed on selectedReposKey, not the selectedRepos array — a background
-  // repos:changed refresh mid-flight would otherwise bump the generation and
-  // silently discard the user's page navigation (#11485). Mirrors every dep of
-  // the fetch effect that resets page state, so a reset always invalidates
-  // in-flight page requests.
+  // Key generations by request fields rather than fresh repo arrays so background refreshes cannot discard page navigation.
   useEffect(() => {
     paginationGenerationRef.current += 1
     setPaginationLoading(false)

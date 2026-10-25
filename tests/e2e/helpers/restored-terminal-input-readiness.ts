@@ -13,8 +13,7 @@ export async function waitForRestoredTerminalInputReady(
   timeoutMs = 15_000
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
-  // Why: ConPTY echo can lag behind the poll interval, so retain every marker
-  // sent to the current concrete pane instead of chasing only the newest one.
+  // Retain every marker for this pane because ConPTY echo can lag behind the next poll.
   let pendingAttempts: readonly ReadinessAttempt[] = []
 
   while (Date.now() < deadline) {
@@ -45,8 +44,7 @@ export async function waitForRestoredTerminalInputReady(
             ) {
               return { ready: true, paneInstanceId }
             }
-            // Why: one input() payload is either wholly replay-suppressed or
-            // wholly forwarded, unlike character-by-character keyboard typing.
+            // One input() payload is wholly replay-suppressed or forwarded; typed characters can split across both.
             pane.terminal.input(input, true)
             return { ready: false, paneInstanceId }
           }
@@ -66,8 +64,7 @@ export async function waitForRestoredTerminalInputReady(
           ]
         : []
     } catch {
-      // Relaunch can replace the document between polls; the next attempt
-      // resolves the current pane and binding instead of retaining stale state.
+      // Relaunch may replace the document; resolve a fresh pane and binding on the next poll.
       pendingAttempts = []
     }
 

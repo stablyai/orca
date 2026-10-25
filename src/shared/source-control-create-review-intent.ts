@@ -52,8 +52,7 @@ export function resolveCreateReviewIntentEligibility({
     return { eligible: false, kind: null }
   }
 
-  // Why: safe branch preparation can continue without lookup authority; the
-  // main create preflight still fails closed before creating a duplicate.
+  // Branch preparation needs no lookup authority; create preflight still fails closed against duplicates.
   if (hostedReviewCreation.blockedReason === 'dirty') {
     if (stagedCount > 0 && !hasMessage) {
       return { eligible: true, kind: 'message_required' }
@@ -80,10 +79,7 @@ export function resolveCreateReviewIntentEligibility({
     return { eligible: true, kind: 'force_push' }
   }
 
-  // Why: a behind-only branch is safe to prepare with `git pull --ff-only`, so
-  // the intent flow can handle it in one click. A genuinely diverged branch
-  // stays ineligible — auto-merging would reconcile without consent, so the
-  // user keeps the explicit sync-first step.
+  // Behind-only allows ff-only preparation; divergence requires the user’s explicit sync step.
   if (hostedReviewCreation.blockedReason === 'needs_sync' && isBehindOnlyUpstream(upstreamStatus)) {
     return { eligible: true, kind: 'needs_sync' }
   }

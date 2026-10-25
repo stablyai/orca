@@ -1,6 +1,4 @@
-// Layout-owner build: what restore reads from each pane's stored terminal. A pane never
-// reattaches to a terminal another workspace owns (the window's rule,
-// deferred-session-reattach-choice.ts), and one whose local terminal is gone shows as sleeping.
+// Restores never attach another workspace's terminal; gone local bindings show sleeping, matching window rules (deferred-session-reattach-choice.ts).
 
 import { isPtySessionIdOwnedByWorktree } from '../../../../shared/pty-session-id-format'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'

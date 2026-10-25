@@ -100,8 +100,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
         testWindow.__createPRIntentPushFinished = false
         store.setState((current) => ({
           getHostedReviewCreationEligibility: async () => {
-            // Why: eligibility stays blocked until the delayed push completes,
-            // so this test exercises navigation during an in-flight intent run.
+            // Delay push so eligibility remains blocked while navigation exercises the in-flight intent.
             if (!testWindow.__createPRIntentPushFinished) {
               return {
                 provider: 'github' as const,

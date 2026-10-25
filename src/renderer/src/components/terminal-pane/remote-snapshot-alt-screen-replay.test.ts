@@ -75,8 +75,7 @@ vi.mock('./pty-transport', () => ({
 
 const COLS = 40
 const ROWS = 6
-// A setup script's output, then an agent TUI that entered the alt screen over it. Under a
-// live TUI the normal buffer is frozen, so host and pane hold the same one.
+// Live TUIs freeze normal history on both host and pane; start with matching pre-TUI setup output.
 const NORMAL_LINES = [...Array.from({ length: 10 }, (_, i) => `SETUP-OUTPUT-${i}`), '$ claude']
 const LIVE_PANE = `${NORMAL_LINES.join('\r\n')}\x1b[?1049h\x1b[2J\x1b[HOLD-AGENT-FRAME`
 // Agent frames jump the cursor over cells they expect blank instead of writing spaces.
@@ -193,9 +192,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     return [...events, { cols: COLS, rows: ROWS }]
   }
 
-  // Why: a revisited remote tab running an agent TUI gets a pushed snapshot while xterm
-  // is on the agent's alt screen. Cleared in place, the image's normal screen (old setup
-  // output) painted into the agent's screen, under its next paints.
+  // Folded normal history must not paint into a revisited live TUI’s alt buffer.
   it('repaints a pushed image exactly and keeps the history the TUI covers', async () => {
     const payload = recoveryPayload(ROWS)
     const client = await render([
@@ -219,8 +216,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: the pane's normal buffer froze with the host's when the TUI entered alt, so a
-  // pushed image repaints only the alt frame, whatever grid the host serialized it at.
+  // Keep frozen normal history when a push repaints only the live alt frame, regardless of capture grid.
   it("keeps the pane's history when the host screen has another grid", async () => {
     const hostRows = 10
     const events = await drainOntoLiveAltScreen(recoveryPayload(hostRows), {
@@ -241,8 +237,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: a push can reuse a concurrent requested capture that folds history in too;
-  // painting that history over the kept one would duplicate it in scrollback.
+  // Shared requested captures may include history; avoid duplicating it over the retained normal buffer.
   it('keeps history unduplicated when a pushed image also carries history', async () => {
     const client = await render([
       LIVE_PANE,
@@ -264,8 +259,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: the pane's buffer is read only after queued output parses; read early, a
-  // still-queued ?1049h makes the image paint its normal part into the TUI.
+  // Wait for queued ?1049h before reading buffer type or normal image bytes could paint into the TUI.
   it('reads the pane buffer after a queued alt-screen entry parses', async () => {
     const client = await render([
       LIVE_PANE,
@@ -287,8 +281,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: a TUI that started while the tab was hidden left the pane on the normal
-  // buffer; the image must rebuild that buffer and enter alt itself.
+  // If the TUI started while hidden, rebuild its normal history and enter alt from the host image.
   it('paints the whole image when the TUI started while hidden', async () => {
     const client = await render([
       NORMAL_LINES.join('\r\n'),
@@ -309,8 +302,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: once the host's TUI exits, its image no longer enters alt; the pane must leave
-  // alt and show the host's normal screen.
+  // Host TUI exit requires leaving alt and showing its normal screen.
   it('repaints from the normal buffer once the host TUI has exited', async () => {
     const hostScreen = [...NORMAL_LINES, 'Resume with claude --resume', '$ ']
       .slice(-ROWS)
@@ -335,8 +327,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: an SSH relay replays a raw byte window, not an image; it continues the TUI on
-  // the alt screen and must leave the normal buffer alone.
+  // Raw relay windows continue live alt output without replacing normal history.
   it('clears a raw byte replay in place on the alt screen', async () => {
     const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(AGENT_FRAME, {}))])
     const expected = await render([LIVE_PANE, `\x1b[2J${AGENT_FRAME}`])
@@ -350,8 +341,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     }
   })
 
-  // Why: a requested image flags alt only once the host's TUI exited (shell owner); one
-  // that exited without leaving alt must still paint from the normal buffer.
+  // Shell-owner images must restore normal content even when the dead TUI omitted alt teardown.
   it('paints a requested image from an exited TUI exactly over an alt screen', async () => {
     const client = await render([
       LIVE_PANE,

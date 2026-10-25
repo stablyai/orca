@@ -5,9 +5,7 @@ import {
   SSH_MUX_REQUEST_TIMEOUT_CODE
 } from './ssh-channel-multiplexer'
 
-// docs/reference/ssh-execution-boundary.md: the vocabulary is live / unverifiable / exited, and
-// loss of contact is never evidence of absence. Three call sites phrase this verdict to a user, so
-// collapsing "unverifiable" into "could not be reached" is a user-visible lie.
+// Use live/unverifiable/exited vocabulary: lost contact never proves absence (docs/reference/ssh-execution-boundary.md).
 describe('SSH request outcome verdict', () => {
   it('treats a response deadline as unverifiable', () => {
     const timedOut = Object.assign(new Error('Request "x" timed out after 30000ms'), {
@@ -17,9 +15,7 @@ describe('SSH request outcome verdict', () => {
   })
 
   it('treats a link declared lost as unverifiable, not as absence', () => {
-    // The regression this exists for: declaring a wedged link lost at TIMEOUT_MS made those
-    // requests surface CONNECTION_LOST where they used to surface a timeout, silently downgrading
-    // the honest "may still be running on the remote host" to "could not be reached".
+    // Wedged links now report CONNECTION_LOST instead of request timeout; both must retain possibly-running host outcome.
     expect(isSshRequestOutcomeUnverifiable(createSshDisposalError('connection_lost'))).toBe(true)
   })
 

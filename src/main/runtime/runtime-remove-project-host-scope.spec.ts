@@ -1,10 +1,4 @@
-/**
- * The same repo id is allowed on two execution hosts (persistence.ts `removeProjectForHost`).
- * `repo.rm` resolves a *row*, so the deletion it performs must be scoped to that row's host,
- * never the sibling host's registration.
- * A `path:`/`name:` selector resolves unambiguously even when the id is duplicated, so this
- * is reachable — and since #11994 every paired device now learns about it immediately.
- */
+/** Same repo ids may exist on multiple hosts; repo.rm resolves one row and must delete only that host registration, including unambiguous path/name selectors (#11994). */
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { OrcaRuntimeService } from './orca-runtime'

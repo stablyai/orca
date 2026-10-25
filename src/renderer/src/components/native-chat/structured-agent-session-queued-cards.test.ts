@@ -1,7 +1,3 @@
-// Card projection policy: queue order, derived hold labels (the wire carries
-// holds, not labels), and the presentation-only suppression of a card whose submission
-// already arrived — a queued draft is otherwise never a transcript bubble.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
@@ -47,7 +43,6 @@ function submission(
   }
 }
 
-/** The host's hand-off of draft `draftId`, always under a submission id of its own. */
 function handOff(
   draftId: string,
   dispatchState: AgentJournalSubmission['dispatchState'] = 'pending',
@@ -181,7 +176,6 @@ describe('queued message cards', () => {
     expect(queuedMessagesQueuePause(unpaused, null)).toBeNull()
   })
 
-  // A card held on its own (a failed send, or a newer host's hold) holds nothing behind it.
   it('a card behind a card held on its own is not held by it', () => {
     const cards = projectQueuedMessageCards(
       [
@@ -248,15 +242,13 @@ describe('queued message cards', () => {
       entry('plain'),
       entry('recorded', { phase: 'recorded' })
     ]
-    // Its card draws a queue send while the agent works; a plain send stays in view, and so does a
-    // recorded one until its row arrives (the transcript drops it then).
+    // Pending queued sends use cards while working; plain/recorded sends remain bubbles until host ownership appears.
     expect(ids(pendingSendsOutsideQueuedCards(sends, [], true))).toEqual(['plain', 'recorded'])
     expect(ids(pendingSendsOutsideQueuedCards(sends, [], false))).toEqual([
       'queued',
       'plain',
       'recorded'
     ])
-    // Once the host visibly holds it, it is a card.
     expect(ids(pendingSendsOutsideQueuedCards(sends, ['plain'], false))).toEqual([
       'queued',
       'recorded'

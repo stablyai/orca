@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
+import { dispatchPreambleSendOptions } from './orchestration/preamble'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -25,12 +26,11 @@ const fixture = (name: string): string =>
 // The bytes dsh-tui 0.17 paints as its first turn starts.
 const DSH_TURN_STARTED = '\x1b]0;⠂ 🐋 \x07\x1b]7501;state=working:app=dsh-tui\x1b\\'
 
-// #33227: dsh-tui 0.17 paints its launchpad before its session opens and refuses Enter until then,
-// keeping the draft, so a launch prompt sat in the launchpad after Orca's one Enter.
+// dsh-tui 0.17 paints a launchpad before the session accepts Enter, retaining drafts after the first submission (#33227).
 describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   afterEach(() => vi.useRealTimers())
 
-  async function launchDsh(screen: string, acceptingEnter: number) {
+  async function launchDsh(screen: string, acceptingEnter: number, dispatch = false) {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       (runtime, data) => {
@@ -45,13 +45,19 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
     )
     // The captures were painted on a 120x40 grid.
     vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'say hi in one word', {
-      inputKind: 'launch',
-      composerReady: true,
-      acceptQueued: true,
-      requestId: 'dsh-launch',
-      observationTimeoutMs: 0
-    })
+    const submission = runtime.sendTerminalAgentPrompt(
+      handle,
+      'say hi in one word',
+      dispatch
+        ? dispatchPreambleSendOptions('dsh-dispatch')
+        : {
+            inputKind: 'launch',
+            composerReady: true,
+            acceptQueued: true,
+            requestId: 'dsh-launch',
+            observationTimeoutMs: 0
+          }
+    )
     await vi.advanceTimersByTimeAsync(40_000)
     await expect(submission).resolves.toMatchObject({ accepted: true })
     return {
@@ -77,6 +83,14 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   it('stops once the launchpad no longer holds the prompt', async () => {
     await expect(launchDsh(fixture('launchpad-empty'), Infinity)).resolves.toEqual({
       enters: 1,
+      pastes: 1
+    })
+  })
+
+  // #30778: a fresh worker's tui-idle settles on dsh 0.17's boot `OSC 7501 idle`, before its session opens.
+  it('presses Enter again for a worker dispatch the launchpad refused', async () => {
+    await expect(launchDsh(fixture('launchpad-draft-starting'), 3, true)).resolves.toEqual({
+      enters: 3,
       pastes: 1
     })
   })

@@ -53,8 +53,7 @@ function getCheckAnnotationKey(annotation: PRCheckAnnotation): string {
   ].join('\0')
 }
 
-// Why: a check run can repeat a job name (matrix reruns) and omit the id, so fall back to the
-// fields that separate two same-named jobs.
+// Disambiguate same-named matrix jobs by other fields when GitHub omits ids.
 function getCheckJobKey(job: PRCheckJob): string {
   return job.id !== null
     ? String(job.id)

@@ -1,32 +1,15 @@
 import { latestNativeChatReplyText } from '../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
-/** Decides whether the live streaming preview should render as a synthetic
- *  bubble. Text alone can't tell "the transcript caught up with this stream"
- *  from "a new reply happens to repeat the previous turn's prefix" — the old
- *  prefix test swallowed genuine repeated-prefix replies. The gate keeps the
- *  transcript tail observed when the current stream segment began: the bubble
- *  hides only when a reply that landed during the segment leads with the
- *  streamed text (the real turn landed), never for an older identical turn. */
+// Compare prefixes only after the segment’s captured tail so a previous turn’s identical reply cannot swallow a new preview.
 export type MobileNativeChatStreamingGate = {
-  /** Chat/session identity this baseline belongs to. */
   scopeKey: string | null
-  /** Streamed text seen on the previous tick ('' while idle). */
   prevText: string
-  /** Folded tail message id when the current segment began; null while the
-   *  gate has never observed a transcript tail (text arrived on its very first
-   *  tick), where the legacy suppress-on-prefix rule applies. */
+  // Null means no tail was observed before streaming; only then fall back to suppressing any matching prefix.
   baselineTailId: string | null
 }
 
-/** The preview text to feed the gate for one tick, or undefined for "no observation".
- *
- *  Providers publish a tool's stdout/error as `lastAssistantMessage` so status cards can
- *  preview it. That text is not the reply and never lands in a transcript assistant block,
- *  so the catch-up rule below could never retire it — it stayed on screen as a wall of raw
- *  tool output until the turn ended. Treating it as no observation (rather than empty text
- *  that still anchors) also keeps it out of `prevText`, so the next real reply is not
- *  mistaken for a continuation of a tool result. */
+// Tool output never lands as assistant text; treat it as unobserved so it cannot persist as a reply or become the next segment’s baseline.
 export function mobileNativeChatStreamPreview(
   status:
     | { lastAssistantMessage?: string; lastAssistantMessageIsToolOutput?: boolean }
@@ -46,8 +29,7 @@ export function createMobileNativeChatStreamingGate(
   return { scopeKey, prevText: '', baselineTailId: null }
 }
 
-// Reuses the incoming gate object when nothing moved, so a caller can detect
-// "no change" by reference (and a render-time state adjustment can settle).
+// Reuse unchanged gates so render-time state adjustments settle by reference.
 function advanceGate(
   gate: MobileNativeChatStreamingGate,
   prevText: string,
@@ -58,17 +40,14 @@ function advanceGate(
     : { ...gate, prevText, baselineTailId }
 }
 
-/** Advance the gate one tick and derive the visible streaming text (null hides
- *  the bubble). Pure and idempotent for a repeated (text, tail) pair, so a
- *  re-render without new data cannot flip the decision. */
+// Repeated text/tail observations must keep the same decision across re-renders.
 export function deriveMobileNativeChatStreaming(
   gate: MobileNativeChatStreamingGate,
   folded: readonly NativeChatMessage[],
   streamingText: string | undefined,
   options: {
     scopeKey?: string | null
-    /** Whether the agent is still mid-turn. A textless tick then means "no
-     *  observation this render", not "the stream ended". */
+    // Textless ticks during a live turn are missing observations, not stream endings.
     streamLive?: boolean
   } = {}
 ): { gate: MobileNativeChatStreamingGate; streaming: string | null } {
@@ -79,22 +58,14 @@ export function deriveMobileNativeChatStreaming(
   const tail = folded.at(-1)
   const tailId = tail?.id ?? null
   if (!text) {
-    // Only a textless tick that carries a real tail and is outside a live turn
-    // is trustworthy pre-stream history. Mid-turn gaps (a tool call, a throttle
-    // lull, the transcript landing the reply before its status text) would
-    // otherwise adopt that reply as history and render it a second time as a
-    // bubble; a torn-down transcript carries no tail at all. The exception is a
-    // gate that has never anchored — mounted mid-turn, the first real tail it
-    // sees is the best pre-stream history it will ever get.
+    // Anchor only settled real history, except on first mount: live gaps may already contain the reply and would duplicate it as a preview.
     const canAnchor = tailId !== null && (!options.streamLive || scopedGate.baselineTailId === null)
     return { gate: canAnchor ? advanceGate(scopedGate, '', tailId) : scopedGate, streaming: null }
   }
-  // A stream that is not an extension of the previous tick is a new segment
-  // (next reply part); re-anchor to the tail that predates it.
+  // A non-extension begins a new segment with the current tail as its baseline.
   const segmentStart = scopedGate.prevText !== '' && !text.startsWith(scopedGate.prevText)
   const baselineTailId = segmentStart ? tailId : scopedGate.baselineTailId
-  // Only a reply that landed after the segment began can be the streamed one. A null baseline
-  // (text on the very first tick, no tail ever seen) reads the whole turn: suppress-on-prefix.
+  // Only post-baseline replies can retire this segment; a missing baseline falls back to scanning the whole turn.
   const baselineIndex =
     baselineTailId === null ? -1 : folded.findIndex((message) => message.id === baselineTailId)
   const caughtUp = latestNativeChatReplyText(folded, baselineIndex).startsWith(text)

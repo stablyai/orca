@@ -74,7 +74,6 @@ function reserveRequest(location: AgentSessionExecutionLocation): AgentSessionRe
   }
 }
 
-/** A session reserved at `location`, pinned to `launchDirectory` when one is given. */
 async function reserve(location: AgentSessionExecutionLocation, launchDirectory?: string) {
   const { record } = await store.reserveOwner({
     ...reserveRequest(location),

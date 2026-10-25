@@ -1,10 +1,4 @@
-/**
- * How far one session's download has got, as a fraction, for the bar to follow outside React.
- *
- * The fetch's replies keep the JS thread busy for the whole download, so React commits nothing until
- * it ends; a bar drawn from state sat at zero and then jumped. A listener here runs inside the
- * dispatch that carries the progress, and the bar hands each value to the native driver from it.
- */
+// Publish outside React so progress reaches the native-driver bar while JS fetch/decode work delays commits; React state alone would jump from empty to complete.
 export type DownloadProgressFeed = {
   readonly current: () => number
   readonly subscribe: (listener: (fraction: number) => void) => () => void

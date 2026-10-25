@@ -1,16 +1,9 @@
-/**
- * Removing a structured agent session's chat tab from a live workspace tab snapshot.
- *
- * Extracted from `closeStructuredAgentSessionTab` so that user-initiated tab closes and
- * orchestration settlements (stop / release / discard) retire the same tab the same way, rather
- * than orchestration leaving a dead chat tab behind that re-attaches the session when opened.
- */
+/** Share tab retirement between user close and orchestration settlement so dead tabs cannot reattach sessions. */
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 
-/** The snapshot's tab for a structured session, matched by session id and by published tab id. */
 export function findStructuredAgentSessionTab(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   sessionId: string
@@ -25,11 +18,7 @@ export function findStructuredAgentSessionTab(
   )
 }
 
-/**
- * The snapshot with that session's tab pruned, or null when it holds no such tab.
- *
- * Pure: the caller owns storing and emitting, so nothing here can fail a settlement.
- */
+/** Return the pruned snapshot, or null; the caller owns storing/emitting, so this cannot fail settlement. */
 export function retireStructuredAgentSessionTabFrom(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   sessionId: string
@@ -55,14 +44,7 @@ export function retireStructuredAgentSessionTabFrom(
   }
 }
 
-/**
- * Retires a settled structured worker's chat tab, and cannot fail the settlement that called it.
- *
- * Every caller runs this AFTER it has already proven the session's close, so a snapshot problem
- * here must never be able to turn a proven stop into `release_unknown`: the runtime method is
- * called optionally (a runtime double or an older surface may not have it) and any throw is
- * swallowed. It talks to no renderer, so the startup release reconciler can call it too.
- */
+/** Retire only after proven close; missing/older runtime methods and snapshot errors must not turn a settled stop into release_unknown. No renderer required. */
 export function retireSettledStructuredWorkerTab(
   sessionId: string,
   runtime:

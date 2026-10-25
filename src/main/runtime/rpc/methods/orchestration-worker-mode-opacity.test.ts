@@ -1,15 +1,4 @@
-/**
- * The worker mode is a runtime implementation detail, not part of the orchestration contract.
- *
- * Two properties are pinned here, because both were false at some point in this lane:
- *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named,
- *   where it runs (chat or terminal) and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
- *   worker, which is a two-tier capability model dressed as a preamble tweak;
- * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
- *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
- *   missing rather than merely unadvertised.
- */
+/** Both worker modes receive identical orchestration instructions after identity/surface normalization, and structured workers can dispatch sub-workers through session authority. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -127,8 +116,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    // Deferred to the real getters for a structured handle, because resolving one through the
-    // registry is exactly what is under test; stubbed only for the PTY handles that have no runtime.
+    // Use real structured-handle getters to test registry resolution; stub only PTYs lacking runtime state.
     const realPaneKey = runtime.getTerminalPaneKey.bind(runtime)
     const realIncarnation = runtime.getTerminalProcessIncarnation.bind(runtime)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -138,8 +126,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       (handle) => realIncarnation(handle) ?? 'runtime_test:worker:1'
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    // Above the default of 1, so the sub-dispatch section is on the table for both modes; at the
-    // default a depth-1 worker is refused nesting whatever mode it runs in.
+    // Raise nesting depth above one so both modes can receive sub-dispatch instructions.
     vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(3)
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: WORKTREE,
@@ -236,8 +223,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(structuredPreamble).toContain(CHAT_REDISPATCH_PARAGRAPH)
     expect(terminalPreamble).toContain(TERMINAL_REDISPATCH_PARAGRAPH)
     expect(structuredPreamble).not.toContain('this terminal')
-    // The section the structured lane used to withhold, asserted by name so the equality above
-    // cannot pass by both preambles losing it.
+    // Assert the sub-dispatch section exists too; equality alone passes if both modes lose it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
   })
 
@@ -312,8 +298,7 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     const observation = await inspectWorkerTerminal(runtime, db, started.dispatchId)
 
-    // Absent, not null: null is the contract's "looked and found none", and a journal question is
-    // invisible to every prompt scan, so null would be a false negative a coordinator acts on.
+    // Omit agentWait: null means checked-and-absent, but terminal prompt scans cannot see journal questions.
     expect('agentWait' in observation).toBe(false)
   })
 })

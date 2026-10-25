@@ -22,12 +22,7 @@ export type NativeChatTabDirectoryResolution =
   | { status: 'awaiting-pin' }
   | { status: 'unavailable' }
 
-/**
- * The directory a native chat tab's agent runs in. A floating structured chat is held to the folder
- * its session was pinned to, because the floating setting can move after launch, so it has no
- * directory until the host publishes that pin. Every other tab resolves by workspace id exactly as
- * the host does.
- */
+/** Use the host-pinned directory for floating structured chats; settings can move after launch. Other tabs resolve by workspace id. */
 export function resolveNativeChatTabDirectoryResolution(
   state: NativeChatTabDirectoryState,
   tabId: string,
@@ -49,8 +44,7 @@ export function resolveNativeChatTabDirectoryResolution(
     return { status: 'unavailable' }
   }
   const pinned = state.structuredSessionLaunchDirectoryByTabId?.[tabId]
-  // Why no setting fallback: absence cannot tell "not delivered yet" from "none", and the setting
-  // may name a folder this session never ran in.
+  // A missing pin may still be loading; settings cannot prove where this session runs.
   return pinned && pinned.sessionId === structuredTab.entityId
     ? { status: 'resolved', directory: pinned.launchDirectory }
     : { status: 'awaiting-pin' }

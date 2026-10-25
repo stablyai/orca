@@ -1,26 +1,5 @@
-/**
- * A scriptable stand-in for an agent CLI, for orchestration push-delivery E2E.
- *
- * Why a purpose-built process and not a bare shell emitting titles: push-on-idle
- * is gated on the status Orca infers from live OSC titles and delivers by
- * writing into the pane's foreground process. A shell echoes rather than
- * records, so it can prove the gate but never the payload. This process owns
- * both sides — the test drives its title through a control file and it appends
- * every stdin chunk to a ledger, which is what makes "the pointer and the Enter
- * reached the agent" an assertion instead of an inference.
- *
- * Titles come from a polled file, not stdin, because orchestration writes to
- * stdin itself; a stdin control channel could not tell a test command apart from
- * the delivery under test.
- *
- * Why it runs in the pane the fixture already opened, rather than a pane created
- * for it: terminal.create waits up to 10s for a renderer graph sync to bind the
- * new tab's handle, and a headless CI renderer misses that deadline — every spec
- * here died on 'Timed out waiting for terminal handle after creation'. Nothing
- * on the delivery path reads a pane's agent metadata (it resolves the leaf, the
- * OSC title, and PTY liveness), so a foreground process in a mounted pane
- * exercises the same code with none of that startup race.
- */
+// Record foreground stdin and emit controlled OSC titles so idle-gated push tests prove exact delivery, not shell echo.
+// Control titles via file because stdin carries the delivery under test; reuse a mounted pane to avoid unrelated handle-binding races.
 import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -119,9 +98,7 @@ type MailPaneAgentOptions = {
   titleOnStdin?: { needle: string; title: string }
 }
 
-// Why worker exit and not a spec's afterAll: Playwright reuses a worker across
-// spec files, and a temp dir removed while another spec still polls its ledger
-// surfaces as an agent that mysteriously stopped reporting.
+// Clean up at worker exit: reused spec workers can still be polling another file’s agent ledger.
 const agentDirs: string[] = []
 process.once('exit', () => {
   for (const dir of agentDirs) {
@@ -139,8 +116,7 @@ export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPan
   writeFileSync(scriptPath, AGENT_SOURCE)
   writeFileSync(ledgerPath, '')
 
-  // Why forward slashes: valid for node on Windows and parsed identically by
-  // PowerShell, cmd, and POSIX shells, where raw backslashes would be eaten.
+  // Use forward slashes so Node paths survive PowerShell, cmd and POSIX parsing unchanged.
   const quote = (value: string): string => `"${value.replaceAll('\\', '/')}"`
 
   const readLedger = (): AgentLedgerEntry[] => {

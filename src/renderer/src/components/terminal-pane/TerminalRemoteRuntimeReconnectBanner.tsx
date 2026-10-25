@@ -128,11 +128,7 @@ export function TerminalRemoteRuntimeReconnectBanner({
   )
 }
 
-/**
- * A pane's recovery, said only once it outlasts a clean reconnect; anything needing action shows
- * at once. Stays mounted with no recovery so its minimum time and hold can run out.
- * `heldByServer`: the server's own notice covers this drop, so the pane stays quiet.
- */
+/** Delay clean reconnect notices, show actionable states immediately, and stay mounted for minimum/hold timing; heldByServer suppresses pane notices. */
 export function CalmRemoteRuntimeReconnectBanner({
   recovery,
   heldByServer,

@@ -51,8 +51,7 @@ async function terminalLinkPoint(
   tabId: string,
   link: string
 ): Promise<{ x: number; y: number }> {
-  // Why: a link opened beside the terminal narrows it, and the refit lands frames later; a point
-  // read from the old grid clicks a different cell once the terminal reflows.
+  // Wait for the narrowed grid’s refit after opening beside the terminal, or old coordinates click another cell.
   await expect
     .poll(() => terminalGridSettled(page, tabId), {
       timeout: 10_000,
@@ -87,8 +86,7 @@ async function terminalLinkPoint(
 
 /** Prints origin+path as one link; split apart so the typed command never shows the whole URL. */
 async function printLink(page: Page, tabId: string, origin: string, path: string): Promise<void> {
-  // Why the blank row: a link opened beside the terminal narrows it, and a URL that exactly fills a
-  // row would read the prompt below as its edge-wrapped continuation.
+  // Add a blank row so narrowing the terminal cannot wrap the URL into the shell prompt below.
   await typeInTerminal(page, tabId, `printf '%s%s\\n\\n' '${origin}' '${path}'`)
   await expectPaneText(page, tabId, `${origin}${path}`)
 }

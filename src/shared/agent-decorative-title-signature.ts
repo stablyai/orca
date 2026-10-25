@@ -3,8 +3,7 @@ import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from './agent-detecti
 export const DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT = MAX_OSC_TITLE_CHARS
 
 export function getDecorativeAgentTitleSignature(title: string): string | null {
-  // Why: this runs on renderer state/session hot paths; oversized titles are
-  // treated as ordinary changes instead of synchronously normalized.
+  // Bound synchronous normalization on renderer hot paths; oversized titles remain ordinary changes.
   if (title.length > DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT) {
     return null
   }
@@ -12,8 +11,7 @@ export function getDecorativeAgentTitleSignature(title: string): string | null {
   if (!status) {
     return null
   }
-  // Why: agent spinners can emit OSC title frames many times per second; the
-  // spinner glyph is live decoration, not meaningful tab or sort state.
+  // Spinner OSC frames can arrive many times a second without changing semantic title/sort state.
   return `${status}:${normalizeDecorativeAgentTitleText(title)}`
 }
 

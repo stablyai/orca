@@ -46,7 +46,6 @@ import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
-  // Earlier layers allocate these slots; this constructor assigns their readonly values.
   declare protected readonly getLocalProviderFn: HostServices['getLocalProviderFn']
   declare readonly onPtyStopped: HostServices['onPtyStopped']
   declare protected readonly onTerminalAgentStatus: HostServices['onTerminalAgentStatus']
@@ -64,7 +63,6 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     | RuntimeConstructionBindings['readHookCliWriterObservation']
     | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
-  /** Hook-reported provider session changes; null on a host without a hook store. */
   declare readonly subscribeAgentProviderSessionChangesFn:
     | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
     | null
@@ -190,7 +188,6 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       showRepo: (selector) => this.showRepo(selector),
       showManagedWorktree: (selector) => this.showManagedWorktree(selector)
     })
-    // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
       this.clientSessionTabSelections.hydrate(persistedClientTabSelections)
@@ -227,9 +224,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
-    // Why: configure the shared AiVault scan cache from a serve-mode-reachable
-    // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
-    // even on headless `orca serve` hosts where registerCoreHandlers never runs.
+    // Headless serve skips registerCoreHandlers but still needs managed-Codex/WSL AiVault sources.
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
       configureAiVaultSessionSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
@@ -238,12 +233,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })
     }
-    // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
-    // attachMainWindowServices, AFTER this service is constructed. Capturing
-    // `getLocalPtyProvider()` at construction time would freeze a reference to
-    // the pre-daemon `LocalPtyProvider` and miss the routed adapter. Resolve
-    // lazily via thunk so teardown always sees the currently-installed
-    // provider (design §4.3 wire-up).
+    // Resolve lazily: attachMainWindowServices replaces the initial provider with the daemon adapter later (§4.3).
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
@@ -258,20 +248,15 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
-    // Why: the ConPTY spawn mark can land after daemon stream data already
-    // created this PTY's emulator; the mark retrofits the DA1 override here
-    // (terminal-query-authority.md §ConPTY DA1).
+    // ConPTY spawn marks can follow emulator creation; retrofit DA1 (terminal-query-authority.md).
     registerConptyDa1OverrideInstaller((ptyId) => this.ensureNativeWindowsConptyDa1Override(ptyId))
-    // Why: a renderer attribute push must reach already-live emulators too —
-    // cursor options for DECRQSS/DECRQM parity plus the per-PTY OSC color
-    // override reset a theme apply implies (terminal-query-authority.md
-    // §View-attribute bridge).
+    // Apply renderer changes to live emulators too: cursor query parity and per-PTY OSC color reset.
     registerTerminalViewAttributesApplier((attributes) => {
       for (const state of this.headlessTerminals.values()) {
         state.emulator.applyPushedViewAttributes(attributes)
       }
     })
-    // Why: PR conflict previews fetch the same base branches a create refreshes; one owner queues them.
+    // Conflict previews and create refreshes must queue through one fetch owner.
     setPRConflictSummaryRemoteFetches(this.remoteFetches)
   }
 }

@@ -1,4 +1,4 @@
-/** Marks each tab's direct child of the strip with its tab id; menu triggers rendered beside tabs are out of flow and unmarked. */
+/** Strip slots exclude adjacent out-of-flow menu triggers. */
 const SLOT_SELECTOR = '[data-tab-strip-slot]'
 /** Marks the slot of the tab that renders active; it is sticky, so it docks to the edge it would scroll past. */
 const DOCK_SELECTOR = '[data-active-tab-dock]'
@@ -75,11 +75,7 @@ export function findOffscreenOpenedTabStripSlot(
   )
 }
 
-/**
- * Scroll the least distance that shows `slot` at its real spot. Why not scrollIntoView: a docked
- * tab already looks on screen, so it would not scroll. The docked active tab is shown alongside
- * when both fit; otherwise room is left for it to dock beside `slot` instead of covering it.
- */
+/** Reveal natural slot geometry instead of its sticky dock; reserve room for the active dock when both cannot fit. */
 export function revealTabStripSlot(strip: HTMLElement, slot: HTMLElement): void {
   let [left, right] = getSlotNaturalSpan(strip, slot)
   const dock = getActiveTabDock(strip)

@@ -5,15 +5,8 @@ import {
   MAX_PARTIAL_ESCAPE_TAIL_LENGTH
 } from './terminal-partial-escape-tail'
 
-// Differential fuzz for the ESC-free gate in `advancePartialEscapeTail`: the guarded fold must be
-// byte-for-byte indistinguishable from the unguarded oracle (concat + full walk + cap) on every
-// input, and must preserve the fold property extract(a + b) === extract(extract(a) + b).
-// A 25.6M-case out-of-band sweep (exhaustive len<=5, 2000 x 16 KB random chunks, every BMP code
-// unit) found 0 divergences; this is the CI-sized slice of it.
-// The fold half re-splits every combined stream at every code-unit boundary; the alphabet and
-// SEQUENCES deliberately carry CAN/SUB and doubled ESC inside OSC/DCS/SOS/PM/APC, because two
-// fold breaks in those exact states shipped undetected while the fold check was only asserted
-// on already-normalized pendings (where it is a tautology).
+// Compare the ESC-free gate with the unconditional concat/walk/cap oracle. A 25.6M-case sweep (length ≤5, 2000 × 16KB chunks, every BMP unit) found no divergence.
+// Re-split combined streams at every code-unit boundary: normalized-tail-only fold checks were tautologies that missed CAN/SUB and doubled-ESC breaks in OSC/DCS/SOS/PM/APC.
 
 const oracle = (pending: string, chunk: string): string => {
   const tail = extractPartialEscapeTail(pending + chunk)
@@ -86,9 +79,7 @@ const SEQUENCES = [
   '\x1bX sos \x1b\x1bP'
 ]
 
-// Yields {text, depth} because an astral symbol is two UTF-16 code units: filtering on
-// `text.length` would silently drop every depth-N string containing one, so the corpus would
-// not be exhaustive at depth N the way the test names claim.
+// Count corpus depth separately: astral symbols occupy two UTF-16 units, so text.length would drop valid depth-N strings.
 function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string }> {
   yield { depth: 0, text: '' }
   for (let depth = 1; depth <= maxDepth; depth++) {
@@ -109,10 +100,7 @@ function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string
 describe('advancePartialEscapeTail differential fuzz', () => {
   let checked = 0
   let foldSplits = 0
-  // Why the sweep and not just `advance(extract(pending), chunk)`: every PENDINGS entry is
-  // already a tail, so `extract(pending) === pending` makes that form a tautology. Only
-  // re-splitting the combined stream lands a boundary inside oscEsc/stringEsc, where the
-  // CAN/SUB abort and the second-ESC restart live.
+  // Re-split the whole stream to exercise oscEsc/stringEsc boundaries; pre-normalized tails make the fold assertion tautological.
   const checkFolds = (text: string): void => {
     if (text.length > 32) {
       return // keeps the cap corpus (5000-char chunks) out of an O(n^2) sweep

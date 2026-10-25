@@ -1,8 +1,6 @@
 import type { Tab } from '../../../../shared/tab-types'
 
-/** Resolves the unified tab a per-tab presentation action (rename, color) targets.
- *  Terminal tabs are addressed by their backing terminal's entityId; a structured
- *  chat has no TerminalTab record and is addressed by the unified tab id itself. */
+/** Presentation actions use terminal entityId for backed tabs, unified ID for rowless structured chats. */
 export function findRenamableUnifiedTab(
   unifiedTabsByWorktree: Record<string, Tab[]>,
   tabId: string

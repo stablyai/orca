@@ -1,10 +1,4 @@
-/**
- * The signed manifest a relay-hosted SSH target's state is exported as.
- *
- * Reads only: the catalog rows the target owns and the dormant state that references them, copied
- * out of the profile-state store. The source keeps every row; retiring it happens only after the
- * destination has verified and imported this exact manifest.
- */
+/** Export copied catalog/dormant state without mutating source. Path rewriting precedes signing; source ownership remains until cutover establishes destination authority. */
 import { randomUUID } from 'node:crypto'
 import {
   MAX_ORCAD_MIGRATION_MANIFEST_BYTES,
@@ -42,7 +36,6 @@ export type OrcadMigrationManifestExportOptions = {
   migrationId?: string
   now?: () => Date
   destinationEnvironmentId?: string
-  /** Only these rows: a re-export of what earlier migrations of the host already moved. */
   onlyCatalog?: OrcadMigrationCatalogIds
   /** Maps source paths to destination paths before signing; identity for an SSH host. */
   rewrite?: OrcadMigrationPathRewriter
@@ -75,7 +68,7 @@ export function createOrcadMigrationManifest(
     sourcePayload,
     options.destinationEnvironmentId
   )
-  // After collection: dormant state is selected by the source's own paths and ids.
+  // Select dormant state using source identities before rewriting destination paths.
   const payload = rewriteOrcadMigrationPayloadPaths(
     { ...sourcePayload, ...(hasDormantState(dormantState) ? { dormantState } : {}) },
     rewrite
@@ -115,11 +108,7 @@ const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
 const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
   REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REQUEST_ENVELOPE_RESERVE_BYTES
 
-/**
- * Throws the user-facing refusal when a catalog request would overflow the host's sealed frame;
- * the host would answer by closing the socket. Every request carries the whole manifest, so a
- * fence must not be taken on one that fails this: its stage, state and abort would all refuse.
- */
+/** Reject oversized manifest requests before fencing: stage/state/full abort would all exceed the sealed frame and close its socket. */
 export function assertOrcadMigrationRequestFits(params: {
   manifest: OrcadMigrationManifest
 }): void {
@@ -139,7 +128,7 @@ export function orcadMigrationRequestFits(params: { manifest: OrcadMigrationMani
   )
 }
 
-/** The bare code told users nothing (#30126): name the largest parts and what to trim. */
+/** Name the largest sections and how to trim them; a bare error code was unhelpful (#30126). */
 export function describeOversizedOrcadMigrationPayload(
   payload: OrcadMigrationCatalogPayload,
   limitBytes = MAX_ORCAD_MIGRATION_MANIFEST_BYTES

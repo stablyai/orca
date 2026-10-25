@@ -95,7 +95,6 @@ describe('a chat an older build left messages for', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
   })
 
-  // The older build kept the list in send order only by sorting it when read.
   it('hands back in the order they were sent, whatever order the copy holds them in', async () => {
     localStorage.setItem(
       KEY,

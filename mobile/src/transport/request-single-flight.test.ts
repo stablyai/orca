@@ -36,8 +36,7 @@ describe('sendSingleFlightRequest', () => {
     const client = rpcClient(sendRequest)
 
     const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
-    // Two more triggers arrive while the read is on the wire: no duplicate now, and they share ONE
-    // trailing follow-up (not the older in-flight response).
+    // Coalesce mid-read triggers into one fresh follow-up using latest params.
     const second = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 5000 })
     const third = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 2500 })
 
@@ -49,7 +48,6 @@ describe('sendSingleFlightRequest', () => {
     leading.resolve(leadingResponse)
     expect(await first).toBe(leadingResponse)
 
-    // The leading read settled → the coalesced follow-up fires exactly once.
     expect(sendRequest).toHaveBeenCalledTimes(2)
     expect(sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', { limit: 2500 })
     trailing.resolve(trailingResponse)
@@ -89,7 +87,6 @@ describe('sendSingleFlightRequest', () => {
 
     leading.reject(failure)
     await expect(first).rejects.toBe(failure)
-    // A trigger that arrived mid-flight is not poisoned by the leading failure: its follow-up runs.
     await expect(second).resolves.toBe(response)
     expect(sendRequest).toHaveBeenCalledTimes(2)
   })

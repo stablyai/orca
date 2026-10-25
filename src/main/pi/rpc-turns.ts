@@ -25,7 +25,7 @@ export type PiRpcTurnDeps = {
   ) => Promise<unknown>
   settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
   idle: () => void
-  /** A turn's end reached the timeline. */
+  /** Called after the timeline accepts the turn end. */
   turnEnded?: () => void
   failed: (error: Error) => void
   diagnostic?: (error: unknown) => void
@@ -92,7 +92,6 @@ export class PiRpcTurns {
   get working(): boolean {
     return this.active !== undefined
   }
-  /** Moves whenever Pi or a send does anything. */
   get activity(): number {
     return this.revision
   }

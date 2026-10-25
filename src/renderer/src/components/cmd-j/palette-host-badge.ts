@@ -6,10 +6,7 @@ export type PaletteHostBadge = {
   label: string
 }
 
-// Why: Cmd+J only needs a host label when there's a live remote to disambiguate
-// from. A merely-configured-but-disconnected SSH/runtime host shouldn't tag every
-// row with the local host label, so we require an actually-reachable non-local host —
-// unlike the sidebar gate, which lists disconnected hosts so users can connect.
+// Show unfiltered host labels only with a reachable remote; sidebar headers also list disconnected hosts for connection.
 function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean {
   return hostOptions.some(
     (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health === 'available'
@@ -19,8 +16,7 @@ function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean
 export function getPaletteHostBadge(
   hostId: ExecutionHostId | null | undefined,
   hostOptions: readonly SidebarHostOption[],
-  // Why: with a host filter applied the badge is the only thing explaining which
-  // rows survived, so it must show even when every remote is disconnected.
+  // Filtered rows need their host label to explain inclusion even while every remote is disconnected.
   alwaysShowHostLabel = false
 ): PaletteHostBadge | null {
   if (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions)) {

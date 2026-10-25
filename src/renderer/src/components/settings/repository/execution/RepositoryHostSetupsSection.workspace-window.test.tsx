@@ -99,8 +99,7 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-// Why: #12350 — a reachable remote server whose renderer graph is gone still
-// answered status.get, so every setup it owned read "Ready".
+// Reachable servers with missing renderer graphs previously showed every owned setup Ready (#12350).
 describe('RepositoryHostSetupsSection workspace window availability', () => {
   it('flags a reachable runtime owner whose workspace window is closed instead of Ready', () => {
     renderWithOwnerStatus(
@@ -120,8 +119,7 @@ describe('RepositoryHostSetupsSection workspace window availability', () => {
   })
 
   it('keeps a graph-ready runtime owner Ready when it reports no desktop window', () => {
-    // Why: headless `orca serve` (#6844) owns a ready graph with an openable
-    // desktop window — the degraded check must not widen into a renderer requirement.
+    // Headless serve can own a ready graph/openable desktop; readiness must not require a live renderer (#6844).
     renderWithOwnerStatus(makeStatus({ graphStatus: 'ready', desktopWindowStatus: 'openable' }))
 
     expect(container.textContent).toContain('Ready')

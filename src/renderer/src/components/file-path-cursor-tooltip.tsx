@@ -5,11 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 // Clears the pointer without putting the label under the cursor's own hotspot.
 const CURSOR_TOOLTIP_GAP = 18
 
-/**
- * Radix positions the tooltip against the trigger, so a cursor position has to
- * be restated as offsets from the trigger's bottom-left corner to land under
- * the pointer.
- */
+/** Convert cursor coordinates to Radix offsets from the trigger’s bottom-left corner. */
 export function cursorTooltipOffsets(
   pointer: { x: number; y: number },
   trigger: { bottom: number; left: number }
@@ -20,10 +16,7 @@ export function cursorTooltipOffsets(
   }
 }
 
-/**
- * Splits a path for filename-first display, keeping the separator attached to
- * the directory so `/foo` renders `foo` + `/` and Windows paths keep `\`.
- */
+/** Keep the directory separator when splitting filename-first display, including Windows paths. */
 export function splitTrailingSegment(path: string): { directory: string; filename: string } {
   const separatorIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
 
@@ -37,8 +30,7 @@ export function FilenameFirstPath({ path }: { path: string }): React.JSX.Element
 
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1">
-      {/* shrink-0 + max-w-full: the directory gives up all of its width before
-          the filename loses a character. */}
+      {/* Truncate the directory before sacrificing filename width. */}
       <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
       {directory ? (
         <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
@@ -47,11 +39,6 @@ export function FilenameFirstPath({ path }: { path: string }): React.JSX.Element
   )
 }
 
-/**
- * Wraps a single result row so its full path appears in a system-styled tooltip
- * anchored under the cursor. The child is the trigger; it receives a ref and a
- * pointer-move handler.
- */
 export function FilePathCursorTooltip({
   children,
   path
@@ -64,9 +51,7 @@ export function FilePathCursorTooltip({
   const [open, setOpen] = React.useState(false)
   const [offset, setOffset] = React.useState({ align: 0, side: 0 })
 
-  // Why: the offsets are only valid for the trigger's position at the moment
-  // Radix positions it. Results stream in and move rows while the open delay
-  // runs, so re-measure on open rather than trusting the pointer-move rect.
+  // Streaming results can move rows during the open delay; remeasure before positioning.
   React.useLayoutEffect(() => {
     const rect = triggerRef.current?.getBoundingClientRect()
     const pointer = pointerRef.current
@@ -84,10 +69,7 @@ export function FilePathCursorTooltip({
       <TooltipTrigger asChild>
         <Slot.Root
           ref={triggerRef}
-          // Why: a ref, not state — read once when the tooltip opens, so
-          // re-rendering per pointer move would be churn for nothing.
-          // pointermove (not mousemove) because Radix opens off pointermove and
-          // Slot runs the child handler first, keeping this fresh on instant open.
+          // Use a ref to avoid per-move renders; pointermove matches Radix and Slot updates it before instant open.
           onPointerMove={(event: React.PointerEvent) => {
             if (open) {
               return
@@ -98,8 +80,7 @@ export function FilePathCursorTooltip({
           {children}
         </Slot.Root>
       </TooltipTrigger>
-      {/* Anchored under the cursor the way a system tooltip is, rather than to
-          the row. Collision shifting still applies near the viewport edge. */}
+      {/* Anchor to the cursor while retaining viewport collision handling. */}
       <TooltipContent
         data-cursor-tooltip=""
         side="bottom"

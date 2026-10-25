@@ -52,7 +52,7 @@ function makeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 
-// Why: prune assertions only discriminate when the repo actually owns lineage rows a scan verdict could delete.
+// Seed real lineage rows so pruning assertions discriminate.
 function makeLineage(): Record<string, WorktreeLineage> {
   return {
     [WORKTREE_ID]: {
@@ -182,8 +182,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: `withTimeout` resolves its fallback on rejection as well as on timeout, so an unabsorbed rejection would silently widen
-  // selector resolution for local repos the way a stall does.
+  // withTimeout also falls back on rejection; absorb real scan failures before they can restore stale rows.
   it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
@@ -202,7 +201,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     )
   })
 
-  // Why: an authoritative empty scan must retain the normal backoff instead of spawning Git on every ~1s snapshot.
   it('caches a zero-row local scan instead of rescanning on every poll', async () => {
     vi.useFakeTimers()
     try {
@@ -235,7 +233,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
   it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
     vi.useFakeTimers()
     try {
@@ -266,7 +263,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: the ownership gate must not cost the single-host case the fix exists for — a stamped row on its own host still comes back.
   it('restores persisted rows stamped for this host when its only owner stalls', async () => {
     vi.useFakeTimers()
     try {
@@ -290,9 +286,8 @@ describe('worktree.ps on a degraded repo scan', () => {
 
       const restored = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
       expect(restored?.hostId).toBe(LOCAL_EXECUTION_HOST_ID)
-      // Why: no git answered, so a restored row must not claim a branch it cannot have verified.
       expect(restored?.branch).toBe('')
-      // Why: `worktree.ps` summaries carry no head, so pin the blank head on the resolved row the restore path actually builds.
+      // ps summaries omit head; inspect the resolved row to verify it too.
       const resolved = await advancePastRepoScanBudget(
         runtime.showManagedWorktree(`id:${WORKTREE_ID}`)
       )
@@ -303,7 +298,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: the timeout fires per poll, so only the in-flight scan map keeps a permanent stall from re-spawning `git worktree list`.
   it('does not re-spawn the git scan on every poll while a scan stays stalled', async () => {
     vi.useFakeTimers()
     try {

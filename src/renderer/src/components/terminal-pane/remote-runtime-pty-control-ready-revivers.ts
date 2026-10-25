@@ -1,6 +1,4 @@
-// Why: a route that returns without an OS `online` event (Tailscale, VPN, a re-keyed link) fires no
-// trigger, so a pane latched past its window stayed dead over a working link. The environment's
-// control socket answering again is positive reachability evidence, as good as a Reconnect click.
+// VPN/Tailscale routes can recover without online events; a ready control socket proves reachability and revives latched panes like Reconnect.
 const controlReadyRevivers = new Map<string, Set<() => boolean>>()
 
 export function registerRemoteRuntimePtyControlReadyReviver(

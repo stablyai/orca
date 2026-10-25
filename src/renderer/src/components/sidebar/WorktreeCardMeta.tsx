@@ -48,8 +48,6 @@ export type {
   WorktreeCardDetailsHoverProps
 }
 
-// Re-exported so existing importers keep their entry point after the badge
-// row moved into its own module.
 export { hasWorktreeCardDetails, WorktreeCardMetaBadges }
 
 function hasComment(comment: string | null): boolean {
@@ -134,8 +132,7 @@ export function WorktreeCardDetailsHover({
   )
   const copyLinkedWorkItemLink = React.useCallback(async (url: string, label: string) => {
     try {
-      // Why: Electron clipboard IPC remains reliable from nested hover/dropdown
-      // overlays where browser clipboard activation can be lost.
+      // Electron clipboard IPC survives nested overlays that can lose browser activation.
       await window.api.ui.writeClipboardText(url)
       toast.success(
         translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {

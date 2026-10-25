@@ -88,8 +88,7 @@ describe('branch line total merge base on git status requests', () => {
   })
 
   it('omits the merge base param entirely for a remote status with no visible chip', async () => {
-    // Why: Rule-1 wire safety — an old server must see the exact params it
-    // already understands, and a hidden chip must not cost a remote diff.
+    // Old hosts need unchanged params; hidden chips must cost no remote diff (Rule 1).
     await getRuntimeGitStatus({
       target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',

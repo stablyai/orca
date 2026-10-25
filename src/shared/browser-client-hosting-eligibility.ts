@@ -24,15 +24,7 @@ export function runtimeAdvertisesBrowserClientHosting(
   )
 }
 
-/**
- * Whether a browser page created against this runtime will be hosted by this client.
- *
- * Why it is shared: the main process decides this for real while preparing the placement, and the
- * renderer has to predict the same answer one round-trip earlier to mount the right pane in the
- * staged frame. Two copies drift silently — the renderer would stage a client-hosted pane that
- * never receives a placement, and the user would sit in front of a pane that stays connecting.
- * Conditions only one side can see (pairing, graph readiness, lease startup) stay on that side.
- */
+/** Share main placement and renderer staging prediction to avoid panes stuck connecting. Pairing/graph/lease conditions visible on one side stay there. */
 export function expectsBrowserClientHosting(input: {
   enabled: boolean
   preference: BrowserClientHostPlacementPreference | undefined

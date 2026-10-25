@@ -79,8 +79,7 @@ describe('ModifierDoubleTapDetector', () => {
   it('handles a second keyDown of the same modifier without an intervening keyUp', () => {
     const d = new ModifierDoubleTapDetector()
     d.process(down('Shift'), 0)
-    // Missed keyUp — a fresh (non-repeat) keyDown for the same modifier just
-    // restarts the first tap rather than emitting.
+    // A missed keyUp makes a fresh keyDown restart the first tap.
     d.process(down('Shift'), 50)
     d.process(up('Shift'), 60)
     // The next press within the window still completes the gesture.
@@ -89,13 +88,11 @@ describe('ModifierDoubleTapDetector', () => {
 
   it('clears armed state when the second keydown was suppressed (allowlisted path)', () => {
     const d = new ModifierDoubleTapDetector()
-    d.process(down('Shift'), 0) // first tap down → down1
-    d.process(up('Shift'), 10) // first tap up → armed
-    // The main process suppressed the second keydown (an allowlisted action fired
-    // there), but the second tap's keyup still reaches this detector.
+    d.process(down('Shift'), 0)
+    d.process(up('Shift'), 10)
+    // Main consumed the second keydown for an allowlisted action, but its keyup still arrives.
     d.process(up('Shift'), 20)
-    // A later lone Shift press (e.g. typing a capital) must NOT phantom-complete
-    // a double-tap from the stale armed state.
+    // A later lone modifier press must not complete the stale gesture.
     expect(d.process(down('Shift'), 200)).toBeNull()
   })
 

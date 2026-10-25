@@ -37,7 +37,6 @@ type HostCall = { method: string; params: unknown }
 type HostOptions = {
   chunkBytes?: number
   buildId?: string
-  /** Replaces the reply the host would have sent for this request. */
   intercept?: (call: HostCall) => unknown
   onInFlight?: (inFlight: number) => void
 }
@@ -48,7 +47,6 @@ function paramField(params: unknown, key: string): unknown {
   return boxed[key]
 }
 
-/** A host that serves a fixed asset table by the same rules the real one does. */
 function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
   const chunkBytes = options.chunkBytes ?? 4
   const bytes = new Map(Object.entries(files).map(([path, text]) => [path, bytesOf(text)]))
@@ -60,8 +58,7 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
       contentType: 'text/plain'
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
-  // The id the reader now insists on: the digest of exactly this list. A test that wants a host
-  // publishing some other id still names one, which is how the mismatch cases below read.
+  // Derive fixture ids from final asset lists unless the test explicitly selects a mismatch.
   const buildId = options.buildId ?? computeMobileWebBundleId(assets)
   const manifest = {
     schemaVersion: 1,
@@ -130,7 +127,6 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
   return { client, calls, manifest }
 }
 
-/** The refusal a caller records, read off the rejection rather than its prose. */
 async function refusalOf(failed: Promise<unknown>): Promise<string | null> {
   const error = await failed.then(
     () => null,
@@ -143,7 +139,7 @@ function chunkCallCount(calls: readonly HostCall[]): number {
   return calls.filter((call) => call.method === 'mobileWeb.bundle.chunk').length
 }
 
-/** Long enough for an unstopped worker pool to page three 40-byte assets one byte at a time. */
+// Drain enough ticks to expose a worker pool missing its stop check.
 async function drainPendingHostWork(): Promise<void> {
   for (let tick = 0; tick < 300; tick += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -166,10 +162,8 @@ describe('fetchMobileWebBundle', () => {
     expect(fetched.totalBytes).toBe(16)
     expect(fetched.manifest.buildId).toBe(host.manifest.buildId)
     expect(fetched.elapsedMs).toBeGreaterThanOrEqual(0)
-    // One report per accepted chunk: four for index.html, one for app.js.
     expect(progress).toHaveLength(5)
     expect(progress.at(-1)).toBe(16)
-    // 13 bytes at 4 per chunk is four requests, 3 bytes is one, plus the manifest.
     expect(host.calls.filter((call) => call.method === 'mobileWeb.bundle.chunk')).toHaveLength(5)
     expect(host.calls[0]!.method).toBe('mobileWeb.bundle.manifest')
     expect(host.calls[0]!.params).toEqual({})
@@ -269,8 +263,7 @@ describe('fetchMobileWebBundle', () => {
   })
 
   it('refuses a chunk that answers the right path at the wrong offset', async () => {
-    // The path half of the echo check is already covered; this is the offset half on its own, so
-    // a host that re-serves chunk zero cannot have its bytes written at the offset we asked for.
+    // Test offset echo independently so repeated chunk zero cannot fill a later slot.
     const host = bundleHost(
       { 'index.html': 'abcdef' },
       {
@@ -298,8 +291,7 @@ describe('fetchMobileWebBundle', () => {
   })
 
   it('reads a zero-byte asset in one chunk and returns it empty', async () => {
-    // A real bundle carries these. Its one planned slot is zero bytes long, so the host's eof is
-    // what makes the empty reply whole rather than a refusal for no progress.
+    // Empty assets still need an eof response; zero bytes must not be mistaken for stalled progress.
     const host = bundleHost({ 'assets/empty.css': '', 'index.html': 'abc' })
 
     const fetched = await fetchMobileWebBundle({ client: host.client })
@@ -472,8 +464,7 @@ describe('fetchMobileWebBundle', () => {
 
     // The refusal is what the caller sees; the internal stop never surfaces.
     expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
-    // 120 chunks would page all three large assets to the end. One more round of four is the most
-    // the window can add, because it checks the stop before it asks for a chunk.
+    // Stop checks allow at most another concurrency window, never all remaining chunks.
     expect(chunkCallCount(host.calls)).toBeLessThanOrEqual(atRejection + 4)
     expect(chunkCallCount(host.calls)).toBeLessThan(10)
   })
@@ -517,8 +508,7 @@ describe('fetchMobileWebBundle', () => {
 
   it('counts the bytes it received rather than the total the manifest claims', async () => {
     const host = bundleHost({ 'index.html': 'abcdef' }, { chunkBytes: 3 })
-    // The mobile reader is loose, so it does not carry the host schema's sum refinement: a manifest
-    // whose total disagrees with its assets must not decide what the fetch reports.
+    // Ignore claimed totalBytes; derive progress from the asset bytes actually read.
     host.manifest.totalBytes = 999
 
     const fetched = await fetchMobileWebBundle({ client: host.client })
@@ -527,8 +517,7 @@ describe('fetchMobileWebBundle', () => {
   })
 
   it('reads a schema refusal whose message is prose as a generic failure', async () => {
-    // The dispatcher refuses params that fail the host schema before the bundle handler runs, so the
-    // message is zod prose rather than one of the six codes.
+    // Dispatcher schema rejection uses diagnostic prose rather than a bundle machine code.
     const host = bundleHost(
       { 'index.html': 'abc' },
       {
@@ -568,7 +557,6 @@ describe('fetchMobileWebBundle', () => {
   })
 
   describe('with a cached generation to reuse', () => {
-    /** A cache holding these files by content, each still whole on disk unless `whole` says not. */
     function cacheOf(files: Record<string, string>, checked: string[], whole = true) {
       const hashes = new Map(
         Object.values(files).map((text) => {

@@ -4,8 +4,7 @@ import type {
   MobilePushPlatform
 } from '../../../src/shared/mobile-push-contract'
 
-// Why: the native APNs/FCM token, not an Expo push token — Orca's own gateway
-// talks to Apple and Google directly, so it needs the raw device token.
+// Use raw APNs/FCM tokens because Orca’s gateway talks directly to providers, not Expo’s push service.
 
 export type MobilePushToken = {
   readonly platform: MobilePushPlatform
@@ -25,13 +24,9 @@ function toMobilePushToken(raw: { type: string; data: unknown }): MobilePushToke
   if (raw.type === 'ios') {
     return { platform: 'ios', token: raw.data, apnsEnvironment: apnsEnvironment() }
   }
-  // Web tokens carry an object payload and no Orca gateway path; only native counts.
   return raw.type === 'android' ? { platform: 'android', token: raw.data } : null
 }
 
-/**
- * The native push token, or null if registration is unavailable or fails.
- */
 export async function getDevicePushToken(): Promise<MobilePushToken | null> {
   try {
     return toMobilePushToken(await Notifications.getDevicePushTokenAsync())
@@ -40,7 +35,6 @@ export async function getDevicePushToken(): Promise<MobilePushToken | null> {
   }
 }
 
-/** Providers can roll a token while the app runs; the old one stops delivering. */
 export function addPushTokenListener(listener: (token: MobilePushToken) => void): () => void {
   try {
     const subscription = Notifications.addPushTokenListener((raw) => {
@@ -51,8 +45,7 @@ export function addPushTokenListener(listener: (token: MobilePushToken) => void)
     })
     return () => subscription.remove()
   } catch {
-    // A shell with no push capability cannot subscribe; the caller is a root-level
-    // effect, so throwing here would take the whole app down over an optional feature.
+    // Unavailable optional push must not throw from the root subscription effect.
     return () => {}
   }
 }

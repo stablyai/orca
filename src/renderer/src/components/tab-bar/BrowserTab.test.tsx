@@ -28,9 +28,7 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
-    // Why: this shallow harness calls the component as a plain function (no React
-    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
-    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    // This shallow harness has no React dispatcher; favicon tests do not need persistent refs or event handlers.
     useRef: <T,>(initial: T) => ({ current: initial }),
     useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {

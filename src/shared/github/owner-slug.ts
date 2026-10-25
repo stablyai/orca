@@ -1,7 +1,4 @@
-// Why: GitHub owner logins are alphanumerics and single hyphens — plus, for
-// Enterprise Managed Users, the `_<shortcode>` GitHub itself appends — so `_` is
-// valid after the first character and never leading. One source for main, renderer
-// and mobile: three drifting copies is how EMU logins got rejected (#20449).
+// Share owner grammar across main/renderer/mobile, including EMU _shortcode suffixes (#20449); leading underscores remain invalid.
 const OWNER_SLUG_SOURCE = '[A-Za-z0-9][A-Za-z0-9_-]*'
 
 export const GITHUB_OWNER_SLUG_RE = new RegExp(`^${OWNER_SLUG_SOURCE}$`)

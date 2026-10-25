@@ -7,7 +7,6 @@ import {
 describe('floating terminal open-maximized intent', () => {
   afterEach(() => {
     vi.useRealTimers()
-    // Drain any leftover intent so it cannot bleed into an unrelated test.
     consumeFloatingTerminalOpenMaximizedIntent()
   })
 
@@ -15,7 +14,6 @@ describe('floating terminal open-maximized intent', () => {
     requestFloatingTerminalOpenMaximized()
 
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(true)
-    // One-shot: a second consume without a new request is false.
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(false)
   })
 
@@ -27,8 +25,7 @@ describe('floating terminal open-maximized intent', () => {
     vi.useFakeTimers()
     requestFloatingTerminalOpenMaximized()
 
-    // Why: the open was abandoned (prevented/interrupted before the panel
-    // mounted); a much-later ordinary open must not consume the stale intent.
+    // An abandoned open must not leave maximize intent for a later ordinary open.
     vi.advanceTimersByTime(2001)
 
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(false)

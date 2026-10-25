@@ -223,7 +223,7 @@ describe('passive terminal seeding retries until a decision applies', () => {
     }
   })
 
-  // Why: that reseed bails once the user leaves, so a workspace left mid-wait must seed on return.
+  // Leaving cancels reseed; returning must still seed the workspace.
   it('seeds on return to a workspace left while a reseed awaited agent detection', async () => {
     mocks.gate.mockResolvedValue('empty')
     claimEmptyWorkspaceDefaultSurface('wt-1', PENDING_INTENT)

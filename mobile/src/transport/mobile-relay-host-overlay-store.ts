@@ -30,8 +30,7 @@ function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {
 async function readOverlaysForMutation(): Promise<MobileRelayHostOverlay[]> {
   const overlays = parseOverlays(await AsyncStorage.getItem(OVERLAY_STORAGE_KEY))
   if (!overlays) {
-    // Why: never rewrite an unreadable v2 namespace as an empty list; doing so
-    // would destroy relay recovery data during an unrelated host mutation.
+    // Never rewrite unreadable v2 data as empty; unrelated host edits must preserve relay recovery.
     throw new Error('mobile relay host overlay storage unreadable')
   }
   return overlays
@@ -43,7 +42,7 @@ async function mutateOverlays(
   const mutation = overlayMutation.then(async () => {
     const current = await readOverlaysForMutation()
     const next = update(current)
-    // Why: an update handing back the list it read changed nothing; skip the full AsyncStorage write.
+    // Skip storage for identity-preserving updates.
     if (next === current) {
       return false
     }
@@ -65,8 +64,7 @@ export async function loadMobileRelayHostRoutingState(
   const relays = new Map<string, MobileRelayEndpoint>()
   const orphanHostIds: string[] = []
   for (const overlay of overlays) {
-    // Why: an older app can remove the legacy base without knowing this
-    // namespace; never let the retained overlay resurrect that host later.
+    // Older builds may remove base hosts without this namespace; retained overlays must not resurrect them.
     if (!existingHostIds.has(overlay.hostId)) {
       orphanHostIds.push(overlay.hostId)
     } else if (overlay.relay) {
@@ -76,7 +74,6 @@ export async function loadMobileRelayHostRoutingState(
   return { relays, orphanHostIds }
 }
 
-/** Resolves whether storage changed. */
 export function saveMobileRelayHostRouting(
   hostId: string,
   relay: MobileRelayEndpoint
@@ -87,8 +84,7 @@ export function saveMobileRelayHostRouting(
     if (index === -1) {
       return [...overlays, validated]
     }
-    // Why: a failing relay loop re-resolves the same cell every retry. Both sides are this
-    // schema's output, so key order matches; an older record's direct entry fails the compare.
+    // Skip identical routing writes during repeated resolution; schema-normalized outputs have stable key order.
     if (JSON.stringify(overlays[index]) === JSON.stringify(validated)) {
       return overlays
     }
@@ -110,7 +106,6 @@ export async function removeMobileRelayHostRoutings(hostIds: readonly string[]):
   })
 }
 
-/** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayHostOverlayStoreForTests(): void {
   overlayMutation = Promise.resolve()
 }

@@ -66,8 +66,7 @@ describe('hosted review RPC methods', () => {
       })
     )
 
-    // Why: without this the mobile PR sidebar would sit on the card-list pacing
-    // and take a no-review interval to notice a PR opened elsewhere (#11532).
+    // Mobile PR sidebar refresh must bypass card-list pacing to discover reviews opened elsewhere (#11532).
     expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
       expect.objectContaining({ active: true, force: true })
     )

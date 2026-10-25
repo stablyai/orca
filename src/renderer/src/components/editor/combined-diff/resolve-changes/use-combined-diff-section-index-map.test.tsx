@@ -21,7 +21,6 @@ describe('useCombinedDiffSectionIndexMap', () => {
     )
     const first = result.current
 
-    // An on-demand load replaces the array and one section object; keys are untouched.
     rerender({ sections: sectionsFor(keys, ['combined-commit:b.ts']) })
 
     expect(result.current).toBe(first)

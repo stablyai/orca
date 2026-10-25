@@ -2,9 +2,7 @@ import { useCallback, useRef, type RefObject } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listeners'
 
-/** Global side effects a tab drag holds while in flight: webview pointer
- *  passthrough plus the window-level fallback for a missed drag end. Both refs
- *  are injected so this stays independent of the drag state machine. */
+/** Own webview passthrough and missed-end fallback for the drag; release both when the root detaches. */
 export function useTabDragGestureLifecycle({
   clearDragStateRef,
   tabDragActiveRef
@@ -41,8 +39,7 @@ export function useTabDragGestureLifecycle({
   }, [clearDragStateRef, releaseMissedEndFallback, tabDragActiveRef])
 
   const acquireWebviewDragPassthrough = useCallback(() => {
-    // Why: dnd-kit tab drags are pointer-driven, so the native drag listeners
-    // in webview-registry never fire. Put webviews in passthrough explicitly.
+    // Pointer-based dnd-kit drags bypass native drag listeners, so enable webview passthrough explicitly.
     releaseWebviewDragPassthrough()
     releaseWebviewDragPassthroughRef.current = acquireWebviewsDragPassthrough()
   }, [releaseWebviewDragPassthrough])
@@ -52,9 +49,7 @@ export function useTabDragGestureLifecycle({
       if (node) {
         return
       }
-      // Why: this root owns the dnd-kit gesture that temporarily puts browser
-      // webviews in pointer passthrough and installs global fallback listeners,
-      // so root teardown must release both.
+      // Root teardown must release both webview passthrough and global missed-end listeners.
       releaseWebviewDragPassthrough()
       releaseMissedEndFallback()
     },

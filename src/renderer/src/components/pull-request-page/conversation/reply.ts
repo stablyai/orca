@@ -34,8 +34,7 @@ export async function postConversationReply(args: {
     )
     return false
   }
-  // Why: nest under review threads (path/threadId/discussion_r); never post a
-  // separate top-level conversation comment for those.
+  // Reply inside review threads; a top-level conversation post would detach the answer.
   const isReviewThreadReply = args.item.type === 'pr' && canPostPRReviewThreadReply(args.comment)
   const result = isReviewThreadReply
     ? await addPRReviewCommentReplyForRepo({

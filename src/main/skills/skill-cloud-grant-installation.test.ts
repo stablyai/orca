@@ -134,9 +134,7 @@ describe('installSkillCloudGrant', () => {
   })
 })
 
-// The failure report is keyed by user-visible skill IDs, so switching the
-// membership test from `includes` to a Set must not change which entries appear,
-// how often, or in what order.
+// Set membership must retain manifest order and duplicates in user-visible failure reports.
 it('reports selected manifest entries in manifest order, duplicates and all', async () => {
   const skills = ['b', 'a', 'dupe', 'dupe', 'unselected'].map((id) => ({
     id,
@@ -155,7 +153,7 @@ it('reports selected manifest entries in manifest order, duplicates and all', as
   } as unknown as OrcaRuntimeService
   const result = await installSkillBundleCloudGrant(runtime, bundleGrant, {
     operationId: 'op',
-    // Repeated and unknown selections must be inert, exactly as with `includes`.
+    // Repeated/unknown selection ids must not change manifest membership.
     selectedSkillIds: ['dupe', 'a', 'a', 'b', 'never-in-manifest'],
     destination: { scope: 'global' }
   })

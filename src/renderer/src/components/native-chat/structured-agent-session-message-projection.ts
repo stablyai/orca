@@ -8,8 +8,7 @@ import { projectStructuredAgentSessionMessages as projectMessages } from '../../
 import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
 
-/** The desktop's transcript: a message the host accepted and then rejected stays where it was
- *  sent, as not sent, unless the queue holds it as a card. */
+/** Keep host-recorded rejections in place as not sent unless a queue card owns them. */
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
@@ -22,8 +21,7 @@ export type StructuredPromptItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
 }
 
-/** The prompt cards a person can answer: pending, and named by the host as waiting
- *  (`isActionableStructuredAgentSessionPrompt`) when the host names them. */
+/** Offer pending prompts, respecting the host’s actionable-wait declaration when available. */
 export function pendingStructuredSessionPrompts({
   journalItems,
   currentRequests,

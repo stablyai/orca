@@ -27,7 +27,7 @@ function accountKey(host: string, user: string): string {
   return `${host.toLowerCase()}\0${user.toLowerCase()}`
 }
 
-// Why: Radix Select rejects an empty item value, so "inherit the ambient login" needs a sentinel.
+// Radix forbids empty item values; use a sentinel for inherited ambient login.
 const AMBIENT_VALUE = '__ambient_gh_login__'
 
 export function RepositoryGitHubAccountSection({
@@ -43,7 +43,7 @@ export function RepositoryGitHubAccountSection({
   const loadGenerationRef = useRef(0)
   const selectLabelId = useId()
 
-  // Why: the binding lives on the repo's own host; key the memo on its id so it stays stable.
+  // Bind to the repo owner and memoize by host identity.
   const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownerEnvironmentId = ownerHost?.kind === 'runtime' ? ownerHost.environmentId : null
   const runtimeTarget = useMemo(
@@ -267,7 +267,7 @@ export function RepositoryGitHubAccountSection({
               )}
             </SelectItem>
             {repo.ghAccount && !selectedInInventory ? (
-              // Why: keep the bound account's key as the item value so the trigger shows it; disabled so it cannot be re-picked.
+              // Retain the missing bound key for display, but disable reselection.
               <SelectItem value={selectedKey} disabled>
                 {translate(
                   'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',

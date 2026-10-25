@@ -153,7 +153,6 @@ export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: b
           'Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle.'
         )
   )
-  // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
-  // on the dashboard is the trigger to add one.
+  // Process-startup timeout has no v1 telemetry slot; unknown counts signal when to add one.
   track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }

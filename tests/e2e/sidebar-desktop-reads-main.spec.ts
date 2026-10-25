@@ -1,8 +1,4 @@
-/**
- * The desktop sidebar drawn from main's feed (ORCA_SIDEBAR_INPUTS=main): it follows main, not the
- * window's own store, and a drag, create, open or collapse still shows at once from the window's
- * own state.
- */
+// With ORCA_SIDEBAR_INPUTS=main, follow main’s feed while window drag/create/open/collapse changes still commit immediately.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
@@ -38,19 +34,14 @@ type DomState = {
 
 type DomLog = { stop: () => Promise<{ states: DomState[]; inputs: string[] }> }
 
-/**
- * Records every committed state of the sidebar's DOM (rows top to bottom, whether it shows `text`,
- * the current row) and whether it landed in the task of an input. Why that bound: the window
- * applies its own state in the input's task, while main's answer needs an IPC reply, which is a
- * later task, so it holds on any runner load. No paints: a hidden window may never paint.
- */
+// Record every committed DOM state within the input task: local changes can commit there, main IPC replies cannot.
+// Use committed DOM rather than paint because hidden windows may never paint.
 async function startDomLog(page: Page, text = ''): Promise<DomLog> {
   const handle = await page.evaluateHandle(
     ({ selector, wanted }) => {
       const states: (Omit<DomState, 'afterInput' | 'inInputTask'> & { at: number })[] = []
       const inputs: { type: string; at: number; nextTaskAt: number }[] = []
-      // Why the event's own time: the app's handlers can commit, and this log record the state,
-      // before this listener runs. A posted message runs in the next task, which ends the window.
+      // Use event time because React may commit before this listener; posted messages close the observation window next task.
       const onInput = (event: Event): void => {
         const input = { type: event.type, at: event.timeStamp, nextTaskAt: Infinity }
         inputs.push(input)
@@ -155,8 +146,7 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
     await expect.poll(async () => (await ours()).length, { timeout: 30_000 }).toBe(3)
     await orcaPage.screenshot({ path: testInfo.outputPath(`list.png`) })
 
-    // Empty the window's own catalog for one task: the rows still listed come from main. No
-    // refetch can answer before the next task.
+    // Empty local catalog for one task; main-owned rows must remain before any refetch reply.
     const listedWhileEmptied = await orcaPage.evaluate(async (selector) => {
       window.__store!.setState({ worktreesByRepo: {} })
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -296,8 +286,7 @@ test('the sidebar lists main’s inputs and keeps drag, create, open and collaps
       )
       .toBe(true)
     await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
-    // The list's last row, once painted at the bottom: rows render after the scroll, so until
-    // then the last mounted row sits mid-viewport, within overscan of the top.
+    // Wait for post-scroll row mounting; initial overscan can still leave the last mounted row mid-viewport.
     const lastRowAtBottom = (): Promise<string> =>
       scroller.evaluate((element, selector) => {
         const box = element.getBoundingClientRect()

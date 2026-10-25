@@ -1,9 +1,4 @@
-/**
- * The Orca pane processes of a running distro with their pane key and folder, read inside it.
- * On Windows a bridge WSL pane's own process is `wsl.exe`, and bash there reports no folder
- * (no OSC 7), so this is the only place a pane's shell folder can be learned. Each guest process
- * of a pane inherits `ORCA_PANE_KEY`.
- */
+/** Windows sees only wsl.exe and bridge bash lacks OSC 7; inherited ORCA_PANE_KEY identifies shell folders inside the guest. */
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
@@ -21,12 +16,7 @@ export type WslGuestProcessRow = {
 const BEGIN = 'ORCA_PANE_PROCESSES_BEGIN'
 const END = 'ORCA_PANE_PROCESSES_END'
 
-/**
- * One line per Orca pane process between two fence lines: pid, ppid, comm, the pane key and the
- * cwd, tab-separated. One `grep` over every environ finds the tagged processes, so
- * the cost follows the panes, not the distro's process count. Fields come after the last `)` of
- * /proc/<pid>/stat because comm may hold spaces or parens. POSIX sh and BusyBox tools only.
- */
+/** Fenced tab-separated pid/ppid/comm/pane-key/cwd rows, using POSIX sh/BusyBox. One grep avoids per-process forks; stat fields follow the last `)` because comm may contain spaces/parens. */
 export const WSL_GUEST_PANE_PROCESS_SCRIPT = [
   `echo ${BEGIN}`,
   "for e in $(grep -l -s 'ORCA_PANE_KEY=' /proc/[0-9]*/environ); do",
@@ -72,10 +62,7 @@ export function parseWslGuestPaneProcesses(stdout: string): WslGuestProcessRow[]
 
 const readsInFlight = new Map<string, Promise<WslGuestProcessRow[] | null>>()
 
-/**
- * The distro's process rows; null when it is not running (a read would boot it) or could not be
- * read in full. Callers asking at once, such as the panes of one Sleep, share one read.
- */
+/** Avoid booting stopped distros; incomplete reads return null, and simultaneous Sleep callers share one read. */
 export function readWslGuestPaneProcesses(
   distro: string,
   timeoutMs: number,
@@ -89,8 +76,7 @@ export function readWslGuestPaneProcesses(
     return inFlight
   }
   const read = (async () => {
-    // Why the confirmed list too: a session the client holds as live may sit in a distro that was
-    // terminated since, and reading it would boot it.
+    // A client-held live session may belong to a terminated distro; require confirmation before skipping the boot guard.
     const knownRunning =
       opts.running === true &&
       (peekConfirmedRunningWslDistros() ?? []).some((running) => running.toLowerCase() === key)
@@ -123,10 +109,7 @@ export function readWslGuestPaneShellCwd(
   return shells.length === 1 ? (shells[0].cwd ?? null) : null
 }
 
-/**
- * The pane's shell: the topmost tagged shell. The WSL relay above it may carry the key too, so
- * tagged non-shell ancestors don't hide it.
- */
+/** Only tagged shell ancestors hide a pane shell; a WSL relay may carry the key too. */
 export function paneShells(
   rows: readonly WslGuestProcessRow[],
   paneKey: string

@@ -20,7 +20,6 @@ beforeEach(() => {
 const WT = 'repo-1::/Users/dev/orca'
 const FILE = '/Users/dev/orca/notes.ts'
 
-/** A persisted editor tab whose unified tab names its file by the owned id. */
 function ownedSession(): WorkspaceSessionState {
   return {
     activeRepoId: null,
@@ -115,7 +114,7 @@ describe('headless editor tabs under an owned id', () => {
 
 const ENV = 'env-1'
 
-/** A runtime-environment and a local file at one path: the runtime one listed first and owned. */
+// Distinct owners can hold the same path; list the owned runtime file first.
 function twoOwnerSession(): WorkspaceSessionState {
   const base = ownedSession()
   const file = { filePath: FILE, relativePath: 'notes.ts', worktreeId: WT, language: 'typescript' }

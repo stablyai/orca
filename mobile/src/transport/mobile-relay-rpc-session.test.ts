@@ -205,15 +205,12 @@ describe('mobile relay RPC session', () => {
   it('connects when the relay never answers capability negotiation', async () => {
     const { session } = await confirmResume()
 
-    // Why: the advisory's own deadline used to fail confirmResume, so a link too slow to
-    // answer within the request timeout never published 'connected' — it just redialled.
+    // An unanswered capability advisory must not trap a slow link before connected.
     await vi.waitFor(() => expect(session.getState()).toBe('connected'), { timeout: 5_000 })
     expect(session.getFailure()).toBeNull()
   })
 
-  // Why: ConnectionState stays 'connecting' until relay-hello, so the migration bound
-  // needs a separate signal to tell "cell never answered the upgrade" from "cell took
-  // relay-auth and is still resolving the assignment".
+  // Dial stages distinguish a missing upgrade from slow cell assignment while both report connecting.
   it('reports the dial stage as the link opens, receives hello, and authenticates', async () => {
     const session = openSession()
     const stages: string[] = []
@@ -321,7 +318,6 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions!.onError(new Error('relay transport error'))
 
     await expect(pending).rejects.toThrow('relay transport error')
-    // The frame reached the wire, so the failure must read as delivery-unknown.
     await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
     expect(session.getState()).toBe('disconnected')
   })
@@ -392,7 +388,7 @@ describe('mobile relay RPC session', () => {
     server.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
     const frames = fakes.sendText.mock.calls.map((call) => JSON.parse(String(call[0])))
-    // The frames #26501 wrote with its own `executionHost` option, ids aside; key order is not read.
+    // Compare envelope routing independently of frame ids and JSON key order.
     expect(frames.map(({ id: _id, ...frame }) => frame)).toStrictEqual([
       {
         method: 'worktree.ps',

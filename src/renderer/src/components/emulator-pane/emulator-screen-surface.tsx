@@ -85,8 +85,7 @@ export function EmulatorScreenSurface({
       aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
       aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive)}
     >
-      {/* Why: the stream is the actual emulator screen; fake in-screen chrome
-          doubles up with iOS's real status bar and makes bezels lie. */}
+      {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent
         loading={loading}
         onStreamError={onStreamError}

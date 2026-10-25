@@ -88,7 +88,6 @@ describe('WorktreeCardSshHostControl', () => {
     expect(screen.getByRole('button', { name: 'Connect to SSH host devbox' })).toBeEnabled()
   })
 
-  // Why: the verb must match the terminal overlay, host-header menu, and status-bar row.
   it.each([
     ['auth-failed', 'Reconnect'],
     ['error', 'Retry'],
@@ -128,8 +127,7 @@ describe('WorktreeCardSshHostControl', () => {
       renderControl({ status })
 
       const button = screen.getByRole('button', { name: 'Connecting to SSH host devbox' })
-      // Why: aria-disabled, not disabled — a real `disabled` would let a second click fall
-      // through to the card and would kill the tooltip for the whole in-flight window.
+      // Native disabled would let clicks fall through to the card and suppress the in-flight tooltip.
       expect(button).toHaveAttribute('aria-disabled', 'true')
       expect(button).toHaveAttribute('aria-busy', 'true')
       expect(button).not.toBeDisabled()
@@ -143,8 +141,7 @@ describe('WorktreeCardSshHostControl', () => {
     expect(screen.getByText('Project on SSH host devbox')).toBeInTheDocument()
   })
 
-  // Why: runtime-owned targets deliberately have no renderer-visible status; the card has
-  // always shown the plain host glyph there rather than a false disconnected state.
+  // Runtime-owned targets have no renderer status; null must remain a passive glyph, not false disconnection.
   it('renders the passive host glyph for a null status', () => {
     renderControl({ status: null })
 
@@ -152,7 +149,6 @@ describe('WorktreeCardSshHostControl', () => {
     expect(screen.getByText('Project on SSH host devbox')).toBeInTheDocument()
   })
 
-  // Why: this is the exact bug targetRemoved exists to prevent — a Connect that can only fail.
   it('never offers Connect for a removed host, even in a failed state', () => {
     renderControl({ status: 'error', targetRemoved: true })
 
@@ -163,7 +159,6 @@ describe('WorktreeCardSshHostControl', () => {
   it('keeps the label available to assistive tech but not on screen in icon-only mode', () => {
     renderControl({ iconOnly: true })
 
-    // Why: aria-label is the accessible name, so a second sr-only copy would be dead markup.
     const button = screen.getByRole('button', { name: 'Connect to SSH host devbox' })
     expect(button).not.toHaveTextContent('Connect')
     expect(button).toHaveClass('w-4')
@@ -190,8 +185,6 @@ describe('WorktreeCardSshHostControl', () => {
     )
   })
 
-  // Why: reconnecting a host and navigating to its workspace are separate intents; the
-  // control sits inside the card's own click target.
   it('does not activate the surrounding card when clicked', async () => {
     const onCardClick = vi.fn()
     const user = userEvent.setup()
@@ -256,11 +249,10 @@ describe('WorktreeCardSshHostControl', () => {
         'ssh-target-1'
       )
     )
-    // The local ssh API must never see a remote host's target.
     expect(connect).not.toHaveBeenCalled()
   })
 
-  // Why: N cards can share one host, and a passphrase-gated target would prompt N times.
+  // Cards sharing one host must not create duplicate passphrase prompts.
   it('suppresses a sibling card dialing a host that is already connecting', async () => {
     const connect = vi.fn().mockReturnValue(new Promise(() => {}))
     installSshApi(connect)
@@ -295,7 +287,6 @@ describe('WorktreeCardSshHostControl', () => {
     expect(connect).toHaveBeenCalledTimes(1)
   })
 
-  // Why: aria-disabled leaves the button clickable, so the handler owns the guard.
   it('ignores a second click while its own connect is in flight', async () => {
     const connect = vi.fn().mockReturnValue(new Promise(() => {}))
     installSshApi(connect)
@@ -309,8 +300,7 @@ describe('WorktreeCardSshHostControl', () => {
     expect(connect).toHaveBeenCalledTimes(1)
   })
 
-  // Why: the sidebar scroll root treats a bubbled Enter as "focus the terminal", which would
-  // cancel the button's activation and move focus off the card.
+  // Bubbled Enter reaches sidebar terminal-focus handling and would steal this button’s activation.
   it('does not let Enter or Space bubble to the sidebar key handler', async () => {
     const onContainerKeyDown = vi.fn()
     const user = userEvent.setup()
@@ -342,7 +332,6 @@ describe('WorktreeCardSshHostControl', () => {
     expect(screen.getByText('Project on SSH host devbox')).toBeInTheDocument()
   })
 
-  // Why: the title row hosts sibling h-4 pills; a taller state would shift every card on the host.
   it('carries one height class across every actionable state', () => {
     const heights = new Set<string>()
     for (const status of [
@@ -363,8 +352,6 @@ describe('WorktreeCardSshHostControl', () => {
     expect([...heights]).toEqual(['h-4'])
   })
 
-  // Why: the passive branch swaps the 16px button for a bare glyph span; a larger icon there
-  // would make the row taller in exactly the states with nothing to act on.
   it.each([
     ['connected', false],
     [null, false],

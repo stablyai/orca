@@ -7,8 +7,6 @@ import {
   taskUiStateSchema
 } from './task-runtime-reply-schema'
 
-// Pins what the hydration reads require and what they deliberately do not.
-
 describe('the runtime status', () => {
   it('reads the representative capability lists', () => {
     for (const capabilities of [['mobile.tasks.v1'], ['files.mutation-ownership.v1']]) {
@@ -93,10 +91,7 @@ describe('the two advisory probes', () => {
     })
   })
 
-  // `success-result-or-skip` accepts an envelope whose `result` is absent or null and then asks
-  // the reader to decode it, so a refusal here throws out of the caller's whole hydration. Main
-  // hydrated on both of these replies; the recorded settings.task-hydration and
-  // settings.workspace-context partitions are what caught the difference.
+  // Advisory acceptance still decodes absent/null results; total readers must retain hydration defaults instead of throwing.
   it.each([
     ['absent', undefined],
     ['null', null],

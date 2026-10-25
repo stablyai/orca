@@ -136,8 +136,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
     )
     expect(result.ok).toBe(true)
     if (result.ok) {
-      // Why: the entry is the smallest self-contained unit, so dropped counts
-      // reflect distinct corrupt records rather than symptoms.
+      // Count distinct corrupt entries, the smallest self-contained units, rather than validation symptoms.
       expect(result.droppedPaths).toEqual(['terminalLayoutsByTabId.tab-bad'])
       expect(result.value.terminalLayoutsByTabId['tab-bad']).toBeUndefined()
       expect(result.value.terminalLayoutsByTabId['tab-good']?.root).toEqual({
@@ -198,8 +197,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('reports a dotted map key and its same-named nested path independently', () => {
-    // Why: map keys are user data, so 'a.root' and the nested path a → root are
-    // different entries that read alike once joined.
+    // User-data key a.root differs from nested path a → root even though their rendered paths match.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {
@@ -278,9 +276,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('salvages rather than throwing on a payload large enough to overflow the validator', () => {
-    // Why: this parse runs in the Store constructor, so an escaping RangeError is
-    // an unrecoverable launch failure. Per-entry validation never accumulates the
-    // issue list that used to overflow.
+    // An escaping RangeError in Store construction prevents launch; per-entry salvage avoids materializing the old overflowing issue list.
     const worktreeId = 'repo-1::/huge'
     const tabs = Array.from({ length: 200_000 }, (_, i) => ({ id: `bad-${i}` }))
     const result = parseWorkspaceSessionSalvaging(
@@ -307,16 +303,13 @@ describe('parseWorkspaceSessionSalvaging', () => {
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalTopologyRevisionByRepoId'])
       expect(result.value.terminalTopologyRevisionByRepoId).toBeUndefined()
-      // Why: an explicit undefined key would shadow the caller's default in the
-      // `{ ...defaults, ...value }` spread both call sites do.
+      // An explicit undefined would shadow defaults in callers’ object spread.
       expect(Object.hasOwn(result.value, 'terminalTopologyRevisionByRepoId')).toBe(false)
     }
   })
 
   it('salvages systemic corruption far larger than any single-entry budget', () => {
-    // Why: the reported failure was one bad record, but a bad writer projects the
-    // same wrong shape across every entry it touches. The dropped count is
-    // unbounded so that case stays a salvage instead of a full-session reset.
+    // Bad writers can corrupt many entries; do not reset the whole session when dropped counts exceed the diagnostic budget.
     const incarnations: Record<string, unknown> = {}
     for (let i = 0; i < 400; i += 1) {
       incarnations[`tab-${i}:leaf-${i}`] = i % 2 === 0 ? i : `inc-${i}`
@@ -355,8 +348,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('keeps the rest of the session when a required top-level field is unsalvageable', () => {
-    // Why: without a fallback, one bad legacy `tabsByWorktree` would still cost
-    // every worktree's unified tabs, groups and layouts.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: 'nope',
@@ -374,8 +365,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('still rejects a foreign object payload rather than posing as a repaired session', () => {
-    // Why: a fallback repairs a field we could not read, it must never manufacture
-    // a session out of an unrelated JSON blob that simply lacks every field.
+    // Fallbacks must not manufacture a session from unrelated JSON lacking every session field.
     expect(parseWorkspaceSessionSalvaging({ unrelated: 'payload', count: 3 }).ok).toBe(false)
   })
 

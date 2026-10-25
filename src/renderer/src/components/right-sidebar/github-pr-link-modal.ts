@@ -23,8 +23,7 @@ export function openGitHubPRLinkModal({
 }): void {
   openModal('edit-meta', {
     worktreeId,
-    // Why: the same workspace ID can exist under two hosts. Naming the owner
-    // keeps the dialog on this workspace instead of the ambiguous lookup.
+    // Pin the owner because workspace IDs can repeat across hosts.
     repoId: worktree.repoId,
     executionHostId: worktree.hostId,
     currentDisplayName: worktree.displayName,

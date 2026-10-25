@@ -11,6 +11,7 @@ import {
 } from './ssh-ipc-context'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
+import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
 
@@ -40,6 +41,8 @@ export function registerSshPortForwardHandlers(): void {
           args.remotePort,
           args.label
         )
+        // A forward the user adds again starts a fresh backoff.
+        clearForwardFailure(args.targetId, entry)
         persistPortForwards(args.targetId)
         broadcastPortForwards(getCurrentMainWindow, args.targetId)
         return entry
@@ -76,6 +79,10 @@ export function registerSshPortForwardHandlers(): void {
             args.remotePort,
             args.label
           )
+          clearForwardFailure(entry.connectionId, entry)
+          if (previous) {
+            clearForwardFailure(entry.connectionId, previous)
+          }
           persistPortForwards(entry.connectionId, previous)
           broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
           return entry
@@ -108,12 +115,44 @@ export function registerSshPortForwardHandlers(): void {
       }
       const removed = await portForwardManager!.removeForwardAndWait(args.id)
       if (removed) {
+        clearForwardFailure(removed.connectionId, removed)
         persistPortForwards(removed.connectionId, removed)
         broadcastPortForwards(getCurrentMainWindow, removed.connectionId)
       }
       return removed
     })
   })
+
+  ipcMain.handle('ssh:listUnrestoredPortForwards', (_event, args: { targetId: string }) =>
+    listUnrestoredPortForwards(args.targetId)
+  )
+
+  // A saved forward that never started has no live id, so it is removed by its mapping.
+  ipcMain.handle(
+    'ssh:removeSavedPortForward',
+    (
+      _event,
+      args: { targetId: string; localPort: number; remoteHost: string; remotePort: number }
+    ) =>
+      serializePortForwardChange(args.targetId, async () => {
+        const { targetId, ...mapping } = args
+        // A restore queued ahead may have opened it since the row was drawn; close that too.
+        const live = portForwardManager!
+          .listForwards(targetId)
+          .find(
+            (forward) =>
+              forward.localPort === mapping.localPort &&
+              forward.remoteHost === mapping.remoteHost &&
+              forward.remotePort === mapping.remotePort
+          )
+        if (live) {
+          await portForwardManager!.removeForwardAndWait(live.id)
+        }
+        persistPortForwards(targetId, mapping)
+        clearForwardFailure(targetId, mapping)
+        broadcastPortForwards(getCurrentMainWindow, targetId)
+      })
+  )
 
   ipcMain.handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
     const all = portForwardManager!.listForwards(args?.targetId)

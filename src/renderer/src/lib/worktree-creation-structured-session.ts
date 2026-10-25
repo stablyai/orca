@@ -29,11 +29,7 @@ type LaunchStructuredWorktreeSessionArgs = {
   primaryTabId: string | null
 }
 
-/**
- * The host's "no" to a create the user moved away from opens the agent terminal the way a
- * background terminal create does: in place, without selecting the workspace (#23974). A create the
- * user is still watching keeps the default, which opens it as a new agent tab there.
- */
+/** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
 function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
   host: RuntimeClientTarget
@@ -79,9 +75,7 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Why: the composer decided route and delivery mode before the worktree existed, and the request
-  // carries that verdict in renderer memory for the life of the create; re-entering with it is what
-  // keeps a retry from re-resolving against a host that has changed since.
+  // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
@@ -107,8 +101,7 @@ export async function launchStructuredWorktreeSession(
         ? {}
         : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
       beforeOpen: () => {
-        // Why: cancellation can arrive through the launch signal while reveal is running, before
-        // the pending-creation store snapshot has caught up.
+        // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
         if (abandoned.signal.aborted || isCancelled()) {
           return false
         }
@@ -136,8 +129,7 @@ export async function launchStructuredWorktreeSession(
       primaryTabId = launch.tab?.id ?? primaryTabId
     }
   } catch (error) {
-    // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
-    // mid-create.
+    // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
     return { ...settled, activation, primaryTabId }
   } finally {

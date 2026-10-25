@@ -11,7 +11,6 @@ import {
   type MobileNativeChatConversation
 } from './use-mobile-native-chat-conversation-state'
 
-/** The chat surface, from which any row can open a picture full size or its actions sheet. */
 export function MobileNativeChatRowOverlaysHost({
   conversation,
   children
@@ -19,8 +18,7 @@ export function MobileNativeChatRowOverlaysHost({
   conversation: MobileNativeChatConversation
   children?: React.ReactNode
 }): React.JSX.Element {
-  // What a row opened belongs to the conversation it was opened in. The message is kept as it was
-  // pressed, so the sheet reads its words once.
+  // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
   const [shown, setShown] = useMobileNativeChatConversationState<{
     image?: MobileNativeChatViewedImage
     actionsFor?: NativeChatMessage
@@ -32,7 +30,7 @@ export function MobileNativeChatRowOverlaysHost({
     }),
     [setShown]
   )
-  // Built once per change, so the chat re-rendering on each streamed word leaves it alone.
+  // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {
     const close = () => setShown(null)
     return shown?.image ? (

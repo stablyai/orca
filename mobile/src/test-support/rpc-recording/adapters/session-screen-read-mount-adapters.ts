@@ -13,14 +13,7 @@ const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 
-/**
- * What the session screen reads while it is open: a markdown or file tab's document, the terminal
- * inventory, the repo probe native chat gates readability on, and the paced double-Escape stop.
- *
- * These hooks take the screen's accumulated model, so each mount supplies only the members the hook
- * destructures — a fixture completed into a whole session model would invent state no scenario
- * observes. The setters are recorded as model values rather than as native UI.
- */
+// Supply only destructured model fields; a complete invented session model would introduce state no scenario observes.
 export function sessionScreenReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

@@ -17,8 +17,7 @@ describe('shouldPruneTerminalHandle', () => {
   })
 
   it('retains the chat-covered handle when the list omits it (#10681)', () => {
-    // terminal.list drops every handle while the desktop graph reloads; the covered
-    // stream is the input lease and nothing else re-subscribes it.
+    // Graph reloads can omit every handle while the covered stream still owns the composer input lease.
     expect(
       shouldPruneTerminalHandle({
         handle: 'term-1',
@@ -56,8 +55,7 @@ describe('shouldPruneTerminalHandle', () => {
 
 describe('resolveRetainedTerminalHandles', () => {
   it('carries the chat-covered handle so its live-input preference survives', () => {
-    // Sweeping preferences against the raw list would erase the buffered-mode
-    // opt-out on the very refresh the subscription was retained through.
+    // Retain preferences with the lease so this refresh cannot erase its buffered-mode opt-out.
     expect([
       ...resolveRetainedTerminalHandles({
         liveHandles: new Set(['term-2']),

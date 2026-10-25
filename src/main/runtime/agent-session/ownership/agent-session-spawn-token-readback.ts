@@ -1,9 +1,5 @@
-/**
- * Reads the spawn token a live child carries in its environment, giving the owner probe a
- * PID-reuse-safe identity element even when no start time was recorded. Only Linux exposes
- * another process's environment (/proc/<pid>/environ); macOS and Windows answer null, which
- * the probe treats as "no answer" — never as proof in either direction.
- */
+/** Linux /proc exposes the child's PID-reuse-safe token even without recorded start time.
+ * macOS/Windows return null: unavailable evidence proves neither liveness nor death. */
 
 import { readFile } from 'node:fs/promises'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session-record'

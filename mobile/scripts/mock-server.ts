@@ -1,7 +1,5 @@
 #!/usr/bin/env npx tsx
-// Why: standalone mock WebSocket server for developing the mobile app without
-// a running Orca desktop instance. Responds to the same RPC methods the real
-// runtime exposes, with realistic fake data. Supports E2EE handshake.
+// Standalone E2EE WebSocket mock exposes desktop RPCs with fake data for mobile development without Orca.
 import { WebSocketServer, type WebSocket } from 'ws'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
 import { loadOrCreateMockServerKeyPair } from './mock-server-key-pair'
@@ -15,18 +13,13 @@ import {
 const PORT = Number(process.env.PORT) || 6768
 const AUTH_TOKEN = 'mock-device-token'
 
-// Why: generate a persistent server keypair for this mock session.
-// The public key is printed at startup so it can be used in pairing QR data.
-// MOCK_SERVER_KEY_FILE reuses one across restarts so a paired device (which
-// pins the public key) survives a server restart.
+// Print server public key for pairing QR; MOCK_SERVER_KEY_FILE preserves it across restarts for pinned devices.
 const serverKeyPair = loadOrCreateMockServerKeyPair(process.env.MOCK_SERVER_KEY_FILE)
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
 
 const wss = new WebSocketServer({ port: PORT })
 
-// Why: each connection goes through an E2EE handshake before any RPC traffic.
-// The first message must be e2ee_hello (plaintext), then all subsequent
-// messages are encrypted with the derived shared key.
+// First frame is plaintext e2ee_hello; encrypt subsequent RPCs with derived shared key.
 const connectionState = new Map<WebSocket, E2EEState>()
 
 wss.on('connection', (ws) => {
@@ -37,7 +30,6 @@ wss.on('connection', (ws) => {
     const e2ee = connectionState.get(ws)
 
     if (!e2ee) {
-      // Handshake phase — expect e2ee_hello
       let hello: { type?: string; publicKeyB64?: string }
       try {
         hello = JSON.parse(msg)
@@ -68,7 +60,6 @@ wss.on('connection', (ws) => {
       return
     }
 
-    // Post-handshake — decrypt, handle, encrypt reply
     const plaintext = e2eeDecrypt(msg, e2ee.sharedKey)
     if (plaintext === null) {
       console.log('[mock] Decryption failed — dropping message')

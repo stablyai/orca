@@ -1,11 +1,6 @@
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 
-/**
- * Which rows a Kanban pointer-drag actually moves.
- *
- * Host-qualified (STA-4343): two hosts can publish the same workspace id, so a
- * drag must move the row that was grabbed, not every row sharing its id.
- */
+/** Qualify by host so dragging one workspace cannot move its same-ID twin on another host. */
 export function resolveWorkspaceKanbanPointerDragSelection(args: {
   sourceWorktreeId: string
   sourceWorktreeIdentity: string
@@ -27,7 +22,6 @@ export function resolveWorkspaceKanbanPointerDragSelection(args: {
   }
 }
 
-/** Params for the Kanban pointer-drag hook; lives here with the selection logic. */
 export type UseWorkspaceKanbanCardPointerDragParams = {
   open: boolean
   boardRef: React.RefObject<HTMLElement | null>

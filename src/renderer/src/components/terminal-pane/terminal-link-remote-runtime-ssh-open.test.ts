@@ -252,8 +252,7 @@ describe('handleOscLink', () => {
       filePath: '/home/me/repo/report.html',
       worktreeId: 'wt-1'
     })
-    // Why: the preview tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
+    // The preview is the surface; activation must not seed a shell into an emptied workspace.
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })

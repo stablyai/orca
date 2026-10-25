@@ -95,8 +95,7 @@ function ListRowHarness({
   const onLongPress = useCallback(() => undefined, [])
   const onToggleLineage = useCallback(() => undefined, [])
 
-  // Sibling state changes re-render the harness without changing the row's props,
-  // exercising the row's React.memo bailout.
+  // Rerender harness with unchanged row props to exercise React.memo bailout.
   return createElement(
     Fragment,
     null,

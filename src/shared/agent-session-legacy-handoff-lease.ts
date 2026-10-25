@@ -1,11 +1,4 @@
-/**
- * Lease values only older builds wrote.
- *
- * Records an older build persisted can still carry a terminal owner (`runtimeKind: 'tui'`), a
- * handoff stage (`preparing`, `old-owner-stopped`), or the removed ownerless-reservation latch
- * (`manual-recovery`). They are accepted on disk and mapped here, once, at decode, so no in-memory
- * lease holds a value nothing in this build produces.
- */
+/** Decode legacy tui owners, preparing/old-owner-stopped handoffs and manual-recovery latches once at load so in-memory leases contain only current values. */
 
 import type {
   AgentSessionHandoffStage,
@@ -78,8 +71,7 @@ export function normalizeLegacyHandoffLease(lease: PersistedAgentSessionLease): 
     ...lease,
     runtimeKind: 'native',
     handoffStage: stage,
-    // Why: a recorded terminal is the user's foreground agent. `conflicted` is the claim every
-    // build probes but never stops; a plain native owner would be stopped by restart recovery.
+    // Legacy terminal owners are user foreground agents: keep them conflicted and probe-only; native restart recovery would stop them.
     claimStatus: lease.ownerProcess === null ? lease.claimStatus : 'conflicted'
   }
 }

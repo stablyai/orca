@@ -8,8 +8,7 @@ import {
 import type { UsageScanWorkerRequest, UsageScanWorkerScanBody } from './usage-scan-worker-protocol'
 import type { UsageSourceCacheRef } from './usage-source-cache-file'
 
-// A worker_threads stand-in the tests drive directly: it records posted requests
-// and lets a test emit message/error/exit without a built worker bundle.
+// Drive transport lifecycle without a built worker bundle.
 class FakeWorker {
   postedRequests: UsageScanWorkerRequest[] = []
   private listeners = new Map<string, Set<(arg?: unknown) => void>>()
@@ -85,7 +84,6 @@ describe('UsageScanWorkerClient', () => {
 
     const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
     await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
-    // The request names where the worker keeps the per-source cache instead of carrying it.
     expect(worker.postedRequests[0]).toMatchObject({
       operation: 'scan',
       providerId: 'codex',
@@ -155,8 +153,7 @@ describe('UsageScanWorkerClient', () => {
       throw new Error('no thread available')
     })
 
-    // The rejection is what the store turns into `lastScanError`, keeping the
-    // previous projection rather than publishing an empty one.
+    // Stores turn rejection into lastScanError and keep the previous projection.
     await expect(client.scan(CODEX_BODY)).rejects.toThrow(/spawn failed/)
   })
 
@@ -182,8 +179,7 @@ describe('UsageScanWorkerClient', () => {
       // Posted synchronously by dispatch; vi.waitFor would advance the fake clock.
       expect(worker.postedRequests).toHaveLength(1)
 
-      // Four windows of wall clock, each broken by a progress message just
-      // before the deadline: the old wall-clock budget died in the first one.
+      // Progress just before each deadline keeps the scan alive across four wall-clock windows.
       for (let window = 1; window <= 4; window++) {
         await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
         worker.emit('message', { id: worker.lastId(), filesScanned: window * 100 })
@@ -235,8 +231,7 @@ describe('UsageScanWorkerClient', () => {
       return worker
     })
 
-    // One more call than the cap, so the last one must be drained rather than
-    // handed to a fourth worker.
+    // One call beyond the death cap must drain instead of spawning another worker.
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 1 }, () =>
       client.scan(CODEX_BODY)
     )

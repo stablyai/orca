@@ -26,8 +26,7 @@ vi.mock('lucide-react-native', () => ({
 import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
 
-/** A host the shell's client has failed to reach twenty times, which is the verdict that offers
- *  Reconnect on native. */
+// Use the failed-attempt count that offers native Reconnect to prove the page still withholds it.
 function controllerWith(forceReconnectHost: ForceReconnect) {
   const fields = {
     actions: {

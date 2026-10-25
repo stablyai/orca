@@ -41,40 +41,26 @@ export function useMobileNativeChatDrafts(args: {
   tabId: string | null
   sessionId: string | null
   messages: readonly NativeChatMessage[]
-  /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string | null
   launchDraftCreatedAt?: number | null
-  /** Whether the tab is currently resolved to the chat view. Off-chat the
-   *  launch-draft effects hold their state instead of acting on it. */
+  // Off-chat launch-draft effects hold state rather than reading retraction.
   chatActive?: boolean
-  /** `messages` is not yet this session's real history (read in flight, or the
-   *  transcript still belongs to the previously active tab), so it cannot be
-   *  trusted to decline or retire the seed. */
+  // Unsettled or previous-tab history cannot decline/retire the launch seed.
   transcriptLoading?: boolean
-  /** `messages` is this session's own settled history — so an empty one really
-   *  is an empty conversation, not a read that failed or never ran. Only then
-   *  does a send's captured tail describe a real boundary. */
+  // Only settled own-session history makes an empty list a real send boundary.
   transcriptSettled: boolean
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
-  /** Append after existing typing (newline-joined); a queued card's Edit copy lands here.
-   *  False when nothing was appended: no active draft, or no text. */
   appendComposerText: (text: string) => boolean
   getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
-  /** Phone-local previews rebound to the transcript message that replaced the
-   *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
   captureSendOrigin: (text: string, sentAt?: number) => MobileNativeChatSendOrigin | null
-  /** Launch-context text still believed to be parked on the agent's TUI input
-   *  line, or null once it has been declined or retired. Send paths size their
-   *  pre-clear from it, since one Ctrl+U clears only one logical line. */
+  // Retain parked TUI text for sizing pre-clear: one Ctrl+U removes only one logical line.
   readSeededLaunchDraft: () => string | null
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
-  /** Clear the composer at send time, before the RPC settles. */
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  /** Put the text back after a definite rejection, after whatever the composer holds now. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
@@ -133,7 +119,6 @@ export function useMobileNativeChatDrafts(args: {
     },
     [draftKey]
   )
-  // Copied queued-card text goes after whatever is there, so newer typing is preserved.
   const appendComposerText = useCallback(
     (text: string): boolean => {
       if (!draftKey || text.length === 0) {
@@ -149,7 +134,6 @@ export function useMobileNativeChatDrafts(args: {
   )
 
   const captureSendOrigin = useCallback(
-    // When Send was pressed, as desktop times its pending sends, not when the host took it.
     (text: string, sentAt = Date.now()) => {
       if (!draftKey) {
         return null
@@ -162,9 +146,7 @@ export function useMobileNativeChatDrafts(args: {
         normalizedText,
         baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
         baselineTailMessageId: messagesRef.current.at(-1)?.id ?? null,
-        // Only a settled read makes this a boundary. Anything else — hydrating,
-        // or a read that failed — hands back an empty list that reads as "the
-        // conversation was empty", which lets any row claim this send later.
+        // Only settled history grants a boundary; failed/hydrating empty lists would let old rows claim new sends.
         baselineResolved: transcriptSettled,
         sentAt
       }
@@ -172,15 +154,12 @@ export function useMobileNativeChatDrafts(args: {
     [draftKey, pendingKey, transcriptSettled]
   )
 
-  // Why: over relay the send RPC can take seconds (or lose only its ack), and a
-  // composer that waits for settlement to empty reads as "my prompt didn't
-  // send". Clear at send time; a definite rejection restores the text below.
+  // Clear at send time because slow/lost acknowledgements must not leave delivered text in the composer; restore only on rejection.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     clearMobileNativeChatDraftForSend(origin.draftKey, origin.draftEditGeneration, text)
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
     setMobileNativeChatDraftText(origin.draftKey, (current) =>
       appendReturnedDraftText(current, text)
     )
@@ -241,12 +220,7 @@ export function useMobileNativeChatDrafts(args: {
     if (pending.length === 0) {
       return
     }
-    // Only judge a send against a read known to be this session's. Note this
-    // does NOT give an image echo a boundary — the rebase deliberately leaves
-    // those on whatever they captured — so a caption-less photo sent before any
-    // read settled can still claim an older photo turn, exactly as it does on
-    // main. Fixing that needs a tail that excludes older image turns without
-    // excluding the send's own echo, which is a separate change.
+    // Reconcile only own-session reads; pre-read image echoes still risk claiming older identical photos because they cannot safely acquire a new tail.
     const landedImagePreviews = findLandedImagePreviewEchoes(
       messages,
       pending.filter((item) => item.baselineResolved)
@@ -259,8 +233,7 @@ export function useMobileNativeChatDrafts(args: {
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
-      // Rebase before retiring: a send captured before the history was known has
-      // to own a real boundary before any row can be judged against it.
+      // Rebase unresolved sends before retirement so row matching uses their real boundaries.
       const rebased = transcriptSettled
         ? rebaseMobileNativeChatPendingBaselines(messages, current)
         : current

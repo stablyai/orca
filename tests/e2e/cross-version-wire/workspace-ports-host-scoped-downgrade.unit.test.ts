@@ -1,15 +1,5 @@
-// Host-scoped workspace port scan and Stop, paired across two builds: current code against the
-// newest published release.
-//
-// `workspacePorts.scanHost` / `killHost` are new methods, not new fields on `scan` / `kill`, because
-// an old host would strip a host field and scan or signal on itself. Each skew must hold:
-//
-//  - an old client keeps calling `scan` / `kill` with `{ repoId }`, which a new host parses as before;
-//  - an old host neither advertises the capability nor knows the methods, so a new client can only
-//    get "update server" from it, never a scan or Stop of the wrong machine.
-//
-// The old side's capability list and catalog have the new entries removed, so this stays exercised
-// after a release ships them.
+// Use distinct host-scoped methods: old hosts strip unknown fields on scan/kill and could target the wrong machine.
+// Remove new methods/capabilities from release catalogs so rolling baselines keep the update-server refusal case.
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -26,7 +16,6 @@ import {
   releaseModuleExport
 } from './release-checkout'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 const HOST_SCOPED_METHODS = ['workspacePorts.scanHost', 'workspacePorts.killHost']
 

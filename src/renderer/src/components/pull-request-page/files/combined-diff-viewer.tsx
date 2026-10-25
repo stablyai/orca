@@ -63,9 +63,7 @@ export function PRFilesCombinedDiffViewer({
   )
   const entries = useMemo(
     () => getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry)),
-    // Why: diffEntrySignature captures every file field that feeds the branch entries,
-    // so memoizing on it (not the files array identity) preserves the old ref-cache
-    // dedupe without writing a ref during render.
+    // The signature captures branch-entry inputs; avoid array-identity churn without render-phase ref writes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [diffEntrySignature]
   )

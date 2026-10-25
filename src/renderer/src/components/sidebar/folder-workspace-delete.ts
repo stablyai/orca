@@ -24,11 +24,7 @@ export function folderWorkspaceDeleteClosesTabs(
   )
 }
 
-/**
- * The card action, context menu and hovered shortcut delete a folder workspace here: refused
- * while it holds unsaved editor text, and clears the selection when it was the active one.
- * Resolves null when refused.
- */
+/** Refuse folder deletion that would discard unsaved editor text; return null when refused. */
 export function deleteFolderWorkspaceUnlessUnsaved(
   getState: () => AppState,
   folderWorkspaceId: string,

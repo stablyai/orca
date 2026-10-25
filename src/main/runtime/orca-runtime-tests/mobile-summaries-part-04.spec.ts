@@ -29,7 +29,7 @@ describe('OrcaRuntimeService', () => {
     const unreadPath = 'relative/zzz-unread'
     const pinnedId = `${remoteRepo.id}::${pinnedPath}`
     const unreadId = `${remoteRepo.id}::${unreadPath}`
-    // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
+    // No SSH Git provider is installed, so these fixtures use stored rows.
     const metaById: Record<string, WorktreeMeta> = {
       ...Object.fromEntries(
         activeWorktrees.map((worktree) => [
@@ -86,7 +86,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('clears stale working status after the agent exits and the shell takes over the title', async () => {
-    // Why (#1437): sticky lastAgentStatus left the spinner on 'working' after agent exit; recompute from the live OSC title each call.
+    // Recompute from the live title so retained agent status cannot strand a working spinner (#1437).
     const runtime = new OrcaRuntimeService(store)
 
     runtime.attachWindow(1)
@@ -115,7 +115,6 @@ describe('OrcaRuntimeService', () => {
     const working = await runtime.getWorktreePs()
     expect(working.worktrees[0].status).toBe('working')
 
-    // Agent exits, shell title takes over — mobile must flip to 'active' like desktop's getWorktreeStatus.
     runtime.onPtyData('pty-1', '\x1b]0;bash\x07', 200)
     const afterExit = await runtime.getWorktreePs()
     expect(afterExit.worktrees[0].status).toBe('active')

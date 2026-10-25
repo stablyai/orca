@@ -1,6 +1,4 @@
-// While main's local layout stream is down, a change the window sends is applied by main but not
-// drawn by the window; the reopened stream's snapshot shows it. The local host is the same build,
-// so the window never needs to draw these itself.
+// During local stream outage, main applies intents and reconnect snapshot draws them. Local main shares this build, so window fallback drawing is unnecessary.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

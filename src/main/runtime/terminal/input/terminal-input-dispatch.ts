@@ -87,11 +87,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
   /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
   protected isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
     this.pruneExpiredLeafPtyVerdicts(Date.now())
-    // Why hasPty and not ptysById: graph sync mirrors a connected record for
-    // every leaf ptyId — including a prior process's — so runtime records can't
-    // distinguish live from stale. The controller's exact-id hasPty is the
-    // provider's own synchronous inventory: a known id is alive, skip probing
-    // and supersede any cached verdict (the id came back).
+    // Controller hasPty supersedes cached absence; graph-mirrored records can describe a prior process under the same id.
     if (this.controllerKnowsPtyIsLive(ptyId)) {
       this.provenAbsentLeafPtyVerdicts.delete(ptyId)
       return Promise.resolve(false)
@@ -192,10 +188,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       throw new Error('invalid_terminal_send')
     }
     await assertTerminalInputWithinLimitWithYield(action.text)
-    // Why: leaf.writable mirrors the renderer graph, which can still answer for
-    // a prior process's ptyId — and provider writes to unknown ids are accepted
-    // no-ops. Only controller-proven absence rejects; unknown proceeds (a
-    // restored daemon session takes writes before its pane remounts).
+    // Graph writability can be stale and unknown-id writes no-op; refuse only controller-proven absence, permitting unknown restored-daemon liveness.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
@@ -278,8 +271,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     const payload = payloadFor(leaf.ptyId)
     await assertTerminalInputWithinLimitWithYield(payload)
-    // Why: same absence gate as sendTerminal — a stale graph mirror must not
-    // accept a prompt into a void; unknown liveness still proceeds.
+    // Use the same absence gate as sendTerminal; unknown liveness still permits the prompt.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }

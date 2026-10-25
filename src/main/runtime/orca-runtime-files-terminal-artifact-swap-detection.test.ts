@@ -31,12 +31,8 @@ vi.mock(
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
 
-/**
- * Replays the first stat seen for a path on every later open of it. That is what Linux hands the
- * grant check for free after an unlink+recreate: ext4 reuses the just-freed inode, nlink and size
- * are unchanged for a same-size swap, and the coarse mtime clock only advances once per timer tick
- * (measured: 1ms), so a swap inside one tick is byte-for-byte identical to the granted stat.
- */
+/** Linux can reuse an inode within one mtime tick after same-size unlink/recreate; replay identical stats
+ * so swap detection cannot rely on inode, nlink, size or coarse mtime changing. */
 function replayFirstStatPerPath(): void {
   const frozen = new Map<string, unknown>()
   openMock.mockImplementation(async (...args) => {
@@ -118,7 +114,7 @@ describe('terminal artifact swap detection', () => {
     ).rejects.toThrow('terminal_file_grant_stale')
   })
 
-  // Control: the replayed stat alone must not reject, or the swap cases above prove nothing.
+  // Untouched control must pass; otherwise swap rejection proves nothing.
   it('still serves an untouched artifact under the same replayed stat', async () => {
     replayFirstStatPerPath()
     const artifactPath = await tempFile('result.png', 'fake-png')

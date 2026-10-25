@@ -10,7 +10,6 @@ import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pendin
 
 const NO_IMAGE_ECHOES: ReadonlySet<string> = new Set()
 
-/** A send captured against `messages`, exactly as `captureSendOrigin` builds it. */
 function sendOrigin(
   text: string,
   messages: readonly NativeChatMessage[]
@@ -41,7 +40,6 @@ function userTurn(id: string, text: string): NativeChatMessage {
 
 describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
   const KEY = 'host\0worktree\0tab\0session'
-  // Multi-line text distinguishes raw trim from reconciliation normalization.
   const MULTILINE = 'first line of the prompt\nsecond line of the prompt'
 
   it('gives a repeated multi-line send the next ordinal', () => {

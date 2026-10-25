@@ -25,8 +25,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     return addedRepo.id
   }, repoPath)
 
-  // Why: fetchWorktrees() resolves before Zustand always reflects the async
-  // worktree scan, so poll the same public store path real repo setup uses.
+  // Poll the public store because fetchWorktrees may resolve before async scan state is visible.
   await expect
     .poll(
       () =>
@@ -240,8 +239,7 @@ test.describe('Large diff freeze repro', () => {
             throw new Error(`staged locale fixture missing entries: ${missing.join(', ')}`)
           }
 
-          // Why: reproduce stale snapshot behavior by opening combined diffs
-          // as "unstaged" using entries captured from the staged status snapshot.
+          // Open staged-snapshot entries as unstaged to reproduce the stale combined diff.
           const staleUnstagedEntries = entries.map((entry) => ({
             ...entry,
             area: 'unstaged' as const

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// A send the host kept as a card is drawn as that card, never also as a not-sent row, and its
-// card's Edit or Delete brings no row back: the transcript reads the send's own record.
+// Host-held cards must not also render not-sent rows, even after card Edit/Delete; transcript projection uses the send record.
 
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'

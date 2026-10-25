@@ -94,7 +94,6 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 }
 
-// Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()

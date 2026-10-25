@@ -1,10 +1,4 @@
-/**
- * STA-4343 (list state): two hosts publishing the same `repoId::path` row must
- * stay two rows. Before the fix the streamed-progress merge, the dismissal
- * match, and the post-removal prune all keyed on `worktreeId` alone, so one
- * host's row silently replaced — or silently hid, or silently dropped — the
- * other's, which is what let a user confirm a row that was not the one shown.
- */
+/** Same repoId::path on two hosts must remain distinct through progress merge, dismissal and removal pruning; otherwise confirmation can target a different row (STA-4343). */
 import { describe, expect, it, vi } from 'vitest'
 import {
   getWorkspaceCleanupCandidateIdentity,

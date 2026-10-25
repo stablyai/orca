@@ -76,7 +76,6 @@ describe('MobileNativeChatTurnStatus', () => {
     expect(onToggleExpanded).toHaveBeenCalledOnce()
   })
 
-  // The crash's notice row explains the cut; the turn bar reads like any finished turn.
   it('heads a turn a crash cut off as worked, and a turn the user stopped as interrupted', () => {
     const crashed = render({
       startedAt: Date.now(),

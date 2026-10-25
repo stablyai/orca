@@ -76,7 +76,6 @@ function Popover(props: {
   pulseKey: number
 }): JSX.Element {
   const { expanded, targeted, swapped, pulseKey } = props
-  // Why: bars show % used (consumption), matching the live status-bar meter.
   const sessionPctText = swapped ? '0% used' : '96% used'
   const sessionResetText = swapped ? 'Resets in 5h' : 'Resets in 47m'
   const sessionFillWidth = swapped ? '0%' : '96%'
@@ -293,11 +292,7 @@ function SwitchAccount(props: {
   )
 }
 
-// The 340px-wide light pill at the bottom of the panel that the popover tip
-// points down to. Codex chip is the "active" one — it animates from a near-
-// full red bar (% used) to an empty green bar after the account swap.
 function BottomBar(props: { swapped: boolean }): JSX.Element {
-  // Why: match live status-bar consumption meters (% used), same as the popover.
   const codexFillWidth = props.swapped ? '0%' : '96%'
   const codexFillColor = props.swapped ? 'rgb(34 197 94)' : 'rgb(239 68 68)'
   const codexMeta = props.swapped ? '0% used 5h · 4% used wk' : '96% used 47m'

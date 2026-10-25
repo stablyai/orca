@@ -60,7 +60,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -123,10 +122,7 @@ describe('browser create focus intent across the client-host preparation await',
   beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
-  /**
-   * Drives a create whose client-host preparation is held open, optionally switching the visible
-   * tab while it is held. Returns whatever focus intent the snapshot reconcile would have seen.
-   */
+  /** Hold client-host preparation open and optionally switch tabs; return the focus intent snapshot reconciliation would read. */
   async function runCreateSwitchingDuringPreparation(options: {
     switchTab: boolean
   }): Promise<{ hostTabId: string } | null | undefined> {
@@ -192,8 +188,7 @@ describe('browser create focus intent across the client-host preparation await',
   it('drops the focus intent when the user switches tabs during preparation', async () => {
     const intentAtReconcile = await runCreateSwitchingDuringPreparation({ switchTab: true })
 
-    // A surviving intent is what makes the reconcile follow the snapshot's active tab and steal
-    // the user back to the new browser tab.
+    // A surviving intent makes reconciliation steal focus back to the new browser.
     expect(intentAtReconcile).toBeNull()
   })
 

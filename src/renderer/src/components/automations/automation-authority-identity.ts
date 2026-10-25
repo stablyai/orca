@@ -1,12 +1,4 @@
-/**
- * The two live values an authority's fence is keyed by, read from mirrored store
- * state rather than remembered.
- *
- * Both answer the same question — which incarnation is this authority right
- * now — and both must be read at the moment of use: a cached pairing revision
- * survives a re-pair, and a cached repo table survives a repo moving hosts, so
- * either one held too long fences a request against an authority that is gone.
- */
+/** Read live pairing revisions/repo tables at use time; cached values can fence against a re-paired authority or a project that moved hosts. */
 
 import type { Repo } from '../../../../shared/repo-types'
 import type { LegacyAutomationPartitionContext } from '../../../../shared/automation-legacy-list-partition'
@@ -55,14 +47,7 @@ export function groupReposByAutomationAuthority(
   return tables
 }
 
-/**
- * The legacy partition context for the authority that answered.
- *
- * Only the desktop table is a verdict. A runtime's repos reach this client as a
- * mirror that is populated on connect and can lag or be empty, so a miss there
- * leaves the record unverified instead of declaring its project gone — and a
- * desktop repo that happens to share an ID never gets to answer for it.
- */
+/** Only desktop repo misses prove absence. Runtime mirrors may lag or be empty, so stored rows stay unverified; colliding desktop IDs cannot answer for them. */
 export function automationAuthorityPartitionContext(
   tables: AutomationAuthorityRepoTables,
   authority: StableAutomationAuthorityRef
@@ -75,11 +60,7 @@ export function automationAuthorityPartitionContext(
   }
 }
 
-/**
- * The revision the runtime transport guard compares, read from the saved
- * environment list so a re-pair is observed rather than cached. An unknown
- * environment answers -1, which never matches a real revision.
- */
+/** Read the saved runtime revision afresh to observe re-pairing; unknown environments return -1, which cannot match a real revision. */
 export function automationRuntimePairingRevision(
   environments: readonly { id: string; createdAt: number; pairingRevision?: number }[],
   environmentId: string

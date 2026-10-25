@@ -29,10 +29,7 @@ export type AgentChildWorkObservationAlias = {
   alias: string
 }
 
-/** An observation may be sparse, and raw provider text is fine: admission folds text to one line.
- *  An omitted or malformed label, token count or residency keeps its stored value; the owner,
- *  last message, provider timing and a definite outcome last only for their invocation. Tokens
- *  never shrink. Omitting `operation` clears it. */
+/** Sparse/malformed descriptive facts retain stored values; tokens never shrink. Owner/message/timing/definite outcome belong to one invocation. Fold text to one line; omitted operation clears it. */
 export type AgentChildWorkObservationFields = {
   kind: AgentChildWorkKind
   state: AgentChildWorkState
@@ -48,8 +45,7 @@ export type AgentChildWorkObservationFields = {
   providerTiming?: AgentChildWorkProviderTiming
   parentChildWorkId?: AgentChildWorkId
   residency?: AgentChildWorkResidency
-  /** Admission clamps `observedAt` into [firstObservedAt, request observedAt], and drops the
-   *  operation when the state cannot carry one (settled, idle, unverifiable). */
+  /** Clamp observedAt to the child evidence window; settled/idle/unverifiable states cannot retain operations. */
   operation?: AgentChildWorkOperation
   lastMessage?: string
   observedAt: number

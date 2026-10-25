@@ -29,8 +29,7 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
   }
   pane.webglRebuildDeferred = false
   disposeWebgl(pane)
-  // Why: the live addon just proved context creation works, so a stale attach
-  // backoff from an earlier failure must not downgrade this pane to DOM.
+  // A live addon proves context creation works; clear stale attach backoff instead of downgrading to DOM.
   clearTerminalWebglAttachBackoff(pane)
   attachWebgl(pane)
 }

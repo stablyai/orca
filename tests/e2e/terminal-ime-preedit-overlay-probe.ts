@@ -1,16 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
-/**
- * Samples the xterm preedit overlay's real geometry.
- *
- * Why geometry and not the `active` class: an overlay forced to
- * `max-width: 0; overflow: hidden` is invisible on screen, yet keeps its class, its
- * `textContent`, `display: block` and `checkVisibility() === true`. The bounding rect is the
- * only property that discriminates, and it is also the only one a DOM emulator cannot produce —
- * happy-dom reports all-zero rects in every state, so a unit-level arm passes over an overlay
- * that never renders.
- */
+// Measure real preedit geometry: max-width:0/overflow:hidden can retain active/text/display/checkVisibility while showing nothing.
+// DOM emulators return zero rects, so only browser bounding rects distinguish this regression.
 export type PreeditOverlaySample = {
   found: boolean
   active: boolean

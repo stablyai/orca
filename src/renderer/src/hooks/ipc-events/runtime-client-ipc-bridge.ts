@@ -62,11 +62,9 @@ export function registerRuntimeClientIpcBridge(
       // Why: project events can reveal target CRUD, but known target states already arrive by push.
       void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-      // Why: the host emits one reposChanged for group/folder-workspace edits too, so those
-      // catalogs go stale without this; groups first because folder workspaces resolve owners from them.
+      // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }
-      // Why: catalogs and worktrees are independent; serializing them put two 15s RPC
-      // timeouts ahead of worktree/lineage convergence on a wedged host.
+      // Refresh catalogs/worktrees independently so two catalog RPC timeouts cannot delay lineage convergence.
       await Promise.all([
         (async () => {
           await useAppStore.getState().fetchProjectGroups(runtimeOwner)
@@ -253,7 +251,7 @@ export function registerRuntimeClientIpcBridge(
     onEvent: handleRuntimeClientEvent
   })
 
-  // Why: no on-connect repo fetch (PR #2); seed discovery for connected runtimes or remote projects hide until Add-Project.
+  // Seed connected-runtime discovery or existing remote projects stay hidden until Add Project.
   const initialRuntimeEnvironmentState = useAppStore.getState()
   const runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds(
     initialRuntimeEnvironmentState
@@ -282,9 +280,7 @@ export function registerRuntimeClientIpcBridge(
   const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(
     handleRuntimeEnvironmentStoreWrite
   )
-  // Subscribe before the first runtime stream starts: replay invalidation may
-  // synchronously publish a tracked SSH bucket and relies on this listener to
-  // replace that subscription exactly once.
+  // Subscribe before streams start; replay invalidation can synchronously publish SSH buckets needing exactly one replacement subscription.
   runtimeClientEventsSync.sync()
   unsubs.push(runtimeClientEventsSync.stop)
   unsubs.push(runtimeProjectRefreshScheduler.stop)

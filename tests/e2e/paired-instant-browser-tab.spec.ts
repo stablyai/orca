@@ -25,13 +25,7 @@ type CreateTimings = {
   tabIdAtFirstSight: string | null
 }
 
-/**
- * Start a paired browser create and watch the strip while it is still in flight.
- *
- * The oracle is ordering, not a stopwatch: the tab has to be in the strip before the create
- * promise settles. That is the whole claim — the click no longer waits on the host round-trip —
- * and it stays true on a slow machine where any absolute millisecond budget would flake.
- */
+// Require the optimistic tab before the held create promise settles; ordering avoids a machine-dependent latency budget.
 async function createAndWatch(
   fixture: Awaited<ReturnType<typeof setUpPairedFixture>>,
   groupId: string
@@ -161,9 +155,7 @@ async function readActiveBrowserPlacementKind(
   }, worktreeId)
 }
 
-// Why: the optimistic tab autofocuses its address bar, so the user starts typing a URL a full host
-// round-trip before adoption lands. Adoption replaces the whole pane, and with it the bar — so
-// unless the edit is carried across, their typed address is silently reset to about:blank.
+// Adoption replaces the pane after a host roundtrip; preserve any address the user already typed.
 test('keeps an address typed into the staged tab when the paired create is adopted', async ({
   testRepoPath
 }, testInfo) => {
@@ -216,8 +208,7 @@ test('keeps an address typed into the staged tab when the paired create is adopt
     await client.page.keyboard.type(typed)
     expect(await readAddressBarState(client.page)).toMatchObject({ focused: true, value: typed })
 
-    // Why reset and not release: release arms a reconciliation failure, which rolls the tab back.
-    // Adoption is the thing under test, so the create has to be allowed to succeed.
+    // Reset permits successful adoption; release would arm reconciliation failure and rollback.
     await client.page.evaluate(() =>
       (window as FaultWindow).__webRuntimeBrowserCreationFault?.reset()
     )
@@ -231,9 +222,7 @@ test('keeps an address typed into the staged tab when the paired create is adopt
       })
       .toBe('client')
 
-    // Why a settle window rather than an immediate read: the failure this guards is the adopted
-    // pane's own mount overwriting the bar a frame or two after the swap, which a read taken the
-    // instant the handle flips would miss.
+    // Wait through the adopted pane’s mount, which can overwrite the address a frame after handle replacement.
     await client.page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 2_000)))
     expect(await readAddressBarState(client.page)).toEqual({ bars: 1, focused: true, value: typed })
   } finally {
@@ -274,8 +263,7 @@ test('shows a paired browser tab before its create RPC resolves, then keeps it a
     expect(group.tabOrder.at(-1)).toBe(timings.tabIdAtFirstSight)
     expect(group.activeTabId).toBe(timings.tabIdAtFirstSight)
 
-    // Why: the point of adopting in place is that the strip never flickers. Any drop-and-re-add
-    // would show up here as an extra transition through '' or through a different id.
+    // Any empty/different-id transition reveals strip flicker during adoption.
     expect(await readBrowserTabTransitions(fixture)).toEqual(['', timings.tabIdAtFirstSight])
 
     // The host has to own it by now: materialization is what clears the staged handle.
@@ -361,8 +349,7 @@ test('keeps three rapid paired browser creates as three ordered tabs', async ({
   }
 })
 
-// Why: the optimistic tab is the user's only feedback that the click landed, so a create that
-// fails after staging has to take that tab back rather than leave a dead one in the strip.
+// A failed staged create must remove the optimistic tab rather than leave dead feedback.
 test('takes back the optimistic tab when the paired create fails to reconcile', async ({
   testRepoPath
 }, testInfo) => {
@@ -447,10 +434,7 @@ test('takes back the optimistic tab when the paired create fails to reconcile', 
   }
 })
 
-// Why: an optimistic tab is clickable the instant it appears, so its X can land while the create
-// is still in flight. The staged page names a runtime the host has not minted it on yet, so the
-// close cannot go to the host — and if the create is allowed to finish anyway, its snapshot puts
-// the tab straight back and leaves a page open on the host that nothing in the client shows.
+// Closing an in-flight staged tab cannot target an unminted host page; successful create must later retire it without resurrecting the tab.
 test('cancels a held paired browser create when its staged tab is closed from the strip', async ({
   testRepoPath
 }, testInfo) => {
@@ -518,11 +502,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
     )
     expect(cancelled.tabs.filter((tab) => tab.contentType === 'browser')).toEqual([])
 
-    // Why reset and not release: release also arms a reconciliation failure, and that failure
-    // cleans the host page up on its own — which would let this test pass with the cancel handling
-    // removed. reset lifts the hold and the snapshot suppression together, so the create carries on
-    // to a genuine success and the host snapshot is free to re-add the tab the user just closed.
-    // That is the scenario, and it is the one that has to end with no tab and no host page.
+    // Reset clears the hold and snapshot suppression without injecting failure; release would clean up independently and mask broken cancellation.
     await client.page.evaluate(() =>
       (window as FaultWindow).__webRuntimeBrowserCreationFault?.reset()
     )
@@ -530,16 +510,14 @@ test('cancels a held paired browser create when its staged tab is closed from th
       () => (window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate
     )
 
-    // Why: the host's own tab list is the only proof the page was retired — the client removing
-    // its rows is exactly what an orphaned host page looks like from inside the client.
+    // Check the host list for retirement; client row removal alone can hide an orphan.
     await expect
       .poll(() => readHostBrowserPageIds(fixture.host.client, testRepoPath), {
         timeout: 60_000,
         message: 'host kept the page from the cancelled create'
       })
       .toEqual([])
-    // Why: give the now-unsuppressed snapshots a window to put the tab back before declaring it
-    // gone — the failure this guards is a late re-add, not an immediate one.
+    // Wait for unsuppressed snapshots to expose a delayed resurrection.
     await client.page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 3_000)))
     const settled = await readPanes(client.page, worktreeId)
     expect(requireGroup(settled, rootGroupId).tabOrder).toEqual(before.tabOrder)
@@ -550,8 +528,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
         worktreeId
       )
     ).toBe(0)
-    // Why: the transition log catches a resurrection that a final-state read would miss if the
-    // snapshot re-added the tab and the reconciler then removed it again.
+    // Keep transition history to catch resurrection followed by reconciliation removal.
     const transitions = await readBrowserTabTransitions(fixture)
     expect(transitions.at(-1)).toBe('')
     expect(transitions.filter((entry) => entry !== '')).toHaveLength(1)
@@ -560,9 +537,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
   }
 })
 
-// Why: unwinding the only tab in a worktree runs through the same store path a user close takes,
-// and that path falls back to the landing screen. A create that failed must not evict the user
-// from the workspace they were standing in when they clicked.
+// Rollback must preserve workspace selection even when the only tab disappears, unlike an intentional final-tab close.
 test('leaves the user on an empty worktree when its first browser create fails', async ({
   testRepoPath
 }, testInfo) => {
@@ -624,8 +599,7 @@ test('leaves the user on an empty worktree when its first browser create fails',
       },
       { groupId: rootGroupId, url: fixture.url }
     )
-    // Why: an emptied worktree drops its group entirely, so the oracle has to live at worktree
-    // scope — the group only exists again for as long as the staged tab does.
+    // Observe the worktree because its group exists only while the optimistic tab exists.
     await expect
       .poll(() => readEmptyWorktreeState(client.page, worktreeId), {
         timeout: 60_000,
@@ -725,8 +699,7 @@ async function releaseHeldCreateAndAdopt(
       message: 'the held create never adopted its staged tab'
     })
     .toBe('client')
-  // Why a settle window: the failures here are a snapshot arriving a beat after the handle flips,
-  // so a read taken the instant adoption lands would miss every one of them.
+  // Wait after adoption so delayed snapshots can expose regressions.
   await client.page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 3_000)))
 }
 
@@ -744,9 +717,7 @@ async function readBrowserTabId(
   )
 }
 
-// Why: the create records the group it asked for, and that record used to outrank the group the
-// tab was actually in when the snapshot landed — so a split made during the staging window was
-// undone, taking the pane with it.
+// Use the tab’s current group after a staged split; its original requested group would undo the user’s move.
 test('keeps a split made while the paired create is still staged', async ({
   testRepoPath
 }, testInfo) => {
@@ -783,9 +754,7 @@ test('keeps a split made while the paired create is still staged', async ({
   }
 })
 
-// Why the hold is on the preparation and not the create: the focus expectation used to be
-// sampled after that round-trip, so a switch made during it was baked in as the baseline and the
-// guard read the user as having stayed put. A switch after the create RPC was always handled.
+// Hold host preparation: the old focus baseline sampled after that roundtrip and incorrectly accepted an intervening user switch.
 test('leaves the user on the tab they switched to during client-host preparation', async ({
   testRepoPath
 }, testInfo) => {
@@ -867,10 +836,7 @@ test('leaves the user on the tab they switched to during client-host preparation
   }
 })
 
-// Why element identity and not the bar's contents: a save-and-resume across a remount restores the
-// text, which is what the typed-address test already proves. Only the same input node proves the
-// chrome was never torn down — a teardown is what replays the suggestion dropdown's open animation
-// and drops the guest the user is looking at.
+// Require the same address input node: restoring its text across remount still replays dropdown animation and drops the guest.
 test('adopts a paired browser tab without rebuilding its chrome', async ({
   testRepoPath
 }, testInfo) => {

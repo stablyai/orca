@@ -43,7 +43,7 @@ export type HookListenerState = {
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
-  /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `outcome` persists so the eventual done still carries it. Published on every row as `mainAgent`. */
+  /** Lead-only state published as mainAgent; retain verdict through child churn until final done. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
@@ -55,9 +55,7 @@ export type HookListenerState = {
   claudeLaunchedBackgroundTasksByPaneKey: Map<string, ClaudeLaunchedBackgroundTasks>
   /** Compact whose completion each pane already applied, so relay duplicates can't refresh the row. */
   claudeConsumedCompactPromptIdByPaneKey: Map<string, string>
-  /** Claude `session_id` that last reported on the pane from a LEAD event. A different id means the
-   *  conversation was replaced (/clear, relaunch, resume), so claims the old session owned are void
-   *  even when no SessionStart arrives — the backstop for the exits that emit no terminating hook. */
+  /** Lead session_id changes retire replaced-conversation claims even without SessionStart (/clear/relaunch/resume). */
   claudeSessionOwnerByPaneKey: Map<string, string>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
@@ -73,12 +71,7 @@ export type HookListenerState = {
   grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
-  /**
-   * OpenCode session id -> owning pane, observed from the client side. The
-   * shared v2 server stamps every post with its own frozen pane, so ingest
-   * reattributes bound sessions before disposition. Not a state claim itself —
-   * it names no row — so paneHasStateClaims ignores it.
-   */
+  /** Client-observed OpenCode1 session ownership replaces frozen shared-server stamps before ingest. This map names owners, not status claims. */
   opencodeSessionPaneBySessionId: Map<string, OpenCodeSessionBinding>
   /** Last launch token seen per pane; a rewritten shared-server post needs the bound pane's live token to pass its fence. */
   lastLaunchTokenByPaneKey: Map<string, string>
@@ -242,13 +235,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.hermesTurnByPaneKey.delete(paneKey)
 }
 
-/** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
- *  `resolveClaudePaneStatus` would re-gate `working` from on the pane's next event?
- *
- *  Deliberately lives next to `clearPaneCacheState` above and enumerates the claim-bearing subset of
- *  what that function deletes: the two must be edited together, and keeping them three lines apart in
- *  one file is what makes that obvious. Prompt/tool/transcript caches are excluded — they render a
- *  row, they never create one. */
+/** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
   return (
     state.lastStatusByPaneKey.has(paneKey) ||

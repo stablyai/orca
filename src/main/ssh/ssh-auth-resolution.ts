@@ -8,9 +8,7 @@ import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 import { readSshIdentityFileSync } from './ssh-identity-file-read'
 import { isAuthError } from './ssh-reconnect-error-classification'
 
-// Why: ssh2 only tries keys that are explicitly provided. Users with keys in
-// standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probe the regular and FIDO2 OpenSSH default paths.
+// ssh2 discovers no keys itself; probe regular/FIDO2 default paths for users without agents.
 const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
 const DEFAULT_SECURITY_KEY_NAMES = ['id_ed25519_sk', 'id_ecdsa_sk']
 
@@ -20,8 +18,7 @@ const DEFAULT_IDENTITY_PATHS = [...DEFAULT_KEY_NAMES, ...DEFAULT_SECURITY_KEY_NA
 )
 const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
-// Why: resolved IdentityFile paths are expanded before auth resolution, so they
-// won't match the ~/... form in DEFAULT_KEY_PATHS.
+// IdentityFile paths were already expanded; compare expanded defaults too.
 const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_IDENTITY_PATHS.map(resolveSshConfigHomePath)
 
 export type PrivateKeyFile = { path: string; contents: Buffer }
@@ -30,7 +27,6 @@ export function listDefaultIdentityFilePaths(): string[] {
   return [...DEFAULT_IDENTITY_PATHS]
 }
 
-/** Identity files one connect attempt could not use, by configured path, with the reason. */
 export type SkippedIdentityFiles = Map<string, string>
 
 export function findDefaultKeyFile(skipped?: SkippedIdentityFiles): PrivateKeyFile | undefined {
@@ -75,8 +71,7 @@ export function resolveAgentSocket(
   target: Pick<SshTarget, 'identityAgent' | 'configHost' | 'source' | 'host'>,
   resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
 ): string | undefined {
-  // Why: imported config-host targets may contain raw OpenSSH tokens like %d.
-  // ssh -G resolves those tokens, so its value must win when available.
+  // ssh -G resolves raw OpenSSH tokens such as %d in imported targets; prefer that result.
   const configuredIdentityAgent = isOpenSshConfigBackedTarget(target)
     ? (resolved?.identityAgent ?? target.identityAgent)
     : (target.identityAgent ?? resolved?.identityAgent)
@@ -122,7 +117,7 @@ export function resolveIdentityFilePaths(
 const MAX_WARNED_IDENTITY_FILE_PROBLEMS = 64
 const warnedIdentityFileProblems = new Set<string>()
 
-// Why: every reconnect and credential retry re-reads keys; one warning per path and problem is enough.
+// Reconnects/retries re-read keys; warn once per path/problem.
 function warnSkippedIdentityFileOnce(keyPath: string, problem: string): void {
   const key = `${keyPath}\0${problem}`
   if (warnedIdentityFileProblems.has(key)) {
@@ -183,7 +178,7 @@ export function resolvePrivateKeys(
   return defaultKey ? [defaultKey] : []
 }
 
-/** Names the identity files auth had to skip, so a generic auth failure says which key and why. */
+/** Add skipped key paths/reasons to otherwise generic authentication errors. */
 export function withSkippedIdentityFileDetail(
   error: unknown,
   skipped: SkippedIdentityFiles

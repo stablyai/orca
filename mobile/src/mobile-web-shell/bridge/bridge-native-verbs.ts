@@ -19,24 +19,10 @@ import {
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 
-/**
- * The shell-answered request seam: what a `native.` method is, and every verb there is.
- *
- * A page `request` whose method starts with this prefix is answered by the host and never reaches
- * the desktop. That fence is the load-bearing one. The desktop would refuse the method too — it is
- * absent from `MOBILE_RPC_METHOD_ALLOWLIST`, which answers `forbidden` for anything unlisted — but
- * that only applies to a request that got as far as a paired desktop, and depends on its version.
- * The point of the prefix is that the request never leaves the phone, so neither matters.
- *
- * Replies ride the existing `reply` and `error` frames and count against the same in-flight cap as
- * a forwarded request. They carry **no `_meta`**: `isRpcResponse` does not require it on either
- * arm, and no runtime produced these, so a page reader must not depend on one being there.
- *
- * Adding a verb is a row here plus a handler; it is never a new frame kind.
- */
+// Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
+// Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
 export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
 
-/** Every verb this shell serves. The table below must cover exactly these, or it does not compile. */
 export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
   'native.clipboard.read',
@@ -52,48 +38,28 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
 
-/**
- * Text, and only text: an image on the pasteboard is `native.media.pick { source: 'clipboard' }`.
- *
- * The shape was broad on first addition so a later build could serve an image without a contract
- * change. That build is the media verbs, and it does not serve one the way this verb would have
- * had to — inline, against a 24 MiB base64 ceiling and an 8 MiB reply cap — so the image arm is
- * retired here rather than left standing as a refusal pointing at nothing.
- */
+// Keep clipboard reads text-only; images use media.pick and chunked reads instead of exceeding inline reply limits.
 export const BRIDGE_CLIPBOARD_MIMES = ['text'] as const
 
 export type BridgeClipboardMime = (typeof BRIDGE_CLIPBOARD_MIMES)[number]
 
 const mimeSchema = z.enum(BRIDGE_CLIPBOARD_MIMES)
 
-/**
- * One verb's wire contract. Params are read from the page and are attacker-shaped; results are the
- * shell's own and are declared so a handler cannot answer a shape the page will not parse.
- */
+// Validate page params and shell results against one contract before dispatch/reply.
 export type BridgeNativeVerbSpec = {
   params: z.ZodType
   result: z.ZodType
 }
 
-/**
- * No cap on the written text beyond the frame's own: a clipboard write is bounded by
- * `BRIDGE_MAX_MESSAGE_BYTES` like every other page frame, and a second bound here would refuse
- * what the transport already accepted. The read is bounded on the way out instead, by the reply
- * byte cap every forwarded reply gets.
- */
-/** Exported concretely as well as through the table: a handler parses with the schema for the verb
- *  it is serving, so what it holds is typed without an assertion. The table's values are widened to
- *  `ZodType`, which is all the host needs to refuse params before it dispatches. */
-// Strict, not stripping: `z.object` drops a key it does not know, so a call carrying one it thinks
-// is meaningful would dispatch as if it had not. The page and the shell are separate builds, and a
-// param the shell silently ignores is the shape of a verb that changed under a page.
+// Let the frame cap bound clipboard writes and the normal reply cap bound reads; a separate text cap would reject values the transport already accepts.
+// Export concrete schemas for typed handler parsing; the dispatch table widens them to ZodType.
+// Reject extra params so mixed-version builds cannot silently ignore a field the caller relies on.
 export const clipboardWriteParamsSchema = z.strictObject({ mime: mimeSchema, value: z.string() })
 export const clipboardReadParamsSchema = z.strictObject({ mime: mimeSchema })
 
 export const clipboardWriteResultSchema = z.strictObject({ written: z.boolean() })
 export const clipboardReadResultSchema = z.strictObject({ value: z.string() })
 
-// A workspace key the host-area page opened in-page, read on demand rather than carried in `init`.
 export const storageReadParamsSchema = z.strictObject({
   key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
 })
@@ -108,8 +74,6 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: clipboardReadParamsSchema,
     result: clipboardReadResultSchema
   },
-  // The staged-handle trio. Their shapes live beside each other in `bridge-media-verbs.ts`: the
-  // three are one contract, and a handle is meaningless without the verb that minted it.
   'native.media.pick': {
     params: mediaPickParamsSchema,
     result: mediaPickResultSchema
@@ -122,13 +86,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: mediaReleaseParamsSchema,
     result: mediaReleaseResultSchema
   },
-  // Optional beside the trio: a page without it names a picked file from its mime.
   'native.media.name': {
     params: mediaNameParamsSchema,
     result: mediaNameResultSchema
   },
-  // Dictation's capture. Their shapes live in `bridge-audio-verbs.ts` for the media trio's reason:
-  // the pull, its ring and the tail the stop carries back are one contract.
   'native.audio.start': {
     params: audioStartParamsSchema,
     result: audioStartResultSchema
@@ -147,20 +108,16 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   }
 }
 
-/** Whether a method the page named is one this seam answers rather than one the desktop serves. */
 export function isBridgeNativeMethod(method: string): boolean {
   return method.startsWith(BRIDGE_NATIVE_METHOD_PREFIX)
 }
 
-/** The verb a `native.` method names, or null when this shell has no row for it. */
 export function readBridgeNativeVerb(method: string): BridgeNativeVerb | null {
   return BRIDGE_NATIVE_VERB_NAMES.find((verb) => verb === method) ?? null
 }
 
-/** Why the seam would not serve a `native.` method. Each is a different fault, so each is named. */
 export type BridgeNativeVerbRefusal = 'unknown-verb' | 'ungranted' | 'invalid-params'
 
-/** The code each pre-dispatch refusal crosses under. One decision, one name, in one place. */
 export const BRIDGE_NATIVE_VERB_REFUSAL_CODES = {
   'unknown-verb': 'native_verb_unknown',
   ungranted: 'native_verb_ungranted',
@@ -171,13 +128,7 @@ export type BridgeNativeVerbRead =
   | { ok: true; verb: BridgeNativeVerb; params: unknown }
   | { ok: false; refusal: BridgeNativeVerbRefusal; detail: string }
 
-/**
- * The whole decision, as a function of what the page asked and what it was granted.
- *
- * Separate from the host so the `ungranted` arm can be exercised at all: every page is offered
- * every verb this build implements, so through a real host that arm is unreachable today, and it
- * is the whole point of the check the moment a grant is per-route.
- */
+// Resolve method and per-route grant before dispatch; keep refusal reasons explicit for the page.
 export function readBridgeNativeVerbCall(args: {
   method: string
   granted: readonly string[]

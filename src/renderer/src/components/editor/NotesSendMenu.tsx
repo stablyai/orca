@@ -52,20 +52,16 @@ export type NotesSendMenuProps<TNote> = {
   disabledTooltip?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
-  // A new nonce value asks this menu to open (e.g. from a keyboard shortcut).
-  // Only a single mounted instance should be driven this way.
+  // Drive exactly one mounted instance with each keyboard-open nonce.
   openRequestNonce?: number | null
-  // Wall-clock deadline after which a never-consumed request is dropped instead
-  // of opening the menu. Checked here, on the commit that acts on the request,
-  // so it reads exact time rather than a render clock that can lag or freeze.
+  // Check expiry on the opening commit; render clocks can lag or freeze.
   openRequestExpiresAt?: number | null
   onOpenRequestHandled?: () => void
   onDelivered: (notes: readonly TNote[]) => void
 }
 
 export function buildNotesSendTargetModeId(modeIdParts: readonly string[]): string {
-  // Why: length-prefixing preserves part boundaries even when paths or ids
-  // contain the separator, keeping unrelated note send targets distinct.
+  // Length prefixes preserve target boundaries when paths or IDs contain separators.
   return `note-send:${modeIdParts.map((part) => `${part.length}:${part}`).join('|')}`
 }
 
@@ -171,8 +167,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
 
   const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
   if (sendMenuOpen && activeTargetModeId !== targetModeId) {
-    // Why: avoid rendering a stale menu for one paint after another send target
-    // wins; the local open bit is only meaningful while this target is active.
+    // Clear stale local open state before painting another target’s menu.
     setSendMenuOpen(false)
   }
 
@@ -187,8 +182,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     if (openRequestNonce == null) {
       return
     }
-    // Why: only open when notes remain and the request has not aged out; either
-    // way clear it so a stale nonce cannot reopen the menu on a later remount.
+    // Consume even expired or undeliverable requests so a later mount cannot reopen them.
     const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
     if (!expired && hasDeliverableNotes && defaultScope) {
       handleOpenChange(true)

@@ -1,13 +1,7 @@
-// Why: the remote --connect exits with this code after the daemon refused its endpoint
-// credential. The mapping daemon ⇄ exit code 43 lives in src/relay/relay-handshake.ts
-// (EXIT_CODE_CREDENTIAL_MISMATCH). Bridges older than that constant exit 1 instead, so the
-// absence of 43 proves nothing; only its presence is evidence.
+// relay-handshake.ts maps credential refusal to exit 43; older bridges exit 1, so only 43 proves refusal.
 export const RELAY_EXIT_CODE_CREDENTIAL_MISMATCH = 43
 
-/**
- * A live daemon answered the handshake and refused the credential the client read from disk.
- * Positive host evidence that the endpoint is held, on any host — no `lsof` required.
- */
+/** A credential refusal proves a live endpoint on every host, without lsof. */
 export class RelayCredentialMismatchError extends Error {
   readonly name = 'RelayCredentialMismatchError'
 

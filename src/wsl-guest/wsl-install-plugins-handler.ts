@@ -1,8 +1,4 @@
-// Guest-side handler for AGENT_HOOK_INSTALL_PLUGINS_METHOD: caches the plugin
-// source the Windows host ships over the wire and materializes OpenCode's
-// config overlay inside the guest. Extracted from the relay entrypoint so it is
-// unit-testable without binding the hook server. Scope is OpenCode only for
-// now; the payload/response shape matches the SSH relay so Pi/OMP are additive.
+// Cache host-shipped sources and install guest overlays without binding the hook listener.
 import { existsSync } from 'node:fs'
 
 import { getRelayOpenCodePluginPath, type PluginOverlayManager } from './plugin-overlay'
@@ -34,12 +30,7 @@ export function createInstallPluginsHandler(
   pluginOverlay: PluginOverlayManager,
   env: NodeJS.ProcessEnv
 ): InstallPluginsHandler {
-  // Why: materializeOpenCode wipes and rebuilds the overlay, and the id here is
-  // instance-scoped (not pane-scoped as on SSH). The host re-ships on every
-  // reinstall — 60s after connect and again on later pane spawns — so
-  // re-materializing unconditionally would delete the config root out from
-  // under running agents and race panes spawning against the path the host just
-  // handed them. Rebuild only when the shipped source actually changed.
+  // Rebuild only changed sources: repeat installs share an instance overlay that running/spawning agents may already use.
   let materialized: { source: string; sourceDir: string | undefined; dir: string } | null = null
   let materialized2: { source: string; sourceDir: string | undefined; dir: string } | null = null
 
@@ -73,8 +64,7 @@ export function createInstallPluginsHandler(
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
-      // Explicit-only (see header). Constant in practice for a relay's lifetime, so
-      // keying the cache on it is defensive; the rc scan behind it is memoized.
+      // Include the resolved source dir in the cache key; shell-startup lookup is memoized.
       const sourceDir =
         resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL) ??
         resolveOpenCodeConfigDirectory(env as Record<string, string>, env.HOME)
@@ -91,7 +81,7 @@ export function createInstallPluginsHandler(
       } else {
         const overlayId =
           sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode'
-        // Why: null on write failure — caller falls back to the guest's own config (no status), never crossing a Windows overlay into WSL.
+        // Write failure falls back to guest config without status; never pass a Windows overlay path into WSL.
         opencodeDir = pluginOverlay.materializeOpenCode(overlayId, existingSourceDir) ?? undefined
         materialized =
           opencodeDir && incoming !== null

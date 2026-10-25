@@ -1,13 +1,4 @@
-/**
- * A paired viewer must not erase a verified mirrored PTY binding while a
- * restarted `orca serve` process republishes the same surface as pending, and
- * the surviving daemon PTY must keep appending to its durable history log.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Retain verified mirrored PTY bindings while serve restart republishes pending surfaces; the surviving daemon must keep appending durable history.
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -635,8 +626,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     expect(host.app.process().pid, 'The serve Electron process must actually be replaced').not.toBe(
       hostPidBeforeRestart
     )
-    // Layout-owner build: main's load binds the pane again from its tab row while the PTY lives, so
-    // the replacement host publishes it ready at once and never pending.
+    // Layout-owner main restores the live binding from its tab row, so this build publishes ready immediately.
     if (!LAYOUT_OWNER_BUILD) {
       let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
       await expect

@@ -9,9 +9,7 @@ import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconcili
 const authorityRuntimeId = 'runtime-new'
 const authorityEpoch = 'epoch-new'
 
-// Adoption is the only caller of the orchestrator, and it never rethrows: a run that refuses or
-// fails leaves the pages it did place and reports the rest as unadopted, so every guard below is
-// pinned by what the client was asked to do and what ended up placed, not by a rejection.
+// Adoption swallows failures; assert issued commands and committed placements to distinguish outcomes.
 describe('browser host page reconciliation orchestration', () => {
   it('commits a reclaimed placement only after exact completed client proof', async () => {
     const { leases, identity, events } = setup([oldPage('page-a')])
@@ -75,7 +73,6 @@ describe('browser host page reconciliation orchestration', () => {
 
     await expect(adopting).resolves.toEqual([])
     expect(leases.getPlacement('page-a')).toBeUndefined()
-    // The same inventory can no longer be planned against, so no second command is ever issued.
     await expect(leases.adoptClientPages(identity, [intent])).resolves.toEqual([])
     expect(events).toHaveLength(1)
 
@@ -176,8 +173,7 @@ describe('browser host page reconciliation orchestration', () => {
     await vi.waitFor(() => expect(events).toHaveLength(1))
     expect(events[0]!.command.type).toBe('closePage')
 
-    // The page has no placement between the close and the restore, but the slot is not free:
-    // handing it to anything else would strand the restore this plan has already committed to.
+    // The close/restore gap still reserves capacity or the committed restore could be stranded.
     expect(leases.getPlacement('page-a')).toBeUndefined()
     expect(() => leases.placeServerPage('page-a')).toThrow(
       'browser_page_replacement_requires_retirement'
@@ -269,8 +265,7 @@ describe('browser host page reconciliation orchestration', () => {
 
     host.disconnect()
     await flushMicrotasks()
-    // Why: the attempt must give up with the connection rather than wait out a client that can
-    // never answer, so it has to be settled before anything aborts it from the outside.
+    // Prove disconnect settled the attempt before external cleanup can abort it.
     const settledAfterDisconnect = settled
     controller.abort(new Error('test cleanup'))
     await adopting
@@ -311,7 +306,6 @@ describe('browser host page reconciliation orchestration', () => {
 
     host.release()
 
-    // Why: a fenced lease must abort its attempt, not wait out a client that can never answer.
     await expect(adopting).resolves.toEqual([])
     expect(events).toHaveLength(1)
   })
@@ -419,7 +413,6 @@ function reclaimIntent(
   }
 }
 
-/** A profile the live guest cannot be rekeyed into, so the plan must close it and restore. */
 function replacementIntent(
   browserPageId: string,
   pageHostGeneration: number

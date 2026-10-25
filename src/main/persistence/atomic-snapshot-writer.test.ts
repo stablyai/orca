@@ -28,7 +28,7 @@ describe('AtomicSnapshotWriter', () => {
 
   const tmpFiles = (): string[] =>
     readdirSync(join(dir, 'nested')).filter((name) => name.endsWith('.tmp'))
-  // Resolves once the async write has serialized and its temp-file write is pending.
+  // Signal after serialization, while the asynchronous temporary-file write is pending.
   const inFlight = (content: string): { serialize: () => string; started: Promise<void> } => {
     let markStarted = (): void => {}
     const started = new Promise<void>((resolve) => {

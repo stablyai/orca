@@ -50,9 +50,7 @@ function cursorLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRate
 
 describe('Cursor status-bar segment', () => {
   it('renders both plan pools instead of filtering them out as unknown buckets', async () => {
-    // Why: the verbose bucket allowlist was written for Gemini's experimental
-    // models. Cursor's pools are its whole meter, so a signed-in account
-    // rendered an icon with no percentage at all.
+    // Cursor’s whole-meter pools must bypass Gemini’s experimental-model allowlist.
     const { ProviderSegment } = await import('./StatusBar')
     const markup = renderToStaticMarkup(
       <ProviderSegment p={cursorLimits()} compact={false} display="used" mode="verbose" />
@@ -80,9 +78,7 @@ describe('Cursor status-bar segment', () => {
 
 describe('getWindowSections for Cursor', () => {
   it('keeps the plan total beside the pools', async () => {
-    // Why: Cursor puts the headline number in `monthly` and the sub-pools in
-    // buckets. Dropping `monthly` hid the figure closest to the user's cap — a
-    // plan at 92% read as 50% in the roster and the tooltip.
+    // Cursor’s monthly plan total can be nearer the cap than individual buckets.
     const { getWindowSections } = await import('./tooltip')
     const sections = getWindowSections(cursorLimits())
     expect(sections.find((section) => section.label === 'Plan')?.window?.usedPercent).toBe(92)

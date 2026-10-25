@@ -124,8 +124,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
             finalizeReservation = false
             return
           }
-          // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
-          // nor rolling it back to a state that would send a second Enter is provable here.
+          // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
           if (enterSettlement.outcome === 'refused') {
             releaseWithoutRedrive = true
           }

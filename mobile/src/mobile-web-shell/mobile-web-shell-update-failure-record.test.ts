@@ -13,11 +13,7 @@ import {
 import type { MobileWebShellStep } from './mobile-web-shell-session-contract'
 import type { MobileWebShellUpdateFailureFacts } from './mobile-web-shell-update-failure'
 
-/**
- * A release build forwards no `console.*` to logcat, so the banner is all a triager gets unless the
- * shell writes down why. Every exit `onDownloadFailed` takes owes exactly one record, carrying what
- * the reducer knew: the cause, the generation offered and the one on disk, and what went on screen.
- */
+// Require one record per failed-read outcome with cause/builds/verdict; release console logs cannot provide this evidence.
 const NEWER = manifestFacts({ ...MANIFEST_WIRE, buildId: 'c'.repeat(64) })
 
 function recorded(step: MobileWebShellStep): MobileWebShellUpdateFailureFacts[] {
@@ -26,7 +22,6 @@ function recorded(step: MobileWebShellStep): MobileWebShellUpdateFailureFacts[] 
   )
 }
 
-/** Connected, `cached` on disk, NEWER offered, then the gates move to `patch` under the fetch. */
 function refusedUnder(
   patch: Parameters<typeof gates>[0],
   cached = CACHED,
@@ -184,8 +179,7 @@ describe('a newer generation committed clears the record, and nothing else does'
   })
 
   it('forgets when the host moved between the manifest read and the fetch', () => {
-    // The fetch reads the manifest again and commits what that read named, so the build that lands
-    // can be newer than the one this flow was offered. It is still this download's commit.
+    // Fetch rereads the manifest, so a committed download can be newer than the offered build and must still clear failure history.
     const MOVED = 'd'.repeat(64)
     const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
     const step = run(fetching.session, { type: 'download-staged' }, activated(MOVED))

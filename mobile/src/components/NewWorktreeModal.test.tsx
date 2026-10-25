@@ -634,9 +634,7 @@ describe('NewWorktreeModal project targets', () => {
     expect(pickerItems(renderer, 'Project')).toEqual([expect.objectContaining({ label: 'fresh' })])
   })
 
-  // react-native-screens freezes a blurred screen by suspending its subtree
-  // (react-freeze), so React runs this component and then throws that render away.
-  // Anything the render mutated in place outlives the work React discarded.
+  // Blurred react-native-screens freezes by suspending/react-freeze; discarded render mutations otherwise outlive React’s work.
   function suspendableTree(frozen: () => boolean, child: ReactElement) {
     const never = new Promise<void>(() => {})
     const Freezer = () => {

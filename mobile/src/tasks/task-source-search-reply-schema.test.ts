@@ -6,10 +6,6 @@ import {
   taskWorkItemLookupSchema
 } from './task-source-search-reply-schema'
 
-// Pins what each provider read requires and, for every requirement, the drop a row takes when the
-// host omits it. The rows here are the corrected fixtures: real GitHubWorkItem / GitLabWorkItem /
-// LinearIssue shapes, not the `{ id }` and `{ number, title }` stubs the corpus used to carry.
-
 const githubRow = {
   id: 'issue:1',
   type: 'issue',
@@ -130,8 +126,7 @@ describe('the Linear issue list takes both shapes the picker has always accepted
     expect(taskLinearIssueListSchema.safeParse([noId])).toMatchObject({ success: true, data: [] })
   })
 
-  // The four reads createLinearTask and the reviewer sort make with no guard. Each drops its row
-  // rather than crashing the map, and each drop is the behaviour the fixture correction records.
+  // Missing unguarded mapping/sort inputs must drop a row instead of crashing or producing NaN.
   it('drops an issue with no state, which createLinearTask reads as state.name', () => {
     const { state: _state, ...noState } = linearRow
     expect(taskLinearIssueListSchema.safeParse([noState])).toMatchObject({ data: [] })
@@ -161,8 +156,6 @@ describe('the Linear issue list takes both shapes the picker has always accepted
     expect(taskLinearIssueListSchema.safeParse([noPriority])).toMatchObject({ data: [] })
   })
 
-  // Adopting the item half's `linearIssueRowSchema` adds five requirements to this path. Each one
-  // is non-optional on the host's own `LinearIssue`, and each is rendered by the picker row.
   it.each(['identifier', 'title', 'url', 'updatedAt', 'labels'] as const)(
     'drops an issue with no %s, which the host type declares non-optional',
     (member) => {
@@ -193,8 +186,7 @@ describe('a single work-item lookup', () => {
     expect(taskWorkItemLookupSchema.safeParse(githubRow)).toMatchObject({ success: true })
   })
 
-  // Not a drop: a lookup is one row, not a list, so an unreadable row names the reply instead of
-  // handing the paste a source whose labels the editor would then filter.
+  // A malformed single lookup must fail the reply; silently returning it would crash the label editor.
   it('names a lookup row with no labels rather than resolving the paste', () => {
     const { labels: _labels, ...noLabels } = githubRow
     expect(taskWorkItemLookupSchema.safeParse(noLabels).success).toBe(false)

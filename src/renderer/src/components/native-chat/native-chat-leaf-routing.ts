@@ -21,8 +21,7 @@ export function resolveNativeChatActiveLayoutLeafId(
     return null
   }
   if (layout.activeLeafId) {
-    // Why: close/hydration races can leave activeLeafId one snapshot behind
-    // the topology; stale pane evidence must not route chat to a removed leaf.
+    // Reject stale active ids after close/hydration so removed panes cannot inherit chat routing.
     return !layout.root || layoutNodeContainsLeaf(layout.root, layout.activeLeafId)
       ? layout.activeLeafId
       : null
@@ -39,13 +38,11 @@ export function isNativeChatTabWideFallbackSafe(
   if (layout.root.type === 'split') {
     return false
   }
-  // Why: a stale active id means the single-leaf collapse is not yet settled;
-  // tab-wide launch/title evidence could still describe the removed sibling.
+  // A stale active id can still name the removed sibling, so tab-wide evidence must wait for collapse.
   return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
 }
 
-/** Whether tab-wide launch evidence (agent hint, launch draft) describes this
- *  leaf: it must still be the tab's sole pane and the one the evidence bound to. */
+/** Tab-wide evidence applies only to the original sole pane, never split siblings. */
 export function nativeChatLeafOwnsTabWideEvidence(args: {
   ownerLeafId: string | null
   leafId: string | null
@@ -55,8 +52,7 @@ export function nativeChatLeafOwnsTabWideEvidence(args: {
   if (!ownerLeafId || !leafId) {
     return false
   }
-  // Why: the evidence belongs to the tab's original pane. Once a split exists,
-  // it says nothing about any particular sibling.
+  // A split makes original tab-wide evidence insufficient for any individual sibling.
   return leafIds.length === 1 && leafIds[0] === leafId && ownerLeafId === leafId
 }
 
@@ -97,25 +93,20 @@ export function resolveNativeChatLeafRoute(args: {
     return { chatLeafId: null, exitChat: false }
   }
   if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
-    // Why: agent/title evidence can disappear while local, SSH, or runtime
-    // transports reconnect. A mounted owning pane is not a terminal lifecycle
-    // event, so keep its chat surface until the pane itself is removed.
+    // Missing reconnect evidence is not an agent exit; retain chat while its owning pane remains mounted.
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
-  // Manager hydration can briefly have no active pane; preserve the requested
-  // mode until a concrete leaf exists instead of toggling it off during mount.
+  // Hydration may temporarily lack an active pane; preserve mode until a concrete owner exists.
   if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   if (args.chatLeafId && !args.chatLeafStillMounted && !confirmedAgentExit) {
-    // A user-closed chat pane is an explicit close, not an agent handoff. Do not
-    // retarget the chat surface to whichever sibling became active.
+    // Closing the owner is explicit; do not transfer chat to the newly active sibling.
     return { chatLeafId: null, exitChat: true }
   }
   if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
-  // Why: removing the owning leaf or confirming its agent exited must not leave
-  // the composer targeting a plain shell. Return the tab to terminal mode.
+  // Return to terminal after owner removal or confirmed agent exit so the composer cannot target a shell.
   return { chatLeafId: null, exitChat: true }
 }

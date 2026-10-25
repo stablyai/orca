@@ -8,10 +8,7 @@ import {
   selectRuntimeServerTailscaleHost
 } from './remote-server-outage'
 
-/**
- * The one notice for a server whose shared connection dropped and is retrying, in place of a
- * banner in every pane. The surface owns `reveal`, so its panes stay quiet for as long as this shows.
- */
+/** Show one shared server-outage notice; its reveal state keeps pane recovery banners quiet. */
 export function RemoteServerOutageNotice({
   environmentId,
   reveal

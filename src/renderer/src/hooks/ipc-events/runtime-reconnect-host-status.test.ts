@@ -34,7 +34,6 @@ function environment(): PublicKnownRuntimeEnvironment {
   } as PublicKnownRuntimeEnvironment
 }
 
-/** What the sidebar host header renders from: 'available' is online, 'disconnected' is the offline GUI. */
 function sidebarHostHealth(): string | undefined {
   const state = useAppStore.getState()
   return buildExecutionHostRegistry({
@@ -74,14 +73,12 @@ describe('remote Orca server reconnect', () => {
     unsubs = []
     liveRuntimeId = 'remote-runtime'
     failingStatusProbes = 0
-    // Module-level sonner double: without this a toast from an earlier test leaks into
-    // the assertions below.
+    // Reset module-level toast state so prior tests cannot leak alerts into assertions.
     vi.mocked(toast.warning).mockClear()
     stubRuntimeEnvironmentBridge({
       list: vi.fn(async () => [environment()]),
       getStatus: vi.fn(async () => {
-        // Captured before the block so a probe that is still dialing answers with the
-        // runtime it was dispatched against, not with whatever restarted meanwhile.
+        // Capture runtime before dialing so a restart cannot retarget the in-flight probe.
         const dispatchedRuntimeId = liveRuntimeId
         if (failingStatusProbes > 0) {
           failingStatusProbes -= 1
@@ -115,8 +112,7 @@ describe('remote Orca server reconnect', () => {
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID } as never,
       runtimeEnvironments: [environment()],
-      // Cleared explicitly: the removal case leaves a tombstone in this module-level
-      // store, which would silently suppress every later test's probes.
+      // Clear module-level removal tombstones or later test probes stay suppressed.
       removedRuntimeEnvironmentIds: new Set(),
       runtimeStatusByEnvironmentId: new Map([
         [ENVIRONMENT_ID, { status: liveRuntimeStatus(), checkedAt: Date.now() }]
@@ -135,7 +131,6 @@ describe('remote Orca server reconnect', () => {
     vi.restoreAllMocks()
   })
 
-  /** Delivers the replay-tagged first response a shared-control reconnect produces. */
   function replaySubscription(selector = ENVIRONMENT_ID): void {
     const responder = subscriptionResponders.findLast((entry) => entry.selector === selector)
     if (!responder) {

@@ -50,7 +50,6 @@ describe('useMobileNativeChatInputLease', () => {
     await act(async () => {
       renderer = create(createElement(Harness, { connected: true }))
     })
-    // The route reads this to tell a real teardown from one React never sees.
     expect(lease?.clear('terminal')).toBe(false)
     expect(lease?.clear()).toBe(false)
 
@@ -94,7 +93,6 @@ describe('useSettledMobileNativeChatInputLock', () => {
     })
     expect(settled).toBe('waiting')
 
-    // A brief unlock that reverts inside the settle window never reaches the composer.
     act(() => renderer?.update(createElement(Harness, { reason: null })))
     act(() => {
       vi.advanceTimersByTime(300)
@@ -118,7 +116,6 @@ describe("the phone chat composer's placeholder", () => {
     expect(mobileNativeChatComposerPlaceholder(null, 'queue')).toBe(
       'Queue a message to run after the stop'
     )
-    // Where the host does not queue sends, it holds the message until the stop lands.
     expect(mobileNativeChatComposerPlaceholder(null, 'send')).toBe(
       'Send a message to run after the stop'
     )

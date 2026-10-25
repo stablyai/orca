@@ -10,7 +10,6 @@ export const PROVIDER_LABELS: Record<TaskProvider, string> = {
   jira: 'Jira'
 }
 
-// Records require a label for every task provider.
 export const PROVIDER_EMPTY_LABELS: Record<TaskProvider, string> = {
   github: 'No GitHub tasks',
   gitlab: 'No GitLab tasks',

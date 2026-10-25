@@ -8,8 +8,7 @@ describe('terminalPreviewUnavailableMessage', () => {
   })
 
   it('reports an unobservable remote preview instead of asserting the pane exited', () => {
-    // This client holds no SSH PTY provider and the host has no snapshot RPC to it, so a
-    // null snapshot is loss of contact. See docs/reference/ssh-execution-boundary.md.
+    // Missing remote snapshots prove loss of observation, not pane exit; see docs/reference/ssh-execution-boundary.md.
     const fromPtyId = terminalPreviewUnavailableMessage({ ptyId: 'ssh:devbox@@pty-3' })
     expect(fromPtyId).toMatch(/remote session/)
     expect(fromPtyId).not.toMatch(/pane has closed/)

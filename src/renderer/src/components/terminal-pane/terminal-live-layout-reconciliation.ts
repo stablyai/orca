@@ -5,13 +5,7 @@ import type {
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
-/**
- * Whether a tab's split layout is owned by a host (web/mobile clients, or a
- * desktop client viewing a remote "Orca server" worktree) rather than built
- * locally. Such layouts arrive via the host snapshot, so the live-layout
- * reconciler must materialize their panes. A desktop client only needs this for
- * remote-runtime tabs — local tabs split their panes directly.
- */
+/** Materialize host-published layouts for web/mobile and desktop remote-runtime tabs; local desktop splits create panes directly. */
 export function isHostAuthoritativeLayout(args: {
   isWebClient: boolean
   ptyIdsByLeafId: Record<string, string> | undefined
@@ -86,12 +80,7 @@ function mountedLeafIdsIn(
   ]
 }
 
-/**
- * Mounted leaves the host layout no longer names. The host retires a leaf when
- * its PTY ends, so a pane still mounted for it is a ghost: it renders nothing
- * and, once it is the only pane left, absorbs the tab's next close. An empty
- * layout plans nothing — absence of a tree is not evidence about any pane.
- */
+/** Find mounted leaves omitted by a nonempty host tree; no tree proves nothing about retirement. */
 export function planTerminalLiveLayoutRemovals(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>,
@@ -101,9 +90,7 @@ export function planTerminalLiveLayoutRemovals(
     return []
   }
   const layoutLeafIds = new Set(collectLeafIds(root))
-  // Why: a mounted leaf the layout stopped naming is a removal only once the
-  // host is known to have retired it (trackRetiredLeafIds). A snapshot landing
-  // while the client is still starting a pane must not read as a retirement.
+  // Require prior host publication before treating absence as retirement; snapshots can race client startup.
   return [...currentLeafIds].filter(
     (leafId) => !layoutLeafIds.has(leafId) && retiredLeafIds.has(leafId)
   )
@@ -131,9 +118,7 @@ export function planTerminalLiveLayoutInsertions(
       return false
     }
 
-    // Why: bridge the current split before filling nested descendants; once a
-    // child subtree is split internally, PaneManager can no longer wrap it as
-    // this split's sibling using a leaf-only splitPane call.
+    // Bridge parent splits first; nested children cannot later be wrapped as siblings through leaf-only splitPane.
     if (firstHasMounted && !secondHasMounted) {
       const sourceLeafId = rightmostMountedLeafId(node.first, mountedLeafIds)
       const newLeafId = leftmostLeafId(node.second)
@@ -181,10 +166,7 @@ export function planTerminalLiveLayoutInsertions(
   return insertions
 }
 
-/** Panes to close for leaves the host retired. Only a pane whose transport has
- *  no PTY any more is a ghost; a pane with no transport yet, or still bound to
- *  a PTY, may simply not be named by a stale snapshot. The last pane on the tab
- *  is never removed. */
+/** Close only retired leaves with cleared PTYs; missing transports may still mount, and live bindings may outdate snapshots. Never remove the last pane. */
 export function selectRetiredPaneIds(
   retiredLeafIds: readonly string[],
   view: {
@@ -207,13 +189,7 @@ export function selectRetiredPaneIds(
   return paneIds
 }
 
-/**
- * Leaves the host dropped from its layout whose panes are still mounted. Only a
- * leaf the host named before can be retired: a leaf it has never named belongs
- * to a pane the client is still starting. A retired leaf stays retired until
- * its pane is gone or the host names it again, so a removal skipped while the
- * transport still held its PTY is planned again once that PTY clears.
- */
+/** Retain omitted previously published leaves until removal or host republication, retrying after live PTY bindings clear. */
 export function trackRetiredLeafIds(args: {
   retiredLeafIds: ReadonlySet<string>
   previousLayoutLeafIds: ReadonlySet<string>

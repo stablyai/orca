@@ -85,8 +85,7 @@ export function encodeWindowsInputRecordPasteText(
 }
 
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
-  // Why: forced callers already built the exact paste protocol bytes. Send
-  // them as PTY input so xterm's DOM/native paste machinery cannot defer them.
+  // Send prebuilt protocol bytes directly; xterm’s DOM/native paste path can defer them.
   terminal.input(wrapTerminalBracketedPasteText(text))
 }
 
@@ -118,14 +117,12 @@ export function pasteTerminalText(
   options?: PasteTerminalTextOptions
 ): void {
   if (options?.windowsInputRecordNewline) {
-    // Why: input-record TUIs see bracket markers as keys; modified Enter preserves
-    // pasted newlines without turning the first one into submit.
+    // Input-record TUIs treat brackets as keys; modified Enter preserves newlines without submitting.
     terminal.input(encodeWindowsInputRecordPasteText(text, options.windowsInputRecordNewline))
     return
   }
   if (options?.forceBracketedPaste) {
-    // Why: generated image paths are paste payloads, even when they are a
-    // single line, so they must bypass stale Ctrl+C plain-text suppression.
+    // Generated image paths must bypass stale Ctrl+C text suppression, even on one line.
     forceBracketedPaste(terminal, text)
     return
   }
@@ -145,8 +142,7 @@ export function pasteTerminalText(
   }
 
   const previousIgnoreBracketedPasteMode = terminal.options.ignoreBracketedPasteMode
-  // Why: Ctrl+C can leave xterm's bracketed-paste bit stale after the foreground
-  // process dies. Single-line paste does not need wrappers, so avoid leaking them.
+  // Ctrl+C can leave paste mode stale after process exit; omit unnecessary single-line wrappers to avoid leaks.
   terminal.options.ignoreBracketedPasteMode = true
   try {
     terminal.paste(sanitizeTerminalPasteText(text))

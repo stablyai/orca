@@ -52,8 +52,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
-  // Why: Radix opens context menus under the pointer; on some macOS/Electron
-  // paths the right-button release lands on the first item and selects it.
+  // Right-button release can hit Radix's first menu item on macOS/Electron; suppress accidental selection.
   event.preventDefault()
   event.stopPropagation()
 }

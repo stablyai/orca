@@ -43,7 +43,6 @@ export function sharedEntry(
   return planEntry(name, [planOp(kind, `/home/u/.agents/skills/${name}`, extra)])
 }
 
-/** Every op of the plan ran as planned. */
 export function doneResult(plan: BundledSkillPlan): BundledSkillInstallResult {
   return {
     scope: plan.scope,

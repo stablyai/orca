@@ -9,8 +9,7 @@ export function getVisibleFileExplorerWorktreePath({
   rightSidebarOpen: boolean
   worktreePath: string | null
 }): string | null {
-  // Why: Contents search keeps the file pane mounted, but hidden file trees
-  // must not trigger passive file loads or macOS app-data probes.
+  // Contents search leaves Files mounted; suppress hidden tree loads and macOS app-data probes.
   return rightSidebarOpen && explorerView === 'files' ? worktreePath : null
 }
 

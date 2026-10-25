@@ -4,7 +4,6 @@ import { redactKagiSessionToken } from '../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from './browser-workspace-source-resolution'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 
-/** Opens `url` in a new Orca browser tab right after the page's tab, in the page's own profile. */
 export function openUrlInTabBesideBrowserPage(args: {
   sourcePageId: string
   worktreeId: string

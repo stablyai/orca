@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * What the page refetches, and whose row survives it.
- *
- * A refresh reaches one authority at a time, so re-deriving the selection or the
- * run history from its answer drops — or worse, mislabels — every row another
- * host holds. Under All hosts that is the normal case, not the edge case.
- */
+/** Refresh reaches one authority at a time; deriving selection/history from that answer would drop or mislabel other hosts’ rows under All hosts. */
 
 import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -44,8 +38,7 @@ describe('AutomationsPage refresh', () => {
 
     await renderPage()
 
-    // Every call names one automation: a host's whole history is never the
-    // page's to hold, and asking for it made the cost scale with retention.
+    // Request one automation’s history; whole-host history would scale page cost with retention.
     for (const [args] of api.automations.listRuns.mock.calls) {
       expect(args?.automationId).toBeTruthy()
     }
@@ -81,8 +74,7 @@ describe('AutomationsPage refresh', () => {
 
     await renderPage()
 
-    // The ambient runtime is not evidence about any row. The desktop answers
-    // the unscoped arm; a runtime's rows arrive through its own catalog entry.
+    // The ambient runtime cannot identify a row owner; unscoped desktop and scoped runtime queries stay separate.
     expect(api.automations.list).toHaveBeenCalled()
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'gpu' },
@@ -132,8 +124,7 @@ describe('AutomationsPage selection', () => {
     const { container } = await renderPage()
     await openAutomationRow(container, 'Nightly')
 
-    // One fenced read, owned by the row's own host: the page-level refresh used
-    // to fetch this history too, unfenced and always against the desktop.
+    // Read history once through its row’s fence; page-level desktop refresh must not duplicate it unfenced.
     expect(api.automations.listRuns).toHaveBeenCalledWith({
       automationId: 'a-1',
       expectedOwner: SELF_PRECONDITION
@@ -155,8 +146,7 @@ describe('AutomationsPage selection', () => {
     await rerender()
     await openAutomationRow(container, 'Weekly')
 
-    // The history read carries the row's fence too: a read against a host that
-    // no longer owns the record is refused rather than answered from the wrong one.
+    // Fence history reads too so moved rows refuse rather than answer from a former host.
     expect(api.automations.listRuns).toHaveBeenCalledWith({
       automationId: 'a-2',
       expectedOwner: SELF_PRECONDITION
@@ -184,8 +174,7 @@ describe('AutomationsPage multi-host selection', () => {
     await refreshOnFocus()
     await rerender()
 
-    // The refresh reaches one authority, so re-deriving the selection from its
-    // list dropped every row that authority does not hold.
+    // One authority’s refresh cannot decide whether another authority’s selected row still exists.
     expect(setSelectedAutomationId).not.toHaveBeenCalled()
     await openAutomationRow(container, 'Remote nightly')
     expect(container.querySelector('[data-testid="detail-name"]')?.textContent).toBe(
@@ -198,8 +187,7 @@ describe('AutomationsPage multi-host selection', () => {
       [makeAutomation({ id: 'a-1', name: 'Remote nightly' })],
       [makeRun({ id: 'run-remote', automationId: 'a-1' })]
     )
-    // Same ID, different machine: legal, because an ID is unique only inside
-    // one authority. The desktop is the host the page can always reach.
+    // IDs can collide across authorities; desktop remains independently reachable.
     api.automations.list.mockResolvedValue([makeAutomation({ id: 'a-1', name: 'Desktop nightly' })])
     api.automations.listRuns.mockResolvedValue([
       makeRun({ id: 'run-desktop', automationId: 'a-1' })

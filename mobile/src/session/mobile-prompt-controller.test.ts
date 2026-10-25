@@ -230,7 +230,6 @@ describe('prompt cards through the production controller, send contract and view
     act(() => {
       getTree().root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress()
     })
-    // Still mounted under the strip, so a partly made choice survives.
     expect(getController().nativeChatPermission).not.toBe(null)
     expect(getController().nativeChatCollapsedPrompt?.title).toBeTruthy()
     expect(getTree().root.findAllByProps({ testID: 'native-chat-prompt-strip' })).toHaveLength(1)

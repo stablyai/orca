@@ -1,10 +1,6 @@
-// POSIX `sh` probe listing every plausible remote Node binary, one per line.
-// Kept out of the resolver so the shell text can grow without pushing that file
-// past its line budget.
+// Probe all plausible Node paths directly, independent of shell startup-file behavior.
 
-// Why the dotfile scrape: sshd's exec channel runs without the user's profile, so
-// MISE_DATA_DIR / NVM_DIR set in ~/.zshrc are not in this environment. Reading the
-// assignment out of the dotfiles is the only way to see a relocated data dir.
+// sshd exec lacks profile-only MISE_DATA_DIR/NVM_DIR; read relocated data-dir assignments from dotfiles.
 export const REMOTE_NODE_PATH_PROBE_SCRIPT = `
 command -v node 2>/dev/null
 orca_dotfile_dirs() {

@@ -1,6 +1,4 @@
-// The error a chat's settled request left in its journal, as the chat recorded it: the sentence it
-// shows and the provider's own words beside it. Read from saved rows, never from the event that
-// announced the failure, so every agent's failure reads the same way however its host wrote it.
+// Read saved journal failures, not notification events, so every host supplies the same display sentence and provider detail.
 
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -17,8 +15,7 @@ export type ChatRequestError = {
   kind?: string
 }
 
-/** Rejections about what the sender sent. The sender already sees them, and a person typing in a
- *  worker's chat must not page the coordinator about their own message. */
+/** Sender rejections already reach the sender; typing into a worker chat must not page its coordinator. */
 const SENDER_OWN_REJECTION_KINDS: ReadonlySet<string> = new Set([
   'emptyMessage',
   'attachmentInvalid',
@@ -32,8 +29,7 @@ export function isSenderOwnRejection(error: ChatRequestError | null): boolean {
   return error?.kind !== undefined && SENDER_OWN_REJECTION_KINDS.has(error.kind)
 }
 
-/** The request's error, or null when it left none: a turn whose rows were not written yet, or a
- *  refused send from a host that recorded no reason. */
+/** Null when rows are not yet written or an older host recorded no refusal reason. */
 export function chatRequestError(
   snapshot: Pick<AgentJournalSnapshot, 'items' | 'submissions'>,
   request: Pick<StructuredAgentSessionRequestFailure, 'kind' | 'id'>

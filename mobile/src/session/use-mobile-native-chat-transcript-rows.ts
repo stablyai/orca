@@ -1,6 +1,3 @@
-// Desktop parity: `native-chat-transcript-slots` and `native-chat-transcript-work-runs`. Which
-// rows a settled turn folds away, and which unbroken stretches draw as one work run.
-
 import { useMemo } from 'react'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
@@ -28,13 +25,10 @@ type TranscriptRows = {
 }
 
 export type MobileNativeChatWorkRuns = {
-  /** Each run's first row, with every member in order. */
   heads: ReadonlyMap<number, readonly NativeChatMessage[]>
-  /** The later members, which their first row draws. */
   joined: ReadonlySet<number>
 }
 
-/** A settled turn folds to its answer until the reader opens it. */
 function mobileNativeChatTurnFold({
   rows,
   turnKeys,
@@ -54,8 +48,7 @@ function mobileNativeChatTurnFold({
   })
 }
 
-/** Thoughts sit inside a run rather than splitting it. A row that draws nothing (a blank
- *  thought, or the one the live line discloses) neither joins nor ends one. */
+// Invisible thoughts neither join nor split work runs; visible thoughts stay inside the run.
 function mobileNativeChatWorkRuns({
   rows,
   turnKeys,
@@ -93,8 +86,7 @@ function mobileNativeChatWorkRuns({
 const NO_RECEIPTS: ReadonlyMap<string, NativeChatResolvedPrompt> = new Map()
 const NO_WORK_RUNS: MobileNativeChatWorkRuns = { heads: new Map(), joined: new Set() }
 
-/** How the structured lane's rows draw: the fold, the live frontier, and the work runs. The
- *  bridge lane has no turns, so none of it applies there. */
+// Fold/frontier/work-run projection applies only to structured turn rows.
 export function useMobileNativeChatTranscriptRows({
   enabled,
   rows,
@@ -126,8 +118,7 @@ export function useMobileNativeChatTranscriptRows({
         : NATIVE_CHAT_EMPTY_TURN_FOLD,
     [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
   )
-  // Liveness is the turn's, not any one call's: the run at the frontier stays live
-  // between its calls, and a run the agent has moved past is settled.
+  // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
     () =>
       enabled

@@ -326,7 +326,6 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `tab-1::${rightLeafId}`)
 
     expect(kill).toHaveBeenCalledWith('pty-right')
-    // Only the leaf-addressed notice for the closed pane; never a whole-tab close.
     expectDesktopDropsPane(
       { closeTerminalPane, getSession: () => boundSessionOf(runtime) },
       'tab-1',
@@ -584,7 +583,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('wakes slept agents on the host renderer when a phone activates a worktree', async () => {
-    // Seed isUnread:false so the unread-clear branch stays quiet, isolating the mobile slept-agent wake.
+    // Keep unread-clear quiet to isolate the slept-agent wake.
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
     }
@@ -627,7 +626,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    // A renderer must be attached to receive the wake; headless serve reports 'unsupported-headless' instead.
+    // Attach a renderer to exercise its wake notification.
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
@@ -637,8 +636,7 @@ describe('OrcaRuntimeService', () => {
       clientKind: 'mobile'
     })
 
-    // INV-2: mobile wake never navigates the desktop (no activateWorktree). The window's own
-    // hibernation wake runs once main's queued wake has.
+    // Mobile wake must resume sleeping agents without navigating the desktop.
     await vi.waitFor(() => expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID))
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(result.sleepingAgentWake).toBe('requested')

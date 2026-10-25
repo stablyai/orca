@@ -81,7 +81,6 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
     expect(ok).toBe(true)
     expect(client.calls).toHaveLength(4)
-    // Leading Ctrl+U clears any stale input so a retry can't duplicate the image.
     expect(client.calls[0]).toEqual({
       method: 'terminal.send',
       params: {
@@ -97,7 +96,6 @@ describe('pasteMobileNativeChatImagePaths', () => {
   })
 
   it('stops and reports failure as soon as a paste is rejected', async () => {
-    // Clear accepted, first image paste rejected.
     const client = clientWithResponses([sendResult(true), sendResult(false)])
 
     const ok = await pasteMobileNativeChatImagePaths({
@@ -110,7 +108,6 @@ describe('pasteMobileNativeChatImagePaths', () => {
     })
 
     expect(ok).toBe(false)
-    // Never attempts the second path after the first is rejected.
     expect(client.calls).toHaveLength(2)
     expect(client.calls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(client.calls[0]?.params).not.toHaveProperty('client')
@@ -121,7 +118,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
     try {
       const responses = [sendResult(true), sendResult(true), sendResult(true)]
       const calls: { timeoutMs: unknown }[] = []
-      // Each write burns 10s, so the 15s sequence budget is spent by the third.
+      // Spend 10s per write so the third attempt exceeds the shared 15s sequence budget.
       const client = {
         sendRequest: vi.fn(async (_method: string, _params?: unknown, options?: unknown) => {
           calls.push({ timeoutMs: (options as { timeoutMs: number }).timeoutMs })
@@ -140,10 +137,8 @@ describe('pasteMobileNativeChatImagePaths', () => {
       })
 
       expect(ok).toBe(false)
-      // Clear + first image only; the second image is never written.
       expect(calls).toHaveLength(2)
       expect(calls[0]?.timeoutMs).toBe(15_000)
-      // Positive-but-small remainder still gets the floor.
       expect(calls[1]?.timeoutMs).toBe(5_000)
     } finally {
       vi.useRealTimers()
@@ -153,8 +148,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
 describe('clearing a parked multi-line launch draft before the image paste', () => {
   it('leads with the caller-sized burst instead of one Ctrl+U', async () => {
-    // One Ctrl+U kills only the LAST line, so the draft's earlier lines would
-    // survive and ride along with the image as part of the prompt body.
+    // One Ctrl+U clears only the last logical line; earlier launch-draft lines must not ride with images.
     const client = clientWithResponses([sendResult(true), sendResult(true)])
     const clearInput = buildAgentTuiClearInputForText('Linked Linear issue: ABC-123\nhttps://x')
 

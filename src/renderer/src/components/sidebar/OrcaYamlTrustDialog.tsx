@@ -46,8 +46,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
     value: false
   }))
 
-  // Why: never show a stale "always trust" choice on a new hook prompt.
-  // Resetting during render avoids one paint with the old decision checked.
+  // Reset before paint so a new hook prompt never flashes stale Always trust consent.
   if (alwaysTrustState.isOpen !== isOpen) {
     setAlwaysTrustState({ isOpen, value: false })
   }

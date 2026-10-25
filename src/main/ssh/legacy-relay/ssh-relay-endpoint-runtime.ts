@@ -1,25 +1,14 @@
-/**
- * The Node runtime each running relay daemon was started with, read from its own argv.
- *
- * A relay launches as `<node> relay.js --detached ... --sock-path <sock> ...`, where `<node>` is
- * its pinned runtime on ladder hosts (which often have no Node on PATH) or the host Node a legacy
- * relay resolved. Asking that relay, or probing its socket, with the same runtime is what keeps a
- * host with no PATH Node from reading every relay as unverifiable.
- */
+/** Read runtimes from daemon argv so pinned-runtime hosts without Node on PATH can still answer relay probes. */
 import type { SshConnection } from '../connection/ssh-connection'
 import { execCommand } from '../remote-exec/remote-exec-command'
 
 const RELAY_DAEMON_MARKER = ' relay.js --detached '
 
-/**
- * `-ww` keeps long argv untruncated on procps and BSD `ps`; BusyBox (Alpine) rejects those flags
- * but lists every process for plain `-o args`. No daemon prints nothing.
- */
+/** Use -ww to avoid truncation on procps/BSD; BusyBox rejects it but plain -o args lists every process. */
 export const RELAY_DAEMON_ARGV_COMMAND =
   `{ ps -eww -o args= 2>/dev/null || ps -o args= 2>/dev/null; } | ` +
   `grep -F -- '${RELAY_DAEMON_MARKER.trim()}' || true`
 
-/** Socket path to the runtime its daemon runs on; a daemon whose argv does not parse is skipped. */
 export function parseRelayDaemonRuntimes(output: string): Map<string, string> {
   const runtimes = new Map<string, string>()
   for (const line of output.split('\n')) {

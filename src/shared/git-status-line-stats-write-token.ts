@@ -1,7 +1,4 @@
-/**
- * Generation bookkeeping that decides whether a git-status line-stats scan may
- * still write. Split from the cache itself so the snapshot store stays readable.
- */
+/** Fence Git-status line-stat writes independently of snapshot storage. */
 export type GitStatusLineStatsWriteToken = {
   cacheKey: string
   globalGeneration: number
@@ -11,13 +8,10 @@ export type GitStatusLineStatsWriteToken = {
 
 const GIT_STATUS_LINE_STATS_WRITE_KEYS_MAX_ENTRIES = 1024
 
-// Why: mutation invalidation must retire scans that began before it. A scan
-// captures these generations at begin; a mismatch at store/clear time means an
-// invalidation happened mid-scan and the derived stats may be pre-mutation.
+// Capture invalidation generations at scan start; mismatches prevent publishing pre-mutation stats.
 let globalInvalidationGeneration = 0
 const keyInvalidationGenerationByWorktree = new Map<string, number>()
-// Why: overlapping recomputes must resolve latest-begun-wins without letting a
-// reuse-only read (which never stores) starve an older recompute's store.
+// Latest-begun recompute wins; reuse-only readers that never store must not starve older writes.
 const lastStoredBeginSeqByWorktree = new Map<string, number>()
 let nextBeginSeq = 0
 

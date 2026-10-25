@@ -55,8 +55,7 @@ describe('isTerminalQueryReply', () => {
     expect(isTerminalQueryReply('\x1b[?12;5R')).toBe(true)
     // Text-area size in characters (answer to CSI 18t).
     expect(isTerminalQueryReply('\x1b[8;24;80t')).toBe(true)
-    // Kitty keyboard flags report (answer to CSI ? u) — crossterm probes this
-    // at startup, so a debounced reply corrupts the same way CPR did.
+    // Crossterm probes Kitty flags at startup; delaying replies corrupts input like CPR did.
     expect(isTerminalQueryReply('\x1b[?0u')).toBe(true)
     expect(isTerminalQueryReply('\x1b[?31u')).toBe(true)
     // DCS DECRQSS reports (vim queries cursor style via DCS $ q) + XTVERSION.
@@ -84,9 +83,7 @@ describe('isTerminalQueryReply', () => {
   })
 
   it('documents the accepted modified-F3/CPR collision', () => {
-    // xterm.js encodes Shift+F3 as CSI 1;2R — byte-identical to a CPR report.
-    // Classified as a reply on purpose: order is still preserved (the immediate
-    // path flushes pending input first); see the comment in terminal-query-reply.ts.
+    // Modified F3 is byte-identical to CPR; accept the ambiguity documented in terminal-query-reply.ts.
     expect(isTerminalQueryReply('\x1b[1;2R')).toBe(true)
   })
 
@@ -157,12 +154,7 @@ describe('isTerminalQueryReply', () => {
   })
 })
 
-// Regression for the `gh auth login` report: termenv writes `OSC 11 ;? ST` then
-// `CSI 6n` and reads exactly one response, treating a CPR-first answer as "no OSC
-// support" without draining further. Orca defers the color reply behind an ECHO
-// probe, so a CPR taken straight to the PTY overtakes it and leaves `ESC ]` in the
-// tty for the next program — bubbletea then dies with
-// "unexpected escape sequence from terminal: ['\x1b' ']']".
+// termenv reads one OSC-then-CPR response. If CPR overtakes the echo-deferred OSC reply, leftover ESC ] later crashes bubbletea (gh auth login).
 describe('query reply ordering (termenv OSC-then-CPR)', () => {
   const OSC_11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\'
   const CPR_REPLY = '\x1b[1;1R'
@@ -245,11 +237,7 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
   })
 })
 
-// Known limitation, tracked for follow-up: the guarantee is FIFO among recognised
-// query replies, not over every byte written to the pty. Both branches of
-// takeLiveQueryReply match whole strings, so a coalesced payload is not a reply, and
-// ordinary input never rides the queue at all. Pinned so the boundary is explicit —
-// if a change makes these take the ordered path, that is an improvement, not a break.
+// Known limit: FIFO covers recognized replies, not all PTY bytes. Whole-string matching excludes mixed payloads and ordinary input; routing them through FIFO later is an improvement.
 describe('writes that still bypass the ordered queue', () => {
   const BYPASSING = [
     { what: 'reply coalesced with a keystroke', data: '\x1b[6;1Ry' },

@@ -189,8 +189,7 @@ describe('restoreSshConnectionsForStartup', () => {
     await restore
 
     expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
-    // The timed-out rewrite must not resurrect the reachable background target: a deferred
-    // connected target sends fresh panes down the cold-restore path instead of the normal one.
+    // Timeout rewrite must not redefer already connected background hosts or fresh panes take the cold-restore path.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
   })
 

@@ -36,9 +36,7 @@ import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 
-// Why lazy: the feedback form is only reachable from this menu's own item, so it does not
-// belong on the renderer boot graph. Shared with the menu-open warm below so both hit the
-// same module-map entry.
+// Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
 const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
   import('./SidebarFeedbackDialog')
 
@@ -107,7 +105,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const settingsShortcut = useShortcutKeyDetails('app.settings')
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  // Why sticky: the dialog animates itself closed off `open`, so unmounting on close cuts that short.
+  // Retain the mounted dialog through its closing animation.
   const [feedbackDialogMounted, setFeedbackDialogMounted] = useState(false)
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
@@ -122,8 +120,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     setMenuOpen(open)
     updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
     if (open) {
-      // Warm on the precursor: reading the menu and clicking Send Feedback takes hundreds of ms,
-      // so the chunk is already in the module map by the time the item is selected.
+      // Warm while users read the menu so feedback is loaded before selection.
       void loadSidebarFeedbackDialog().catch(() => {})
     }
   }

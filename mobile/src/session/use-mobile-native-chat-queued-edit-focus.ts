@@ -2,8 +2,7 @@ import { useMemo, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-message-controls'
 
-/** Wraps a queued card's Edit so the composer it fills takes focus, and typing continues
- *  without another tap. An Edit that copied nothing leaves focus where it is. */
+// Focus after a queued Edit actually copies text; empty copies preserve current focus.
 export function useMobileNativeChatQueuedEditFocus(onEdit: MobileQueuedMessageEdit | undefined): {
   composerInputRef: RefObject<TextInput | null>
   editQueuedMessage: MobileQueuedMessageEdit | undefined

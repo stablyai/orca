@@ -148,7 +148,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
             : {}),
         ...(isNewSession ? { isNewSession: true } : {}),
         persistHostSessionBinding: true,
-        // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
+        // Publish only the authoritative snapshot below to avoid a temporary wrong-group placement.
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
@@ -278,10 +278,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
+      // New epochs retire the prior publisher and reject its later updates.
       publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
+      // Activating the new tab must also focus its requested split group.
       activeGroupId:
         activate && opts.targetGroupId
           ? opts.targetGroupId
@@ -289,12 +289,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups,
-      // Why: keep group split geometry on new-tab creation, else opening a terminal while split loses the arrangement.
+      // Retain split geometry when adding a tab.
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    // Why: emit the stored snapshot, not the pre-store one — storing grafts on retirement
-    // proofs, and subscribers dedupe on version so they would never see them otherwise.
+    // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence

@@ -84,7 +84,6 @@ it.each([
   expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]?.onWriteRejected).toBeUndefined()
 })
 
-// The pane brings the latest into view on this, whatever the send was classified as.
 it.each([
   ['chat', 'hello'],
   ['command', '/compact'],

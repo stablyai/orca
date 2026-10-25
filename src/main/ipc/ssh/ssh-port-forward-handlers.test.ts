@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type LiveForward = { id: string; connectionId: string }
+type LiveForward = {
+  id: string
+  connectionId: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+}
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
   updateForward: vi.fn(),
+  addForward: vi.fn(),
   previous: {
     id: 'pf-1',
     connectionId: 't1',
@@ -30,6 +37,7 @@ vi.mock('./ssh-ipc-context', () => ({
   persistedStore: null,
   portForwardManager: {
     updateForward: h.updateForward,
+    addForward: h.addForward,
     listForwards: () => h.live,
     removeForwardAndWait: h.removeForwardAndWait
   }
@@ -42,6 +50,7 @@ vi.mock('./ssh-renderer-broadcast', () => ({
 
 const { registerSshPortForwardHandlers } = await import('./ssh-port-forward-handlers')
 const { PortForwardTornDownError } = await import('../../ssh/port-forwarding/ssh-port-forward')
+const { isForwardBackingOff, recordForwardFailure } = await import('./ssh-port-forward-unrestored')
 
 const edit = {
   id: 'pf-1',
@@ -72,6 +81,23 @@ describe('ssh:updatePortForward', () => {
     h.updateForward.mockRejectedValue(new Error('port in use'))
     await expect(h.handlers.get('ssh:updatePortForward')!({}, edit)).rejects.toThrow('port in use')
     expect(h.persist).toHaveBeenCalledWith('t1')
+  })
+
+  it('closes a forward a restore opened before a queued saved-forward remove ran', async () => {
+    h.live = [{ ...h.previous, localPort: 4100 }]
+    await h.handlers.get('ssh:removeSavedPortForward')!(
+      {},
+      { targetId: 't1', localPort: 4100, remoteHost: '127.0.0.1', remotePort: 80 }
+    )
+    expect(h.removeForwardAndWait).toHaveBeenCalledWith('pf-1')
+  })
+
+  it('starts a re-added forward on a fresh backoff', async () => {
+    const mapping = { localPort: 4100, remoteHost: '127.0.0.1', remotePort: 80 }
+    recordForwardFailure('t1', mapping, new Error('port in use'))
+    h.addForward.mockResolvedValue({ id: 'pf-3', connectionId: 't1', ...mapping })
+    await h.handlers.get('ssh:addPortForward')!({}, { targetId: 't1', ...mapping })
+    expect(isForwardBackingOff('t1', mapping)).toBe(false)
   })
 
   it('drops only the edited-away forward from the saved list', async () => {

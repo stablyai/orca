@@ -66,8 +66,7 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the browser tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
+    // The browser is the surface; activation must not seed a shell into an emptied workspace.
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })

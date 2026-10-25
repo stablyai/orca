@@ -1,8 +1,4 @@
-/**
- * #25783 on the managed-server path: an open pane on an orcad-managed SSH host answers typing again
- * on its own after the network to the host goes away for 30 s and comes back. Nobody clicks
- * Reconnect, and the pane keeps its original shell.
- */
+// #25783: recover typing automatically after managed-host network loss while preserving the original shell.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { readPairedPaneContent } from './helpers/paired-host-terminal'

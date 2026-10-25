@@ -97,7 +97,7 @@ function dispatchWheel(deltaY: number, init: WheelEventInit = {}): WheelEvent {
     ...init
   })
   if (init.ctrlKey) {
-    // Why: happy-dom drops modifier flags from the WheelEvent init dict.
+    // Happy DOM drops wheel modifier initialization; set flags explicitly.
     Object.defineProperty(event, 'ctrlKey', { value: true })
   }
   surface.dispatchEvent(event)
@@ -122,14 +122,13 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
   function boot(): void {
     document.body.innerHTML = bodyMarkup()
-    // The bundle the WebView loads, run as the WebView runs it.
     new Function(TERMINAL_DOCUMENT_SCRIPT)()
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
       })
     )
-    // Why: init commits the replacement surface on the next animation frame.
+    // Wait for init’s next-frame surface commit.
     while (animationFrames.length > 0) {
       animationFrames.shift()?.()
     }
@@ -191,8 +190,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
     dispatchWheel(3 * CELL_HEIGHT)
 
-    // Why: alt-screen TUIs (Claude Code, vim) have no scrollback, so an external
-    // mouse/trackpad wheel must reach the PTY as cursor keys the way touch does.
+    // Alternate-screen TUIs have no scrollback; wheels must reach the PTY as input, matching touch.
     expect(terminalInputBytes(postMessage)).toBe(ESC_ARROW_DOWN.repeat(3))
   })
 
@@ -226,8 +224,6 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
     dispatchWheel(CELL_HEIGHT)
 
-    // Default (non-SGR) encoding: wheel-down button 65 + 32 = 97 ('a'), then two
-    // printable cell bytes (their value depends on the fit scale, not on routing).
     const bytes = terminalInputBytes(postMessage)
     expect(bytes.slice(0, 4)).toBe(`${ESC}[Ma`)
     expect(bytes).toHaveLength(6)

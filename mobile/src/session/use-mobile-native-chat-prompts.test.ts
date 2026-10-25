@@ -167,7 +167,6 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('renders no ask card from a sticky prompt while the agent is working or done', () => {
-    // The prompt payload outlives its answer — same paused gate as permission.
     const working = promptsFor({ state: 'working', interactivePrompt: ASK })
     expect(working.ask).toBeNull()
     expect(working.detectedAsk).not.toBeNull()
@@ -178,9 +177,7 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('keeps the transcript-derived pending ask outside the paused gate', () => {
-    // A hook row idle past AGENT_STATUS_STALE_AFTER_MS projects to `done` with no
-    // interactivePrompt, so gating this too would make a still-pending question
-    // unanswerable from mobile. `extractPendingAsk` clears on the tool result.
+    // Stale status loses interactivePrompt; transcript pending asks must remain answerable until their tool result lands.
     expect(promptsFor({ state: 'waiting' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'done' }, askMessages).ask).not.toBeNull()
     expect(promptsFor({ state: 'working' }, askMessages).ask).not.toBeNull()
@@ -200,10 +197,7 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
   })
 
   it('does not leak a paused-out sticky status prompt through the transcript fallback', () => {
-    // The post-answer window: the status still carries the prompt while flipping
-    // to `working`, and the transcript's tool-result row has not landed yet, so
-    // both sources still describe the answered question. The paused gate only
-    // holds because a status prompt suppresses the transcript fallback outright.
+    // Sticky answered status suppresses transcript fallback; only the paused gate prevents a duplicate card while its result is in flight.
     const working = promptsFor({ state: 'working', interactivePrompt: ASK }, askMessages)
     expect(working.ask).toBeNull()
     expect(working.detectedAsk).not.toBeNull()

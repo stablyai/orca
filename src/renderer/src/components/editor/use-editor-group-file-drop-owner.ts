@@ -62,7 +62,6 @@ function useEditorGroupFileDropSequence(key: string): OsFileDropSequence {
   )
 }
 
-/** Opens files dropped on this group's tab strip or editor area in that group's worktree. */
 export function useEditorGroupFileDropOwner({
   worktreeId,
   groupId

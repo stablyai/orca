@@ -12,9 +12,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// Step 6 renews a device on a memory cell at most once a day: only when less than 29 of its 30
-// days remain. Shipped phones must keep a relay-only session alive under that rule, which they
-// do only if a current-version confirm never answers renewed:false.
+// Memory cells renew at most daily; current-version confirmations must still say renewed so shipped phones retain lease timers.
 const DAY = 24 * 60 * 60 * 1000
 const RESUME_TTL_MS = 30 * DAY
 const RENEWAL_INTERVAL_MS = DAY
@@ -56,7 +54,6 @@ async function relayOnlyPhone(days: number, answerNotDue: 'renewed' | 'unchanged
       expiresAt: stored.expiresAt
     }
   }
-  // The delay the lease timer last armed, or null once nothing is armed.
   const slot: { delayMs: number | null } = { delayMs: null }
   const timer = new RelayLeaseRotationTimer(
     {
@@ -99,7 +96,6 @@ describe('relay renewal under the step-6 memory cell rule', () => {
   it('keeps a relay-only phone valid for 31 days, with its lease timer armed after every confirm', async () => {
     const phone = await relayOnlyPhone(31, 'renewed')
     expect(phone.timerArmed).toBe(true)
-    // The re-resume every 6 hours writes at most once a day.
     expect(phone.resumes).toBeGreaterThanOrEqual(31 * 4)
     expect(phone.stored.renewals).toBeLessThanOrEqual(32)
     expect(phone.bundle.current.expiresAt).toBe(phone.stored.expiresAt)
@@ -109,7 +105,7 @@ describe('relay renewal under the step-6 memory cell rule', () => {
   })
 
   it('would strand that phone if a not-due confirm answered renewed:false', async () => {
-    // The answer the design rejected: the phone stops arming its lease timer at once.
+    // An unchanged confirmation would stop this shipped phone’s lease timer immediately.
     const phone = await relayOnlyPhone(31, 'unchanged')
     expect(phone.resumes).toBe(1)
     expect(phone.timerArmed).toBe(false)

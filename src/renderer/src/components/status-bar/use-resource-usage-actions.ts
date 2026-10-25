@@ -101,7 +101,7 @@ export function useResourceUsageActions({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
-    // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
+    // Folder activation owns host/path gating; git-worktree target resolution cannot handle folder keys.
     if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
       activateAndRevealWorkspace(worktreeId)
       return
@@ -181,8 +181,7 @@ export function useResourceUsageActions({
     if (!workspaceSessionReady) {
       return
     }
-    // Why the shared selector: the button's count comes from the same function, so the set killed
-    // is exactly the set advertised. Filtering separately here is how live sessions got killed.
+    // Use the badge’s exact orphan selector so bulk cleanup cannot destroy sessions excluded from its count.
     const orphans = selectUnboundDaemonSessions(sessions, resourceSessionBindings)
     if (orphans.length === 0) {
       return

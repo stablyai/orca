@@ -17,6 +17,7 @@ import {
   markCopiedResource,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
+import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
@@ -85,6 +86,7 @@ export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
+  syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({

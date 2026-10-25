@@ -266,7 +266,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(resolveAgentAccountRestartResumeStartup('claude', pane)).toBeNull()
   })
 
-  // Why both: a WSL worktree's UNC path and a WSL Windows runtime default each resolve a WSL runtime.
+  // Both WSL UNC paths and a WSL default runtime must resolve to the guest runtime.
   it.each([
     [
       'a WSL worktree path',

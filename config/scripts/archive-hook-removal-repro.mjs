@@ -1,15 +1,5 @@
-/**
- * Real-repo verification for #19334 — run with:
- *   node config/scripts/archive-hook-removal-repro.mjs
- *
- * Requires a prior `build:cli` and `build:electron-vite`; it drives the BUILT CLI against the
- * BUILT headless runtime, so it proves the shipped artifacts rather than the test harness.
- *: a failed archive hook must BLOCK a destructive
- * worktree removal, and the checkout, its git registration and its files must all survive.
- *
- * Boots the BUILT headless runtime (`out/main/index.js --serve`), pairs the BUILT CLI to it,
- * and drives `orca worktree rm` end to end against real git worktrees on disk.
- */
+// Run node config/scripts/archive-hook-removal-repro.mjs after build:cli/build:electron-vite.
+// Drive built CLI/headless runtime against real worktrees: failed/unverifiable archive hooks must preserve registration and file contents.
 import { spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,7 +30,6 @@ function check(label, ok, detail = '') {
 
 let pairingCode = null
 
-/** Run the real CLI against the booted server. Returns the raw process result. */
 function cli(args, { json = true } = {}) {
   return spawnSync(
     process.execPath,
@@ -49,7 +38,6 @@ function cli(args, { json = true } = {}) {
   )
 }
 
-/** Run the CLI and require success, returning result payload. */
 function ok(args) {
   const r = cli(args)
   const parsed = parseJsonLine(r)
@@ -216,7 +204,6 @@ async function main() {
     pairingCode = new URL(ready.pairing.url).searchParams.get('code')
     out(`ready: ${ready.advertisedEndpoint}`)
 
-    // ---------------------------------------------------------------- setup
     const hookRepoPath = seedGitRepo('hooked', true)
     const folderProjectSlug = `agh-folder-proof-${randomBytes(3).toString('hex')}`
     const bareRepoPath = seedGitRepo('nohook', false, folderProjectSlug)
@@ -242,7 +229,6 @@ async function main() {
       return { ...wt, repoPath, unarchivedBody }
     }
 
-    // ============================================================ SCENARIO 1
     banner('SCENARIO 1 — archive hook exits 23: removal MUST be refused, nothing deleted')
     setMode('fail')
     const wt1 = makeWorktree(hookRepo, hookRepoPath, `gate-fail-${randomBytes(3).toString('hex')}`)
@@ -298,8 +284,7 @@ async function main() {
     )
     check('error data carries exitCode 23', forcedJson?.error?.data?.exitCode === 23)
     check('checkout directory still exists', after1.dirExists)
-    // Assert the CONTENTS, not just the path: a file that survived as an empty stub would prove
-    // nothing about the work the archive hook was supposed to rescue.
+    // Check contents too: an empty surviving stub would not prove archive protection.
     check(
       'unarchived file PRECIOUS.txt survives with its contents',
       after1.fileExists && after1.fileBody === wt1.unarchivedBody,
@@ -317,18 +302,15 @@ async function main() {
       hookRuns().length >= 2,
       `runs=${hookRuns().length}`
     )
-    // The checkout is dirty (untracked PRECIOUS.txt). The plain run reported the ARCHIVE failure,
-    // not the dirty-preflight failure, so the gate is evaluated before that preflight.
+    // Dirty checkout reports archive failure first, proving gate precedes dirty preflight.
     check(
       'archive gate precedes the dirty preflight (dirty checkout, archive error reported)',
       /Archive hook failed/.test(human.stderr ?? '') &&
         !/\?\? PRECIOUS\.txt/.test(human.stderr ?? '')
     )
 
-    // ============================================================ SCENARIO 2
     banner('SCENARIO 2 — --allow-failed-archive-hook: removal proceeds, waiver recorded')
-    // --force here waives only the DIRTY preflight (PRECIOUS.txt is untracked on purpose);
-    // scenario 1 already proved it does not waive the archive gate.
+    // --force waives only dirty preflight; scenario 1 proves archive gate still requires its own waiver.
     const waived = cli([
       'worktree',
       'rm',
@@ -364,7 +346,6 @@ async function main() {
         waivedJson?.result?.archiveHookOverride?.outcome === 'exited'
     )
 
-    // ============================================================ SCENARIO 3
     banner('SCENARIO 3 — archive hook exits 0: removal proceeds')
     setMode('ok')
     const wt3 = makeWorktree(hookRepo, hookRepoPath, `gate-ok-${randomBytes(3).toString('hex')}`)
@@ -382,7 +363,6 @@ async function main() {
       okJson?.result?.archiveHookOverride === undefined
     )
 
-    // ============================================================ SCENARIO 4
     banner('SCENARIO 4 — no archive hook configured: removal proceeds unchanged')
     const wt4 = makeWorktree(
       bareRepo,
@@ -400,7 +380,6 @@ async function main() {
     check('checkout deleted', !after4.dirExists)
     check('no hook was run', hookRuns().length === runsBefore)
 
-    // ============================================================ SCENARIO 5
     banner('SCENARIO 5 — hook never reports an exit (killed): must BLOCK as `unverifiable`')
     setMode('signal')
     const wt5 = makeWorktree(hookRepo, hookRepoPath, `gate-unver-${randomBytes(3).toString('hex')}`)
@@ -425,17 +404,14 @@ async function main() {
     check('checkout survives', after5.dirExists && after5.fileExists)
     check('git registration survives', after5.registered)
 
-    // clean up scenario 5 with the waiver so the temp dirs go away
     setMode('ok')
     cli(['worktree', 'rm', '--worktree', wt5.id, '--force'])
 
-    // ============================================================ SCENARIO 6
     banner('SCENARIO 6 — folder workspace removal (the boundary that runs no hook) is unchanged')
     const folderDir = mkdtempSync(join(tmpdir(), 'agh-folder-'))
     mkdirSync(join(folderDir, 'src'))
     writeFileSync(join(folderDir, 'src', 'app.txt'), 'folder workspace content\n')
-    // A folder workspace is imported against an existing project identity, so anchor it on the
-    // hookless repo's GitHub-derived project.
+    // Folder imports use existing project identity; anchor to the hookless repo’s GitHub project.
     const folderProjectId = `github:agh-owner/${folderProjectSlug}`
     ok([
       'project',
@@ -452,8 +428,7 @@ async function main() {
     const folderRepo = (ok(['repo', 'list']).repos ?? []).find((r) => r.path === folderDir) ?? null
     out(`folder repo: ${folderDir} (${folderRepo?.id}) kind=${folderRepo?.kind}`)
     check('registered repo kind is folder', folderRepo?.kind === 'folder', String(folderRepo?.kind))
-    // The project ROOT of a folder project is not deletable (pre-existing rule, unrelated to the
-    // gate); the deletable folder workspace is a child created under it.
+    // Folder project root remains undeletable; test removal on its child workspace.
     const folderRoot = ok(['worktree', 'show', '--worktree', `path:${folderDir}`]).worktree
     const rootRm = cli(['worktree', 'rm', '--worktree', folderRoot.id, '--force', '--run-hooks'])
     out(

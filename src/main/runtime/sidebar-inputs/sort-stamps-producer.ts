@@ -58,13 +58,7 @@ type TrackedPane = AgentPaneWorkspace & { state: AgentPaneState }
 /** A tier reconciled without a pane moving. */
 const SETTLED = { from: 'rest', to: 'rest', transition: null } as const
 
-/**
- * Writes the sort stamps of every workspace this host owns, at the source: the transition
- * detector's agent panes (terminal agents, structured chats, hookless agents' titles), bells, and
- * terminals a CLI starts. Creation stamps itself where the record is made. Rest panes are not
- * kept. The detector's news raises the workspace's unread flag unless a client is looking at it;
- * clients clear it.
- */
+/** Stamp host-owned workspace activity from agent transitions, bells and CLI terminal starts; creation stamps itself. Retain no Rest panes; raise unread for unseen news and let clients clear it. */
 export class SortStampsProducer {
   private readonly panes = new Map<string, TrackedPane>()
 
@@ -106,11 +100,7 @@ export class SortStampsProducer {
     }
   }
 
-  /**
-   * Clears a tier this machine stored that nothing backs after a restart: no hook row, and every
-   * terminal it held proven gone by its provider. Runs once hook rows and PTYs have settled. Another
-   * host's tiers stay: a host not reached yet is not one whose agents died.
-   */
+  /** After hooks/PTYs settle, clear only this host's tiers with no hook rows and all recorded terminals proven gone; unreachable hosts prove no exits. */
   async reconcileStoredTiers(evidence: StoredTierEvidence): Promise<void> {
     const probes = new Map<string, Promise<boolean>>()
     const isProvenAbsent = (ptyId: string): Promise<boolean> => {
@@ -132,8 +122,7 @@ export class SortStampsProducer {
       candidates.map(async (worktreeId) => {
         const ptyIds = evidence.terminalPtyIds(worktreeId)
         const absent = await Promise.all(ptyIds.map(isProvenAbsent))
-        // No terminal on record proves nothing (a chat republishes later, a client owns the
-        // layout); a pane can also report while the probes are in flight.
+        // No recorded terminals provide no exit proof; chats may republish later, clients may own layout, and panes may report during probes.
         if (ptyIds.length > 0 && absent.every(Boolean) && !this.isBacked(worktreeId)) {
           this.writeAgentChange({ worktreeId, sshHostId: null }, SETTLED, this.sources.now())
         }
@@ -178,10 +167,7 @@ export class SortStampsProducer {
     }
   }
 
-  /**
-   * Takes the observed phase as it is and reconciles the tier, without a Recent stamp. A phase the
-   * record already holds keeps its time, so a restart rewrites nothing.
-   */
+  /** Reconcile observed phase without a Recent stamp; unchanged phases retain their time across restart. */
   private seed(
     paneKey: string,
     workspace: AgentPaneWorkspace,

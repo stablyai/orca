@@ -1,9 +1,6 @@
 import type { DedicatedRepoChannel, ReleaseBuild, ReleaseChannel } from './release-channel'
 
-// ─── Updater ─────────────────────────────────────────────────────────
-
-// Why: the release object sent to the renderer omits `version` (redundant
-// with the top-level UpdateStatus.version) to keep one source of truth.
+// Keep version only on UpdateStatus so release payloads cannot disagree.
 export type ChangelogRelease = {
   title: string
   description: string
@@ -25,8 +22,7 @@ export type UpdateCheckOptions = {
   targetTag?: string
 }
 
-/** Non-release origins for an update. Derived from the dev-channel list so a new
- *  channel with its own repo cannot be reported as an ordinary release. */
+/** Derive nonrelease origins from dev channels so new dedicated repos cannot be mislabeled ordinary releases. */
 export type UpdateSource = 'local' | DedicatedRepoChannel
 
 /** Root-package Linux install formats whose update installs need privilege escalation. */
@@ -73,16 +69,9 @@ export type UpdateStatus = (
       state: 'available'
       version: string
       activeNudgeId?: string
-      // Why: releaseUrl is not currently populated by the update-available handler
-      // (it always sends undefined). Kept on the type for the Settings page's
-      // release-notes link fallback and for potential future use if the main
-      // process starts extracting release URLs from electron-updater metadata.
+      // Kept for Settings release-link fallback; the current update-available handler does not populate it.
       releaseUrl?: string
-      // Why: changelog is always explicitly set by the main process — null means
-      // the fetch failed or the version wasn't in the JSON (simple mode), and a
-      // populated object means rich mode. Using `| null` (not `?`) avoids a
-      // three-state ambiguity (undefined vs null vs present) and makes exhaustive
-      // checks straightforward.
+      // Main always sets this: null means fetch failure/missing version, object enables rich mode. Avoid an undefined third state.
       changelog: ChangelogData | null
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */

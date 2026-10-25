@@ -52,9 +52,7 @@ function ActivityThreadRowAction({
   )
 }
 
-// Why React.memo: rows are pure functions of these props; thread identity is stable across
-// query/selection/group re-renders, so memo keeps a keystroke or selection change from
-// re-rendering every mounted row. Callbacks take the thread so parents can pass stable handlers.
+// Stable thread/callback identities let memoized rows skip query, selection and grouping updates.
 export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   thread,
   selected,

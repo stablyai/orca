@@ -1,6 +1,4 @@
-// Test-only: runs the row-8 producers (an agent started with a workspace) against the parity
-// harness's real store. Only what precedes the launch is stubbed: setup policy, hooks trust, agent
-// detection and the create itself.
+// Run workspace-seeded launch producers against the real parity store; stub only setup/trust/detection/workspace creation.
 import type { LaunchTestStore } from './launch-parity-renderer.test-fixture'
 import type * as WorkItemLaunch from '@/lib/launch-work-item-direct'
 import type * as FolderComposerSubmit from '@/components/sidebar/folder-workspace-composer-submit'
@@ -35,8 +33,7 @@ export async function startWorkspaceAgent(
 ): Promise<void> {
   const { producer } = c
   const state = store.getState()
-  // Activating a workspace asks for a PR refresh, which this harness has no bridge for; a prompt
-  // pasted after start waits on timers.
+  // Stub PR refresh without a bridge and let timers drive post-start paste.
   Object.assign(window.api, { gh: {} })
   Object.assign(window, { setTimeout, clearTimeout })
   store.setState({
@@ -44,7 +41,6 @@ export async function startWorkspaceAgent(
     updateWorktreeMeta: async () => ({ ok: true })
   })
   if (producer.kind === 'work-item') {
-    // The workspace the create returns is the one the harness seeded.
     const worktree = state.worktreesByRepo['repo-1']?.[0]
     store.setState({ createWorktree: async () => ({ worktree }) })
     const started = await modules.workItem.launchWorkItemDirect({
@@ -92,7 +88,6 @@ export async function startWorkspaceAgent(
     note: producer.note,
     quickAgent: producer.agent,
     autoRenameBranchFromWork: false,
-    // As the composer's folder submit passes them.
     agentCmdOverrides: settings?.agentCmdOverrides,
     agentArgs: resolveTuiAgentLaunchArgs(producer.agent, settings),
     agentEnv: resolveTuiAgentLaunchEnv(producer.agent, settings),

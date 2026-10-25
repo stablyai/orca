@@ -85,7 +85,11 @@ describe('agent TypeScript LSP diagnostics bridge', () => {
 
   it('re-pulls open documents when the server asks for a refresh', () => {
     const { bridge, client, server, flush, pulls } = harness({})
-    bridge.fromClient(edit(1))
+    bridge.fromClient({
+      jsonrpc: '2.0',
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, version: 1, languageId: 'typescript', text: 'v1' } }
+    })
     flush()
     bridge.fromServer({ jsonrpc: '2.0', id: 'srv-1', method: 'workspace/diagnostic/refresh' })
     flush()
@@ -113,18 +117,20 @@ describe('agent TypeScript LSP diagnostics bridge', () => {
       encodeLspMessage({ id: 2 })
     ])
     read(frames.subarray(0, 7))
-    read(frames.subarray(7, 30))
-    read(frames.subarray(30))
+    const split = frames.indexOf(Buffer.from('é')) + 1
+    read(frames.subarray(7, split))
+    read(frames.subarray(split))
     expect(received).toEqual([{ id: 1, text: 'héllo' }, { id: 2 }])
   })
 
-  it('is the server every committed agent config launches', () => {
+  it('wires Claude and OpenCode to the repository language server', () => {
     const plugin = JSON.parse(
       readFileSync(join(repoRoot, 'config/agent-plugins/orca-typescript/.lsp.json'), 'utf8')
     )
     const opencode = JSON.parse(readFileSync(join(repoRoot, 'opencode.json'), 'utf8'))
     const script = 'config/scripts/agent-typescript-lsp.mjs'
     expect(existsSync(join(repoRoot, script))).toBe(true)
+    expect(plugin['orca-typescript'].command).toBe('node')
     expect(plugin['orca-typescript'].args).toEqual([`\${CLAUDE_PROJECT_DIR}/${script}`])
     expect(opencode.lsp['orca-typescript'].command).toEqual(['node', script])
   })

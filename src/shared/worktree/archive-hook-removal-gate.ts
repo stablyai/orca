@@ -1,20 +1,9 @@
-// Why (#19334): the archive hook is a user's last chance to save work off a checkout Orca is
-// about to delete. A failed hook used to be logged and stepped over, so the delete went ahead
-// with nothing archived. It is a precondition, evaluated before any stop/delete mutation.
+// A successful archive hook is a precondition for stop/delete mutations (#19334).
 
-/**
- * How long an archive hook gets before it is cut off. Shared because a client waiting on a removal
- * has to outlast it: a client that gives up first reports a failure for a hook that is still
- * running, and the host then completes the delete anyway — telling the user the opposite of what
- * happened to their checkout (#19334).
- */
+/** Clients must wait beyond this deadline; otherwise they report failure while the host can still finish the hook and delete (#19334). */
 export const ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
-/**
- * How long a client waits for worktree.rm's reply. Git's checkout delete has no timeout (measured
- * up to ~60 s under load) and a bulk delete queues behind the host's two-at-a-time limit; a client
- * that gives up instead settles the card from the host's listing, so this is not a failure deadline.
- */
+/** Allow unbounded Git deletion and the host’s two-at-a-time queue after any hook deadline. A client timeout is not proof removal failed; settle from host listings. */
 export function worktreeRemovalReplyTimeoutMs(runsArchiveHook: boolean): number {
   return (runsArchiveHook ? ARCHIVE_HOOK_TIMEOUT_MS : 0) + 180_000
 }
@@ -24,18 +13,11 @@ export const ARCHIVE_HOOK_FAILED_REMOVAL_CODE = 'worktree_archive_hook_failed'
 
 export const ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX = 'Archive hook failed for worktree:'
 
-// One string, three surfaces: the CLI, RPC callers, and the desktop toast that now carries its own
-// Delete Anyway button. Naming only the CLI flag sent desktop users to a terminal for a button that
-// was six inches away, so both affordances are named and neither is presented as the only one.
+// Name both desktop and CLI waivers so each surface offers an actionable override.
 export const ARCHIVE_HOOK_OVERRIDE_HINT =
   'Nothing was stopped, deleted or deregistered. Fix the hook and retry, or delete anyway with an explicit waiver — "Delete Anyway" in the app, or --allow-failed-archive-hook on the CLI.'
 
-/**
- * `exited` means the host reported a non-zero exit for this hook run. `unverifiable` covers every
- * case where the hook's outcome was never observed — spawn failure, timeout, lost contact with the
- * execution host. Loss of contact is never evidence that the hook passed, so both block removal.
- * Vocabulary is deliberately the `UnstoppedPtyVerdict` spelling; see docs/reference/ssh-execution-boundary.md.
- */
+/** exited requires an observed nonzero exit. Spawn failure, timeout or lost host contact is unverifiable; both block removal. Use the UnstoppedPtyVerdict vocabulary (docs/reference/ssh-execution-boundary.md). */
 export type ArchiveHookOutcome = 'exited' | 'unverifiable'
 
 export type ArchiveHookFailure = {
@@ -75,11 +57,7 @@ export function formatArchiveHookFailure(failure: ArchiveHookFailure): string {
   ].join(' ')
 }
 
-/**
- * The waived case says the opposite of the refusal: the removal DID go ahead. Reusing
- * `formatArchiveHookFailure` here printed "Nothing was stopped, deleted or deregistered" directly
- * after deleting the checkout.
- */
+/** The waived case did remove the checkout; never reuse the refusal’s "Nothing was stopped, deleted or deregistered" message. */
 export function formatArchiveHookOverride(override: ArchiveHookOverride): string {
   const output = override.output.trim()
   return [
@@ -89,10 +67,7 @@ export function formatArchiveHookOverride(override: ArchiveHookOverride): string
   ].join(' ')
 }
 
-/**
- * Narrow an unknown rejection to the typed refusal, or rethrow it. This is the branch a real
- * caller writes, so tests asserting on a refusal should go through it rather than re-deriving it.
- */
+/** Use the same typed refusal branch in callers and tests; rethrow unrelated failures. */
 export function asArchiveHookRefusal(error: unknown): WorktreeArchiveHookFailedError {
   if (error instanceof WorktreeArchiveHookFailedError) {
     return error

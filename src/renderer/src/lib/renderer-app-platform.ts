@@ -1,6 +1,4 @@
-// Why: hot render paths call this per render; the preload answer never changes, so
-// cache it. The user-agent fallback stays uncached because window.api can still be
-// installing (the web client injects its own platform API after boot).
+// Cache the immutable preload platform on hot render paths; never cache UA fallback while web window.api may still install.
 let cachedAppPlatform: NodeJS.Platform | undefined
 
 export function getRendererAppPlatform(): NodeJS.Platform {

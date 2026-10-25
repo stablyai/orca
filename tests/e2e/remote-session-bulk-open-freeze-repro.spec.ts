@@ -1,24 +1,5 @@
-/**
- * Freeze repro R1 — bulk-open remote sessions under multi-worktree flood load.
- *
- * Trigger: reopening many remote sessions on Remote Server / SSH with agents.
- *
- * Topology under test:
- *   R1: headless Remote Orca host + paired desktop web client (paired-remote-server)
- *
- * Measurement:
- *   renderer timer drift during hidden flood + bulk worktree/tab open.
- *   soft freeze >= 2.5s, hard freeze >= 5s.
- *
- * Run:
- *   SKIP_BUILD=1 pnpm exec playwright test \
- *     tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts \
- *     --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- *
- * Or:
- *   pnpm run test:e2e:remote-bulk-open-freeze
- */
+// R1: measure renderer timer drift while a headless paired host floods hidden sessions and the desktop bulk-opens worktrees/tabs.
+// Soft/hard freeze thresholds are 2.5s/5s; run pnpm run test:e2e:remote-bulk-open-freeze.
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

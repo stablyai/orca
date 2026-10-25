@@ -42,7 +42,6 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
     )
   }
   if (row.kind === 'gitlab') {
-    // Why: GitMerge keeps merge requests visually distinct from PRs and branches.
     return row.item.type === 'mr' ? (
       <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
     ) : (

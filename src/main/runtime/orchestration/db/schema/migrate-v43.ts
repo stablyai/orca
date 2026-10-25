@@ -4,25 +4,20 @@ import type { OrchestrationDb } from '../orchestration-db'
 const LEGACY_PREFIX = 'session:'
 const CURRENT_PREFIX = 'orca_session_id:'
 
-// Every column an earlier build wrote a session's mail address into. Bodies, subjects and payloads
-// are text, not addresses, and are left as written.
+// Rewrite address columns only; bodies, subjects and payload text retain their original content.
 const ADDRESS_COLUMNS = [
   ['messages', 'from_handle'],
   ['messages', 'to_handle'],
   ['coordinator_runs', 'coordinator_handle']
 ] as const
 
-// Address columns in a key: where the current spelling already has its row, the legacy one is a duplicate.
+// If both spellings exist for a keyed address, the legacy row is redundant.
 const KEYED_ADDRESS_COLUMNS = [
   ['run_coordinator_handles', 'terminal_handle'],
   ['structured_pointer_operations', 'mailbox_handle']
 ] as const
 
-/**
- * Earlier builds addressed an Orca session as `session:<id>`. Respells every stored one as
- * `orca_session_id:<id>`, so a chat still reads mail sent before the upgrade, a Run still routes
- * mail to the chat that coordinated it, and a reply to old mail reaches its sender.
- */
+/** Respell stored session: addresses as orca_session_id: so pre-upgrade mail, routing and replies remain reachable. */
 export function migrateV43(this: OrchestrationDb, current: number): void {
   if (current >= 43) {
     return

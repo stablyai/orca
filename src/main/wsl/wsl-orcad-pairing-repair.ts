@@ -1,9 +1,4 @@
-/**
- * Pairing again with a WSL host whose orcad refused this desktop's enrolled token (a lost device
- * registry, a revoked device), through the managed SSH repair gate: one repair at a time, a capped
- * number per window, and only an offer under the pinned host key. The distro runs on this machine,
- * so its published offer is read from the distro itself, as SSH reads it over SSH.
- */
+/** Use the managed SSH repair gate for refused WSL enrollment: serialize, cap attempts and require the pinned host key. Read new offers inside the local distro. */
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import {
   findWslHostDeployment,

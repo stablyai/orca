@@ -15,8 +15,7 @@ function getGitErrorCode(error: unknown): string | undefined {
 }
 
 export function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  // `-z` is this fixed command's only post-baseline flag, so exit 129 is the
-  // locale-independent rejection signal on old native, WSL, and SSH Git.
+  // -z is this command’s only post-baseline flag; exit 129 detects rejection across locales and execution hosts.
   if (getGitErrorCode(error) === '129') {
     return true
   }

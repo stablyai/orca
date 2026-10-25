@@ -39,8 +39,7 @@ describe('getRendererAppPlatform', () => {
     }
   )
 
-  // Why: the web client injects its platform API after boot, so an early caller must
-  // not pin the user-agent guess for the rest of the session.
+  // The web platform bridge arrives after boot; early user-agent guesses must not become session-long cache entries.
   it('does not cache the user-agent fallback', () => {
     // 'freebsd' is never a user-agent fallback answer, so the swap is unambiguous.
     expect(getRendererAppPlatform()).not.toBe('freebsd')

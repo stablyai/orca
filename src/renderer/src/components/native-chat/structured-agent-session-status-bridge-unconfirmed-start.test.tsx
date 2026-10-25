@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A chat whose create got no answer (a lost reply, or a reload mid-start) may or may not exist on
-// its host. It shows no mark while that is unknown; when the host is reachable again the launch is
-// re-checked without the user, and settles to started (no mark) or failed (marked).
+// Lost create replies remain unmarked and recheck on reconnect; only confirmed failures earn failure marks.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -204,7 +202,6 @@ async function connect(): Promise<void> {
   }
 }
 
-/** A reload keeps the saved launch record and the tab, but nothing in memory. */
 async function reload(): Promise<void> {
   cleanup()
   store().setState({ agentStatusByPaneKey: {} })
@@ -216,7 +213,6 @@ async function reload(): Promise<void> {
   await connect()
 }
 
-/** The create's reply never arrives and the host lists nothing, so the outcome stays unknown. */
 async function loseStart(
   sessionId = CLAUDE_SESSION,
   agent: 'claude' | 'codex' = 'claude'
@@ -280,7 +276,6 @@ describe('a chat whose start was never confirmed', () => {
     await flush()
 
     expect(lifecycle()).toBeNull()
-    // The host already held the chat, so nothing is created twice.
     expect(createCalls()).toBe(creates)
     expect(rows()).toEqual([])
   })

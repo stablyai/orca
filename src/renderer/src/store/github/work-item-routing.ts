@@ -138,11 +138,7 @@ export function getGitHubRepoSourceSettings(
   return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
-/**
- * Transport for a repo's GitHub request: a row-less task source's host, else the repo's owner.
- * Local and SSH repos use this app's credentials; an unknown repo stays here too (main refuses
- * repos it does not own) instead of following the focused server.
- */
+/** Use row-less task source host, else repo owner. Local/SSH/unknown repos use desktop credentials; never follow focused runtime (main refuses unowned repos). */
 export function getGitHubSourceTarget(
   state: Pick<AppState, 'repos'>,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
@@ -241,7 +237,7 @@ export function countGitHubWorkItemsForRepo(
 }
 
 export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
-  // Why: only `runtime_error` came from the GitHub method; other RPC transport failures ("timed out"/"unavailable") must not be blamed on GitHub.
+  // Only runtime_error came from the GitHub method; transport timeouts/unavailability are not GitHub faults.
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }

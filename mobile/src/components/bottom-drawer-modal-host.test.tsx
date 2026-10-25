@@ -74,8 +74,7 @@ type Layers = { detail: boolean; form: boolean }
 const closeDetail = vi.fn()
 const closeForm = vi.fn()
 
-// Mirrors the Tasks surface: the Create Workspace form renders before the issue detail and is
-// raised over it by zIndex, both inside one host.
+// Mirror Tasks: form precedes detail in tree but zIndex raises it, both under one host.
 function tasksSheets({ detail, form }: Layers) {
   return (
     <BottomDrawerModalHost>
@@ -125,8 +124,7 @@ describe('BottomDrawerModalHost without a caller-owned visible', () => {
     closeForm.mockReset()
   })
 
-  // #21003: iOS refuses a native modal presented over a sibling one, so the form opened from an
-  // issue detail never appeared. Both sheets must live in the single native Modal.
+  // iOS rejects sibling modal over active issue detail (#21003); Create form and detail must share one Modal.
   it('opens a sheet over another inside the one native Modal', () => {
     show({ detail: true, form: false })
     finishAnimations()

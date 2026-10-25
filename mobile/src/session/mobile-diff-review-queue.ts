@@ -162,7 +162,6 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
-/** A row whose staging area this build can place. One with no area is in no section either. */
 type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
 
 function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {

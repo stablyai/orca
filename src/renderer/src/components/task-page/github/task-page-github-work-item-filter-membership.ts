@@ -13,24 +13,17 @@ function resolveMeLogin(viewerLogin: string | null): string | null {
   return trimmed ? trimmed.toLowerCase() : null
 }
 
-/**
- * Whether a registry-merged work item should be soft-hidden for the active query.
- * Evaluate every applicable membership signal; hide if any fails (AND of constraints).
- */
+/** Soft-hide when any applicable query membership constraint fails. */
 export function shouldSoftHideTaskPageGitHubWorkItem(args: {
   item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests'>
   query: ParsedTaskQuery
   viewerLogin: string | null
-  /**
-   * Per-item: true when this item’s sourceContext resolves to environment/SSH.
-   * Never a page-level flag (multi-repo can mix local + remote).
-   */
+  /** Resolve environment/SSH per item; a multi-repo page can mix local and remote sources. */
   skipMeQualifiers: boolean
 }): boolean {
   const { item, query, skipMeQualifiers } = args
   const viewer = resolveMeLogin(args.viewerLogin)
 
-  // State membership
   if (query.state === 'open') {
     if (item.state === 'closed' || item.state === 'merged') {
       return true
@@ -45,15 +38,12 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
       return true
     }
   }
-  // state === null | 'all' → no state-based soft-hide
 
-  // Why: is:draft forces state to 'open', so a draft that turns non-draft still
-  // passes the state check; the draft qualifier soft-hides it explicitly.
+  // is:draft forces open state, so a separate draft check must hide items that become non-draft.
   if (query.draft && item.state !== 'draft') {
     return true
   }
 
-  // Assignee membership
   if (query.assignee) {
     const assignee = query.assignee.trim()
     if (assignee.toLowerCase() === '@me') {
@@ -65,7 +55,6 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
     }
   }
 
-  // Review-requested membership
   if (query.reviewRequested) {
     const requested = query.reviewRequested.trim()
     if (requested.toLowerCase() === '@me') {
@@ -98,8 +87,7 @@ export function recomputeTaskPageGitHubItemSoftHide(args: {
   })
   const stickyEntry = args.sticky.get(args.itemKey)
   const stickyActive = Boolean(stickyEntry && stickyEntry.queryKey === args.queryKey)
-  // Why: sticky keeps successful membership exits hidden after pending clears;
-  // pending membership hide still applies before confirm.
+  // Sticky hides retain confirmed membership exits after pending operations clear.
   return {
     hide: membershipHide || stickyActive,
     sticky: stickyActive

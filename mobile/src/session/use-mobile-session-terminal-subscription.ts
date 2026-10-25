@@ -14,7 +14,6 @@ import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers
 import type { MobileDisplayMode } from './mobile-session-route-types'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 
-/** Derived from constants, so it is read once rather than on every subscribe. */
 const snapshotByteBudget = mobileTerminalSnapshotByteBudget()
 
 export function useMobileSessionTerminalSubscription(
@@ -73,7 +72,7 @@ export function useMobileSessionTerminalSubscription(
         activeHandleRef.current,
         handle
       )
-      // Why: a native-chat-covered terminal has no mounted webview, so only gate on the webview when not covered.
+      // Covered chat can hold a lease without a mounted WebView; gate readiness only for rendered terminals.
       if (!covered) {
         const ref = getTerminalRef(handle)
         if (!ref) {
@@ -86,12 +85,12 @@ export function useMobileSessionTerminalSubscription(
         }
         const frame = terminalFrameRef.current
         if (!viewportMeasuredRef.current) {
-          // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
+          // Wait for first frame layout: document ready can arrive before its fitted dimensions.
           if (!frame) {
             logSkippedGate('frame-not-laid-out')
             return
           }
-          // Why: sized from the box the ready document reported, the host serializes the snapshot at the phone's size.
+          // Use the document’s measured cell box so the host serializes scrollback at phone dimensions.
           const dims = ref.fitDimensions(frame)
           diagnostics.viewportMeasured(handle, dims, frame.height)
           if (dims) {
@@ -125,7 +124,7 @@ export function useMobileSessionTerminalSubscription(
         }
       })
 
-      // Why: viewport is embedded in the subscribe params so the server auto-fits before serializing scrollback (no focus→safeFit race).
+      // Send viewport in subscribe so host fitting precedes snapshot serialization without a focus/fit race.
       const stopStream = subscribeMobileTerminalSafely(
         client,
         {
@@ -133,8 +132,7 @@ export function useMobileSessionTerminalSubscription(
           client: { id: clientId, type: 'mobile' as const },
           viewport: sentViewport,
           capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
-          // Undefined on a phone, where no per-message cap exists; omitted rather than sent as
-          // undefined so an older host sees the params it has always seen.
+          // Omit absent native budgets to preserve older hosts’ subscribe shape.
           ...(snapshotByteBudget === undefined ? {} : { snapshotByteBudget })
         },
         (result) => {
@@ -151,7 +149,7 @@ export function useMobileSessionTerminalSubscription(
             markNativeChatInputLeaseReady(handle)
             return
           }
-          // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.
+          // Covered streams keep input ownership without changing hidden xterm state; returning view gets fresh history.
           if (
             nativeChatTerminalStream.isTerminalCoveredByNativeChat(
               showNativeChatRef.current,
@@ -161,7 +159,7 @@ export function useMobileSessionTerminalSubscription(
           ) {
             return
           }
-          // Why: drop `resized` events older than the seen seq (superseded layout); scrollback always resets the mark, else reconnect blanks the terminal.
+          // Reject superseded resize sequences; fresh scrollback resets the mark or reconnect can blank the terminal.
           const eventSeq = typeof data.seq === 'number' ? data.seq : null
           if (eventSeq != null && data.type === 'resized') {
             const last = layoutSeqRef.current.get(handle)
@@ -188,14 +186,13 @@ export function useMobileSessionTerminalSubscription(
             }
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             const { hostCols, hostRows } = readTerminalViewportDims(data)
-            // Why: absent host dims must not be coerced into a comparable size — 80x24
-            // never equals a phone viewport and armed a zero-delay resubscribe loop (STA-3337).
+            // Keep absent dimensions unknown; invented 80x24 can never match phone size and causes a refit loop.
             const cols = hostCols ?? viewportRef.current?.cols ?? 80
             const rows = hostRows ?? viewportRef.current?.rows ?? 24
             const initialData = typeof data.serialized === 'string' ? data.serialized : ''
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             const ref = getTerminalRef(handle)
-            // Why: only mark initialized once init() reaches the WebView, else later scrollback is dropped and the terminal stays blank.
+            // Mark initialized only after init reaches the WebView or later snapshots are discarded while it stays blank.
             if (!ref) {
               console.log('[fit][session] scrollback DROPPED — no terminal ref', {
                 handle: handle.slice(-8),
@@ -209,16 +206,14 @@ export function useMobileSessionTerminalSubscription(
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
-              // Why: same-mode frames must keep the Map identity, or every stream pass re-renders the whole route.
+              // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
               setTerminalModes((prev) =>
                 prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
               )
             }
-            // Why: cold-start refit — init()'s fit can run against a transient scrollWidth, so re-fire against a settled DOM.
+            // Refit after DOM settles because init can see transient scrollWidth.
             lifetime.scheduleSettledFit(ref)
-            // Why: a subscribe without a viewport (no reported cell box) measures after init and
-            // resubscribes so the server can phone-fit — bounded per handle so a
-            // non-converging host degrades visibly instead of hot-looping (STA-3337).
+            // Measure viewport-less subscriptions after init, then retry within the bounded per-handle budget.
             runTerminalViewportFitPass({
               handle,
               seq,
@@ -243,7 +238,7 @@ export function useMobileSessionTerminalSubscription(
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
           } else if (data.type === 'data') {
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
-            // Why: missing ref is the likely cause of "blank but input works" — writes dropped after mid-flight unmount or scrollback never landed.
+            // Missing refs explain input-working/blank-output states after unmount or missing scrollback.
             const dataRef = getTerminalRef(handle)
             if (!dataRef) {
               console.log('[fit][session] data DROPPED — no terminal ref', {
@@ -262,7 +257,7 @@ export function useMobileSessionTerminalSubscription(
             dataRef.write(data.chunk as string)
           } else if (data.type === 'resized') {
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
-            // Server resize: reinit xterm on a full-buffer snapshot (width reflow rewraps scrollback), else just resize geometry.
+            // Width reflow needs full-buffer reinit; geometry-only events just resize.
             const viewport = viewportMeasuredRef.current ? viewportRef.current : null
             const [cols, rows] = viewportResubscribeBudgetRef.current.observeResize(
               handle,
@@ -286,7 +281,7 @@ export function useMobileSessionTerminalSubscription(
             }
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
-              // Why: same-mode frames must keep the Map identity, or every stream pass re-renders the whole route.
+              // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
               setTerminalModes((prev) =>
                 prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
               )

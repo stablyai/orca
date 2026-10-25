@@ -1,12 +1,9 @@
-// Why: signals a host owns browser pages with no renderer (headless serve via the
-// offscreen backend). Advertised only when that backend is actually available, so
-// clients never fall back to a local desktop browser tab for a remote-owned page.
+// Advertise only with an available offscreen backend so remote-owned pages cannot fall back to local desktop tabs.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
 export const BROWSER_IDENTITY_RUNTIME_CAPABILITY = 'browser.identity.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
-// Why: older hosts discard browser.tabCreate's page field, so clients may only
-// treat a preallocated page ID as canonical when this is advertised.
+// Older hosts drop tabCreate.page; trust preallocated IDs only when advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
 export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const

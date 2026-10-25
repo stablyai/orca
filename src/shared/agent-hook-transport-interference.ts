@@ -1,9 +1,4 @@
-// Transport background and the allowlisting answer for security teams: docs/reference/agent-hook-transport.md
-//
-// Why (#11217): enterprise IDS/AV products inspect loopback HTTP bodies and reset the hook POST
-// mid-flight when the agent's own tool I/O happens to match an LFI/command-injection signature.
-// The listener fails open on every error, so a reset arrives as a swallowed exception and agent
-// status stops with no diagnostic anywhere. Classifying the truncation is what makes it reportable.
+// Loopback IDS/AV resets otherwise disappear into fail-open hook errors; report truncated bodies (#11217). See docs/reference/agent-hook-transport.md.
 
 /** Thrown by the listener when a request closed before `end` with fewer bytes than `Content-Length` promised. */
 export class HookRequestTruncatedError extends Error {
@@ -22,11 +17,7 @@ export function isHookRequestTruncatedError(error: unknown): error is HookReques
   return error instanceof HookRequestTruncatedError
 }
 
-/**
- * Truncation is only interference when Orca did not cause it. `Content-Length` must be present and
- * unmet: a chunked body or a completed one proves nothing, and reporting those would make the
- * signal useless.
- */
+/** Only an unmet, usable Content-Length proves truncation; chunked/completed bodies carry no evidence. */
 export function classifyTruncatedHookRequest(
   contentLengthHeader: string | string[] | undefined,
   bytesRead: number
@@ -39,7 +30,7 @@ export function classifyTruncatedHookRequest(
   return bytesRead < contentLength ? new HookRequestTruncatedError(bytesRead, contentLength) : null
 }
 
-/** Why: one truncation can be a crashed agent mid-write; a repeat is a device on the loopback path. */
+/** Repeated truncations suggest loopback interference; one may be a crashed writer. */
 export const HOOK_TRANSPORT_INTERFERENCE_THRESHOLD = 3
 
 export type HookTransportInterferenceReport = {
@@ -57,10 +48,7 @@ export type HookTransportInterferenceTracker = {
   reset: () => void
 }
 
-/**
- * Counts truncated hook POSTs and reports exactly once, at `threshold`. Counting continues after
- * the report so a diagnostics reader can still see the magnitude without re-notifying per event.
- */
+/** Report once at threshold, then keep counting for diagnostics without repeat notifications. */
 export function createHookTransportInterferenceTracker(
   onThresholdReached: (report: HookTransportInterferenceReport) => void,
   threshold: number = HOOK_TRANSPORT_INTERFERENCE_THRESHOLD
@@ -89,11 +77,7 @@ export function createHookTransportInterferenceTracker(
   }
 }
 
-/**
- * Shared operator-facing text. Names the likely cause first but not exclusively: the hook client's
- * own `--max-time` can also cut a body if this process stalls, and claiming certainty would send a
- * user to their IT department over a main-thread hang.
- */
+/** Name likely interference without certainty: client max-time can also expire during a main-thread stall. */
 export function describeHookTransportInterference(report: HookTransportInterferenceReport): string {
   return (
     `[agent-hooks] ${report.count} agent-status POSTs were cut off mid-body on loopback ` +

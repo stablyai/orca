@@ -1,10 +1,8 @@
-// Why: catalog reconcilers compare rows that IPC structured-clone (and main's hydration) rebuild on
-// every fetch, so a reference compare reports every row as changed and nothing ever reconciles.
-// Only plain records and arrays are walked; anything exotic (Date, Map, class instance) falls back
-// to reference equality rather than being mistaken for an empty record.
+// IPC/hydration rebuilds catalog objects; reference checks would mark every row changed.
+// Walk only arrays/plain records so exotic values cannot masquerade as empty records.
 
 type ValueEqualityPolicy = {
-  // Why: `Object.is` makes NaN equal NaN but 0 unequal -0; `===` does the opposite.
+  // Object.is equates NaN and distinguishes signed zero; === does the inverse.
   readonly sameValueLeaves: boolean
   readonly absentKeyEqualsUndefined: boolean
 }
@@ -57,24 +55,12 @@ function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boole
   return keys.every((key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy))
 }
 
-/**
- * Structural compare where an absent own key differs from a key that is present and holds
- * `undefined`, and leaves compare with `===`.
- *
- * Why the strict key set: the repo/project merges branch on `'localWindowsRuntimePreference' in
- * project`, so a key appearing or disappearing is a real change even when its value is `undefined`.
- */
+/** Compare leaves with === and require identical own keys: repo/project merges use in, making undefined distinct from absence. */
 export function structuralValuesEqual(a: unknown, b: unknown): boolean {
   return valuesEqual(a, b, STRICT_OWN_KEYS)
 }
 
-/**
- * Structural compare that treats an absent own key as equal to a key holding `undefined`, and
- * compares leaves with `Object.is`.
- *
- * Why the loose key set: locally constructed worktree catalog rows carry explicit `undefined`
- * fields that the host simply omits, and no consumer of those rows uses the `in` operator.
- */
+/** Use Object.is leaves and ignore absent-vs-undefined keys for catalog rows that omit undefined over the wire. */
 export function structuralValuesEqualIgnoringUndefined(a: unknown, b: unknown): boolean {
   return valuesEqual(a, b, UNION_OF_KEYS)
 }

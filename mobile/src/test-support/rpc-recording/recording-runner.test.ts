@@ -111,7 +111,6 @@ describe('recording boundaries', () => {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
       void transport.client.sendRequest('long', {}, { timeoutMs: 50 }).catch(() => {})
       await clock.advance(5)
-      // Exact virtual milliseconds: the deadline is recorded at the value the product asked for.
       expect(transport.requests[0].settlement).toEqual({
         status: 'rejected',
         startedAt: 0,
@@ -215,14 +214,12 @@ describe('recording boundaries', () => {
       { id: 'third', observation: history(['a', 'b', 'c']) }
     ]
     const file = goldenFile(golden)
-    // Six observations of three distinct entries: each is stored once, plus the three states.
     expect(Object.keys(file.values)).toHaveLength(6)
     expect(file.recording.checkpoints.map((checkpoint) => checkpoint.observation.sender)).toEqual([
       ['a'].map(entryHash),
       ['a', 'b'].map(entryHash),
       ['a', 'b', 'c'].map(entryHash)
     ])
-    // Whichever checkpoint an entry was first seen in, every later reference resolves to it.
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
     try {
       writeFileSync(join(directory, 'pooled.json'), goldenBytes(golden))
@@ -357,8 +354,7 @@ describe('recording boundaries', () => {
     ).toThrow('diverges from the base')
   })
 
-  // A matrix that cannot drive a family has to fail. The prefix list it replaced returned no site
-  // and the loop skipped, which is how ten families lost their matrix without a red test.
+  // A family without matrix sites must fail rather than silently generate zero tests.
   it('refuses a family it cannot matrix instead of skipping it', () => {
     const base: RecordingScenario = {
       id: 'family',
@@ -476,9 +472,7 @@ describe('recording boundaries', () => {
       void client.sendRequest('worktree.show', {}).catch(() => {})
       client.subscribe(CLIENT_EVENTS, null, () => {})
     })
-    // The published order is identical either way, because a subscribe publishes synchronously
-    // while a request first waits for connected. Without the ordinal the swap moves no recorded
-    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
+    // Wire publication order stays equal; logical-call ordinals must still detect the changed request/subscribe order.
     expect(sendFirst.map((payload) => payload.name)).toEqual(
       subscribeFirst.map((payload) => payload.name)
     )
@@ -487,8 +481,7 @@ describe('recording boundaries', () => {
   })
 
   it('orders a subscribe against an effect in an operation that sends no requests', async () => {
-    // The gap the request count left: with no request to count, every stamp was `0`, so the two
-    // independent lists had nothing ordering them against each other.
+    // With no requests, only shared ordinals can order payloads against effects.
     const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
       const recording = await runRecording(
         {
@@ -530,8 +523,7 @@ describe('recording boundaries', () => {
         join(root, 'mod/settings-read-operations.ts'),
         `const raw = {} as { settings?: unknown }\nconst settings = raw.settings\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
       )
-      // Its own spec, not one borrowed from the mutant table: the guard is the loader's, and the
-      // table is not an input to anything the loader does while recording.
+      // Declare the repeated-anchor case independently; recording must never read the mutant table.
       const loader = operationModuleLoader(root, {
         name: 'repeated-anchor',
         file: 'settings-read-operations.ts',
@@ -571,7 +563,6 @@ function entryHash(name: string): string {
   return valueHash({ name })
 }
 
-/** An append-only sender history, the shape every checkpoint after the first re-states. */
 function history(names: readonly string[]): Observation {
   return {
     ...observation(names.join('-')),

@@ -21,9 +21,6 @@ import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bub
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
 import { translate } from '@/i18n/i18n'
 
-// Children start pending (no agent row visible) and reveal as the orchestrator
-// dispatches a message to them. This mirrors the "agents arrive when assigned"
-// reading the design wants.
 const INITIAL_CHILD_PENDING: RowPending = {
   'child-codex': true,
   'child-claude': true
@@ -62,9 +59,7 @@ export function OrchestrationPage(props: {
   const [createdChildCount, setCreatedChildCount] = useState(0)
   const displayedChildCount = controlledCreatedChildCount ?? createdChildCount
 
-  // Why: bubbles measure the recipient row at fire-time, so the pending flag
-  // has to flip *before* the path is computed. React state updates are async,
-  // so keep a synchronous mirror to flip styles immediately.
+  // Mirror pending flags synchronously so bubble geometry does not wait for React’s state commit.
   const pendingMirror = useRef<RowPending>({ ...INITIAL_CHILD_PENDING })
 
   childCountControlledRef.current = controlledCreatedChildCount !== undefined
@@ -107,8 +102,6 @@ export function OrchestrationPage(props: {
 
   useEffect(() => {
     if (!active) {
-      // Reset everything to the initial state when the user pages away so
-      // re-entering the step plays from the top.
       setRowState(INITIAL_ROW_STATE)
       setRowMessages(INITIAL_ROW_MESSAGES)
       setRowFlash({})
@@ -127,8 +120,6 @@ export function OrchestrationPage(props: {
     }
 
     if (reducedMotion) {
-      // Static state: parent + both children visible, mid-task. No bubbles —
-      // the lineage chip and nesting convey parentage.
       setRowState(INITIAL_ROW_STATE)
       setRowMessages(INITIAL_ROW_MESSAGES)
       setRowPending({})
@@ -174,9 +165,7 @@ export function OrchestrationPage(props: {
         setRowState((s) => ({ ...s, [beat.from]: 'done' }))
       }
 
-      // The bubble needs a real geometry target. If the recipient row is
-      // still pending (collapsed), aim the bubble at its parent card center
-      // — the row itself reveals only when the bubble lands.
+      // Collapsed recipients have no usable row geometry; target the parent card until landing reveals them.
       const wasPending = pendingMirror.current[beat.to] === true
       const targetForPath: HTMLElement = wasPending
         ? ((toRow.closest('[data-feature-wall-card]') as HTMLElement | null) ?? toRow)
@@ -196,8 +185,6 @@ export function OrchestrationPage(props: {
       nextFrame(() => bubble.classList.add('in-flight'))
 
       later(() => {
-        // Reveal the recipient agent on landing — that's the moment work
-        // "arrives" at the child workspace.
         if (wasPending) {
           pendingMirror.current = { ...pendingMirror.current, [beat.to]: false }
           setRowPending((p) => ({ ...p, [beat.to]: false }))
@@ -223,8 +210,7 @@ export function OrchestrationPage(props: {
       setCreatedChildCount(0)
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
       if (!childCountControlledRef.current) {
-        // Reveal each child workspace when the matching shell command appears,
-        // so the CLI tip reads as Claude driving the exact Orca workflow shown.
+        // Reveal children alongside their shell commands so the CLI tip and workspace animation agree.
         later(() => {
           setCreatedChildCount(1)
         }, CHILD_ONE_CREATE_MS)

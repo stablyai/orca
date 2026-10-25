@@ -30,7 +30,6 @@ export function resolveCreateReviewDraftTitle({
   return humanizeBranchSlug(branchLeaf) || normalizedBranch
 }
 
-/** The title and body the composer seeds for a branch, before any edit or generation. */
 export function resolveCreateReviewSeedText({
   branch,
   eligibility,

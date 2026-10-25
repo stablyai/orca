@@ -1,13 +1,4 @@
-/**
- * `--reclaim-stale-lock`: clears an orcad instance lock that no automatic start may judge (#32177).
- *
- * A lock on a home other machines may share names a PID that is evidence only on the machine that
- * issued it, so a start after a reboot refuses it rather than guess. This command gathers what this
- * machine can check (same host name, an earlier boot, an old record, nothing answering on this
- * machine at the holder's endpoints), shows it, and clears the lock only when the user confirms
- * with --yes that no other machine sharing the home runs Orca. Losing contact is never treated as
- * exit without that confirmation.
- */
+// Shared-home locks need explicit operator confirmation: local silence cannot prove a remote holder exited.
 import { readdirSync, statSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
@@ -43,7 +34,7 @@ import {
 export const ORCAD_STALE_LOCK_MIN_AGE_MS = 2 * 60_000
 const ENDPOINT_PROBE_TIMEOUT_MS = 1_500
 
-/** `silent` only on a refusal the OS gives for an endpoint nobody listens on; anything else is not. */
+/** Silent requires OS-confirmed absence of a listener; errors leave ownership unknown. */
 export type OrcadEndpointProbe = 'answers' | 'silent' | 'unknown'
 
 export type OrcadStaleLockReclaimHooks = {
@@ -68,9 +59,7 @@ export async function reclaimStaleOrcadInstanceLock(
   dataRoot: string,
   options: {
     yes: boolean
-    /** Refuse unless the lock still holds this nonce: the record the user approved. */
     expectNonce?: string
-    /** Who to name in a refusal's command: an orcad names its own runtime, the CLI `orca serve`. */
     hintRuntime: OrcadReclaimHintRuntime | null
   },
   hooks: OrcadStaleLockReclaimHooks = {}
@@ -89,7 +78,7 @@ export async function reclaimStaleOrcadInstanceLock(
   })
   const contents = readBoundedLockFile(lockPath)
   if (contents === null) {
-    // Only a confirmed absence is "none"; a permission or I/O error hides a lock.
+    // Permission or I/O errors can hide a lock; only absence permits none.
     return lockIsAbsent(lockPath)
       ? result(
           'none',
@@ -126,12 +115,11 @@ export async function reclaimStaleOrcadInstanceLock(
     )
   }
   try {
-    // Why through the normal acquire: it reclaims only this exact record, through the same
-    // race-safe rename, and still refuses if that PID is running here under the same identity.
+    // Normal acquisition rechecks identity and atomically reclaims only this record.
     acquireOrcadInstanceLock(dataRoot, {
       ...hooks.lockHooks,
       reclaimHintRuntime: options.hintRuntime,
-      // Only the record shown above; a reclaimer cut short by the same reboot is just as stale.
+      // Also reclaim abandoned reclaimers from earlier boots of this host.
       reclaimConfirmed: (record, role) =>
         role === 'holder'
           ? record.nonce === holder.nonce
@@ -155,7 +143,6 @@ async function checkStaleLock(
   const locality = orcadLockHolderLocality(holder, self, () =>
     (hooks.dataRootIsOnLocalDisk ?? orcadDataRootIsOnLocalDisk)(dataRoot)
   )
-  // Covers a record from this boot too: the same boot proves the same machine.
   if (locality === 'local') {
     return {
       refusal:
@@ -210,7 +197,7 @@ async function checkStaleLock(
   }
 }
 
-/** The holder's sockets and recorded transports; null when its runtime record is unreadable. */
+/** Null leaves endpoints unverifiable when runtime metadata is unreadable. */
 function holderEndpoints(dataRoot: string, pid: number): string[] | null {
   const endpoints = new Set<string>()
   try {
@@ -236,7 +223,7 @@ export function probeOrcadEndpoint(endpoint: string): Promise<OrcadEndpointProbe
   try {
     const url = /^wss?:\/\//u.test(endpoint) ? new URL(endpoint) : null
     const defaultPort = url?.protocol === 'wss:' ? 443 : 80
-    // Why strip brackets: URL keeps them around an IPv6 host, which the socket API rejects.
+    // URL.hostname retains IPv6 brackets, which the socket API rejects.
     target = url
       ? { host: url.hostname.replace(/^\[|\]$/gu, ''), port: Number(url.port || defaultPort) }
       : { path: endpoint }
@@ -279,7 +266,6 @@ function statOrNull(path: string): { mtimeMs: number } | null {
   }
 }
 
-/** Prints a result as one line of JSON or as text, the way both entry points report it. */
 export function printOrcadStaleLockReclaimResult(
   result: OrcadStaleLockReclaimResult,
   json: boolean
@@ -291,7 +277,6 @@ export function printOrcadStaleLockReclaimResult(
   ;(result.status === 'reclaimed' ? console.log : console.error)(result.message)
 }
 
-/** `orcad --reclaim-stale-lock [--data-root <dir>] [--expect-nonce <nonce>] [--yes] [--json]`. */
 export async function runOrcadStaleLockReclaimCommandAndExit(argv: string[]): Promise<never> {
   const args = argv.slice(1)
   const json = args.includes('--json')
@@ -307,7 +292,7 @@ export async function runOrcadStaleLockReclaimCommandAndExit(argv: string[]): Pr
     (arg, index) =>
       !['--yes', '--json', ...valueFlags].includes(arg) && !valueIndexes.includes(index - 1)
   )
-  // A missing value must never fall through to another data root or nonce, nor read a flag as one.
+  // Reject missing flag values before they can select another data root or nonce.
   const badValue = (value: string | undefined): boolean =>
     value !== undefined && (!value.trim() || value.startsWith('-'))
   if (!dataRoot || badValue(dataRoot) || badValue(expectNonce) || unknown.length) {

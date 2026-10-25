@@ -40,7 +40,6 @@ describe('orcad idle-stop record', () => {
       stoppedAt: '2026-10-03T10:15:00.000Z',
       idleTimeoutMs: 900_000
     })
-    // A crash after this start must not inherit the earlier idle stop.
     expect(consumeOrcadIdleStopRecord(root)).toBeNull()
   })
 
@@ -77,7 +76,6 @@ describe('orcad idle-stop record', () => {
 
   it('drops the record when a signal stop finishes before the idle stop asks to shut down', () => {
     writeOrcadIdleStopRecord(root, { quietSince: 1, stoppedAt: 2, timeoutMs: 3 }, '1.0.0')
-    // The signal's stop runs every cleanup, then exits before the idle request ever runs.
     createIdleStopRecordOwnership(root).onShutdown()
     expect(existsSync(orcadIdleStopRecordPath(root))).toBe(false)
   })

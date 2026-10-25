@@ -7,12 +7,10 @@ import { test, expect } from './helpers/orca-app'
 
 test.use({ seedTestRepo: false })
 
-// Quote, subexpression and non-ASCII: a path that reached PowerShell as script
-// text would be mangled or executed instead of copied.
+// Include quotes, PowerShell syntax and Unicode to detect paths accidentally executed as script.
 const FILE_NAME = "o'brien $(exit 7) ü.txt"
 
-// Explorer pastes only a real CF_HDROP; FileNameW alone reads back fine but
-// pastes nothing, so prove the copy with the shell's own paste verb.
+// Prove a real CF_HDROP with Explorer’s paste verb; FileNameW alone reads back but pastes nothing.
 async function shellPasteInto(folder: string): Promise<void> {
   const result = await runProcess({
     program: windowsPowerShellPath(),

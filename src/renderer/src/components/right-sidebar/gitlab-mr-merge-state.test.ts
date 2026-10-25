@@ -35,8 +35,7 @@ describe('presentGitLabMRMergeState', () => {
     ).toBe('Unresolved threads')
   })
 
-  // Why: an unrecognised/absent reason used to render a bare "Checking", hiding the red pipeline
-  // that is the actual thing the user has to act on.
+  // Unknown merge reasons must not hide the actionable failed pipeline behind Checking.
   it('surfaces a failed pipeline when GitLab reports no usable merge reason', () => {
     expect(
       presentGitLabMRMergeState({
@@ -51,8 +50,7 @@ describe('presentGitLabMRMergeState', () => {
     })
   })
 
-  // Why: GitLab keeps adding detailed_merge_status values, so a reason we have never seen must
-  // degrade the same way an absent one does rather than falling through to a merge-ready label.
+  // New GitLab reason values must degrade like missing reasons instead of claiming merge readiness.
   it('treats an unrecognised merge reason like an absent one', () => {
     expect(
       presentGitLabMRMergeState({

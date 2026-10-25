@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Where a new automation lands.
- *
- * Every case here is one the page previously answered by inferring a host from
- * the draft's run context: the storage authority came from whichever machine the
- * workspace happened to execute on, which is exactly what required invariant 1
- * forbids. These pin the stated-destination contract instead — the destination
- * is chosen, shown, re-checked at submit, and refused when it no longer holds.
- */
+/** Choose, display and revalidate the storage destination explicitly; workspace execution cannot infer authority, and stale destinations must preserve the refused form. */
 
 import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -72,8 +64,7 @@ function addSshProject(): void {
   } as Repo
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.repoMap.set(SSH_REPO_ID, repo)
-  // Without a ready setup on that host the project has no run context, and a
-  // save against it is refused before any destination is stated.
+  // The host needs a ready setup or save refuses the project before choosing a destination.
   mocks.state.projectHostSetups = [
     ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
     {
@@ -173,8 +164,7 @@ describe('AutomationsPage create destination', () => {
     await openCreateDialogFor(RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID)
     await save()
 
-    // The desktop is the client's own authority, never the selected host — and
-    // the id sent is the runtime's own, never a desktop repo id it cannot resolve.
+    // Send the runtime’s own repo ID to its authority; the desktop is always the client authority, not the selected host.
     expect(api.automations.create).not.toHaveBeenCalled()
     expect(createRpcCalls()).toHaveLength(1)
     expect(createRpcCalls()[0]?.[0]).toEqual({ kind: 'environment', environmentId: RUNTIME_ID })
@@ -187,8 +177,7 @@ describe('AutomationsPage create destination', () => {
   })
 
   it('refuses a desktop project for a runtime destination instead of sending its id', async () => {
-    // The repo_not_found bug: the desktop repo id can never resolve on the
-    // runtime, so the submit is refused here rather than by the remote host.
+    // Reject desktop repo IDs before sending them to a runtime that cannot resolve them (repo_not_found).
     api.automations.list.mockResolvedValue([])
     scopedList([])
     runtimeHost([], [])
@@ -216,8 +205,7 @@ describe('AutomationsPage create destination', () => {
     await openCreateDialogFor(RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID)
     await save()
 
-    // A repo with no connection ID is not evidence of local: this one is the
-    // runtime's, and the desktop's Self host cannot hold an automation for it.
+    // A missing connection ID does not prove desktop ownership; this project belongs to the runtime.
     expect(api.automations.create).not.toHaveBeenCalled()
     expect(mocks.editorDialog?.notice?.message).toBeTruthy()
     expect(mocks.editorDialog?.open).toBe(true)
@@ -275,8 +263,7 @@ describe('AutomationsPage create destination', () => {
       mocks.editorDialog?.createDestination?.onSelect(SSH_HOST_KEY)
     })
 
-    // The local project shares this one's name, so offering both leaves the user
-    // no way to tell which is the one on that host.
+    // Same-name local/SSH projects are ambiguous unless the picker is scoped to the destination.
     expect(mocks.editorDialog?.repos?.map((repo) => repo.id)).toEqual([SSH_REPO_ID])
   })
 
@@ -403,15 +390,13 @@ describe('AutomationsPage edit fencing', () => {
 
   it('refuses the save when nothing names the record’s host', async () => {
     const automation = makeAutomation({ id: 'a-1' })
-    // No host answered, so no owner was ever captured, and the record is gone
-    // from the one list the client can still address.
+    // No host answered, so no owner was captured; the legacy-addressable record is also gone.
     api.automations.listScoped.mockRejectedValue(new Error('offline'))
     api.automations.list.mockResolvedValue([])
 
     await renderPage()
     await settleHostQueries()
-    // No host answered, so the page never listed a row for it; the pre-catalog
-    // projection is the only key the user could have clicked.
+    // Only the pre-catalog projection could have supplied the clicked key before any host answered.
     await editAndSave(unscopedAutomationListRows([automation])[0]!)
 
     expect(api.automations.update).not.toHaveBeenCalled()
@@ -426,8 +411,7 @@ describe('AutomationsPage edit dialog projects', () => {
       projectId: RUNTIME_REPO_ID,
       workspaceId: RUNTIME_WORKSPACE_ID
     })
-    // The ambient list is the desktop's and never held this record, so an
-    // id lookup there answers with nothing and the row's owner is all there is.
+    // The ambient desktop list never held this row; only its captured owner can locate it.
     api.automations.list.mockResolvedValue([])
     scopedList([])
     runtimeHost([automation], [])
@@ -461,8 +445,7 @@ describe('AutomationsPage edit destination', () => {
 
     const resolution = mocks.editorDialog?.editDestination?.resolution
     expect(resolution?.status === 'ready' && resolution.entry.stableKey).toBe(DESKTOP_SELF_KEY)
-    // Another authority is a legal destination — reached by a create there and a
-    // delete here — so restricting the list to this one would hide a real move.
+    // Cross-authority moves create at the destination then delete at the source; keep both legal destinations offered.
     expect(mocks.editorDialog?.editDestination?.entries.map((entry) => entry.stableKey)).toContain(
       RUNTIME_SELF_KEY
     )
@@ -536,8 +519,7 @@ describe('AutomationsPage edit destination', () => {
     scopedList([automation])
     runtimeHost([], [])
     addRuntimeProject()
-    // The first create dies in transport after the server may have committed;
-    // only an identical creationKey on the retry keeps that copy singular.
+    // Transport may fail after create commits; retries need the identical creationKey to avoid duplicates.
     let failCreate = true
     const previous = mocks.callRuntimeRpc.getMockImplementation()
     mocks.callRuntimeRpc.mockImplementation(
@@ -567,8 +549,7 @@ describe('AutomationsPage edit destination', () => {
         projectId: RUNTIME_REPO_ID,
         workspaceMode: 'existing',
         workspaceId: RUNTIME_WORKSPACE_ID,
-        // A changed schedule mints dtstart per attempt — the volatile input that
-        // must not re-key the move.
+        // Changed schedules mint dtstart per attempt; this volatile field must not re-key a move.
         preset: 'custom',
         customSchedule: 'FREQ=DAILY;BYHOUR=10;BYMINUTE=0'
       }))
@@ -667,8 +648,7 @@ describe('AutomationsPage edit destination', () => {
 
 describe('AutomationsPage create admission', () => {
   it('keeps the create button available while every offered host is ineligible', async () => {
-    // No host has answered, so nothing resolves ready — but the dialog is where
-    // an ineligible host's repair is stated, so the button must still open it.
+    // Keep Create available to open the dialog that explains repairs, even before any host is eligible.
     api.automations.listScoped.mockRejectedValue(new Error('offline'))
     api.automations.list.mockResolvedValue([])
 
@@ -679,13 +659,11 @@ describe('AutomationsPage create admission', () => {
   })
 
   it('refuses a mismatched create destination before the hooks trust prompt', async () => {
-    // A runtime-owned project under the sole desktop destination: refused, and
-    // refused before the user is asked to trust that project's setup hooks.
+    // Refuse the mismatched destination before asking the user to trust setup hooks.
     api.automations.list.mockResolvedValue([])
     scopedList([])
     addRuntimeProject()
-    // A setup hook whose default policy is run-by-default, so the old save
-    // order would have raised the trust prompt before refusing the create.
+    // A default-run hook would have prompted for trust under the old save order.
     const { checkRuntimeHooks } = await import('@/runtime/runtime-hooks-client')
     vi.mocked(checkRuntimeHooks).mockResolvedValue({
       status: 'ok',

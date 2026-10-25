@@ -51,7 +51,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
-    // Why explicit both ways: a server from before the default flip reads an absent value as off.
+    // Send explicit true/false because older servers interpret absence as disabled.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
 
@@ -61,8 +61,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
       target,
       updates: {
         ...target,
-        // Why: updateTarget merges partially, so explicit undefined values are
-        // required to clear optional fields inherited from ~/.ssh/config.
+        // Partial updates need explicit undefined to clear fields inherited from SSH config.
         identityFile,
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,

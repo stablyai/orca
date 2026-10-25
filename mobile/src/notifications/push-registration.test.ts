@@ -200,7 +200,6 @@ describe('push registration capability gating', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(sent).toEqual(['status.get'])
 
-    // A failed probe retries while the same connection remains active.
     probeFails = false
     await vi.advanceTimersByTimeAsync(1_000)
     await Promise.resolve()
@@ -218,7 +217,6 @@ describe('push registration capability gating', () => {
     await flush()
     expect(methodsIn(sent)).toEqual(['status.get'])
 
-    // A token can be missing only for now — APNs registration still in flight.
     await setRemotePushEnabled(true)
     await flush()
 
@@ -291,15 +289,13 @@ describe('push unregistration', () => {
     expect(methodsIn(first.sent)).not.toContain('notifications.unregisterPush')
     expect(stored.pendingUnregisterHostIds).toEqual(['host-1'])
 
-    // A fresh process: only the persisted intent survives the restart.
     AppState.currentState = 'active'
     resetPushRegistrationForTests()
     const reconnected = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
     attachPushRegistration('host-1', reconnected.client)
     await flush()
 
-    // No probe first: a pending entry is a switch-off the user already performed, so
-    // it must not wait on a status.get that may never answer.
+    // Persisted unregister intent must proceed before a capability probe that may never answer.
     expect(methodsIn(reconnected.sent)).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
   })
@@ -384,7 +380,6 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
-    // Gating this on the probe leaves the gateway pushing while the switch reads off.
     expect(sent).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
   })
@@ -411,15 +406,13 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
-    // The sweep snapshots `registered` while this host is still only in flight.
     const switchedOff = setRemotePushEnabled(false)
     await flush()
     register.release?.()
     await switchedOff
     await flush()
 
-    // Recording the late success would leave a live gateway registration behind a
-    // switch that reads off, with nothing pending to ever retract it.
+    // Do not record late register success after disable; it would leave a live gateway route with no pending unregister.
     expect(sent).toContain('notifications.unregisterPush')
     expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   })

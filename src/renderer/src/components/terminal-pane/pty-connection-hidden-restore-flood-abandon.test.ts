@@ -13,19 +13,13 @@ import {
   type PaneDrive
 } from './pty-connection-test-hidden-restore-flood'
 
-// STA-4869 — routes R3 (pending-queue overflow, pty-connection.ts:7696) and R4
-// (loop iteration cap, 7702) end in the QUIET abandon, which trades the loss
-// banner for one deferred post-flood repaint. Same invariant as the non-quiet
-// routes: every retained byte is reconciled exactly once, or the loss is
-// disclosed. These cases must also survive the pane being scrolled back or
-// hidden when the deferred repaint comes due.
+// STA-4869: queue-overflow and iteration-cap quiet abandons owe deferred reconciliation or disclosed loss, including while scrolled back or hidden.
 
 const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
 
-// The iteration-cap warning is the only externally visible proof that R4's
-// backstop fired rather than the loop finishing on its own.
+// Require the iteration-cap warning to prove the backstop fired rather than natural loop completion.
 vi.mock('./terminal-lifecycle-diagnostics', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   warnTerminalLifecycleAnomaly
@@ -65,7 +59,6 @@ function expectDisclosedOrRecovered(disclosure: Disclosure): void {
 describe('hidden-output restore quiet abandonment (STA-4869)', () => {
   installHiddenRestoreFloodSuiteHooks()
 
-  // ── R3: foreground pending-queue overflow ───────────────────────────────
   describe('R3 pending-queue overflow', () => {
     /** Drives one restore into a 512KB queue overflow and returns once the
      *  quiet abandon has run. */
@@ -80,13 +73,11 @@ describe('hidden-output restore quiet abandonment (STA-4869)', () => {
       // The live stream outruns fetch+replay and blows the queue cap.
       drive.deliver(OVERFLOW_CHUNK, 64 + OVERFLOW_CHUNK.length)
       drive.deliver(OVERFLOW_CHUNK, 64 + 2 * OVERFLOW_CHUNK.length)
-      // Resolve inside the 750ms foreground deadline so the drain, not the
-      // deadline timer, owns the abandonment.
+      // Resolve before the 750ms deadline so queue drain owns abandonment.
       firstSnapshot.resolve(modelSnapshot('pre-overflow-model', 64))
       await flushAsyncTicks(20)
 
-      // Proof the overflow arm ran: the snapshot replayed, and the queued
-      // backlog was discarded rather than drained under it.
+      // Require replay plus discarded backlog to prove the overflow branch ran.
       const written = drive.writtenChunks().join('')
       expect(written).toContain('pre-overflow-model')
       expect(written).not.toContain('o'.repeat(1024))
@@ -123,8 +114,7 @@ describe('hidden-output restore quiet abandonment (STA-4869)', () => {
       getMainBufferSnapshot.mockResolvedValue(modelSnapshot(R4_MARKER, 4096))
       await vi.advanceTimersByTimeAsync(60_000)
       await flushAsyncTicks(20)
-      // Parked, not abandoned: the repaint must not yank the viewport, and must
-      // not claim a loss it can still heal.
+      // Defer repaint without moving the scrolled-back viewport or disclosing a still-recoverable loss.
       expect(drive.writtenChunks().join('')).not.toContain(BANNER_FRAGMENT)
       expect(drive.pane.terminal.buffer.active.viewportY).toBe(42)
 
@@ -146,7 +136,6 @@ describe('hidden-output restore quiet abandonment (STA-4869)', () => {
     })
   })
 
-  // ── R4: restore loop iteration cap ──────────────────────────────────────
   describe('R4 loop iteration cap', () => {
     it('[invariant] reconciles the retained bytes after the iteration backstop fires', async () => {
       const drive = await connectVisiblePane()
@@ -159,9 +148,7 @@ describe('hidden-output restore quiet abandonment (STA-4869)', () => {
       await announceMainDrop(64)
       await flushAsyncTicks(20)
 
-      // Each round: the pane goes background long enough for one chunk to arrive
-      // with a restore in flight, which marks the in-flight snapshot stale and
-      // sends the loop around again.
+      // Background arrival stales each in-flight snapshot, forcing another loop iteration.
       for (const [index, round] of rounds.entries()) {
         expect(getMainBufferSnapshot).toHaveBeenCalledTimes(index + 1)
         drive.setVisible(false)
@@ -171,8 +158,7 @@ describe('hidden-output restore quiet abandonment (STA-4869)', () => {
         await flushAsyncTicks(20)
       }
 
-      // The backstop cut the loop without a banner; the deferred repaint owes
-      // the pane its bytes.
+      // Quiet backstop abandonment still owes a deferred repaint.
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(3)
       expect(warnTerminalLifecycleAnomaly).toHaveBeenCalledWith(
         'hidden output restore hit its iteration cap',

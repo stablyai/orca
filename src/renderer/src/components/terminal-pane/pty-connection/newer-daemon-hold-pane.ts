@@ -5,11 +5,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 // Clears the saved screen the hold painted so the restore below paints it once.
 const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
 
-/**
- * Holds a restored local pane main refused to spawn because a newer Orca build's daemon may
- * still run its session: read-only, with its saved screen, until the hold releases it into
- * `reconnect`.
- */
+/** Hold refused local restores read-only with saved output while a newer daemon may own the session; release reconnects. */
 export function holdForNewerDaemon(
   session: ConnectPanePtySession,
   sessionId: string,

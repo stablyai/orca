@@ -238,12 +238,7 @@ export function buildTerminalSessionData(
 
   // Why: relay reconnect keeps lastKnown but clears tab.ptyId; the !tab.ptyId guard excludes slept tabs (which keep ptyId as a wake hint).
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
-  // Why the two reconnect maps (#17743): hydration nulls tab.ptyId, empties ptyIdsByTabId, and
-  // never restores lastKnown, so on a fresh process they are the ONLY surviving handle for a
-  // relay-backed tab between restore and rebind. Persisting without them republishes the nulled
-  // row over the id the file (and the relay snapshot) still held, which is the client's own
-  // bookkeeping being read as evidence the remote PTY is gone. Both already count as live
-  // ownership for the orphan sweep (terminal-orphan-helpers) and for retirement planning.
+  // During fresh hydration reconnect maps alone retain relay handles after live/tab bindings clear (#17743); omitting them republishes temporary absence over surviving sessions.
   const pendingReconnect = snapshot.pendingReconnectPtyIdByTabId ?? {}
   const deferredSshSessions = snapshot.deferredSshSessionIdsByTabId ?? {}
   const restoredSessionId = (tabId: string): string | undefined =>
@@ -262,8 +257,7 @@ export function buildTerminalSessionData(
   )
   const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
 
-  // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
-  // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
+  // Derive reconnect targets locally with preindexed ownership; fragile synchronous IPC can drop under shutdown pressure, while per-tab catalog rescans delay quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const worktree = worktreeById.get(worktreeId)

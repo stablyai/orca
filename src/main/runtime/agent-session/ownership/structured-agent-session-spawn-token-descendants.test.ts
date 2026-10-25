@@ -1,7 +1,4 @@
-// The spawn token is an environment variable, so every descendant of a provider child inherits it:
-// an editor the agent opened with `code .`, a tmux server, a detached dev server. Carrying the token
-// proves descent, not being the provider child, so the host never signals a process on the token
-// alone. The token scan still answers one question soundly: whether a reservation ever spawned.
+// Spawn tokens prove descent, including detached editors/dev servers, so never authorize signals alone; scans can still prove an unused reservation.
 
 import type * as NodeFsPromises from 'node:fs/promises'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -132,8 +129,7 @@ describe('a process that inherited a spawn token', () => {
     })
     expect(released.lease).toMatchObject({ claimStatus: 'released', reservedSpawnToken: null })
 
-    // The editor the agent opened detached into its own group and outlived the chat, still
-    // carrying the token; another descendant carries a token no store here ever minted.
+    // Model a detached descendant surviving the chat plus another carrying a token this store never minted.
     fakeProc.environs.set(1, environ(null))
     fakeProc.environs.set(5151, environ(MINTED_TOKEN))
     fakeProc.environs.set(6161, environ('spawn-foreign'))
@@ -149,7 +145,6 @@ describe('a process that inherited a spawn token', () => {
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
-    // The installed host reads the record the seed wrote, so the check below has a lease to act on.
     expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await host.reconcileRestartLeases()
     // Install work that is not awaited would have run by now; nothing here waits on a timer.
@@ -190,7 +185,6 @@ describe('the reservation owner probe', () => {
 
     const store = await reconcileReservation()
 
-    // Released without evidence, and the process carrying the token is left alone.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       deathEvidence: null

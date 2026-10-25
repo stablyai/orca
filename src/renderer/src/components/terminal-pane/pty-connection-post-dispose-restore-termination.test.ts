@@ -83,11 +83,7 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  // Why this exists: the hidden-output restore task used to re-arm itself from its
-  // own `.finally`. After dispose the task body exits immediately, so the handler
-  // re-ran instantly and re-armed again — an unbounded self-feeding promise chain
-  // that consumed ~4GB in ~12s. It only stayed invisible because the pre-split
-  // 25k-line suite happened to run a later test that tore the loop down.
+  // Disposed restore tasks must not re-arm from finally: instant exits otherwise create an unbounded promise chain that exhausts the heap.
   it('stops re-arming the hidden output restore once the pane binding is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -115,9 +111,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
 
-    // Why a counting getter: the restore task's `.finally` reads isVisibleRef.current
-    // on every re-arm, so read count is a direct, deterministic measure of how many
-    // times the chain cycled — no timing or memory heuristics needed.
+    // Count visibility getter reads to measure finally re-arms deterministically without timing or memory heuristics.
     let visibilityReads = 0
     let visible = false
     const isVisibleRef = {

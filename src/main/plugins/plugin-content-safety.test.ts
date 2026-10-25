@@ -44,8 +44,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  // Why: PluginService may still be releasing in-process Parcel watches; drop
-  // the shared vitest watcher state before deleting roots those watches own.
+  // Release shared Parcel watches before deleting roots they may still own.
   disposeWatcherProcess()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })

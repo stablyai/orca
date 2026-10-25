@@ -14,8 +14,7 @@ let lastPointerPosition: { x: number; y: number } | null = null
 let openCardCount = 0
 let lastCardClosedAt = Number.NEGATIVE_INFINITY
 
-// Why: scrolling slides rows under a still pointer and Chromium fires hover events at the
-// unchanged coordinates. Only a pointer that actually moved signals intent to peek.
+// Scroll-induced hover events at unchanged coordinates are not intent to peek; require real pointer movement.
 function recordPointerMove(x: number, y: number): boolean {
   const moved = lastPointerPosition?.x !== x || lastPointerPosition?.y !== y
   lastPointerPosition = { x, y }

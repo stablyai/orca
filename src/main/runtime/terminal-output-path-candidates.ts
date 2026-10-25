@@ -1,6 +1,5 @@
 /* eslint-disable no-control-regex -- Why: PTY output interleaves ANSI escapes with paths, so candidate scanning must terminate matches on the control bytes themselves. */
-// Path candidates harvested from PTY output so terminal artifact links can be
-// resolved without re-scanning the whole transcript.
+// Retain path candidates for artifact links without rescanning the transcript.
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
@@ -11,7 +10,7 @@ export function appendRecentPtyPathCandidates(
 ): string[] {
   const extractedCandidates = extractTerminalOutputPathCandidates(data)
   if (extractedCandidates.length === 0) {
-    // Why: pathless output is the hot path; reuse immutable history so each chunk doesn't clone and byte-scan up to 1,024 old candidates.
+    // Pathless output is the hot path; reuse immutable history instead of cloning/scanning 1,024 candidates per chunk.
     return previous ?? []
   }
   const next = previous ? previous.slice() : []
@@ -150,7 +149,7 @@ function decodeTerminalOutputPercentEscapes(value: string): string {
   })
 }
 
-// Why: the extension regex backtracks quadratically on the PTY hot path; candidates can't cross a newline, so scan per line and skip over-long lines (dropped anyway).
+// Avoid quadratic extension-regex backtracking: paths cannot cross newlines, so scan bounded lines separately.
 function extractTerminalOutputPathCandidates(data: string): string[] {
   const candidates: string[] = []
   const add = (value: string): void => {

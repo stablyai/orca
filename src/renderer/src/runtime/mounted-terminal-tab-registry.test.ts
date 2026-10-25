@@ -40,8 +40,7 @@ function duplicateTabState(): AppState {
       [WORKTREE_A]: [{ id: TAB_ID, worktreeId: WORKTREE_A, title: 'A', ptyId: 'pty-a' }],
       [WORKTREE_B]: [{ id: TAB_ID, worktreeId: WORKTREE_B, title: 'B', ptyId: 'pty-b' }]
     } as unknown as AppState['tabsByWorktree'],
-    // The persisted layout map is legacy tab-id keyed. Mounted captures must
-    // still remain isolated by their worktree registration.
+    // Legacy tab-keyed layouts still need worktree-isolated mounted captures.
     terminalLayoutsByTabId: {
       [TAB_ID]: {
         root: { type: 'leaf', leafId: LEAF_A },
@@ -67,8 +66,7 @@ describe('runtime terminal registration ownership', () => {
           .find((snapshot) => snapshot.worktree === worktreeId)
           ?.tabs.find((tab) => tab.type === 'terminal')
 
-      // Legacy layout/title maps are tab-id keyed, so publishing either row
-      // would risk assigning one worktree's persisted metadata to the other.
+      // Colliding tab IDs cannot safely publish legacy layout/title metadata to either workspace.
       expect(terminalFor(WORKTREE_A)).toBeUndefined()
       expect(terminalFor(WORKTREE_B)).toBeUndefined()
     } finally {

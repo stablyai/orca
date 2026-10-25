@@ -1,8 +1,4 @@
-/**
- * After commit: a migration keeps its source rows, so a downgraded build still sees the host and
- * its projects and can reach them over its own relay. New builds hide those rows and serve the host
- * from the server. They are never deleted automatically.
- */
+/** Keep source rows for downgraded clients using their old relays; new clients hide them and serve managed state. Never delete retained rows automatically. */
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -21,13 +17,10 @@ type OrcadMigrationDraftRenameStore = Pick<
   | 'setWorkspaceSession'
 >
 
-// One retain per migration at a time: a second caller waits for the first and then finds it done.
+// Serialize retains per migration so waiting callers observe completion.
 const retainsInFlight = new Map<string, Promise<OrcadMigrationSourceCutover>>()
 
-/**
- * Marks a committed migration as finished for this build while its source rows stay. Its unsaved
- * drafts are renamed to the server first, durably, so the retained mark proves they were.
- */
+/** Durably rename unsaved drafts into the server partition before marking source retained, so the mark proves rename completion. */
 export function retainOrcadMigrationSource(
   userDataPath: string,
   migrationId: string,
@@ -58,15 +51,14 @@ async function retainOnce(
   await store.runDurableMutation(() => {
     const renamed = renamedDestinationSession(store, cutover)
     if (!renamed) {
-      // A startup rename may still be only in memory; the retained mark must not outrun it.
+      // Startup rename may still be in memory; flush before recording retained completion.
       return { value: undefined, persist: 'if-dirty' }
     }
-    // No rollback: the renamed rows are correct either way, and a retry adds nothing twice.
+    // Renamed rows remain correct after failure; idempotent retry needs no rollback.
     writeDestinationSession(store, cutover, renamed.next)
     return { value: undefined }
   })
-  // Why no baseline here: the source may have changed since the commit (a crash, then an older
-  // build); only the fence's pre-commit baseline proves what the server holds.
+  // Only the pre-commit baseline proves destination state; an older build may have changed source after commit.
   const retained = {
     ...readCommittedCutover(userDataPath, migrationId),
     sourceRetainedAt: now().toISOString()
@@ -75,11 +67,7 @@ async function retainOnce(
   return retained
 }
 
-/**
- * At startup, for a commit whose retained mark a crash cut off: its drafts are renamed before any
- * window reads its sessions, since a renderer that booted without them would overwrite them; then
- * the move is retained, so the rename never runs again and a draft closed later stays closed.
- */
+/** Rename committed drafts before any renderer loads sessions or it could overwrite them. Mark retained once so later startup never resurrects closed drafts. */
 export function retainUnretainedOrcadMigrationSources(
   userDataPath: string,
   store: OrcadMigrationDraftRenameStore & Pick<Store, 'getSshTarget'>
@@ -87,7 +75,7 @@ export function retainUnretainedOrcadMigrationSources(
   const migrationIds: string[] = []
   try {
     for (const cutover of listOrcadMigrationSourceCutovers(userDataPath)) {
-      // Journals are shared across profiles; only the profile that owns the host can rename.
+      // Shared journals do not authorize another profile to rename sessions.
       const target = store.getSshTarget(cutover.sshTargetId)
       if (
         cutover.phase !== 'destination-committed' ||
@@ -103,7 +91,7 @@ export function retainUnretainedOrcadMigrationSources(
       migrationIds.push(cutover.migrationId)
     }
   } catch (error) {
-    // The connect's retain renames them instead; startup must not fail on an unreadable journal.
+    // An unreadable journal must not fail startup; connect can retry the rename.
     console.warn('[ssh] Could not rename committed migrations’ unsaved drafts:', error)
   }
   return Promise.all(
@@ -125,7 +113,7 @@ function readCommittedCutover(userDataPath: string, migrationId: string) {
   return cutover
 }
 
-/** Only files the server partition lacks, so the retain after a startup rename adds nothing. */
+/** Add only files absent from the destination partition so startup/connect retains remain idempotent. */
 function renamedDestinationSession(
   store: Pick<
     OrcadMigrationDraftRenameStore,
@@ -149,7 +137,6 @@ function writeDestinationSession(
   cutover: OrcadMigrationSourceCutover,
   session: WorkspaceSessionState
 ): void {
-  // Baselined writer: drafts are desktop view state no layout command carries (LayoutEditorFile
-  // omits them), and the tabs themselves reach the server only through the manifest.
+  // Drafts are desktop view state absent from layout commands; manifest transfer alone carries their tabs.
   store.setWorkspaceSession(session, toRuntimeExecutionHostId(cutover.destinationEnvironmentId))
 }

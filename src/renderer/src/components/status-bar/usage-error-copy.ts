@@ -38,15 +38,12 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
 
 function isUsageRateLimitError(p: ProviderRateLimits): boolean {
   const failureKind = p.usageMetadata?.failureKind
-  // Why: a structured kind beats wording; "failed to fetch codex rate limits: error
-  // sending request" is a network failure that only names what it was reading.
+  // Structured failure kinds outrank wording that may only name the unread rate limits.
   if (failureKind && failureKind !== 'unknown') {
     return failureKind === 'rate-limited'
   }
   const message = p.error
-  // Why: Codex app-server's "chatgpt authentication required to read rate
-  // limits" mentions rate limits only as the thing it could not read; treat
-  // authentication-required failures as auth, never as the user being limited.
+  // Authentication-required errors describe unread rate limits, not exhausted quota.
   if (!message || /\bauthentication required\b/i.test(message)) {
     return false
   }
@@ -54,8 +51,7 @@ function isUsageRateLimitError(p: ProviderRateLimits): boolean {
 }
 
 const USAGE_AUTH_ERROR_PATTERNS = [
-  // Why: "OAuth" can be an upstream route label; only credential/session wording
-  // should hide raw details behind the softer usage-refresh copy.
+  // OAuth can name an upstream route; soften details only for credential/session failures.
   /\binvalid (?:authentication )?credentials?\b/i,
   /\b(?:no|missing|invalid|expired|stale|unavailable) (?:oauth )?(?:access token|refresh token|token|credentials?|auth(?:entication)? session|auth cookie)\b/i,
   /\b(?:access token|refresh token|token|credentials?|auth(?:entication)? session|auth cookie) (?:is |are |was |were |could not be |cannot be |can't be )?(?:missing|unavailable|invalid|expired|stale|used|refreshed|loaded|found)\b/i,
@@ -84,8 +80,7 @@ function getDelegatedCliRefreshProvider(
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
   }
-  // Why: only these providers require a user-run CLI to rotate the read-only
-  // session Orca consumes; Claude handles the same failure kind in-app.
+  // Only these providers require a CLI-run credential rotation; Claude reports the same kind in-app.
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
@@ -154,18 +149,15 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (p.usageMetadata?.failureKind === 'network') {
     return translate('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
   }
-  // Why: MiniMax reports credential expiry through the payload, not an HTTP status,
-  // so it needs its own copy rather than the generic refresh-failure label.
+  // MiniMax signals credential expiry in its payload, so generic refresh-failure copy is misleading.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
   }
-  // Why: cursor-agent owns its own token rotation, so a lapsed Cursor session is
-  // fixed by signing in to the CLI, not by Orca retrying the fetch.
+  // Cursor-agent owns token rotation; signing into its CLI repairs expiry, not another Orca fetch.
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.cursor.expired.label', 'Sign-in expired')
   }
-  // Why: an unsubscribed account is a settled answer about the account, not a
-  // failed refresh; "Refresh failed" sends the user hunting a bug that is not there.
+  // No subscription is settled account state; refresh-failure copy would imply a fetch problem.
   if (p.usageMetadata?.failureKind === 'no-subscription') {
     return translate(
       'auto.components.status.bar.tooltip.usage.noSubscription.label',

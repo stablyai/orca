@@ -313,9 +313,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             onSleep={handleCloseTerminals}
             onSleepSubtree={handleSleepSubtree}
           />
-          {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
-             disabled Delete Worktree for parity with non-primary cards and pair
-             it with the enabled Remove Project action below. */}
+          {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}
           {!isMultiContext && removesProject ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -337,10 +335,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {/* Why: primary checkout rows remove the project from Orca instead of
-             invoking git worktree deletion. Radix forwards unknown props to the
-             DOM element, so `title` works directly without a wrapper span —
-             this preserves Radix's flat roving-tabindex keyboard navigation. */}
+          {/* Use Radix’s direct title prop for project-removal copy; wrapper elements break flat roving-keyboard navigation. */}
           <DropdownMenuItem
             variant="destructive"
             onSelect={handleDelete}

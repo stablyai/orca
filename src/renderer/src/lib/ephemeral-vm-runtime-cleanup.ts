@@ -6,18 +6,7 @@ import {
 } from '../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 
-/**
- * Tear down the ephemeral-VM runtimes backing a set of deleted workspaces (and,
- * optionally, runtimes pinned to a removed repo's runtime-owned SSH target).
- *
- * Centralized because both the per-workspace delete (`removeWorktree`) and the
- * project removal (`removeProject`) must clean up the runtime — an SSH-mode
- * per-workspace-env's workspace is the repo's *main* worktree, so deleting it
- * routes through project removal, which must not leak the live Docker/VM and its
- * hidden SSH target.
- *
- * Classifies runtime-owned SSH targets so callers purge only confirmed-destroyed projects.
- */
+/** Destroy runtimes for removed workspaces and runtime-owned SSH targets. Share with project removal because SSH-mode main worktrees delete through that path; classify targets so callers purge only confirmed destruction. */
 export type EphemeralVmCleanupSummary = {
   destroyedSshTargetIds: string[]
   retainedSshTargetIds: string[]
@@ -30,8 +19,7 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     workspaceId: string
     executionHostId: ExecutionHostId
   }[]
-  // Raw runtime-owned SSH target ids (e.g. a removed repo's connectionId) whose
-  // backing runtime should also be torn down, even if no workspace id matched.
+  // Also destroy runtimes pinned to these raw SSH target IDs even without a matching workspace.
   runtimeOwnedSshTargetIds?: readonly string[]
 }): Promise<EphemeralVmCleanupSummary> {
   const destroyedSshTargetIds = new Set<string>()

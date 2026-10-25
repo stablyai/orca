@@ -1,5 +1,4 @@
-// L80 (P3): with the switch on, a pane main owns is no proof its terminal runs; the host's
-// inventory and the terminal's record decide. Switch-off, a window leaf still vouches for its pty.
+// Main-owned pane bindings do not prove process life; host inventory/records decide. Window-owned builds retain graph-based liveness.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
@@ -264,8 +263,7 @@ describe('stopping a workspace through a listing gap (switch on)', () => {
     const liveIds = runtime['getLivePtyIdsForWorktree'](TEST_WORKTREE_ID)
     expect(liveIds).toEqual(new Set(['saved-pty']))
 
-    // The host answered it has no such id, which cannot prove the shell gone (a restarted host can
-    // omit survivors), and the kill draws no exit: the shell may still run.
+    // Reachable relay absence plus an unconfirmed kill cannot prove exit; restarted hosts can omit survivors.
     expect(runtime.getPtyLivenessVerdict('saved-pty')).toBeNull()
     const result = await runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     expect(result).toMatchObject({ ptyStopVerdict: 'unverifiable' })

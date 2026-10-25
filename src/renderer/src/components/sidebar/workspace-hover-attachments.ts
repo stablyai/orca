@@ -115,7 +115,6 @@ export type WorkspaceLinkedItemRow = {
   liveTask: WorktreeCardIssueDisplay | WorktreeCardLinearIssueDisplay | null
 }
 
-/** One row per linked item, with the URL to open and the live review state the row shows. */
 export function getWorkspaceLinkedItemRows(
   workspace: Worktree,
   details: LiveDetails,

@@ -1,6 +1,3 @@
-// Ledger admission for mutations that are not reservations — send, cancel, an
-// approval answer. Split from the store so the store keeps only the transaction.
-
 import {
   agentSessionOperationKey,
   agentSessionOperationExpiry,
@@ -90,7 +87,6 @@ export type AgentSessionMutationOperationDecision = {
 
 type EvaluatedOperationRows = { rows: OperationRows; decision: AgentSessionOperationDecision }
 
-/** Prune and evaluate, placing nothing: the ledger's answer as it stands. */
 export function evaluateAgentSessionOperationRow(
   rows: OperationRows,
   args: AgentSessionOperationAdmission
@@ -99,7 +95,7 @@ export function evaluateAgentSessionOperationRow(
   return { rows: pruned, decision: evaluateAgentSessionOperation({ rows: pruned, ...args }) }
 }
 
-/** Send ids name one provider delivery even when the authenticated caller changes. */
+/** Send ids retain delivery identity across authenticated caller changes. */
 export function evaluateAgentSessionGlobalOperationRow(
   rows: OperationRows,
   args: AgentSessionOperationAdmission
@@ -117,8 +113,7 @@ export function evaluateAgentSessionGlobalOperationRow(
   }
 }
 
-/** Places the row an evaluation admitted. The caller runs this inside one transaction, so two
- *  concurrent copies of an operation id cannot both admit. */
+/** Place admitted rows inside one transaction so concurrent copies cannot both win. */
 function placeAdmittedAgentSessionOperationRow(
   evaluated: EvaluatedOperationRows,
   args: AgentSessionOperationAdmission
@@ -149,8 +144,7 @@ export function admitAgentSessionGlobalOperationRow(
   )
 }
 
-/** The ledger's answer for a mutation, placing nothing and checking no lease: what a call must
- *  know before it decides whether to give the session an owner. Null when no record exists. */
+/** Evaluate mutation replay before acquiring an owner; writes nothing, checks no lease, null means no record. */
 export function evaluateAgentSessionMutationOperation(
   state: Pick<AgentSessionStoreState, 'records' | 'operations'>,
   args: AgentSessionMutationOperationAdmission
@@ -204,12 +198,7 @@ export function admitAgentSessionMutationOperation(
   return { admission, record }
 }
 
-/**
- * Admit into the store's own rows, replacing them in place.
- *
- * The three admit paths and the claim path all did the same read-modify-return dance at the call
- * site; keeping it here means the rows map is only ever swapped by the module that owns its shape.
- */
+/** Keep operation-map replacement in its owning module across admission and claim paths. */
 export function admitAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
   args: AgentSessionOperationAdmission
@@ -240,8 +229,7 @@ export function claimAgentSessionOperationInto(
 /** Whether an admission left the right to run open, so the same transaction should claim it. */
 export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
 
-/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
- *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
+/** Combine admission and optional claim into one durable write before the effect. */
 export function admitAndClaimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
   args: AgentSessionOperationAdmission,

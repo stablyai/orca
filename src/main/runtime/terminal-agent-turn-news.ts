@@ -1,6 +1,4 @@
-// What a hook-reported terminal agent's turns tell a listener away from the screen: a turn that
-// finished (or failed) and an agent that needs input, each with its hook row. The rules and timing
-// are the window's; the listener (the phone push, a connector) decides only how to word and send it.
+// Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
@@ -121,13 +119,12 @@ export class TerminalAgentTurnNews<Prepared> {
       this.workingSeen.add(paneKey)
       return
     }
-    // The lead agent finished while background work keeps the pane working: as the window does,
-    // that is the turn's finish, named by its `turnCompletedAt` and announced at once, once.
+    // Announce the lead agent's turnCompletedAt once even while background work keeps the pane working.
     if (this.finishedTurnByPane.get(paneKey) === turnCompletedAt) {
       return
     }
     this.finishedTurnByPane.set(paneKey, turnCompletedAt)
-    // A finish of work this host never saw is the window's to drop too; it still marks the turn told.
+    // Unseen work suppresses the alert but still marks the turn announced.
     if (!this.workingSeen.has(paneKey)) {
       return
     }
@@ -137,7 +134,7 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, worktreeId, finish, false)
   }
 
-  // As the window seeds a restored pane: a working one counts as work seen, a stamped turn as told.
+  // Seed restored rows like the window: working counts as seen, stamped completion as announced.
   private seed(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
     if (row?.turnCompletedAt !== undefined) {

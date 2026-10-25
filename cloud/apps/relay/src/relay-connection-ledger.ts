@@ -146,8 +146,7 @@ export class RelayConnectionLedger {
     return this.reserveUpgrade(this.normalAdmissionLimit)
   }
 
-  // A step-5 booking holds one reserved unit, but only below the placement ceiling the
-  // director would use, so phones keep the headroom between it and the socket ceiling.
+  // Bookings stop at the placement ceiling to preserve phone headroom below the socket ceiling.
   tryReserveBooking(limit: number): { release(): void } | null {
     if (!this.canReserveBooking(limit)) return null
     this.advanceWatermark()

@@ -85,10 +85,7 @@ function belongsToRemovedHost(
   return !isRuntimeHost(removedHostId) && survivingHostIds.every(isRuntimeHost)
 }
 
-/**
- * Maps a removed copy's transport aliases to its host id. Why: an SSH copy reached through a
- * paired runtime stamps its tabs, launches and snapshots with that runtime's id.
- */
+/** Map transport aliases to removed host: SSH copies accessed via paired runtimes stamp launches/tabs/snapshots with runtime ID. */
 export function removedHostCanonicalizer(
   state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   worktreeId: string,
@@ -144,8 +141,7 @@ export function collectRemovedHostTwinState(
         const entry = ptyHostEvidence(ptyId)
         return entry === 'non-runtime' && !live.has(ptyId) ? null : entry
       })
-      // Why every: one pane on another host means the tab is not only the removed host's; a
-      // stamp still yields to a PTY that names another host.
+      // Any off-host pane disproves exclusive attribution; PTY evidence outranks tab stamps.
       return stamped
         ? stamped === removedHostId &&
             evidence.every((entry) => !contradictsRemovedHost(canonical(entry), removedHostId))

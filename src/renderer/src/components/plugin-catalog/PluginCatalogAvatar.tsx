@@ -6,7 +6,6 @@ type PluginCatalogAvatarProps = {
   className?: string
 }
 
-/** Quiet monogram tile — same footprint as the old icon well, unique per plugin. */
 export function PluginCatalogAvatar({
   name,
   className

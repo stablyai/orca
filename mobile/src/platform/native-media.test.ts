@@ -1,4 +1,3 @@
-/** The device half of the media verbs: the picker it runs, the bytes it moves, the file it deletes. */
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { splitBridgeReply } from '../mobile-web-shell/bridge/bridge-reply-chunking'
@@ -23,8 +22,7 @@ import { createNativeMediaVerbServer, type NativeMediaFile } from './native-medi
 
 const CACHE = 'file:///cache'
 
-/** Every handle the read path opened, and whether it was closed. A file handle a shell leaks is
- *  invisible on a fake and a file descriptor on a phone. */
+// Track closed handles explicitly because a fake otherwise hides native descriptor leaks.
 const handles: { closed: boolean }[] = []
 
 function fakeFile(bytes: Uint8Array): NativeMediaFile {
@@ -188,9 +186,7 @@ describe('picking', () => {
   })
 
   it('strips the data-url prefix the pasteboard puts in front of its base64', async () => {
-    // `getImageAsync` answers `data:image/png;base64,...`, which is what an `<Image>` source wants
-    // and not what a file wants. Staged unstripped, every byte of the file is shifted by the
-    // prefix and the page decodes a corrupt image with no error anywhere.
+    // Clipboard returns a data URI; strip its prefix or staged bytes become a silently corrupt image.
     const probe = harness({
       readClipboardImage: () =>
         Promise.resolve({ data: `data:image/png;base64,${btoa('pasted-bytes')}` })
@@ -200,8 +196,6 @@ describe('picking', () => {
   })
 
   it('names a picker that reported no type, rather than answering an empty mime', async () => {
-    // An empty string is not a mime the result schema takes, so the alternative to this floor is
-    // `native_verb_result` — a shell bug's code for a document picker doing what it may do.
     const probe = harness({
       launchFiles: () => Promise.resolve({ canceled: false, assets: [{ uri: `${CACHE}/doc.pdf` }] })
     })
@@ -238,8 +232,6 @@ describe('picking', () => {
   })
 
   it('refuses a pick up front when nothing is left, before the OS copies a byte', async () => {
-    // Without this the OS copies every selected asset into the cache and the registry then
-    // refuses the whole pick, so the user waits through a multi-select for nothing.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const launches: number[] = []
     const probe = harness({
@@ -262,9 +254,7 @@ describe('picking', () => {
   })
 
   it('weighs a provider item before copying it, so an oversized one is never held in memory', async () => {
-    // `copyPickedMediaIntoCache` reads the whole file into memory. Weighing only the copy would
-    // mean holding a 64 MiB item to find out it is too big. Nothing is ours yet at that point, so
-    // nothing is discarded either.
+    // Weigh before copying: copyIntoCache reads the entire source into memory.
     const probe = harness({
       openFile: () => ({ size: 64 * 1024 * 1024, open: () => fakeFile(new Uint8Array()).open() }),
       launchLibrary: () =>
@@ -281,10 +271,7 @@ describe('picking', () => {
   })
 
   it('refuses a provider item it cannot weigh, rather than reading an unknown number of bytes', async () => {
-    // `SAFDocumentFile.length()` answers 0 when the provider reports no size, and there is no
-    // bounded read to fall back on: `File.open()`, `readableStream()` and `writableStream()` all
-    // go through `javaFile`, which throws outright for a content uri, so `bytesSync()` is the only
-    // read that works and it is all or nothing. An item this shell cannot weigh is not copied.
+    // Provider size zero means unknown or empty; Expo has no bounded content: read to safely discover its size.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const probe = harness({
       openFile: () => ({ size: 0, open: () => fakeFile(new Uint8Array()).open() }),
@@ -303,9 +290,7 @@ describe('picking', () => {
   })
 
   it('refuses a Files result over the room before it stages any of it', async () => {
-    // `getDocumentAsync` takes no selection limit, so the room `pick` hands it is advisory and the
-    // user can return more than the registry will hold. Counted before staging: otherwise every
-    // asset is copied into the cache and `mint` refuses the lot afterwards.
+    // DocumentPicker can exceed advisory room; reject before staging rather than copy assets the registry will refuse.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const probe = harness({
       launchFiles: () =>
@@ -324,7 +309,6 @@ describe('picking', () => {
       probe.serve('native.media.pick', { source: 'files', multiple: true })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_cap')
     expect(probe.registry.liveCount()).toBe(0)
-    // Nothing of ours existed to sweep: the picker's own copies are its business.
     expect(probe.discarded).toEqual([])
     warn.mockRestore()
   })
@@ -351,9 +335,6 @@ describe('reading chunks', () => {
   }
 
   it('reads a million-byte item in order to eof, and the bytes come back whole', async () => {
-    // Three chunks, which is enough to pin the ordering and the join here. The largest item a
-    // pick may stage runs in `bridge-host-media-verbs.test.ts`, where the frames are serialized
-    // and the size is the one that matters.
     const total = 1_000_000
     const { probe, handle } = await staged(total)
     const source = bytesOf(total)
@@ -383,9 +364,7 @@ describe('reading chunks', () => {
   })
 
   it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {
-    // The only case that separates the range from the cap. Every other read here asks for a whole
-    // chunk, so a handler that ignored `length` and read to the end of the file would pass them
-    // all: the file is shorter than one chunk, and the fake clamps at its own size.
+    // Ask for a partial range: whole-file reads would also pass cases whose files fit below the cap.
     const { probe, handle } = await staged(1000)
     const source = bytesOf(1000)
     const chunk = mediaReadResultSchema.parse(
@@ -543,8 +522,7 @@ describe('what the largest reply weighs', () => {
     }
     const split = splitBridgeReply('a'.repeat(22), payload)
     expect(split.ok).toBe(true)
-    // One frame, not a chunked reply: base64 carries no character JSON has to escape, so the
-    // string costs exactly its length and the envelope is the only thing on top of it.
+    // Base64 needs no JSON escaping, so serialized size is its length plus the envelope.
     expect(split.ok === true && split.frames).toHaveLength(1)
     const bytes = utf8ByteLength(JSON.stringify(split.ok === true ? split.frames[0] : null))
     expect(bytes).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
@@ -554,9 +532,7 @@ describe('what the largest reply weighs', () => {
 
 describe('a provider uri the Android picker can answer', () => {
   it('copies it into the cache and mints the handle over the copy, bytes intact', async () => {
-    // `MediaHandler.readExtras` has a reachable arm: when the resolver cannot type the asset it
-    // answers `ImagePickerAsset(type = null, uri = uri.toString())`, the provider's own uri,
-    // uncopied. The OS completed that pick, so refusing it loses a photo the user chose.
+    // Android may return an uncopied provider URI when MIME resolution fails; adopt it rather than lose the selected photo.
     const probe = harness({
       launchLibrary: () =>
         Promise.resolve({
@@ -584,15 +560,12 @@ describe('a provider uri the Android picker can answer', () => {
     const bytes = atob(chunk.base64)
     expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...bytesOf(300)])
 
-    // The copy is what release deletes. The provider's uri was never ours to unlink.
     await probe.serve('native.media.release', { handle: item?.handle ?? '' })
     expect(probe.discarded).toEqual([`${CACHE}/copy-0.bin`])
   })
 
   it('refuses a uri the copy could not adopt either, rather than minting over it', async () => {
-    // A copy that answered something this shell still cannot delete. Nothing here is ours, and
-    // the provider's own uri least of all: unlinking it is not this app's to attempt, and the
-    // failure path must leave it alone rather than sweep what it never owned.
+    // Reject an unowned copy without deleting it or the provider’s source URI.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const probe = harness({
       copyIntoCache: (uri: string) => uri,
@@ -602,7 +575,6 @@ describe('a provider uri the Android picker can answer', () => {
           assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
         })
     })
-    // Weighable, so the ownership guard is what fires rather than the pre-read weigh above it.
     probe.files.set('content://media/external/images/media/42', bytesOf(64))
     await expect(
       probe.serve('native.media.pick', { source: 'library', multiple: false })

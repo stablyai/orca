@@ -32,11 +32,7 @@ function unifiedTab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'con
   }
 }
 
-/**
- * The store the app really has with a structured tab focused: raw group state plus the
- * active-surface fields the store derives from it. That derivation is what leaves `activeTabId`
- * naming a live background terminal, so stubbing it would hide the half under test.
- */
+/** Build real active-surface state so structured focus leaves the legacy terminal ID stale, reproducing the ownership seam. */
 function storeWithStructuredTabActive({
   terminalIds,
   lastFocusedTerminalId,
@@ -97,8 +93,7 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('leaves activeTabId naming a live background terminal', () => {
-    // Guards the premise: without a stale id that is really in the terminal list, the tests
-    // below would pass with the bug present.
+    // Require the stale ID to exist in the terminal list or the buggy path would pass.
     mocks.store = storeWithStructuredTabActive({
       terminalIds: ['term-1', 'term-2', 'term-3'],
       lastFocusedTerminalId: 'term-2'

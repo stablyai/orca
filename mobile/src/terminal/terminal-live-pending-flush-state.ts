@@ -81,7 +81,7 @@ async function drainTerminalLiveMirrorSends(
   return false
 }
 
-// Mirror deltas are ordered PTY bytes; batching pending bytes avoids one RTT per keystroke.
+// Batch ordered PTY mirror bytes to avoid one round trip per keystroke.
 export function queueTerminalLiveMirrorSend(
   state: TerminalLivePendingFlushState,
   handle: string,

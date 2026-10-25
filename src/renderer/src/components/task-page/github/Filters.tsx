@@ -66,8 +66,7 @@ export function TaskPageGitHubFilters({
     )
   )
   return (
-    // Why: top of the joined GitHub list card — pairs with the
-    // table shell below (rounded-t-none border-t-0) as one surface.
+    // Join filter chrome and table as one surface.
     <div
       className="flex min-w-0 flex-col gap-2.5 rounded-md rounded-b-none border border-border/50 bg-muted/35 px-3 py-2.5"
       data-contextual-tour-target="tasks-search-presets"
@@ -241,7 +240,7 @@ export function TaskPageGitHubFilters({
               if (!selectorRenderable || !repo) {
                 return null
               }
-              // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
+              // The selector renders a div; keep a block wrapper to avoid invalid nesting.
               return (
                 <div key={s.sourceKey} className={issueSourceChipClass}>
                   {showRepoBadgeLabel ? (

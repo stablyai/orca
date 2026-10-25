@@ -199,8 +199,7 @@ function textSpanHtml(markup: string, text: string): string {
 
 function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
-  // Why: pinned literally — a definite `w-*` is what stops live title updates from resizing
-  // every tab, so asserting against the constant would let that guarantee be edited away.
+  // Assert literal widths so changing the shared constant cannot silently allow live-title tab resizing.
   const widthClasses = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
   expect(container).toContain(widthClasses)
   expect(root).not.toContain('w-[180px]')

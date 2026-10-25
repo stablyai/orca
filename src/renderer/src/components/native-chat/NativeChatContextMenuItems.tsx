@@ -76,7 +76,6 @@ export function NativeChatContextMenuTargetItems({
   )
 }
 
-/** Opens the chat's find bar, labelled with the shortcut that opens it from the keyboard. */
 export function NativeChatFindMenuItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const shortcut = formatOptionalPrimaryShortcutLabel('chat.find', keybindings)
@@ -117,7 +116,6 @@ function NativeChatRewindMenuItem({
   )
 }
 
-/** The link popover's icons: external opens leave Orca, an in-app browser opens stay. */
 function LinkActionIcon({ action }: { action: LinkAction }): React.JSX.Element {
   if (action.external === true) {
     return <ExternalLink />

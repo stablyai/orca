@@ -1,15 +1,6 @@
-/**
- * A relay-era SSH host converts to managed orcad on connect (#24979), on a real host:
- *
- * A relay-era profile (repository, folder workspace, editor tab) converts on its first connect,
- * and the new server lists them. The source rows stay retained and hidden.
- *
- * A managed host also updates to a relaunched app's bundled orcad on its next idle connect, and
- * reaches its server when another runtime already holds orcad's preferred port.
- *
- * Host: `ORCA_E2E_ORCAD_CONVERT_HOST=docker` (Linux fixture) or a Windows host-cell descriptor.
- * Template: `ORCA_E2E_ORCAD_CONVERT_TEMPLATE`, built for that host's target.
- */
+// #24979: convert real relay-era repo/folder/editor state on first SSH connect, retaining hidden source rows.
+// Also update bundled orcad on idle reconnect and handle an occupied preferred port.
+// ORCA_E2E_ORCAD_CONVERT_HOST selects Docker or a Windows host-cell descriptor; ORCA_E2E_ORCAD_CONVERT_TEMPLATE must match its target.
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -107,8 +98,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       { repoPath: host.remoteRepoPath, folderPath: host.remoteFolderPath },
       { terminalTab: true, parkedScrollback: true }
     )
-    // No relay ever ran here, so the terminal gate must prove `exited` from an empty lease set.
-    // This launch bypasses the fixture's log relay; keep the SSH lines a failed move explains itself by.
+    // With no relay leases, the gate must prove exited; retain raw SSH logs because this launch bypasses fixture forwarding.
     const upgraded = await session.launch({
       onStderr: (chunk) => {
         if (chunk.includes('[ssh]')) {
@@ -118,8 +108,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
     })
     app = upgraded.app
     await waitForSessionReady(upgraded.page)
-    // The relay-era terminal tab never spawns on the unconverted row; mounting it dials the host,
-    // as the relay-era pane did, and that connect converts it.
+    // Mounting the unconverted relay tab dials the host and triggers conversion without spawning locally.
     await upgraded.page.evaluate(
       ({ worktreeId, hostId, tabId }) => {
         const state = window.__store!.getState()
@@ -333,7 +322,6 @@ test('a managed host updates to the bundled orcad on the first connect after an 
   })
   let app: ElectronApplication | null = null
   try {
-    // Template A: the empty host deploys managed orcad on its first connect.
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)
@@ -350,7 +338,7 @@ test('a managed host updates to the bundled orcad on the first connect after an 
     await session.close(app)
     app = null
 
-    // Template B, as an app update would bundle: the tunnel restore or the next connect updates it.
+    // Use template B to model a bundled app update during tunnel restore/next connect.
     makeOrcadTemplateVariant(TEMPLATE_DIR, 'B')
     const updated = await session.launch({
       onStderr: (chunk) => {
@@ -361,8 +349,7 @@ test('a managed host updates to the bundled orcad on the first connect after an 
     })
     app = updated.app
     await waitForSessionReady(updated.page)
-    // Why connect, not disconnect first: on launch the app already reaches the server through its
-    // tunnel, and a disconnect racing that restore cancels the connect that runs the update.
+    // Connect directly: a disconnect racing launch-time tunnel restore cancels the update-triggering connect.
     const attempts: string[] = []
     await expect
       .poll(

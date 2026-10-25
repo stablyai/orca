@@ -34,8 +34,7 @@ export function mobileStructuredSendDelivery(
   if (submission.queuedMessageId === result.value.clientMessageId) {
     return { outcome: 'unknown', error: null }
   }
-  // Recorded, so the host's row holds it, as on desktop: a rejection draws in place, never back in
-  // the composer. One kept as a card is that card.
+  // Recorded rejections stay in history rather than returning to the composer; requeued submissions belong to their cards.
   if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
     return { outcome: 'queued', error: null }
   }

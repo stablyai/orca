@@ -45,7 +45,7 @@ export function BrowserClientHostedRemoteSetting({
           <SettingsSegmentedControl
             size="sm"
             ariaLabel={title}
-            // Why: absent means on — profiles written before the flag existed default to client hosting.
+            // Older profiles omit the flag and default to client hosting.
             value={settings.browserClientHostedRemoteEnabled !== false ? 'device' : 'server'}
             onChange={(value) =>
               updateSettings({ browserClientHostedRemoteEnabled: value === 'device' })

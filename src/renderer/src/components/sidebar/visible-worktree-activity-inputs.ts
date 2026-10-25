@@ -45,13 +45,7 @@ const structuredChatWorktreeIds = new WeakMap<
   WeakMap<StructuredChatSleptAtByPaneKey, ReadonlySet<string>>
 >()
 
-/**
- * Workspace ids holding a structured chat that Sleep has not put to rest.
- *
- * Why the host's Sleep mark rather than the provider child: the child starts only on a send and the
- * host's idle sweep stops it, so keying on it would put every quiet chat workspace to sleep after a
- * restart or a pause. Only the user's Sleep marks a chat, and the next admitted send clears it.
- */
+/** Only explicit Sleep marks rest a structured chat; idle child teardown or restart must not hide its workspace. */
 export function getWorktreeIdsWithStructuredChat(
   unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined,
   structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
@@ -59,8 +53,7 @@ export function getWorktreeIdsWithStructuredChat(
   if (!unifiedTabsByWorktree) {
     return EMPTY_STRUCTURED_CHAT_WORKTREE_IDS
   }
-  // Keyed on the snapshot, like the tab projection it reads: zustand re-runs every mounted card's
-  // selector on each store write, and this is a whole-store scan.
+  // Cache whole-store scans by snapshot because every card selector runs on each store write.
   const cached = structuredChatWorktreeIds
     .get(unifiedTabsByWorktree)
     ?.get(structuredChatSleptAtByPaneKey)

@@ -14,10 +14,8 @@ export type RepoSummary = {
   badgeColor?: string
   kind?: 'git' | 'folder'
   connectionId?: string | null
-  /** Set on a server's repos, whose calls run on that server. */
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
-  /** Fork parent resolved by the host; drives upstream Project row matching. */
   upstream?: { owner: string; repo: string; host?: string } | null
 }
 
@@ -107,11 +105,7 @@ export type GitLabWorkItem = {
   repoName: string
 }
 
-/**
- * A to-do as the reader proves it, not as the host declares it: the five members the screen reads
- * with no guard are required, and the rest are optional because a guard already stands in front of
- * each one. See `gitlabTodoSchema` in task-list-reply-schema.ts.
- */
+// Require only unguarded reader fields; optional host fields retain consumer fallbacks.
 export type GitLabTodo = {
   id: number
   actionName: string
@@ -185,13 +179,7 @@ export type DetailComment = {
   body: string
   createdAt?: string
   url?: string
-  /**
-   * `content` is whatever the provider called the reaction — GitHub's `GitHubReactionContent`
-   * (`'+1'`, `'-1'`, `laugh`, ...) and absent on GitLab, whose rows are `{ name, count }`. It was
-   * declared as an eight-arm mobile vocabulary no producer sends; `COMMENT_REACTION_EMOJI` is
-   * keyed by that same vocabulary and so resolves no glyph for a real reaction, which is a
-   * separate defect this type must not hide.
-   */
+  // Preserve provider tokens: GitHub sends +1/-1/etc.; GitLab may omit content. The legacy emoji map is not the wire vocabulary.
   reactions?: Array<{
     content?: string
     count: number
@@ -203,10 +191,7 @@ export type DetailComment = {
   isResolved?: boolean
 }
 
-/** `viewerViewedState` is `string`, not `GitHubPRFileViewedState`'s three arms: the reader forwards
- *  whatever arrives so an arm this build predates reaches the `=== 'VIEWED'` tests as itself.
- *  `status` keeps the host's seven arms because its only consumer sends it back as a
- *  `github.prFileContents` param, which the host validates against that same set. */
+// Unknown viewed states must reach equality checks unchanged; status stays closed because it round-trips to host validation.
 export type GitHubDetailFile = {
   path: string
   oldPath?: string
@@ -224,10 +209,7 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
-/** Optional throughout because nothing reads a member unguarded: the review panels reach each flag
- *  through `?.`, and `splitContentLines` (github-pr-file-diff.ts:21) takes `string | undefined`
- *  behind a falsy guard. The host sets the two too-large flags only when it skipped a side for size
- *  (pull-request-file-contents.ts:54), so they are absent on an ordinary reply. */
+// Consumers guard every field; too-large flags are absent when a side was not skipped.
 export type GitHubPRFileContents = {
   original?: string
   modified?: string

@@ -28,7 +28,6 @@ describe('listAppliedWorkspaceCleanupFilters', () => {
   })
 
   it('names the reported stuck filter rather than its group', () => {
-    // The bar always read "Showing 546 of 799"; what was missing was which filter.
     const filters = createDefaultWorkspaceCleanupFilterState()
     filters.activity.idleMinDays = 20
 

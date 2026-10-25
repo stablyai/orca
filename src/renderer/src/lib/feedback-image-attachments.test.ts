@@ -86,7 +86,6 @@ function oversizedPng(
 }
 
 function gifFile(name: string, size: number): File {
-  // GIF89a, 1x1
   const file = new File([new Uint8Array([71, 73, 70, 56, 57, 97, 1, 0, 1, 0])], name, {
     type: 'image/gif'
   })
@@ -104,9 +103,7 @@ describe('hasAttachableFeedbackImage', () => {
     expect(hasAttachableFeedbackImage([svg, pngFile('a.png')])).toBe(true)
   })
 
-  // Why: the paste handler only consumes the event when this is true. An
-  // image/* type outside the allow-list must still fall through so co-pasted
-  // text is not swallowed, while readFeedbackImageFiles raises its toast.
+  // Unsupported images must reach rejection toasts without consuming co-pasted text.
   it('is false when every file is an unsupported image type', () => {
     const svg = new File(['x'], 'a.svg', { type: 'image/svg+xml' })
     const bmp = new File(['x'], 'a.bmp', { type: 'image/bmp' })
@@ -139,8 +136,7 @@ describe('hasAttachableFeedbackImage', () => {
     )
   })
 
-  // Why: the paste gate must mirror the shrink rule, or a pasted screenshot that
-  // would have been compressed falls through to the textarea and is lost.
+  // The paste gate must admit screenshots the reader can shrink or they fall through and are lost.
   it('is true for an oversized screenshot that can be shrunk into the space left', () => {
     expect(hasAttachableFeedbackImage([pngFile('retina.png', 6_400_000)])).toBe(true)
     expect(hasAttachableFeedbackImage([pngFile('second.png', 2_000_000)], 1, 3_000_000)).toBe(true)
@@ -167,8 +163,7 @@ describe('hasAttachableFeedbackImage', () => {
 })
 
 describe('maxFeedbackImageBatchBytes', () => {
-  // Why: the paste gate reads this reservation while a batch shrinks, so it must
-  // cover what the reader commits without reserving a file size it never will.
+  // Reserve the reader’s possible committed size while shrinking, not bytes it will never attach.
   it('covers what the reader commits on every budget left, and nothing it refuses', async () => {
     shrinkFeedbackImage.mockImplementation(async (_file: File, maxBytes: number) =>
       encoded(maxBytes, 'image/png')
@@ -255,7 +250,6 @@ describe('readFeedbackImageFiles', () => {
     expect(errors.at(-1)).toBe('96 additional images could not be attached.')
   })
 
-  // Why: optimizing one image must still leave room for another attachment.
   it('shrinks an oversized screenshot to at most half the budget even when all of it is free', async () => {
     const file = pngFile('retina.png', 6_400_000)
     shrinkFeedbackImage.mockResolvedValue(encoded(1_750_000, 'image/png'))
@@ -303,7 +297,6 @@ describe('readFeedbackImageFiles', () => {
     expect(notices).toEqual([])
   })
 
-  // Why: the cap applies only to a re-encode; an image that fits is sent as taken.
   it('does not re-encode an image over half the budget that fits the space left', async () => {
     const { images, notices } = await readFeedbackImageFiles(
       [pngFile('first.png', 3_500_000), pngFile('second.png', 600_000)],
@@ -348,8 +341,7 @@ describe('readFeedbackImageFiles', () => {
     expect(errors).toEqual(['second.png would bring the attachments over 4.0 MB in total.'])
   })
 
-  // Why: a bigger screenshot was just shrunk and accepted, so "larger than 4 MB"
-  // would contradict it; the space the others use is what refuses this one.
+  // Name the shared budget, not raw file size: a larger screenshot was just compressed successfully.
   it('blames the shared budget when a shrinkable image is refused for lack of room', async () => {
     const almostSpent = MAX_FEEDBACK_IMAGE_TOTAL_BYTES - MIN_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES + 1
     const noRoom = await readFeedbackImageFiles([pngFile('third.png', 5_600_000)], 2, almostSpent)
@@ -367,8 +359,7 @@ describe('readFeedbackImageFiles', () => {
     ])
   })
 
-  // Why: with half the budget or more left, the shrink got the same capped target
-  // an empty budget would give, so the other attachments did not cause the refusal.
+  // At the capped shrink target, an empty budget would reject too; other attachments did not cause this refusal.
   it('calls an image too large when even the capped target an empty budget gives refused it', async () => {
     const { errors } = await readFeedbackImageFiles([pngFile('noise.png', 9_000_000)], 1, 1_000_000)
 
@@ -492,7 +483,6 @@ describe('readFeedbackImageFiles', () => {
 
     expect(errors).toEqual(['corrupt.png is not a valid supported image.'])
     expect(images.map((image) => image.name)).toEqual(['retina.png'])
-    // The refused image spent none of the budget the next one shrinks into.
     expect(shrinkFeedbackImage).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: 'retina.png' }),
       MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES

@@ -6,13 +6,7 @@ export function post(scope: RichMarkdownEditorScope, message: MobileRichMarkdown
   scope.postToHost(message)
 }
 
-/**
- * The document's last act at start: it is built and listening, so the host may send content.
- *
- * Last of the sequence rather than first, because a host that answers `ready` by setting markdown
- * would otherwise reach a surface whose listeners are not installed yet — and because the inset
- * the host lifts its bar by is measured before the host is told there is anything to lift for.
- */
+// Send ready last, after listeners and keyboard measurement: host may synchronously set content/adjust bar in response.
 export function startHostBridge(scope: RichMarkdownEditorScope) {
   post(scope, { type: 'ready' })
 }

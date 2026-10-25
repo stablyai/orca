@@ -28,11 +28,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * An updated browser moves from its pairing code to a device key against this host, and keeps
- * its code against a released host that cannot take keys. Runs the real socket wiring and
- * registry; the browser side is the real web transport over an in-memory socket pair.
- */
+// Run real web/socket/registry wiring: new hosts upgrade browser codes to keys, while old hosts keep code auth.
 const SUITE_TIMEOUT_MS = 180_000
 
 type HostImplementation = {

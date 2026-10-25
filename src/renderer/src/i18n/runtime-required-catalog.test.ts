@@ -1,9 +1,4 @@
-/**
- * The renderer ships only the English entries i18next cannot rebuild from the
- * `defaultValue` every `translate(key, fallback)` call site passes. These
- * assertions are the proof that the prune is invisible: every English string
- * the app can render still renders identically without the full catalog.
- */
+/** Prove pruning English entries leaves every rendered translation unchanged when call sites supply inline defaults. */
 import i18next, { type i18n as I18nInstance } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
@@ -60,8 +55,7 @@ describe('runtime-required English catalog', () => {
       if (prunedEntries.has(key)) {
         continue
       }
-      // What the app does: translate(key, fallback) with the fallback the
-      // catalog was seeded from. Dropping the entry must not change the result.
+      // Use the catalog-seeded inline fallback, just like app call sites.
       if (pruned.t(key, { defaultValue: value }) !== full.t(key, { defaultValue: value })) {
         changed.push(key)
       }

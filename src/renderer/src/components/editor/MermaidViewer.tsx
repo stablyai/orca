@@ -8,10 +8,7 @@ type MermaidViewerProps = {
   filePath: string
 }
 
-// Why: MermaidViewer is the full-file counterpart to MermaidBlock (which
-// renders fenced mermaid blocks inside markdown). When a user opens a .mmd
-// or .mermaid file in diagram mode, the entire file content is the diagram
-// source — no markdown wrapper, no frontmatter, just mermaid syntax.
+// Render full .mmd/.mermaid files directly as diagram source.
 export default function MermaidViewer({
   content,
   filePath
@@ -19,9 +16,7 @@ export default function MermaidViewer({
   const rootRef = useRef<HTMLDivElement>(null)
   const isDark = useDocumentDarkTheme()
 
-  // Why: Each viewing mode (source vs diagram) produces different DOM heights.
-  // Mode-scoped keys prevent restoring a source-mode scroll position in diagram
-  // mode (same reasoning as MarkdownPreview's scrollCacheKey).
+  // Source and diagram heights differ; keep their scroll positions separate.
   const scrollCacheKey = `${filePath}:mermaid-diagram`
 
   useLayoutEffect(() => {
@@ -44,9 +39,7 @@ export default function MermaidViewer({
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Why: guard against writing 0 when the SVG has not rendered yet (e.g.,
-      // StrictMode double-mount or quick tab switch before mermaid.render()
-      // completes). Without this, a valid cached position gets clobbered.
+      // Before async SVG renders, zero layout must not overwrite cached scroll during quick switches or Strict Mode remounts.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
@@ -67,8 +60,7 @@ export default function MermaidViewer({
     let frameId = 0
     let attempts = 0
 
-    // Why: mermaid.render() is async, so the SVG may not exist on the first
-    // frame. Retry up to 30 frames (~500ms) to match MarkdownPreview's pattern.
+    // Async SVG may miss the first frame; bound restoration retries as MarkdownPreview does.
     const tryRestore = (): void => {
       const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
       const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
@@ -91,9 +83,7 @@ export default function MermaidViewer({
   return (
     <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
       <div className="mermaid-viewer-canvas">
-        {/* Why: DOMPurify's SVG profile strips <foreignObject> elements that
-           mermaid uses for HTML labels. Force SVG-native <text> labels so
-           they survive sanitization — same fix as the markdown preview path. */}
+        {/* DOMPurify strips foreignObject HTML labels; request native SVG text so labels survive sanitization. */}
         <MermaidBlock content={content.trim()} isDark={isDark} htmlLabels={false} />
       </div>
     </div>

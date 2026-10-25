@@ -30,8 +30,7 @@ const interval = setInterval(() => {
   }
   clearInterval(interval)
   try {
-    // Why: the agent is a child of the startup shell; terminating that shell
-    // produces a real PTY exit instead of merely returning to its prompt.
+    // Kill agent’s startup-shell parent to cause a real PTY exit rather than returning to its prompt.
     process.kill(process.ppid, 'SIGTERM')
   } catch {
     // The parent may already have exited after the trigger was observed.

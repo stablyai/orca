@@ -290,7 +290,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     setSelectedJiraIssueKey
   ])
 
-  // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
+  // Linear string IDs need the provider-generic numeric placeholder 0.
   return model
 }
 export type TaskPageJiraListEffectsModel = ReturnType<typeof useTaskPageJiraListEffects>

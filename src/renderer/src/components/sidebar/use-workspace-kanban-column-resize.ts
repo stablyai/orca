@@ -35,8 +35,7 @@ export function useWorkspaceKanbanColumnResize(
     if (!resizingRef.current) {
       draftWidthRef.current = nextCommittedWidth
       if (columnWidth !== nextCommittedWidth) {
-        // Why: external width changes should be reflected before children
-        // render; during active drag the local draft remains authoritative.
+        // Apply external widths before rendering children; retain the local draft during active resize.
         setColumnWidth(nextCommittedWidth)
       }
     }

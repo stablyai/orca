@@ -44,10 +44,7 @@ type BrokerOwnership = {
   valid: boolean
 }
 
-// The single owner of "why the socket died". Why only the null case: readContext
-// throws on transient failures and returns null solely when the cloud session is
-// gone (absent, or cleared by a 401). A present-but-unentitled context is still a
-// signed-in desktop, and "sign in to reconnect" would be wrong advice for it.
+// Only null proves session loss; transient reads throw and lost entitlement is not sign-out.
 function authLossCloseReason(context: RelayAuthContext | null): RelayHostCloseReason | undefined {
   return context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT
 }
@@ -60,7 +57,6 @@ export class RelayAuthCoordinator {
   private latestReconcile: Promise<void> = Promise.resolve()
   private readonly linger = new RelayLingerTimer()
   private readonly retry: RelayRetrySchedule
-  // Why the latest reconcile left no live broker; cleared when one registers.
   private unavailableReason: RelayUnavailable['reason'] | null = null
   private readonly readinessWaiters = new RelayReadinessWaiters()
   private stopped = false
@@ -89,9 +85,7 @@ export class RelayAuthCoordinator {
     void reconcile
   }
 
-  // hostCloseReason names an auth loss the phone should be told about. Quit,
-  // relaunch and every other fence pass nothing, so the control socket dies
-  // abruptly exactly as before and the cell records no cause.
+  // Name only auth loss to phones; quit/relaunch fences retain abrupt, cause-free closure.
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     ++this.authEpoch
     this.linger.cancel()
@@ -105,9 +99,7 @@ export class RelayAuthCoordinator {
     this.publish('offline')
   }
 
-  // Why derived rather than passed in: the coordinator republishes `registered`
-  // after the broker already announced its cell, so a call site that forgot the
-  // cell would silently blank it moments after the broker set it.
+  // Derive the cell from ownership so coordinator republishes cannot blank the broker's announced cell.
   private publish(status: RelayBrokerStatus): void {
     this.options.onStatus(
       status,
@@ -115,23 +107,17 @@ export class RelayAuthCoordinator {
     )
   }
 
-  // Raw ownership handle for identity matching (revoke routing); control work uses getLiveBroker.
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
   }
 
-  // Why: ownership stays valid across a control death, so control work must
-  // apply the same liveness gate reconcile does; unprovable liveness stays usable.
+  // Valid ownership can outlive control death; unknown liveness remains usable.
   getLiveBroker(): CoordinatedRelayBroker | null {
     const broker = this.getActiveBroker()
     return broker && (broker.isLive?.() ?? true) ? broker : null
   }
 
-  // Why: some broker deaths end with no retry timer — an auth refresh that
-  // fails past token expiry (laptop sleep), or a transient context read that
-  // returned null at open. Periodic/power-resume callers use this as a
-  // dead-man's switch; it never disturbs a live broker, a scheduled retry,
-  // or an open already in flight.
+  // Revive untimed failures without disturbing live brokers, scheduled retries or in-flight opens.
   ensureLive(): void {
     if (this.stopped || this.retry.pending || this.pendingOwnerships.size > 0) {
       return
@@ -149,7 +135,6 @@ export class RelayAuthCoordinator {
     return broker ? { ready: true, broker } : { ready: false, reason, retryAt: this.retry.retryAt }
   }
 
-  // Awaits the reconcile in flight (and any it was superseded by), never a retry.
   async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     let pending: Promise<void> | null = null
     while (!this.stopped && !this.getLiveBroker() && pending !== this.latestReconcile) {
@@ -159,9 +144,7 @@ export class RelayAuthCoordinator {
     return this.stopped ? null : this.getLiveBroker()
   }
 
-  // Why waitMs: a cold start that fails once arms a retry seconds away; a caller
-  // with time to spare waits for it instead of reporting the first failure. The
-  // deadline bounds every wait, and a fence releases the caller at once.
+  // Wait through scheduled cold-start recovery when budget permits; fences release immediately.
   async waitForReadiness(waitMs: number): Promise<RelayReadiness> {
     const deadline = Date.now() + waitMs
     while (!this.stopped && !this.getLiveBroker()) {
@@ -226,8 +209,6 @@ export class RelayAuthCoordinator {
       if (
         this.ownership?.valid &&
         this.ownership.identityKey === nextIdentityKey &&
-        // Why: registered must be provable; a broker whose control died without
-        // recovering falls through and is replaced instead of republished.
         (this.ownership.broker?.isLive?.() ?? true)
       ) {
         this.retry.reset()
@@ -269,8 +250,6 @@ export class RelayAuthCoordinator {
       this.publish('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
-        // Why: silent broker-open failures made a dead relay look like standby
-        // during incident diagnosis; the message carries operation + status.
         console.warn(
           '[relay] broker reconcile failed:',
           error instanceof Error ? error.message : String(error)
@@ -306,7 +285,6 @@ export class RelayAuthCoordinator {
     }
     const epoch = this.authEpoch
     const context = await this.options.readContext()
-    // A superseded refresh names no reason: whoever superseded it owns the close.
     if (!ownership.valid || !this.isEpochCurrent(epoch)) {
       return { accessToken: null }
     }

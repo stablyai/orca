@@ -25,7 +25,6 @@ export function useMobileNativeChatReadability(
     readable: false
   })
   useEffect(() => {
-    // Why: the floating workspace always runs on the paired host and has no repo connection to resolve.
     if (isFloatingWorkspace) {
       return
     }
@@ -85,7 +84,6 @@ export function useMobileNativeChatReadability(
   if (isFloatingWorkspace) {
     return true
   }
-  // Why: route reuse renders before its new effect resolves; never expose the
-  // previous repo's readability under a different client/worktree key.
+  // Route reuse precedes effect completion; never expose the prior repo’s verdict under a new scope.
   return state.client === client && state.worktreeId === worktreeId ? state.readable : false
 }

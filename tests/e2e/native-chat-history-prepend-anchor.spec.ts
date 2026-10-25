@@ -205,8 +205,7 @@ test.describe('Native chat transcript anchoring', () => {
         throw new Error('Expected a fully visible measured row to anchor')
       }
 
-      // The button stays off-screen so invoking it here exercises the real pagination
-      // handler without Playwright first scrolling the reader to the transcript head.
+      // Invoke the off-screen button directly so Playwright cannot scroll the reader to the head before paging.
       await loadEarlier.evaluate((button: HTMLButtonElement) => button.click())
       await expect
         .poll(() => transcriptWindow.evaluate((element: HTMLElement) => element.offsetHeight))

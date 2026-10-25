@@ -28,7 +28,6 @@ function row(
   }
 }
 
-/** The rows as one turn: still `working`, or settled after `worked` seconds, or neither. */
 type Turn = { working?: boolean; worked?: number; expanded?: boolean }
 
 function slotsOf(
@@ -57,7 +56,6 @@ function slotsOf(
 
 const SEEN = [row('prompt', 1, 'user'), row('reply', 2)]
 const LATER = [...SEEN, row('answer', 3), row('more', 4)]
-/** The reader asks, then the agent works a step and answers. */
 const ASKED = [row('prompt', 1, 'user')]
 const DONE = [...ASKED, row('step', 2), row('answer', 3)]
 
@@ -75,7 +73,6 @@ describe('where the "New" marker draws', () => {
     })
   })
 
-  // The bar's own line would otherwise sit against the marker's.
   it("is above the turn bar when only that bar parts the row from the reader's prompt", () => {
     const asked = [row('prompt', 1, 'user'), row('answer', 2)]
     expect(
@@ -92,7 +89,6 @@ describe('where the "New" marker draws', () => {
     ).toEqual({ key: 'answer', place: 'above-row' })
   })
 
-  // With no prompt of the reader's, the turn's bar draws above its first row, folded or not.
   it('is above the bar of a turn the agent opened, whether the turn is open or shut', () => {
     const turn = DONE.slice(1)
     for (const expanded of [false, true]) {
@@ -138,7 +134,6 @@ describe('useNativeChatNewRowsMarker', () => {
     )
   }
 
-  /** The reader goes to another tab, the chat becomes `onReturn`, and they come back. */
   function leaveAndReturn(left: NativeChatMessage[], onReturn: NativeChatMessage[], turn?: Turn) {
     const view = chat(left, turn)
     view.rerender({ messages: left, showing: false })
@@ -195,7 +190,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker).toBeUndefined()
   })
 
-  // The reader left before the journal had placed the prompt they had just sent.
   it('marks the first reply to a chat that held no row the journal had placed', () => {
     const sending = [row('prompt', null, 'user')]
     const view = leaveAndReturn(sending, [row('prompt', 1, 'user'), row('answer', 2)])
@@ -209,7 +203,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker).toMatchObject({ key: 'answer', arriving: false })
   })
 
-  // The reader may be midway through what it marks: a glance at another tab must not move it.
   it('stays where it is through another look away, until the reader answers', () => {
     const view = leaveAndReturn(SEEN, LATER)
     act(() => view.result.current.marker?.onArrived())
@@ -240,7 +233,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker?.key).toBe('newer')
   })
 
-  // Another agent's message waits behind the running turn, drawn outside the transcript's rows.
   it('marks a message that was held behind the running turn once it joins the transcript', () => {
     const view = chat(SEEN)
     view.rerender({ messages: SEEN, showing: false })
@@ -254,7 +246,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker?.key).toBe('held')
   })
 
-  // Queued behind an ordinary turn, it draws after everything the agent goes on to write.
   it('stays above a queued message while the turn writes on ahead of it', () => {
     const queued: NativeChatMessage = { ...row('held', 3), queued: true }
     const view = leaveAndReturn(SEEN, [...SEEN, queued])

@@ -39,8 +39,7 @@ function transport(socket: WebSocket): { pause(): void; resume(): void; setNoDel
 
 export type SpliceCloseInfo = { code: number; reason: string; trigger: string }
 
-// The ws receiver kills a connection whose frame exceeds maxPayload with this
-// message; surfacing it separately is what makes catalog-growth kills visible.
+// Separate ws maxPayload errors so catalog-growth disconnects are visible.
 function errorTrigger(side: 'client' | 'host', error: Error): string {
   return /max payload/i.test(error.message) ? `${side}-oversize-frame` : `${side}-error`
 }

@@ -1,7 +1,4 @@
-// One story table driven through every lane that publishes a main agent's status. Each lane
-// derives child liveness from its own evidence, but the published `{ state, workingMode, mainAgent }`
-// must be what the shared fold says for that main agent and that evidence — a producer that folds
-// differently is caught here structurally, not by review.
+// Drive the same main-agent stories through every publishing lane; lane-specific child evidence must produce the shared fold’s row.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
@@ -53,9 +50,7 @@ function published(payload: ParsedAgentStatusPayload | null | undefined): Publis
   }
 }
 
-/** The main agent's own state, restated as the fold's input. The verdict is not one: a cancel is
- *  a fact about the main agent, and the work it left running reads as it would after any end of
- *  turn. */
+/** Refold the main agent’s state; cancellation is its verdict and does not hide surviving child work. */
 function refold(
   mainAgent: Published['mainAgent'],
   childWorkLiveness: AgentChildWorkLiveness
@@ -124,8 +119,7 @@ const STORIES: Story[] = [
       expect: { state: 'working', mainAgent: { state: 'done' } }
     },
     codex: {
-      // A root Stop with no transcript-tracked children clears the roster (Codex 0.144 could omit
-      // child Stop hooks), so the child proves it is still alive with its next tool event.
+      // Codex 0.144 could omit child Stop hooks; root Stop clears untracked children until their next tool event proves liveness.
       events: [
         { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
         { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
@@ -231,9 +225,7 @@ const STORIES: Story[] = [
       ],
       expect: { state: 'waiting', mainAgent: { state: 'done' } }
     },
-    // KNOWN DIVERGENCE: a child's pending prompt is the session's `attention`, so this lane reads
-    // it as the main agent's own `blocked`, one needs-input state whoever asked, even beside the
-    // child's own waiting record.
+    // KNOWN DIVERGENCE: structured attention folds a child’s prompt into the main agent’s blocked state as well as its waiting child record.
     structured: {
       status: 'attention',
       backgroundTasks: [{ ...AGENT_TASK, state: 'waiting' }],
@@ -272,10 +264,8 @@ const STORIES: Story[] = [
     }
   },
   {
-    // A cancel never hides live work: the shell the cancelled turn left running reads monitoring
-    // in every lane, and the cancellation survives only as the main agent's verdict. The Claude
-    // row is the primary path: Orca's inferred cancel, carried by the main agent record into the
-    // next Stop, which lists the shell.
+    // Cancellation survives as the main agent’s verdict while its live shell keeps every lane monitoring.
+    // Claude’s inferred cancel must survive the next Stop that lists the shell.
     name: 'interrupted with a watch loop',
     claude: {
       events: [
@@ -312,8 +302,7 @@ const STORIES: Story[] = [
     }
   },
   {
-    // Neither CLI reports a cancel on its own Stop, so the late turn boundary must keep the
-    // verdict Orca inferred rather than downgrade it to "unknown".
+    // Neither CLI reports cancellation on Stop; keep Orca’s inferred verdict at the late boundary.
     name: 'interrupted, then the late turn boundary',
     claude: {
       events: [
@@ -475,9 +464,7 @@ describe('mainAgent status parity across lanes', () => {
       const payload = drive('grok', lane.events)
       const row = published(payload)
       expect(row).toEqual(lane.expect)
-      // Grok's child evidence lives only on its final turn end: a listed subagent is agent work, a
-      // shell or an active stop hook is watch work, whatever verdict ended the turn, and nothing
-      // else ever holds the pane.
+      // Grok’s final turn end is its only child evidence: subagents mean agent work; shells/active stop hooks mean watch work, regardless of verdict.
       const last = lane.events.at(-1) ?? {}
       const tasks: unknown[] = Array.isArray(last.backgroundTasks) ? last.backgroundTasks : []
       const hasType = (type: string) =>

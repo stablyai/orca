@@ -21,7 +21,6 @@ function runHeader(container: HTMLElement): HTMLElement {
   return header
 }
 
-/** The blocks a structured chat draws for one journal tool row. */
 function projected(itemId: string, body: AgentJournalToolCallItem): NativeChatBlock[] {
   return (
     projectStructuredItemToNativeChat({ itemId, sequence: 1, revision: 1, observedAt: 1, body })

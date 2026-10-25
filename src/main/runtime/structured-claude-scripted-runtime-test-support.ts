@@ -1,5 +1,4 @@
-// A structured-session runtime whose Claude children are scripted: the production runtime,
-// adapter, record store and host, with only the CLI process replaced.
+// Use production runtime/adapter/store/host with only the Claude CLI process replaced.
 
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'

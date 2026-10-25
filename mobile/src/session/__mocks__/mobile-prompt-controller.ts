@@ -251,7 +251,6 @@ export async function render(props: HarnessProps = lastProps ?? {}) {
 export function sendButton() {
   return getTree().root.findByProps({ accessibilityLabel: 'Send message' })
 }
-/** Index 1 is Deny. */
 export function permissionAction(index = 1) {
   return getTree()
     .root.findByProps({ testID: 'native-chat-approval-actions' })

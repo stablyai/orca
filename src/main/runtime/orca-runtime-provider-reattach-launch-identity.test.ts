@@ -32,7 +32,7 @@ function getPty(runtime: OrcaRuntimeService, ptyId: string): RuntimePtyLaunchIde
   )
 }
 
-/** Switch-on, main's layout answers which pane holds a terminal, so the runtime needs a store. */
+// Main-owned layout requires a store to resolve pane/PTY bindings.
 function createRuntime(): OrcaRuntimeService {
   return new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? partialRuntimeStore() : null)
 }

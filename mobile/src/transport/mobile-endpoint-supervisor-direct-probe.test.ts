@@ -31,8 +31,7 @@ describe('mobile endpoint supervisor direct probe', () => {
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
-    // Foreground return: the probe dials direct at once, the dead LAN answers with
-    // an instant 1006, and the direct client enters its 500/1000/2000ms backoff.
+    // Model a dead LAN closing immediately into direct-client backoff.
     supervisor.setForeground(false)
     supervisor.setForeground(true)
     await vi.advanceTimersByTimeAsync(0)
@@ -40,8 +39,7 @@ describe('mobile endpoint supervisor direct probe', () => {
     direct.publishState('reconnecting')
     logical.publishState('disconnected')
 
-    // Relay recovery must not wait out the probe's 12s bound; the probe gives up
-    // one grace window after the redial fails to land.
+    // Release recovery after the redial grace window instead of waiting the probe’s full bound.
     await vi.advanceTimersByTimeAsync(2_000)
     expect(openRelay).toHaveBeenCalledOnce()
     expect(direct.close).toHaveBeenCalled()

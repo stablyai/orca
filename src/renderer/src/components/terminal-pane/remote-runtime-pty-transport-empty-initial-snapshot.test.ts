@@ -9,7 +9,6 @@ import {
   encodeTerminalStreamJson
 } from '../../../../shared/terminal-stream-protocol'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -98,8 +97,7 @@ async function attachTransport(mode: AttachMode) {
   }
 }
 
-// #18464 / #21208 / #23884: a long-lived agent idle at its prompt paints nothing new, so a pane
-// whose first attach replayed no image stayed blank (cursor only) while `terminal read` had the frame.
+// Idle agents send no new paint; imageless initial attach must pull retained host content instead of leaving a cursor-only pane (#18464/#21208/#23884).
 describe('remote pane whose first attach replays no image', () => {
   beforeEach(() => {
     resetRemoteRuntimeTransport()

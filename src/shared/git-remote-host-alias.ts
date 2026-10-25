@@ -1,15 +1,10 @@
-// Why: a remote URL can name a forge through an alias host (SSH-over-443, `www.`), and every
-// comparison of a probed remote against a pasted URL must fold those to the same identity.
+// Fold SSH-over-443/www aliases when comparing probed remotes with pasted URLs.
 
 function normalizeRemoteHost(host: string): string {
   return host.trim().toLowerCase()
 }
 
-/**
- * Fold a `www.` prefix. Deliberately NOT part of the forge normalizers: those feed
- * `getProjectIdentityKey`, so folding there would re-key already-persisted projects on upgrade.
- * Only URL-vs-remote comparison may use it.
- */
+/** Fold www only for URL/remote comparison; forge identity normalizers feed persisted project keys and would re-key them on upgrade. */
 export function foldWwwHostAlias(host: string): string {
   return normalizeRemoteHost(host).replace(/^www\./, '')
 }
@@ -35,10 +30,7 @@ export function foldComparableGitLabHost(host: string): string {
   return normalizeGitLabRemoteHost(foldWwwHostAlias(host))
 }
 
-/**
- * A host with no dot is an OpenSSH `Host` alias (`git@github-work:owner/repo`) that only
- * ~/.ssh/config can expand; `git remote -v` never resolves it, so it is unknown, not wrong.
- */
+/** Dotless hosts are unresolved OpenSSH Host aliases; remote -v cannot expand ~/.ssh/config, so mismatches remain unknown. */
 export function isUnresolvedSshHostAlias(host: string): boolean {
   return !normalizeRemoteHost(host).includes('.')
 }

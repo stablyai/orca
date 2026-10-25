@@ -33,7 +33,7 @@ export function getEffectiveKeybindingsForAction(
   const definition = DEFINITIONS_BY_ID.get(actionId)
   const override = overrides?.[actionId]
   if (Array.isArray(override)) {
-    // Why: canonicalize digit-index overrides to <mods>+1 so display/conflict stay consistent even if a hand-edited file stored a different digit.
+    // Canonicalize hand-edited digit overrides to <mods>+1 so display/conflicts agree across the range.
     if (isDigitIndexActionId(actionId)) {
       const canonical: string[] = []
       for (const binding of override) {

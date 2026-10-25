@@ -14,8 +14,7 @@ const mountedRows = vi.hoisted(() => ({
   mountsBySlug: new Map<string, number>()
 }))
 
-// Why the real row and not a spy on the virtualizer: a spy would only restate its own
-// bookkeeping. Not memoized, because the shipped row is not either.
+// Count real row mounts rather than restating virtualizer bookkeeping; match the shipped row’s lack of memoization.
 vi.mock('./ArtifactListRow', async (importOriginal) => {
   const actual = await importOriginal<typeof ArtifactListRowModule>()
   const react = await import('react')
@@ -73,8 +72,7 @@ class MockResizeObserver implements ResizeObserver {
   }
 }
 
-// With a `target`, only observers actually watching that element fire, and only for it — so
-// resizing one element proves production observes *that* element, not merely something.
+// Fire only observers watching the resized element, proving production observes the right target.
 function fireResizeObservers(target?: Element): void {
   for (const observer of activeResizeObservers) {
     if (target && !observer.elements.has(target)) {
@@ -131,8 +129,7 @@ function elementHeight(element: Element): number {
   const row = element.matches(ARTIFACT_ROW_SELECTOR)
     ? element
     : element.querySelector(ARTIFACT_ROW_SELECTOR)
-  // Why 0 otherwise: nothing else here has a load-bearing height — the Load more block and the
-  // empty-state paragraph are observed for resizes, never summed into an offset or windowed against.
+  // Other observed elements affect offsets on resize but have no height used by this synthetic layout.
   return row ? (measuredHeights.get(element) ?? SYNTHETIC_ROW_HEIGHT_PX) : 0
 }
 
@@ -180,8 +177,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: relative to now — the row labels are relative times, so fixed dates would rot. The two
-// timestamps are far apart so Updated and Expires never render the same string.
+// Use relative dates and separate Updated/Expires enough to keep their rendered strings distinct.
 function artifact(slug: string, title: string): ArtifactListItem {
   const createdAt = new Date(Date.now() - 3 * DAY_MS).toISOString()
   return {
@@ -235,11 +231,7 @@ function requireVirtualShell(): HTMLElement {
   return shell
 }
 
-/**
- * Where the browser would put `element` in the scroller's content: the summed heights of the
- * in-flow siblings before it. Derived, not assigned — a hardcoded shell top would make every
- * scroll-margin assertion restate the number the test chose.
- */
+/** Derive layout tops from preceding in-flow siblings so scroll-margin assertions cannot restate an assigned offset. */
 function inFlowTopWithinScroller(element: Element): number {
   const scrollerNode = scroller()
   let top = 0
@@ -293,9 +285,7 @@ function setHeaderHeight(height: number): void {
   })
 }
 
-// First index the virtualizer must mount at this offset. The sticky header is the shell's only
-// in-flow predecessor, so the margin production derives from the DOM comes to `headerHeightPx`;
-// dropping or mis-deriving it resolves a window several rows down the list.
+// The sticky header alone precedes the shell; a wrong derived margin shifts the expected first mounted row.
 function expectedFirstWindowedIndex(scrollOffsetPx: number): number {
   const firstVisible = Math.floor((scrollOffsetPx - headerHeightPx) / SYNTHETIC_ROW_HEIGHT_PX)
   return Math.max(0, firstVisible - VIRTUALIZED_LIST_OVERSCAN)
@@ -337,8 +327,7 @@ function renderCollection({
   syncLayout()
 }
 
-// React tracks the input's own value, so assigning `input.value` updates that tracker too and the
-// change is swallowed as a no-op — the write must go through the setter the tracker delegates to.
+// Use the delegated native setter; direct assignment also updates React’s value tracker and swallows the change.
 function typeSearchQuery(text: string): void {
   const input = host.querySelector('input')
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -376,11 +365,7 @@ function clickLoadMore(): HTMLButtonElement {
   return button
 }
 
-/**
- * Whether a windowed row's Delete action is disabled — the row's only rendering of `deleting`.
- * Radix mounts the menu only while it is open and portals it out of `host`, so the state cannot be
- * read off the row; the menu is toggled back shut so the next row reads its own.
- */
+/** Read deleting from the row’s portaled menu, then close it so the next lookup cannot match this row’s action. */
 function deleteActionDisabled(index: number): boolean {
   const trigger = rowAtIndex(index)?.querySelector<HTMLElement>('button[aria-label]')
   if (!trigger) {
@@ -410,11 +395,7 @@ function bottomScrollOffset(rowCount: number): number {
   return HEADER_HEIGHT_PX + rowCount * SYNTHETIC_ROW_HEIGHT_PX - VIEWPORT_HEIGHT_PX
 }
 
-/**
- * A row carrying the separator. Both edges: a constant that gained `border-t` would paint two
- * hairlines between every pair of rows while every `toBe(true)` here still passed. Colour spelled
- * out because Tailwind's default is `currentColor` — a dropped token tints every hairline.
- */
+/** Require one divider with the exact color: added top borders double hairlines, while a missing color falls back to currentColor. */
 function expectRowDivider(row: Element | null | undefined): void {
   expect(row).toBeTruthy()
   expect(row?.classList.contains('border-b')).toBe(true)
@@ -429,11 +410,7 @@ function expectNoRowDivider(row: Element | null | undefined): void {
   expect(row?.classList.contains('border-t')).toBe(false)
 }
 
-/**
- * `text-center` on a direct scroller child centers in the visible width; inside a `w-fit` band or
- * with a width utility of its own it would center over the scroll width — partly off screen.
- * `min-w-`/`max-w-` floor or cap that box just as `w-` sets it, so all three prefixes are refused.
- */
+/** Empty text must center in viewport width; reject width/min-width/max-width utilities or a w-fit band that would center it offscreen. */
 function expectCenteredEmptyState(): void {
   const empty = host.querySelector('p')
   expect(empty?.textContent).toContain('No matches')
@@ -465,9 +442,7 @@ describe('artifacts list windowing — below the threshold', () => {
     expect(mountedRows.count).toBe(count)
     expect(virtualShell()).toBeNull()
     expect(host.querySelectorAll('[data-index]').length).toBe(0)
-    // Why the structure and not just the count: any band reintroduced around the rows — sized to
-    // its content, or carrying a rule of its own — would widen the wash or double every hairline,
-    // and below the threshold nothing else in this file would see it.
+    // Below threshold, inspect direct children to catch a wrapper band that widens washes or adds duplicate rules.
     const children = Array.from(scroller().children)
     expect(children.length).toBe(count + 1)
     expect(children[0]).toBe(tableHeader())
@@ -522,8 +497,7 @@ describe('artifacts list windowing — above the threshold', () => {
     expect(elementHeight(lastRow)).toBeLessThan(SYNTHETIC_ROW_HEIGHT_PX)
     expect(Number.parseInt(shell.style.height, 10)).toBe(500 * SYNTHETIC_ROW_HEIGHT_PX)
 
-    // Targeted, so only an observer already watching this wrapper can fire: the correction can
-    // come from nothing but the measurement ref the shared virtual list puts on the wrapper.
+    // Resize only the measured row; the shared virtualizer’s measurement ref must supply the correction.
     act(() => {
       fireResizeObservers(lastRow)
     })
@@ -558,8 +532,7 @@ describe('artifacts list windowing — above the threshold', () => {
     ).toEqual(windowedIndexes().map((index) => ['listitem', '500', String(index + 1)]))
   })
 
-  // Why the values and not just the tracks: the grid keeps six columns aligned either way, so
-  // swapping two cells shows the wrong date under the right header — wrong data read as correct.
+  // Correct tracks alone cannot catch swapped values under the wrong date headers.
   it('puts each row value under the header that names it', () => {
     renderCollection({ items: artifacts(500) })
 
@@ -584,8 +557,7 @@ describe('artifacts list windowing — above the threshold', () => {
       expectRowDivider(row)
     }
 
-    // Why: index 499 is nowhere near the first window, so only the slug comparison can find it —
-    // the removed `divide-y` and any window-relative "is this the last row" check would not.
+    // Only full-list slug identity can find row 499; window-relative checks cannot identify the final row.
     scrollTo(HEADER_HEIGHT_PX + 499 * SYNTHETIC_ROW_HEIGHT_PX)
     expectNoRowDivider(rowAtIndex(499)?.querySelector('[role="button"]'))
     for (const index of [497, 498]) {
@@ -647,22 +619,18 @@ describe('artifacts list windowing — row identity', () => {
     const current = host.querySelectorAll('[data-current="true"]')
     expect(current.length).toBe(1)
     expect(rowAtIndex(0)?.contains(current[0] ?? null)).toBe(true)
-    // The selected class carries no border token, so a selected row keeps its own hairline — and
-    // this is the only render with a selection, so the only place a `!isSelected` gate would show.
+    // Selection must retain the divider; this selected render exposes an incorrect !isSelected gate.
     expectRowDivider(current[0])
   })
 
   it('keeps every windowed row on its own slug when an artifact is prepended', () => {
-    // Paired titles, distinct slugs: real artifacts can share a name, and a title key would then
-    // collide inside the window and hand one artifact's row to the other.
+    // Duplicate titles with distinct slugs expose title-key collisions that could reuse the wrong artifact row.
     const base = Array.from({ length: 500 }, (_, index) =>
       artifact(`a-${index}`, `Artifact ${Math.floor(index / 2)}`)
     )
     renderCollection({ items: base })
     const before = mountCountsSnapshot()
-    // More slugs mounted than the 16 on screen: first paint windows before the scroll margin is
-    // measured, so it briefly fills the whole 600px viewport plus overscan. Bounded, not pinned —
-    // the claim is only that the transient window stayed far short of the whole list.
+    // Before measuring scroll margin, the first window may briefly fill the viewport; bound total mounts below the full-list threshold.
     expect(before.size).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(before.size).toBeGreaterThanOrEqual(mountedRows.count)
 
@@ -706,8 +674,7 @@ describe('artifacts list windowing — surface behaviors', () => {
     expect(deleteActionDisabled(4)).toBe(false)
   })
 
-  // The row's second menu, and the only assertion that opens it: its items are mapped from
-  // `rowActions` separately from the dropdown's, so nothing else here would see them diverge.
+  // The context menu maps actions separately; verify parity with the dropdown.
   it('right-clicking a windowed row offers the same actions as its dropdown', () => {
     renderCollection({ items: artifacts(500) })
     scrollTo(HEADER_HEIGHT_PX + 400 * SYNTHETIC_ROW_HEIGHT_PX)
@@ -776,8 +743,7 @@ describe('artifacts list windowing — surface behaviors', () => {
     expect(scroller().children.length).toBe(3)
     const loadMoreBlock = scroller().lastElementChild
     expect(loadMoreBlock?.textContent).toContain('Load more')
-    // Why pinned: the list-final row draws no divider of its own, so this top rule is the only
-    // thing closing the table — and a deleted class is invisible to a containment check.
+    // Exact equality catches a missing top rule; the final row has no divider of its own.
     expect(loadMoreBlock?.classList.contains('border-t')).toBe(true)
     expect(isObservedByAny(tableHeader())).toBe(true)
     expect(isObservedByAny(requireVirtualShell())).toBe(true)
@@ -824,11 +790,7 @@ describe('artifacts list windowing — surface behaviors', () => {
   })
 })
 
-/**
- * Crossing the threshold is the one moment the shared scroller is attached, and on attach the
- * virtualizer writes its start offset back to it — a jump to the top unless told where the user
- * already is. The 500 -> 600 append above is virtualized on both sides, so it never sees this.
- */
+/** Crossing the windowing threshold attaches the shared scroller; preserve the current offset instead of accepting the virtualizer’s default top. Appends already above threshold cannot test this. */
 describe('artifacts list windowing — crossing the virtualize threshold', () => {
   it('keeps the scroll position when Load more pushes the list over the threshold', () => {
     const loadMore = vi.fn()
@@ -836,8 +798,7 @@ describe('artifacts list windowing — crossing the virtualize threshold', () =>
     renderCollection({ items: base, hasMore: true, loadMore })
     expect(virtualShell()).toBeNull()
 
-    // Why the bottom and not an arbitrary offset: 40 rows under a 300px header overflow a 600px
-    // viewport, so Load more is only reachable from here.
+    // Load more is reachable only at the bottom of these 40 rows below the 300px header.
     const offset = bottomScrollOffset(base.length)
     scrollTo(offset)
     clickLoadMore()
@@ -869,8 +830,7 @@ describe('artifacts list windowing — crossing the virtualize threshold', () =>
   })
 
   it('keeps the scroll position when clearing a search restores the list over the threshold', () => {
-    // 45 of 60 match, so the query takes the list below the threshold and clearing it brings the
-    // list back over — the same detach and re-attach, reached without loading anything.
+    // Search reduces 60 rows to 45, then clearing it reattaches windowing without another page load.
     const items = Array.from({ length: 60 }, (_, index) =>
       artifact(`a-${index}`, index < 45 ? `Keep ${index}` : `Drop ${index}`)
     )

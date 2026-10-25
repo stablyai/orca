@@ -13,12 +13,7 @@ type VisibleOverlayOptions = {
   ignoreDismissed?: boolean
 }
 
-/**
- * Whether a dialog, alert dialog, listbox, or menu is on screen. Page-level Escape
- * handlers ask this before acting: the overlay owns the first Escape, and a page
- * that preventDefaults instead vetoes the overlay's own dismissal. Terminal focus
- * asks the same question: a live overlay outranks a queued pane focus.
- */
+/** Live overlays own Escape before page handlers and outrank queued terminal focus. Ignore page chrome while retaining nested layers. */
 export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
   return Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some((element) => {
     if (!(element instanceof HTMLElement)) {
@@ -36,10 +31,7 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
     if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
       return false
     }
-    // Why: overlays stay mounted and painted through their exit animation, so a
-    // dismissed one would otherwise keep owning a queued focus for ~300ms. Escape
-    // callers opt out: they run before the attribute flips, so it only ever hides
-    // a still-open overlay from them.
+    // Dismissed overlays remain painted during ~300ms exit animation; exclude them from focus ownership. Escape checks run before closed attributes update and must opt out.
     if (options?.ignoreDismissed && element.getAttribute('data-state') === 'closed') {
       return false
     }

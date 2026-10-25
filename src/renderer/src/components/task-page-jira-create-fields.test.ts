@@ -27,10 +27,7 @@ describe('isVisibleJiraCreateField', () => {
     { key: 'issuetype', required: true, expected: false },
     { key: 'summary', required: true, expected: false },
     { key: 'description', required: true, expected: false },
-    // the dialog renders a dedicated assignee picker, so the generic field must not show
     { key: 'assignee', required: true, expected: false },
-    // characterization: current behavior — the system-field filter is exact-match
-    // and case-sensitive, so a differently-cased key stays visible.
     { key: 'Summary', required: true, expected: true }
   ]
 
@@ -136,8 +133,6 @@ describe('getJiraCreateOptionPayload', () => {
   })
 
   it('skips empty-string members', () => {
-    // characterization: current behavior — the checks are truthiness-based, so an
-    // empty id falls through to the next candidate.
     expect(getJiraCreateOptionPayload({ id: '', value: 'v' }, 'fb')).toEqual({ value: 'v' })
   })
 })
@@ -178,8 +173,6 @@ describe('buildJiraCreateFieldValue', () => {
     const numberField = field({ schema: { type: 'number' } })
     expect(buildJiraCreateFieldValue(numberField, ' 42 ')).toBe(42)
     expect(buildJiraCreateFieldValue(numberField, 'abc')).toBe('abc')
-    // characterization: current behavior — Infinity is not finite, so the trimmed
-    // text is kept instead of the coerced number.
     expect(buildJiraCreateFieldValue(numberField, 'Infinity')).toBe('Infinity')
   })
 
@@ -201,8 +194,6 @@ describe('buildJiraCreateFieldValue', () => {
   })
 
   it('prefers allowed values over the number branch', () => {
-    // characterization: current behavior — the allowedValues branch runs before the
-    // number branch, so the draft stays a string even on a number-typed field.
     const numeric = field({ schema: { type: 'number' }, allowedValues: [{ id: 'id-1' }] })
     expect(buildJiraCreateFieldValue(numeric, '7')).toBe('7')
   })
@@ -270,8 +261,7 @@ describe('buildJiraCreateSubmission', () => {
   })
 
   it('keeps userFieldKeys absent when user fields exist but are blank', () => {
-    // Why it matters: a non-empty key list trips the remote user-fields
-    // capability gate, which older hosts fail even with nothing to shape.
+    // Even empty user-field key lists must avoid requiring capabilities absent from older hosts.
     expect(buildJiraCreateSubmission([userField], {}, null)).toEqual({
       customFields: undefined,
       userFieldKeys: undefined

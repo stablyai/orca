@@ -222,10 +222,7 @@ function published(...sessionIds: string[]): RuntimeMobileSessionTabsResult[] {
 
 let main: TabsDrawnFromMain | null = null
 
-/**
- * Switch on: the split workspace in a real store, drawn from main's frames. Main keeps no empty
- * group, so each side holds a terminal.
- */
+// Frame-drawn split workspace: each side needs a terminal because main drops empty groups.
 async function drawSplitFromMain(): Promise<void> {
   const real = createTestStore()
   const side = (groupId: string): Tab => ({
@@ -281,7 +278,6 @@ async function openedChats(): Promise<Tab[]> {
 const first = launchIntent('session-first')
 const second = launchIntent('session-second')
 
-/** A pick from the + menu, new-tab search or the new-agent shortcut: its own action, no text. */
 function pick(
   requestId: string,
   overrides: {

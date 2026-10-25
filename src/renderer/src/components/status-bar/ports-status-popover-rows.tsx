@@ -99,8 +99,7 @@ export function PortRow({
       recordFeatureInteraction('ports')
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
-        // Why: keyboard activations have detail=0; only pointer clicks carry
-        // the modifier intent for the system-browser escape hatch.
+        // Keyboard activation has no pointer modifier intent for the system-browser escape hatch.
         event: event.detail > 0 ? event : null,
         isMac: navigator.userAgent.includes('Mac')
       })

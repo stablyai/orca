@@ -14,7 +14,6 @@ import type { TerminalParkingFoundation } from './use-terminal-parking-foundatio
 
 const initialState = useAppStore.getInitialState()
 
-/** An id-only surface array that reports how often a caller re-derived its ids. */
 function countingSurfaces(ids: string[]): { surfaces: WorkspaceSurface[]; mapCalls: () => number } {
   let mapCalls = 0
   const surfaces = ids.map((id) => ({ id, path: `/tmp/${id}` }))
@@ -51,7 +50,6 @@ describe('workspace surface ids', () => {
     const initialIdSet = result.current.workspaceSurfaceIdSet
     expect(initialIds).toEqual([first.id, second.id])
 
-    // A worktree write that changes no id: fresh row objects, fresh array.
     useAppStore.setState({
       worktreesByRepo: {
         [repo.id]: [
@@ -66,7 +64,6 @@ describe('workspace surface ids', () => {
     expect(result.current.workspaceSurfaceIds).toBe(initialIds)
     expect(result.current.workspaceSurfaceIdSet).toBe(initialIdSet)
 
-    // A real membership change still re-identifies both.
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [first] } })
     rerender()
     expect(result.current.workspaceSurfaceIds).not.toBe(initialIds)
@@ -109,7 +106,6 @@ describe('workspace surface ids', () => {
     applyTerminalColdActivation(controller)
     applyTerminalColdActivation(controller)
 
-    // Pre-fix this was two 423-element id arrays (plus a 423-entry Set) per render.
     expect(mapCalls()).toBe(0)
     expect(controller.mountedWorktreeIdsRef.current.has('repo::/gone')).toBe(false)
     expect(controller.mountedWorktreeIdsRef.current.has('repo::/worktree-0')).toBe(true)
@@ -144,7 +140,6 @@ describe('workspace surface ids', () => {
 
     const pass = collectTerminalParkingPassCandidates(controller)
 
-    // Pre-fix this allocated a 423-element id array and a 423-entry Set per fire.
     expect(mapCalls()).toBe(0)
     expect(pass.retentionCandidates.map((candidate) => candidate.worktreeId)).toEqual([
       'repo::/worktree-0'
@@ -167,8 +162,7 @@ describe('workspace surface ids', () => {
     const idSet = result.current.workspaceSurfaceIdSet
     expect(surfaces).toHaveLength(423)
 
-    // Pre-fix every switch re-ran the projection (423 surface objects) and re-derived
-    // the id array, because the active id was a dep even with no folder host to tie-break.
+    // Active-ID-only switches without a folder tie-break must reuse the surface projection and ID array.
     for (let index = 1; index < 10; index += 1) {
       act(() => {
         useAppStore.setState({ activeWorktreeId: worktrees[index].id })
@@ -215,8 +209,7 @@ describe('workspace surface ids', () => {
       { id: 'folder:folder-shared', path: '/remote/orca' }
     ])
 
-    // Leaving the folder workspace drops the tie-break, so the projection must re-run
-    // and fall back to first-wins rather than mount the previous host's path.
+    // Leaving folder scope must drop its host tie-break and recompute first-wins selection.
     act(() => {
       useAppStore.setState({
         activeWorktreeId: 'repo-1::/worktree-0',
@@ -248,8 +241,7 @@ describe('workspace surface ids', () => {
     })
     expect(fires).toEqual({ surfaceKeyed: 1, idKeyed: 1 })
 
-    // 100 worktree writes that touch no workspace id — the idle shape (activity
-    // timestamps, status refreshes) that dominates a large profile.
+    // Model idle activity/status writes that preserve every workspace ID.
     for (let write = 0; write < 100; write += 1) {
       act(() => {
         useAppStore.setState({

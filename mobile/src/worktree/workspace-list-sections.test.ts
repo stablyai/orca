@@ -168,8 +168,7 @@ describe('filterWorktrees', () => {
   })
 
   it('keeps a sleeping folder workspace on hosts that omit isMainWorktree', () => {
-    // A folder workspace has no branch, so the legacy branch heuristic can never
-    // recognise it — without its own arm, #8873 still reproduces on old desktops.
+    // Legacy branch guessing cannot recognize branchless folder workspaces (#8873).
     const legacyFolder = worktree({
       workspaceKind: 'folder-workspace',
       worktreeId: 'folder:legacy-1',
@@ -368,7 +367,6 @@ describe('buildSections', () => {
   })
 
   it('counts live terminal output as Recent activity for headless serve hosts', () => {
-    // Serve hosts only stamp lastActivityAt at creation, so output must rank.
     const streamingOnServe = worktree({
       worktreeId: 'streaming',
       displayName: 'streaming',
@@ -690,7 +688,6 @@ describe('buildSections', () => {
     )
 
     expect(sections.map((section) => ({ key: section.key, title: section.title }))).toEqual([
-      // The desktop's default catalog order.
       { key: 'workspace-status:in-progress', title: 'In progress' },
       { key: 'workspace-status:in-review', title: 'In review' }
     ])

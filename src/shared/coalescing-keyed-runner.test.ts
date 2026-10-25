@@ -27,7 +27,6 @@ describe('createCoalescingKeyedRunner', () => {
 
     first.resolve('leading')
     await expect(leading).resolves.toBe('leading')
-    // The trailing run uses the latest caller's work, and every burst caller gets its result.
     await expect(Promise.all(burst)).resolves.toEqual(Array(5).fill('trailing-4'))
     expect(burstWork.slice(0, 4).every((work) => work.mock.calls.length === 0)).toBe(true)
     expect(burstWork[4]).toHaveBeenCalledTimes(1)
@@ -79,7 +78,6 @@ describe('createCoalescingKeyedRunner', () => {
 
     first.resolve('origin:0')
     await expect(leading).resolves.toBe('origin:0')
-    // Each queued run uses its latest joiner's work; the runs start in the order they were queued.
     await expect(Promise.all(callers)).resolves.toEqual(['upstream:3', 'origin:2', 'upstream:3'])
     expect(order).toEqual(['upstream:3', 'origin:2'])
   })

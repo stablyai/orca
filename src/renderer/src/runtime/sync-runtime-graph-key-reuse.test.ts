@@ -207,8 +207,7 @@ describe('mobile session snapshot reuse', () => {
     const first = buildMobileSessionTabSnapshots(state)[0]
     const second = buildMobileSessionTabSnapshots(state)[0]
 
-    // Why: main gates per-worktree mobile fanout on this pair; a no-op rebuild
-    // must not mint a fresh version or every graph sync fans out every worktree.
+    // Stable epoch/version gates mobile fan-out; no-op graph rebuilds must not republish every workspace.
     expect(second?.publicationEpoch).toBe(first?.publicationEpoch)
     expect(second?.snapshotVersion).toBe(first?.snapshotVersion)
   })

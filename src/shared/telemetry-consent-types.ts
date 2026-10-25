@@ -1,12 +1,4 @@
-// Shared consent-state shape, serializable across the main/renderer IPC
-// boundary. Lives in `shared/` rather than main so the Privacy pane
-// (renderer-side) can import the type without pulling in main-only code.
-//
-// The same discriminated union is what `src/main/telemetry/consent.ts`
-// produces from `resolveConsent(settings)`. Keeping it here as the source
-// of truth means the IPC getter in `src/main/ipc/telemetry.ts` returns
-// this exact shape and the Privacy pane renders helper text by pattern-
-// matching the `reason` without re-deriving the rules.
+// Share resolveConsent’s IPC union with the Privacy pane so renderer text matches reason codes without importing main or re-deriving consent.
 
 export type TelemetryConsentState =
   | { effective: 'enabled' }

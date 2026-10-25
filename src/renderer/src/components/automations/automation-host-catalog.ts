@@ -19,14 +19,7 @@ import {
 import { resolveSelfExecutionHealth, resolveSshExecutionHealth } from './automation-host-health'
 import { orderAutomationHostCatalogEntries } from './automation-host-catalog-order'
 
-/**
- * Purely projective host catalog for the Automations page.
- *
- * It reads state that is already mirrored on this client and returns entries.
- * It never connects to a runtime, lists targets, or opens an SSH session —
- * rendering the picker must cost nothing. Capability support and authority
- * health are *inputs*, not probes.
- */
+/** Project mirrored state without connecting or probing; authority health/capabilities are inputs, so rendering the picker adds no network traffic. */
 
 export const AUTOMATION_ORPHAN_ENTRY_LABEL = 'Unassigned legacy automations'
 
@@ -133,16 +126,11 @@ function resolveSshCatalogState(
   if (isLive) {
     return targetsHydrated ? 'authoritative' : 'unhydrated'
   }
-  // Why: a tombstone is positive evidence recorded by the owning authority; a
-  // bare absence only counts once that authority's target list actually loaded.
+  // Authority tombstones prove removal; bare absence needs a hydrated target list.
   return isTombstoned || targetsHydrated ? 'removed' : 'unhydrated'
 }
 
-/**
- * A missing generation has four unrelated causes and only one of them is the
- * server's contract. Reading them all as "old server" is exactly what
- * `automation-host-catalog-generation.ts` warns callers against.
- */
+/** Separate all four causes of missing generation; a target disconnect must not masquerade as old-server support. */
 function resolveSshScopeGap(
   querySupport: AutomationHostQuerySupport,
   catalogState: AutomationHostCatalogState,

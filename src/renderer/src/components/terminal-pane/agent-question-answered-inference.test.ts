@@ -185,8 +185,7 @@ describe('agent question-answered inference', () => {
       makeWaitingQuestionEntry({ state: 'working' }),
       makeWaitingQuestionEntry({ toolName: 'Bash' }),
       makeWaitingQuestionEntry({ agentType: 'codex' }),
-      // Why: a stale wait past the freshness horizon no longer renders amber,
-      // so a keystroke must not synthesize activity for it.
+      // Stale waits no longer render attention, so input must not revive them as inferred activity.
       makeWaitingQuestionEntry({ updatedAt: -100_000_000, stateStartedAt: -100_000_000 })
     ]
     for (const entry of cases) {

@@ -49,8 +49,7 @@ async function retryIdempotentActivationAfterCutover(
       operation,
       target: diagnosticTarget
     })
-    // Why: cutover rejects ambiguous in-flight work after the replacement is
-    // active; these state-setting requests are idempotent and safe to repeat once.
+    // Cutover activates the replacement before rejecting old requests; repeat these idempotent state writes once.
     try {
       const response = await request()
       logMobileTerminalDiagnostic('activation-result', {

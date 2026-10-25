@@ -17,8 +17,6 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// Focus/network nudge routing, make-before-break replacement, and the
-// happy-eyeballs race — split from the main supervisor suite (max-lines).
 describe('mobile endpoint supervisor nudges', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -40,8 +38,6 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(deps.openRelay).toHaveBeenCalledOnce()
     expect(logical.getActivePath()).toBe('relay')
 
-    // The OS reports a network handoff, but the relay never published onclose.
-    // The replacement authenticates, migrateTo swaps sessions — never disconnected.
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
@@ -68,21 +64,18 @@ describe('mobile endpoint supervisor nudges', () => {
     await supervisor.start()
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // PEER_DROPPED on the replacement: the suspect session comes down so the
-    // armed retry can run, and the failure books the shared cooldown.
+    // A failed replacement must retire the suspect session and book shared cooldown so the armed retry can recover.
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // More flap nudges share the existing cooldown rather than opening sockets.
     for (let i = 0; i < 5; i++) {
       supervisor.nudge('network-change')
       await vi.advanceTimersByTimeAsync(0)
     }
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // Exactly one retry fires at the 250 ms deterministic backoff boundary.
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
@@ -107,7 +100,6 @@ describe('mobile endpoint supervisor nudges', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // Manual retry uses the same app-resume nudge as a background/foreground cycle.
     supervisor.nudge('app-resume')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -129,7 +121,6 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     expect(deps.openRelay).not.toHaveBeenCalled()
 
-    // Repeated focus events never create a second supervisor-owned liveness policy.
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
     expect(logical.sendRequest).not.toHaveBeenCalled()
@@ -155,9 +146,7 @@ describe('mobile endpoint supervisor nudges', () => {
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
 
-    // First handoff nudge dials a replacement whose bookkeeping write is slow,
-    // holding the recovery mutex; the second nudge arriving then must neither
-    // suspend the session nor be dropped.
+    // Queue a second handoff while slow persistence holds the recovery mutex.
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
@@ -166,7 +155,6 @@ describe('mobile endpoint supervisor nudges', () => {
 
     resolveWrite?.()
     await vi.advanceTimersByTimeAsync(0)
-    // The in-flight replacement satisfies the queued intent — no third socket.
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
@@ -195,8 +183,7 @@ describe('mobile endpoint supervisor nudges', () => {
   })
 
   it('withdraws the racing relay dial when direct authenticated while it was in flight', async () => {
-    // Direct won between the grace timer firing and the relay session
-    // authenticating; the migration must withdraw instead of closing the winner.
+    // Withdraw if direct wins before relay authentication; never close the winning session.
     const logical = new FakeLogicalClient('connected', 'lan')
     const relaySession = new FakeRelaySession('connected')
     const setActiveSession = vi.fn()

@@ -1,6 +1,4 @@
-// What a terminal's exit does to its pane: today's window rules, decided from facts the runtime
-// holds. A proven exit retires the pane unless it is one the user needs to see fail; an unproven
-// one (a negative code, attach absence) keeps the pane and only unbinds it.
+// Retire proven exits unless the failure must remain visible. Negative codes and attach absence only unbind; neither proves process exit.
 
 import { isProvenProcessExit } from '../terminal-exit-cause'
 import { omitStoredFields } from './stored-record-fields'
@@ -42,8 +40,7 @@ function exitVerdict(facts: ProcessExitFacts, paneCount: number): ExitVerdict {
   if (facts.inputWritten) {
     return 'retire'
   }
-  // Whatever the code: a sole newborn keeps its error visible; so does a fresh split that printed
-  // nothing. The runtime sees output for hidden panes too, so no visibility gate.
+  // Before input, keep a sole newborn or a silent unrestored split into a live tab. Runtime output includes hidden panes, so visibility is irrelevant.
   if (paneCount <= 1) {
     return facts.spawnedFresh ? 'keep' : 'retire'
   }

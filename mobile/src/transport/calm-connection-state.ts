@@ -6,11 +6,7 @@ import {
 } from '../../../src/shared/calm-status-reveal'
 import type { ConnectionState } from './types'
 
-/**
- * What the header shows for a connection: a drop after this session was connected reads as
- * connected until it outlasts a clean reconnect, the same schedule the desktop banner uses.
- * The first connect and a refused pairing show at once.
- */
+// Hide short drops after a successful connection; show initial connects and refused pairings immediately.
 export function stepCalmConnectionState(
   previous: CalmStatusReveal,
   input: {
@@ -19,7 +15,6 @@ export function stepCalmConnectionState(
     now: number
     /** On mount the drop already happened unseen; it began no earlier than the last connect. */
     since?: number | null
-    /** What the header shows now; a drop on screen stays through its minimum time and hold. */
     shown?: ConnectionState
   }
 ): { next: CalmStatusReveal; presented: ConnectionState; recheckInMs: number | null } {
@@ -64,7 +59,7 @@ export function useCalmConnectionState(
       state,
       lastConnectedAt,
       now: Date.now(),
-      // Why the last connect: the drop time is unseen on mount; erring early shows a real outage at once.
+      // Use last connect for unseen mount-time drops; erring early exposes real outages promptly.
       since: observedRef.current ? null : lastConnectedAt,
       shown: shownRef.current
     })

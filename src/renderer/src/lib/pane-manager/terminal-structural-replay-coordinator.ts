@@ -26,8 +26,7 @@ export type TerminalStructuralReplayCoordinator = {
   dispose: () => void
 }
 
-// Why: clear-and-replay bytes parse later and can overlap. One pane-scoped
-// queue prevents dimension changes and stale viewport restores from interleaving.
+// Serialize pane rebuilds so asynchronous replay cannot interleave dimensions or stale viewport restoration.
 export function createTerminalStructuralReplayCoordinator(
   terminal: TerminalScrollIntentTarget & TerminalReplayPresentationTarget
 ): TerminalStructuralReplayCoordinator {
@@ -46,8 +45,7 @@ export function createTerminalStructuralReplayCoordinator(
           return
         }
         const intent = captureTerminalStructuralScrollIntent(terminal)
-        // Why: a pre-replay fit retry can otherwise run after this transaction
-        // and restore a stale marker over the authoritative replay viewport.
+        // Cancel pre-replay fit retries before they can overwrite the authoritative viewport with stale markers.
         cancelDeferredScrollRestore(terminal)
         beginTerminalScrollIntentBufferRebuild(terminal)
         const releasePresentation = beginTerminalReplayPresentation(terminal)
@@ -68,8 +66,7 @@ export function createTerminalStructuralReplayCoordinator(
             const shouldRestore = !disposed && options.shouldRestore?.() !== false
             if (shouldRestore) {
               restoreTerminalStructuralScrollIntent(terminal, intent, { restoreBy: 'bottomOffset' })
-              // Why: live bytes must remain serialized behind replay until any
-              // post-restore fit has produced the authoritative destination grid.
+              // Hold live bytes behind replay until post-restore fit establishes the authoritative destination grid.
               await Promise.race([Promise.resolve(options.afterRestore?.()), cancellation])
               shouldPresent = true
             }
@@ -90,8 +87,7 @@ export function createTerminalStructuralReplayCoordinator(
         return
       }
       disposed = true
-      // Why: a torn-down terminal may silently drop write callbacks. Release
-      // the rebuild without sampling its half-parsed buffer into the keyed pin.
+      // Torn-down xterm can silently drop callbacks; release rebuild without sampling half-parsed geometry into the keyed pin.
       cancelTerminalScrollIntentBufferRebuildCompletions(terminal)
       activeCancellation?.()
     }

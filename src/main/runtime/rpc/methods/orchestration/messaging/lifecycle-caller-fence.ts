@@ -4,13 +4,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 
-/**
- * Refuses a worker report or question sent from another orchestration party's terminal: a Run
- * coordinator or the assignee of a different Dispatch. Env that names no live pane on this host
- * (stale, foreign, scrubbed, absent), or a live pane that is no party, proves nothing and passes.
- * Accepted limit: a tmux server keeps the env of the pane that started it, so a worker inside a tmux
- * server started from a live coordinator or worker pane is refused.
- */
+/** Refuse reports/questions from a different live orchestration party; absent/stale/foreign/scrubbed env proves nothing.
+ * Accepted limit: tmux inherits its starting pane's env, so a worker in a coordinator/worker-owned tmux server is refused. */
 export function assertLifecycleCallerIsNotAnotherParty(
   runtime: OrcaRuntimeService,
   args: {
@@ -20,7 +15,7 @@ export function assertLifecycleCallerIsNotAnotherParty(
   }
 ): void {
   const { evidence } = args
-  // Why pane key first: the env handle goes stale on remint, the pane key does not.
+  // Prefer pane key because remint invalidates env handles.
   const callerHandle = evidence?.paneKey
     ? runtime.getTerminalHandleForPaneKey(evidence.paneKey)
     : evidence?.terminalHandle
@@ -34,7 +29,7 @@ export function assertLifecycleCallerIsNotAnotherParty(
   }
   const db = runtime.getOrchestrationDb()
   const callerDispatchId = ownedDispatchId(db, callerHandle, callerPaneKey)
-  // Why: a stale --from handle can hide the worker's own terminal; only a different party is refused.
+  // A stale from handle may hide the same worker; refuse only a different party.
   if (callerDispatchId && callerDispatchId === ownedDispatchId(db, args.from, args.fromPaneKey)) {
     return
   }

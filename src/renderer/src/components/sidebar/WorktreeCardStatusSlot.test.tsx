@@ -340,8 +340,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('keeps sleeping distinct from PR status when new card style is on', () => {
-    // Why done, not inactive: a slept workspace keeps its retained done rows,
-    // so its status still reads 'done' — the exact case from #19624.
+    // Sleeping retains done rows; test that state rather than inactive.
     mocks.status = 'done'
     mocks.sleeping = true
     const markup = renderToStaticMarkup(
@@ -358,7 +357,6 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    // Why: sleep must stay distinct from awake completion; sleeping never collapses into PR.
     expect(markup).toContain('Sleeping')
     expect(markup).toContain('lucide-moon')
     expect(markup).not.toContain('PR checks: Failed')
@@ -421,7 +419,6 @@ describe('WorktreeCardStatusSlot', () => {
         hasBranchIdentity
       />
     )
-    // Why: sleeping wins over the branch lane, even with an identity present.
     expect(sleepingMarkup).toContain('Sleeping')
     expect(sleepingMarkup).toContain('lucide-moon')
     expect(sleepingMarkup).not.toContain('lucide-git-branch')

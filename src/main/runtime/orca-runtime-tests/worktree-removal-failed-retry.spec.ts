@@ -1,6 +1,4 @@
-// A runtime Delete (paired desktop, web, mobile, CLI) on the leftover of a delete that failed after
-// Git dropped the registration: the leftover is listed with its error instead of vanishing from
-// every listing; Delete refuses while the folder is there and finishes the rest once it is gone.
+// List failed-delete leftovers with their error; refuse retry until the leftover is gone.
 import { existsSync } from 'node:fs'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -117,7 +115,7 @@ describe('runtime Delete on a failed delete’s leftover', () => {
 
   it('takes the normal delete once Git registers a checkout at the path again', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A new checkout at the same path: the recorded choices were for the leftover, not for it.
+    // A new checkout at the same path must not inherit stale removal choices.
     vi.mocked(listWorktreesStrict).mockResolvedValue([
       {
         path: leftover,
@@ -154,7 +152,6 @@ describe('runtime Delete on a failed delete’s leftover', () => {
     ).resolves.toEqual({})
 
     expect(otherClientsRetry).toHaveBeenCalledTimes(1)
-    // Only the joined retry ran: the leftover is still there because its stub deleted nothing.
     expect(existsSync(join(leftover, 'node_modules'))).toBe(true)
     expect(removeWorktree).not.toHaveBeenCalled()
   })
@@ -200,7 +197,6 @@ describe('runtime listing straight after a delete fails partway', () => {
       (await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).worktrees.find(
         (row) => row.id === leftoverId
       )
-    // Caches Git's registration for the 30 s scan TTL.
     expect(await listLeftover()).not.toHaveProperty('removalError')
     vi.mocked(removeWorktree).mockImplementation(async () => {
       // Git drops the registration, then fails on a file it cannot delete.

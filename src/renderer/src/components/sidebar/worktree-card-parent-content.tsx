@@ -165,7 +165,6 @@ export function WorktreeCardParentContent({
         </div>
       ) : null}
 
-      {/* Content area */}
       <div
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',

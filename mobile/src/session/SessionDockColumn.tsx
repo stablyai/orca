@@ -19,11 +19,7 @@ type Props = {
 
 type DockPanelContentProps = Omit<Props, 'availableWidth'>
 
-// The wide-layout right-hand dock beside the session content (KTD2/KTD6). Owns its own
-// drag-resize state so dragging only re-renders this subtree (not the whole session
-// screen), and the panel content is memoized so a width change doesn't re-render the
-// embedded panel/comment list — only the container reflows. The terminal re-fit is
-// driven separately off the terminal frame's onLayout, so it doesn't need the width.
+// Keep drag width state in this subtree; terminal refits follow frame onLayout and need no width prop.
 export function SessionDockColumn({
   activePanel,
   hostId,
@@ -53,8 +49,7 @@ export function SessionDockColumn({
   )
 }
 
-// Memoized so a resize (width-only change on the parent) does not re-render the
-// embedded panel — its props are width-independent, so React skips it during a drag.
+// Width-independent panel props let memo skip content rerenders during resize.
 const DockPanelContent = memo(function DockPanelContent({
   activePanel,
   hostId,
@@ -64,9 +59,7 @@ const DockPanelContent = memo(function DockPanelContent({
   onFileOpenStart,
   onOpenedFileDiff
 }: DockPanelContentProps) {
-  // Source Control and Pull Request share one hub instance so swapping dock icons
-  // keeps commit draft / visited-tab / scroll state and lands on the right segment
-  // (design: PR dock maps to hub + tab=pr).
+  // Reuse the source-control hub so dock icon switches retain commit draft, visited tabs and scroll.
   if (activePanel === 'sourceControl' || activePanel === 'pr') {
     return (
       <MobileSourceControlPanel
@@ -96,8 +89,7 @@ const DockPanelContent = memo(function DockPanelContent({
 const RESIZE_EDGE_WIDTH = 24
 
 const styles = StyleSheet.create({
-  // Invisible grab strip over the dock's left edge. Absolute + elevated so it sits
-  // above the panel content and reliably owns the drag on Android.
+  // Elevate the absolute grab strip so Android scroll content cannot steal its drag.
   resizeHandle: {
     position: 'absolute',
     top: 0,

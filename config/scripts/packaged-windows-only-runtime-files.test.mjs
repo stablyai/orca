@@ -27,8 +27,7 @@ async function withTempDir(prefix, run) {
   }
 }
 
-// Copies the installed ssh2 package the way electron-builder applies an extraResources entry,
-// then reports which of its excluded files survived.
+// Apply electron-builder’s extraResources filter to real installed ssh2 and report surviving excluded files.
 async function copiedSsh2ExcludedFiles(resource, destinationRoot) {
   const destination = join(destinationRoot, resource.to)
   await copyFiles([new FileMatcher(resource.from, destination, (value) => value, resource.filter)])

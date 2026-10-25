@@ -5,7 +5,6 @@ import type { RpcSuccess } from './types'
 
 type SentFrame = { id: string; method: string; params?: unknown }
 
-/** The registry sends through an `unknown` port, so name the shape the assertions read. */
 function readSentFrame(request: unknown): SentFrame {
   if (
     typeof request !== 'object' ||

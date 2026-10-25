@@ -14,12 +14,7 @@ import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-h
 
 const ZCODE_SCRIPT_BASE = 'zcode-hook'
 
-/**
- * Every lifecycle event ZCode's hook runner can fire (`HookEventName` in
- * `packages/contracts/src/hooks/index.ts`). Matchers are omitted on purpose:
- * ZCode's `matchesAnyHookMatcher` treats an absent matcher as "every tool",
- * and Claude's `"*"` is not a valid ZCode matcher.
- */
+/** Match ZCode lifecycle events. Omitted matchers mean all tools; Claude-style * is not valid ZCode syntax. */
 export const ZCODE_HOOK_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -30,13 +25,7 @@ export const ZCODE_HOOK_EVENTS = [
   'Stop'
 ] as const
 
-/**
- * ZCode's hook block, nested one level deeper than Claude's (`hooks.events.<Event>`).
- *
- * `events` is deliberately `unknown`-valued: it comes straight off a user-editable JSON
- * file, so each entry is narrowed by `readEventDefinitions` at the point of use rather
- * than asserted to be well-formed here.
- */
+/** User-edited hooks.events values stay unknown until narrowed at use, never assumed well-formed. */
 export type ZCodeHooksRuntimeConfig = {
   enabled?: boolean
   events?: Record<string, unknown>
@@ -49,8 +38,7 @@ export type ZCodeConfig = {
 }
 
 export function getZCodeConfigPath(): string {
-  // Why: ZCode resolves `~/.zcode/cli` from `homedir()` on every platform
-  // (`packages/adapters/src/config/file-config.adapter.ts`) — no APPDATA/XDG branch.
+  // ZCode resolves ~/.zcode/cli from homedir on every platform, without APPDATA/XDG branching.
   return join(homedir(), '.zcode', 'cli', 'config.json')
 }
 
@@ -87,13 +75,11 @@ function getZCodeManagedCommandMatcher(
   return createManagedCommandMatcher(scriptFileName)
 }
 
-/** The `hooks.events` block as a plain lookup, or empty when absent or malformed. */
 export function readZCodeEventMap(config: ZCodeConfig): Record<string, unknown> {
   const events = config.hooks?.events
   return isPlainObject(events) ? events : {}
 }
 
-/** The definitions registered for one event, dropping anything not shaped like a list. */
 function readEventDefinitions(
   events: Record<string, unknown>,
   eventName: string
@@ -102,8 +88,7 @@ function readEventDefinitions(
   if (!Array.isArray(definitions)) {
     return []
   }
-  // Why: a hand-edited config can hold nulls or scalars here; keep only object entries so
-  // the callers below never have to re-check, and never throw on user content.
+  // Filter malformed user scalars/nulls once so hook consumers cannot throw.
   return definitions.filter((definition): definition is HookDefinition => isPlainObject(definition))
 }
 
@@ -125,8 +110,7 @@ export function applyZCodeManagedHooks(
     ...config,
     hooks: {
       ...config.hooks,
-      // Why: ZCode's DefaultRuntimeConfig ships `hooks.enabled: false`, so a hook block alone
-      // fires nothing — this flag is what the "ZCode hooks never run" reports were missing.
+      // Events do not run under ZCode's default disabled flag; installation must enable hooks.
       enabled: true,
       events: nextEvents
     }
@@ -143,16 +127,13 @@ export function removeZCodeManagedHooks(
   let changed = false
 
   for (const [eventName, value] of Object.entries(nextEvents)) {
-    // Why: leave a non-array value exactly as the user wrote it — emptying it below would
-    // delete a key Orca never owned.
+    // Preserve malformed/non-array values Orca never owned.
     if (!Array.isArray(value)) {
       continue
     }
     const definitions = readEventDefinitions(nextEvents, eventName)
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
-    // Why: only touch an event Orca actually owned something in. Without this, an unrelated
-    // empty entry the user wrote (`"Notification": []`) was deleted as collateral whenever a
-    // managed hook elsewhere made the write happen.
+    // Only change owned events; otherwise removing managed hooks also deletes unrelated user-empty entries.
     if (JSON.stringify(cleaned) === JSON.stringify(definitions)) {
       continue
     }
@@ -167,12 +148,10 @@ export function removeZCodeManagedHooks(
   if (!changed) {
     return { config, changed: false }
   }
-  // Why: leave `hooks.enabled` alone on remove — the user may run their own hooks, and
-  // flipping it back to false would silently disable those too.
+  // Do not disable hook runtime on removal; user hooks still need it.
   return { config: { ...config, hooks: { ...config.hooks, events: nextEvents } }, changed: true }
 }
 
-/** Events whose managed command is currently registered in the user's config. */
 export function readManagedZCodeHookEvents(
   config: ZCodeConfig,
   scriptFileName = getZCodeManagedScriptFileName()

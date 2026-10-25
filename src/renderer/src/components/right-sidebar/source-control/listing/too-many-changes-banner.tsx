@@ -52,8 +52,7 @@ export function TooManyChangesBanner({
       if (!isMountedRef.current) {
         return
       }
-      // Why: a failed local/SSH retry must leave the capped warning usable
-      // instead of becoming an unhandled click rejection.
+      // Report retry failures without leaving the warning unusable through an unhandled click rejection.
       console.warn('[SourceControl] capped status retry failed', error)
       toast.error(
         translate(

@@ -20,25 +20,13 @@ export type SkillPathInspection = {
   kind: SkillFilesystemEntryKind
   /** Fully resolved path; null when it cannot be resolved (broken link, gone). */
   realpath: string | null
-  /**
-   * Modification time in ms, read the same way the host's own discovery read it
-   * so a freshness comparison stays self-consistent: native `stat` (follows a
-   * symlink), WSL's `stat -c %Y` (does not). Null when it cannot be read.
-   */
+  /** Discovery-matched mtime: native stat follows links, WSL stat -c %Y does not. Null means unreadable. */
   mtimeMs: number | null
 }
 
 export type SkillInstallFilesystem = {
   authorizeRoots?(paths: readonly string[]): void
-  /**
-   * Enumeration primitives for path-based deletion. Both take arrays because a
-   * guest or remote filesystem must answer a whole delete plan in one round
-   * trip — the WSL home alone contributes ~16 discovery roots, and one
-   * `wsl.exe` boot per root is the cost this shape exists to avoid.
-   *
-   * Optional: only implementations that can enumerate provide them, and the
-   * delete service refuses rather than guessing when they are absent.
-   */
+  /** Optional batch enumeration bounds guest/remote round trips. Delete refuses absent primitives rather than guessing. */
   listEntries?(directories: readonly string[]): Promise<Map<string, SkillDirectoryEntry[]>>
   inspectPaths?(paths: readonly string[]): Promise<Map<string, SkillPathInspection>>
   prepareExtractedSkill(path: string, manifest: SkillPackageManifestV1): Promise<void>
@@ -64,16 +52,12 @@ export const nativeSkillInstallFilesystem: SkillInstallFilesystem = {
     ),
   rename: renameSkillPathWithWindowsRetry,
   remove: (path) => rm(path, { recursive: true, force: true }),
-  // Why the bounded pool rather than `Promise.all`: a delete plan enumerates
-  // every discovery root, and unbounded fan-out here is the same burst of
-  // filesystem-metadata work discovery already learned to cap.
+  // Bound metadata fan-out across the full discovery root set, as discovery does.
   listEntries: async (directories) =>
     new Map(
       await runSkillCandidateTasks(
         directories.map((directory) => async (): Promise<[string, SkillDirectoryEntry[]]> => {
-          // Only a confirmed absence may read as an empty directory: the delete
-          // planner treats an empty listing as "nothing left here" and removes
-          // the parent, so a swallowed EACCES/EIO would delete unenumerated files.
+          // Only proven absence is empty; swallowed EACCES/EIO could authorize removal of an uninspected parent.
           const entries = await readdir(directory, { withFileTypes: true }).catch(
             (error: NodeJS.ErrnoException) => {
               if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {

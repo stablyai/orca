@@ -12,6 +12,7 @@ import {
 import { pickCollapsedUsageChips } from './status-bar-usage-collapse'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values: Record<string, string> = {}) =>
     Object.entries(values).reduce(
       (text, [key, value]) => text.replace(`{{${key}}}`, value),

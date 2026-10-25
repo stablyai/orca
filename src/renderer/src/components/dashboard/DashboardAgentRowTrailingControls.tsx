@@ -12,8 +12,7 @@ type DashboardAgentRowTrailingControlsProps = {
   relativeTimestamp: string | null
   expanded: boolean
   hideExpand: boolean
-  /** Subagent child rows have no store entry of their own to dismiss —
-   *  offering the X would be a silent no-op. */
+  /** Subagents have no dismissible store entry; hide the otherwise inert control. */
   hideDismiss?: boolean
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   onDismiss: (paneKey: string) => void
@@ -35,8 +34,7 @@ export function DashboardAgentRowTrailingControls({
   onToggleExpanded,
   onSendTargetClick
 }: DashboardAgentRowTrailingControlsProps): React.JSX.Element {
-  // Why: stop propagation so clicking nested row controls does not also
-  // activate the agent row or parent worktree card.
+  // Nested controls must not activate the agent row or enclosing worktree card.
   const stopMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
   }, [])
@@ -114,8 +112,7 @@ export function DashboardAgentRowTrailingControls({
           {relativeTimestamp}
         </span>
       )}
-      {/* Why: timestamp and dismiss-X share one slot. On no-hover devices the X
-          is visible by default, so the timestamp must yield there too. */}
+      {/* Timestamp and dismiss share a slot; always-visible dismiss controls on touch must hide the timestamp too. */}
       {!hasChildDisclosure && !sendTargetStatus && !hideDismiss && relativeTimestamp !== null && (
         <span className="relative grid grid-cols-1 grid-rows-1 shrink-0 items-center justify-items-end">
           <span

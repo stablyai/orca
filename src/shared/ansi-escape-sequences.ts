@@ -134,11 +134,7 @@ function stripGenericEscapes(value: string): string {
   return collector.finish()
 }
 
-/**
- * Remove ANSI escape sequences while preserving text, tabs and line breaks.
- * Ordering matters: OSC/string sequences must be consumed before the generic
- * escape pattern, which would otherwise eat only their introducer.
- */
+/** Consume OSC/string sequences before generic escapes or only introducers disappear; preserve text, tabs and line breaks. */
 export function stripAnsiEscapeSequences(value: string): string {
   if (!ANSI_INTRODUCER_PATTERN.test(value)) {
     return value

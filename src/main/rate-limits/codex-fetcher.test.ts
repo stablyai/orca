@@ -19,7 +19,7 @@ const {
   startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
 
-// The probe's child runs in-process here; the worker transport has its own suite.
+// Keep child-process assertions in this suite; worker transport is covered separately.
 vi.mock(
   '../worker-thread-child-process/worker-thread-child-process',
   () =>
@@ -29,7 +29,7 @@ vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
-// The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
+// Observe spawn requests before npm-shim resolution.
 vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcess>()),
   spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
@@ -59,8 +59,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock
 }))
 
-// Default to signed-in so the spawn paths under test still run; the auth gate
-// itself is covered by codex-auth-presence.test.ts and the no-auth case below.
+// Assume signed-in for spawn tests; codex-auth-presence.test.ts covers gating.
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
@@ -79,8 +78,7 @@ function makeRpcChild() {
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
-  // the graceful shutdown path resolves only once the child reports exit.
+  // Graceful shutdown must wait for EOF/signal to produce exit, as real app-server does.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
@@ -124,7 +122,7 @@ function mockBackendUsage(): void {
   readFileMock.mockResolvedValue(
     JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
   )
-  // A Response body reads once; usage and reset credits each fetch.
+  // Response bodies are single-use; usage and credit reset need separate fixtures.
   vi.mocked(fetch).mockImplementation(
     async () =>
       new Response(
@@ -329,7 +327,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits()
-    // Why: without an initialize response only the 30s boot deadline fires.
+    // No initialize response means only the boot deadline can settle this request.
     await vi.advanceTimersByTimeAsync(30_000)
 
     await expect(resultPromise).resolves.toMatchObject({

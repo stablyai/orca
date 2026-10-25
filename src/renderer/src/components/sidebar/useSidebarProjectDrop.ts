@@ -25,7 +25,6 @@ function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings
   )
 }
 
-/** Says why a drop was refused; true when it was. */
 function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
   if (route.kind === 'windows-drive-on-wsl-host') {
     toast.error(

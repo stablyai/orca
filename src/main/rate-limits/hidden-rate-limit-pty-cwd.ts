@@ -7,9 +7,7 @@ import { isRootLikePath } from '../providers/pty-path-safety'
 const HIDDEN_RATE_LIMIT_PTY_CWD_DIR = 'rate-limit-pty-cwd'
 const WSL_RATE_LIMIT_PTY_CWD_DIR = 'orca-rate-limit-pty-cwd'
 
-// Why: the hidden usage PTY must run in a bounded, never-root directory so
-// Claude's discovery cannot walk a whole filesystem — reject a root-like user
-// data path and scope to tmpdir instead (see runaway-cpu-hidden-usage-pty-design.md).
+// Never let hidden Claude discovery start at a filesystem root; bound cwd to userData or tmpdir (runaway-cpu-hidden-usage-pty-design.md).
 function resolveUserDataRoot(userDataPath?: string | null): string {
   const root = userDataPath?.trim() || process.env.ORCA_USER_DATA_PATH?.trim()
   if (root && !isRootLikePath(root)) {

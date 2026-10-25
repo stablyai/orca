@@ -12,6 +12,7 @@ import {
   TERMINAL_HANDLE,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
+import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -37,7 +38,7 @@ const QUESTION_SCREEN =
   '\x1b]0;✳ Claude Code\x07Which color?\r\n❯ 1. Red\r\n  2. Blue\r\n' +
   'Enter to select · ↑/↓ to navigate · Esc to cancel\r\n'
 
-describe('mailbox delivery into a pane with an open dialog', () => {
+describe('mailbox delivery into a pane awaiting the user', () => {
   afterEach(() => {
     vi.useRealTimers()
     for (const directory of temporaryDirectories.splice(0)) {
@@ -81,6 +82,43 @@ describe('mailbox delivery into a pane with an open dialog', () => {
           ? []
           : [expect.stringContaining('You have 1 orchestration message'), '\r']
       )
+      db.close()
+    }
+  )
+
+  it.each([
+    ['sent', 'driving', '\x1b[2J\x1b[H', 5000],
+    ['abandoned past the cap', 'driving', '', USER_INPUT_HOLD_CAP_MS],
+    ["not for Orca's own launch draft", 'launch', '', 0]
+  ] as const)(
+    'holds the pointer while the composer has an unsent draft; %s',
+    async (_label, inputKind, screenAfter, waitAfterMs) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-composer-draft-delivery-hold-')
+      const { runtime, write } = createRuntime(db, {
+        getAgentStatusSnapshot: () => [claudeHookRow('done')],
+        checkHookAgentPresence: async () => 'live',
+        launchAgent: 'claude'
+      })
+      const run = createBoundRun(db, 'Claude Run')
+      await runtime.listTerminals()
+
+      runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ `, 1)
+      runtime.terminalRunFacts.recordInput(PTY_ID, inputKind, 'please refactor the auth')
+      runtime.onPtyData(PTY_ID, 'please refactor the auth', 2)
+      await vi.advanceTimersByTimeAsync(200)
+      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(write).toHaveBeenCalledTimes(inputKind === 'launch' ? 2 : 0)
+
+      runtime.onPtyData(PTY_ID, screenAfter, 3)
+      await vi.advanceTimersByTimeAsync(waitAfterMs)
+
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
       db.close()
     }
   )

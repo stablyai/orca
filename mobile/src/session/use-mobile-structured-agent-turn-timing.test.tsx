@@ -9,8 +9,7 @@ import type {
 import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
-// Host clock sits an hour ahead of the client's so any leak of a host timestamp
-// into the local anchor shows up as a huge offset.
+// Skew the host clock by an hour so unconverted timestamp leakage is obvious.
 const HOST_START = 3_600_000_000
 const CLIENT_NOW = 12_345_000
 
@@ -42,7 +41,6 @@ function lifecycle(
 type Timing = ReturnType<typeof useMobileStructuredAgentTurnTiming>
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
-// The submission the provider acknowledged under the key its lifecycle row cites.
 const SUBMISSIONS: AgentJournalSubmission[] = [
   {
     clientMessageId: 'first',
@@ -86,7 +84,6 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
     const items = [
-      // The acknowledged send: its entry's key is the submission's, not the provider's.
       user('orca:first', 1),
       lifecycle(
         't1',
@@ -100,7 +97,6 @@ describe('useMobileStructuredAgentTurnTiming', () => {
         HOST_START + 5
       ),
       user('u2', 3),
-      // The host appended the row 2.5s after it saw the turn start.
       lifecycle(
         't2',
         4,
@@ -113,7 +109,6 @@ describe('useMobileStructuredAgentTurnTiming', () => {
       renderer = create(createElement(Harness, { items, submissions, turnId: 't2' }))
     })
     expect(timing?.workingStartedAt).toBe(CLIENT_NOW - 2_500)
-    // The row's provider key resolves through the submission alias, not journal order.
     expect([...timing!.settledTurns]).toEqual([
       ['orca:first', { startedAt: HOST_START, workedSeconds: 61, verdict: 'interruption' }],
       ['u2', null]
@@ -128,8 +123,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     act(() => renderer?.update(createElement(Harness, { items, turnId: null })))
     expect(timing?.workingStartedAt).toBeNull()
 
-    // With a host clock that said the turn was 35s old 5s ago, the anchor sits
-    // 40s before first sight, wherever the client's absolute clock is.
+    // Convert host age through elapsed receipt time rather than either clock’s absolute timestamp.
     vi.setSystemTime(CLIENT_NOW + 60_000)
     const next = [
       ...items,

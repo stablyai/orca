@@ -346,8 +346,7 @@ describe('mobile relay pairing journal store', () => {
     }
   )
 
-  // Why: a stranded authorized journal used to refuse every later scan with
-  // "recovery pending" until it expired (#12518); a new scan now supersedes it.
+  // New scans must supersede stranded authorized journals instead of blocking until expiry (#12518).
   it.each([
     ['an earlier launch', () => resetMobileRelayPairingJournalStoreForTests()],
     ['an ended attempt', (journalId: string) => releaseMobileRelayPairingJournal(journalId)]
@@ -434,8 +433,7 @@ describe('mobile relay pairing journal store', () => {
 
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
     expect(metadataRaw).toBeNull()
-    // Why: the presence record must outlive the self-heal so reads stay absent instead of
-    // walking back to an older generation; the metadata-less load sweeps it next.
+    // Keep presence through self-heal to prevent fallback to an older secret; the next metadata-less load sweeps it.
     expect(presenceRaw).toBe('0')
 
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()

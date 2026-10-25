@@ -171,8 +171,7 @@ export function createBrowserTabActions(
             worktreeId,
             environmentId: runtimeEnvironmentId,
             url: defaultUrl,
-            // Why: desktop pane groups are client-owned — the local reconciler only honors a
-            // recorded clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
+            // Desktop reconciliation honors clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
             targetGroupId: groupId,
             clientTargetGroupId: groupId
           })
@@ -243,8 +242,7 @@ export function createBrowserTabActions(
   }
 }
 
-// The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
-// the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
+// Write window-owned tab order/selection/New Tab focus only after main frames draw layout-owner tabs.
 function browserTabOpenView(
   s: AppState,
   worktreeId: string,
@@ -275,8 +273,7 @@ function browserTabOpenView(
   const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   const shouldFocusAddressBar =
     (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
-    // Why the doc check and not just the url: a document page is blank by construction, and
-    // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
+    // Documents are blank by design but have no address bar; URL alone must not trigger New Tab focus.
     !page.docLocation &&
     (options?.focusAddressBar ??
       (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))

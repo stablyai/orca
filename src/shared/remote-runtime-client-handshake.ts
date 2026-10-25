@@ -22,8 +22,7 @@ export function createRemoteRuntimeClientHandshake(
   })
 }
 
-// Why: the auth step is async, so the socket can close or be replaced before the frame is
-// sealed; `stillAwaiting` is re-checked then, and a seal failure goes to `fail`.
+// Async auth sealing may outlive socket close/replacement; recheck stillAwaiting before send and route sealing errors to fail.
 export async function sendRemoteRuntimeTokenAuth(args: {
   handshake: PairedE2EEClientHandshake
   deviceToken: string

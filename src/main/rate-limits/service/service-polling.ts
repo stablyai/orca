@@ -21,10 +21,6 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal
-  // ---------------------------------------------------------------------------
-
   protected startTimer(): void {
     this.stopTimer()
     this.timer = setInterval(() => {
@@ -61,7 +57,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
-    // Why: these fetches only power in-app UI; skip polling when hidden/minimized/unfocused to save CLI/API budget (refresh on activate).
+    // UI-only polling pauses while inactive to save CLI/API budget; activation refreshes it.
     if (!this.mainWindow.isVisible() || this.mainWindow.isMinimized()) {
       return false
     }
@@ -69,7 +65,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   }
 
   protected getActiveProviderState(): ActiveProviderState[] {
-    // Why: key by provider so a new provider is compile-forced an entry — a missing one silently never recovers from a startup error.
+    // Exhaustive provider keys prevent new providers from silently missing startup-error recovery.
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
@@ -104,9 +100,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         }
         continue
       }
-      // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
+      // Failed startup reads remain eligible for provider-throttled activation recovery.
       if (limits.status === 'error') {
-        // Why: the server told us when to come back (Retry-After); retrying earlier burns the endpoint's budget and keeps the 429 alive.
+        // Respect server Retry-After rather than spending budget and prolonging 429s.
         if (this.isRetryAfterActive(limits)) {
           continue
         }
@@ -135,8 +131,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
     if (plan.kind === 'full') {
-      // Why: a full fetch retries failing providers too; restart their retry clocks so the individual failure lane doesn't fire ahead of backoff.
-      // Why: gated on !isFetching — the fetchAll below no-ops mid-flight, so don't consume the retry throttle for free.
+      // Full fetches retry failures too; restart clocks only if one can start, never for an in-flight no-op.
       if (!this.isFetching) {
         const now = Date.now()
         for (const { provider, limits } of this.getActiveProviderState()) {
@@ -149,7 +144,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
 
-    // Why: an in-flight fetch will refresh these; skip without consuming the per-provider retry throttle so the next activation retries.
+    // In-flight work already refreshes this data; preserve retry allowance for the next activation.
     if (this.isFetching) {
       return
     }
@@ -167,7 +162,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return
     }
 
-    // Why: recover partial failures of dedicated-fetch providers without re-reading healthy providers still inside their debounce.
+    // Dedicated cycles retry failing providers without rereading healthy debounced siblings.
     if (plan.providers.includes('claude')) {
       await this.fetchClaudeOnly()
     }

@@ -46,7 +46,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
       onClose={() => {
         setProjectRepoNotInOrca(null)
       }}
-      // Why: opens over the project detail, which renders after it in the shared host.
+      // Layer above the project detail rendered later in the shared host.
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     >
       {projectRepoNotInOrca ? (

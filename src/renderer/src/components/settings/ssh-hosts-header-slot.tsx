@@ -8,10 +8,7 @@ type SshHostsHeaderSlotState = {
 
 const SshHostsHeaderSlotContext = createContext<SshHostsHeaderSlotState | null>(null)
 
-/**
- * Why a portal slot: Sync/Add/⋯ sit in the settings section header, but their state (sync,
- * restore, the add form) lives in SshPane; portalling keeps one owner instead of lifting it all.
- */
+/** Portal header actions so SshPane retains ownership of sync, restore and add-form state. */
 export function SshHostsHeaderSlotProvider({
   children
 }: {

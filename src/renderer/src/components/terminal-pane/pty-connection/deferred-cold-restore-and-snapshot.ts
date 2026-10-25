@@ -44,8 +44,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      // Switch point: main records the wake of this pane alone, the one this window resumed.
-      // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
+      // Record main’s wake before dropping the record; record-only consumption would leave nothing for main to resume.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         recordPaneWakeThroughLayoutOwner(
           useAppStore.getState(),
@@ -102,8 +101,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     deferHiddenAgentResume(session, startup)
       ? Promise.resolve(null)
       : session.spawnColdRestoreAgentResume(startup, options)
-  // Why: the hibernation wake fires from noteVisibilityResume in the outer
-  // connection scope, long after this deferred-connect closure has run.
+  // Visibility wake runs from the outer binding after this deferred-connect closure returns.
   session.wakeHibernatedAgentPane = () => session.spawnColdRestoreAgentResume()
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
@@ -212,8 +210,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       session.clearRestoredSnapshotBaseline()
       return
     }
-    // Why: arming drops the redelivery permanently, so the snapshot's painted
-    // content must be able to back the seq it claims; a blank image cannot (STA-5179).
+    // Only painted cell content can back a seq baseline that permanently suppresses redelivery; blank images cannot (STA-5179).
     if (snapshot.seq > 0 && !paintsContent) {
       session.clearRestoredSnapshotBaseline()
       return
@@ -223,12 +220,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         ? Math.min(snapshot.pendingDeliveryStartSeq, snapshot.seq)
         : null
     if (windowStartSeq !== null && windowStartSeq >= snapshot.seq) {
-      // Why: main reported an empty undelivered backlog — no chunk at or
-      // below the snapshot seq can ever arrive again (delivery is once and
-      // in order) and a future pending-cap trim re-arms the out-of-band
-      // marker. Arming a baseline anyway would misread live chunks from a
-      // foreign seq domain (restarted counter / synthetic injection) as
-      // duplicates or trim gaps and silently drop genuinely-new output.
+      // An empty pending backlog cannot redeliver earlier seqs; arming a baseline would drop new output from restarted/foreign counters.
       session.clearRestoredSnapshotBaseline()
       return
     }

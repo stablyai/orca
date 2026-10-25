@@ -25,8 +25,7 @@ describe('terminal path-exists cache', () => {
   it('re-probes (cache miss) once a negative result expires — issue #5024', () => {
     const cache: TerminalPathExistsCache = new Map()
     writeTerminalPathExistence(cache, 'k', false, startTerminalPathExistsProbe(1000))
-    // Past the negative TTL: treated as a miss so the caller re-checks the
-    // filesystem (the file may have since been created).
+    // Expired misses must re-probe because the file may now exist.
     expect(readTerminalPathExistence(cache, 'k', 1000 + 10_000)).toBeUndefined()
     expect(cache.has('k')).toBe(true)
   })

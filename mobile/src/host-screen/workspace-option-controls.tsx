@@ -36,14 +36,10 @@ export type WorkspaceOptionHost = { id: ExecutionHostId; label: string }
 export type WorkspaceOptionProps = {
   controller: HostScreenController
   hosts: readonly WorkspaceOptionHost[]
-  /** The shared option's label. */
   label: string
 }
 
-/**
- * How the phone draws one shared option. Inline options draw their own main-sheet row (`framed`
- * ones inside the section's card); the rest show their value on the main sheet and open a page.
- */
+// Inline options render on the main sheet, framed inside the card when requested; others show a value and open a page.
 export type WorkspaceOptionControl =
   | { kind: 'inline'; framed: boolean; Row: ComponentType<WorkspaceOptionProps> }
   | {
@@ -54,8 +50,7 @@ export type WorkspaceOptionControl =
 
 const CARD_PROPERTY_CHOICES = phoneCardPropertyChoices(WORKSPACE_CARD_PROPERTY_CHOICES)
 
-// Why folder rows: the desktop asks whether it has project groups, which the phone does not read;
-// the host lists folder workspaces only under a group, so their rows are that fact as it shows.
+// Infer project-group availability from folder rows: hosts list folder workspaces only under a group.
 function cardDisplayChoices(
   controller: HostScreenController
 ): WorkspaceViewChoice<WorktreeCardProperty>[] {
@@ -78,7 +73,6 @@ function hostsValue({ controller, hosts }: WorkspaceOptionProps): string {
   )
 }
 
-// As the desktop: while every host shows, no single host is checked, and tapping one shows only it.
 function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
   const { settings, state } = controller
   const visible = state.view.filters.visibleHostIds
@@ -105,7 +99,6 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
                 key={host.id}
                 label={host.label}
                 checked={checked.has(host.id)}
-                // The last shown host cannot be turned off.
                 disabled={next === undefined}
                 onPress={() => write(next)}
               />
@@ -120,7 +113,6 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
 function projectsValue({ controller }: WorkspaceOptionProps): string {
   const repos = controller.sectionsResult.uniqueRepos
   const selected = controller.state.view.filters.filterRepoIds
-  // As the desktop: no project picked shows every project.
   const checked = selected.length === 0 ? repos : repos.filter((repo) => selected.includes(repo.id))
   return summarizeChecklist(
     checked.map((repo) => repo.name),
@@ -178,7 +170,6 @@ function choicePage<Id extends string>(
   return {
     kind: 'page',
     value: ({ controller }) => choiceLabel(choices, selected(controller)),
-    // Picking keeps the page open, as the desktop keeps its submenu open.
     Page: ({ controller }) => (
       <View style={styles.filterGroup}>
         <ChoiceRows
@@ -212,7 +203,6 @@ function CardPropertyRows(props: {
   )
 }
 
-// As the desktop: "Hover" under Compact, otherwise how many of the phone's properties show.
 function showPropertiesValue({ controller }: WorkspaceOptionProps): string {
   const value = getWorkspaceCardPropertiesValue(
     withoutPhoneHiddenProperties(controller.state.view.worktreeCardProperties),
@@ -277,7 +267,6 @@ function filterSwitch(
   }
 }
 
-/** One phone control per shared option; a new option fails to compile until it has one. */
 export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, WorkspaceOptionControl> = {
   hosts: { kind: 'page', value: hostsValue, Page: HostsPage },
   projects: { kind: 'page', value: projectsValue, Page: ProjectsPage },
@@ -313,7 +302,6 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
     value: showPropertiesValue,
     withAgentLayout: true
   }),
-  // As the desktop, Card display shows no value.
   cardDisplay: propertiesPage(cardDisplayChoices, { value: () => '', withAgentLayout: false }),
   hideSleepingWorkspaces: filterSwitch('hideSleepingWorkspaces'),
   alwaysShowDefaultBranchWorkspace: filterSwitch('alwaysShowDefaultBranchWorkspace'),

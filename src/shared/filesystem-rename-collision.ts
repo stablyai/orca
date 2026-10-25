@@ -9,8 +9,7 @@ function isENOENT(error: unknown): boolean {
 }
 
 function caseFoldFileExplorerBasename(name: string): string {
-  // Why: APFS may surface canonically equivalent Unicode names in different forms.
-  // Node has no filesystem-native collation API here, so this is best-effort.
+  // APFS can vary Unicode normalization; NFC/case folding is best-effort without native filesystem collation.
   return name.normalize('NFC').toLowerCase()
 }
 

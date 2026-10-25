@@ -26,11 +26,9 @@ import {
 
 const ROW_SPRING = { damping: 28, stiffness: 350 }
 const LONG_PRESS_ACTIVATION_MS = 200
-// Why: joins row keys into a change-detection signature; NUL cannot occur in
-// a key, so the joined string is unambiguous.
+// NUL cannot occur in row keys, making joined change signature unambiguous.
 const KEY_SEPARATOR = '\u0000'
-// Why: drags near the viewport edges scroll the outer ScrollView so rows can
-// travel further than one screen; speed ramps up the closer the finger gets.
+// Ramp outer scrolling near viewport edge so drags can span more than one screen.
 const AUTO_SCROLL_EDGE = 72
 const AUTO_SCROLL_MAX_SPEED = 560
 
@@ -111,8 +109,7 @@ export function DragReorderList<ItemT>({
     }
   }
 
-  // Why: pan updates stop while the finger holds still at a screen edge, so a
-  // frame callback keeps scrolling (and re-slotting the row) until it moves.
+  // Keep scrolling/re-slotting via frame callback while stationary edge finger stops pan updates.
   const autoScroll = useFrameCallback((frame) => {
     const key = activeKey.value
     if (key === null) {
@@ -187,8 +184,7 @@ export function DragReorderList<ItemT>({
     [onReorder, keySignature, catalog]
   )
 
-  // Why: screen-reader users can't long-press-drag; the handle exposes
-  // move up/down accessibility actions that commit the same reorder.
+  // Expose move-up/down accessibility actions: screen readers cannot long-press-drag.
   const moveRowByAccessibilityAction = useCallback(
     (key: string, delta: number) => {
       const fromIndex = keys.indexOf(key)

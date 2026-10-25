@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 
-/** Header of the Cloud VMs card: what they are and where their recipes are set up. */
 export function CloudVmSetupGuide({
   refreshAction
 }: {

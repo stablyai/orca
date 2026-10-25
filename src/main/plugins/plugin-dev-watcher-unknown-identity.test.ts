@@ -27,7 +27,7 @@ vi.mock('node:fs/promises', async () => {
   return { ...actual, stat: vi.fn(actual.stat) }
 })
 
-/** The catch-up refresh a live subscription schedules; later counts start after it. */
+/** Exclude the subscription's initial catch-up from later refresh counts. */
 async function flushCatchUpRefresh(refresh: ReturnType<typeof vi.fn>): Promise<void> {
   await vi.advanceTimersByTimeAsync(300)
   expect(refresh).toHaveBeenCalledOnce()
@@ -208,7 +208,6 @@ it('recovers a silent replacement when previously unknown identity first becomes
   await vi.advanceTimersByTimeAsync(60_000)
   await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
   await vi.advanceTimersByTimeAsync(300)
-  // The rebind refresh, then the rebound subscription's one catch-up.
   expect(refresh).toHaveBeenCalledTimes(2)
   expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce()
   for (let tick = 1; tick < 4; tick += 1) {
@@ -234,7 +233,6 @@ it('retries a failed native setup for an unknown present root on the existing ma
   await vi.advanceTimersByTimeAsync(60_000)
   await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
   await vi.advanceTimersByTimeAsync(300)
-  // The retry refresh, then the retried subscription's one catch-up.
   expect(refresh).toHaveBeenCalledTimes(2)
   await vi.advanceTimersByTimeAsync(180_000)
   expect(refresh).toHaveBeenCalledTimes(2)

@@ -21,8 +21,7 @@ export function applyRemoveWorktreeSuccessState(
   executionHostId?: ExecutionHostId,
   confirmedDiscards?: ConfirmedUnsavedDiscards
 ): void {
-  // Why outside `set`: it is module-scope, not store state. Dropping it also
-  // re-arms the once-per-workspace warning if this id is ever added back.
+  // Clear module caches outside store state; reused IDs must re-arm ambiguity warnings.
   forgetAmbiguousOwnerWarnings([worktreeId])
   forgetCombinedDiffViewsForWorktrees([worktreeId])
   set((s) => {
@@ -46,7 +45,6 @@ export function applyRemoveWorktreeSuccessState(
     }
     const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, removedFileIds, confirmedDiscards)
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
-    // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
       : false
@@ -78,9 +76,7 @@ export function applyRemoveWorktreeSuccessState(
       ),
       baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
-      // Why: file search state is worktree-scoped; clear it so another worktree can't inherit stale matches.
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
-      // Why: these worktree-keyed maps are re-keyed on rename but were missed by removal, leaking one entry each.
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
       recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
@@ -102,12 +98,10 @@ export function applyRemoveWorktreeSuccessState(
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
       editorViewMode: omitByFileId(s.editorViewMode),
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
-      // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
-      // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
@@ -130,8 +124,7 @@ export function applyRemoveWorktreeSuccessState(
         new Set(worktreeIds),
         executionHostId
       ),
-      // Why: terminal shutdown clears these earlier, but teardown awaits after that and a
-      // provider-session event routed by worktree id can write a record in between (#24784).
+      // Provider-session events can reinsert worktree-scoped sleep records after terminal shutdown while teardown awaits (#24784).
       ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds)),
       sortEpoch: s.sortEpoch + 1
     }

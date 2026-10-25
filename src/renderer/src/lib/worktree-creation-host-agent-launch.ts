@@ -10,9 +10,7 @@ import type {
   HostAgentLaunch
 } from '@/store/slices/worktrees/create/worktree-create-payload'
 
-/** The composer's terminal agent, for a host that plans it from its own settings. Chat launches
- *  have their own host path; VM recipes keep the desktop plan, as their hosts hold no user settings.
- *  Drafts stay desktop-planned: a host's `startupDraft` swaps a host-disabled agent for another. */
+/** Use host settings for terminal agents; chats have a separate host path. VM hosts lack user settings, and drafts stay desktop-planned because host startupDraft can substitute a disabled agent. */
 export function hostPlannableAgentLaunch(
   request: WorktreeCreationRequest
 ): HostAgentLaunch | undefined {
@@ -33,8 +31,7 @@ export function hostPlannableAgentLaunch(
   }
 }
 
-/** What the window itself starts in the created workspace: its startup and the agent its terminal
- *  recovery may relaunch. A host that planned the launch owns it, so the window starts neither. */
+/** Host-planned launches also own window startup/recovery; starting either here could duplicate the agent. */
 export function windowStartupAfterCreate(
   request: WorktreeCreationRequest,
   result: CreatedWorktreeResult,
@@ -42,14 +39,13 @@ export function windowStartupAfterCreate(
 ): { startup?: WorktreeStartupPayload; agent: TuiAgent | null } {
   if (result.hostPlannedStartup) {
     if (!backendSpawned) {
-      // Why: the host reported no agent terminal, yet its own window may still have started one.
+      // No reported terminal does not prove the host window started no agent.
       toast.error(agentLaunchPaneNoticeText({ kind: 'unconfirmed' }, request.agent))
     }
     return { agent: null }
   }
   if (request.startupPlan && !backendSpawned && !request.startupPlan.launchToken) {
-    // Why: delayed delivery must target the exact pane spawned from this queued
-    // startup, so both halves of the handoff share one renderer-session token.
+    // Share one renderer-session token so delayed delivery targets the pane this queued startup spawns.
     request.startupPlan.launchToken = createBrowserUuid()
   }
   if (request.agentLaunchRoute === 'structured-native-chat') {

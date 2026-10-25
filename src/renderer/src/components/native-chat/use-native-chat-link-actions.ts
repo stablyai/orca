@@ -18,8 +18,7 @@ export type NativeChatLinkActions = {
   closeLinkActions: (dismissed?: LinkActionRequest) => void
 }
 
-/** Transcript links offer the same destination popovers the terminal shows: file
- *  targets open in Orca or the default app, http(s) targets in a browser. */
+/** Match terminal destination popovers: files open in Orca/default app, HTTP(S) links in a browser. */
 export function useNativeChatLinkActions(
   context: NativeChatFileLinkContext | null,
   rootRef: RefObject<HTMLElement | null>,
@@ -51,7 +50,6 @@ export function useNativeChatLinkActions(
         openFileLink?.(event, href)
         return
       }
-      // mailto: and other schemes keep the anchor's default handling.
       if (route.kind !== 'web' || !/^https?:/i.test(route.url)) {
         return
       }

@@ -151,10 +151,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('prefers the remote-validated eligibility default so it cannot diverge from the composer', () => {
-    // Why: the intent flow's eligibility is recomputed from the same compare
-    // base right before creation, so its default already corrects a local-only
-    // stacked parent to the repo default. The one-click path must target that
-    // same base as the composer, not the raw (possibly unpushable) compare base.
+    // Match the composer's remote-validated base default so one-click creation cannot target an unpushable local stack parent.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'stacked-parent',
@@ -173,9 +170,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('falls back to the compare base when eligibility supplies no default', () => {
-    // Why: never blank the base. If the main process could not resolve a default
-    // (no candidate on remote and repo default unavailable), keep the user's
-    // compare base rather than dropping to an empty target.
+    // If eligibility has no remote default, preserve the selected compare base instead of an empty target.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'refs/remotes/origin/release',
@@ -240,8 +235,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('fast-forwards behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
-    // Genuinely diverged (local + non-equivalent remote commits): auto-merging
-    // would reconcile without consent, so the intent flow keeps the explicit stop.
+    // Diverged branches require an explicit stop; automatic merge would reconcile without consent.
     expect(
       resolveCreatePrIntentRemoteStep({
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },

@@ -3,10 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
 
-/**
- * The row is the only place a release build shows why an update failed, so it reads exactly what
- * was recorded: the newest failure per paired host, and nothing at all until there is one.
- */
+// Release builds expose update failures only here: show the newest per paired host, and nothing before a failure is recorded.
 type Doubles = {
   failures: MobileWebShellUpdateFailure[]
   hosts: { id: string; name: string }[]

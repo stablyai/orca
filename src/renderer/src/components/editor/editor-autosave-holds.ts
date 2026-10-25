@@ -10,15 +10,13 @@ import {
 } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
-// Why not the model URI: it normalizes paths by the client's rules, so on a Windows client
-// `/repo/a\b.ts` and `/repo/a/b.ts` on a POSIX host would collide.
+// Use host path rules: Windows model-URI normalization would conflate distinct backslash/slash paths on POSIX hosts.
 function physicalFileKey(owner: EditorModelOwner, filePath: string): string | null {
   const ownerKey = resolvedEditorModelOwnerKey(owner)
   if (ownerKey === null) {
     return null
   }
-  // Why: a discard via `\\wsl$` must hold a tab opened via `\\wsl.localhost`. A tuple can't
-  // equal a real path string, so a share literally named `wsl` stays apart.
+  // Unify WSL UNC aliases using a tuple so a real share named wsl cannot collide.
   const wsl = isLocalWindowsEditorOwner(owner) ? parseWslUncPath(filePath) : null
   const pathKey = wsl
     ? ['wsl', wsl.distro.toLowerCase(), wsl.linuxPath]
@@ -26,10 +24,7 @@ function physicalFileKey(owner: EditorModelOwner, filePath: string): string | nu
   return JSON.stringify([ownerKey, pathKey])
 }
 
-/**
- * The physical file (host + path) a tab writes, shared by its edit and unstaged-diff tabs in every
- * workspace; a tab whose host is unknown, or that writes nothing, answers for itself.
- */
+/** Share physical host/path holds across edit and unstaged-diff views; unresolved or non-writing tabs keep private IDs. */
 export function editorFileHoldKey(state: AppState, file: OpenFile): string {
   if (file.mode !== 'edit' && !(file.mode === 'diff' && file.diffSource === 'unstaged')) {
     return file.id
@@ -46,10 +41,7 @@ export function editorPathHoldKey(
   return physicalFileKey(resolveEditorModelOwner(owner, state), filePath)
 }
 
-/**
- * Hold keys a path mutation (git discard) touches: the matched tabs' files, plus the file the path
- * names in the target workspace, which another workspace's tab may hold with none open here.
- */
+/** Hold matched tabs plus the target physical path, including views opened only in other workspaces. */
 export function pathMutationHoldKeys(
   state: AppState,
   target: EditorPathMutationTarget
@@ -71,32 +63,29 @@ export function pathMutationHoldKeys(
     ),
     joinPath(target.worktreePath, target.relativePath)
   )
-  // Why: an unresolved owner keys per tab, so no other tab can share it.
+  // Unknown owners remain private per-tab keys and cannot supply shared holds.
   if (targetKey !== null) {
     keys.add(targetKey)
   }
   return keys
 }
 
-// Why: a slow SSH git restore can take a while; past this the dirty tabs say why they aren't saving.
+// Explain prolonged autosave holds without releasing a potentially slow SSH discard.
 export const AUTOSAVE_HOLD_BACKSTOP_MS = 120_000
 
 export type AutoSaveHolds = {
   /** Pauses autosave for these hold keys until the returned release runs. */
   hold: (keys: ReadonlySet<string>) => () => void
-  /** Whether a discard currently holds `file`'s autosave. */
   isHeld: (state: AppState, file: OpenFile) => boolean
-  /** Re-shows the banner on dirty tabs of a hold past its backstop whose banner was dismissed. */
+  /** Re-show dismissed banners on dirty tabs when their hold exceeds its backstop. */
   flagOverdue: (state: AppState) => void
   dispose: () => void
 }
 
-/** Autosave pauses a git discard takes on a file in every workspace while git runs. */
 export function createAutoSaveHolds(
   getState: () => AppState,
   onRelease: () => void
 ): AutoSaveHolds {
-  // Held key → number of holds on it; `overdue` counts those past their backstop.
   const counts = new Map<string, number>()
   const overdue = new Map<string, number>()
   const backstops = new Set<number>()
@@ -131,8 +120,7 @@ export function createAutoSaveHolds(
   const hold = (keys: ReadonlySet<string>): (() => void) => {
     let released = false
     let isOverdue = false
-    // Why: git's outcome is still unknown, so the hold stays; the banner only explains the pause
-    // and makes any later write an explicit choice.
+    // Keep the hold while Git’s outcome is unknown; explain the pause and require explicit choice for later writes.
     const backstop = window.setTimeout(() => {
       backstops.delete(backstop)
       isOverdue = true
@@ -142,7 +130,7 @@ export function createAutoSaveHolds(
     backstops.add(backstop)
     add(counts, keys, 1)
     return () => {
-      // Why: a discard finishing after the controller detached must not re-arm its timers.
+      // Late discard settlement must not restart timers after controller disposal.
       if (released || disposed) {
         return
       }

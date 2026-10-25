@@ -1,10 +1,4 @@
-/**
- * Reproduces issue #8048 against the built daemon on Windows.
- *
- * A witness PowerShell stays alive while victim sessions receive the same
- * graceful-then-immediate kill pair emitted when Orca closes a workspace.
- * The daemon PID and witness session must survive every iteration.
- */
+// Reproduce #8048 on Windows daemon: send overlapping graceful/immediate kill pair to victim sessions while witness PowerShell and daemon survive every iteration.
 import { fork } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -335,8 +329,7 @@ async function main() {
         throw new Error(`Victim ${victimId} did not return a valid OS pid`)
       }
 
-      // Why: sending both RPCs before awaiting either preserves the renderer
-      // unmount/worktree-sweep overlap that produced issue #8048.
+      // Send both RPCs before awaiting to preserve renderer-unmount/worktree-sweep overlap behind #8048.
       const graceful = rpc.request('kill', { sessionId: victimId, immediate: false })
       const forced = rpc.request('kill', { sessionId: victimId, immediate: true })
       await Promise.all([graceful, forced])

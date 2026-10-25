@@ -11,7 +11,7 @@ import { buildUnixCliLauncher } from '../cli/cli-dev-launcher'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 
-// Read by native/windows-cli-launcher: its presence beside orca.exe selects the server mode.
+// The native Windows launcher selects server mode when this sibling config exists.
 export const ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME = 'orca-launcher.cfg'
 const RETIRED_LAUNCHER_SUFFIX = '.retired'
 
@@ -25,7 +25,7 @@ export async function prepareOrcadCliLauncher(): Promise<void> {
   launcherPath = null
   const installRoot = resolveOrcadInstallRoot()
   const entry = join(installRoot, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
-  // Older server slots and source-only runs may not include the CLI yet.
+  // Older slots and source-only runs may lack the CLI.
   if (!existsSync(entry)) {
     return
   }
@@ -54,7 +54,7 @@ export function buildWindowsCliLauncherConfig(
   return `node=${nodePath}\ncli=${cliEntryPath}\nuser-data=${userDataPath}\n`
 }
 
-/** A native exe, never a .cmd: cmd.exe reparses `%*` and cannot carry a multi-line body. */
+/** Native exe preserves arguments that cmd.exe reparses through batch %*. */
 async function prepareWindowsLauncher(
   installRoot: string,
   entry: string,
@@ -73,7 +73,7 @@ async function prepareWindowsLauncher(
     try {
       writeFileAtomically(path, binary)
     } catch {
-      // A running `orca` keeps its image mapped; Windows still lets it be renamed away.
+      // Windows locks running images against overwrite but allows retirement by rename.
       await rename(path, `${path}.${randomUUID()}${RETIRED_LAUNCHER_SUFFIX}`)
       writeFileAtomically(path, binary)
     }
@@ -91,7 +91,7 @@ async function removeRetiredLaunchers(binDir: string): Promise<void> {
   await Promise.all(
     names
       .filter((name) => name.startsWith('orca.exe.') && name.endsWith(RETIRED_LAUNCHER_SUFFIX))
-      // One still running stays until a later start.
+      // Running retired images remain until a later cleanup.
       .map((name) => rm(join(binDir, name), { force: true }).catch(() => {}))
   )
 }

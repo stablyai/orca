@@ -1,6 +1,4 @@
-/** Shared plumbing for paired-desktop terminal specs: the headed host owns the terminal, the
- *  paired client mirrors it as a web-terminal surface tab. Extracted so more than one spec can
- *  drive the same topology without re-deriving the surface-id mapping. */
+// Map a host terminal to its paired client’s mirrored surface without re-deriving ids in every spec.
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import {
@@ -39,8 +37,7 @@ export async function callEnvironment(
   )
 }
 
-/** Validates rather than asserts: an RPC shape change should fail here with the shape named, not
- *  surface later as an undefined surface id. */
+// Validate the RPC shape immediately so drift cannot surface later as an undefined surface id.
 function readCreatedTerminalTab(result: unknown): { id: string; terminal: string } {
   if (
     typeof result === 'object' &&
@@ -111,8 +108,7 @@ export async function openPairedClientTab(
     .toBe(true)
 }
 
-/** Reads the target tab's own buffer. `getTerminalContent` resolves whatever tab the store thinks
- *  is active, which hides per-tab reveal failures. */
+// Read this tab’s buffer; active-tab lookup can hide failures in a different revealed tab.
 export async function readPairedPaneContent(page: Page, webTabId: string): Promise<string> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)

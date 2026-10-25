@@ -64,7 +64,6 @@ beforeEach(() => {
   backgroundTasks = undefined
 })
 
-/** Starts `/compact` and leaves its reply outstanding, then sends a message. */
 function sendDuringCommand(): boolean | 'queued' {
   mocks.call.mockImplementation((_target: unknown, method: string) =>
     method === 'agentSession.conversationCommand' ? new Promise(() => {}) : Promise.resolve(null)
@@ -97,7 +96,6 @@ it('queues a message typed during a command on a host that runs it as a turn', (
   expect(mocks.outboxSend).toHaveBeenCalledOnce()
 })
 
-// What a refused /clear names goes from the chat with its cause, so its line can go too.
 describe('a /clear refused for something the chat shows', () => {
   const renderSession = () =>
     renderHook(() =>

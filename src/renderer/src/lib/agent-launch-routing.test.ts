@@ -109,13 +109,11 @@ describe('new agent launch routing', () => {
       ],
       hostStructuredAgents: ['grok']
     }
-    // Routing does not depend on native installation inventory.
     expect(route({ agent: 'claude' })).toBe('structured-native-chat')
     expect(route(grokHost)).toBe('structured-native-chat')
     expect(
       route({ ...grokHost, settings: { ...settings, nativeChatProviders: { grok: false } } })
     ).toBe('terminal-tui')
-    // A saved choice wins either way.
     expect(route({ settings: { ...settings, nativeChatProviders: { codex: false } } })).toBe(
       'terminal-tui'
     )
@@ -166,7 +164,6 @@ describe('new agent launch routing', () => {
     // A client that never told the server it reads structured sessions keeps the host terminal.
     expect(route({ ...server, clientCapabilities: [] })).toBe('terminal-tui')
     expect(route({ ...server, clientCapabilities: undefined })).toBe('terminal-tui')
-    // The server has not answered yet, or answered without structured sessions.
     expect(route({ ...server, hostCapabilities: null })).toBe('terminal-tui')
     expect(route({ ...server, hostCapabilities: [] })).toBe('terminal-tui')
   })

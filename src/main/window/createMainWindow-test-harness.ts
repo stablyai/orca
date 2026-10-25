@@ -70,8 +70,7 @@ export type BrowserManagerModuleMock = {
   }
 }
 
-// Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
-// re-declaring the shared electron surface.
+// vi.mock factories are hoisted per suite; builders reuse the Electron surface without duplicating it.
 export function electronModuleMock(): ElectronModuleMock {
   return {
     app: appMock,

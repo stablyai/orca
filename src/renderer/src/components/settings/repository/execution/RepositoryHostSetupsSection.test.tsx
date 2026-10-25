@@ -212,7 +212,6 @@ describe('RepositoryHostSetupsSection', () => {
       openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // The single project pane switches host in place — no navigation.
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       'github:stablyai/orca',
       toSshExecutionHostId('openclaw 2'),

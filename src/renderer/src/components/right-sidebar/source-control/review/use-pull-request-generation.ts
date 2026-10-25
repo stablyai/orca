@@ -30,10 +30,7 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 
-/**
- * Runs AI generation of the PR details for the active branch through a store record, so a
- * run started before a tab switch is still resumable when the composer remounts.
- */
+/** Persist generation in a store record so the composer can resume after tab switches. */
 export function useSourceControlPullRequestGeneration({
   activeRepo,
   activeRepoTarget,
@@ -123,7 +120,6 @@ export function useSourceControlPullRequestGeneration({
         runtimeTarget: activeRepoTarget
       }
       const seed = { ...fields }
-      // Why: SourceControl can unmount on tab switches; the persisted record lets the PR composer resume on return.
       setPullRequestGenerationRecord(
         generationKey,
         createRunningPullRequestGenerationRecord(context, seed, fieldRevisions, options?.autoSubmit)
@@ -133,7 +129,7 @@ export function useSourceControlPullRequestGeneration({
         try {
           const result = await generateRuntimePullRequestFields(
             {
-              // Why: route generation by the repo OWNER host, not the focused runtime.
+              // Route generation to the repo owner, which may differ from the focused host.
               target: context.runtimeTarget,
               prefs: useAppStore.getState().settings,
               worktreeId: context.worktreeId,
@@ -224,7 +220,7 @@ export function useSourceControlPullRequestGeneration({
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
-      // Why: the user can switch hosts while generation runs; cancel the original request owner, not the focused host.
+      // Cancel on the original request owner even after host navigation.
       target: record.context.runtimeTarget,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,

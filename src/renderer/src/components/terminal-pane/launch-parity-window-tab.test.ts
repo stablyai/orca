@@ -206,9 +206,7 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   )
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2 and 6, window
-// half): the real producer, store and pane build the pty:spawn request each case's table row names.
-// C2 (typed-prompt tabs onto the pane trigger) and C3 (Antigravity continue) check against it.
+// Use real launch producers, store and pane to pin the spawn-request parity baseline for later convergence.
 describe('window-tab producers: the pty:spawn request a real pane sends', () => {
   // Why: the first import transforms the whole pane graph; keep that out of the first case.
   beforeAll(async () => {

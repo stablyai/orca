@@ -184,8 +184,7 @@ export function presentGitHubPRMergeState(
     }
   }
   if (!hasFullMergeMetadata(item)) {
-    // Why: GitHub can omit merge metadata while checks are already green; let
-    // users attempt merge and rely on the main-process preflight for blockers.
+    // Missing metadata can coexist with green checks; main-process preflight remains the merge authority.
     if (checksPassed(item)) {
       return passedChecksMergePresentation(autoMergeAction)
     }
@@ -266,8 +265,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
-  // Why: GitHub may still report intermediate mergeability while checks are
-  // green; the merge command re-checks authoritative blockers before merging.
+  // Main-process preflight rechecks blockers when GitHub mergeability is still intermediate despite green checks.
   if (checksPassed(item)) {
     return passedChecksMergePresentation(autoMergeAction)
   }

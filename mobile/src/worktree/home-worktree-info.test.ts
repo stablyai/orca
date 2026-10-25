@@ -79,8 +79,7 @@ describe('homeHostWorktreeSummary', () => {
   it('keeps the last proven counts however long ago the refresh failed', () => {
     const afterFailure = markHomeWorktreeCatalogUnavailable(loaded, 'host-1')
 
-    // A session that stays connected past the live window then hits one failed refresh is the
-    // headline case: the counts are history, not nothing.
+    // Failed refresh preserves historical counts after their live window expires.
     expect(
       homeHostWorktreeSummary(afterFailure, provenAt + HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS + 1)
     ).toBe('Last known: 12 worktrees · 2 active')
@@ -90,7 +89,7 @@ describe('homeHostWorktreeSummary', () => {
   })
 
   it('stops calling aged-out counts live even while a refresh is only pending', () => {
-    // A snapshot rehydrated from a previous app session describes a host we have not reached yet.
+    // Rehydrated counts predate any current-session answer.
     expect(homeHostWorktreeSummary(loaded, provenAt + 600_000)).toBe('12 worktrees · 2 active')
     expect(homeHostWorktreeSummary(loaded, provenAt + 600_001)).toBe(
       'Last known: 12 worktrees · 2 active'

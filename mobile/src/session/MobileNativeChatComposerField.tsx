@@ -5,7 +5,6 @@ import {
 } from './mobile-native-chat-composer-field-skill'
 import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
 
-/** The composer's text field. Native: the skill is a styled span of the field's own text. */
 export function MobileNativeChatComposerField({
   value,
   skillToken,

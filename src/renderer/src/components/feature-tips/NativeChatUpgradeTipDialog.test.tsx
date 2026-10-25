@@ -34,7 +34,6 @@ function textOf(html: string): string {
     .replace(/&#x27;/g, "'")
 }
 
-// Why: repo convention — React only suppresses its act() warning when this global is set.
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 function dialog(
@@ -97,7 +96,6 @@ describe('NativeChatUpgradeTipDialog', () => {
     expect(text).not.toContain('Turn on chat mode')
     expect(html).not.toContain('role="switch"')
     expect(html).toContain('27rem')
-    // The way back to the terminal stays in the tip.
     expect(text).toContain('Resume in New Terminal copies a Claude or Codex chat')
   })
 
@@ -110,11 +108,9 @@ describe('NativeChatUpgradeTipDialog', () => {
     const buttons = container.querySelectorAll<HTMLButtonElement>('footer button')
     expect(buttons).toHaveLength(2)
     expect(buttons[0]?.textContent).toBe('Leave Off')
-    // Leave Off is plain text, not a Button primitive.
     expect(buttons[0]?.hasAttribute('data-variant')).toBe(false)
     expect(buttons[1]?.textContent).toBe('Enable Now')
     expect(buttons[1]?.getAttribute('data-variant')).toBe('default')
-    // Enable Now takes the row width Leave Off leaves.
     expect(buttons[1]?.classList.contains('flex-1')).toBe(true)
     expect(buttons[0]?.classList.contains('flex-1')).toBe(false)
     act(() => buttons[0]?.click())

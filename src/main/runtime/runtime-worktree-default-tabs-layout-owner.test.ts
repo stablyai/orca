@@ -65,7 +65,6 @@ describe('layout-owner build: a worktree’s default tabs, window or none', () =
       { tabId: tabs![1]!.tabId, leafId: tabs![1]!.leafId, title: 'Tests', command: 'pnpm test' },
       { tabId: tabs![2]!.tabId, leafId: tabs![2]!.leafId }
     ])
-    // Titles and colours rode the one command: no separate title or colour write.
     expect(host.setTabTitle).not.toHaveBeenCalled()
     expect(host.setTabColor).not.toHaveBeenCalled()
   })

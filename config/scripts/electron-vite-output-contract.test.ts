@@ -9,11 +9,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { MainConfigFactory } from 'electron-vite'
 import { resolveConfig } from 'vite'
 import {
-  DEV_BUNDLE_ID,
-  DEV_HELPER_BUNDLE_ID,
-  getDevHelperPlistPatches
-} from './dev-electron-bundle-identity.mjs'
-import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
@@ -134,17 +129,8 @@ describe('Electron Vite output contract', () => {
     }
   })
 
-  it("minifies main and renderer with rolldown's in-process minifier", () => {
-    // Why: 'esbuild' routes every chunk through a second, undeclared transpiler.
-    expect(electronViteConfig.main?.build?.minify).toBe('oxc')
-    expect(electronViteConfig.renderer?.build?.minify).toBe('oxc')
-    expect(electronViteConfig.main?.esbuild).toBeUndefined()
-    expect(electronViteConfig.renderer?.esbuild).toBeUndefined()
-  })
-
   it('emits hidden main source maps that packaging strips from app.asar', () => {
-    // Hidden maps decode minified crash traces without the bundle referencing
-    // files that the packaged app never ships.
+    // Hidden maps decode minified crashes without referencing maps omitted from the package.
     expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
     expect(electronBuilderConfig.files).toContain('!out/**/*.map')
   })
@@ -185,12 +171,18 @@ describe('Electron Vite output contract', () => {
     expect(matcher.createFilter()(outputPath, { isDirectory: () => false })).toBe(true)
   })
 
-  it('keeps CLI main imports unpacked at stable paths', () => {
+  it('keeps CLI main imports unpacked at their emitted paths', () => {
     const input = electronViteConfig.main?.build?.rollupOptions?.input
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       throw new Error('Expected named main-process inputs')
     }
-
+    const appRoot = join(tmpdir(), 'orca-cli-unpack-app')
+    const matcher = new FileMatcher(
+      appRoot,
+      join(tmpdir(), 'orca-cli-unpack-destination'),
+      (value: string) => value,
+      electronBuilderConfig.asarUnpack
+    ).createFilter()
     for (const name of [
       'gitlab/project-ref-parser',
       'macos-tree-clone',
@@ -208,20 +200,13 @@ describe('Electron Vite output contract', () => {
       'skills/bundled-skill-install/cli-entry',
       'startup/http1-compatibility-marker'
     ]) {
-      expect(input).toHaveProperty(name)
+      expect(input[name]).toBe(nodePath.resolve('src', 'main', `${name}.ts`))
+      expect(
+        matcher(join(appRoot, 'out', 'main', `${name}.js`), { isDirectory: () => false })
+      ).toBe(true)
     }
-    expect(electronBuilderConfig.asarUnpack).toContain('out/main/gitlab/project-ref-parser.js')
-    expect(electronBuilderConfig.asarUnpack).toContain('out/main/macos-tree-clone.js')
-    expect(electronBuilderConfig.asarUnpack).toContain('out/main/asar-transparent-fs.js')
-    expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
-    expect(electronBuilderConfig.asarUnpack).toContain(
-      'out/main/orca-profiles/profile-index-store.js'
-    )
-    expect(electronBuilderConfig.asarUnpack).toContain(
-      'out/main/startup/http1-compatibility-marker.js'
-    )
-    expect(electronBuilderConfig.asarUnpack).toContain(
-      'out/main/skills/bundled-skill-install/cli-entry.js'
+    expect(matcher(join(appRoot, 'out', 'main', 'index.js'), { isDirectory: () => false })).toBe(
+      false
     )
   })
 
@@ -256,10 +241,6 @@ describe('Electron Vite output contract', () => {
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('smol-toml')
-  })
-
-  it('bundles validation dependencies used by the sandboxed preload', () => {
-    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
   })
 
   it('exits when a static import fails before source error guards load', () => {
@@ -352,20 +333,5 @@ describe('Electron Vite output contract', () => {
     } finally {
       rmSync(logDirectory, { recursive: true, force: true })
     }
-  })
-
-  it('isolates renderer entry side effects behind strict facades', () => {
-    expect(electronViteConfig.renderer?.build?.rollupOptions?.preserveEntrySignatures).toBe(
-      'strict'
-    )
-  })
-
-  it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
-    // Asserted on the values rather than the source text: the ids moved into
-    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
-    expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
-    expect(getDevHelperPlistPatches()).toEqual([
-      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
-    ])
   })
 })

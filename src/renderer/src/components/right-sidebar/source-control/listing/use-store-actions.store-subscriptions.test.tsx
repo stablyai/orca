@@ -41,7 +41,6 @@ afterEach(() => {
   useAppStore.setState(originalState, true)
 })
 
-/** Everything the hook returns that is a store action rather than subscribed state. */
 const ACTION_KEYS = Object.keys(originalState).filter(
   (key) => typeof (originalState as Record<string, unknown>)[key] === 'function'
 )
@@ -56,8 +55,7 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Why 2: `pullRequestGenerationRecords` and `commitMessageGenerationRecords` are the only
-    // entries that are state; the other 40 are actions read through getState().
+    // Subscribe only to the two generation maps; fixed-identity actions come from getState().
     expect(listenerCount() - baseline).toBe(2)
 
     unmount()
@@ -148,7 +146,6 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     const before = useAppStore.getState() as unknown as Record<string, unknown>
     const snapshot = new Map(ACTION_KEYS.map((key) => [key, before[key]]))
 
-    // Drive real writes through several slices, then confirm no action identity moved.
     act(() => {
       useAppStore.getState().setRightSidebarOpen(true)
       useAppStore.getState().setRightSidebarTab('source-control')

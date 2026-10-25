@@ -1,10 +1,4 @@
-/**
- * Identity-first equality over a `Record<string, readonly T[]>` under a projection of each item.
- *
- * Why not `createWorktreeTabBucketProjection`: that builds a projected record so callers can hold
- * it; a subscriber that only needs "did my fields change?" pays for an allocation per store write.
- * This answers the same question by comparing in place.
- */
+/** Compare projected bucket fields in place; subscribers needing only equality avoid allocating a projected record on every store write. */
 export function sameBucketRecords<T>(
   previous: Readonly<Record<string, readonly T[]>>,
   next: Readonly<Record<string, readonly T[]>>,

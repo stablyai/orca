@@ -12,7 +12,6 @@ type BufferState = {
   viewportY: number
 }
 
-// 40 cols of 8px cells fit a 381px viewport unscaled, so one row is 15 screen px.
 const CELL_HEIGHT = 15
 const FRAME_MS = 16
 const ESC_ARROW_DOWN = '\u001b[B'
@@ -67,7 +66,6 @@ describe('terminal WebView touch scrolling', () => {
 
   function boot(importedDocument = false): void {
     document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
-    // The bundle the WebView loads, run as the WebView runs it.
     if (importedDocument) {
       const terminalDocument = createTerminalDocument()
       stopDocument = () => terminalDocument.stop()
@@ -79,7 +77,7 @@ describe('terminal WebView touch scrolling', () => {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
       })
     )
-    // Why: init commits the replacement surface on the next animation frame.
+    // Wait for init’s next-frame surface commit.
     runFrames(8)
   }
 
@@ -115,7 +113,6 @@ describe('terminal WebView touch scrolling', () => {
     surface.dispatchEvent(event)
   }
 
-  /** A finger moving up the screen, one touchmove per frame; returns where it ended. */
   function dragUp(fromY: number, stepPx: number, steps: number): number {
     let y = fromY
     for (let i = 0; i < steps; i++) {
@@ -188,7 +185,6 @@ describe('terminal WebView touch scrolling', () => {
     fireTouch('touchstart', { x: 40, y: 400 })
     dragUp(400, 0.5, 200)
 
-    // 100px of travel over 15px rows.
     expect(scrolledRows()).toBe(6)
   })
 
@@ -199,7 +195,6 @@ describe('terminal WebView touch scrolling', () => {
     const y = dragUp(400, 100, 1)
     expect(scrolledRows()).toBe(6)
 
-    // 10px left over from the first move plus 5px more is one more row.
     dragUp(y, 5, 1)
     expect(scrolledRows()).toBe(7)
   })

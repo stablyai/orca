@@ -60,8 +60,7 @@ export default function LinearItemDrawer({
     []
   )
 
-  // Why: the list view may not include the full description. Re-fetch
-  // the issue by ID and its comments to populate the drawer.
+  // List rows may omit descriptions; fetch full issue and comments for the drawer.
   // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: resets drafts as it starts the fenced IPC fetch for a new issue id.
   useEffect(() => {
     if (!issue) {
@@ -80,8 +79,7 @@ export default function LinearItemDrawer({
     const requestId = requestIdRef.current
     setFullIssue(issue)
 
-    // Why: fetch issue and comments independently so a transient comments
-    // failure doesn't discard the successfully-fetched issue data.
+    // Fetch independently so comments failure cannot discard the issue.
     linearGetIssue(providerSettings, issue.id, issue.workspaceId)
       .then((issueResult) => {
         if (requestId !== requestIdRef.current) {
@@ -90,8 +88,7 @@ export default function LinearItemDrawer({
         if (issueResult) {
           const fetched = issueResult as LinearIssue
           setFullIssue(fetched)
-          // Why: skip if the user already made optimistic edits — the fetch
-          // carries pre-edit data that would clobber in-flight changes.
+          // Preserve optimistic edits made after the fetch began.
           if (!hasEditedRef.current) {
             setEditState(initLinearIssueEditState(fetched))
           }
@@ -104,8 +101,7 @@ export default function LinearItemDrawer({
         if (requestId !== requestIdRef.current) {
           return
         }
-        // Why: merge any comments the user posted optimistically while the
-        // fetch was in-flight, using id to avoid duplicates.
+        // Merge optimistic comments posted during fetch, deduplicating by id.
         let fetched = commentsResult as LinearComment[]
         const opt = optimisticCommentsRef.current
         if (opt.length > 0) {
@@ -126,8 +122,7 @@ export default function LinearItemDrawer({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [issue?.id, issue?.workspaceId, providerSettings])
 
-  // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
-  // pointer-events: none on body when overlays transition.
+  // Clear Radix’s stale body pointer-events after overlay transitions, as GitHubItemDialog does.
   useEffect(() => {
     if (!issue?.id) {
       return

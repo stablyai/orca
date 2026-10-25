@@ -44,9 +44,7 @@ export function MobileBrowserAddressField({
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-        // Why: `keyboardType` is a native-only enum, so in a browser the URL keyboard is lost and
-        // the field falls back to a plain one. `inputMode` is what a browser reads, and it takes
-        // precedence over `keyboardType`, so it must stay undefined everywhere else.
+        // Browser reads inputMode, not native keyboardType; keep it undefined on native where it would override URL keyboard.
         inputMode={Platform.OS === 'web' ? 'url' : undefined}
         numberOfLines={1}
         returnKeyType="go"

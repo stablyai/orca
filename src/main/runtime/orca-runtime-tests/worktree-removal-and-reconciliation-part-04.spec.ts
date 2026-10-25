@@ -512,12 +512,11 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValue({ stdout: '', stderr: '' })
     onTestFinished(() => gitSpy.mockRestore())
 
-    // Prime the bounded raw scan cache with the worktree still present.
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
 
-    // Regression (#8882): orphan-cleanup removal must also drop the raw scan cache, or the worktree lingers in listings until the 30s TTL.
+    // Orphan cleanup must invalidate the raw scan cache rather than wait 30s (#8882).
     vi.mocked(listWorktrees).mockResolvedValue([])
     await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
       { worktrees: [] }
@@ -699,7 +698,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {
-    // Reproduces: stale filesystem-auth cache made git:branchCompare fail with "Access denied" for CLI-created worktree paths.
+    // A stale filesystem-auth cache denied branch comparison for CLI-created paths.
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),

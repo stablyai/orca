@@ -182,16 +182,14 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
-    // Why: only a Windows desktop shows this toggle, so only there may search find it.
+    // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
-// shape can change without breaking consumers, and a typo/rename throws loudly
-// instead of silently matching the wrong (or empty) entry.
+// Resolve by title and fail loudly on renames so changing catalog shape cannot silently retarget numeric indexes.
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getExperimentalPaneSearchEntries().find((e) => e.title === title)
   if (!entry) {

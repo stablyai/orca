@@ -66,8 +66,7 @@ export function TabBarQuickCommandsMenu({
   const commandListRef = useRef<HTMLDivElement | null>(null)
   const focusFrameRef = useRef<number | null>(null)
   const menuImeEnter = useImeEnterGestureOwnership()
-  // Why: closing restores focus to the chevron for accessibility, but that
-  // focus restoration should not immediately reopen its tooltip.
+  // Suppress tooltip reopening when closing the menu restores focus to its chevron.
   const suppressMoreCommandsTooltipRef = useRef(false)
   const showSearch = repoCommands.length + globalCommands.length > 1
   const filteredRepoCommands = useMemo(
@@ -155,8 +154,7 @@ export function TabBarQuickCommandsMenu({
     if (!menuOpen || !showSearch) {
       return
     }
-    // Why: Radix focuses the menu surface by default; search-first UX needs
-    // the input ready so Enter can run the highlighted command.
+    // Override Radix surface focus so Enter can run the highlighted search result.
     focusSearchInput()
     return cancelFocusFrame
   }, [cancelFocusFrame, focusSearchInput, menuOpen, showSearch])
@@ -349,8 +347,7 @@ export function TabBarQuickCommandsMenu({
                 )}
                 value={query}
                 onValueChange={(nextQuery) => {
-                  // Why: a new query changes the filtered list, so keyboard
-                  // selection should jump to the best match immediately.
+                  // Reset user selection on query changes so the best new match becomes active.
                   setCommandValueOverride(null)
                   setQuery(nextQuery)
                 }}

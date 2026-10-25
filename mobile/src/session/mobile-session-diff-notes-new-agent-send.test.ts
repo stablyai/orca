@@ -178,13 +178,12 @@ async function mountSessionScreen(client: RpcClient): Promise<void> {
   })
 }
 
-/** "Send review notes to AI", then the sheet's first new agent session. */
 async function sendNotesToNewAgent(): Promise<void> {
   await act(async () => screen().send())
   await act(async () => screen().sendActions[0]?.onPress())
 }
 
-/** The launched tab landed, which frees the "+" lock long before a prompted reply. */
+// A listed tab releases the create lock before prompt delivery settles.
 function landLaunchedTab(): void {
   const { creatingTerminalRef } = screen()
   const lock = creatingTerminalRef.current
@@ -204,7 +203,6 @@ describe('sending review notes to a new agent session', () => {
     expect(launches()).toHaveLength(1)
     landLaunchedTab()
 
-    // The notes are no longer offered, and a stale tap on the old sheet starts nothing.
     await act(async () => screen().send())
     expect(screen().pendingDelivery).toBeNull()
     await act(async () => sheetAction?.onPress())
@@ -212,7 +210,6 @@ describe('sending review notes to a new agent session', () => {
     expect(launches()).toHaveLength(1)
     expect(screen().sendingIds).toEqual(new Set([NOTE.id]))
 
-    // Delivered: the notes leave the list rather than becoming sendable again.
     await act(async () => replies[0]?.(launchReply('handed-to-terminal')))
     expect(screen().sendingIds.size).toBe(0)
     expect(sendRequest.mock.calls.filter(([method]) => method === 'worktree.set')).toEqual([

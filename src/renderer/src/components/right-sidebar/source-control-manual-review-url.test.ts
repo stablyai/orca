@@ -241,8 +241,7 @@ describe('buildSourceControlManualReviewUrl', () => {
   })
 
   it('suppresses the link when the branch tracks a fork remote with no resolvable push URL', () => {
-    // Repro: branch pushed only to a fork (tracked via plain git, so pushTarget
-    // is empty). A base-repo compare/main...quick-commands would 404 on origin.
+    // A fork-only tracked branch without pushTarget would 404 through the base-repo compare URL.
     expect(
       buildSourceControlManualReviewUrl({
         baseRef: 'refs/remotes/origin/main',
@@ -296,8 +295,7 @@ describe('buildSourceControlManualReviewUrl', () => {
   })
 
   it('suppresses the link when the branch was never pushed (no upstream, no push target)', () => {
-    // Repro: local-only branch. main...<local-branch> lands on GitHub's
-    // "There isn't anything to compare" page.
+    // Unpushed local branches would lead to GitHub's empty compare page.
     expect(
       buildSourceControlManualReviewUrl({
         baseRef: 'refs/remotes/origin/main',

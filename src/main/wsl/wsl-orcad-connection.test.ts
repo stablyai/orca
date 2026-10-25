@@ -177,7 +177,6 @@ describe('WslOrcadConnectionManager', () => {
     expect(deployAndLaunch).toHaveBeenCalledTimes(1)
     expect(manager.list()).toEqual([a])
     expect(manager.get('UBUNTU')).toBe(a)
-    // Only the bridge check ran a child so far.
     expect(children.commands).toHaveLength(1)
   })
 
@@ -187,7 +186,6 @@ describe('WslOrcadConnectionManager', () => {
     launches.push(ready(first.port))
     expect(await manager.ensure('Ubuntu')).toBe(connection)
     expect(children.commands).toHaveLength(1)
-    // A refresh that changed nothing stays quiet: connecting, ready, and no more.
     expect(onChange).toHaveBeenCalledTimes(2)
   })
 
@@ -298,7 +296,6 @@ describe('WslOrcadConnectionManager', () => {
     await expect(manager.ensure('Ubuntu')).rejects.toBeInstanceOf(WslOrcadLaunchDeferredError)
     expect(children.commands).toHaveLength(0)
     expect(manager.get('Ubuntu')).toBeNull()
-    // Nothing serves, so the deferral is what offers Update or Force.
     expect(onChange).toHaveBeenLastCalledWith(
       'Ubuntu',
       null,
@@ -424,7 +421,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
       resolve: () => stored,
       connect: async () => {
         const target = { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' } as const
-        // Never used: readReadiness answers from the fixture.
+        // The fixture supplies readiness, so this spawner is unused.
         const spawn = fakeWslBridgeChildren().spawn
         return { target, connection: createWslOrcadHostTransport({ target, spawn }) }
       },
@@ -438,7 +435,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     return { stored: () => stored, refresh, recovery }
   }
 
-  // The host knows only the token it published after losing its device registry.
+  // After registry loss, only the newly published token authenticates.
   const verifyIdentity = async (pairingOffer: string) =>
     parsePairingCode(pairingOffer)?.deviceToken === 'fresh-token'
       ? ({ verdict: 'verified' } as const)
@@ -468,7 +465,7 @@ describe('a WSL host that refuses the enrolled pairing', () => {
     let hostLostRegistry = false
     const onChange = vi.fn()
     const { manager } = setup({
-      // The host accepts the enrolled token until it loses its registry, then accepts nothing.
+      // Registry loss invalidates the previously enrolled token.
       verifyIdentity: async (pairingOffer: string) =>
         !hostLostRegistry && parsePairingCode(pairingOffer)?.deviceToken === 'lost-token'
           ? ({ verdict: 'verified' } as const)

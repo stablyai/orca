@@ -1,7 +1,4 @@
-/**
- * End of the seam: `orchestration.workerStart` reads the user's own setting and starts the worker
- * that setting describes. No flag reaches this decision, and no combination refuses the start.
- */
+/** workerStart follows the user's launch preference without a mode flag; unsupported structured mode falls back rather than refusing routine dispatch. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -208,8 +205,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('seeds --model and --effort into the structured session instead of downgrading', async () => {
-    // These two used to force a PTY worker, which is half of why orchestration never produced a
-    // structured chat: choosing a model is the ordinary way to dispatch one.
+    // Model/effort used to force PTY mode, preventing routine structured dispatch.
     const result = await startWorker(STRUCTURED_DEFAULT, { model: 'opus', effort: 'high' })
 
     expect(result).toMatchObject({
@@ -223,8 +219,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('creates a new worktree WITHOUT an agent terminal and gives it a structured session', async () => {
-    // The other half: `createWorkerWorktree` creates agent-first, so a `--worktree new-child`
-    // dispatch could only ever end up a PTY terminal worker.
+    // Agent-first new worktrees previously made structured mode unreachable.
     const created = mockWorktreeCreation()
 
     const result = await startWorker(STRUCTURED_DEFAULT, {
@@ -259,8 +254,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('falls back to a terminal agent in the worktree it just created when the host refuses', async () => {
-    // The host can only answer for a workspace that exists, so a created worktree settles its mode
-    // after creation — and a refusal must not fail a routine dispatch.
+    // Resolve mode after creation, when workspace support is knowable; unsupported preference must still dispatch.
     mockWorktreeCreation()
     vi.mocked(runtime.getStructuredAgentSessionCreateSupport).mockResolvedValue({
       supported: false,

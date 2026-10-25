@@ -46,15 +46,13 @@ function makePane(id: number): ManagedPaneInternal {
 }
 
 describe('pane inline images', () => {
-  // Every test below the deferred one wants the addon already resolved, so the
-  // file has no ordering requirement in either direction.
+  // Most tests need a resolved addon; prime independently so file ordering cannot matter.
   beforeAll(async () => {
     await primeTerminalImageAddon()
   })
 
   it('attaches deferred panes once the addon chunk resolves', async () => {
-    // Fresh modules rather than "must run first": the deferred path only exists
-    // while the module-level addon memo is still unresolved.
+    // Fresh modules expose the deferred path before the module-level addon memo resolves.
     vi.resetModules()
     const images = await import('./pane-inline-images')
     const loader = await import('./terminal-image-addon-loader')
@@ -158,7 +156,6 @@ describe('pane inline images', () => {
     expect(options.sixelSizeLimit).toBe(8 * 1024 * 1024)
     expect(options.iipSizeLimit).toBe(8 * 1024 * 1024)
     expect(options.kittySizeLimit).toBe(8 * 1024 * 1024)
-    // Pin the value, not the formula the source already states.
     expect(options.pixelLimit).toBe(8_000_000)
   })
 })

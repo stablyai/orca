@@ -1,13 +1,4 @@
-/**
- * Memory-leak regression: prRefreshSequences must stay bounded.
- *
- * `prRefreshSequences` is a Record keyed by PR cache key (repo/branch/execution
- * host). `applyGitHubPRRefreshEvent` only ever wrote entries and never removed
- * them, so the map grew monotonically with the number of distinct (host, repo,
- * branch) tuples observed — branches are ephemeral and unbounded over a long
- * session. The fix caps it to MAX_CACHE_ENTRIES, evicting the oldest-touched
- * keys (the writer moves each touched key to the most-recent position).
- */
+/** Bound PR refresh sequences by MAX_CACHE_ENTRIES across ephemeral host/repo/branch keys; move touched keys to tail so cap evicts idle sequences. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice } from './github'
@@ -54,7 +45,6 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
   it('caps prRefreshSequences and keeps the most recently touched key', () => {
     const store = createTestStore()
 
-    // Seed more sequence entries than the cap allows.
     const seeded: Record<string, number> = {}
     const seedCount = MAX_CACHE_ENTRIES + 100
     for (let i = 0; i < seedCount; i++) {
@@ -62,7 +52,6 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     }
     store.setState({ prRefreshSequences: seeded })
 
-    // One more refresh event for a brand-new PR cache key pushes over the cap.
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
       reason: 'visible',
@@ -71,9 +60,7 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     })
 
     const sequences = store.getState().prRefreshSequences
-    // Bounded — not seedCount + 1.
     expect(Object.keys(sequences)).toHaveLength(MAX_CACHE_ENTRIES)
-    // The just-touched key survives; the oldest seeded key is evicted.
     expect(sequences['key-new']).toBe(1)
     expect(sequences['seed-0']).toBeUndefined()
   })
@@ -98,8 +85,7 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     }
     store.setState({ prRefreshSequences: seeded })
 
-    // Refresh the OLDEST key. The writer moves it to most-recent (delete+set),
-    // so capping must evict the next-oldest keys, not this freshly-touched one.
+    // Retouch oldest before overflow; eviction must spare it and remove the next oldest.
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 9,
       reason: 'visible',
@@ -109,9 +95,7 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
 
     const sequences = store.getState().prRefreshSequences
     expect(Object.keys(sequences)).toHaveLength(MAX_CACHE_ENTRIES)
-    // Survives with its updated sequence; without move-to-end it would be evicted.
     expect(sequences['seed-0']).toBe(9)
-    // The next-oldest key is the one evicted instead.
     expect(sequences['seed-1']).toBeUndefined()
   })
 })

@@ -8,8 +8,7 @@ import type { NativeChatTurnJournal } from '../../../../shared/native-chat-turn-
 import { compareMessages } from './native-chat-session-assembler'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {
-  // Folding only clones the assistant rows that absorb a tool run; every other row
-  // comes back as the input object, so most rows settle without a field scan.
+  // Most rows retain input identity; only folded assistant runs need field comparison.
   if (left === right) {
     return true
   }

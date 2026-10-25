@@ -138,17 +138,13 @@ function withNotice(claim: () => ConptyStartupEvents): () => ConptyStartupEvents
   }
 }
 
-/**
- * Spawns a Windows ConPTY pane and confirms its console host reads input before anyone can write.
- * Nothing holds the pane until this returns, so a respawn never repeats a command typed into it.
- */
+// Verify ConPTY input before exposing the pane, so respawning cannot repeat user input.
 export async function spawnConptyWithInputReader(
   spawn: () => Promise<pty.IPty>,
   opts: {
     label: string
     signal?: AbortSignal
-    /** Respawn only shells started with Orca's own interactive argv: any other argv may run a
-     *  command (`pwsh -Command`, `cmd /c`, a startup command), and a respawn would run it twice. */
+    // Only Orca's default interactive argv is safe to respawn; custom argv may repeat a command.
     respawnSafe: boolean
   }
 ): Promise<{ proc: pty.IPty; claimStartupEvents: () => ConptyStartupEvents }> {

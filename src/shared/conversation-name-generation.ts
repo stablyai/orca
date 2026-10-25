@@ -60,8 +60,7 @@ export function sanitizeGeneratedConversationName(raw: string): string | null {
   return name ? normalizeAgentSessionConversationName(clipConversationName(name)) : null
 }
 
-/** The chat's name until a generated one replaces it, so a failed generation never leaves the
- *  placeholder label. */
+/** Seed a real name so failed generation cannot strand the placeholder. */
 export function conversationNameSeed(firstPrompt: string): string | null {
   const prompt = normalizeAgentSessionConversationName(firstPrompt)
   if (!prompt) {

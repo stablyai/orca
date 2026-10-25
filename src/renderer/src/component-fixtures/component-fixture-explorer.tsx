@@ -29,8 +29,7 @@ const params = new URLSearchParams(window.location.search)
 const pageTheme = parseTheme(params.get('theme'))
 
 markComponentFixtureState('loading')
-// Why: reuse the web client's preload shims so components get the same
-// `window.api` defaults the browser build ships, with no runtime paired.
+// Reuse browser-build window.api defaults without pairing a runtime.
 installWebPreloadApi()
 // Fixtures preview the desktop renderer; keep web-only component branches off.
 Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')

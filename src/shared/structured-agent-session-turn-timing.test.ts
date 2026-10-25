@@ -236,8 +236,7 @@ describe('explicit user-item attribution', () => {
         completedAt: 2_000
       })
     ]
-    // Never the preceding prompt, which did not open this turn; the record's own
-    // key gives the turn a bar at its own position instead.
+    // Provider-opened turns anchor themselves; preceding prompts did not open them.
     expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual([
       'legacy:codex:s:turn-lifecycle%3Aauto'
     ])
@@ -355,8 +354,7 @@ describe('a rejected send', () => {
     resolvedAt: 2
   })
 
-  // The local clock saw the send go pending and stop, which would read as "Worked for 0s"; the
-  // host says the provider never got the message, so no turn ran and nothing may fold under it.
+  // Local send timestamps cannot imply a zero-duration turn when the host proves the message never reached the provider.
   it('opened no turn, whatever the local clock observed', () => {
     const settled = selectStructuredAgentSettledTurns([user('orca:dead')], [rejected('dead')])
     expect(settled.get('orca:dead')).toBeNull()

@@ -1,8 +1,7 @@
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
 
-// Why: 'repo' roots also come from folder workspaces, so "Repository" misnames
-// half of them; "Workspace" matches the share-eligibility copy users read next.
+// Repo-scoped roots also include folder workspaces; call them Workspace consistently with eligibility copy.
 export function sourceKindLabel(kind: SkillSourceKind): string {
   switch (kind) {
     case 'home':

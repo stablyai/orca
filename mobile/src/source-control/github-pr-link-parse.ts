@@ -1,13 +1,7 @@
-// Parses a GitHub PR/issue reference from user input — a bare number, "#42", or a
-// full GitHub URL — mirroring the desktop parseGitHubIssueOrPRNumber
-// (src/renderer/src/lib/github-links.ts). Ported (not imported) so the mobile bundle
-// stays free of renderer modules. Returns null for anything unparseable; guards
-// number > 0 so the link flow never persists PR #0.
+// Keep this parser independent of desktop renderer imports for the mobile bundle.
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
-// Why: this parser is GitHub-specific (the link flow writes the worktree's
-// GitHub linkedPR key), so only github.com / its enterprise subdomains may parse —
-// otherwise `https://example.com/o/r/pull/7` would be mistaken for a GitHub PR.
+// Only GitHub hosts may populate the worktree’s linkedPR field.
 function isGitHubHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
   return host === 'github.com' || host.endsWith('.github.com')

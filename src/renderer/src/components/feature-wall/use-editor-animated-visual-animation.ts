@@ -33,9 +33,7 @@ export function useEditorAnimatedVisualAnimation(
     if (!docMaybe || !activeLineInitial || !cursorMaybe || !menuMaybe || !afterMaybe) {
       return
     }
-    // Re-bind to non-null locals so the helper closures spanning `await`
-    // points keep their narrowed types — TS flow analysis drops the narrow
-    // through async boundaries otherwise.
+    // Capture narrowed nodes in locals so async closures retain non-null types.
     const doc: HTMLDivElement = docMaybe
     const cursor: HTMLDivElement = cursorMaybe
     const menu: HTMLDivElement = menuMaybe
@@ -49,7 +47,6 @@ export function useEditorAnimatedVisualAnimation(
         timers.push(id)
       })
 
-    // Stash initial DOM so we can restore between loops.
     const initialActiveLineHTML = activeLineInitial.outerHTML
     const initialActiveLineParent = activeLineInitial.parentNode
     const initialActiveLineNextSibling = activeLineInitial.nextSibling
@@ -69,8 +66,7 @@ export function useEditorAnimatedVisualAnimation(
     function placeMenuNearLine(line: HTMLElement): void {
       const docRect = doc.getBoundingClientRect()
       const lineRect = line.getBoundingClientRect()
-      // Why: nudge the menu right so it doesn't cover the "/" the user just
-      // typed — keeps the typed character visible alongside the menu.
+      // Offset the menu so it does not cover the typed slash.
       const x = lineRect.left - docRect.left + 16
       menu.style.left = `${x}px`
       menu.style.top = '0px'
@@ -138,8 +134,6 @@ export function useEditorAnimatedVisualAnimation(
     }
 
     function restoreInitialActiveLine(): void {
-      // Pull whatever the active line currently is back into the original
-      // shape so the next loop starts from the same DOM as render.
       activeLine.remove()
       const wrapper = document.createElement('div')
       wrapper.innerHTML = initialActiveLineHTML
@@ -164,7 +158,6 @@ export function useEditorAnimatedVisualAnimation(
 
     async function loop(): Promise<void> {
       while (!cancelled) {
-        // Reset state.
         clearAfter()
         hideMenu()
         clearActiveRow()
@@ -179,7 +172,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // 1. Type "/" on the fresh active line.
         if (activeText) {
           activeText.textContent = ''
         }
@@ -192,7 +184,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // 2. Slash menu opens, anchored near the line.
         setSlashMode('all')
         placeMenuNearLine(activeLine)
         showMenu()
@@ -207,7 +198,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // 3. Click — line becomes an H1.
         cursor.dataset.clicking = '1'
         await wait(EDITOR_ANIMATION_TIMING.clickRippleMs)
         if (cancelled) {
@@ -221,8 +211,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // Convert the active line to an H1: clear the slash glyph, drop the
-        // monospace styling, type the heading.
         activeLine.dataset.role = 'h1'
         if (activeText) {
           activeText.textContent = ''
@@ -243,7 +231,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // 4. New active line below the H1 — user types "/code".
         const newActive = document.createElement('div')
         newActive.dataset.role = 'active'
         newActive.className = activeLineClass()
@@ -273,7 +260,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // Filter to the Code Block row, anchor menu, highlight.
         clearActiveRow()
         if (rowH1) {
           rowH1.classList.remove('slash-active')
@@ -292,7 +278,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // 5. Click — line becomes a code block.
         cursor.dataset.clicking = '1'
         await wait(EDITOR_ANIMATION_TIMING.clickRippleMs)
         if (cancelled) {
@@ -316,7 +301,6 @@ export function useEditorAnimatedVisualAnimation(
           return
         }
 
-        // Restore the initial DOM and loop.
         restoreInitialActiveLine()
       }
     }

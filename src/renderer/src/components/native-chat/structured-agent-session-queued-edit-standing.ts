@@ -1,13 +1,11 @@
-// Where the published queue puts an edited card against the body the edit would save, for an
-// open edit and for a Save whose answer this pane could not read.
+// Compare published queue state with the desired edit body, including Saves whose reply was lost.
 
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
 import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
 
-/** `sent`: the card went out holding that body; `gone`: it left otherwise; `holds`: it holds that
- *  body now; `differs`: it holds another. An unloaded queue (`null`) says nothing. */
+/** Sent means handed off with this body; holds/differs describe the current card, gone its removal; null queue proves nothing. */
 export type QueuedEditStanding = 'sent' | 'gone' | 'holds' | 'differs'
 
 export function queuedEditStanding(

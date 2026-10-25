@@ -46,7 +46,7 @@ export async function initializeMultiplexStream(
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
     desktopClaimTail: Promise.resolve(true),
     registeredRemoteDesktopDriver: false,
-    // Why: streamId is client-local, so key the width floor by connectionId or two connections sharing stream 1 for one PTY clobber each other's floor.
+    // Namespace client-local streamId by connection so sibling stream 1 floors cannot collide.
     remoteDesktopSubscriptionKey,
     pendingRemoteDesktopViewport: null,
     buffering: true,
@@ -100,12 +100,12 @@ export async function initializeMultiplexStream(
     }
     stream.outputBatcher.push(data, meta)
   })
-  // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while it receives output; a paused stream drops it, so main answers.
+  // Remote xterm answers delivered queries; paused streams drop output, returning reply authority to main.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
     () => stream.outputPaused
   )
-  // Why: the pane must hear its daemon died now, not when its next keystroke is refused.
+  // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice
     ? subscribeToPtyEndpointLoss(ptyId, () => {
         if (isMultiplexStreamAttached(state, stream)) {
@@ -122,7 +122,7 @@ export async function initializeMultiplexStream(
   if (isMobile && request.client?.id) {
     await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
   } else if (request.client?.id && request.viewport) {
-    // Why: subscribe records this stream's geometry and cleanup key but doesn't claim ownership; activity frames claim later.
+    // Subscribe records cleanup/geometry without ownership; later activity claims it.
     stream.registeredRemoteDesktopDriver = true
     stream.pendingRemoteDesktopViewport = request.viewport
   }

@@ -123,8 +123,7 @@ test.describe('structured chat tabs', () => {
       homePath: process.env.HOME
     }))
     expect(resolveCliCommand('claude', mainEnv)).toBe(claudeStub.command)
-    // Every Claude process Orca started was the stub: a version probe, or a launch for one of
-    // these chats' conversations.
+    // Require every launched Claude process to be this stub’s version probe or one of the two chat conversations.
     const providerIds = [first, second, opened!.entityId].map((id) =>
       claudeSessionIdForOrcaSession(id)
     )

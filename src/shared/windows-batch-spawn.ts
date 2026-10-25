@@ -21,11 +21,7 @@ export class UnsafeWindowsBatchArgumentsError extends Error {
   }
 }
 
-// Why: cmd.exe re-parses the command line, and these are the characters that can
-// start a new command or expand a variable out of an otherwise inert argument.
-// `(`/`)` are deliberately absent: they only group commands, and grouping cannot
-// chain anything without one of the separators below, so rejecting them merely
-// broke every `C:\Program Files (x86)\...` shim and paren-bearing worktree path.
+// Reject cmd chaining/expansion characters. Parentheses only group here, so allow them for Program Files (x86) and workspace paths.
 const WINDOWS_BATCH_UNSAFE_CHARACTERS = ['&', '|', '<', '>', '^', '"', '%', '!'] as const
 
 /** The rejected characters, spelled for error messages so they cannot drift from the guard. */
@@ -46,15 +42,7 @@ function assertWindowsCmdSafeTokens(values: readonly string[]): void {
 }
 
 export type GetSpawnArgsForWindowsOptions = {
-  /**
-   * GUI launchers (Open In apps) should not leave a lingering Command Prompt.
-   * `start "" /B` returns immediately and keeps console-subsystem children of
-   * `.cmd`/`.bat` shims from allocating a fresh visible prompt window.
-   *
-   * Opt-in only: `start` re-parses the command line, so callers whose argv can
-   * carry quoted operands (VS Code `--remote` authorities and remote paths with
-   * spaces) must leave this off.
-   */
+  /** Opt-in GUI launch: start empty-title /B avoids a visible prompt but reparses argv, so callers with quoted operands (such as VS Code remote paths) must leave it off. */
   detachedGui?: boolean
 }
 
@@ -68,17 +56,8 @@ export function getSpawnArgsForWindows(
 
     // Why: separate argv entries let Node quote spaces without breaking cmd.
     if (options.detachedGui) {
-      // Why: `start` launches a batch target through a nested `cmd /K`, which
-      // stays resident after the script ends — `/B` only suppresses a *new*
-      // console, so the shim leaks a hidden cmd.exe. Handing `start` an inner
-      // `cmd /d /c` makes that interpreter exit with the script.
-      //
-      // Window title must be an *empty argv entry* (`''`). libuv's Windows
-      // quoter turns empty into `""` on the CreateProcess command line — the
-      // empty title `start` requires so a later quoted path is not eaten as
-      // the title. The two-character string `'""'` is wrong: libuv re-escapes
-      // it to `"\"\""`. (Default ComSpec has no spaces, so the bad form often
-      // still "works"; quoted Program Files paths are where it breaks.)
+      // start normally nests cmd /K and leaks a hidden interpreter; explicitly use cmd /d /c to exit with the shim.
+      // Pass an empty argv entry for the title: libuv emits the required double quotes. A literal quote-pair is re-escaped and breaks spaced paths.
       const cmdExePath = getCmdExePath()
       return {
         spawnCmd: cmdExePath,
@@ -90,10 +69,7 @@ export function getSpawnArgsForWindows(
   return { spawnCmd: command, spawnArgs: args }
 }
 
-/**
- * Inverse of `detachedGui`'s `start "" /B`: a visible console that waits.
- * Title is the empty argv entry so libuv emits `""` rather than `"\"\""`.
- */
+/** Visible start /WAIT counterpart; an empty title argument lets libuv emit the required quotes. */
 export function wrapWindowsStartWait(
   spawnCmd: string,
   spawnArgs: string[]

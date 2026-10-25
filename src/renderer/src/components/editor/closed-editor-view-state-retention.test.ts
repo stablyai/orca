@@ -36,7 +36,7 @@ function open(path: string, text = 'original') {
     language: 'plaintext',
     isDirty: false
   }
-  // Mirrors `MonacoEditor`: the `path` prop is what `@monaco-editor/react` hands to `Uri.parse`.
+  // Match the React wrapper’s path-to-Uri.parse conversion.
   const model = monaco.editor.createModel(
     text,
     'plaintext',
@@ -138,8 +138,7 @@ it.each([
   expect(reopened.getValue()).toBe('original')
 })
 
-// Guards the construction/comparison symmetry: the disposal lookup and the still-open ownership
-// check must normalize a path the same way, or closing one tab drops a model another tab is editing.
+// Disposal and ownership lookup must normalize Windows paths identically or one close can destroy another tab’s model.
 it('keeps a Windows-path model that a second open tab still owns', async () => {
   const filePath = 'C:\\repo\\shared.ts'
   const editing: OpenFile = {

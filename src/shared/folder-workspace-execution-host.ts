@@ -1,16 +1,5 @@
-/**
- * Resolves which host a folder workspace executes on.
- *
- * Main and the renderer both have to answer this — the list projects a record's
- * host from it, dispatch targets one from it — so the answer lives here rather
- * than being re-derived per side and drifting. The workspace's own
- * `executionHostId` pin wins: a pinned workspace runs there whatever its repos
- * say, which is exactly the case that used to read as local.
- *
- * `ambiguous` is a distinct answer, not a missing one: a scope that spans a
- * local repo and an SSH one has no single host, and callers must fail closed
- * with something visible rather than defaulting to local.
- */
+/** Share host resolution between main dispatch and renderer projection. Workspace executionHostId pins override repo ownership.
+ * Mixed-host scopes return ambiguous; callers must fail visibly rather than defaulting to local. */
 
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from './project-group-types'
@@ -61,18 +50,8 @@ export type FolderWorkspaceHost =
   | { kind: 'runtime'; environmentId: string; sshTargetId: string | null }
   | { kind: 'ambiguous' }
 
-/**
- * The SSH target whose filesystem holds this repo's files, or `null` for anything else.
- *
- * SSH ownership has two spellings on a repo row — the legacy `connectionId` field and the unified
- * `executionHostId` — so reading the raw field sees only one of them and a row carrying only
- * `executionHostId: 'ssh:<target>'` reads as if it had no connection at all. Every comparison in
- * this file goes through here: the candidate filters decide which rows reach the resolver, so
- * reading raw in either place drops the row before the resolver can classify it.
- *
- * A non-SSH host falls back to the raw field so a `runtime:` row keeps contributing its nested
- * target, which is not this client's to dial.
- */
+/** Resolve legacy connectionId and unified SSH ownership in both candidate filters and the resolver; raw reads can discard SSH-only rows early.
+ * Non-SSH hosts retain raw connectionId for runtime-nested targets, which require the environment to dial. */
 function getRepoScopeConnectionId(repo: FolderHostRepo): string | null {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   return host?.kind === 'ssh' ? host.targetId : normalizeHostPart(repo.connectionId)
@@ -86,8 +65,7 @@ function getFolderScopeCandidateRepos<R extends FolderHostRepo>(args: {
   repos: readonly R[]
 }): R[] {
   const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
-  // Classify each repo once. The previous pair of filters read every
-  // projectGroupId twice before applying the same path predicate.
+  // Classify once rather than reading projectGroupId in two filters before the same path predicate.
   const groupRepos: R[] = []
   const pathRepos: R[] = []
   for (const repo of args.repos) {
@@ -107,8 +85,7 @@ function getFolderScopeCandidateRepos<R extends FolderHostRepo>(args: {
   if (groupRepos.length === 0) {
     return pathRepos
   }
-  // Both sides resolved: comparing a resolved path repo against a raw group read would reintroduce
-  // the same mismatch from the other direction.
+  // Resolve both sides or legacy/unified group comparisons diverge again.
   const groupConnectionIds = new Set(groupRepos.map(getRepoScopeConnectionId))
   return [
     ...groupRepos,
@@ -152,8 +129,7 @@ export function resolveFolderWorkspaceHost<R extends FolderHostRepo>(
     case 'ssh':
       return { kind: 'ssh', targetId: explicitHost.targetId }
     case 'runtime': {
-      // Why: another host may hold a folder with this id, and this lookup cannot tell which one is
-      // selected, so the server's target is named only when the id is unambiguous.
+      // Only an unambiguous folder id identifies which host’s nested target is selected.
       const isOnlyOwner = state.folderWorkspaces.every(
         (entry) => entry.id !== folderWorkspaceId || entry === workspace
       )

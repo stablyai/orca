@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-/** A phone holding a terminal's input locks the chat composer (#30179): the lock must say so
- *  whatever the box holds, offer the terminal's Take back, and look disabled. */
+/** A phone’s input lease must visibly lock the composer and offer Take back regardless of draft contents. */
 
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'

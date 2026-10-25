@@ -5,22 +5,13 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
 
-// Ratchet gate for the mobile test typecheck.
-//
-// mobile/tsconfig.json excludes *.test.ts so Metro never compiles tests into the release bundle,
-// and vitest transpiles without typechecking. Nothing checked a mobile test until tsconfig.test.json
-// existed, so 144 of the 632 test files had accumulated type errors — overwhelmingly one seam, the
-// react-test-renderer / mocked-react-native pair, whose fix is a test-support typing decision rather
-// than 587 local edits. This check freezes that set and fails when a test file that typechecks today
-// stops doing so. The baseline may only shrink.
+// Mobile release tsconfig excludes tests and Vitest does not typecheck; separate test program freezes existing errors with a shrink-only baseline.
 
 const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
-// The only test files allowed to sit outside the program, and why. Everything else on disk must be
-// in it: the error diff below sees a file only once it errors, so an excluded or shadowed test
-// disappears from this gate silently.
+// Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/tasks/agent-launch-mobile-replay.test.ts',
@@ -44,8 +35,7 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   ]
 ])
 
-// tsc prints the host's own separator; the baseline stores POSIX, so a Windows run would otherwise
-// read every entry as both stale and added.
+// Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
 export function parseFailingFiles(tscOutput) {
@@ -78,9 +68,7 @@ export function collectTestFilesOnDisk(root = process.cwd()) {
   return found.sort()
 }
 
-// --listFiles prints one absolute real path per line into the same stream as the diagnostics; a
-// diagnostic carries `(line,col): error` and a path relative to cwd, so neither filter can take the
-// other's lines.
+// Separate absolute --listFiles rows from relative (line,col):error diagnostics in their shared stream.
 export function parseProgramTestFiles(tscOutput, realRoot) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
   return [
@@ -148,8 +136,7 @@ export function diffBaseline(current, baseline) {
   }
 }
 
-// tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
-// One pass answers both questions: --listFiles names the program, the diagnostics name the failures.
+// Type errors are expected; only compiler crash is fatal. One pass collects both program files and diagnostics.
 export function collectTypecheckPass(root = process.cwd()) {
   const command = resolveMobileTypecheckCommand(PROJECT, root)
   const result = runProcessSync({

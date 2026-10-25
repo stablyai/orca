@@ -14,11 +14,7 @@ export function resetStructuredAgentLocalLaunchCancelsForTests(): void {
   closedByLocalCancel.clear()
 }
 
-/**
- * ORCA_LAYOUT_OWNER=main only: this machine's host refuses a create whose close came first, or
- * closes the chat as it lands, so a local cancel retires the chat on the host at once and keeps no
- * tombstone. A failed retire is logged; main still remembers the close.
- */
+/** With main layout ownership, local close fences concurrent create and retires immediately without tombstone. Log retirement failure; main still remembers close. */
 export function cancelStructuredAgentLaunchOnLocalHost(
   worktreeId: string,
   sessionId: string

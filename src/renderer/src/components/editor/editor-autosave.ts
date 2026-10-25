@@ -15,7 +15,7 @@ export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
-// Why: a sibling's baseline moved without its cached text, so the panel drops that cache.
+// Drop sibling content caches when their disk baseline advances without cached text.
 export const ORCA_EDITOR_FILE_CACHE_STALE_EVENT = 'orca:editor-file-cache-stale'
 
 export function notifyEditorFileCacheStale(fileId: string): void {
@@ -99,21 +99,15 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
 }
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
-  // Why: read-only tabs (AI Vault View Log) must never autosave — writing an
-  // agent-owned transcript can corrupt the provider's resume history.
+  // Never autosave provider-owned transcripts or CSV preview placeholders; either can overwrite content the editor does not own.
   if (file.readOnly === true || file.csvPreviewOnly === true) {
     return false
   }
-  // Why: single-file editors and one-file unstaged diffs have an unambiguous
-  // write target. Combined diff and conflict-review tabs can represent multiple
-  // paths, so autosave must stay out of those surfaces until they have their
-  // own save coordination instead of guessing which file should be written.
+  // Only edit and unstaged single-file diffs have one write target; multi-file surfaces need separate save coordination.
   return file.mode === 'edit' || (file.mode === 'diff' && file.diffSource === 'unstaged')
 }
 
-// Why: autosave must not resolve a changed-on-disk conflict by overwriting the newer external
-// content. An unmarked conflict needs no pause: every save is guarded, and a refusal sets the mark.
-// One predicate so the save-queue gate and the timer scheduler cannot drift.
+// Share one suspension rule across queue and timers: marked conflicts pause until resolved; unmarked conflicts are still rejected by guarded writes.
 export function isAutosaveSuspendedForFile(
   file: Pick<
     OpenFile,
@@ -128,9 +122,7 @@ export function isAutosaveSuspendedForFile(
 }
 
 export function normalizeAutoSaveDelayMs(value: unknown): number {
-  // Why: settings are persisted locally and can be missing or hand-edited.
-  // Clamp the delay at the write site so autosave never degenerates into an
-  // effectively immediate save loop or an unexpectedly huge wait.
+  // Clamp missing or hand-edited persisted settings so autosave cannot become an immediate loop or an excessive wait.
   const numericValue =
     typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : null
   const normalizedValue =
@@ -200,9 +192,7 @@ export async function requestEditorSaveQuiesce(
         }
       })
     )
-    // Why: discard/delete flows also run when no editor tab is mounted. Let
-    // those external mutations proceed immediately instead of hanging forever
-    // waiting on a quiesce listener that does not exist in that UI state.
+    // Discard/delete can run with no mounted controller; unclaimed quiesce requests must resolve rather than hang.
     if (!claimed) {
       resolve()
     }
@@ -225,10 +215,7 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
         }
       })
     )
-    // Why: a direct save request should never report success unless some
-    // controller actually accepted responsibility for writing the file. Unlike
-    // quiesce, silently no-oping here would make Cmd/Ctrl+S look successful
-    // while dropping the user's save entirely.
+    // Unlike quiesce, unclaimed saves must fail so Cmd/Ctrl+S cannot silently drop the user’s write.
     if (!claimed) {
       reject(new Error('Editor save controller is unavailable.'))
     }
@@ -246,9 +233,7 @@ export function requestEditorFileClose(
   )
 }
 
-// CONTRACT: this event fires even when some tabs of the path are dirty —
-// every consumer MUST skip dirty files per-file. Reloading a dirty tab's
-// content destroys its unsaved draft (the data-loss half of issue #7265).
+// CONTRACT: consumers must skip dirty files individually; this event can include dirty tabs whose drafts must survive reload.
 export function notifyEditorExternalFileChange(target: EditorPathMutationTarget): void {
   window.dispatchEvent(
     new CustomEvent<EditorPathMutationTarget>(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {

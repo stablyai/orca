@@ -12,8 +12,7 @@ import type { RelayDatabase } from '../database.js'
 import type { AppliedControlFlags } from '../relay-control-flag-channel.js'
 import { createRelayServer } from '../relay-server.js'
 
-// One reserve-mode cell over a real database, with desktops that complete the host proof.
-// For the flip-back tests (E-mix), on SQLite and on a latency-injected PostgreSQL.
+// Real reserve-cell host proof for SQLite and latency-injected PostgreSQL flip-back tests (E-mix).
 
 export const RESERVE_MODE_CELL_ID = 'production-gce-c3'
 
@@ -42,7 +41,6 @@ export function nextMessage(socket: WebSocket): Promise<Record<string, unknown>>
   })
 }
 
-// The next frame of this type, skipping pings and anything else the socket carries first.
 export function nextFrame(socket: WebSocket, type: string): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     const onMessage = (data: RawData) => {
@@ -131,7 +129,6 @@ export async function startReserveModeCell(input: {
     return { keyPair, hostId, token }
   }
 
-  // The first control frame after the proof, and the socket's close code once it closes.
   const connect = async (identity: Awaited<ReturnType<typeof host>>, epoch: number) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/control`, {
       headers: { authorization: `Bearer ${identity.token}` },
@@ -212,7 +209,6 @@ export async function startReserveModeCell(input: {
     return { identity, ...reply }
   }
 
-  // A paired phone's device row, as an install would have written it.
   const installDevice = async (
     relayHostId: string,
     resumeToken: string,
@@ -230,7 +226,6 @@ export async function startReserveModeCell(input: {
       ]
     )
 
-  // A phone's dial: its first relay-hello frame and its close.
   let phoneSource = 0
   const dialPhone = async (relayHostId: string, credential: string) => {
     phoneSource += 1
@@ -251,7 +246,6 @@ export async function startReserveModeCell(input: {
     return { socket, hello, closed }
   }
 
-  // The desktop's data leg for a conn-open its control received.
   const attachData = async (connOpen: Record<string, unknown>, generation: unknown) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/data/${String(connOpen.connId)}`, {
       perMessageDeflate: false

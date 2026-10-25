@@ -82,7 +82,6 @@ describe.each(['repo', 'workspace-status', 'pr-status', 'none'] as const)(
           expect(row.hostContextLabel).toBeUndefined()
         }
       }
-      // The mixed-host source rows still need their labels when host grouping is removed.
       expect(rows.filter((row) => row.type === 'item').map((row) => row.hostContextLabel)).toEqual([
         'Builder',
         'Local Mac',

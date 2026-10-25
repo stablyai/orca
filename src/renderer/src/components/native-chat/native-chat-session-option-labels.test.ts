@@ -31,8 +31,6 @@ function modelDescriptor(
 
 describe('nativeChatModelPillLabel', () => {
   it('names a model the CLI defaulted to, not the bare category', () => {
-    // This is the last step between `defaultModelIsCliDefault` and pixels: withholding
-    // `default` here would silently undo the whole load-time default display.
     expect(nativeChatModelPillLabel(modelDescriptor('default', 'grok-4.5'))).toBe('Grok 4.5')
   })
 
@@ -46,8 +44,7 @@ describe('nativeChatModelPillLabel', () => {
   })
 
   it('falls back to the raw id when the list no longer offers it', () => {
-    // A discovered list can drop an id the record still tracks; showing the id beats
-    // showing "Model" while a real model is running.
+    // Keep naming a tracked model after discovery drops it; the running selection is still known.
     expect(nativeChatModelPillLabel(modelDescriptor('reported', 'grok-build'))).toBe('grok-build')
   })
 })

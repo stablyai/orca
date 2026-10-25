@@ -15,11 +15,7 @@ import {
 } from './tui-agent-startup-script.test-fixture'
 
 describe('draft prefill teardown ordering (#14975)', () => {
-  // Why pinned: the teardown mutates the calling shell, so it must reference
-  // $fish_pid, which aborts the line under `set -u`. That is survivable ONLY
-  // because it runs AFTER the agent — the agent is already up. Moving it before
-  // the command would make an aborted line a blocked launch, which is exactly
-  // what reverted #14863.
+  // Prefill cleanup expands fish_pid and can abort under set -u. Run after the agent so cleanup failure cannot block launch (#14975, reverted #14863).
   it('runs the clear after the agent command, never before it', () => {
     const plan = buildAgentDraftLaunchPlan({
       agent: 'pi',
@@ -45,8 +41,6 @@ describe('tui agent startup plans', () => {
     }
   )
 
-  // Structured native chat stopped reading the configured arguments; a terminal launch must
-  // still spell every token of them, in order, exactly as the user wrote them.
   it('passes the whole configured argument string to a terminal launch', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -59,7 +53,6 @@ describe('tui agent startup plans', () => {
       allowEmptyPromptLaunch: true
     })
 
-    // Every token, in order, shell-quoted as the terminal path has always quoted them.
     expect(plan?.launchCommand).toBe("claude '--dangerously-skip-permissions' '--model' 'Opus'")
   })
 
@@ -222,9 +215,7 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toMatch(/^sh -c /)
     expect(plan?.launchCommand).not.toContain("'sh' '-c'")
-    // Why parse rather than string-match: the octal escapes must survive the
-    // OUTER quoting to reach the inner sh, and portable quoting emits a
-    // backslash as `"\\"` rather than leaving it inside a single-quoted run.
+    // Parse the outer portable quoting to prove octal escapes reach inner sh unchanged.
     const tokens = tokenizeStartupCommand(plan?.launchCommand ?? '', 'posix')
     expect(tokens.ok && tokens.tokens.at(-1)).toMatch(/\\0[0-7]{3}/)
   })
@@ -284,10 +275,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('uses the plain orca shim for Claude Agent Teams on Linux SSH remotes', () => {
-    // Why: the SSH relay deploys the CLI shim as `orca` (not the local-only
-    // `orca-ide` GNOME-screen-reader workaround), so a remote launch must not
-    // emit `orca-ide claude-teams` — that name is not on the remote PATH and
-    // `claude-teams` is rejected by the relay's CLI switch (issue #6500).
+    // Remote Linux deploys orca, never local-only orca-ide; using the renamed desktop wrapper breaks relay launches (#6500).
     const plan = buildAgentStartupPlan({
       agent: 'claude-agent-teams',
       prompt: '',
@@ -301,8 +289,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('keeps the Windows orca.cmd shim for Claude Agent Teams on SSH remotes', () => {
-    // Why: the Windows remote shim is also `orca.cmd`, matching the local
-    // win32 override, so remoteness must not alter the Windows command.
+    // Windows remote and local shims are both orca.cmd; remoteness must preserve that override.
     const plan = buildAgentStartupPlan({
       agent: 'claude-agent-teams',
       prompt: '',
@@ -316,9 +303,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('keeps the Linux orca-ide wrapper for local (non-remote) Claude Agent Teams', () => {
-    // Why: the `orca-ide` rename is still required for a local Linux desktop
-    // install (avoids shadowing the GNOME Orca screen reader), so an explicit
-    // isRemote:false must preserve it.
+    // Local Linux keeps orca-ide to avoid the GNOME screen-reader command clash.
     const plan = buildAgentStartupPlan({
       agent: 'claude-agent-teams',
       prompt: '',
@@ -470,8 +455,7 @@ describe('tui agent startup plans', () => {
       shell: 'cmd'
     })
 
-    // Why: cmd.exe treats single quotes as literal characters. Resume must use
-    // double quotes (or unquoted tokens) so the CLI receives clean argv.
+    // cmd.exe needs double quotes or bare tokens; single quotes would become literal argv bytes.
     expect(plan?.launchCommand).toBe(
       'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
     )
@@ -625,8 +609,7 @@ describe('tui agent startup plans', () => {
     )
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
-    // Why: no native draft launch plan means both agents fall through to the
-    // cursor-gated paste-after-ready route, where the new signal applies.
+    // Without native draft plans, these agents must use cursor-gated paste readiness.
     expect(
       buildAgentDraftLaunchPlan({
         agent: 'opencode',
@@ -646,9 +629,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('keeps grok on the composer-glyph paste draft route', () => {
-    // Why: grok has no --prefill-style flag, so every launch draft goes through
-    // paste-after-ready — and its shimmering startup logo never settles the
-    // quiet window, which is what made the paste take the full hard timeout.
+    // Grok has no native prefill and its animated logo never settles; drafts must wait for its composer glyph.
     expect(TUI_AGENT_CONFIG.grok.draftPasteReadySignal).toBe('grok-composer-prompt')
     expect(TUI_AGENT_CONFIG.grok.draftPromptFlag).toBeUndefined()
     expect(TUI_AGENT_CONFIG.grok.draftPromptEnvVar).toBeUndefined()
@@ -708,11 +689,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
-    // Why: OMP owns its own managed prefill extension and env var.
-    // orca-prefill.ts reads ORCA_OMP_PREFILL for OMP launches — see
-    // src/main/pi/titlebar-extension-service.ts — so a draft plan for OMP
-    // MUST emit that name. A regression here would either silently drop the
-    // draft (Pi var ignored by OMP) or honor a stale Pi-PTY draft.
+    // OMP’s managed extension reads ORCA_OMP_PREFILL; sharing Pi’s var would lose drafts or replay stale Pi text.
     const plan = buildAgentDraftLaunchPlan({
       agent: 'omp',
       draft: 'fix the omp regression',

@@ -185,8 +185,6 @@ describe('ImageViewer PDF scroll cache key', () => {
     vi.clearAllMocks()
   })
 
-  // Why: nothing else pins the wiring, so a dropped prop anywhere between
-  // EditorContent and PdfViewer would ship as silently amnesiac scrolling.
   it('forwards the scroll cache key to PdfViewer', async () => {
     expect(await renderPdfViewerProps('/repo/report.pdf::tab-2:pdf')).toMatchObject({
       filePath: '/repo/report.pdf',
@@ -251,8 +249,7 @@ describe('ImageViewer pre-load layout box', () => {
     vi.clearAllMocks()
   })
 
-  // Why: the scroll surface's inner box is w-max/h-max, so percentage maxes resolve
-  // to none and a 6000x4000 image lays out at natural resolution before onLoad.
+  // The w-max/h-max scroll box makes percentage maxima ineffective before image load; viewport units must bound natural dimensions.
   it('bounds both scroll surfaces with viewport units before the image loads', async () => {
     const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
 

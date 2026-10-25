@@ -75,8 +75,7 @@ describe('buildDispatchPreamble', () => {
     expect(codeBlocks[0]).toMatchObject({ lang: 'sh', value: cliFence(result) })
   })
 
-  // Why: a `---` rule directly under a paragraph is a setext H2, so the optional
-  // sections' closing rules must not turn their last sentence into a heading.
+  // A closing rule directly below prose becomes a setext heading; keep a blank line.
   it('renders no Markdown headings when the sub-dispatch and drift sections are present', () => {
     const result = buildDispatchPreamble(
       baseParams({ canDispatchSubWorkers: true, baseDrift: driftParams })
@@ -172,7 +171,6 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('  - fix: A')
     expect(result).toContain('  - feat: B')
     expect(result).toContain('  - chore: C')
-    // drift section must appear before the task spec
     expect(result.indexOf('--- BASE DRIFT ---')).toBeLessThan(result.indexOf('=== TASK ==='))
   })
 
@@ -217,8 +215,6 @@ describe('buildDispatchPreamble', () => {
   })
 
   it('renders a stable snapshot of the full preamble', () => {
-    // Why: single strict snapshot catches any accidental regression in
-    // formatting or rule presence in one line.
     const result = buildDispatchPreamble({
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',

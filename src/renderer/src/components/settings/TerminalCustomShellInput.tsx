@@ -11,12 +11,7 @@ type TerminalCustomShellInputProps = Omit<
   onCommit: () => void
 }
 
-/**
- * Custom shell field that shows what was typed while it has focus.
- *
- * Why: settings writes come back trimmed, which would drop a space typed mid-path. The draft lives
- * in this component so it is discarded whenever the field unmounts, even without a blur.
- */
+/** Retain focused draft whitespace through trimmed persistence echoes; component ownership discards drafts on unmount without blur. */
 export function TerminalCustomShellInput({
   value,
   onEdit,

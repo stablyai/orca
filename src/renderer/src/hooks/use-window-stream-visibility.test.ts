@@ -39,8 +39,7 @@ describe('useWindowStreamVisible', () => {
     expect(hook.result.current).toBe(false)
   })
 
-  // Pins the `|| isDocumentVisibilityProvenStale()` term: dropping it wedges every stream pane
-  // hidden forever whenever macOS stops reporting occlusion changes.
+  // Stale-visibility evidence must reopen streams when macOS occlusion updates stop.
   it('treats a wedged hidden document as visible once user input disproves it', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const hook = renderHook(() => useWindowStreamVisible())

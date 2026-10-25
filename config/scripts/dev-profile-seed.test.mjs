@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createDefaultLocalOrcaProfile } from '../../src/shared/orca-profiles'
 import { seedDevProfile } from './dev-profile-seed.mjs'
 
 const roots = []
@@ -27,14 +28,15 @@ function hashTree(dir) {
 function createSourceProfile() {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-seed-source-'))
   roots.push(root)
-  const profileDir = path.join(root, 'profiles', 'local-default')
+  const profile = createDefaultLocalOrcaProfile(0)
+  const profileDir = path.join(root, 'profiles', profile.id)
   mkdirSync(profileDir, { recursive: true })
   writeFileSync(
     path.join(root, 'orca-profile-index.json'),
     JSON.stringify({
       schemaVersion: 1,
-      activeProfileId: 'local-default',
-      profiles: [{ id: 'local-default' }]
+      activeProfileId: profile.id,
+      profiles: [profile]
     })
   )
   writeFileSync(path.join(profileDir, 'account-session.json.enc'), '{"ciphertext":"x"}')
@@ -57,7 +59,7 @@ function createSourceProfile() {
 }
 
 describe('seedDevProfile', () => {
-  it('writes an importable slim profile and never changes the source', async () => {
+  it('copies durable profile domains and the account file without changing the source', async () => {
     const source = createSourceProfile()
     const before = hashTree(source)
     const target = path.join(mkdtempSync(path.join(tmpdir(), 'orca-seed-target-')), 'profile')

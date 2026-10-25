@@ -18,11 +18,7 @@ import {
   watchUserComposition
 } from '@/components/browser-pane/host-guest/agent-input-focus-guard'
 
-/**
- * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
- * remote runtime. Its guest events come from this main process, not from the host's tab sync, so
- * the blanket runtime-active guard on those channels would drop them on the floor.
- */
+/** Client-hosted webview events originate in this desktop even for remote workspaces; runtime-active guards would incorrectly drop them. */
 function isClientHostedBrowserPage(browserPageId: string): boolean {
   return (
     useAppStore.getState().remoteBrowserPageHandlesByPageId[browserPageId]?.placement?.kind ===
@@ -113,7 +109,7 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeCapturePaintHold) {
     unsubs.push(() => {
       unsubscribeCapturePaintHold()
-      // Why: the release for a live hold can no longer arrive, so it must not leave the page drawn.
+      // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
       for (const token of capturePaintHoldTokens.values()) {
         releaseBrowserAutomationVisibility(token)
       }

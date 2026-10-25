@@ -9,8 +9,7 @@ import type { HookListenerState } from '../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
 
-/** Polling reads new host-owned records without replaying the hook that started the turn; a turn
- *  end the rollout records is replayed as the root Stop that Codex skips for internal subagents. */
+/** Poll new host rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. */
 export function pollCodexTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,

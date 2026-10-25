@@ -13,34 +13,13 @@ export type MobileNativeChatVisualHostMode = 'inline' | 'fullscreen'
 
 export const MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT = 160
 
-/** The host page's function the app calls to size the frame to a height it has decided. */
 export const MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT = '__orcaVisualApplyHeight'
 
-// The host forwards at most one size report per interval (the latest wins) and one link per window.
 const SIZE_FORWARD_INTERVAL_MS = 100
 const LINK_WINDOW_MS = 5_000
 
-/**
- * The trusted document the WebView loads. A native WebView's top document gets no `sandbox`, so
- * the author HTML never runs here: it runs in an opaque `sandbox="allow-scripts"` srcdoc child, and
- * this document is the only one the app listens to (the WebView patch drops messages from any frame
- * but the main one).
- *
- * - It relays only messages whose `source` is the child's window, as data for the app to validate,
- *   and stamps them with `token`, which the child never sees.
- * - A link request is relayed only while the child frame holds focus and the page holds user
- *   activation, and at most once per activation window.
- * - A later `load` of the child (WebKit fires one for in-page links too) is pinged; if nothing
- *   answers, the frame went blank or left, so it is removed and the app told. A tripwire only: this
- *   page's policy (`frame-src`/`child-src 'none'`), the app's `allowsLoad` and the sandbox are the
- *   navigation boundary.
- * - It never sizes the frame from a report itself; the app decides heights and calls back.
- * - Inline, the frame does not scroll, so a drag that starts on it scrolls the transcript.
- *
- * The child inherits this document's policy (a srcdoc frame has no URL of its own) and adds the
- * same policy from its own meta, so this document carries the visual policy too, except that it
- * admits the shell's `about:srcdoc` base, which the child's own policy then locks.
- */
+// The unsandboxed WebView loads only this trusted wrapper; author HTML stays in an opaque sandboxed child, whose srcdoc inherits this CSP.
+// Relay only the child/channel’s messages and keep the app token private; load pings detect escapes, while CSP, sandbox and allowsLoad enforce navigation policy.
 export function buildMobileNativeChatVisualHostDocument(input: {
   visualDocument: string
   /** The channel the visual document was built with; only messages on it are relayed. */
@@ -48,7 +27,6 @@ export function buildMobileNativeChatVisualHostDocument(input: {
   token: string
   title: string
   mode: MobileNativeChatVisualHostMode
-  /** Tests shorten the wait for the shell's answer. */
   pongTimeoutMs?: number
 }): string {
   const frameHeight =

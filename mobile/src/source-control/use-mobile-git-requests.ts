@@ -14,8 +14,6 @@ type Params = {
   worktreeId: string
 }
 
-// The raw RPC layer for source-control git actions. Pure transport — owns no
-// screen state, so it stays out of the giant state hook.
 export function useMobileGitRequests({ client, connState, worktreeId }: Params) {
   const sendGitRequest = useCallback(
     async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {

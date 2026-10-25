@@ -4,10 +4,7 @@ export const BOOTSTRAP_FATAL_LOG_FILE_NAME = 'bootstrap-fatal.log'
 const BOOTSTRAP_FATAL_LOG_MAX_BYTES = 262_144
 
 export function createBootstrapFatalExitBanner(): string {
-  // Why: Electron's pre-import error dialog can leave main resident and block NSIS replacement.
-  // Suppressing that dialog also removes the only account of the failure, so record one first:
-  // a partially copied resources tree otherwise exits silently on every launch, with nothing
-  // for the user or a support log to name the module that was missing.
+  // Electron’s pre-import dialog can leave main resident and block NSIS replacement; log missing-module failures before suppressing it or partial installs exit silently.
   return `
 ;(() => {
   const guardKey = ${JSON.stringify(BOOTSTRAP_FATAL_EXIT_GUARD_KEY)}

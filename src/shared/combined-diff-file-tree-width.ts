@@ -8,7 +8,7 @@ export function computeCombinedDiffFileTreeWidthBounds(containerWidth: number): 
   maxWidth: number
   minWidth: number
 } {
-  // Why: a hidden pane measures 0; treat that as "unknown" so it can't shrink the stored width.
+  // Hidden panes measure zero; treat it as unknown so stored width cannot shrink.
   if (!Number.isFinite(containerWidth) || containerWidth <= 0) {
     return {
       maxWidth: COMBINED_DIFF_FILE_TREE_MAX_WIDTH,
@@ -24,8 +24,7 @@ export function computeCombinedDiffFileTreeWidthBounds(containerWidth: number): 
     return { maxWidth: fittedMax, minWidth: COMBINED_DIFF_FILE_TREE_MIN_WIDTH }
   }
 
-  // Why: below both minimums combined nothing fits, so split the container evenly rather than
-  // hold the tree at its minimum and push the diff pane out of the container.
+  // Below both minimums, divide evenly rather than push the diff outside its container.
   const shared = Math.max(0, Math.floor(containerWidth / 2))
   return { maxWidth: shared, minWidth: shared }
 }

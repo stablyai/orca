@@ -146,8 +146,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
       ? args.pr.number
       : undefined
-  // Why: the key embeds the branch, so this write path grows with every distinct
-  // (host, repo, branch) a session refreshes. Share the hosted-review slice's bound.
+  // Bound hosted-review keys across host/repo/branch churn like the shared slice.
   return {
     cache: withHostedReviewCacheEntry(args.cache, hostedReviewCacheKey, {
       data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,

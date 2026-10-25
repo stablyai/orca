@@ -12,7 +12,6 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-// Deferred so emoji-picker-react's ~500KB chunk only loads once the Emoji tab renders.
 const RepositoryIconEmojiPicker = lazyWithRetry(
   () =>
     import('./RepositoryIconEmojiPicker').then((module) => ({

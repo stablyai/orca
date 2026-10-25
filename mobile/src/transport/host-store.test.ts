@@ -616,8 +616,7 @@ describe('host-store list mutations', () => {
 
     const rename = updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Renamed Host' })
     const remove = removeHost(HOST_TWO.id)
-    // Both writers have started their RMW and are blocked on the shared read
-    // gate; without a mutation queue the second would clobber the first.
+    // Overlap writers behind one read gate to expose lost updates without serialization.
     await vi.waitFor(() => {
       expect(pendingReads).toBeGreaterThanOrEqual(1)
     })
@@ -657,8 +656,7 @@ describe('host-store list mutations', () => {
     expect(storedHostsRaw).toBe('{')
   })
 
-  // Why: gates the (slow, real-device 50-200ms) Keychain pass so a load can be
-  // parked mid-flight while a write commits underneath it.
+  // Park the slow keychain pass while a durable write invalidates it.
   function gateKeychainReads(): () => void {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -806,8 +804,7 @@ describe('host-store list mutations', () => {
   })
 
   it('resolves instead of rejecting when updateLastConnected hits unreadable storage', async () => {
-    // Why: callers fire updateLastConnected with `void`; a rejection here would
-    // surface as an unhandled promise rejection rather than a caught error.
+    // Void callers cannot catch rejection; unreadable storage must leave this bookkeeping best-effort.
     storedHostsRaw = '{'
     await expect(updateLastConnected(HOST_ONE.id)).resolves.toBeUndefined()
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
@@ -824,7 +821,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
     lastConnected: 0,
     deviceToken: 'device-token'
   }
-  // Why: the verbatim Android rejection from #6600 — expo maps a null-message GeneralSecurityException to this.
+  // Preserve the Android null-message GeneralSecurityException shape from #6600.
   const ENCRYPT_REJECTION = new Error(
     "Could not encrypt the value for key 'orca.host-token.host-1782629088232' under keychain 'key_v1'. Caused by: unknown"
   )
@@ -849,7 +846,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
       }
-      // Why: the generation record is durable on device; a forgetful mock would fake a broken read path.
+      // Retain the durable generation in the mock so reads can follow alias rotation.
       return key === GENERATION_KEY ? storedGenerationRaw : null
     })
     asyncStorageMock.setItem.mockImplementation(async (key: string, raw: string) => {
@@ -865,7 +862,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
 
   it('saves the host when the reported Android failure is alias-local (#6600)', async () => {
     const written = new Map<string | undefined, string>()
-    // Why: simulate the unverified alias-local case; no affected physical device was available.
+    // Model the alias-local hypothesis; no affected physical device was available.
     secureStoreMock.setItemAsync.mockImplementation(
       async (_key: string, value: string, options?: { keychainService?: string }) => {
         if (options?.keychainService === undefined) {
@@ -906,7 +903,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
       }
     )
     await savePairedHost(NEW_HOST)
-    // Why: a fresh process has no token cache, so the host list has to come back off the rotated alias.
+    // Clear the process cache to verify durable reads follow the rotated alias.
     resetHostStoreForTests()
     secureStoreMock.getItemAsync.mockImplementation(
       async (_key: string, options?: { keychainService?: string }) =>

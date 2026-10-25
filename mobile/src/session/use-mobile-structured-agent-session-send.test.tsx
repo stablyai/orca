@@ -193,7 +193,6 @@ describe('mobile structured send actions', () => {
           ? ok({ origin: 'probe', fetchedAt: 1, models: [opus] })
           : method === 'agentSession.options'
             ? ok({
-                // A stopped chat lists the host's rows and its own model.
                 models: [
                   opus,
                   { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
@@ -298,7 +297,6 @@ describe('mobile structured send actions', () => {
     await act(async () => {
       expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
     })
-    // The new send is drawn under its own id until its row lands.
     const sent = agentJournalSubmissionKey(sentIds()[0] ?? '')
     expect(hook!.session.messages.map((message) => message.id)).toEqual([messages[0]?.id, sent])
     expect(hook!.session.messages[0]).toEqual(messages[0])
@@ -342,7 +340,6 @@ describe('mobile structured send actions', () => {
     expect(calls()).toHaveLength(1)
   })
 
-  // The recorded row is the message: in place, as not sent, with the sign-in row saying why once.
   it.each(['reply-before-row', 'row-before-commit'] as const)(
     'leaves a recorded rejection to its row, with no banner and nothing handed back, for %s',
     async (order) => {

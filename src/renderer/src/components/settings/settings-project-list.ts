@@ -31,11 +31,7 @@ function getCheckoutSelectionKey(projectId: string, repoId: string): string {
   return `${projectId}::setup:${repoId}`
 }
 
-/**
- * The host (and setup) an entry's pane shows. Adding or removing a sibling
- * clone changes an entry's selectionKey, so a pick saved under its other key
- * carries over while that host is still in this entry.
- */
+/** Carry the latest explicit host pick across split/unsplit selection keys while that host remains present. */
 export function getSettingsEntryHostSelection(
   settingsProject: SettingsProject,
   hostSelection: Readonly<Record<string, ExecutionHostId>>,
@@ -73,12 +69,7 @@ export function getSettingsProjectRemovalScope(
   return settingsProject.splitProject ? 'split-project' : 'project'
 }
 
-/**
- * Which repo row identifies a project's single Settings nav row + pane. Pure
- * over the project's setups so nav and panes derive the same id. Prefers the
- * `local` host (the user's own machine) and otherwise the lowest repoId, so the
- * id is stable unless that exact repo row is removed.
- */
+/** Prefer local, then lowest repo ID, to keep navigation and pane identity stable until that repo is removed. */
 export function getSettingsProjectRepresentativeRepoId(
   setups: readonly ProjectHostSetup[]
 ): string {
@@ -98,12 +89,7 @@ export function getSettingsProjectRepresentativeRepoId(
   return lowest
 }
 
-/**
- * Collapses repo rows into one entry per project, except that a same-host clone
- * the sidebar gives its own header gets its own entry. Entries are derived from
- * repos alone so the nav and pane lists agree exactly; pass the sidebar's
- * `projectGrouping` so the split decision sees the same setups it does.
- */
+/** Match sidebar clone splitting; derive navigation and panes from the same repo list. */
 export function buildSettingsProjectList(
   repos: readonly Repo[],
   projectGrouping?: ProjectGroupingModel
@@ -116,11 +102,9 @@ export function buildSettingsProjectList(
   const suppliedSetupByCheckout = new Map(
     projectGrouping?.projectHostSetups.map((setup) => [getSettingsSetupCheckoutKey(setup), setup])
   )
-  // Why: Settings metadata is rebuilt as repos refresh across hosts; index
-  // setups once so many projects do not turn each refresh into an O(n²) scan.
+  // Index once per refresh to avoid quadratic scans across projects.
   const entriesByKey = new Map<string, Omit<SettingsProject, 'representativeRepoId'>>()
-  // Why: a repo id owns one `repo-<id>` section, so its same-id twin on another
-  // host joins the clone's entry instead of colliding with it.
+  // Same-ID host twins must join one clone entry to avoid duplicate repo section IDs.
   const checkoutRepoIds = new Set(
     groupingIndex === null
       ? []
@@ -171,12 +155,7 @@ function getSettingsSetupCheckoutKey(setup: ProjectHostSetup): string {
   return `${getRepoHostIdentityForParts(setup.repoId, setup.hostId)}\0${normalizeRuntimePathForComparison(setup.path.trim())}`
 }
 
-/**
- * The host whose settings the project pane should show. Validates the stored
- * selection against the live setups so a disconnected/removed host never leaves
- * the pane rendering off a dangling hostId: falls back to local, then the first
- * ready setup, then the first setup.
- */
+/** Validate saved host selection against live setups; fall back to local, ready, then first. */
 export function resolveEffectiveProjectHost(
   setups: readonly ProjectHostSetup[],
   selectedHostId: ExecutionHostId | undefined
@@ -195,8 +174,7 @@ export function resolveEffectiveProjectHost(
   return (readySetup ?? setups[0]).hostId
 }
 
-/** Maps every host's repoId to its project's representative repoId, so a
- *  `{pane:'repo', repoId}` deep link resolves to the collapsed pane. */
+/** Map host repo IDs to collapsed panes for repository deep links. */
 export function buildRepoIdToRepresentative(
   projects: readonly SettingsProject[]
 ): Map<string, string> {
@@ -211,8 +189,7 @@ export function buildRepoIdToRepresentative(
   return map
 }
 
-/** Maps each host's repoId to its owning entry + host, so a deep link can
- *  select that host in the pane's "Available Hosts" switcher. */
+/** Resolve deep links to their owning host as well as their pane. */
 export function buildRepoIdToHostSelection(
   projects: readonly SettingsProject[]
 ): Map<string, { selectionKey: string; hostId: ExecutionHostId }> {
@@ -243,11 +220,7 @@ export function getSettingsTargetHostSelection(
   return null
 }
 
-/**
- * The repo row a Settings deep link points at, from either an explicit repoId
- * or a `repo-<id>-<subsection>` sectionId. repo ids can contain hyphens, so the
- * sectionId is matched against known ids with the longest match winning.
- */
+/** Repo IDs may contain hyphens; match known IDs longest-first in subsection links. */
 export function resolveSettingsTargetRepoId(
   target: { repoId: string | null; sectionId?: string },
   repoIds: Iterable<string>
@@ -270,12 +243,7 @@ export function resolveSettingsTargetRepoId(
   return best
 }
 
-/**
- * Removes a Settings entry's setup on every host it exists on; an entry of a
- * split project holds only its own part. Sequential so each host's teardown +
- * projection recompute don't interleave; setups without a repo row
- * (planned/not-set-up hosts) have nothing to remove.
- */
+/** Remove sequentially to avoid interleaved teardown/projection updates; planned hosts have no repo to remove. */
 export async function removeSettingsProjectFromAllHosts(
   setups: readonly ProjectHostSetup[],
   removeProject: (
@@ -285,17 +253,13 @@ export async function removeSettingsProjectFromAllHosts(
 ): Promise<void> {
   for (const setup of setups) {
     if (setup.repoId.trim().length > 0) {
-      // Why: user-initiated single-project removal, so a failure must be visible rather than silent (#11994).
+      // Surface failures from user-initiated removal.
       await removeProject(setup.repoId, { hostId: setup.hostId, errorFeedback: 'toast' })
     }
   }
 }
 
-/**
- * The repo row the project pane should render for the given host selection.
- * Shared by the pane and the hooks-loading effect so they always agree on which
- * host's repo (id + host) is mounted — critical in the same-id/self-pair case.
- */
+/** Keep pane rendering and hook loading on the same repo ID and host, including same-ID self-pairs. */
 export function getSettingsProjectHostRepo(
   settingsProject: SettingsProject,
   repos: readonly Repo[],

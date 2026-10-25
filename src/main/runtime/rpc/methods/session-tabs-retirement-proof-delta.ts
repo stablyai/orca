@@ -13,11 +13,7 @@ type ProofCarrier = {
 
 export type SessionTabsRetirementProofDelta = <TFrame extends ProofCarrier>(frame: TFrame) => TFrame
 
-/**
- * Per-stream projection that sends each retirement proof once. The host pins up to 64 proofs per
- * worktree for its process lifetime, so without this every title tick re-ships the whole list.
- * A capable client retains what it was sent; a legacy client keeps receiving the full list.
- */
+/** Send each proof once per capable stream instead of up to 64 on every title tick; legacy clients retain full lists. */
 export function createSessionTabsRetirementProofDelta(
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): SessionTabsRetirementProofDelta {
@@ -34,10 +30,9 @@ export function createSessionTabsRetirementProofDelta(
     const fresh = sent
       ? frame.retiredTerminalSurfaces.filter((proof) => !sent.has(proofKey(proof)))
       : frame.retiredTerminalSurfaces
-    // Why: track exactly the current list, so a proof that leaves and returns is sent again.
+    // Track current membership so a removed proof is sent again if it returns.
     sentByWorktree.set(frame.worktree, new Set(frame.retiredTerminalSurfaces.map(proofKey)))
-    // Why: an empty list is a real signal ("nothing new, keep yours"). Omitting the field would be
-    // indistinguishable from a host that holds no proofs, which is what tells the client to forget.
+    // Send [] for nothing new; omission means no held proofs and clears client state.
     return fresh.length === frame.retiredTerminalSurfaces.length
       ? frame
       : { ...frame, retiredTerminalSurfaces: fresh }

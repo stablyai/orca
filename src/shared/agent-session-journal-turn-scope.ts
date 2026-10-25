@@ -1,6 +1,4 @@
-/** Which turn a row belongs to, stated by the write that created it. `turn` names the turn
- *  record's journal key; `thread` is a row that belongs to no turn — a notice about the
- *  conversation, or a message not yet delivered into one. Turn records themselves are `thread`. */
+// turn names its owning journal turn key; thread has no owning turn and includes turn records themselves.
 export type AgentJournalTurnScope =
   | { kind: 'turn'; turnItemId: string }
   | { kind: 'thread' }

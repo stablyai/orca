@@ -68,8 +68,7 @@ export function selectWorktreeActivityStatuses(
   return statuses
 }
 
-// Why: return a shallow-stable status map so terminal updates outside the
-// visible candidates do not re-render the picker.
+// Keep equal status maps stable so unrelated terminal updates do not rerender the picker.
 export function useWorktreeActivityStatuses(
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {

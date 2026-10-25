@@ -17,8 +17,7 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts'
 ]
 
-// Why: cloud/ is neither linted nor format-checked, so without this a cloud-only diff skips the
-// static job's check-test-file-runners.mjs; any code file may register tests, so all of them route.
+// Cloud-only code must run check-test-file-runners: cloud is neither linted nor format-checked, and any source can register tests.
 const CLOUD_TEST_RUNNER_INPUT = /^cloud\/(?:.+\.[cm]?[jt]sx?|(?:.+\/)?package\.json)$/
 
 export function isCloudTestRunnerInput(file) {

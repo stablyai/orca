@@ -137,21 +137,22 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return { alive, killed }
   }
 
-  /**
-   * A session this client never spawned or reattached, such as one a relaunched app's window has
-   * not reopened: adopted before its Sleep, or that Sleep writes no checkpoint and keeps no folder.
-   */
+  /** Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session. */
   protected async adoptListedSessionForSleep(
     sessionId: string,
     deadlineMs?: number
   ): Promise<void> {
-    // Why active too: a session this client suspended after a seed failure must stay suspended,
-    // or its fresh-only screen would replace the history it was restored from.
-    if (
-      !this.historyManager ||
-      this.historyManager.hasWriter(sessionId) ||
-      this.activeSessionIds.has(sessionId)
-    ) {
+    // Keep seed-failed sessions suspended so a fresh screen cannot overwrite their restore history.
+    const needsAdoption =
+      !!this.historyManager &&
+      !this.historyManager.hasWriter(sessionId) &&
+      !this.activeSessionIds.has(sessionId)
+    const needsPaneKey =
+      process.platform === 'win32' &&
+      !needsAdoption &&
+      !this.wslPaneKeysBySessionId.has(sessionId) &&
+      this.wslDistrosBySessionId.get(sessionId) !== undefined
+    if (!needsAdoption && !needsPaneKey) {
       return
     }
     const result = await this.client.request<ListSessionsResult>(
@@ -160,8 +161,10 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       remainingDaemonRequestTimeoutMs(deadlineMs)
     )
     const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
-    if (session) {
+    if (session && needsAdoption) {
       await this.adoptLiveSession(session, { activeOnlyIfReconciled: true })
+    } else if (session?.wslDistro && session.paneKey) {
+      this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
     }
   }
 

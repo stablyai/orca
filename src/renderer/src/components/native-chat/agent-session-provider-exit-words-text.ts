@@ -1,5 +1,3 @@
-// Desktop words for an agent that stopped, kept beside the other failure pieces' translations.
-
 import { translate } from '@/i18n/i18n'
 import {
   AGENT_SESSION_FAILURE_COPY as COPY,

@@ -22,7 +22,6 @@ type Props = {
   client: RpcClient | null
   repoId: string | null
   repoName: string | null
-  /** The host's agent-prompt cap. */
   agentPromptMaxLength: number | null
   onLaunch: (command: TerminalQuickCommand) => boolean
 }

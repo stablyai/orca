@@ -613,8 +613,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         expect.objectContaining({ sessionId: staleSessionId })
       )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The reattach found no terminal: main starts the pane and keeps its record; the window
-        // starts no fresh shell of its own.
+        // A missing reattach asks main to start and preserve the resume record; the window cannot spawn its own shell.
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })

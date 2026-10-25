@@ -1,7 +1,6 @@
 import type { MobileGitUpstreamStatus } from './mobile-git-status'
 
-// Icon identifier resolved to a lucide component by the screen. Kept as a string
-// here so this module stays free of the native lucide import and unit-testable.
+// String identifiers keep native lucide imports out of this module.
 export type MobileSourceControlActionIcon =
   | 'commit'
   | 'push'
@@ -51,9 +50,6 @@ export type MobileSourceControlActionArgs = {
   }
 }
 
-// Builds the source-control bottom-sheet action list. Pure (no hooks) so it can
-// be unit-tested and keeps the screen file lean. Enable/disable rules mirror the
-// desktop primary-action gating.
 export function buildMobileSourceControlActions(
   args: MobileSourceControlActionArgs
 ): MobileSourceControlAction[] {

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -14,9 +13,7 @@ afterEach(() => {
 
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Why: the transport suppresses a repeat of the message it last surfaced so one outage cannot spam the
-// pane. Dismissal is the only evidence the user consumed that surface, so it must re-arm the memory —
-// otherwise an identical fatal error recurring during the same outage leaves a dead pane looking fine.
+// Dismissal re-arms identical errors; otherwise a later fatal recurrence in the same outage can leave a dead pane without a visible surface.
 describe('remote runtime error surface dismissal', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()

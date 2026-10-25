@@ -375,7 +375,6 @@ describe('useMobileStructuredAgentSession', () => {
 
     await vi.waitFor(() => expect(hook!.permission).not.toBeNull())
     await vi.waitFor(() => expect(hook!.question).not.toBeNull())
-    // The seed paints first; the session's own list is what a pick is checked against.
     await vi.waitFor(() => {
       expect(listedModelIds(hook!.optionSnapshot)).toContain('gpt-slow')
       expect(hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({

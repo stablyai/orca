@@ -37,15 +37,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-/**
- * Live interactive view of an agent's terminal, streaming from the main
- * process's per-PTY headless emulator. On open it claims the PTY grid for the
- * dialog's own box (see createPreviewGridClaim), so the terminal renders
- * properly sized rather than scaled. The terminal itself is always created at
- * the PTY's REAL cols/rows, and when someone else owns the grid (a phone, a
- * host reclaim) createPreviewBoxFit scales the oversized frame down. Keystrokes
- * pass through to the PTY; DOM renderer so it never grabs a WebGL context.
- */
+/** Claim the dialog’s grid, retaining real PTY dimensions when another owner requires scaling; stream input/output through a DOM renderer without WebGL. */
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
@@ -61,8 +53,7 @@ export function AgentTerminalPreview({
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
-  // Why: keys and appearance must read live values without remounting the
-  // terminal (a remount reconnects the pty and repaints from a new snapshot).
+  // Read live settings without terminal remount, PTY reconnect or snapshot repaint.
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
@@ -81,14 +72,10 @@ export function AgentTerminalPreview({
   const retainTheme = useShallow((theme: ITheme | null) => theme)
   const terminalTheme = retainTheme(composedTheme)
   const terminalMinimumContrastRatio = settings?.terminalMinimumContrastRatio
-  // A null snapshot means no serializer knows this pty (it died or was never
-  // spawned this session) — say so instead of painting a silent blank terminal.
+  // A null snapshot means the serializer cannot find the PTY; show unavailable instead of a blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
 
-  // Why: refs are seeded at first render and refreshed on commit — assigning
-  // during render trips react-compiler. Layout, not passive: xterm's keydown is
-  // a native listener, so React would not flush a passive effect before the
-  // next keystroke and a just-relayed profile could miss it.
+  // Refresh committed refs in layout before xterm’s next native keydown; passive effects can miss a newly relayed input profile.
   useLayoutEffect(() => {
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
@@ -109,8 +96,7 @@ export function AgentTerminalPreview({
     const previewApi = terminalPreviewApiFor(ptyId)
     // Why one read: the xterm's advertisement and its mirror must never disagree.
     const mountTerminalInput = terminalInputRef.current
-    // Why: mirrors the pane's tracker — the policy needs the flags the TUI
-    // negotiated, and this preview parses the same output stream the pane does.
+    // Parse the same output as the pane so input policy sees the TUI’s negotiated kitty flags.
     const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({
       kittyKeyboard: previewAdvertisesKittyKeyboard(mountTerminalInput)
     })
@@ -309,9 +295,7 @@ export function AgentTerminalPreview({
     settings?.terminalLigatures
   ])
 
-  // Why: appearance settings must land on the open terminal, and the OS input
-  // source can flip Option-as-Alt with no settings change at all. A remount
-  // would reconnect the pty and repaint the agent's screen from a new snapshot.
+  // Apply appearance and OS Option-as-Alt changes without reconnecting the PTY or repainting its snapshot.
   useEffect(() => {
     const terminal = terminalRef.current
     if (!terminal) {
@@ -325,10 +309,7 @@ export function AgentTerminalPreview({
   }, [settings, macOptionAsAlt])
 
   return (
-    // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden
-    // keeps the dialog stable no matter how wide/tall the pane's serialized
-    // buffer is. The terminal keeps the pane's true dimensions and is scaled/
-    // clipped to fit; createPreviewBoxFit anchors the end that shows the cursor.
+    // Fix the box to the viewport so snapshot geometry cannot resize the dialog; fit/clip the true PTY frame at its cursor end.
     <div
       className={cn(
         'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',

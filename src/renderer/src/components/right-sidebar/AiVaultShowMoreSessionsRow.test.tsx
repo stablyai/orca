@@ -35,8 +35,7 @@ it('stays put in a loading state while the deeper rescan runs', () => {
   expect(button.hasAttribute('disabled')).toBe(true)
 })
 
-// Why: the old rule inferred "stepping" from the selected depth minus a page, which at the
-// default depth is zero, so every foreground rescan claimed more history was coming.
+// Depth-minus-page is zero at the default, falsely claiming every foreground rescan loads deeper history.
 it('stays hidden during a foreground rescan the scan had room for', () => {
   render(
     <AiVaultShowMoreSessionsRow

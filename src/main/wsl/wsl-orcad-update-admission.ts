@@ -1,8 +1,4 @@
-/**
- * The SSH connect's update decision on a WSL connect: a newer build, the one the host rolled back
- * from, or one already rejected this launch keeps the incumbent serving, adopted as an SSH first
- * deploy adopts it. The fenced activation applies the same plan again.
- */
+/** Reuse SSH update admission: keep newer, rolled-back or launch-rejected incumbents serving; fenced activation replans before committing. */
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostDeferredUpdate
@@ -111,10 +107,7 @@ export async function admitWslOrcadLaunch(
   return admission.deferredUpdate ? { ...ready, deferredUpdate: admission.deferredUpdate } : ready
 }
 
-/**
- * Keeps Update and Force offered on a connect that skipped this app's build for this host's own
- * reasons. A newer host gets no hint: an Update keeps that skip, and nothing here updates it.
- */
+/** Offer Update/Force for retriable host deferrals; newer hosts get no hint because Update cannot change that refusal. */
 function skippedUpdateHint(
   plan: ManagedOrcadAutoUpdatePlan,
   failure: OrcadUpdateFailure | null,
@@ -142,10 +135,7 @@ function skippedUpdateHint(
     : null
 }
 
-/**
- * As SSH's connect: an update over an incumbent that was rejected or threw is not retried this
- * launch. Null failures (a wait or a policy refusal) never tried it.
- */
+/** Do not retry rejected/thrown incumbent updates this launch, matching SSH. Waits/policy refusals never attempted activation and record no failure. */
 export function recordWslOrcadUpdateFailure(
   host: OrcadUpdateFailureHost,
   incumbentVersion: string | null,

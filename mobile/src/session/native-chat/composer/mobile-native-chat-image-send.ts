@@ -7,14 +7,10 @@ import {
 import { nativeChatTerminalWrite } from '../../mobile-session-write-operations'
 import type { MobileNativeChatRpcSender } from '../../mobile-native-chat-send'
 
-// Give the agent TUI a beat to register each bracketed image paste before the
-// message text + Enter arrive, so the image attaches instead of being treated as
-// part of the prompt body (mirrors desktop's NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS).
+// Wait for the TUI to register bracketed image attachments before text/Enter arrives.
 export const MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS = 300
 
-// Ctrl+U kills the agent's unsubmitted input line. Sent before pasting so a retry
-// after a rejected body/Enter can't leave a stale image paste that then rides along
-// with (and duplicates) the next attempt — matches desktop clearUnsubmittedAgentInput.
+// Clear stale unsubmitted paths before paste so rejected body/Enter retries cannot duplicate images.
 const MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
 
 type MobileTerminalClient = { id: string; type: 'mobile' }
@@ -26,20 +22,13 @@ type PasteImagesArgs = {
   readonly deviceToken: string | null
   readonly imagePaths: readonly string[]
   readonly followedByText: boolean
-  /** Budget shared with the rest of the user action (the text body that follows, or
-   *  the send this is healing for). Omit to open a fresh one for this paste alone. */
+  // Share the whole action’s budget with following text or the send being healed.
   readonly deadline?: number
-  /** Bytes for the leading clear. Defaults to a single Ctrl+U, which clears only
-   *  ONE logical line — callers holding a parked multi-line launch draft must
-   *  pass a burst, or its earlier lines survive and glue onto the message. */
+  // Default Ctrl+U clears one logical line; multiline launch drafts need a burst.
   readonly clearInput?: string
 }
 
-/** Clears the agent's unsubmitted input line, then pastes each uploaded image
- *  path into the terminal as a bracketed paste (no Enter) — the same payload
- *  desktop native chat rides along on submit. The leading clear keeps a retry
- *  idempotent after a failed body/Enter. Returns false as soon as the host rejects
- *  one, so the caller can abort before Enter. */
+// Paste paths without Enter and stop on rejection so callers cannot submit partial image input.
 export async function pasteMobileNativeChatImagePaths({
   client,
   agent,
@@ -54,9 +43,7 @@ export async function pasteMobileNativeChatImagePaths({
     ? { id: deviceToken, type: 'mobile' }
     : null
   const clientField = mobileClient ? { client: mobileClient } : {}
-  // Why: this is a sequential loop, so a per-write budget multiplies by the number
-  // of images — the composer stays `sending` the whole time. Budget the sequence
-  // once and let each write draw from what's left.
+  // Budget the whole sequence once; independent per-image timeouts would multiply the composer lock.
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
   for (const text of [
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
@@ -67,9 +54,7 @@ export async function pasteMobileNativeChatImagePaths({
     )
   ]) {
     const remainingMs = deadline - Date.now()
-    // Why: the budget is the whole sequence's — starting a write it can't fund would
-    // let a multi-image paste overrun before the text body even begins its own send.
-    // Abort instead; the caller reports the failure and can retry.
+    // Do not start a write the remaining sequence budget cannot fund.
     if (remainingMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
       return false
     }
@@ -81,8 +66,7 @@ export async function pasteMobileNativeChatImagePaths({
         enter: false,
         ...clientField
       },
-      // The remaining budget covers the reconnect wait too; a fresh post-connect
-      // clock here would let one write outlast the whole sequence's ceiling.
+      // Reconnect wait spends the same budget; do not restart its clock after connecting.
       { timeoutMs: remainingMs, budgetSpansConnect: true }
     )
     if (nativeChatTerminalWrite.interpret(response) !== true) {

@@ -43,8 +43,7 @@ describe('agentResumeHostAuthorityCapability', () => {
   })
 
   it('pins the gate for every resumable agent so a new member is a deliberate decision', () => {
-    // Why: silently defaulting a newly resumable agent to the generic probe is the exact skew
-    // failure this module exists to prevent — the mapping must be reviewed, not inherited.
+    // New resumable agents need explicit capability review; generic-probe defaults recreate the version-skew failure.
     expect(
       Object.fromEntries(
         RESUMABLE_TUI_AGENTS.map((agent) => [agent, agentResumeHostAuthorityCapability(agent)])

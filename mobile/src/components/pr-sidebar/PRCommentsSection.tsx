@@ -37,25 +37,18 @@ type Props = {
   details: GitHubWorkItemDetails | null
   // The PR conversation state — gates the root-comment composer (open PRs only).
   prState: PRState | null
-  // Repo slug for the slug-addressed comment edit/delete RPCs; threaded into the
-  // per-card actions so the edit/delete affordances can gate on its presence.
+  // Thread repo slug into card actions; edit/delete require it.
   prRepo?: GitHubPrRepoSlug | null
-  // Interactive comment actions (reply/resolve/add/edit/delete). Absent (e.g.
-  // non-PR) leaves the timeline read-only.
+  // Omit actions to keep timeline read-only outside interactive PR.
   actions?: MobilePrCommentActions
-  // Author logins manually marked as bots on desktop; keeps the Humans/Bots
-  // tabs classifying the same comments as the desktop panel.
+  // Honor desktop’s manually marked bot logins so audience tabs classify identically.
   botAuthorOverrides?: ReadonlySet<string>
 }
 
-// Render comments in bounded pages — the whole sidebar is one ScrollView (can't
-// virtualize a nested list), so eagerly rendering a large set parses markdown for
-// every comment synchronously and ANRs the JS thread. Start small, reveal in chunks.
+// Page comments in chunks: nested ScrollView cannot virtualize, and eager Markdown parse of whole timeline can ANR JS thread.
 const COMMENT_PAGE = 12
 
-// PR body + full comment timeline, mirroring the desktop PR page: a Description
-// card, then a Comments section with an audience filter (PRs only), threaded
-// review comments, reactions, and collapsible resolved threads.
+// Match desktop description/timeline with audience filter, threaded review replies, reactions and collapsible resolved threads.
 export function PRCommentsSection({
   details,
   prState,
@@ -63,8 +56,7 @@ export function PRCommentsSection({
   actions,
   botAuthorOverrides
 }: Props) {
-  // details is null while phase 2 (the heavy comments/body payload) is still loading.
-  // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
+  // Null details means phase 2 loading; synthetic placeholder means failure, never empty success.
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
   const body = details?.body ?? ''
@@ -74,8 +66,7 @@ export function PRCommentsSection({
   )
   const isPr = details != null && !detailsFailed && details.item.type === 'pr'
 
-  // Per-card action bundle (stable callbacks from the hook) — built once so the
-  // memo'd cards don't re-render on unrelated timeline changes.
+  // Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
   const cardActions = useMemo<PRCommentCardActions | undefined>(
     () =>
       actions && isPr
@@ -107,14 +98,12 @@ export function PRCommentsSection({
   const groups = useMemo(() => groupPRComments(visible), [visible])
   const now = useNow(60_000, comments.length > 0)
 
-  // Bounded render window; reset to the first page when the user selects another filter.
   const [limit, setLimit] = useState(COMMENT_PAGE)
   const selectFilter = (nextFilter: PRCommentAudienceFilter): void => {
     if (nextFilter === filter) {
       return
     }
-    // Why: paging belongs to the filter-tab event, so reset it in the same batch
-    // instead of briefly rendering the new filter with the previous page size.
+    // Reset page limit in filter event’s batch to avoid first rendering new audience with old page size.
     setLimit(COMMENT_PAGE)
     setFilter(nextFilter)
   }

@@ -11,9 +11,7 @@ describe('isRootAgentJournalItem', () => {
   })
 
   it('reads an id that failed to resolve as a subagent’s, not as root', () => {
-    // Presence, not truthiness. This is the whole point of the predicate: a
-    // truthy test answers "root" here, which puts the child's content back on
-    // the parent — the defect this attribution exists to remove.
+    // Presence, not truthiness: an unresolved child id must never attribute its content to the parent.
     expect(isRootAgentJournalItem({ agentId: '' })).toBe(false)
   })
 
@@ -25,8 +23,7 @@ describe('isRootAgentJournalItem', () => {
 
 describe('agentJournalLinkageFields', () => {
   it('omits absent members rather than writing them as undefined', () => {
-    // Absence is the claim these fields make, so a key present with an
-    // undefined value is not the same statement as no key at all.
+    // An own key set to undefined is still present; absence alone claims root.
     expect(agentJournalLinkageFields({ agentId: 'task-1' })).toEqual({ agentId: 'task-1' })
     expect(Object.keys(agentJournalLinkageFields({ agentId: 'task-1' }))).toEqual(['agentId'])
     expect(agentJournalLinkageFields(undefined)).toEqual({})

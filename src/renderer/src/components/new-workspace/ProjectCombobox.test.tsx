@@ -6,9 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import ProjectCombobox from './ProjectCombobox'
 
-// Render the popover inline so assertions can reach the list without a portal.
-// `onOpenChange` is exposed on a button so a test can close the popover the way
-// Radix does on Escape — independently of the component's own key handler.
+// Render inline and expose Radix-style close independently of the component key handler.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({
     children,
@@ -281,7 +279,6 @@ describe('ProjectCombobox', () => {
       root.render(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
     })
     openList()
-    // The field itself is the only text input in the control.
     expect(container.querySelectorAll('input')).toHaveLength(1)
 
     type('noq')
@@ -346,9 +343,7 @@ describe('ProjectCombobox', () => {
     openList()
     type('zzzznomatch')
     expect(field().value).toBe('zzzznomatch')
-    // Radix closes the popover itself on Escape/outside-click, leaving a closed
-    // list with a live query — the state that used to strand the field showing
-    // text matching nothing while hiding the committed project.
+    // Radix can close without clearing the query; Escape must still restore the committed project.
     act(() => {
       container
         .querySelector<HTMLButtonElement>('[data-test-close-popover]')
@@ -374,7 +369,6 @@ describe('ProjectCombobox', () => {
     type('asasdasd')
     expect(field().value).toBe('asasdasd')
 
-    // Blur / outside-click closes via Radix, not the key handler.
     act(() => {
       container
         .querySelector<HTMLButtonElement>('[data-test-close-popover]')
@@ -403,9 +397,7 @@ describe('ProjectCombobox', () => {
     expect(field().getAttribute('aria-describedby')).toBe('project-error')
   })
 
-  // Empty query + >=6 matches + a folder group triggers sectioning, which sinks
-  // folders below Projects. Arming raw rank order armed the BOTTOM row, so Enter
-  // on open created the workspace in the folder group.
+  // Sectioning sinks folders below projects; raw rank would arm the bottom row and Enter would choose the wrong project.
   const sectionedOptions: NewWorkspaceProjectOption[] = [
     ...Array.from({ length: 5 }, (_, index) => ({
       kind: 'project' as const,

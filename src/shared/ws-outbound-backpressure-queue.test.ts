@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createWsOutboundBackpressureQueue } from './ws-outbound-backpressure-queue'
 
-// Deterministic harness: bufferedAmount and the drain timer are both injected,
-// so no wall-clock races. `runTimers` fires the single parked drain callback.
+// Inject bufferedAmount and drain scheduling to avoid wall-clock races.
 
 function createHarness(overrides?: {
   softCapBytes?: number
@@ -164,16 +163,14 @@ describe('ws outbound backpressure queue', () => {
 
   it('parks frames in order while over the cap and drains on recovery without loss', () => {
     const h = createHarness({ softCapBytes: 100 })
-    h.setBuffered(200) // over cap
+    h.setBuffered(200)
     h.queue.enqueue('one')
     h.queue.enqueue('two')
     h.queue.enqueue('three')
-    // Nothing sent yet; all held in order.
     expect(h.sent).toEqual([])
     expect(h.queue.queuedBytes()).toBe('one'.length + 'two'.length + 'three'.length)
     expect(h.timerDelay()).toBe(10)
 
-    // Link recovers; the drain timer flushes everything in FIFO order.
     h.setBuffered(0)
     h.runTimer()
     expect(h.sent).toEqual(['one', 'two', 'three'])
@@ -202,8 +199,7 @@ describe('ws outbound backpressure queue', () => {
     h.setBuffered(200)
     h.queue.enqueue('first')
     h.setBuffered(0)
-    // Even though the wire is now clear, an existing backlog means the new
-    // frame must queue behind it, not jump the line.
+    // New frames must stay behind existing backlog even when the wire clears.
     h.queue.enqueue('second')
     expect(h.sent).toEqual([])
     h.runTimer()
@@ -319,12 +315,12 @@ describe('ws outbound backpressure queue', () => {
 
   it('signals overflow (and drops backlog) when the hard cap is exceeded', () => {
     const h = createHarness({ softCapBytes: 10, maxQueuedBytes: 8 })
-    h.setBuffered(100) // over soft cap: everything queues
-    h.queue.enqueue('12345') // 5 bytes queued
+    h.setBuffered(100)
+    h.queue.enqueue('12345')
     expect(h.overflow).not.toHaveBeenCalled()
-    h.queue.enqueue('67890') // 10 bytes total > 8 -> overflow
+    h.queue.enqueue('67890')
     expect(h.overflow).toHaveBeenCalledTimes(1)
-    // After overflow the queue is inert: no sends, no further overflow calls.
+    // Overflow makes the queue inert, with no repeated notification.
     h.setBuffered(0)
     h.runTimer()
     h.queue.enqueue('later')

@@ -38,8 +38,6 @@ describe('guards still do the work when the fast path does not apply', () => {
   })
 })
 
-// ─── Regression guards: counted work, not wall clock ─────────────────
-
 const originalReplace = String.prototype.replace
 
 afterEach(() => {
@@ -80,15 +78,7 @@ describe('no-op regex passes stay skipped', () => {
   })
 })
 
-// ─── One root-bound factory, one input contract ──────────────────────
-
-/**
- * `createNormalizedPathInsideOrEqualMatcher` demands an already-normalized candidate because
- * `normalizeRuntimePathForComparison` is not idempotent. A sibling factory on the same root that
- * took RAW candidates would put two opposite contracts one line apart, and mixing them up returns
- * "outside the root" rather than throwing. Hoisting a root out of a loop is worth ~0.2 us/event;
- * this is the price. Keep the raw-candidate entry point the plain `relativePathInsideRoot` call.
- */
+/** One root-bound factory accepts normalized candidates: WSL normalization is not idempotent, so mixing raw/normalized contracts silently reports outside. Keep raw candidates on relativePathInsideRoot despite ~0.2us/event root-hoisting savings. */
 describe('cross-platform-path exposes a single root-bound factory', () => {
   it('shows what mixing the two contracts would cost', () => {
     const root = '//wsl.localhost/Ubuntu/Repo'

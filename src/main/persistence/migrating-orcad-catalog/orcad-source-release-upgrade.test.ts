@@ -63,7 +63,6 @@ function draft(): PersistedOpenFile {
   }
 }
 
-/** The tab the server gets, while the draft stays here for the commit to rename. */
 function expectDraftKeptHere(state: PersistedState): void {
   const manifest = exportState(state)
   const { dirtyDraftContent: _draft, ...tab } = draft()
@@ -270,7 +269,7 @@ describe('migrating saved state from released SSH clients', () => {
       expect(census(state).counts['workspace-session']).toBe(1)
     })
 
-    // #27281: the app shows the local tabs here, because an empty row is not a close.
+    // Match app adoption: empty host rows do not prove a close (#27281).
     it('exports the local tabs when the host holds an empty tab list', () => {
       const { state, local, host } = split()
       host.tabsByWorktree = { [WORKTREE]: [] }

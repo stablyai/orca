@@ -18,7 +18,6 @@ function readStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry) => typeof entry === 'string') : []
 }
 
-/** Confirms a sleep that also reaches a twin's other copies, which share the workspace id. */
 const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)

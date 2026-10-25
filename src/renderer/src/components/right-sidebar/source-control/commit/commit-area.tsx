@@ -17,7 +17,7 @@ import { getCommitMessageTextareaRows } from './commit-message-rows'
 import type { PrimaryAction } from '../../source-control-primary-action'
 import { getSourceControlRecoveryFailureKindLabel } from '../sync/push-recovery'
 
-// Why: directional icons per action; Pull stays icon-less (down-arrow read as download/save). Hoisted out of render to avoid per-render alloc.
+// Omit Pull's icon because a down arrow reads as download/save; hoist the map to avoid render allocations.
 const PRIMARY_ICONS: Partial<
   Record<
     PrimaryAction['kind'],
@@ -77,9 +77,9 @@ export function CommitArea({
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
-  // Why: cap at 12 rows so a pasted multi-page message doesn't push the Commit button off-screen (textarea scrolls internally past that).
+  // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
-  // Why: only spin the primary when its label matches the running op; mismatched background ops (Fetch) keep it off. Commit spins via isCommitting instead.
+  // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
   const primaryHostsRemoteOperation =
     primaryAction.kind === inFlightRemoteOpKind ||
     (primaryAction.kind === 'push' && inFlightRemoteOpKind === 'force_push')
@@ -89,7 +89,7 @@ export function CommitArea({
       : primaryAction.kind === 'commit'
         ? isCommitting
         : isRemoteOperationActive && primaryHostsRemoteOperation
-  // Why: spin the chevron when the primary doesn't host the in-flight op (e.g. Fetch), since the click is otherwise silent — no toast until failure, no count change on a no-op fetch.
+  // Spin the chevron for operations absent from the primary; otherwise no-op Fetch has no immediate feedback.
   const showChevronSpinner =
     (isCommitting || isCreatingPr || isRemoteOperationActive) && !showSpinner
   const commitFailureSummary = useMemo(
@@ -129,8 +129,7 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
-  // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
+  // The feature toggle owns visibility; dialogs report config errors, and Create PR intent owns its generation spinner.
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
   if (isGenerating) {

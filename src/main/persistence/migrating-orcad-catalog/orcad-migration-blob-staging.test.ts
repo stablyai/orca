@@ -33,7 +33,7 @@ describe('orcad migration blob staging', () => {
     const first = bytes.subarray(0, 9)
 
     expect(stage(manifest, descriptor, 0, first).receivedBytes).toBe(first.length)
-    // A fresh read of the directory is all a restarted host has.
+    // Restart recovery must depend only on the directory.
     expect(inspectOrcadMigrationBlobUploads(manifest, root)).toEqual([
       { ...descriptor, receivedBytes: first.length }
     ])
@@ -189,7 +189,7 @@ describe('orcad migration blob staging', () => {
     stage(manifest, record, 0, recordBytes)
     assertOrcadMigrationBlobSetMatches(manifest, root, [history, record])
 
-    // A retry after a commit that moved the blobs still sees the whole set, from received.
+    // Retried commits must include blobs already moved to received.
     commitOrcadMigrationBlobs(manifest, root)
     assertOrcadMigrationBlobSetMatches(manifest, root, [history, record])
     expect(() => assertOrcadMigrationBlobSetMatches(manifest, root, [history])).toThrow(

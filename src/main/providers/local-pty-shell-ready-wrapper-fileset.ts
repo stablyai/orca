@@ -1,8 +1,4 @@
-/**
- * The wrapper files main's local PTY path launches shells with, built against a
- * caller-supplied root so the tree can be content-addressed (see
- * shell-wrapper-content-address.ts).
- */
+/** Caller-supplied root permits content-addressing the generated wrapper tree. */
 import {
   buildFishVendorConfWrapperFile,
   getFishVendorConfSnippetPath
@@ -41,14 +37,8 @@ export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
   }
 }
 
-// Why `/` concatenation rather than path.join: these paths are baked into
-// .zshenv as a shell literal and handed to bash as `--rcfile`, and the launch
-// config builds the matching values the same way (local-pty-shell-ready.ts).
-// path.join would emit backslashes on Windows, where a shell literal reads them
-// as escapes -- and would desync the written path from the launched one.
-// Why only .zshenv: the hook hands ZDOTDIR back on its first lines, so zsh reads
-// .zprofile, .zshrc and .zlogin from the user's own directory. Nothing Orca
-// writes is read after this file.
+// Use slash paths in shell literals; path.join would introduce Windows backslash escapes and diverge from launch args.
+// Only .zshenv is wrapped: it restores user ZDOTDIR before zsh reads the remaining startup files.
 export function buildLocalShellReadyWrapperFiles(root: string): readonly ShellWrapperFile[] {
   const [zshEnvPath, zshMarkerPath, bashRcfilePath] = getLocalShellReadyWrapperPaths(root)
   return [

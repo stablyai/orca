@@ -194,8 +194,7 @@ describe('ChecksList', () => {
     expect(markup).not.toContain('Open details')
   })
 
-  // Why: the pill above this list already calls skipped checks passing; a "2 passing" header on the
-  // same 2-success/3-skipped PR contradicts its own "5/5 passed" pill.
+  // Include skipped checks so the passing header matches the pill's 5/5 count.
   it('counts skipped checks in the passing header, matching the checks pill', () => {
     const markup = renderToStaticMarkup(
       React.createElement(
@@ -219,8 +218,6 @@ describe('ChecksList', () => {
     expect(markup).not.toContain('2 passing')
   })
 
-  // Why: a completed check with no conclusion will never resolve, so calling it pending kept an
-  // amber spinner next to a grey "Unresolved checks" pill reading the same list.
   it('reports a completed check with no conclusion as unresolved, not pending', () => {
     const markup = renderToStaticMarkup(
       React.createElement(
@@ -253,8 +250,6 @@ describe('PRTriageStrip check counts', () => {
     )
   }
 
-  // Why: the strip and the checks pill read the same list, so a check that completed without a
-  // verdict must not spin here as pending while the pill calls it unresolved.
   it('shows a completed check with no conclusion as unresolved instead of pending', () => {
     const markup = renderStrip([
       { name: 'legacy', status: 'completed', conclusion: null, url: null }
@@ -271,8 +266,7 @@ describe('PRTriageStrip check counts', () => {
     expect(markup).toContain('1 check pending')
   })
 
-  // Why: one unresolved check must not demote a PR that has a passing one — that is the same
-  // rollup rule the pill uses, so both keep saying the PR is green.
+  // Match the pill: unresolved checks must not demote a PR with a passing check.
   it('keeps a passing check green even when another check is unresolved', () => {
     const markup = renderStrip([
       { name: 'build', status: 'completed', conclusion: 'success', url: null },

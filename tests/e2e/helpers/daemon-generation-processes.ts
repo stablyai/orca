@@ -166,8 +166,7 @@ export async function terminateRecordedTree(
   const unique = [...new Map(identities.map((identity) => [identity.pid, identity])).values()]
   let signalled = false
   for (const identity of unique.toReversed()) {
-    // Why: PID reuse between tree capture and cleanup must never authorize a
-    // signal to a process incarnation the fixture did not create.
+    // Revalidate start identity before cleanup so PID reuse cannot authorize signalling an unrelated process.
     if (!(await processIdentityIsAlive(identity))) {
       continue
     }

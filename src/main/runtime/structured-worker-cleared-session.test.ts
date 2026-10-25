@@ -1,8 +1,4 @@
-/**
- * A structured worker the user `/clear`ed carries on in a successor session. Every worker-level
- * reader and actor must reach the session running it now, read the whole conversation, and say
- * `unverifiable` — never `exited` — when it cannot find that session.
- */
+/** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -214,8 +210,7 @@ function installHost(): void {
       }
       visibleTabs = visible ? [...visibleTabs, id] : visibleTabs.filter((tab) => tab !== id)
     },
-    // As the real close: a child is stopped with exit evidence (none, nothing is written), and the
-    // conversation is dropped.
+    // Model real close: stop attached children with evidence, then drop the conversation.
     close: async (id: string) => {
       closed.push(id)
       open.delete(id)
@@ -444,8 +439,7 @@ describe.each(['live', 'at-rest'] as const)(
       const stop = await stopStructuredWorker(identity, 'ctx_1')
       expect(closed).toEqual([SUCCESSOR])
       expect(stop.stopped).toBe(true)
-      // Release settles a stopped worker only on the probe's `exited`: a successor no agent ever
-      // ran gets no death evidence from its close, and must not read `unverifiable` forever.
+      // Never-started successors have no death evidence; retiring their tab must still let release prove exit.
       structuredWorkerIdentities.clear()
       await expect(
         new OrcaRuntimeService().inspectTerminalProcessIncarnationLiveness(

@@ -1,9 +1,6 @@
 import type { EditorBufferRecord } from './editor-buffer-record'
 
-/**
- * A dirty record whose last view closed without a prompt (a removal with no dialog). It owns its
- * model, never autosaves (no writer view), and a view reopening its identity joins it.
- */
+/** Keep dirty records/models after last-view no-prompt removal. No writer means no autosave; reopened identities join them. */
 export type EditorBufferKept = {
   record: EditorBufferRecord
   draft: string | undefined
@@ -15,10 +12,7 @@ export type EditorBufferKept = {
 
 export type EditorBufferKeptRecords = Record<string, EditorBufferKept>
 
-/**
- * Carried by the write that closes these views (`editorBufferKeepRequest`): their dirty records
- * outlive them. The record middleware consumes it; it is never stored.
- */
+/** Closing writes carry editorBufferKeepRequest for record middleware; consume without storing it. */
 export type EditorBufferKeepRequest = {
   viewIds: ReadonlySet<string>
   notice: number

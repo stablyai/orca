@@ -145,8 +145,7 @@ describe('pty-bound agent draft readiness budget', () => {
   })
 
   it('flags a blind paste when only the opencode process, not its composer, was seen', async () => {
-    // Regression (#22479): ConPTY never forwards DECSET 2004, so on Windows this is the only
-    // path opencode can take. Callers must be able to tell it apart from a real delivery.
+    // ConPTY omits DECSET 2004; distinguish OpenCode’s blind-write fallback from observed delivery (#22479).
     testState.waitForReady.mockResolvedValue(false)
     testState.inspectProcess.mockResolvedValue({
       foregroundProcess: 'opencode',

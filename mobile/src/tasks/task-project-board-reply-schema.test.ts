@@ -13,9 +13,6 @@ import {
   taskProjectViewTableSchema
 } from './task-project-board-reply-schema'
 
-// Pins the decisions task-project-board-reply-schema.ts documents: the one closed enum, the one
-// open-vocabulary string beside it, the row drops, and the tri-state the detail pane forwards.
-
 describe('project envelopes', () => {
   it('reads the representative accessible-project list whole', () => {
     const parsed = taskProjectAccessibleListSchema.safeParse({
@@ -142,7 +139,7 @@ describe('the row detail pane preserves reviewDecision as a tri-state', () => {
     expect(parsed.success && parsed.data).toMatchObject({
       details: { item: { reviewDecision: null } }
     })
-    // JSON drops an absent key and keeps an explicit null, which is the whole distinction here.
+    // JSON distinguishes explicit null from an omitted key.
     expect(JSON.stringify(parsed)).toContain('"reviewDecision":null')
   })
 
@@ -212,10 +209,7 @@ describe('the comment replies', () => {
   })
 })
 
-// The five collections and the assignee list are typed by the item half's entity schemas now, so a
-// row the pane would have crashed on drops instead of reaching a consumer as the declared type.
-// No scenario reply carries any of them non-empty, so these pins are the only thing that observes
-// the change — the goldens cannot.
+// Exercise nonempty collections directly; recorded board replies are empty and cannot verify malformed-row salvage.
 describe('the detail collections are the shared entity rows', () => {
   const details = (value: Record<string, unknown>) =>
     taskProjectRowDetailSchema.safeParse({ ok: true, details: value })

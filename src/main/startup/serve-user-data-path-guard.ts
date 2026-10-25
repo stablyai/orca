@@ -1,12 +1,6 @@
 import { SERVE_USER_DATA_PATH_ENV, isSameUserDataPath } from '../../shared/serve-user-data-path'
 
-/**
- * Returns the refusal message when this serve launch landed on a profile other than the one
- * `orca serve` resolved, or null when it may continue to the instance lock.
- *
- * Why before the lock: losing another profile's lock delivers a second-instance request to
- * whatever app owns that profile, often the user's own desktop.
- */
+/** Reject mismatched serve profiles before locking: a lock loss on the wrong profile can activate the user's desktop. */
 export function checkServeUserDataPath(options: {
   isServeMode: boolean
   userDataPath: string
@@ -15,7 +9,7 @@ export function checkServeUserDataPath(options: {
 }): string | null {
   const env = options.env ?? process.env
   const expected = env[SERVE_USER_DATA_PATH_ENV]
-  // Why consume: serve-hosted terminals must not inherit a stale expectation into a later launch.
+  // Consume the expectation so hosted terminals cannot inherit stale profile fences.
   delete env[SERVE_USER_DATA_PATH_ENV]
   if (!options.isServeMode || !expected) {
     return null

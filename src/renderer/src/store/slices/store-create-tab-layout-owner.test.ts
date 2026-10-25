@@ -93,7 +93,6 @@ describe('createTab in a layout-owner build', () => {
         }
       }
     })
-    // The window drew it first: its callers act on the tab at once.
     expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
   })
 

@@ -65,7 +65,6 @@ describe('browser notice formatting', () => {
     ).toBe(`https://example.com asked for ${description}, and Orca denied it.`)
   })
 
-  // Pin the raw-token fallback for permissions Chromium adds later.
   it('falls back to the raw permission name for anything unmapped', () => {
     expect(
       formatPermissionNotice({

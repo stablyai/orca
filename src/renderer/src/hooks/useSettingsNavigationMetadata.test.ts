@@ -348,8 +348,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
-    // Right-click to paste is now exposed on every platform (#8322), so it is
-    // indexed even when only the terminal host — not the client — is Windows.
+    // Right-click paste is indexed on every client platform, including clients of Windows terminal hosts.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
     )
@@ -411,11 +410,7 @@ describe('settings navigation metadata', () => {
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
-  // Note: this exercises the isDev parameter and isWebClient branches only.
-  // Production safety rests on the hard `import.meta.env.DEV` term in the
-  // builder, which is compile-time-inlined per build and cannot be flipped from
-  // a test (vitest always runs with DEV=true) — don't mistake this for full
-  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  // Vitest always has DEV=true; these branches cannot prove the compile-time production gate or bundle exclusion.
   it('shows Dev tools only in desktop development metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')

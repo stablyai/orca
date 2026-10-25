@@ -25,8 +25,6 @@ import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 
 export { SessionRow, WorktreeRow } from './resource-usage-session-rows'
 
-// ─── Top-level segment ──────────────────────────────────────────────
-
 export function ResourceUsageStatusSegment({
   iconOnly
 }: {

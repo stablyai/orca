@@ -24,8 +24,6 @@ describe('shouldIncludeQuickOpenPath', () => {
     expect(shouldIncludeQuickOpenPath('foo/.cache/bar')).toBe(false)
   })
 
-  // Why hidden: home-dir cache/state dirs that caused the original SSH bug.
-  // Test name explains why each is filtered.
   it('hides generated npm cache dir from Quick Open', () => {
     expect(shouldIncludeQuickOpenPath('.npm/pkg/index.js')).toBe(false)
   })
@@ -157,8 +155,7 @@ describe('buildHiddenDirExcludeGlobs', () => {
     expect(globs).toContain('!**/.git')
     expect(globs).toContain('!**/.cache')
     expect(globs).toContain('!**/.local/share')
-    // Directory-match form (not contents form) — contents form lets rg still
-    // descend into the directory.
+    // Directory matches prune rg traversal; contents-only globs still descend.
     expect(globs).not.toContain('!**/node_modules/**')
   })
 })

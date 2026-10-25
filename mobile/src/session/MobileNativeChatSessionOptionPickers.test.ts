@@ -131,7 +131,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     )
 
   const rowByText = (text: string) => {
-    // The sheet's rows only: the pill names the model too.
     const label = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').find(
       (node) => node.props.children === text
     )
@@ -178,7 +177,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
 
   it('lets the pill shrink so a long label never pushes the composer buttons off the row', () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
-    // Style-level only: the test renderer runs no layout.
     expect(findAllByHostType(renderer!.root, 'View')[0]!.props.style).toMatchObject({
       flexShrink: 1
     })
@@ -252,9 +250,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(invokeAction).toHaveBeenCalledWith('model')
   })
 
-  // The terminal transport can only learn the outcome by parsing the screen back,
-  // so the sheet admits the value is unconfirmed; the structured transport reports
-  // it every turn, which makes the same caption noise there.
+  // Terminal settings are inferred from screen parsing; structured settings are confirmed each turn and need no uncertainty caption.
   it.each([
     { transport: 'catalog' as const, caption: true },
     { transport: 'agent-session' as const, caption: false }
@@ -343,7 +339,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       }
     ])
     expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5, full access')
-    // A write that waits behind a starting agent never holds the page open.
     setOption.mockImplementation(() => new Promise(() => {}))
     await act(async () => pill('Model').props.onPress())
     await act(async () => rowByText('Permissions').props.onPress())

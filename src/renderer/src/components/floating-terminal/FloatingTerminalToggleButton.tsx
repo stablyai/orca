@@ -64,10 +64,7 @@ export function FloatingTerminalToggleButton({
   onToggle: () => void
 }): React.JSX.Element {
   const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
-  // Why: show an attention dot while minimized (closed) when any floating-
-  // workspace tab still has an unacknowledged bell or agent completion. Derived
-  // from the shared unread maps, so it clears when the user engages with — or
-  // closes — the offending tab (see selectFloatingWorkspaceHasUnread).
+  // Read shared unread state so engaging with or closing a tab clears its minimized-panel attention dot.
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const showAttentionDot = !open && hasFloatingUnread
   const initialPositionState = useRef<FloatingTerminalTriggerPositionState | null>(null)
@@ -114,8 +111,7 @@ export function FloatingTerminalToggleButton({
   const reconcilePosition = useCallback((): void => {
     setPosition((current) => {
       if (!shouldReconcileFloatingTerminalTriggerPosition(positionSourceRef.current)) {
-        // Why: a startup-size viewport must not overwrite an intentional saved
-        // drag position with the safety clamp before the renderer finishes sizing.
+        // Wait for final viewport sizing before clamping away the user’s saved drag position.
         return current
       }
       const next = resolveFloatingTerminalTriggerPosition(
@@ -127,8 +123,7 @@ export function FloatingTerminalToggleButton({
   }, [])
 
   useLayoutEffect(() => {
-    // Why: Electron can mount before the renderer has final viewport dimensions;
-    // default positions should re-anchor to bottom-right before first paint.
+    // Re-anchor defaults before paint because Electron’s initial viewport can precede final window sizing.
     reconcilePosition()
   }, [reconcilePosition])
 
@@ -195,8 +190,7 @@ export function FloatingTerminalToggleButton({
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      // Why: keep the toggle/minimize control above the z-[45] panel so it stays
-      // clickable where the two overlap.
+      // Keep the toggle above the panel so overlapping areas remain clickable.
       className="fixed z-[46]"
       style={{ left: position.left, top: position.top }}
     >
@@ -206,10 +200,7 @@ export function FloatingTerminalToggleButton({
             type="button"
             variant="outline"
             size="icon"
-            // Why: a parked launcher needs contrast against the page. On light
-            // pages a soft drop shadow lifts it; on near-black dark surfaces a
-            // drop shadow vanishes, so use a distinctly lighter fill plus a
-            // bright hairline ring to define the edge.
+            // Use shadow in light mode and a lighter fill/ring in dark mode so the parked launcher keeps contrast.
             className="relative cursor-grab rounded-lg border-transparent text-foreground bg-card shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] hover:-translate-y-0.5 hover:bg-accent active:translate-y-0 active:cursor-grabbing dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)] dark:hover:bg-[color-mix(in_srgb,var(--accent)_82%,white)]"
             data-floating-terminal-toggle
             aria-label={
@@ -219,9 +210,7 @@ export function FloatingTerminalToggleButton({
                     'Minimize floating workspace'
                   )
                 : showAttentionDot
-                  ? // Why: announce pending activity to assistive tech; the dot
-                    // itself is aria-hidden decoration.
-                    translate(
+                  ? translate(
                       'auto.components.floating.terminal.FloatingTerminalToggleButton.4cb418b991',
                       'Show floating workspace, new activity'
                     )
@@ -239,9 +228,7 @@ export function FloatingTerminalToggleButton({
           >
             <PanelsTopLeft className="size-4" />
             {showAttentionDot ? (
-              // Why: amber matches Orca's "needs attention / unread" convention
-              // (the tab-unread bell); the ring matches the button fill so the
-              // dot reads on both light (bg-card) and dark (dark:bg-accent).
+              // Match unread attention color; match the ring to the button fill so the dot stays legible in both themes.
               <span
                 aria-hidden
                 data-floating-terminal-attention

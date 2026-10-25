@@ -1,6 +1,4 @@
-// A pane's status, derived at publish from facts the runtime already holds; it is never stored, so
-// it cannot drift from them (design §1.1). `unverifiable` follows the SSH execution boundary: loss
-// of contact is never evidence that a process exited.
+// Derive status from current runtime facts at publish. Losing SSH contact never proves process exit (§1.1).
 
 import type { PaneOutcome } from './workspace-layout-pane-outcomes'
 
@@ -14,32 +12,22 @@ export type PaneStatus =
   | 'failed'
   | 'unverifiable'
 
-/**
- * Whether the pane's host can be used: `awaiting` before this runtime can start terminals there
- * (a saved `ssh:` partition not yet converted, or a host not reached yet), `lost` once contact
- * with a host that runs the pane's terminal is gone.
- */
+/** awaiting: the runtime cannot yet start there, including unconverted SSH partitions; lost: contact with the terminal’s host ended. */
 export type PaneHostReach = 'reachable' | 'awaiting' | 'lost'
 
 /** What the PTY registry says of the pane's bound terminal; null when unbound or not registered. */
 export type PaneTerminalFact = 'live' | 'exited' | 'unverifiable' | null
 
 export type PaneStatusFacts = {
-  /** A start attempt (J) is in flight for this pane. */
   starting: boolean
-  /** The pane's entry in the holder's `PaneOutcomes` (kept by `applyPaneOutcomeChanges`). */
+  /** Last outcome from the holder’s PaneOutcomes. */
   lastOutcome: PaneOutcome | null
-  /** The pane holds a sleeping agent record. */
   sleeping: boolean
   terminal: PaneTerminalFact
   host: PaneHostReach
 }
 
-/**
- * First match wins. An outcome or sleeping record outranks the host: both describe this pane's
- * last known state without asking the host. A bound pane whose terminal the registry does not
- * know is `restorable`: a view that shows it starts it.
- */
+/** First match wins: outcomes and sleeping records outrank host reachability. A bound terminal unknown to the registry is restorable on view. */
 export function derivePaneStatus(facts: PaneStatusFacts): PaneStatus {
   if (facts.starting) {
     return 'starting'

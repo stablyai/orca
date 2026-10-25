@@ -40,7 +40,7 @@ type PluginWatchSubscription = {
 
 const devPath = resolve('plugins', 'demo')
 
-/** The catch-up refresh a live subscription schedules; later counts start after it. */
+/** Exclude the subscription's initial catch-up from later refresh counts. */
 async function flushCatchUpRefresh(refresh: ReturnType<typeof vi.fn>): Promise<void> {
   await vi.advanceTimersByTimeAsync(300)
   expect(refresh).toHaveBeenCalledOnce()
@@ -642,7 +642,6 @@ describe('PluginDevWatcher', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
     await vi.advanceTimersByTimeAsync(300)
-    // The rebind refresh, then the replacement root's one catch-up.
     expect(refresh).toHaveBeenCalledTimes(2)
     expect(root.unsubscribe).toHaveBeenCalledOnce()
     expect(subscriptions.map((item) => ({ path: item.path, options: item.options }))).toEqual([

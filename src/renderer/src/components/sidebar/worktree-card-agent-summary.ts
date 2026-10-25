@@ -12,15 +12,15 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
-  // Why: a failed main agent outranks live work; a pending question still comes first.
+  // Failures outrank live work, but pending questions come first.
   'failed',
   'working',
   'monitoring',
   'unconfirmed',
-  // Why: a user's Stop is not news, but it is not a finish either.
+  // A user stop is neither new work nor clean completion.
   'interrupted',
   'done',
-  // Why: below every reporting state, above true idle — the pane is still held.
+  // A held but silent pane ranks above idle and below every reporting state.
   'unverifiable',
   'idle'
 ]

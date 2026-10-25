@@ -25,9 +25,7 @@ export function rcNumberFromTag(base, tag) {
   }
 
   const suffix = tag.slice(prefix.length)
-  // Why the optional .identifier: suffixed side-branch RCs (v1.2.3-rc.4.perf)
-  // must advance the shared rc counter, or the next suffixed cut recomputes
-  // an existing tag and the workflow refuses to re-cut over it.
+  // Suffixed RC tags must advance shared counter or next side-branch cut recomputes an existing tag and fails.
   const match = /^(\d+)(?:\.[0-9A-Za-z]+)?$/.exec(suffix)
   return match ? Number(match[1]) : null
 }
@@ -38,11 +36,7 @@ export function rcNumberFromReleaseSubject(base, subject) {
     return null
   }
 
-  // Why the same optional .identifier as the tag form: the commit subject is
-  // the only record left once a tag is deleted, and that is exactly when the
-  // explicit-version gate leans on this. Without it, deleting a
-  // v1.2.3-rc.4.perf tag drops the series back to rc.3 and an explicit
-  // 1.2.3-rc.4 is waved through — below what perf-channel clients already run.
+  // Count suffixed RC commit subjects after tag deletion; otherwise explicit-version gate permits a release below clients’ current build.
   const match = /^(\d+)(?:\.[0-9A-Za-z]+)?(?:\s|$)/.exec(subject.slice(prefix.length))
   return match ? Number(match[1]) : null
 }

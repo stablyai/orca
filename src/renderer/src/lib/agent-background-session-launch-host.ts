@@ -58,9 +58,7 @@ export function resolveAgentBackgroundLaunchHost(args: {
 }): AgentBackgroundLaunchHost {
   const { store, worktreeId, worktreePath, repo } = args
   if (repo) {
-    // Why: SSH ownership has two spellings, so the raw field spawns an `executionHostId: 'ssh:*'`-only
-    // repo on the client with a remote path. One resolution feeds the route, the trust write and the
-    // launch shape, which must not disagree about the host.
+    // Resolve both SSH owner spellings once so spawn routing, trust writes and launch shape agree on the host.
     const sshConnectionId = getRepoSshConnectionId(repo)
     const { isSshHost, ...hostFact } = resolveLaunchHostFact(store, worktreeId, worktreePath)
     return {

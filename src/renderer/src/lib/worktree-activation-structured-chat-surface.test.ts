@@ -34,8 +34,7 @@ const setup = {
   envVars: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
 }
 
-// Why: a native-chat create used to land the user on a bare "Terminal 1" beside the chat,
-// because the returned setup script counted as work needing a shell to attach to.
+// Returned setup scripts must not force Terminal 1 beside a new native chat.
 describe('seeding beside a caller-provided chat surface', () => {
   it('runs a new-tab setup script without seeding a shell', () => {
     let createdIndex = 0

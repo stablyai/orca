@@ -74,9 +74,7 @@ function ProviderStatus({
   )
 }
 
-/** The agent's name and status line, plus any install button, which sits beside the switch.
- *  An agent whose chats run a program Orca downloads shows that program's install state as its
- *  status line, since its CLI's install state says nothing about whether its chats can start. */
+/** Use managed chat-runtime status for downloaded providers; CLI installation does not establish chat readiness. */
 function ProviderDetail(props: {
   agent: TuiAgent
   label: string
@@ -160,7 +158,6 @@ function ProviderDetail(props: {
   )
 }
 
-/** Antigravity chats sign in on this computer, directly below the program they run. */
 function AntigravityChatProviderSignIn(): React.JSX.Element | null {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, 'antigravity', true)
   if (runtime.kind !== 'active' || !antigravityProviderSignInShown(runtime)) {
@@ -226,7 +223,6 @@ export function NativeChatProvidersSetting({
                       updateSettings={updateSettings}
                     />
                   </div>
-                  {/* Chats sign in on the host they run on, under the program that serves them. */}
                   {agent === 'antigravity' && enabledInAgents ? (
                     <AntigravityChatProviderSignIn />
                   ) : null}

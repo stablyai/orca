@@ -240,8 +240,7 @@ describe('createBrowserSlice runtime guard', () => {
     })
   })
 
-  // Why: the picker must offer the machine the import will read from, or a headless remote leaves
-  // it empty (feature unreachable) or offers profile names that only exist on the remote.
+  // Offer browsers on the machine import reads: headless remotes otherwise produce empty or wrong-host choices.
   it('lists this desktop’s browsers when the environment’s pages are client-hosted', async () => {
     const store = createTestStore()
     store.setState({ settings: settingsWithRuntime('env-1') })

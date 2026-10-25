@@ -134,7 +134,7 @@ describe('workspace package test typecheck', () => {
 })
 
 describe('local and CI compiler selection', () => {
-  it('selects the supported local compiler by default while CI explicitly selects Bun', () => {
+  it('defaults to automatic compiler selection while CI explicitly selects Bun', () => {
     expect(parseTypecheckOptions([]).compiler).toBe('auto')
     const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
     expect(manifest.scripts['typecheck:ci']).toContain('--compiler=bun')
@@ -202,7 +202,7 @@ describe('local and CI compiler selection', () => {
     expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
   })
 
-  it('runs the resolved Bun and refuses to silently fall back when it is missing', () => {
+  it('selects the resolved Bun path and rejects a missing executable', () => {
     expect(
       selectTypecheckCompiler('bun', {
         root: repoRoot,

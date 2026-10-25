@@ -718,8 +718,7 @@ describe('useGitStatusPolling', () => {
     expect(globalThis.setInterval).not.toHaveBeenCalled()
     expect(gitStatus).not.toHaveBeenCalled()
 
-    // Push signals (e.g. a commit's metadata write) must stay subscribed while
-    // huge — a fresh non-huge status result is the only way the flag clears.
+    // Keep push signals subscribed while huge; only a fresh non-huge result can clear that flag.
     const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
     expect(onChanged).toHaveBeenCalledTimes(1)
     const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
@@ -753,8 +752,7 @@ describe('useGitStatusPolling', () => {
         }
       }
     )
-    // Signals dropped while the window was hidden must be caught up on
-    // reveal so the huge flag can still clear.
+    // Visibility recovery must catch up hidden signals so the huge flag can clear.
     expect(gitStatus).not.toHaveBeenCalled()
 
     visibilityDocument.visibilityState = 'visible'

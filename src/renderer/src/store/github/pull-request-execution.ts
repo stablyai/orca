@@ -133,7 +133,7 @@ export function startPullRequestLookup(args: {
           })()
       const pr = outcome.kind === 'found' ? outcome.pr : null
       if (outcome.kind === 'upstream-error') {
-        // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
+        // Runtime RPC bypasses native coordinator broadcasts; record classified errors here for Checks parity (criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
           set((s) => {
             const nextStates = { ...s.prRefreshStates }

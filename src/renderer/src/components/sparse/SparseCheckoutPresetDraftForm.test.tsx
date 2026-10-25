@@ -18,7 +18,6 @@ it('keeps an untouched new preset neutral and reveals the name error on blur', (
     />
   )
   expect(screen.queryByText('Name is required.')).toBeNull()
-  // Why: an empty draft has nothing to be wrong with yet — the list states it plainly.
   expect(screen.queryByText('Add at least one directory.')).toBeNull()
   expect(screen.getByText('No folders added yet.')).toBeTruthy()
   fireEvent.blur(screen.getByLabelText('Name'))

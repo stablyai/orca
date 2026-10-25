@@ -63,10 +63,7 @@ async function readNativeChatVisualShareRequest(
   }
 }
 
-/**
- * A visual inside an assistant reply. Its frame mounts once the reply scrolls near it and stays
- * mounted, so what the reader did in it survives scrolling away and back.
- */
+/** Mount near the viewport, then keep the frame mounted so interactive state survives scrolling away. */
 export function NativeChatInlineVisual({
   owner,
   file,

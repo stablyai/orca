@@ -1,14 +1,7 @@
 import { mcpToolIdentity, type NativeChatMcpIdentity } from './native-chat-tool-identity'
-/**
- * The category vocabulary for native-chat tool rows, and the one glyph each
- * category keeps. A row is `icon + word + argument`: the icon is decorative and
- * the word carries identity, so a renderer must never draw the glyph alone.
- *
- * The glyph is fixed per category across running/completed/failed — only tone
- * changes, plus a trailing mark on failure. A row that swapped glyphs when it
- * finished would read as changing identity.
- */
-import { EDIT_TOOL_NAMES } from './native-chat-diff'
+/** Share category glyphs across lifecycle states; change tone/failure marks only, preserving identity.
+ * Glyphs are decorative: render the identifying tool word alongside them, never alone. */
+import { EDIT_TOOL_NAMES } from './native-chat/tools/native-chat-diff'
 import { isCommandToolName } from './native-chat-tool-activity'
 import { toolInputCommand } from './native-chat-tool-summary'
 
@@ -23,12 +16,10 @@ export type NativeChatToolCategory =
   | 'mcpToolCall'
   | 'subAgentActivity'
   | 'todoList'
-  /** A tool this vocabulary doesn't model. Distinct from `unknown`: claiming a
-   *  terminal for it would assert a shell ran when nothing says one did. */
+  /** Outside this vocabulary; distinct from unknown, which specifically means an unclassified shell command. */
   | 'other'
 
-/** lucide glyph ids. Spelled the same by `lucide-react` and `lucide-react-native`,
- *  so desktop and mobile can resolve one name to their own component. */
+/** Shared lucide ids resolve in lucide-react and lucide-react-native. */
 export type NativeChatToolIconName =
   | 'eye'
   | 'search'
@@ -40,14 +31,11 @@ export type NativeChatToolIconName =
   | 'bot'
   | 'list-checks'
   | 'wrench'
-  /** The awaiting-input row's glyph. Carried here for the shared aligned slot;
-   *  it names no tool category, because that row stands for a question rather
-   *  than for the call that asked it. */
+  /** Pending-question glyph shares the aligned slot but names no tool category. */
   | 'message-square-more'
   /** The reasoning row's glyph, carried for the same aligned slot; it names no tool category. */
   | 'brain'
 
-/** Category to glyph. */
 export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeChatToolIconName> = {
   read: 'eye',
   search: 'search',
@@ -61,31 +49,22 @@ export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeC
   other: 'wrench'
 }
 
-/**
- * Row word to category, keyed by the word a lane actually renders rather than by
- * the protocol type, because that word is all a row model carries. The edit
- * family and the command tools come from their own shared sets below, so this
- * table holds only what neither of those already names.
- * A `Map`, not an object: an object index answers `__proto__` with a truthy value.
- */
+/** Classify rendered row words, not protocol types; reuse shared edit/command sets.
+ * Map avoids truthy inherited object keys such as __proto__. */
 const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   // Codex's classified shell rows.
   ['read', 'read'],
   ['search', 'search'],
   ['list', 'listFiles'],
-  // Codex's rollout-transcript names for a shell call, which the activity set
-  // below does not carry: `isCommandToolName` also picks the running row's copy,
-  // and this vocabulary only picks a glyph.
+  // Rollout shell names classify glyphs here; the activity set separately controls live-row wording.
   ['exec', 'unknown'],
   ['local_shell', 'unknown'],
-  // Every Codex file change projects as a `Diff` call, and the edit set below
-  // names the tools that carry the edit in their input, not that projection.
+  // Codex Diff is a projection, absent from input-carrying edit-tool names.
   ['diff', 'fileChange'],
   // Claude's tool names, which its lane renders verbatim.
   ['grep', 'search'],
   ['glob', 'search'],
-  // Claude's Task call lasts as long as its subagent. Codex's `spawn_agent` ends once the helper
-  // starts, so it is deliberately absent: its roster row, not the call, stands for the helper.
+  // Claude Task lasts through child execution; Codex spawn_agent returns at launch, so only its roster represents ongoing work.
   ['task', 'subAgentActivity'],
   // Claude's transcript alias of Task.
   ['agent', 'subAgentActivity'],
@@ -97,9 +76,7 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   ['web_search', 'webSearch']
 ])
 
-/** The edit family, lowercased for row-word matching. Deliberately not
- *  `isEditToolName`: that predicate answers "could this input wrap a patch",
- *  which is true of command tools too, and a shell row is not an edit. */
+/** Use edit-only names: isEditToolName also admits command inputs that quote patches, which remain shell activity. */
 const EDIT_ROW_WORDS = new Set([...EDIT_TOOL_NAMES].map((name) => name.toLowerCase()))
 
 /** MCP tools arrive as `mcp__<server>__<tool>` and the row is named after the
@@ -116,17 +93,14 @@ export function nativeChatToolCategory(
   if (word.startsWith(MCP_TOOL_PREFIX) || mcpToolIdentity(rowWord, mcpIdentity) !== null) {
     return 'mcpToolCall'
   }
-  // Before the edit family: a command tool runs whatever it is handed, so a
-  // patch in its input is not evidence the row is an edit.
+  // Commands can carry patches without applying them; command identity takes precedence over edit vocabulary.
   if (isCommandToolName(word)) {
     return 'unknown'
   }
   return CATEGORY_BY_ROW_WORD.get(word) ?? (EDIT_ROW_WORDS.has(word) ? 'fileChange' : null)
 }
 
-/** The glyph for a row word. Never empty, so rows stay left-aligned: a word
- *  outside the vocabulary takes the generic tool glyph, and only a row that
- *  really ran a command claims the terminal. */
+/** Unknown words retain generic aligned glyphs; reserve terminal claims for calls proven to run commands. */
 export function nativeChatToolIconName(
   rowWord: string,
   mcpIdentity?: NativeChatMcpIdentity
@@ -134,9 +108,7 @@ export function nativeChatToolIconName(
   return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolCategory(rowWord, mcpIdentity) ?? 'other']
 }
 
-/** The one category every call in a run shares, or null when the run spans
- *  categories or holds no calls. A run header names the whole run, not any one
- *  call in it, so it may only claim a category true of all of them. */
+/** Use a category only when every call shares it; mixed/empty runs return null. */
 export function nativeChatToolRunCategory(
   calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolCategory | null {
@@ -151,9 +123,7 @@ export function nativeChatToolRunCategory(
   return shared
 }
 
-/** The glyph for a run header: the shared category's glyph, the generic tool
- *  glyph for a run that spans categories, and null when the run has no tool
- *  call to describe and so heads with no glyph at all. */
+/** Shared-category glyph, generic for mixed runs, or null for empty headers. */
 export function nativeChatToolRunIconName(
   calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolIconName | null {
@@ -163,12 +133,8 @@ export function nativeChatToolRunIconName(
   return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolRunCategory(calls) ?? 'other']
 }
 
-/** Whether a call reads as terminal activity, for a lane with no per-category
- *  glyph (mobile) that only chooses between a terminal and a generic tool.
- *  The row word cannot decide it alone: Codex names a classified shell row
- *  `read` / `search` / `list`, which lowercase to Claude's own `Read` / `Grep` /
- *  `Glob`, and those ran no command. So the input breaks the tie — Codex keeps
- *  the command it ran, while Claude's `Read` carries only a file path. */
+/** Mobile terminal/wrench classification needs input: Codex read/search/list shell rows can share lowercased names with non-shell Claude tools.
+ * The retained raw command proves shell execution; Claude Read carries a path only. */
 export function isShellActivityToolCall(call: { name: string; input?: unknown }): boolean {
   return isCommandToolName(call.name) || toolInputCommand(call.input) !== null
 }

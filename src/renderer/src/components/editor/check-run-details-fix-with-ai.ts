@@ -148,7 +148,7 @@ export function useCheckRunDetailsFixWithAI(args: {
   const connectionId = args.worktreeId
     ? (getConnectionId(args.worktreeId) ?? repo?.connectionId ?? null)
     : null
-  // Why: the fix agent runs on the workspace's execution host, so its OS decides quoting (#27971).
+  // Quote for the workspace execution host’s OS, where the fix agent runs.
   const launchPlatform =
     args.worktreeId && repo
       ? resolveRepoWorktreeLaunchPlatform(

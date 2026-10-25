@@ -59,7 +59,7 @@ function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<s
       const text: MarkdownNode = { type: 'text', value: child.value }
       children[index] = isPhrasingParent ? text : { type: 'paragraph', children: [text] }
     } else if (kind === 'mixed') {
-      // Why: escape only the unknown tags so allowed HTML and comments in the same block render as before.
+      // Escape unknown tags only so allowed HTML/comments in mixed blocks retain their rendering.
       child.value = child.value.replace(HTML_TAG_NAME_PATTERN, (match, name?: string) =>
         isUnknownTag(name, allowedTagNames) ? escapeHtmlText(match) : match
       )
@@ -67,10 +67,7 @@ function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<s
   }
 }
 
-/**
- * Shows raw HTML tags that sanitize would strip (`<se-tabs>`, `<Button />`) as literal text,
- * so prose that mentions a tag keeps it instead of rendering an empty gap.
- */
+/** Render unsupported tags literally so sanitize cannot erase tag-shaped prose. */
 export function remarkUnknownHtmlAsText(
   allowedTagNames: ReadonlySet<string>
 ): () => (tree: MarkdownNode) => void {

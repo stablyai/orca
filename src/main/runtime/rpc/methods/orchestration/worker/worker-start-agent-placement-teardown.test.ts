@@ -1,7 +1,4 @@
-/**
- * A structured worker whose launch throws after its session exists: the caller never gets a
- * placement to tear down, so the placement itself must discard the session.
- */
+/** Placement must discard structured sessions created before a throw, because callers receive no placement to tear down. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchModeReceipt } from '../../../../../agent-launch/agent-launch-mode'

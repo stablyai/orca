@@ -6,8 +6,6 @@ import type { SkillInstallFilesystem, SkillPathInspection } from '../skill-insta
 import { SKILL_FILE_NAME } from '../skill-root-file-walk'
 import { isSkillStagingEntryName } from './staging-names'
 
-/** One directory in a discovery root that holds a `SKILL.md`, with everything
- *  the classifier needs to decide which of the three placement kinds it is. */
 export type SkillPlacementCandidate = {
   path: string
   root: SkillScanRoot
@@ -32,22 +30,14 @@ export function requireEnumerableFilesystem(filesystem: SkillInstallFilesystem):
   if (!filesystem.listEntries || !filesystem.inspectPaths) {
     throw new SkillDeleteEnumerationUnsupportedError()
   }
-  // Bound, not detached: the WSL filesystem's `listEntries` reaches `this.runOutput`.
+  // Bind WSL listEntries because it reads this.runOutput.
   return {
     listEntries: filesystem.listEntries.bind(filesystem),
     inspectPaths: filesystem.inspectPaths.bind(filesystem)
   }
 }
 
-/**
- * Breadth-first so every level costs one batched round trip rather than one per
- * directory — the bound that keeps a WSL plan to a handful of `wsl.exe` boots
- * instead of hundreds.
- *
- * Plugin roots are deliberately not walked: they nest up to ten levels, and a
- * plugin skill is blocked from the canonical path alone (see the guards), so
- * paying for that walk would buy nothing.
- */
+/** Batch each breadth-first level to bound WSL launches. Skip nested plugin roots: canonical guards already block their skills. */
 export async function enumerateSkillPlacementCandidates(input: {
   roots: readonly SkillScanRoot[]
   filesystem: SkillInstallFilesystem
@@ -67,7 +57,6 @@ export async function enumerateSkillPlacementCandidates(input: {
     for (const current of frontier) {
       const entries = listings.get(input.toFilesystemPath(current.path)) ?? []
       const skillFile = entries.find((entry) => entry.name === SKILL_FILE_NAME)
-      // The root itself is never a placement, only the directories below it.
       if (current.depth > 0 && (skillFile?.kind === 'file' || skillFile?.kind === 'symlink')) {
         candidates.push({
           path: current.path,
@@ -84,15 +73,12 @@ export async function enumerateSkillPlacementCandidates(input: {
         if (entry.kind !== 'directory' && entry.kind !== 'symlink') {
           continue
         }
-        // The SKILL.md of this directory is already accounted for above; as a
-        // child entry it can only ever be a file, never a placement.
         if (entry.name === SKILL_FILE_NAME || isSkillStagingEntryName(entry.name)) {
           continue
         }
         const childPath = api.join(current.path, entry.name)
         if (entry.kind === 'symlink') {
-          // A symlinked directory is an alias candidate on its own, and is not
-          // descended into: its contents belong to whatever it points at.
+          // Treat a directory symlink as an alias; never traverse its external content.
           candidates.push({
             path: childPath,
             root: current.root,
@@ -110,9 +96,7 @@ export async function enumerateSkillPlacementCandidates(input: {
         }
       }
     }
-    // Two roots can share a path — `~/.claude/skills` is both a home root and a
-    // repo root when the home directory is the workspace — so without this the
-    // same directory is walked (and later staged) twice.
+    // Overlapping roots must not enumerate/stage the same path twice.
     frontier = dedupeByPath(next)
   }
 

@@ -57,8 +57,7 @@ test.describe('Setup guide sidebar entry', () => {
     const flashSamples = await stopSetupGuideFlashMonitor(orcaPage)
     expect(flashSamples, `setup guide sidebar flashed at ${flashSamples.join(', ')}`).toEqual([])
 
-    // Unblock pending skill discovery IPC calls before teardown. Completion
-    // after release is covered by the focused progress unit tests.
+    // Release pending discovery IPC before teardown; focused units cover its completion.
     await releaseBlockedSkillDiscovery(electronApp)
     await orcaPage.evaluate(() => {
       window.dispatchEvent(new CustomEvent('orca:installed-agent-skills-changed'))
@@ -71,8 +70,7 @@ async function setActiveViewForFlashProbe(
   view: 'tasks' | 'automations' | 'mobile'
 ): Promise<void> {
   await page.evaluate((nextView) => {
-    // Why: this spec monitors setup-guide visibility during view transitions;
-    // CI pointer stability over sidebar nav is covered by separate nav tests.
+    // Drive view transitions directly; separate navigation tests cover pointer stability.
     window.__store?.getState().setActiveView(nextView)
   }, view)
 }

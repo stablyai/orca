@@ -16,14 +16,8 @@ const input = readScenarios(
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 )
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
-// One mutant per adapter family, so every family's state projection is shown to be load-bearing.
-// `aiVault.history-screen` carries none: every change to what `worktree.ps` publishes also moves
-// the `scopePaths` the next scripted completion asserts, so a mutant aborts the sequence instead of
-// diverging from it. Do not read that family's reply matrix as an accepted-vs-refused oracle
-// either: the screen paints the same spinner, labels and zero rows either way, so `normal`'s
-// projected state is identical to all seven non-crashing partitions. What holds the family is the
-// next request's `scopePaths` (`["/repo/feature"]` when the rows are read, `[]` when they are not)
-// and the crash channel the three `inner-*` partitions land in.
+// AI Vault history has no state mutant: changed rows also change the next asserted scopePaths and abort the scenario.
+// Its non-crashing reply partitions project identical UI; coverage comes from subsequent scopePaths and the crash channel.
 const mutants: Record<string, Mutation> = {
   b1: 'race',
   b2: 'acceptance',
@@ -48,12 +42,7 @@ const mutants: Record<string, Mutation> = {
   'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
   'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
-/**
- * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2
- * accepts the null envelope and applies the label anyway, and b3 reports the issue error instead of
- * the comments error. An unrelated refactor of those files can no longer keep this green by merely
- * differing; the mutants remain the defect evidence and this run corroborates them.
- */
+// Pin archived defect states so unrelated reference refactors cannot pass merely by differing.
 const referenceStates: Record<string, RecordedValue> = {
   b1: { files: [] },
   b2: {
@@ -77,7 +66,6 @@ function visibleState(recording: Recording): RecordedValue {
   return recording.checkpoints.at(-1)!.observation.state
 }
 
-// Pair pilots with their pinned mutant/reference up front so each loop below defines exactly one test.
 const pilots = pilotGoldens(input.scenarios)
 const mutantPilots = pilots.flatMap((pilot) => {
   const mutation = mutants[pilot.id]

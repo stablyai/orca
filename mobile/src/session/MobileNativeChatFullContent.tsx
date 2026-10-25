@@ -21,8 +21,7 @@ import {
   readMobileNativeChatItem
 } from './mobile-native-chat-item-read'
 
-// "Show full output" and "Show full message": a row the phone was sent a head of, read whole from
-// the host that keeps it. State is the row's own, so a live revision never fights it.
+// Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
 type Load = 'idle' | 'loading' | 'failed'
 
@@ -57,7 +56,6 @@ function outputOf(body: AgentJournalItemBody | null): AgentJournalBoundedPayload
   return body?.kind === 'diff' ? body.patch : null
 }
 
-/** A tool's output in an opened line: its head, and the whole of it on request. */
 export function MobileNativeChatToolOutput({
   body,
   type,
@@ -143,7 +141,6 @@ export function MobileNativeChatToolOutput({
   )
 }
 
-/** `message` as drawn: whole once the reader asked for a reply the phone was sent shortened. */
 export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   shown: NativeChatMessage
   showFull: React.JSX.Element | null

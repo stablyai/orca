@@ -6,11 +6,7 @@ import type {
   AutomationHostScopeGap
 } from './automation-host-catalog-types'
 
-/**
- * Copy and tone for the two independent health axes. They stay separate all the
- * way to the badge: an authority that cannot be queried is a different failure
- * from a target that is not connected, and collapsing them hides one of the two.
- */
+/** Keep storage-query and execution-target health separate through badge rendering so neither failure hides the other. */
 
 export type AutomationHostStatusTone = 'neutral' | 'quiet' | 'attention' | 'error'
 
@@ -73,7 +69,7 @@ export function authorityHealthDescriptor(
         isDefault: false
       }
     case 'stale-error':
-      // Why: the rows on screen are real, just not re-verified — say that, don't call them stale data.
+      // Cached rows are real but unverified; preserve that distinction in the message.
       return {
         id: 'authority-stale-error',
         label: translate(

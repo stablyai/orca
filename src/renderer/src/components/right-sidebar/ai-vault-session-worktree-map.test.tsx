@@ -86,7 +86,6 @@ const sessions = [sessionInA, sessionInB, sessionUnmatched]
 
 describe('useAiVaultSessionWorktreeMap', () => {
   it('keeps the map identity across worktree switches while the current flag moves', () => {
-    // Mirrors the panel wiring: cached map + per-row current stamping.
     const { result, rerender } = renderHook(
       ({ activeWorktreeId }: { activeWorktreeId: string | null }) => {
         const map = useAiVaultSessionWorktreeMap({ sessions, repos, worktrees })
@@ -105,7 +104,6 @@ describe('useAiVaultSessionWorktreeMap', () => {
 
     rerender({ activeWorktreeId: worktreeB.id })
 
-    // The switch must not rebuild the 500-session map — only the stamp moves.
     expect(result.current.map).toBe(firstMap)
     expect(result.current.infoFor(sessionInA.id)?.status).toBe('active')
     expect(result.current.infoFor(sessionInB.id)?.status).toBe('current')
@@ -127,9 +125,9 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const allWorktrees = [...worktrees, sshWorktree, archivedWorktree]
     const allRepos = [...repos, makeRepo({ id: 'repo-ssh', path: '/srv/orca' })]
     const allSessions = [
-      sessionInA, // active worktree
-      sessionInB, // non-active worktree
-      sessionUnmatched, // no worktree match
+      sessionInA,
+      sessionInB,
+      sessionUnmatched,
       makeSession({ id: 'codex:ssh', cwd: '/srv/orca/src', executionHostId: 'ssh:target-1' }),
       makeSession({ id: 'codex:attic', cwd: '/repo/attic' }),
       makeSession({ id: 'codex:no-cwd', cwd: null, branch: 'feature/x' })
@@ -160,8 +158,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('matches non-ASCII cwds regardless of unicode normalization form', () => {
-    // macOS file pickers yield NFD while agents record NFC cwds (#10832) —
-    // explicit escapes so tooling can't silently re-normalize the fixture.
+    // macOS NFD and agent NFC must match; explicit escapes prevent fixture normalization (#10832).
     const nfcCafe = makeWorktree({ id: 'repo-1::/repo/caf\u00e9', path: '/repo/caf\u00e9' })
     const cjk = makeWorktree({ id: 'repo-1::/repo/作業区', path: '/repo/作業区' })
     const nfdSession = makeSession({ id: 'codex:nfd', cwd: '/repo/cafe\u0301/src' })
@@ -190,9 +187,6 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('does not attribute a session to a workspace that merely shares a path prefix', () => {
-    // Guards the candidate matcher's boundary: hoisting the root normalization
-    // out of the loop must not degrade containment into a bare startsWith, or
-    // '/repo/alpha-sibling' would be swallowed by '/repo/alpha'.
     const sibling = makeWorktree({
       id: 'repo-1::/repo/alpha-sibling',
       path: '/repo/alpha-sibling'
@@ -211,10 +205,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('builds the map at scale without re-normalizing paths per session', () => {
-    // Regression for the ~1s workspace-switch stall (#10841/#11303): the map
-    // used to rebuild and re-normalize every candidate root per session, making
-    // it O(sessions x roots) on path normalization. Times the real fan-out
-    // rather than counting calls, so it fails on any return to that shape.
+    // Use realistic fan-out to catch repeated per-session root normalization behind workspace-switch stalls (#10841/#11303).
     const manyWorktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::/repo/w${i}`, path: `/repo/w${i}` })
     )
@@ -233,8 +224,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const elapsedMs = performance.now() - startedAt
 
     expect(result.current.size).toBe(manySessions.length)
-    // Was ~350ms+ before the hoist and ~15ms after; the bound is loose enough
-    // to stay quiet on a slow CI box while still catching the quadratic shape.
+    // Previously ~350ms, now ~15ms; allow slow CI while detecting the old normalization cost.
     expect(elapsedMs).toBeLessThan(150)
   })
 })

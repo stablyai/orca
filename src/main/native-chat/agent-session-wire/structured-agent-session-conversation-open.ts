@@ -1,14 +1,7 @@
-// The one way a conversation's journal becomes open on this host: for a send, for a reader, and
-// for an attach that finds none open.
-//
-// A damaged journal fails the open, which refuses it as unloadable. It marks what an earlier host
-// process handed over and left unanswered as in doubt, and settles what it left running — the
-// crash boundary. That
-// needs no lease, and the doubt is final: whether the provider took such a row is never guessed. A
-// row an earlier process accepted and never handed over (it quit or crashed first) is settled here
-// too, before any reader, command or child sees it: a person's message is kept as a card, the rest
-// rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
-// (`queued-message-pause.ts`). Nothing here starts a provider child.
+// Open and settle the crash boundary before any reader, command or child: damaged journals fail;
+// handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
+// other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
+// Settlement needs no lease and starts no provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

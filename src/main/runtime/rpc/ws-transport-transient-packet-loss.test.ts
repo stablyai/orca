@@ -1,5 +1,3 @@
-// Real ws server + real ws client over loopback: a live, well-behaved peer whose pong is swallowed by
-// a transient blackhole must not be terminated (STA-3320).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
@@ -27,7 +25,7 @@ describe('WebSocketTransport under transient packet loss', () => {
       port: 0,
       heartbeatIntervalMs: PROBE_INTERVAL_MS,
       heartbeatNow: now,
-      // Why: this test is about liveness, not the auth handshake; keep the pre-auth reaper out of it.
+      // Keep pre-auth expiry outside this liveness test.
       preAuthTimeoutMs: 600_000
     })
     transports.push(transport)
@@ -45,8 +43,7 @@ describe('WebSocketTransport under transient packet loss', () => {
         resolve(ws)
       })
     })
-    // autoPong:false hands us the protocol-level pong so we can drop exactly one, the way a
-    // cellular/Tailscale blackhole drops exactly the frames in flight during the stall.
+    // Disable autoPong to drop exactly one protocol reply.
     const client = new WebSocket(`ws://127.0.0.1:${transport.resolvedPort}`, { autoPong: false })
     sockets.push(client)
 
@@ -84,7 +81,6 @@ describe('WebSocketTransport under transient packet loss', () => {
     }
 
     expect(probesReceived).toBe(4)
-    // The peer was demonstrably alive across the blackhole: it answered the probes on both sides of it.
     expect(pongedProbes).toEqual([1, 3, 4])
     expect(client.readyState).toBe(WebSocket.OPEN)
   })

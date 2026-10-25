@@ -1,6 +1,4 @@
-// Why: shared rig for autosave-controller suites — the controller needs a
-// real editor store slice plus a window stub (event target, timers, fs
-// bridge), and duplicating that per test file bloats suites past max-lines.
+// Use a real editor slice and isolated window/filesystem bridge across autosave suites.
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
@@ -23,7 +21,7 @@ export type FakeEditorDisk = {
   }
 }
 
-/** In-memory stand-in for window.api.fs, so tests assert what is actually on disk. */
+/** Back the filesystem stub with in-memory disk contents so assertions observe landed writes. */
 export function createFakeEditorDisk(initialFiles: Record<string, string> = {}): FakeEditorDisk {
   const files = new Map(Object.entries(initialFiles))
   return {
@@ -91,14 +89,13 @@ export function stubEditorWindowWithDisk(
   return disk
 }
 
-/** Stubs the global window with an isolated event target and fs bridge;
- *  returns the writeFile mock for assertions. */
+/** Return the isolated window filesystem’s write mock. */
 export function stubEditorWindow(): ReturnType<typeof vi.fn> {
   return stubEditorWindowWithDisk().fs.writeFile
 }
 
 export function createEditorStore(): StoreApi<AppState> {
-  // Why the record middleware: views of one file share a record only through it, as in the app.
+  // Use the app’s record middleware so views of one file share a buffer.
   // oxlint-disable-next-line typescript/no-explicit-any -- a partial store; tests read only the slices it builds.
   const create = withEditorBufferRecords<any>(
     (...args: any[]) => ({
@@ -149,10 +146,7 @@ export function createUntitledNoteStore(fileName: string): StoreApi<AppState> {
   return store
 }
 
-/**
- * Suites whose tabs stand for files already loaded from disk: give each tab without one the
- * baseline a load would stamp, since saves with no known disk version are refused.
- */
+/** Stamp loaded-file baselines in fixtures; saves without known disk versions are refused. */
 export function withLoadedBaselines<T extends Pick<StoreApi<AppState>, 'getState'>>(
   store: T,
   disk?: FakeEditorDisk

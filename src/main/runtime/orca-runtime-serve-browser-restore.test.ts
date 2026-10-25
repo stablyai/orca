@@ -12,7 +12,6 @@ import { BLANK_BROWSER_TAB_STATE } from '../../shared/workspace-layout/workspace
 
 const BROWSER_ONLY_WORKTREE_ID = 'repo-1::/tmp/browser-only'
 
-/** A host with no window whose saved session holds browser tabs from a run before a restart. */
 function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
   const saved = session
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(saved)
@@ -64,7 +63,6 @@ function savedServeTabs(): WorkspaceSessionState {
       title: 'Example'
     })!
   }
-  // The tab a window last showed, as it records it.
   return {
     ...session,
     activeBrowserTabIdByWorktree: {
@@ -74,7 +72,7 @@ function savedServeTabs(): WorkspaceSessionState {
   }
 }
 
-/** A tab a window saved: its tab, page and unified tab each have their own id. */
+/** Saved tab, page and unified-tab ids are distinct. */
 function desktopSavedTab(): WorkspaceSessionState {
   const session = makeWorkspaceSessionWithHeadlessTerminal()
   const state = { ...BLANK_BROWSER_TAB_STATE, url: 'https://example.com/', title: 'Example' }
@@ -179,14 +177,13 @@ describe('a saved browser tab on a host with no window', () => {
       page: 'page-new'
     })
 
-    // A switch-on build saves the page once main's layout write lands.
     await vi.waitFor(() => {
       const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
       expect(saved.map((tab) => [tab.id, tab.url])).toEqual([
         ['page-new', 'https://example.com/new']
       ])
     })
-    // Which tab shows is a view's choice; opening one records none.
+    // Selection belongs to views; creating a page must not persist it.
     expect(getSession().activeBrowserTabIdByWorktree?.[TEST_WORKTREE_ID]).toBeUndefined()
   })
 
@@ -216,7 +213,6 @@ describe('a saved browser tab on a host with no window', () => {
 
     const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
     expect(saved.map((tab) => tab.id)).toEqual(['page-2'])
-    // What a restart reads back.
     const restarted = restartedServe(getSession())
     const listed = await restarted.runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(listed.tabs.some((tab) => tab.id === 'page-1')).toBe(false)
@@ -238,7 +234,6 @@ describe('a saved browser tab on a host with no window', () => {
     const listed = await runtime.browserTabList({ worktree: `id:${TEST_WORKTREE_ID}` })
     await runtime.browserSnapshot({ worktree: `id:${TEST_WORKTREE_ID}` })
 
-    // The last tab opened is the one the layout shows, as a window shows it.
     expect(listed.tabs.map((tab) => tab.browserPageId)).toEqual(['page-2'])
     expect(createTab).toHaveBeenCalledTimes(1)
     expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-2' }))
@@ -333,7 +328,6 @@ describe('a saved browser tab on a host with no window', () => {
     expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-2' }))
   })
 
-  // A paired desktop probes a handle-less tab with tabShow; that must wake this page, not a new one.
   it('starts the named saved page once for a tab show after a restart', async () => {
     const { runtime, createTab } = restartedServe()
 

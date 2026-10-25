@@ -55,8 +55,7 @@ describe('shouldShowJumpToLatest', () => {
   })
 })
 
-// The browser reports application writes as ordinary scroll events. Explicit
-// marks distinguish their delayed echoes from reader movement after growth.
+// Application writes emit ordinary browser scroll events; explicit marks distinguish delayed echoes from reader movement.
 describe('nextFollowingEnd', () => {
   const wellAway = parkedAbove(400)
   const following = {
@@ -71,9 +70,7 @@ describe('nextFollowingEnd', () => {
     expect(nextFollowingEnd(following)).toBe(true)
   })
 
-  // The resume bug: history pages in and rows settle their measured heights, so
-  // the end runs away from an offset the transcript itself pinned. That is not a
-  // reader leaving, and treating it as one strands them mid-transcript.
+  // Growth after application pinning is not reader detachment, even if the scroll event arrives late.
   it('keeps following when a delayed application scroll arrives after growth', () => {
     expect(nextFollowingEnd({ ...following, programmatic: true, geometry: wellAway })).toBe(true)
   })
@@ -121,9 +118,7 @@ describe('nextFollowingEnd', () => {
     ).toBe(false)
   })
 
-  // A smooth scroll marks only where it lands. Leaving the end, its first frames
-  // move a pixel or two and are unmarked: read as the reader arriving, they
-  // re-armed follow and the next frame rebased the view, cancelling the scroll.
+  // Early smooth-scroll frames may be unmarked; movement away from the end must not rearm follow.
   it('does not reattach a detached reader who is moving away from the end', () => {
     const leaving = {
       following: false,
@@ -148,7 +143,6 @@ describe('nextFollowingEnd', () => {
       geometry: parkedAbove(0)
     }
     expect(nextFollowingEnd({ ...clamped, settling: true })).toBe(false)
-    // Anti-vacuous: the same offset reattaches a reader with no jump under way.
     expect(nextFollowingEnd({ ...clamped, settling: false })).toBe(true)
   })
 

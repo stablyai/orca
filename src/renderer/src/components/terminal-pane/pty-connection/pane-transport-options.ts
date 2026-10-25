@@ -11,10 +11,7 @@ export function isDeferredSplitInputHold(session: ConnectPanePtySession): boolea
   return Boolean(session.deps.cwdPromise || session.deps.preconnectInput?.length)
 }
 
-/**
- * Startup work the shell runs after it binds: a startup command, an agent resume (sleeping record or
- * live status entry), or a launch main picks for a pane it starts, unseen here.
- */
+/** Startup command, agent resume, or main-owned launch that runs after PTY binding. */
 export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
   return paneHasKnownStartupWork(session) || mainStartsPane(session)
 }
@@ -28,12 +25,8 @@ function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
   )
 }
 
-/**
- * Plain shells and deferred splits hold keys typed before their PTY binds (a first spawn can wait
- * seconds on the host). Why not panes with startup work: held keys would flush ahead of it, so a
- * typed prompt would run as a shell command or corrupt the launch line; agent panes keep them as
- * a draft instead (agent-pre-ready-typed-draft.ts).
- */
+/** Hold pre-bind keys only for plain/deferred shells. Flushing ahead of startup work could run a prompt
+ * as a shell command or corrupt the launch; agent panes retain a draft (agent-pre-ready-typed-draft.ts). */
 function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
   if (isDeferredSplitInputHold(session)) {
     // Why not mainStartsPane: a deferred split keeps holding under the layout-owner build, as before.
@@ -42,7 +35,6 @@ function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
   return !paneHasStartupWork(session)
 }
 
-/** The spawn/attach options a pane hands its PTY transport. */
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
   return {
@@ -73,9 +65,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
-    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns.
+    // Flush pane↔PTY binding before spawn reply so a SIGKILL cannot lose it.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
     ...(session.deps.placement ? { placement: session.deps.placement } : {}),
@@ -143,10 +133,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           onAgentBecameWorking: session.onAgentBecameWorking,
           onAgentExited: session.onAgentExited
         }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server with local/SSH identity. Remote-runtime streams do not pass through
-    // local main, so the renderer remains their status owner for now.
+    // Local main owns OSC 9999 and forwards hook identity; remote-runtime streams bypass main and retain renderer ownership.
     ...(session.shouldOwnAgentStatusInRenderer
       ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
       : {})

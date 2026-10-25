@@ -24,7 +24,6 @@ it('keeps an over-limit pending cell as draft text when its tab closes', async (
       source: document.source,
       wasDirty: false
     })
-    // A commit refuses the cell, as the table size limit does.
     useCsvPendingCell({
       fileId: 'data.csv',
       commit: () => false,

@@ -9,10 +9,7 @@ import {
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 
-/**
- * The root runner's compiler command for a mobile project, run from `cwd` so diagnostics name
- * files relative to it. Compiler: ORCA_MOBILE_TYPECHECK_COMPILER (auto|tsrs|bun|native).
- */
+// Run from the mobile cwd for relative diagnostics; ORCA_MOBILE_TYPECHECK_COMPILER selects auto|tsrs|bun|native.
 export function resolveMobileTypecheckCommand(project, cwd = process.cwd()) {
   const requested = process.env.ORCA_MOBILE_TYPECHECK_COMPILER ?? 'auto'
   if (!/^(auto|tsrs|bun|native)$/.test(requested)) {

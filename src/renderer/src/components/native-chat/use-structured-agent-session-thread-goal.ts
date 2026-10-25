@@ -14,8 +14,7 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 export type StructuredAgentSessionThreadGoal = {
   goal: AgentJournalThreadGoal | null
   pending: boolean
-  /** False where only the agent's own `/goal` changes the goal: Orca sends it `/goal clear`, and
-   *  the agent has no pause. */
+  /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
   hostChanges: boolean
   /** Resolves false when the change was refused or not sent; the error surfaces separately. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
@@ -37,8 +36,7 @@ export function useStructuredAgentSessionThreadGoal(args: {
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
   const report = support ?? reported
-  // The loaded window reaches the live head, so a goal row in it is newer than the host's
-  // whole-journal answer; that answer covers only rows older than the window.
+  // Loaded rows reach the live head and outrank older whole-journal goal evidence.
   const floor =
     report?.contextFloor && (!journalEpoch || report.contextFloor.epoch === journalEpoch)
       ? report.contextFloor.sequence

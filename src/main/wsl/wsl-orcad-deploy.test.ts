@@ -230,7 +230,7 @@ describe('deployAndLaunchWslOrcad', () => {
     expect(mocks.wake).toHaveBeenCalledTimes(1)
   })
 
-  // Real host (awin): a Remove that failed partway left orcad serving; the record named nothing.
+  // Reproduce failed Remove leaving serving orcad absent from the activation record.
   it('deploys over an adopted unrecorded orcad under the SSH terminal gate, never a fresh launch', async () => {
     const adoptedRecord = {
       ...emptyOrcadActivationRecord(),
@@ -382,7 +382,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       "cat '/home/u/.orca-remote/orcad-1.4.0+aa/.orcad-pid' 2>/dev/null || true",
       expect.anything()
     )
-    // The installed candidate is what a later Force activates; nothing may collect it.
+    // Keep the installed candidate for later explicit Force activation.
     expect(mocks.prune).not.toHaveBeenCalled()
     expect(mocks.probe).not.toHaveBeenCalled()
   })
@@ -516,7 +516,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         outcome: 'ready',
         fullVersion: '1.4.0+aa',
         readiness: INCUMBENT_READINESS,
-        // Force stays offered: it is the one explicit retry.
         deferredUpdate: {
           candidateVersion: '1.5.0+ab',
           code: 'orcad_activation_policy_refused',
@@ -600,7 +599,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         }
       })
       expect(mocks.deploy).toHaveBeenCalledTimes(1)
-      // Force is the explicit retry.
       await launch(undefined, { intent: 'force' })
       expect(mocks.deploy).toHaveBeenCalledTimes(2)
     })
@@ -631,7 +629,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         deferredUpdate: { code: 'orcad_update_terminals_running', forceable: true }
       })
       expect(mocks.adoptRunning).not.toHaveBeenCalled()
-      // Update is not Force: the deploy still gates on the terminals the incumbent counted.
+      // Update still gates on incumbent terminals; only Force bypasses them.
       expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: false, census: LIVE })
       const { admitRecord } = mocks.deploy.mock.calls[1][0]
       expect(admitRecord({ ...activeOld, rolledBackFrom: '1.5.0+ab' }, '1.5.0+ab')).toBeNull()
@@ -645,7 +643,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         code: 'orcad_candidate_readiness_rejected',
         reason: rejected.reason
       })
-      // Nor when the host could not be read: that proves no restore.
+      // Unreadable host state proves no rollback restoration.
       mocks.deploy.mockResolvedValueOnce(rejected)
       mocks.transaction.mockRejectedValueOnce(new Error('wsl.exe did not answer'))
       await expect(launch(undefined, { intent: 'update' })).resolves.toMatchObject({
@@ -750,7 +748,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     })
 
     it('leaves a host stopped after a rollback for Force, not the build it rolled back from', async () => {
-      // No bundle of `previous` is on this desktop, so nothing here could restart it.
+      // Desktop lacks the previous bundle and cannot restart it.
       const stopped = {
         ...emptyOrcadActivationRecord(),
         previous: '1.4.0+aa',

@@ -1,5 +1,4 @@
-// #31136: on a headless `orca serve` host, Codex's own idle title is its project name (no agent
-// marker), captured from Codex 0.163. Only a shell title may retire the hook's transcript address.
+// #31136: Codex 0.163 idle titles lack agent markers; only shell evidence may retire the hook transcript address.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -44,7 +43,7 @@ function codexRow(overrides: Partial<AgentStatusIpcPayload>): AgentStatusIpcPayl
   }
 }
 
-// Codex 0.163 frames: its window title, and the OSC 7501 program state it paints beside it.
+// Captured Codex 0.163 title and OSC 7501 program state.
 const title = (text: string): string => `\x1b]0;${text}\x07`
 const programState = (state: 'working' | 'idle'): string =>
   `\x1b]7501;state=${state}:app=codex\x1b\\`
@@ -73,7 +72,6 @@ function layoutStore(): RuntimeStore {
 async function codexPaneAfterOutput(
   rows: AgentStatusIpcPayload[],
   frames: (string | (() => void))[],
-  /** The host's verdict when a title drops the agent marker, as the hook server reports it. */
   presence: 'live' | 'exited' = 'live'
 ): Promise<unknown> {
   const checkHookAgentPresence = async () => {
@@ -83,7 +81,7 @@ async function codexPaneAfterOutput(
     }
     return presence
   }
-  // Switch-on, main binds the pane in its layout before the terminal registers, so it needs a store.
+  // Main-owned layout binds the pane before registration, requiring a store.
   const runtime = new OrcaRuntimeService(
     ORCA_LAYOUT_OWNER_IS_MAIN ? layoutStore() : null,
     undefined,
@@ -105,7 +103,6 @@ async function codexPaneAfterOutput(
     folderWorkspace: null
   })
   runtime.setPtyController({
-    // As the PTY host's spawn commit: the pane is bound before its terminal registers.
     spawn: vi.fn(committingSpawn(runtime, async () => ({ id: PTY_ID }))),
     write: () => true,
     kill: () => true,
@@ -123,7 +120,7 @@ async function codexPaneAfterOutput(
       continue
     }
     runtime.onPtyData(PTY_ID, frame, Date.now())
-    // The presence recheck a dropped marker starts settles before the next frame.
+    // Let the dropped-marker presence recheck settle before the next frame.
     await new Promise((resolve) => setImmediate(resolve))
   }
   const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -157,7 +154,6 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
       [title('Reply with hi | repo'), programState('idle')]
     )
 
-    // The newer idle title outranks the older hook state, as under any other title.
     expect(agentStatus).toMatchObject({
       agentType: 'codex',
       state: 'done',

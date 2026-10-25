@@ -14,16 +14,14 @@ describe('buildWindowsCmdRunnerDelayedLaunchCommand', () => {
     const command = buildWindowsCmdRunnerDelayedLaunchCommand('C:\\work\\setup.cmd')
     const switches = command.replace(/ -EncodedCommand \S+$/, '')
 
-    // Why: `-EncodedCommand` is not execution-policy gated — only `-File` is — so the switch
-    // was a no-op next to a heavily EDR-flagged base64 command line.
+    // EncodedCommand is not policy-gated (only File is); Bypass adds an EDR signal without changing execution.
     expect(switches).not.toMatch(/-ExecutionPolicy/i)
     expect(switches).not.toMatch(/Bypass/i)
     expect(switches).toBe('powershell.exe -NoProfile -NonInteractive')
   })
 
   it('keeps the base64 that shields the runner path from the pane shell', () => {
-    // Why: this whole module exists because the path carries cmd metacharacters; the
-    // command is typed into a terminal pane, so the base64 must stay.
+    // This command is typed into a pane shell; base64 must protect cmd metacharacters in its path.
     const command = buildWindowsCmdRunnerDelayedLaunchCommand('C:\\work (x86)\\se&tup.cmd')
 
     expect(command).toMatch(

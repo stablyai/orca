@@ -1,15 +1,7 @@
 import { useEffect, useId, useSyncExternalStore } from 'react'
 import { CALM_STATUS_HEALTHY_HOLD_MS } from '../../../../shared/calm-status-reveal'
 
-/**
- * One record per server whose shared connection dropped, shared by every terminal surface on it.
- * - Observers: every mounted surface while the server is down, hidden or not, so the outage start
- *   survives a tab switch and the notice neither re-waits nor resets its clock.
- * - Speakers: visible surfaces able to show the notice; the first one shows it.
- * - Showers: surfaces whose notice is on screen, including its hold after the server answers.
- * Panes on the server stay quiet while anyone speaks or shows, so no surface's pane banners
- * overlap a notice that is still up.
- */
+/** Share one outage clock per server across mounted observers; one visible speaker shows the notice, and every pane stays quiet while any notice is speaking or held on screen. */
 type ServerOutage = {
   observers: Set<string>
   speakers: string[]

@@ -14672,6 +14672,17 @@
             "scanning": "Analizando {{value0}}",
             "checking": "Comprobando {{value0}}",
             "scanned": "Analizados {{value0}}"
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "No se pudo iniciar: {{value0}}",
+                  "4c119f5e2a": "Aún no iniciado",
+                  "b817a96fcf": "Detenido: {{value0}}"
+                }
+              }
+            }
           }
         }
       },

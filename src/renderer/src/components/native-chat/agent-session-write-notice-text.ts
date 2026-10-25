@@ -1,5 +1,4 @@
-// Desktop words for a chat write that did not happen: each sentence translated whole, with the
-// shared English as its fallback so desktop and mobile never say it differently.
+// Translate whole shared sentences with their English fallbacks so desktop and mobile wording agree.
 
 import { translate } from '@/i18n/i18n'
 import {

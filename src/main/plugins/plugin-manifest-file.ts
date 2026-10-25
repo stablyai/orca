@@ -2,8 +2,7 @@ import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
 import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/plugin-manifest'
 
-/** A manifest is startup metadata, not an artifact payload. Bounding it keeps
- * discovery and install preview from allocating an attacker-sized JSON file. */
+// Bound startup/preview metadata reads independently of artifact payload sizes.
 export const PLUGIN_MANIFEST_MAX_BYTES = 1024 * 1024
 
 export async function readPluginManifestText(rootDir: string): Promise<string> {

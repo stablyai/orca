@@ -17,14 +17,7 @@ export type TerminalWithInspectableBuffer = {
   }
 }
 
-// Why: replay bytes can carry a dead run's screen in scrollback — or still
-// painted in the viewport with a shell prompt below it — so once xterm has
-// parsed the replay the confirmation needs both the cursor-agent screen shape
-// AND the parked cursor. A dead screen leaves the shell cursor after its
-// prompt; a live agent that needs the focus-in is by definition parked, and a
-// live agent that is not parked only loses focus reporting the way the
-// pre-fix reattach always did. Returns null when the buffer is not
-// inspectable (e.g. test doubles).
+// Require both current Cursor screen shape and a parked cursor; replay can retain a dead run’s frame above a shell prompt. Uninspectable buffers return null.
 export function parsedViewportShowsParkedCursorAgentScreen(
   terminal: TerminalWithInspectableBuffer
 ): boolean | null {
@@ -62,9 +55,7 @@ export function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
 export const CURSOR_AGENT_REATTACH_HEADER = 'Cursor Agent'
 const CURSOR_AGENT_REATTACH_INPUT_MARKER = '→'
 const CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS = 5000
-// Why bounded: reattach payloads reach multiple MB, but every replay puts the current screen last
-// and only the header nearest the end matters. 256KB clears even a fully SGR-styled frame by ~2x,
-// so the cut only ever drops stale scrollback — which would have been rejected anyway.
+// Scan the last 256KB, enough for a fully styled current frame; earlier headers belong to stale scrollback.
 const CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS = 256 * 1024
 
 export function hasCursorAgentReattachPayloadScreenSignal(data: string): boolean {
@@ -72,11 +63,9 @@ export function hasCursorAgentReattachPayloadScreenSignal(data: string): boolean
     data.length > CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS
       ? data.slice(-CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS)
       : data
-  // Why CSI only: OSC-carried titles must keep counting as a header occurrence, as they did when
-  // this stripped CSI by hand.
+  // Strip only CSI so OSC-carried titles retain header semantics.
   const normalized = tail.replace(CSI_SEQUENCE_PATTERN, '')
-  // Why: anchor on the LAST header occurrence — replay buffers keep scrollback,
-  // and an earlier finished run must not classify the current screen.
+  // Use the last header; replay may also retain earlier finished runs.
   const headerIndex = normalized.lastIndexOf(CURSOR_AGENT_REATTACH_HEADER)
   if (headerIndex === -1) {
     return false

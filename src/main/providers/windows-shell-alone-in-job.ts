@@ -7,27 +7,9 @@ import {
 
 const MSYS_BASH_IMAGE = 'bash.exe'
 
-/**
- * Whether a pane's job holds only its shell: the shell pid alone, or, for Git
- * for Windows' `bin\bash.exe` launcher, one unbranched chain of MSYS bash
- * processes below it.
- *
- * The launcher hands off to `usr\bin\bash.exe` and waits, and every MSYS `exec`
- * (Orca's `chcp.com ...; exec "$BASH" ... -i` startup) leaves the pre-exec
- * process alive as a stub waiting on its successor. So an idle prompt is
- * `launcher -> bash -> ... -> bash`, the leaf being the interactive shell. A
- * command at the prompt adds a non-bash leaf, and a background job branches.
- *
- * Residual: a foreground bash running only builtins (a nested `bash`, a
- * subshell loop, a fork caught before its exec) is also a bash leaf, so it reads
- * as a shell at a prompt.
- *
- * With `readConsoleAttachedProcessIds`, a member that has left the terminal no
- * longer counts: the job keeps everything ever started in the pane, including a
- * daemon that detached itself (an rc-started `ssh-agent`). Parent links alone
- * can't tell it apart, because MSYS fork/exec leaves live work under exited
- * Win32 parents, but it also left the console, which live work does not.
- */
+/** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
+ * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,

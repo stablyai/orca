@@ -127,8 +127,7 @@ describe('project groups', () => {
   })
 
   it('keeps sleep-filtered Project Group members as empty project headers', () => {
-    // Why: #8865 — Hide sleeping removes workspace cards; membership placeholders
-    // must still project the grouped project header so the group count stays honest.
+    // Hide sleeping removes cards, but placeholders must retain project headers and accurate group counts.
     const group: ProjectGroup = {
       id: 'group-1',
       name: 'Platform',
@@ -185,7 +184,6 @@ describe('project groups', () => {
       key: 'project-group:group-1',
       count: 2
     })
-    // Why: empty/placeholder projects sort after projects with visible activity.
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
       'project-group:group-1',
       `repo:${awakeRepo.id}`,

@@ -1,5 +1,4 @@
-// The announcement census (design §9.4): every domain names the writers of what it reads, and each
-// writer, called through the real store, announces a change. No domain is re-read on a phone read.
+// Exercise every domain's real store writers and announcements (design §9.4); phone reads must not re-read domains.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { Repo } from '../../../shared/repo-types'

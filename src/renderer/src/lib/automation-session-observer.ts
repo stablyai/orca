@@ -21,11 +21,7 @@ export async function observeExistingAutomationSession(args: {
   onExit: (code: number) => void
 }): Promise<() => void> {
   const { ptyId, paneKey, runId, onData, onExit } = args
-  // Why: for local/SSH PTYs main already parses OSC 9999 and routes it
-  // through the hook server (agentStatus:set → store); writing here too
-  // would race/duplicate that path. Remote-runtime bytes never transit local
-  // main, and the kill switch restores the legacy write. The onAgentStatus
-  // callback always fires — automation completion tracking stays here.
+  // Main owns local/SSH OSC 9999 writes unless the kill switch restores legacy behavior; runtime bytes still need renderer writes. Completion callbacks always fire here.
   const mainOwnsAgentStatusWrites =
     !isRemoteRuntimePtyId(ptyId) &&
     isMainTerminalSideEffectAuthorityForPty({
@@ -40,8 +36,7 @@ export async function observeExistingAutomationSession(args: {
       if (!mainOwnsAgentStatusWrites) {
         const state = useAppStore.getState()
         const routing = resolveLiveAgentStatusConnectionRouting({ state, paneKey, ptyId })
-        // Why: a delayed reuse observer must not write into a pane that has
-        // since rebound to another host's colliding tab/pane identifiers.
+        // Delayed reuse observers must not update panes rebound to another host’s colliding IDs.
         if (routing) {
           state.setAgentStatus(
             paneKey,

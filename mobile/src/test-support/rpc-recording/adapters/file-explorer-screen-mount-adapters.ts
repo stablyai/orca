@@ -9,16 +9,11 @@ import type { RpcClientContextValue } from '../../../transport/rpc-client-contex
 const HOST = 'host-1'
 const WORKTREE = 'wt-files'
 
-/**
- * The panel reads its client through the shared host-client context, whose handle is module-private
- * in `client-context.tsx`. Exposing it mounts the real `useHostClient` — acquire, subscribe,
- * release — over a scripted client, instead of reconstructing the hook against a prop.
- */
+// Expose context to run the real client acquire/subscribe/release lifecycle over the scripted connection.
 export const fileExplorerScreenMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/** The mobile files tab: the directory read, and the capped legacy list it falls back to. */
 export function fileExplorerScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -35,8 +30,7 @@ export function fileExplorerScreenMountAdapters(
         getClientId: () => 'client-1',
         getAllClients: () => [{ hostId: HOST, client }],
         subscribeHostState: () => () => {},
-        // A reconnect is the screen reaching past the socket the recording scripts, so it is
-        // recorded rather than performed.
+        // Record reconnect intent without reaching a real socket beyond the scripted transport.
         forceReconnect: (hostId) => {
           effect('host-client.force-reconnect', { hostId })
           return Promise.resolve()
@@ -66,8 +60,7 @@ export function fileExplorerScreenMountAdapters(
         },
         state: () => ({
           ...projectMountedScreen(screen),
-          // The inert list never calls `renderItem`, so the rows it was handed are the only
-          // record of what the screen would have drawn.
+          // The inert list never renders rows; observe its data as the screen’s projection.
           rows: renderedElementProps(screen.tree(), 'FlatList').flatMap((props) =>
             Array.isArray(props.data)
               ? props.data.map((row: { id?: unknown }) => row?.id)

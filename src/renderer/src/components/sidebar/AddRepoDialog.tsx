@@ -28,8 +28,7 @@ export default React.memo(function AddRepoDialog({
   hosted?: AddRepoDialogHostedController
 }) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
-  // Why: hosted mode never receives dropped paths through modalData — that
-  // channel belongs to the store-modal instance.
+  // Dropped-path modal data belongs only to the store-modal instance, never hosted mode.
   const droppedLocalPath = useAppStore((s) =>
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
   )
@@ -109,7 +108,7 @@ export default React.memo(function AddRepoDialog({
   } = useRemoteRepo(
     fetchWorktrees,
     setStep,
-    // Why: useRemoteRepo closes only for the non-git → confirm-dialog handoff.
+    // Only the non-git confirmation handoff closes this remote flow.
     closeForFolderHandoff,
     (repoId, executionHostId) => completeGitRepoAdd(repoId, 'ssh_remote_path', executionHostId),
     selectedRuntimeEnvironmentId
@@ -177,7 +176,6 @@ export default React.memo(function AddRepoDialog({
     droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     addRepoPath,
-    // Why: this flow's closes are all folder/non-git outcomes that navigate.
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     scanNestedRepos,
@@ -197,7 +195,6 @@ export default React.memo(function AddRepoDialog({
   } = useAddRepoServerPathFlow({
     addRepoPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-    // Why: closes only after a folder add, which activates the folder workspace.
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     getNestedRepoRuntimeKind,
@@ -210,8 +207,7 @@ export default React.memo(function AddRepoDialog({
   })
 
   const resetState = useCallback(() => {
-    // Why: kill the git clone process if one is running, so backing out
-    // or closing the dialog doesn't leave a clone running on disk.
+    // Closing/backing out must abort an active clone instead of leaving it running on disk.
     void window.api.repos.cloneAbort()
     resetLocalFolderFlow()
     setStep('add')
@@ -260,7 +256,7 @@ export default React.memo(function AddRepoDialog({
     onResetHostScopedState: resetHostScopedState
   })
 
-  // Why after the host-change reset: a drop's path must survive the reset its host switch causes.
+  // Apply dropped paths after host reset so the switch cannot erase them.
   const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
     isOpen,
     droppedHostPath,

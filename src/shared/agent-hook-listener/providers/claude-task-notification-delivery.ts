@@ -11,8 +11,7 @@ import { readClaudeTaskNotification } from '../../claude-task-notification-text'
 import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
 
-/** Fold one MAIN-agent event into the pane's record of launched background tasks. A sub-agent's
- *  own launches are excluded by the caller: their notifications wake that sub-agent, not the pane. */
+/** Track main-agent launches only: child-launched task notifications wake that child, not this pane. */
 export function trackClaudeTaskNotificationDelivery(
   state: HookListenerState,
   paneKey: string,

@@ -1,5 +1,4 @@
-// A conversation command refused for a reason the person can act on: said as that refusal is
-// everywhere, so a command's row names what to wait for rather than "try it again".
+// Reuse actionable refusal wording so the row names what to wait for instead of suggesting a retry.
 
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureSay } from './agent-session-failure-copy'

@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { canConnectSshStatus, isConnectingSshStatus } from './ssh-connection-recoverability'
 
-// Union growth is caught by the typechecker (the modules use total Records), not here.
-// These cases pin the classification itself, which four call sites now depend on.
+// Total Records typecheck union growth; tests pin classification used by all consumers.
 const ALL_STATUSES: SshConnectionStatus[] = [
   'disconnected',
   'connecting',
@@ -47,8 +46,7 @@ describe('canConnectSshStatus', () => {
   )
 })
 
-// Why: runtime-owned targets deliberately yield a null status. Both predicates must read
-// that as "nothing to offer" so the card falls through to the passive host glyph.
+// Runtime-owned null status offers no action; both predicates must fall through to passive host glyph.
 describe('absent status', () => {
   it.each([null, undefined])('classifies %s as neither connecting nor connectable', (status) => {
     expect(isConnectingSshStatus(status)).toBe(false)

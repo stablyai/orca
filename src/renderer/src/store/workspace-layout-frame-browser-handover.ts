@@ -10,11 +10,7 @@ type BrowserRecords = BrowserPages & {
   >
 }
 
-/**
- * Records each staged browser tab of this desktop that a frame drops while drawing a server tab of
- * the same page in the same workspaces: the frames took the create over (L284). The frames' worktrees
- * are one server's, so the page id alone names the page.
- */
+/** A dropped desktop-staged tab replaced by a server tab for the same page/workspace hands create ownership to frames (L284); one server’s page IDs suffice. */
 export function noteFramesTakingOverStagedBrowserTabs(
   state: BrowserRecords,
   built: BrowserPages,
@@ -30,7 +26,7 @@ export function noteFramesTakingOverStagedBrowserTabs(
       (built.browserPagesByWorkspace[tabId] ?? []).map((page) => page.id)
     )
   )
-  // Before scanning the dropped pages: a close drops many pages and draws none of a staged create's.
+  // Skip dropped-page scans for closes, which draw no staged create’s page.
   if (
     !Object.values(state.remoteBrowserPageHandlesByPageId).some(
       (handle) => handle?.staged === true && drawnPageIds.has(handle.remotePageId)

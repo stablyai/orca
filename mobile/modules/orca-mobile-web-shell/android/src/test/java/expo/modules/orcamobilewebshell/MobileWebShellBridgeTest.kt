@@ -31,14 +31,12 @@ class MobileWebShellBridgeTest {
   @Test
   fun `hears only a string message from the main frame of a committed document`() {
     assertTrue(frame())
-    // CSP says frame-src 'none', but Chromium injects the object into every same-origin frame, so
-    // the shell states the rule itself rather than inheriting it from a header C0.7 has to relax.
+    // Chromium injects into same-origin subframes; enforce main-frame independently of CSP.
     assertFalse(frame(isMainFrame = false))
     // An ArrayBuffer message: getData() throws on one, and base64 in JSON is the only binary lane.
     assertFalse(frame(isStringMessage = false))
     assertFalse(frame(isMainFrame = false, isStringMessage = false))
-    // The document the current props replaced, still alive and still same-origin, speaking for a
-    // load the caller has already been told is `loading`.
+    // The replaced same-origin document remains alive until the new load commits.
     assertFalse(frame(hasCommittedDocument = false))
   }
 
@@ -50,8 +48,7 @@ class MobileWebShellBridgeTest {
 
   @Test
   fun `asks for the listener only when the bridge was asked for`() {
-    // The floor is a feature query, never a version string. With the prop false the shell must
-    // still load on a provider that could not have run the bridge at all.
+    // Disabled bridges must load even without listener capability; query features, not versions.
     assertEquals(
       MobileWebShellBridgeInstall.SKIP,
       mobileWebShellBridgeInstall(bridgeEnabled = false, isListenerSupported = false)

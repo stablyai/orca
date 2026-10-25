@@ -1,10 +1,5 @@
-/**
- * Pure lease state transitions. Every function returns the next record or throws a typed error;
- * the store applies them inside one durable transaction so a rejected transition never lands.
- *
- * The invariant they exist to enforce: a session admits a writer only after a reservation, an
- * observed process identity, and a proved provider handle — in that order, at one fence.
- */
+/** Pure transitions applied by the store in one durable transaction.
+ * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import {
@@ -49,10 +44,7 @@ export function assertFence(lease: AgentSessionLease, fence: number): void {
   }
 }
 
-/**
- * Compare-and-swap reservation. Writes the intent at fence + 1 before any process exists, so the
- * loser of a concurrent swap is refused and never spawns.
- */
+/** Reserve fence + 1 before spawn; concurrent losers cannot start a process. */
 export function reserveAgentSessionOwner(args: {
   record: AgentSessionRecord
   expectedFence: number
@@ -78,7 +70,7 @@ export function reserveAgentSessionOwner(args: {
       ...record.lease,
       runtimeKind: 'native',
       runtimeFence: decision.nextFence,
-      // Why: a reserved owner is not yet a writer; it may only talk to the provider to prove resume.
+      // Reservations may prove provider resume, never perform writer effects.
       handoffStage: 'new-owner-proving',
       provenHandleLinkId: null,
       ownerProcess: null,
@@ -93,7 +85,6 @@ export function reserveAgentSessionOwner(args: {
   }
 }
 
-/** Step 4 of acquisition: write the observed identity back into the same lease row. */
 export type AgentSessionProcessIdentityCommit = {
   sessionId: string
   fence: number
@@ -112,7 +103,7 @@ export function commitAgentSessionProcessIdentity(
     })
   }
   if (record.lease.reservedSpawnToken !== args.process.spawnToken) {
-    // Why: a child that cannot echo the reserved token is not the process Orca started.
+    // The child must echo this reservation's token to prove Orca started it.
     throw agentSessionRefusalError('agent_session_ownership_unknown', {
       reason: 'spawnIdentityMismatch'
     })
@@ -124,11 +115,7 @@ export function commitAgentSessionProcessIdentity(
   })
 }
 
-/**
- * The new runtime's process owns the session: only now does it have a writer. `link` is the
- * provider handle when the acquire already held it; one the provider answers with later is recorded
- * through `recordAgentSessionProviderHandle`, and until then the lease names no proven link.
- */
+/** Admit the proven owner; record a supplied provider link now or leave it unproven until the adapter reports one. */
 export function proveAgentSessionOwner(args: {
   record: AgentSessionRecord
   fence: number
@@ -177,12 +164,7 @@ export function proveAgentSessionOwner(args: {
   }
 }
 
-/**
- * A renewal asserts two things at once: the host is running its loop, and the child still matches
- * the recorded identity — re-proven by a PID probe, or held by this runtime with no exit seen. A
- * host that cannot re-verify the child stops renewing rather than extending a lease it can no
- * longer vouch for.
- */
+/** Renew only while the host loop can reprove child identity or still holds it without observed exit. */
 export function renewAgentSessionLease(args: {
   record: AgentSessionRecord
   fence: number
@@ -205,7 +187,7 @@ export function renewAgentSessionLease(args: {
   })
 }
 
-/** Proven eviction — the only other thing besides acquisition that may move the fence. */
+/** Only acquisition and proven eviction may move the fence. */
 export function evictAgentSessionOwner(args: {
   record: AgentSessionRecord
   expectedFence: number
@@ -220,8 +202,7 @@ export function evictAgentSessionOwner(args: {
     observedAt: args.now
   })
   if (adjudication.disposition === 'free') {
-    // Nothing outstanding to evict; clearing the latched stage IS the resolution, and no new
-    // generation was granted, so the fence and the recorded evidence both stay put.
+    // No outstanding owner: clear recovery stage without granting a generation or altering death evidence.
     return withLease(record, {
       ...record.lease,
       handoffStage: null,
@@ -235,12 +216,8 @@ export function evictAgentSessionOwner(args: {
   return releasedAgentSessionLease(record, adjudication.nextFence, adjudication.evidence, args.now)
 }
 
-/**
- * Recovery's conclusion when proof never came: a recorded owner whose identity cannot be verified,
- * or that survived the stop ladder. Its transport died with the runtime that held it, so nothing
- * can drive it, and a verdict that never arrives must not hold the conversation. Nothing proved it
- * gone, so no death evidence is written.
- */
+/** Release recovery when identity/stop remains unproven and the dead runtime's transport cannot drive the session.
+ * This grants no death evidence: nothing proved the old process gone. */
 export function releaseUnprovenAgentSessionOwner(args: {
   record: AgentSessionRecord
   expectedFence: number

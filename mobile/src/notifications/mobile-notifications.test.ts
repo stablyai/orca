@@ -19,7 +19,6 @@ type Handler = (data: unknown) => void
 
 type SentFrame = { id: string; method: string; params: unknown }
 
-/** The registry sends through an `unknown` port, so name the shape the assertions read. */
 function readSentFrame(request: unknown): SentFrame {
   if (
     typeof request !== 'object' ||
@@ -57,7 +56,7 @@ function transportClient(subscribe: RpcClient['subscribe']) {
   return { requests, client }
 }
 
-/** The real stream registry, so dispose-before-ready is answered by the transport, not by a fake. */
+// Use the real registry so transport owns dispose-before-ready cleanup.
 function registryClient() {
   const sent: SentFrame[] = []
   let id = 0
@@ -78,7 +77,6 @@ function registryClient() {
   }
 }
 
-/** The real relay stream manager, the other transport a paired phone reaches a host through. */
 function relayClient() {
   const sent: SentFrame[] = []
   let id = 0
@@ -99,7 +97,6 @@ function relayClient() {
   }
 }
 
-/** Every `notifications.unsubscribe` the phone put on the wire, by either route. */
 function notificationReleases(rpc: {
   sent: SentFrame[]
   requests: { method: string; params: unknown }[]

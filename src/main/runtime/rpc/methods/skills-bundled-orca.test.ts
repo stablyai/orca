@@ -41,7 +41,7 @@ async function call<T>(name: string, params: unknown, context: RpcContext): Prom
   const entry = method(name)
   const parsed = entry.params ? entry.params.parse(params) : undefined
   const result = await entry.handler(parsed, context)
-  // Why JSON: the result crosses the wire, so the client only ever sees its serialised form.
+  // Assert serialized JSON because that is what paired clients receive.
   const wire: T = JSON.parse(JSON.stringify(result))
   return wire
 }

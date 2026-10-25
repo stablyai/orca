@@ -100,7 +100,7 @@ export function createTabsCreateActions(
                 placement.anchorTabId
               )
         const insertedIndex = nextOrder.indexOf(id)
-        // Why always: preview replacement can leave a gap, so an append alone would reuse a sibling's sortOrder.
+        // Preview replacement may leave sortOrder gaps; renumber even on append to prevent collisions.
         nextTabs = applyTabOrderSortValues(nextTabs, nextOrder)
         created = {
           id,
@@ -129,7 +129,7 @@ export function createTabsCreateActions(
 
         const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
-        // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
+        // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent

@@ -410,7 +410,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       expect(deps.updateTabPtyId).not.toHaveBeenCalled()
     })
 
-    // Why: Phase 6 deleted the hidden-skip grammar — every hidden chunk rides the background scheduler, none content-scanned.
+    // All hidden chunks use the background scheduler without content scanning.
     it('queues hidden PTY bytes on the background scheduler without per-chunk scanning', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
@@ -446,7 +446,6 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
           capturedDataCallback.current?.(chunk)
         }
 
-        // Background path defers writes; nothing is written synchronously.
         expect(pane.terminal.write).not.toHaveBeenCalled()
         vi.advanceTimersByTime(50)
         // The drain may coalesce queued chunks into one write — assert content.
@@ -454,7 +453,6 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
         for (const chunk of hiddenChunks) {
           expect(written).toContain(chunk)
         }
-        // No model restore is latched for bounded hidden output.
         expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()

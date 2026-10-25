@@ -5,10 +5,7 @@ import { useAppStore } from '@/store'
 import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 
-/**
- * Ends the host's terminals and Orca's server in its distro, drops the host's records, then
- * refreshes the host list. Anything main could not end is reported, since it keeps the distro up.
- */
+/** Stop terminals/server, remove records and refresh hosts; report anything still running that keeps the distro alive. */
 async function removeWslHostImpl(environmentId: string): Promise<void> {
   const api = window.api.runtimeEnvironments?.wslHosts
   if (!api) {
@@ -16,8 +13,7 @@ async function removeWslHostImpl(environmentId: string): Promise<void> {
   }
   const serverStop = await api.remove({ environmentId })
   const state = useAppStore.getState()
-  // Why: an active workspace on the removed host would keep calling a host that no longer exists;
-  // its rows stay listed as belonging to a removed server.
+  // Clear activation so the removed host stops receiving workspace calls, though its records remain listed.
   if (
     state.activeWorktreeId &&
     workspaceOwnerHostId(state, state.activeWorktreeId) === toRuntimeExecutionHostId(environmentId)

@@ -21,7 +21,6 @@ function sharedStartupArgs(args: AiVaultResumeWorktreeArgs) {
   }
 }
 
-/** The desktop's fork startup; the shared builder explains why a non-forking agent gets null. */
 export function buildAiVaultForkStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup | null {

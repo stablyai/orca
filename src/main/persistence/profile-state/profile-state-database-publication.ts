@@ -18,7 +18,7 @@ class ProfileStateDatabasePublicationError extends Error {
   }
 }
 
-/** Preserve atomic no-overwrite publication while explaining filesystem refusals. */
+/** Explain filesystem refusals without weakening atomic no-overwrite publication. */
 export function publishProfileStateDatabase(stagingFile: string, databaseFile: string): boolean {
   try {
     return publishFileDurableSync(stagingFile, databaseFile)

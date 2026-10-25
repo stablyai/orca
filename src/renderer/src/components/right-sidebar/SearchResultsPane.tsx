@@ -42,16 +42,13 @@ export function SearchResultsPane({
       if (!row) {
         return 20
       }
-      // Why: file rows include pt-1.5 (6 px) for inter-group spacing, so
-      // their estimate is taller than match rows.
+      // File rows include 6px inter-group spacing and need a taller estimate.
       if (row.type === 'file') {
         return 28
       }
       return 20
     },
-    // Why: paddingEnd adds visible breathing room after the last result row.
-    // paddingStart is unnecessary because each file row already includes
-    // pt-1.5 for inter-group spacing (which also covers the first row).
+    // File rows already supply top spacing; pad only the end of the list.
     paddingEnd: 8,
     overscan: SEARCH_VIRTUAL_OVERSCAN,
     getItemKey: (index) => {
@@ -68,8 +65,6 @@ export function SearchResultsPane({
 
   return (
     <>
-      {/* Why: the summary is rendered outside the virtualizer so it stays
-         pinned at the top while the user scrolls through results. */}
       {!error && results && (rows.length > 0 || results.truncated) && (
         <div className="px-2 py-1 text-2xs text-muted-foreground border-b border-border">
           {translate('codeSearch.resultSummary', 'Results: {{results}} · files: {{files}}', {

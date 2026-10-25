@@ -12,7 +12,6 @@ export function inlineAgentDraftFitsPlatform(args: {
     (total, [key, value]) => total + key.length + value.length,
     0
   )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste fallback.
+  // Windows argv/env ceilings require large drafts to use post-ready paste.
   return args.command.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }

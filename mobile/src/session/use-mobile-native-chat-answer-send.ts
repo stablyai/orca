@@ -25,35 +25,18 @@ import {
 } from '../../../src/shared/native-chat-agent-support'
 import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
-/** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
- *  use their agent-specific keystrokes; other agents get pasted label text.
- *  Extracted from the session route to keep that file under its line cap and to
- *  own the pending-timer lifecycle in one place. */
 export type MobileNativeChatAnswerSend = {
-  /** Answer the current question(s) from the card's per-question selections. */
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   /** Cancel unsent groups; an already-issued write may still settle. */
   cancelPending: () => void
 }
 
-// A free-text answer is written as raw keystrokes into Claude's "Type something"
-// input (terminal.send has no paste framing), so an embedded newline would
-// submit it early — collapse line breaks to spaces.
+// Collapse newlines in raw free-text keys so they cannot submit Claude’s input early.
 function sanitizeAskFreeText(text: string): string {
   return text.replace(/[\r\n]+/g, ' ')
 }
 
-/**
- * Owns the ask-answer send sequence for the mobile native chat. Reads the live
- * pane/agent through refs (the route already keeps them current) so the returned
- * callbacks stay stable. Selector answers are delivered as keystroke groups
- * written one step apart over the EXISTING
- * `terminal.send` passthrough (raw text, no enter) — same contract the
- * permission card already uses, so old runtimes replay them verbatim (no new
- * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
- * on a new answer, on `cancelPending` (Stop), and on unmount / session swap.
- * Cancellation prevents later groups; already-issued writes retain their verdict.
- */
+// Pace existing terminal.send key groups for legacy selectors; cancellation stops future groups but preserves already-issued writes’ delivery verdicts.
 export function useMobileNativeChatAnswerSend(args: {
   client: RpcClient | null
   enabled: boolean
@@ -78,9 +61,7 @@ export function useMobileNativeChatAnswerSend(args: {
   const generationRef = useRef(0)
   const activeRouteRef = useRef({ client, enabled, sessionId, streamIdentity })
   activeRouteRef.current = { client, enabled, sessionId, streamIdentity }
-  // Per-terminal count of this hook's chains sharing one write-lock hold: a
-  // superseding answer inherits the cancelled chain's hold (it re-enters before
-  // the old chain unwinds), and only the last chain out releases the lock.
+  // Superseding chains share a terminal hold; only the last chain out may release it.
   const writeHoldsRef = useRef(new Map<string, number>())
   // Successors wait for the prior RPC and inherit any delivery ambiguity.
   const writeTurnsRef = useRef(new Map<string, Promise<boolean>>())
@@ -97,7 +78,6 @@ export function useMobileNativeChatAnswerSend(args: {
     delaysRef.current.clear()
   }, [])
 
-  // Cancel pending writes on unmount and whenever the chat session swaps.
   useEffect(() => {
     if (!enabled) {
       cancelPending()
@@ -120,10 +100,7 @@ export function useMobileNativeChatAnswerSend(args: {
       if (!hasAskAnswer(prompt, selections)) {
         return false
       }
-      // One composed write sequence per terminal: an answer landing mid-flight
-      // in an image paste (or vice versa) would interleave bytes into the PTY.
-      // A superseding answer shares the cancelled chain's hold on this terminal
-      // (that chain has not unwound to its release yet).
+      // Serialize answers with image sequences to prevent PTY byte interleaving; successors inherit the prior answer’s hold.
       const holds = writeHoldsRef.current
       const heldCount = holds.get(handle) ?? 0
       if (heldCount === 0 && !acquireMobileNativeChatTerminalWrite(handle)) {
@@ -137,7 +114,6 @@ export function useMobileNativeChatAnswerSend(args: {
         finishTurn = resolve
       })
       writeTurnsRef.current.set(handle, turn)
-      // A new answer supersedes any still-pending keystroke writes.
       cancelPending()
       const generation = generationRef.current
       let sawUnknownOutcome = false
@@ -146,25 +122,16 @@ export function useMobileNativeChatAnswerSend(args: {
       try {
         predecessorSafe = await previousTurn
         if (!predecessorSafe) {
-          // Fenced. Report it: the card re-enables on a false result, so silence
-          // here is indistinguishable from a dead button. "Check chat" rather than
-          // a bare "not sent" because the PREVIOUS answer's keys may have landed.
-          // Gate on the turn slot, not the generation: a dropped input lease bumps
-          // the generation without writing the Escape that Stop and ask-cancel do,
-          // so the card is still up and silence there strands an advanced selector.
+          // Report fences on the live turn slot: lease loss bumps generation without Escape, and silence would invite retry on an advanced selector.
           if (writeTurnsRef.current.get(handle) === turn) {
             onSendError('Answer not sent — check chat before retrying')
           }
           return false
         }
-        // Superseded by a newer answer, which owns the error surface from here.
         if (generationRef.current !== generation) {
           return false
         }
-        // One budget for the whole answer instead of a fresh timeout per keystroke
-        // group, which let an N-group selector hold the card for N × the send timeout.
-        // It bounds transport time only: each deliberate pacing wait is credited back
-        // below, so a long multi-question answer still gets a full budget to write in.
+        // Budget transport once per answer; credit deliberate pacing so multi-question selectors retain the full write budget.
         let deadline = openMobileNativeChatSendBudget()
         const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
           const activeRoute = activeRouteRef.current
@@ -198,8 +165,7 @@ export function useMobileNativeChatAnswerSend(args: {
           return outcome === 'accepted'
         }
         const wait = (ms: number): Promise<boolean> => {
-          // Already superseded: don't hold the successor for a full pacing step
-          // waiting on a timer whose only job is to report the cancellation.
+          // Already-superseded chains must not delay successors on a cancellation-only timer.
           if (generationRef.current !== generation) {
             return Promise.resolve(false)
           }
@@ -216,12 +182,7 @@ export function useMobileNativeChatAnswerSend(args: {
         }
         const fail = (): false => {
           if (generationRef.current === generation) {
-            // Why: keystrokes that may have landed (ack lost / path cutover) must
-            // not read as a definite failure — a blind resend could double-step
-            // the selector. An earlier group that WAS accepted is the same hazard
-            // in definite form: a multi-question answer whose shared budget ran out
-            // mid-sequence left the remote selector half-stepped, and telling the
-            // user nothing was sent invites a retry on top of the advanced state.
+            // Accepted or uncertain earlier keys may have advanced the selector; never invite blind replay as a definite non-send.
             onSendError(
               sawAcceptedGroup
                 ? 'Answer partly sent — check chat before retrying'
@@ -232,17 +193,9 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok and async questions take pasted text; Claude and Codex need their selector-specific
-        // keystrokes paced so each step renders before the next lands.
+        // Pace Claude/Codex selector keys; other agents and async questions accept pasted answers.
         if (prompt.replyAsMessage || !shouldStepNativeChatAskAnswer(agentRef.current)) {
-          // This shape pastes the label into the composer and commits it, so an
-          // orphaned image paste would be submitted along with the answer (#10228).
-          // The selector shapes below deliberately skip the heal: their keys are
-          // `enter: false` for an active overlay, and a single-select answer is a
-          // bare option digit that cannot submit the line at all, so clearing there
-          // would consume the marker still protecting the next real message.
-          // Desktop splits it identically — use-native-chat-interactive-send.ts
-          // routes only the pasted-label shape through the clearing sender.
+          // Heal only pasted answers: selector overlays swallow clear keys and would consume the stale marker still protecting the next message.
           if (
             !(await healMobileNativeChatStaleInput({
               client,
@@ -259,11 +212,7 @@ export function useMobileNativeChatAnswerSend(args: {
           if (generationRef.current !== generation) {
             return false
           }
-          // A chain a successor took over from must not report success either: an
-          // accepted answer retires the shared send-error banner, wiping the
-          // successor's fence. Test the turn slot, not the generation counter —
-          // Stop, ask-cancel and a dropped lease all bump the generation with no
-          // successor, and there a landed answer IS a success.
+          // Only the owning turn may report success and clear errors; generation changes without successors still allow landed-answer success.
           const sent =
             (await sendTerminal(
               buildNativeChatPasteBytes(formatAskAnswer(prompt, selections)),
@@ -292,17 +241,14 @@ export function useMobileNativeChatAnswerSend(args: {
             deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS
           }
         }
-        // Taken over on the last key: same as above, the successor owns the surface.
         return groups.length > 0 && writeTurnsRef.current.get(handle) === turn
       } finally {
-        // Any accepted key changed the live selector, so a queued replacement
-        // cannot safely apply its from-scratch key plan to that new position.
+        // Any accepted/uncertain key may advance the selector, making a successor’s from-scratch plan unsafe.
         finishTurn(predecessorSafe && !sawUnknownOutcome && !sawAcceptedGroup)
         if (writeTurnsRef.current.get(handle) === turn) {
           writeTurnsRef.current.delete(handle)
         }
-        // Last chain out releases; a superseded chain unwinding late must not
-        // free the lock out from under the successor sharing its hold.
+        // Release only after the last sharing chain unwinds so an old completion cannot free its successor’s lock.
         const remaining = (holds.get(handle) ?? 1) - 1
         if (remaining <= 0) {
           holds.delete(handle)

@@ -89,10 +89,7 @@ function recordedIntents(store: ReturnType<typeof createTestStore>): string[] {
   )
 }
 
-// The runtime persists client-hosted pages so they survive its restarts — which turns a close it
-// never heard into a resurrection. Every single-page close of such a page (plain close AND the
-// address-bar conversion) must leave a durable intent behind when the runtime does not answer,
-// so the reconnect replay can deliver the close late instead of the page coming back.
+// Runtime persists client-hosted pages; undelivered plain/conversion closes need durable intents for reconnect or runtime restart resurrects them.
 describe('durable close intents for unheard client-hosted page closes', () => {
   it('records an intent when the conversion-away close never reaches the runtime', async () => {
     const { store, pageId } = await createStoreWithClientHostedPage()

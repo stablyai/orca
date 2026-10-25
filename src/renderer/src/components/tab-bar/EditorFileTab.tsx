@@ -78,12 +78,9 @@ export default function EditorFileTab({
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
   const FileIcon = getFileTypeIcon(file.filePath)
-  // Why: no transform/transition/isDragging styling — the drag design is
-  // that tabs stay visually anchored; only the blue insertion bar moves.
+  // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
-    // Why: split groups can duplicate the same open file into multiple visible
-    // tabs. Using the unified tab ID keeps each rendered tab draggable as a
-    // distinct item instead of collapsing every copy onto the file entity ID.
+    // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
     id: file.tabId ?? file.id,
     data: dragData
   })
@@ -101,9 +98,7 @@ export default function EditorFileTab({
         : isMarkdownPreviewTab
           ? Eye
           : FileIcon
-  // Why: only deleted/renamed mean the file is gone from its path, which is
-  // what strikethrough conveys. 'changed' keeps a normal label — its surface
-  // is the changed-on-disk banner inside the editor.
+  // Strike through missing paths only; changed content is explained by the editor’s on-disk banner.
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
   const resolvedLanguage =
@@ -128,15 +123,9 @@ export default function EditorFileTab({
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
   const skipMenuFocusRestoreRef = useRef(false)
-  // Escape fires setIsRenaming(false), which unmounts the input. The browser
-  // still fires focusout as the focused node is removed, so onBlur can invoke
-  // commitRename *after* cancel — committing the typed value against the
-  // user's intent. This flag suppresses the trailing blur-commit.
+  // Escape unmounts the input and triggers focusout; suppress that trailing blur so cancel cannot commit.
   const renameCancelledRef = useRef(false)
-  // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely
-  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
-  // would rewrite the agent-owned artifact's backing path.
+  // Rename only concrete editable files; virtual/diff/conflict views and agent-owned read-only artifacts cannot safely move.
   const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
@@ -158,8 +147,7 @@ export default function EditorFileTab({
       return
     }
     const newName = input.value.trim()
-    // onBlur follows Enter when the input unmounts; consume that trailing event
-    // so one user action cannot start a second rename against the old path.
+    // Consume Enter’s trailing blur so one action cannot rename twice against the old path.
     renameCancelledRef.current = true
     setIsRenaming(false)
     const oldName = basename(file.filePath)
@@ -187,8 +175,7 @@ export default function EditorFileTab({
       if (!input) {
         return
       }
-      // Why: the tab re-lays out around the input; focus on the next frame so
-      // that swap has settled before selecting text.
+      // Wait for the input’s tab layout before focusing and selecting its text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputRef.current !== input) {
@@ -216,11 +203,7 @@ export default function EditorFileTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches a pointerdown on the renderer document. Radix
-  // DropdownMenu relies on document pointerdown for outside-click detection,
-  // so it misses webview clicks. Listening for window blur catches the moment
-  // focus leaves the renderer (including into a webview).
+  // Webview clicks bypass renderer pointerdown, so window blur dismisses menus Radix cannot detect as outside clicks.
   useEffect(() => {
     if (!menuOpen) {
       return
@@ -231,8 +214,7 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
-  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
-  // another pane / split) does not switch the active tab mid-gesture.
+  // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate,
     disabled: isRenaming
@@ -302,8 +284,7 @@ export default function EditorFileTab({
               { value0: basename(file.filePath) }
             )}
             defaultValue={basename(file.filePath)}
-            // Why: keep the inline field compact enough for the titlebar while
-            // giving filenames a little more room than the static tab label.
+            // Keep inline rename within titlebar height while reserving readable filename width.
             className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
             spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
@@ -311,8 +292,7 @@ export default function EditorFileTab({
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
+              // IME candidate confirmation must not commit the rename.
               if (isImeCompositionKeyDown(e)) {
                 return
               }
@@ -339,9 +319,7 @@ export default function EditorFileTab({
                 onMakePermanent()
                 return
               }
-              // Why: preview tabs use double-click to become permanent. Scope
-              // rename to non-preview filename text so preview promotion wins on
-              // the tab label as well as the surrounding tab chrome.
+              // Preview double-click promotes the tab; rename filename text only after it is permanent.
               if (!canRename) {
                 return
               }
@@ -366,9 +344,7 @@ export default function EditorFileTab({
           </span>
         )}
       </span>
-      {/* Dirty dot and close button share the same slot to prevent tab width shift during auto-save.
-         When dirty: dot is shown, close button appears on hover (replacing the dot).
-         When clean: close button is shown normally (visible on active tab, on hover for others). */}
+      {/* Share one dot/close slot so autosave cannot change tab width. */}
       <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
         {file.isDirty && (
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />

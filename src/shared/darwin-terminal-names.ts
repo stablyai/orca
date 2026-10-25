@@ -44,8 +44,7 @@ async function readDeviceKey(deps: DarwinTerminalNameDeps, name: string): Promis
   }
 }
 
-// XNU names every pty slave ttys%03d by minor with one /dev entry; verify rdev before trusting it.
-// Unlike devname, a root-made earlier alias of a pty cannot win here.
+// XNU gives pty slaves one ttys%03d minor entry; verify rdev so an earlier root-created alias cannot win as devname might.
 async function readPtyNames(
   devices: ReadonlySet<string>,
   deps: DarwinTerminalNameDeps,
@@ -96,7 +95,7 @@ async function readTerminalNames(
   signal?.throwIfAborted()
 }
 
-/** Name terminals using this capture's /dev inventory, without retaining positive or misses. */
+/** Use this capture’s /dev inventory without caching hits or misses. */
 export async function nameDarwinTerminals(
   stdout: string,
   deps: DarwinTerminalNameDeps = deviceFilesystem,

@@ -28,9 +28,7 @@ describe('pane terminal output scheduler', () => {
   })
 
   describe('parse-deferred ACK crediting', () => {
-    // Why these tests: the credit invariant is "every delivered chunk credits
-    // exactly once, whether parsed or discarded" — a missed credit permanently
-    // shrinks main's in-flight window and wedges the PTY (rc.7.perf).
+    // Each delivery credits exactly once on parse OR discard; omission permanently shrinks main’s window and wedges the PTY.
     function makeCredit(): { fire: () => void; count: () => number } {
       let fired = 0
       return { fire: () => (fired += 1), count: () => fired }
@@ -116,7 +114,6 @@ describe('pane terminal output scheduler', () => {
       const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
       configureTerminalOutputBacklogCap(1_000)
       const terminal = createTerminal()
-      // Never complete a write so the queue only grows.
       terminal.write.mockImplementation(() => {})
       const credits = [makeCredit(), makeCredit(), makeCredit()]
 
@@ -127,8 +124,7 @@ describe('pane terminal output scheduler', () => {
           ackCredit: credit.fire
         })
       }
-      // The cap replacement discards queued chunks — their deliveries still
-      // consumed and must credit.
+      // Cap replacement must credit discarded deliveries too.
       for (const credit of credits) {
         expect(credit.count()).toBe(1)
       }
@@ -152,8 +148,7 @@ describe('pane terminal output scheduler', () => {
       expect(credit.count()).toBe(0)
       discardTerminalOutput(terminal)
       expect(credit.count()).toBe(1)
-      // Discard settles delivery ownership, not xterm parsing; replay wedge
-      // deadlines must not treat cleanup as evidence that the parser is alive.
+      // Discard settles delivery ownership without proving parser liveness; do not extend replay wedge deadlines.
       expect(hasTerminalParseProgressSince(terminal, parseGeneration)).toBe(false)
     })
 

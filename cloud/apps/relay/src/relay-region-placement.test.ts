@@ -208,7 +208,6 @@ describe('Relay regional placement', () => {
       const place = vi.fn(async () => onReserve)
       await expect(assignAsia(place)).resolves.toEqual({ ...onReserve, placed: true })
       expect(place).toHaveBeenCalledOnce()
-      // The refused in-region attempt wrote nothing.
       expect(await database.query(`SELECT cell_id FROM relay_assignments`)).toEqual([])
     })
 
@@ -230,7 +229,6 @@ describe('Relay regional placement', () => {
         region: 'us-central1'
       })
       expect(place).toHaveBeenCalledOnce()
-      // No in-region reserve room at plan time: today's single spill.
       await expect(
         store.assign({ ...identity, relayHostId: 'spillhost0000002' }, 'asia-east2', 'asia-east2')
       ).resolves.toMatchObject({ cellId: 'us-c1' })

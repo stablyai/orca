@@ -12,10 +12,7 @@ export type UseDetectedAgentsResult = {
   isRefreshing: boolean
   /** True when the runtime host is too old to list this workspace's agents. */
   needsServerUpdate: boolean
-  /** Forces a re-detect on the target host (`preflight.refreshAgents` for
-   *  local/runtime targets, a fresh probe for SSH) and updates every
-   *  subscribed surface in the same tick. Idempotent while in flight:
-   *  concurrent callers receive the same pending promise. */
+  /** Refresh the list’s owner host and publish to all surfaces; concurrent refreshes share the pending promise. */
   refresh: () => Promise<TuiAgent[]>
 }
 
@@ -40,27 +37,13 @@ function normalizeAgentDetectionTarget(
   return target
 }
 
-/**
- * Single source of truth for detected agent IDs across the renderer.
- *
- * Why: previously AgentsPane, NewWorkspaceComposerCard, and
- * `detect-agents-cached.ts` each ran their own detection. A tab-bar button
- * that doesn't refresh when Settings → Agents refreshes would feel broken;
- * centralizing the state eliminates multi-owner drift.
- *
- * @param connectionId — Pass a string for legacy SSH callers, or an
- * AgentDetectionTarget for local/SSH/runtime hosts. Pass null for local
- * detection. Pass undefined when the connection context is not yet known
- * (store not hydrated) — returns loading state.
- */
+/** One detected-agent inventory keeps launch surfaces synchronized. Accept legacy SSH IDs or host targets; null means local, undefined means unresolved/loading. */
 export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
   const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
-  // Why: undefined means "store not yet hydrated" — we don't know if the
-  // worktree is local or remote yet. This prevents flashing local agents for
-  // remote worktrees during hydration.
+  // Undefined ownership stays loading so remote hydration cannot flash local agents.
   const isUnknown = target === undefined
   const targetKind = target?.kind
   const targetId =
@@ -146,14 +129,12 @@ export function useDetectedAgents(
     remoteTargetKey !== null &&
     observedRemoteTargetKeysRef.current.has(remoteTargetKey)
   const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
-  // Why: refresh must hit the same host the list came from — refreshing the
-  // local PATH while showing a remote server's agents is a silent no-op.
+  // Refresh the inventory’s host; refreshing local PATH while showing remote agents would silently do nothing.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
     if (isUnknown) {
       return Promise.resolve([])
     }
-    // Why: retained tab bars stay mounted; imperative action reads avoid six
-    // no-op Zustand subscriptions per hook during unrelated store churn.
+    // Imperative action reads avoid six inert subscriptions per retained tab bar.
     const state = useAppStore.getState()
     if (targetKind === 'runtime' && targetId) {
       return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
@@ -170,8 +151,7 @@ export function useDetectedAgents(
     }
     const isNewRemoteTarget =
       remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
-    // Why: switching A → B → A is still one mounted surface; remember every
-    // target so empty hosts don't respawn all detection subprocesses on each switch.
+    // Remember every target seen by this mount so A → B → A does not repeatedly spawn probes for empty hosts.
     if (remoteTargetKey !== null) {
       observedRemoteTargetKeysRef.current.add(remoteTargetKey)
     }
@@ -180,8 +160,7 @@ export function useDetectedAgents(
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
-        // Why: a host can install an agent after its cached list was populated;
-        // refresh once when a new launch surface first observes that host.
+        // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
         void state.refreshRemoteDetectedAgents(targetId)
       } else if (isNewRemoteTarget) {
         // Empty results are intentionally retryable through the normal probe.
@@ -191,8 +170,7 @@ export function useDetectedAgents(
       if (detectedIds === null) {
         void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
-        // Why: a host can install an agent after its cached list was populated;
-        // refresh once when a new launch surface first observes that host.
+        // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
         void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget) {
         // Empty results are intentionally retryable through the normal probe.

@@ -198,11 +198,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     )
   })
 
-  // The other half of the observation gate for this reason. A remount for
-  // 'spawn-left-pane-unbound' heals by spawning, not by reattaching, so it
-  // reaches none of the reattach settle points. Binding a PTY IS the outcome,
-  // and reporting it is what keeps the attempt from sitting 'pending' for the
-  // whole settlement bound and blocking the tab's next recovery.
+  // Fresh-spawn recovery never reaches reattach settlement; report binding so healed attempts cannot remain pending and block later recovery.
   it('settles the tab recovery attempt as a success when the spawn binds a PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const settleTerminalTabRecovery = vi.fn()
@@ -218,9 +214,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-bound-spawn', 0, 'success')
   })
 
-  // The failure half, which already had a settle point: the same call reports
-  // 'failed' before it asks for the remount, so a spawn that keeps failing is
-  // refused as a settled failure rather than retried on the cooldown.
+  // Report failure before remount so repeated failure settles rather than retrying on cooldown.
   it('settles the attempt as failed before asking for the remount', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const settleTerminalTabRecovery = vi.fn()

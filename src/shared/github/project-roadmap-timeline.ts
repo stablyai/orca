@@ -1,8 +1,4 @@
-// Why: GitHub's GraphQL API never exposes which fields a Roadmap view places
-// its items on — `ProjectV2View` carries the layout and the field set, not the
-// roadmap's date configuration. The placement is therefore derived from the
-// view's own fields here, as pure logic, so desktop and mobile can draw the
-// same bars and the geometry stays testable without a renderer.
+// GraphQL ProjectV2View omits roadmap date configuration; derive placement from fields here for consistent, testable desktop/mobile bars.
 import type { GitHubProjectField, GitHubProjectRow, GitHubProjectView } from './project-types'
 
 export const ROADMAP_DAY_MS = 86_400_000
@@ -34,9 +30,7 @@ const TARGET_FIELD_PATTERN = /target|end|due|finish|complet|deadline|ship/i
 
 const MONTHS_PER_UNIT: Record<RoadmapZoom, number> = { month: 1, quarter: 3, year: 12 }
 const MIN_UNITS: Record<RoadmapZoom, number> = { month: 6, quarter: 4, year: 3 }
-// Why: one bogus far-future date must not expand the grid to tens of thousands
-// of columns. Beyond this the range stops growing and out-of-range bars clamp
-// to the edge, which is visibly wrong in the right way rather than a hang.
+// Cap typo-driven date ranges to avoid huge grids; out-of-range bars clamp visibly instead of hanging.
 const MAX_TICKS = 480
 
 function isDateField(field: GitHubProjectField): boolean {
@@ -54,8 +48,7 @@ function pickDateSource(
   if (startField && targetField) {
     return { kind: 'date-range', startField, targetField }
   }
-  // Why: when only one name matched, keep it in its matched role and pair it
-  // with the remaining date field — a plain order fallback inverts the pair.
+  // Keep a singly matched date field in its role; plain field order could invert start/target.
   if (startField) {
     const other = dateFields.find((field) => field.id !== startField.id)
     if (other) {
@@ -69,8 +62,7 @@ function pickDateSource(
     }
   }
   const [first, second] = dateFields
-  // Why: localized or oddly named date fields still describe a range — fall
-  // back to the view's own field order rather than degrading to a marker.
+  // Fallback to view field order for localized/unusual names instead of degrading ranges to markers.
   if (first && second) {
     return { kind: 'date-range', startField: first, targetField: second }
   }
@@ -87,8 +79,7 @@ export function resolveRoadmapDateSource(
   view: GitHubProjectView,
   rows: readonly GitHubProjectRow[] = []
 ): RoadmapDateSource | null {
-  // Why: roadmaps are commonly placed by fields hidden from the view's
-  // visible-field list — sort/group fields are the next best config signal.
+  // Placement fields can be hidden; sort/group fields provide secondary configuration evidence.
   const seen = new Set<string>()
   const candidates: GitHubProjectField[] = []
   for (const field of [
@@ -105,8 +96,7 @@ export function resolveRoadmapDateSource(
     candidates.filter(isDateField),
     candidates.find((field) => field.kind === 'iteration') ?? null
   )
-  // Why: item field values are fetched independently of the view config, so
-  // rows can carry usable dates even when no configured field exposes them.
+  // Row values may supply dates even when view configuration exposes no placement fields.
   return fromConfig ?? pickDateSource(...collectRowPlacementFields(rows))
 }
 
@@ -138,8 +128,7 @@ function collectRowPlacementFields(
   return [Array.from(dateFieldsById.values()), iterationField]
 }
 
-/** Accepts the `YYYY-MM-DD` calendar dates GitHub returns, and tolerates a
- *  full ISO timestamp by reading its date part. */
+/** Read GitHub YYYY-MM-DD dates, tolerating the date portion of full ISO timestamps. */
 export function parseRoadmapDate(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
   if (!match) {
@@ -150,9 +139,7 @@ export function parseRoadmapDate(value: string): number | null {
   if (Number.isNaN(ms)) {
     return null
   }
-  // Why: Date.UTC normalizes overflow (2026-02-30 → Mar 2) instead of failing;
-  // round-trip the components so an invalid calendar date is rejected, not
-  // silently moved to a different day.
+  // Date.UTC normalizes overflow (Feb 30 → Mar 2); round-trip components to reject invalid dates.
   const roundTrip = new Date(ms)
   if (
     roundTrip.getUTCFullYear() !== Number(year) ||
@@ -195,8 +182,7 @@ export function getRoadmapSpan(
     const known = startValue ?? targetValue
     return known === null ? null : { startMs: known, endMs: known + ROADMAP_DAY_MS, point: true }
   }
-  // Why: a target before the start is user data, not corruption — order the
-  // pair so the item still gets a visible bar.
+  // Reversed dates are user data; order them so the item retains a bar.
   return {
     startMs: Math.min(startValue, targetValue),
     endMs: Math.max(startValue, targetValue) + ROADMAP_DAY_MS,
@@ -214,8 +200,7 @@ function unitStart(index: number, zoom: RoadmapZoom): number {
   return Date.UTC(Math.floor(months / 12), months % 12, 1)
 }
 
-/** Builds the column grid covering every span plus today, padded by one unit
- *  on each side and widened to a readable minimum. */
+/** Cover spans and today, with one unit of padding per side and a readable minimum width. */
 export function buildRoadmapTicks(
   spans: readonly RoadmapSpan[],
   zoom: RoadmapZoom,
@@ -228,16 +213,12 @@ export function buildRoadmapTicks(
     latest = Math.max(latest, span.endMs)
   }
   let firstIdx = unitIndexOf(earliest, zoom) - 1
-  // Why: span ends are exclusive, so step back a tick before resolving the
-  // containing unit — otherwise a span landing exactly on a boundary claims
-  // the next unit and the trailing padding drifts by one column.
+  // Exclusive span ends on unit boundaries belong to the previous tick; subtract before computing trailing padding.
   let lastIdxExclusive = unitIndexOf(latest - 1, zoom) + 2
   if (lastIdxExclusive - firstIdx < MIN_UNITS[zoom]) {
     lastIdxExclusive = firstIdx + MIN_UNITS[zoom]
   }
-  // Why: the cap must keep today inside the grid — a single typo'd date in
-  // either direction otherwise consumes every column and the whole roadmap
-  // clamps to one edge. Trim the side farther from today first.
+  // Keep today within the capped grid; trim the farther side first so one typo cannot consume all columns.
   if (lastIdxExclusive - firstIdx > MAX_TICKS) {
     const todayIdx = unitIndexOf(todayMs, zoom)
     firstIdx = Math.max(firstIdx, todayIdx + 2 - MAX_TICKS)
@@ -255,9 +236,7 @@ export function buildRoadmapTicks(
   return ticks
 }
 
-/** Maps a timestamp to a pixel offset inside the grid. Interpolating within
- *  the containing tick (rather than across the whole range) is what keeps bar
- *  edges aligned to the column rules, since months differ in length. */
+/** Interpolate inside each tick to align bar edges despite unequal month lengths. */
 export function roadmapOffsetPx(
   ms: number,
   ticks: readonly RoadmapTick[],

@@ -1,5 +1,4 @@
-// Who a chat message is from when it is not the person at the composer: another agent, through
-// Orca. Carried on the message body (`AgentJournalMessageItem.from`), outside every fingerprint.
+// Agent-origin messages carry from outside fingerprints; absence identifies the person at the composer.
 
 import { z } from 'zod'
 import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
@@ -7,11 +6,7 @@ import { isOrcaSessionId, type OrcaSessionId } from '../orca-session-address'
 import type { OrchestrationPartyIdentity } from '../orchestration-party-identity'
 import { openEnum, salvagedField, salvagedOptional, salvagingArray } from '../zod-salvage'
 
-/**
- * An agent a message is from, named by the orchestration database of the host that stores the
- * message: a federated sender arrives as its `dispatch:<id>` address there. No pane key: it reads
- * and consumes that agent's mailbox, so the host resolves it from the address.
- */
+/** Resolve senders through the storing host's orchestration mailbox address (dispatch:<id> for federation), never a pane key. */
 export type AgentMessageSender = Readonly<{
   party: Omit<OrchestrationPartyIdentity, 'paneKey'>
   /** What Orca called the sender when it wrote, kept for when it is gone; null when it had none. */
@@ -49,9 +44,7 @@ export type AgentMessageSource = Readonly<{
   orchestration: OrchestrationAgentMessage | null
 }>
 
-/** Who a send is from, as its submission records it: the kind only (`AgentJournalSubmission.source`),
- *  so a restart or a close keeps only a person's unsent send as a card. The senders stay on the
- *  message body. */
+/** Persist only the source kind so restart/close retains human unsent cards; sender identities stay on the message body. */
 export type AgentSessionMessageSource = Readonly<{ kind: 'user' | 'agent' }>
 
 export const USER_MESSAGE_SOURCE: AgentSessionMessageSource = { kind: 'user' }
@@ -90,8 +83,7 @@ const senderSchema = z.object({
   name: z.unknown().transform(agentMessageSenderName)
 })
 
-// Read apart, so a malformed sender or an orchestration kind this build lacks never turns an
-// agent's message into the person's.
+// Parse separately so malformed senders or newer orchestration kinds never turn an agent message into a human message.
 const sourceSchema = z.object({
   kind: openEnum(['agent'], 'agent'),
   senders: salvagedField('senders', salvagingArray(senderSchema), () => []),

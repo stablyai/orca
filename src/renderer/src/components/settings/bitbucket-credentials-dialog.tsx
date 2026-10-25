@@ -64,13 +64,10 @@ export function BitbucketCredentialsDialog({
   const [baseUrl, setBaseUrl] = useState('')
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
-  // Why: the form is seeded from `initial*` props that a status refresh may rewrite mid-edit, so
-  // compare text fields against the values captured at open rather than the live props.
+  // Capture opening values for dirty checks; status refreshes may replace seed props mid-edit.
   const baselineRef = useRef({ email: '', baseUrl: '' })
 
-  // Re-sync from the latest stored metadata on every open, not just on mount, so
-  // the Edit flow never shows values from a previous connection. Secrets always
-  // start empty: the main process never hands them back.
+  // Reseed stored metadata on each opening; secrets always start empty because main never returns them.
   // Why an event: keyed on `open` alone, so a status refresh mid-edit must not overwrite typing.
   const seedFromStoredMetadata = useEffectEvent(() => {
     const seedEmail = initialEmail ?? ''
@@ -91,9 +88,7 @@ export function BitbucketCredentialsDialog({
   }, [open])
 
   const remoteRuntime = hasRemoteProviderRuntime(settings)
-  // Why: only an env-managed connection makes saving pointless. A remote runtime
-  // just means the credential is stored on this machine, so the form stays
-  // usable and only the storage note changes (matching the Jira dialog).
+  // Only environment-managed auth makes saving ineffective; remote runtimes change storage guidance, not form usability.
   const locked = environmentManaged
   const connecting = connectState === 'connecting'
   const isTokenMode = authMode === 'token'
@@ -115,9 +110,7 @@ export function BitbucketCredentialsDialog({
     }
   }
 
-  // Why: a stray backdrop click must not discard typed credentials. Only the active mode's fields
-  // are submitted, so compare just those — a stale basic-mode email is not submitted in token mode
-  // and must not make the form sticky. Escape / Cancel / × stay explicit.
+  // Guard accidental backdrop discard using only submitted-mode fields; Escape/Cancel/close remain explicit exits.
   const isDraftDirty = (): boolean =>
     baseUrl !== baselineRef.current.baseUrl ||
     (isTokenMode ? accessToken !== '' : email !== baselineRef.current.email || apiToken !== '')
@@ -173,8 +166,7 @@ export function BitbucketCredentialsDialog({
         onPointerDownOutside={guardOutsideDismiss}
         onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
-          // Only from a text field: Enter on Cancel or the docs link must do
-          // what that control does, not submit the form.
+          // Intercept Enter only in inputs; Cancel and documentation links retain their own actions.
           if (!(event.target instanceof HTMLInputElement)) {
             return
           }
@@ -217,8 +209,7 @@ export function BitbucketCredentialsDialog({
                   return
                 }
                 setAuthMode(value as BitbucketAuthMode)
-                // An API token and an access token are different secrets; drop
-                // the typed one so it can't be submitted as the other.
+                // Drop secrets on mode changes so API tokens cannot be submitted as access tokens or vice versa.
                 setApiToken('')
                 setAccessToken('')
                 clearErrorOnEdit()

@@ -28,8 +28,7 @@ export type PRComment = {
   reactionSubjectId?: string
   /** File path for inline review comments (absent for top-level conversation comments). */
   path?: string
-  /** GraphQL node ID of the review thread — present only for inline review comments.
-   *  Used to resolve/unresolve the thread via GitHub's GraphQL API. */
+  /** Inline review thread’s GraphQL ID, used to resolve/unresolve it; absent for conversation comments. */
   threadId?: string
   /** Whether the review thread has been resolved. Only meaningful when threadId is set. */
   isResolved?: boolean
@@ -39,11 +38,7 @@ export type PRComment = {
   line?: number
   /** Start line of the review annotation range (1-based). Absent for single-line comments. */
   startLine?: number
-  /** True when GitHub identifies the author as a bot (REST `user.type === 'Bot'` or
-   *  GraphQL `__typename === 'Bot'`). Preferred over login-string heuristics because
-   *  third-party review bots (e.g. qodo-ai-reviewer, coderabbitai) don't follow a
-   *  predictable naming convention. Absent when the data source can't report it
-   *  (non-GitHub fallbacks via `gh pr view`). */
+  /** Provider-reported bot identity beats login heuristics (qodo/coderabbit use varied names). Absent when non-GitHub gh fallbacks cannot report it. */
   isBot?: boolean
 }
 

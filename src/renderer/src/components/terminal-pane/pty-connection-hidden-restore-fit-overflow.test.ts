@@ -114,7 +114,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -148,52 +148,112 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('repaints overflowed live output when the deadline interrupts an answered snapshot', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-id')
-    let onData: ConnectCallbacks['onData']
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      onData = callbacks.onData
-      return 'pty-id'
-    })
-    transportFactoryQueue.push(transport)
-    const fit = createDeferred<boolean>()
-    safeFitAndThen.mockReturnValue({ completion: Promise.resolve(true), cancel: vi.fn() })
+  it.each([
+    { name: 'overflowed', pending: 'v'.repeat(512 * 1024 + 1), repaint: true, covered: 0 },
+    { name: 'small', pending: 'Working\r\n', repaint: false, covered: 0 },
+    { name: 'partially covered', pending: 'Working\r\n', repaint: false, covered: 4 },
+    { name: 'unmapped', pending: 'Working\r\n', repaint: true, covered: 4 },
+    { name: 'unhide gap', pending: 'Working\r\n', repaint: true, covered: 0 },
+    { name: 'fresh snapshot gap', pending: 'Working\r\n', repaint: true, covered: 0 }
+  ])(
+    'recovers $name live output when the deadline interrupts an answered snapshot',
+    async ({ name, pending, repaint, covered }) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      let onData: ConnectCallbacks['onData']
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          onData = callbacks.onData
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const fit = createDeferred<boolean>()
+      safeFitAndThen.mockReturnValue({ completion: Promise.resolve(true), cancel: vi.fn() })
 
-    const getSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
-    const hidden = 'hidden-before-flood\r\n'
-    const overflow = 'v'.repeat(512 * 1024 + 1)
-    const done = 'HIDDEN_FLOOD_DONE\r\n'
-    getSnapshot
-      .mockResolvedValueOnce({ data: hidden, cols: 120, rows: 40, seq: hidden.length })
-      .mockResolvedValue({ data: done, cols: 120, rows: 40, seq: hidden.length + overflow.length })
-    const pane = createPane(1)
-    const deps = createDeps({ isVisibleRef: { current: false }, startup: { command: 'codex' } })
-    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks(6)
-    safeFitAndThen.mockClear()
-    safeFitAndThen.mockReturnValueOnce({
-      completion: fit.promise,
-      cancel: vi.fn(() => fit.resolve(false))
-    })
-    vi.useFakeTimers()
-    onData?.(hidden, { seq: hidden.length, rawLength: hidden.length })
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    onData?.('v', { seq: hidden.length + 1, rawLength: 1 })
-    await flushAsyncTicks(30)
-    expect(safeFitAndThen).toHaveBeenCalledTimes(1)
-    onData?.(overflow, { seq: hidden.length + overflow.length, rawLength: overflow.length })
-    await vi.advanceTimersByTimeAsync(750)
-    fit.resolve(true)
-    await flushAsyncTicks(30)
-    await vi.advanceTimersByTimeAsync(2_000)
-    await flushAsyncTicks(30)
-    const output = pane.terminal.write.mock.calls.map(([data]) => data).join('')
-    expect(output).toContain(done)
-    expect(output).not.toContain('main recovery was unavailable')
-    expect(getSnapshot).toHaveBeenCalledTimes(2)
-    disposable.dispose()
-    vi.useRealTimers()
-    expect(await renderHeadlessBuffer([output])).toEqual(await renderHeadlessBuffer([done]))
-  })
+      const getSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
+      const hidden = 'hidden-before-flood\r\n'
+      const snapshot = covered > 0 ? `${hidden}v${pending.slice(0, covered)}` : hidden
+      const done = 'HIDDEN_FLOOD_DONE\r\n'
+      const rawLength = pending.length + (name === 'unmapped' ? 5 : 0)
+      let seq = hidden.length + 1 + rawLength
+      getSnapshot
+        .mockResolvedValueOnce({ data: snapshot, cols: 120, rows: 40, seq: snapshot.length })
+        .mockResolvedValue({
+          data: done,
+          cols: 120,
+          rows: 40,
+          seq: seq + 100
+        })
+      const pane = createPane(1)
+      const isVisibleRef = { current: false }
+      const deps = createDeps({ isVisibleRef, startup: { command: 'codex' } })
+      const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(6)
+      safeFitAndThen.mockClear()
+      safeFitAndThen.mockReturnValueOnce({
+        completion: fit.promise,
+        cancel: vi.fn(() => fit.resolve(false))
+      })
+      vi.useFakeTimers()
+      onData?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      if (name === 'unhide gap') {
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'hidden-drop',
+          hiddenDropEpisode: 1,
+          markerSeq: hidden.length
+        })
+      }
+      isVisibleRef.current = true
+      onData?.('v', { seq: hidden.length + 1, rawLength: 1 })
+      await flushAsyncTicks(30)
+      expect(safeFitAndThen).toHaveBeenCalledTimes(1)
+      onData?.(pending, { seq, rawLength })
+      if (name === 'unhide gap' || name === 'fresh snapshot gap') {
+        isVisibleRef.current = name === 'unhide gap'
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: name === 'unhide gap' ? 'unhide' : 'hidden-drop',
+          hiddenDropEpisode: 1,
+          markerSeq: seq + 100
+        })
+        isVisibleRef.current = true
+      }
+      await vi.advanceTimersByTimeAsync(750)
+      const deadlineOutput = pane.terminal.write.mock.calls.map(([data]) => data).join('')
+      expect(deadlineOutput).not.toContain('main recovery was unavailable')
+      expect(getSnapshot).toHaveBeenCalledTimes(1)
+      let laterOutput = ''
+      for (let second = 0; second < 12; second += 1) {
+        if (!repaint) {
+          const tick = `tick-${second}\r\n`
+          laterOutput += tick
+          seq += tick.length
+          onData?.(tick, { seq, rawLength: tick.length })
+        }
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      expect(getSnapshot).toHaveBeenCalledTimes(repaint ? 2 : 1)
+      fit.resolve(true)
+      await flushAsyncTicks(30)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await flushAsyncTicks(30)
+      const output = pane.terminal.write.mock.calls.map(([data]) => data).join('')
+      expect(output).not.toContain('main recovery was unavailable')
+      expect(getSnapshot).toHaveBeenCalledTimes(repaint ? 2 : 1)
+      disposable.dispose()
+      vi.useRealTimers()
+      const drained = `${hidden}v${pending}`
+      expect(await renderHeadlessBuffer([output])).toEqual(
+        await renderHeadlessBuffer([repaint ? done : drained + laterOutput])
+      )
+      if (!repaint) {
+        expect(await renderHeadlessBuffer([deadlineOutput])).toEqual(
+          await renderHeadlessBuffer([drained])
+        )
+      }
+    }
+  )
 })

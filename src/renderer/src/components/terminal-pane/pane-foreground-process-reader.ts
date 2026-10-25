@@ -42,8 +42,7 @@ export function createPaneForegroundProcessReader(deps: {
         : deps.readForegroundProcess
       const inspection = await (options ? reader(ptyId, options) : reader(ptyId))
       if (isClientOnlyUnverifiableInspection(inspection)) {
-        // A client-only result is never shell evidence, even for a local
-        // adapter that lost its provider while the pane stayed mounted.
+        // Client-only results never prove shell foreground, including local adapters whose provider disappeared.
         remoteEvidenceVerdict = 'unverifiable'
       } else if (typeof inspection === 'string' || inspection === null) {
         processName = inspection
@@ -72,8 +71,7 @@ export function createPaneForegroundProcessReader(deps: {
         processName = inspection.foregroundProcess
       }
     } catch {
-      // The reader adapter is deliberately conservative for injected/legacy
-      // providers: no answer is still an unverifiable remote verdict.
+      // Missing legacy/injected-provider answers remain unverifiable remote verdicts.
       remoteEvidenceVerdict = 'unverifiable'
     }
     return {

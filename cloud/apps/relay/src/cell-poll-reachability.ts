@@ -1,6 +1,4 @@
-// Whether this director's own seat-feed polls reach a cell: one half of the evidence that lets a
-// host that lost its control leave a dead reserve cell without an operator fence. The other half
-// is the cell's stale heartbeat, which travels a different path (cell -> director -> Postgres).
+// Unanswered director feed polls plus stale heartbeat (cell→director→Postgres) prove reserve-cell death, allowing only host-requested departure without an operator fence.
 
 // The failing streak must span this long: the heartbeat TTL, so neither signal outruns the other.
 export const CELL_POLL_DEAD_STREAK_MS = 45_000
@@ -57,8 +55,7 @@ export class CellPollReachability {
     for (const cellId of this.streaks.keys()) if (!cellIds.has(cellId)) this.streaks.delete(cellId)
   }
 
-  // Any current streak, however young: a staggered partition must not let its first cell cross 45 s
-  // while its neighbours are still a few seconds behind and read as healthy.
+  // Count even young failure streaks or staggered partition starts can make the first dead verdict outrun its neighbors.
   private failing(cellId: string, now: number): boolean {
     const streak = this.streaks.get(cellId)
     return streak !== undefined && now - streak.lastFailedAt <= CELL_POLL_DEAD_MAX_GAP_MS
@@ -74,8 +71,7 @@ export class CellPollReachability {
     )
   }
 
-  // Null unless this cell is unreachable. Every director runs in one region, so a partition from
-  // another region fails every cell there for all of them at once: half a region is never a cell.
+  // Regional directors share cross-region partitions; half a region failing cannot prove individual cell death.
   verdict(cellId: string, polled: readonly PolledCell[], now: number): DeadCellVerdict | null {
     if (!this.unreachable(cellId, now)) return null
     const region = polled.find((cell) => cell.cellId === cellId)?.region

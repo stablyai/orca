@@ -57,14 +57,11 @@ function hostLostAfterListing(): void {
   })
 }
 
-/** Clicks and opted-in launches use the same bulk action over their selection. */
 const resumes = {
   click: () => continueNativeChatRestartOffer(['a', 'b']),
   launch: () => continueNativeChatRestartOffer(offered.map((candidate) => candidate.sessionId))
 }
 
-// With the host unreachable there is no list to narrow by: every chat the resume reported failed,
-// and nothing is listed for Show to open.
 it.each(['click', 'launch'] as const)(
   'counts every chat of a lost %s resume when the host cannot be read either',
   async (caller) => {
@@ -75,7 +72,6 @@ it.each(['click', 'launch'] as const)(
   }
 )
 
-// The re-read lists the chats the lost request reported as failed, so the one toast keeps Show.
 it('answers an opted-in launch that loses its resume request with one toast and Show', async () => {
   rpc.mockImplementation(async (_target, method) => {
     if (method === 'agentSession.restartResumable') {
@@ -92,7 +88,6 @@ it('answers an opted-in launch that loses its resume request with one toast and 
   expect(lastToastShow()).toBeDefined()
 })
 
-// The same toast and copy as a click: the chats it resumed ride along under the one it could not.
 it('answers a mixed opted-in launch with one toast', async () => {
   const failure = { ...offered[1]!, failedAt: 1, outcome: 'refused', reason: 'unknown' }
   let acted = false
@@ -119,7 +114,6 @@ it('answers a mixed opted-in launch with one toast', async () => {
   expect(lastToastShow()).toBeDefined()
 })
 
-// Between the listing and the request every chat moved on by itself: nothing happened to report.
 it('raises no toast when the host had nothing left for an opted-in launch to resume', async () => {
   rpc.mockImplementation(async (_target, method) =>
     method === 'agentSession.restartResumable'
@@ -131,7 +125,6 @@ it('raises no toast when the host had nothing left for an opted-in launch to res
   expect(toast).not.toHaveBeenCalled()
 })
 
-// A withdrawn failure cannot recreate attention, but the unseen run summary stays available.
 it('opens the retained summary from Show after the host withdraws a failure', async () => {
   let failed = [{ ...offered[0]!, failedAt: 1, outcome: 'unconfirmed', reason: 'unknown' }]
   rpc.mockImplementation(async (_target, method) =>

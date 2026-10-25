@@ -32,8 +32,7 @@ async function readRemoteJiraPayload<TResult>(
     if (!(error instanceof RuntimeRpcCallError) || error.code !== 'method_not_found') {
       throw error
     }
-    // Older runtimes predate image payload streaming but still return text-only
-    // Jira details safely through the original one-shot method.
+    // Older runtimes lack image streaming but still serve text through the original one-shot method.
     return callRuntimeRpc<TResult>(target, fallbackMethod, args, { timeoutMs: 30_000 })
   }
 }

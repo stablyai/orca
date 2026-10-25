@@ -5,10 +5,7 @@ import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 
-/**
- * Tracks what the user is currently looking at so an in-flight Create PR run can tell whether the
- * panel has since moved on, and pins each of the run's git calls to the host it started from.
- */
+/** Track foreground ownership and pin in-flight Git calls to their original host. */
 export function useSourceControlCreatePrIntentTarget({
   activeRepoId,
   activeRepoTarget,
@@ -47,7 +44,6 @@ export function useSourceControlCreatePrIntentTarget({
 
   const getCreatePrIntentOperationTarget = useCallback(
     (token: CreatePrIntentRunToken): SourceControlOperationTarget => ({
-      // Why: Create PR intent continues after navigation; pin git commands to the worktree/host that started the sequence.
       target: activeRepoTarget,
       worktreeId: token.worktreeId,
       worktreePath: token.worktreePath,

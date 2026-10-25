@@ -21,13 +21,12 @@ export function isEditorWritableView(view: OpenFile): boolean {
   return view.readOnly !== true && view.csvPreviewOnly !== true
 }
 
-/** The first open view of `viewIds` a save of `trigger` may write through, on a current owner. */
 export function firstEditorSaveWriter(
   state: AppState,
   viewIds: readonly string[],
   trigger: EditorSaveTrigger
 ): OpenFile | null {
-  // Why: the record's first view may be a CSV preview or read-only; writing through it throws.
+  // CSV previews and read-only views cannot serve as record writers.
   const mayWrite = (view: OpenFile): boolean =>
     trigger === 'autosave' ? canAutoSaveOpenFile(view) : isEditorWritableView(view)
   for (const viewId of viewIds) {
@@ -39,10 +38,7 @@ export function firstEditorSaveWriter(
   return null
 }
 
-/**
- * The view a save writes through. An explicit save uses the view that asked; autosave and restart
- * use the first writable view whose owner is still current (one opened before a reconnect isn't).
- */
+/** Explicit saves retain the asking view; autosave/restart choose a writable view with current ownership. */
 export function editorSaveWriterView(
   state: AppState,
   fileId: string,
@@ -57,10 +53,7 @@ export function editorSaveWriterView(
   return writer ?? (trigger === 'autosave' ? null : asked)
 }
 
-/**
- * `viewId` while it is open, else the writer among the views its record had: a save outlives the
- * tab that asked, but the record's other views still hold its text.
- */
+/** After the asking view closes, save through a surviving view of its original record. */
 export function liveEditorSaveWriter(
   state: AppState,
   viewId: string,

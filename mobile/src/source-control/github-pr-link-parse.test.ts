@@ -24,7 +24,7 @@ describe('parseGitHubPrReference', () => {
   })
 
   it('rejects a non-GitHub host even when the path looks like a PR', () => {
-    // Why: this parser is GitHub-specific; a look-alike host must not parse.
+    // Reject look-alike hosts; this parser writes GitHub-specific metadata.
     expect(parseGitHubPrReference('https://example.com/owner/repo/pull/7')).toBeNull()
     expect(parseGitHubPrReference('https://gitlab.com/owner/repo/pull/7')).toBeNull()
     expect(parseGitHubPrReference('https://notgithub.com/o/r/pull/1')).toBeNull()

@@ -33,16 +33,14 @@ export function createAgentStatusRuntime(
 ): AgentStatusRuntime {
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
-  // Identity can no longer report "this staged update changed something" once the staged object is
-  // mutated in place, so every accepted staged write advances this instead.
+  // Staged in-place mutations cannot signal changes by identity; count every accepted write.
   let batchedAgentStatusRevision = 0
   let batchedAgentStatusEffects: (() => void)[] | null = null
   let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
-  // Deliberately narrower than zustand's `set`: no `replace` parameter, so no call site in
-  // this slice can compile into a REPLACE the batch commit is unable to express.
+  // Omit replace from this write type so no slice call can request replacement the batch cannot express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
     if (staged === null) {
@@ -178,8 +176,7 @@ export function createAgentStatusRuntime(
   const freshness = createFreshnessScheduler({
     getStatusEntries: () => get().agentStatusByPaneKey,
     bumpEpochs: () => {
-      // Why: freshness is time-based — bump both epochs at the stale boundary to force selector
-      // recompute and re-sort even with no new output, since staleness can change worktree ordering.
+      // Time-based staleness changes ordering without output; bump freshness/sort epochs at boundaries.
       set((s) => ({
         agentStatusEpoch: s.agentStatusEpoch + 1,
         sortEpoch: s.sortEpoch + 1

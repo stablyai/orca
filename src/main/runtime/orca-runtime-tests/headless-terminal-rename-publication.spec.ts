@@ -7,8 +7,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 
-// #29975: a paired desktop ranks its own saved-session title over the host's live title, so a
-// CLI rename on a headless host only reaches it when the host says the name is manual.
+// #29975: paired desktops prefer saved names; publish CLI-renamed headless titles as manual.
 function headlessRuntime() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
@@ -61,7 +60,7 @@ describe('headless terminal rename publication', () => {
       customTitle: '  Sleeping  '
     })
 
-    // `title` too: phones and older desktops read only that.
+    // Phones/older desktops read only title.
     expect(await publishedSurface(runtime)).toMatchObject({
       title: 'Sleeping',
       customTitle: 'Sleeping'

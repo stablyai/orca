@@ -17,10 +17,7 @@ type Owner = GenerationScopedRequestOwner<Parameters, string[]>
 const QUERY: Parameters = { query: 'a' }
 const OTHER_QUERY: Parameters = { query: 'b' }
 
-/**
- * One request whose settlement the schedule controls. Every interleaving below is written as an
- * explicit resolution order rather than a timer, so the test states the schedule instead of racing.
- */
+// Control explicit completion order instead of racing timers.
 function pending(): { start: () => Promise<string[] | null>; resolve: (paths: string[]) => void } {
   let settle: (paths: string[] | null) => void = () => {}
   const promise = new Promise<string[] | null>((resolvePromise) => {
@@ -58,7 +55,6 @@ describe('key-reset-cleanup', () => {
     expect(owner.commit(lease.lease, lease.value)).toBe('committed')
     expect(owner.read(scope, QUERY)).toEqual(['a.ts'])
 
-    // Still pending when the reset lands: this is the in-flight entry the next load must not join.
     let started = 0
     const crossing = pending()
     const crossingLoaded = owner.load(scope, OTHER_QUERY, () => {
@@ -94,8 +90,7 @@ describe('blur', () => {
     const request = pending()
     const loaded = owner.load(scope, QUERY, request.start)
 
-    // The blur bumps the generation the way `use-mobile-send-completion-generation` does: the
-    // surface went away, nothing about the host or the workspace did.
+    // Blur retires the surface generation without changing host/workspace identity.
     owner.reset()
 
     request.resolve(['stale.ts'])
@@ -113,7 +108,6 @@ describe('cutover', () => {
     const first = pending()
     const loaded = owner.load(beforeCutover, QUERY, first.start)
 
-    // `migrateTo` advanced the logical authority epoch; the next read carries the new one.
     expect(owner.read(afterCutover, QUERY)).toBeUndefined()
 
     let started = 0
@@ -137,9 +131,7 @@ describe('cutover', () => {
 
 describe('reconnect-mid-request', () => {
   it('lets each owner decide whether a same-host reconnect retires its data', async () => {
-    // The inventory reads files on disk, which a new authenticated session does not change, so its
-    // scope omits the physical session epoch. A capability latch is the opposite: the reconnected
-    // host may be a newer build that now answers the method, so its scope carries it.
+    // Disk inventory survives reauthentication; capability latches may change with a newer host build and include the session epoch.
     const inventory: Owner = new GenerationScopedRequestOwner()
     const capability: Owner = new GenerationScopedRequestOwner()
     const inventoryBefore = scopeAt('w1', 1)
@@ -151,7 +143,6 @@ describe('reconnect-mid-request', () => {
     const inventoryLoaded = inventory.load(inventoryBefore, QUERY, inventoryRequest.start)
     const capabilityLoaded = capability.load(capabilityBefore, QUERY, capabilityRequest.start)
 
-    // The socket reauthenticated mid-request: same client, same logical authority, new session.
     expect(capability.read(capabilityAfter, QUERY)).toBeUndefined()
     expect(inventory.read(inventoryBefore, QUERY)).toBeUndefined()
 
@@ -178,7 +169,6 @@ describe('stale-inflight-cleanup', () => {
     expect(owner.read(b, QUERY)).toBeUndefined()
     expect(owner.read(a, QUERY)).toBeUndefined()
 
-    // The key A builds is the same string it built before; the generation is what differs.
     let started = 0
     const secondVisit = pending()
     const reloaded = owner.load(a, QUERY, () => {
@@ -218,8 +208,7 @@ describe('stale-settlement-cleanup', () => {
     })
     expect(started).toBe(2)
 
-    // The retired request settles last. Its cleanup names the slot by key, which the live request
-    // now holds, so only promise identity keeps it from evicting a request still in flight.
+    // Only promise identity stops a retired request’s cleanup evicting the new request using its key.
     stale.resolve(['stale.ts'])
     const retired = await settled(staleLoaded)
     expect(owner.commit(retired.lease, retired.value)).toBe('retired-generation')
@@ -294,7 +283,6 @@ describe('currency probe', () => {
     owner.reset()
     expect(probes[0]?.isCurrent()).toBe(false)
 
-    // The probe answers the question `commit` asks, so a loader that ignored it lands here instead.
     request.resolve(['stale.ts'])
     const stale = await settled(loaded)
     expect(owner.commit(stale.lease, stale.value)).toBe('retired-generation')
@@ -324,8 +312,7 @@ describe('currency probe', () => {
     let sent = 0
     const firstLeg = pending()
     const secondLeg = pending()
-    // Two legs, as the compare site has: the probe sits between them, so a superseded attempt never
-    // reaches the second one.
+    // Put the currency probe between sibling legs so retired attempts never send the second request.
     const attempt =
       (leg: { start: () => Promise<string[] | null> }) =>
       async (currency: RequestCurrency): Promise<string[] | null> => {
@@ -357,7 +344,6 @@ describe('currency probe', () => {
 const mobileRoot = fileURLToPath(new URL('../..', import.meta.url))
 const ownerModule = join(mobileRoot, 'src', 'transport', 'generation-scoped-request-owner')
 
-/** Whether a file imports the owner, resolved rather than pattern-matched on the specifier. */
 function importsOwner(path: string, source: string): boolean {
   const parsed = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
   return parsed.statements.some((statement) => {
@@ -421,7 +407,6 @@ function assignmentRoot(target: ts.Expression): string | null {
   }
 }
 
-/** Every write a loader body performs to something it did not itself declare. */
 function externalWrites(callback: ts.Node): string[] {
   const declared = declaredInside(callback)
   const offenders: string[] = []
@@ -509,8 +494,7 @@ describe('loader write fence', () => {
   })
 
   it('has every owner holder loading without writing external state', () => {
-    // Absence proves nothing without presence: an empty offender list would otherwise pass on a day
-    // the scan found no holder and no loader to look inside.
+    // Require discovered owners/loaders so an empty scan cannot pass vacuously.
     expect(
       holders.map(({ path }) => relative(mobileRoot, path).split(/[/\\]/).join('/'))
     ).toContain('src/session/native-chat/composer/use-mobile-native-chat-file-search.ts')

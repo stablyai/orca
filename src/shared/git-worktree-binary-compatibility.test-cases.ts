@@ -29,9 +29,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
       stdout: expect.stringContaining('worktree ')
     })
 
-    // Why: the `prunable` porcelain annotation landed in Git 2.31 — five
-    // releases before `-z` (2.36) — so only Git <2.31 emits neither and needs
-    // Orca's path-existence fallback (issue #8389).
+    // Prunable annotations arrived in Git 2.31, before -z (2.36); only pre-2.31 needs path-existence fallback (#8389).
     await runGit(['worktree', 'add', '-b', 'compat-stale', 'stale-wt'])
     await rm(join(resolveRepoPath(), 'stale-wt'), { recursive: true, force: true })
     const staleList = await runGit(['worktree', 'list', '--porcelain'])
@@ -50,11 +48,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
     ).resolves.toBeDefined()
   })
 
-  // Why pin this: worktree removal decides whether to prune and retry `branch -d` by
-  // matching Git's refusal text, and the wording moved inside the supported range
-  // (<=2.40 "Cannot delete branch 'x' checked out at", >=2.43 "cannot delete branch 'x'
-  // used by worktree at"). It is also the only evidence that the refusal is a stderr
-  // message on every supported Git rather than something a caller could read off stdout.
+  // Pin stderr refusal recognition across <=2.40 checked-out-at and >=2.43 used-by-worktree-at wording; removal uses it to prune/retry.
   it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
     await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
     try {
@@ -73,8 +67,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
     }
   })
 
-  // Why pin this: the create card reads the checkout meter `worktree add` writes into a pipe
-  // unasked (it has no --progress flag), so the record format is a contract with every Git.
+  // The create card consumes worktree add’s unrequested piped checkout meter; pin its format across supported Git.
   it('writes checkout progress records into a pipe during worktree add', async () => {
     const fileCount = 120
     const source = join(resolveRepoPath(), 'progress-source')
@@ -198,9 +191,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
     await runGit(['branch', '-D', 'compat-prepared-final'])
   })
 
-  // Why pin this: the prepared-checkout retarget bound reads these as data, and it fails closed,
-  // so a version that printed a different shape would silently stop every retarget rather than
-  // error. Built with `commit-tree` so the check leaves no ref, branch, or worktree behind.
+  // Retarget drift parsing fails closed on shape changes; commit-tree builds fixtures without leaving refs/worktrees.
   it('measures retarget drift identically on every supported Git', async () => {
     const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
@@ -212,8 +203,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
     await expect(
       runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${head}..${ahead2}`])
     ).resolves.toMatchObject({ stdout: '2\n' })
-    // `--max-count` must report the capped number, not the full one: the bound reads it as a
-    // ceiling, so a Git that returned the true count would reject every retarget instead.
+    // --max-count must cap the reported count; the retarget bound treats it as a ceiling.
     await expect(
       runGit(['rev-list', '--count', '--max-count=1', '--end-of-options', `${head}..${ahead2}`])
     ).resolves.toMatchObject({ stdout: '1\n' })
@@ -224,8 +214,7 @@ export function registerGitWorktreeBinaryCompatibilityCases(
     await expect(runGit(['merge-base', '--end-of-options', head, ahead2])).resolves.toMatchObject({
       stdout: `${head}\n`
     })
-    // A parentless commit shares no history, which is the case the bound must reject however few
-    // commits each side carries.
+    // Few commits do not prove related history; a parentless commit must still fail the bound.
     const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
     await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
   })

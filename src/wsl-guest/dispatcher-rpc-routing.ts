@@ -149,9 +149,7 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
           : typeof errorCode === 'string'
             ? (capacityCodes[errorCode] ?? -32000)
             : -32000
-      // Why an allowlist keyed on the error code: error `data` is otherwise dropped, so a
-      // handler cannot leak internals by attaching them. Each published shape is validated
-      // against its own schema before it crosses.
+      // Allowlist and validate error data by code so handlers cannot leak arbitrary internals.
       const structured =
         errorCode === SKILL_INSTALL_RPC_ERROR_CODE
           ? SkillInstallFailureSchema.safeParse((err as { data?: unknown }).data)
@@ -213,17 +211,13 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
     const frame = this.prepareFrame(msg)
     const lane =
       frame.frameBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES ? 'legacy-response' : 'control'
-    // Why 'reject': the control lane is a shared budget, so a reply that fits the 1 MiB ceiling alone
-    // still overflows it under concurrent traffic. Fatal admission would close the connection — every
-    // pane on the host — over one listing. A response is the droppable class of control frame: it
-    // carries an id, so the substitute below tells that one caller, and pty.replay/notifyControl keep
-    // the fatal default because a silent drop there desyncs the client with nothing to retry.
+    // Reject response admission softly: one listing must not close every pane when the shared control budget is full.
+    // Return a capacity error to that request; replay and control notifications retain fatal admission.
     const accepted = this.enqueuePreparedFrame(client, frame, lane, onSettled, 'reject')
     if (accepted) {
       return true
     }
-    // Why: an oversized response must fail its own request; closing would kill every pane on the host.
-    // A rejected first enqueue leaves onSettled untouched, so exactly one settlement happens.
+    // Fail only the oversized request; rejected enqueue never settles, leaving the substitute exactly one settlement.
     return this.enqueuePreparedFrame(
       client,
       this.prepareFrame({
@@ -235,16 +229,14 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
         }
       }),
       'control',
-      // Why: writing the substitute is not delivering the result — a settlement fence must never read
-      // the capacity error's successful write as "the peer received your result".
+      // A delivered capacity error is not a delivered result; settlement fences must record failure.
       (settlement) =>
         onSettled(
           settlement.ok
             ? { ok: false, error: new Error(RESPONSE_OVER_CAPACITY_MESSAGE) }
             : settlement
         ),
-      // Why 'reject': if even ~150 bytes will not fit, the caller's own request timeout settles it.
-      // Closing to report that one request failed is the outcome this whole path exists to avoid.
+      // If even the small error cannot fit, let the request time out rather than close every pane.
       'reject'
     )
   }

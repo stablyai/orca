@@ -18,7 +18,6 @@ import {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** The xterm write path for PTY output, including the queued agent-idle mode reset. */
 export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void {
   session.writePtyOutputToXterm = function (
     data: string,
@@ -74,7 +73,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       isForeground: foreground,
       isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
     })
-    // Why: recompute the latch on every synchronized START so each frame's interactivity is judged by its own open time and can't leak across a same-chunk close+open; clear only on leaving synchronized output.
+    // Classify each DEC 2026 start from its own open time, including same-chunk close/reopen; clear latency only when synchronization ends.
     if (synchronizedForegroundOutput && synchronizedOutputStarted) {
       session.synchronizedForegroundFrameInteractive =
         performance.now() - session.lastTerminalInputAt <=

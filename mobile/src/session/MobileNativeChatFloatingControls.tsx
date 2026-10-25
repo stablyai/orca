@@ -3,7 +3,6 @@ import { ArrowDown } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 
-/** Floats over the transcript's bottom-right so jump-to-latest takes no row. */
 export function MobileNativeChatFloatingControls({
   showJumpToTail,
   onJumpToTail

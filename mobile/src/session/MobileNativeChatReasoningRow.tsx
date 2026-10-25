@@ -36,8 +36,6 @@ export function MobileNativeChatGroupedThought({
   )
 }
 
-/** A reasoning row, collapsed to its headline; its text mounts only once opened. Desktop parity:
- *  `NativeChatReasoningRow`. */
 export function MobileNativeChatReasoningRow({
   message,
   markdown,
@@ -51,13 +49,11 @@ export function MobileNativeChatReasoningRow({
   message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp'>
   markdown: string
   fontScale: number
-  /** Drawn inside its working turn: an open row there has not ended. */
   live?: boolean
-  /** The transcript's disclosure, keyed like the live line's; absent, the row keeps its own. */
+  // Prefer transcript-held disclosure so recycling a row does not forget it.
   expanded?: boolean
   onToggle?: (key: string) => void
   onOpenFile?: (relativePath: string) => void
-  /** Android only: opens the message's actions sheet, as a long press on any other message does. */
   onLongPress?: () => void
 }): React.JSX.Element {
   const [localExpanded, setLocalExpanded] = useState(false)
@@ -98,8 +94,7 @@ export function MobileNativeChatReasoningRow({
   )
 }
 
-/** A reasoning block's text, under its row or the live activity line. Capped and scrollable, so an
- *  open block streaming at the tail cannot grow without bound. */
+// Cap reasoning height so an open streaming block cannot grow the transcript without bound.
 export function MobileNativeChatReasoningBody({
   positionKey,
   markdown,

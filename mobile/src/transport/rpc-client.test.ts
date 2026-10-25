@@ -604,10 +604,7 @@ describe('mobile rpc-client connection timeout', () => {
     }
   })
 
-  // Repro for issue #5049: Android sessions that appear connected (or stuck
-  // "Reconnecting…") after the app returns to the foreground, recoverable
-  // only by restarting the app. notifyForeground is the recovery hook the
-  // provider invokes on AppState 'active'.
+  // Foreground recovery must heal Android sessions left half-open after suspension (#5049).
   describe('foreground recovery', () => {
     function openAndAuthenticate(socket: MockWebSocket) {
       socket.open()
@@ -621,9 +618,7 @@ describe('mobile rpc-client connection timeout', () => {
       return { client, socket }
     }
 
-    // Why 520_000ms: the 12 fast attempts cost Σ(RECONNECT_DELAYS) 360.5s of
-    // backoff plus 13 × 12s connect timeouts ≈ 516.5s, so 520s lands just
-    // past the give-up cap with the first trickle timer armed.
+    // Pass the fast-attempt cap: 360.5s backoff + 13 × 12s connect timeouts, leaving the first trickle timer armed.
     const PAST_GIVE_UP_CAP_MS = 520_000
 
     it('keeps trickle-retrying after the give-up cap instead of parking', async () => {
@@ -635,15 +630,12 @@ describe('mobile rpc-client connection timeout', () => {
       expect(client.getState()).toBe('reconnecting')
       expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
 
-      // A wedged VPN produces no revival nudge (issue #7824) — the loop must
-      // keep dialing on its own at the 90s trickle cadence.
+      // A wedged VPN sends no revival nudge, so retry autonomously at trickle cadence (#7824).
       const socketsBefore = mockSockets.length
       await vi.advanceTimersByTimeAsync(102_000)
       expect(mockSockets.length).toBeGreaterThan(socketsBefore)
 
-      // Once the tunnel heals, a trickle dial restores the session without
-      // any user action. 75s lands inside the next dial's 12s connect window
-      // (the prior dial failed mid-advance above, re-arming the 90s timer).
+      // 75s reaches the next dial’s 12s connect window after the previous dial re-armed the 90s trickle.
       await vi.advanceTimersByTimeAsync(75_000)
       openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
@@ -683,7 +675,6 @@ describe('mobile rpc-client connection timeout', () => {
       openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
 
-      // The cleared backoff timer must not fire a duplicate attempt.
       await vi.advanceTimersByTimeAsync(1_000)
       expect(mockSockets.length).toBe(socketsBefore + 1)
 
@@ -895,10 +886,7 @@ describe('mobile rpc-client connection timeout', () => {
     })
   })
 
-  // Issue #5200: a single auth rejection used to latch 'auth-failed'
-  // permanently, forcing a needless re-pair even when the desktop still
-  // listed the device with a valid token. The client now retries the
-  // handshake a bounded number of times before declaring auth dead.
+  // Transient auth rejection must not force re-pairing while the desktop still has valid credentials (#5200).
   describe('auth rejection retry (issue #5200)', () => {
     function authenticate(socket: MockWebSocket) {
       socket.open()
@@ -915,11 +903,9 @@ describe('mobile rpc-client connection timeout', () => {
       first.open()
       first.receive(JSON.stringify({ type: 'e2ee_ready' }))
 
-      // Transient rejection during handshake — must NOT latch auth-failed.
       first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
       expect(client.getState()).toBe('reconnecting')
 
-      // A fresh socket gets a fresh handshake; this time it authenticates.
       await vi.advanceTimersByTimeAsync(500)
       authenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
@@ -930,9 +916,7 @@ describe('mobile rpc-client connection timeout', () => {
     it('latches auth-failed once the retry budget is exhausted', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
-      // Three consecutive handshake rejections (AUTH_RETRY_BUDGET = 3).
-      // Why 1_000: failed handshakes grow the backoff since issue #10119 —
-      // cycle 2 waits RECONNECT_DELAYS[1].
+      // Allow cycle 2’s larger RECONNECT_DELAYS[1] after failed handshakes (#10119).
       for (let i = 0; i < 3; i++) {
         if (i > 0) {
           await vi.advanceTimersByTimeAsync(1_000)
@@ -951,8 +935,7 @@ describe('mobile rpc-client connection timeout', () => {
     it('resets the budget after a successful connect between rejections', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
-      // Two rejections, then a clean connect resets the budget...
-      // Why 1_000: failed handshakes grow the backoff since issue #10119.
+      // Allow growing handshake backoff before the successful reset (#10119).
       for (let i = 0; i < 2; i++) {
         if (i > 0) {
           await vi.advanceTimersByTimeAsync(1_000)
@@ -966,11 +949,9 @@ describe('mobile rpc-client connection timeout', () => {
       authenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
 
-      // ...so a later mid-session rejection gets the full budget again
-      // rather than immediately latching auth-failed.
       const live = mockSockets[mockSockets.length - 1]!
       const request = client.sendRequest('status.get').catch(() => undefined)
-      // sendRequest awaits waitForConnected before sending — let it flush.
+      // Let sendRequest’s connect wait flush before inspecting the frame.
       await Promise.resolve()
       const id = sentRequest(live, 'status.get').id
       live.receive(unauthorizedResponsePayload(id))

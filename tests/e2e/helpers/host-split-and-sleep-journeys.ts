@@ -1,8 +1,3 @@
-/**
- * Host-created manual split restore, and an
- * agent pane slept through the sidebar so quit and relaunch resume it.
- */
-
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -18,7 +13,6 @@ import { splitActiveTerminalPane, waitForActiveTerminalManager } from './termina
 import { waitForBoundPanes, type FolderWorkspaceSetup } from './terminal-layout-journeys'
 import { bootstrapFirstLaunch, seededRepoPathOrSkip } from './terminal-restart-persistence'
 
-/** Create and split a host terminal, then leave it for the reactivation layout check. */
 export async function addHostCreatedSplitWorktree(
   page: Page,
   userDataDir: string
@@ -66,7 +60,6 @@ export async function addHostCreatedSplitWorktree(
   }
 }
 
-/** Reopens the host-split worktree once both terminals are running. */
 export async function openHostSplitWorktree(page: Page, userDataDir: string): Promise<string> {
   let setupWorktreeId: string | undefined
   await expect
@@ -103,7 +96,6 @@ export async function openHostSplitWorktree(page: Page, userDataDir: string): Pr
   return setupWorktreeId!
 }
 
-/** A slept agent pane, through the user's sidebar Sleep, so the quit and relaunch resume it. */
 export async function sleepAgentPane(page: Page, worktreeId: string): Promise<void> {
   await splitActiveTerminalPane(page, 'vertical')
   await waitForBoundPanes(page, 2)

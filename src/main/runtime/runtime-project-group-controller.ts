@@ -260,8 +260,7 @@ export class RuntimeProjectGroupController {
     }
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
+      // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
         connectionId = this.deps.resolveFolderConnectionId(workspace)

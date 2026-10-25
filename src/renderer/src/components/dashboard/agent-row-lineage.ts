@@ -49,9 +49,7 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
     }
     children.forEach((child, index) => {
       emitSubtree(child, {
-        // Why: nested dispatches should still stay under their nearest
-        // visible parent, but visual depth remains capped so dense sidebar
-        // rows don't lose too much prompt width.
+        // Keep nested dispatch under its nearest visible parent while capping indentation to preserve prompt width.
         depth: 1,
         parentPaneKey: row.paneKey,
         isFirstSibling: index === 0,

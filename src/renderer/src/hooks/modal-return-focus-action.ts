@@ -1,9 +1,7 @@
 import type { BrowserFocusTarget } from '../components/browser-pane/host-guest/browser-focus'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 
-// The surface that held focus before a modal (QuickOpen, Cmd+J, ...) opened.
-// Captured at open time because Radix steals document focus once the dialog
-// mounts, so the raw activeElement is gone by close time.
+/** Capture focus before Radix mounts the modal; document.activeElement no longer identifies the return surface at close. */
 export type ModalReturnFocusSurface = {
   tabType: WorkspaceVisibleTabType
   worktreeId: string | null
@@ -21,9 +19,7 @@ export type ModalReturnFocusAction =
   | { kind: 'surface' }
   | { kind: 'none' }
 
-// Why: a browser page lives in a separate webContents, so focus must route
-// through the browser focus request channel. Other surfaces need type-specific
-// DOM focus so a hidden xterm cannot steal focus from the active editor.
+// Route webContents focus through browser requests; use surface-specific DOM focus elsewhere so hidden xterm cannot steal it.
 export function resolveModalReturnFocusAction(
   captured: ModalReturnFocusSurface | null
 ): ModalReturnFocusAction {

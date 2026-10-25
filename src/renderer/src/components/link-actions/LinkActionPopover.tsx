@@ -53,7 +53,6 @@ function ActionRow({
   )
 }
 
-/** Shared by the terminal and native chat: pick where a clicked link opens. */
 export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
   onClose,

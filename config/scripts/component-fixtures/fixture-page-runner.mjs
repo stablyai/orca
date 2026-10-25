@@ -2,8 +2,7 @@ import { fixtureScreenshotPath } from './fixture-paths.mjs'
 
 const FIXTURE_TIMEOUT_MS = 60_000
 
-// One warm page per device scale re-renders fixtures in place. It reloads only
-// after a source change, so each shot still reflects the files on disk.
+// Reuse a page per device scale, reloading after source changes so shots reflect disk.
 export function createFixturePageRunner(baseUrl, browserPromise) {
   const workers = new Map()
   let sourceRevision = 0
@@ -92,8 +91,7 @@ export function createFixturePageRunner(baseUrl, browserPromise) {
       const startedAt = performance.now()
       let { worker, failure } = await renderInWorker(id, theme, scale)
       if (failure) {
-        // Why retry fresh: a reused page can hold stale deps (e.g. after Vite
-        // re-optimizes), so only a failure on a clean load is reported.
+        // Retry on a clean load to distinguish stale Vite dependencies from fixture failures.
         worker.revision = -1
         ;({ worker, failure } = await renderInWorker(id, theme, scale))
       }

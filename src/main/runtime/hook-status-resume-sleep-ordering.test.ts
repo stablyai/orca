@@ -1,5 +1,4 @@
-// A layout-owner build: a hook status main accepted before a workspace sleep must not replace the
-// sleep's record when its queued write lands after the sleep is saved.
+// Queued pre-sleep hook writes must not replace the newer saved sleep record.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -9,7 +8,7 @@ import type { WorktreeSleepResumeCapture } from './terminal/stop/worktree-sleep-
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -38,7 +37,6 @@ function codexRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIp
   }
 }
 
-/** A runtime whose first record write applies at once but holds its durable write open. */
 function makeRuntimeWithSlowFirstWrite() {
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
@@ -101,14 +99,12 @@ function sleepCapture(updatedAt: number): WorktreeSleepResumeCapture {
 describe('a queued hook status and a workspace sleep', () => {
   it('keeps the sleep’s record when a status accepted before the sleep is written after it', async () => {
     const { runtime, getSession, releaseFirstWrite } = makeRuntimeWithSlowFirstWrite()
-    // An earlier status's write is still on its way to disk when the next status is accepted.
     runtime.recordHookStatusResume(codexRow())
     await vi.waitFor(() =>
       expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
     )
     runtime.recordHookStatusResume(codexRow({ state: 'blocked', receivedAt: 11 }))
 
-    // The sleep captured that status from the hook store and saves its record.
     const slept = runtime['sleepResumeRecords'].persist(TEST_WORKTREE_ID, sleepCapture(11), [
       PTY_ID
     ])

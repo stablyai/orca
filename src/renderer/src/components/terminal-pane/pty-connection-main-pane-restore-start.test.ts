@@ -1,6 +1,4 @@
-// Layout-owner build: a pane with no live terminal is started by main, never by the window. A
-// sleeping pane asks main on its first view and attaches once main binds it; a reattach that finds
-// its terminal gone asks main too, and nothing the window does starts or resumes a terminal.
+// Layout-owner main starts or resumes missing terminals; the window only asks and attaches, including after a failed reattach.
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'

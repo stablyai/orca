@@ -25,7 +25,6 @@ function snapshot(
   return { ...snapshotEvent({ items, fence }), ...(activity ? { activity } : {}) }
 }
 
-/** What the one live indicator row reads, resolved off the session journal. */
 describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
@@ -47,8 +46,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     return vi.fn()
   })
   const client = { sendRequest, subscribe } as unknown as RpcClient
-  // Stable across renders: a fresh callback would re-run the hold/subscribe effect
-  // and release the session out from under the test.
+  // Keep callbacks stable so rerenders cannot release the session’s hold/subscription.
   const onSendError = vi.fn()
 
   function Harness(): null {
@@ -138,7 +136,6 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     const passthrough = sendRequest.getMockImplementation()!
     type Reply = Awaited<ReturnType<typeof passthrough>>
     let answer: (value: Reply) => void = () => undefined
-    // The Stop's request stays in flight until the test answers it; every other call is as usual.
     sendRequest.mockImplementation((method: string) =>
       method === 'agentSession.cancel'
         ? new Promise<Reply>((resolve) => (answer = resolve))
@@ -157,7 +154,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     expect(hook?.turnIndicator.stopping).toBe(false)
 
     act(() => hook?.cancel())
-    // This host does not queue sends: a message sent now is held by the host until the stop lands.
+    // Legacy hosts hold a new send until the pending Stop lands.
     expect(hook?.turnIndicator).toMatchObject({
       stopping: true,
       stopRequestInFlight: true,
@@ -202,7 +199,6 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   })
 })
 
-/** The phone's chat reads the host's "Stopping…" from the status stream the desktop chat reads. */
 describe("useMobileStructuredAgentSession and the host's Stopping", () => {
   type RpcReply = { ok: boolean; result: unknown; _meta: { runtimeId: string } }
   let renderer: ReactTestRenderer | null = null

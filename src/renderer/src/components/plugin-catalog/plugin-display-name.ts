@@ -10,7 +10,6 @@ export function pluginDisplayNameFromKey(pluginKey: string): string {
     .join(' ')
 }
 
-/** One- or two-letter monogram for plugin avatar tiles. */
 export function pluginMonogram(name: string): string {
   const parts = name
     .trim()

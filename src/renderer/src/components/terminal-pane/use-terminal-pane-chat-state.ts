@@ -39,8 +39,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     suppressPtyExit,
     toggleTabViewMode
   } = useTerminalPaneStoreActions()
-  // Why one selector: five separate subscriptions each re-read the same unified
-  // tab, so one publication paid the lookup five times per mounted tab.
+  // Bundle unified-tab reads to reduce lookups and subscriptions per mounted tab.
   const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
       selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)

@@ -39,8 +39,7 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
-  /** True when the active pane shows the native chat view; renders its way back to the terminal.
-   *  Switching into chat view is no longer offered here. */
+  /** True for native chat’s return-to-terminal control; entering chat uses the conversation action. */
   canShowTerminal?: boolean
   /** Flip the active pane from the native chat view back to the terminal. */
   onShowTerminal?: () => void
@@ -128,8 +127,7 @@ export default function TerminalPaneHeaderOverlay({
                 'Close Pane'
               )
             : translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
-        // Why: a titled split pane keeps its X as remove-title, but a titled single
-        // pane (agent terminals get runtime titles) still needs a close control.
+        // Titled split panes use X to clear titles; titled single panes still need a close control.
         const showCloseButton =
           showAlwaysOnHeaders && (paneCount > 1 ? !title : showSplitButton && !isTabPinned)
         if (!showHeader || !overlayRect) {
@@ -171,20 +169,14 @@ export default function TerminalPaneHeaderOverlay({
                 value={renameValue}
                 onChange={(event) => onRenameValueChange(event.target.value)}
                 onKeyDown={(event) => {
-                  // Why: an Enter that only confirms a CJK IME candidate must
-                  // not commit the rename; wait for a non-composition Enter.
+                  // Wait for non-composition Enter so accepting a CJK IME candidate cannot commit the rename.
                   if (isImeCompositionKeyDown(event)) {
                     return
                   }
                   if (event.key === 'Enter') {
                     onRenameSubmit()
                   } else if (event.key === 'Tab') {
-                    // Why: commit on Tab directly instead of relying on the
-                    // browser advancing focus (which fires blur). Headless / no
-                    // window-focus environments (xvfb, some SSH sessions) don't
-                    // always move focus off the input, so the blur-driven commit
-                    // never runs. Submitting closes the editor, so the default
-                    // Tab focus move is moot and any follow-on blur is a no-op.
+                    // Commit Tab explicitly because headless/SSH focus may not blur; submitting closes the editor and makes later blur inert.
                     onRenameSubmit()
                   } else if (event.key === 'Escape') {
                     onRenameCancel()

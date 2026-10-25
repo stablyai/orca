@@ -57,8 +57,7 @@ describe('WorkspaceCleanupFilterBar', () => {
   })
 
   it('names an applied filter in the bar without opening the panel', () => {
-    // The reported defect: a persisted idleMinDays the user never set. The bar already
-    // read "Showing N of M", so only the cause was hidden.
+    // Persisted idle thresholds narrowed rows without the user setting them; counts alone hid the cause.
     const filters = createDefaultWorkspaceCleanupFilterState()
     filters.activity.idleMinDays = 20
     renderFilterBar(false, { filters, hasActiveFilters: true })

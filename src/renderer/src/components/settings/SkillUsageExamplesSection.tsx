@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { SkillUsageExampleDialog } from './SkillUsageExampleDialog'
 
-// Why: orchestration and Linear both present "How to use it" example cards that
-// open a copyable prompt dialog; sharing one section keeps the two in lockstep.
+// Share example-card dialogs so orchestration and Linear stay consistent.
 export function SkillUsageExamplesSection({
   heading,
   description,

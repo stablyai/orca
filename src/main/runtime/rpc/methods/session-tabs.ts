@@ -98,8 +98,7 @@ export const SESSION_TAB_METHODS = [
                 ) === true
             }
           : {}),
-        // Why: a dead client connection must cancel the surface wait instead
-        // of running down the timeout and rolling back a live tab (#7718).
+        // Cancel surface waits on disconnect rather than timing out and rolling back a live tab (#7718).
         signal
       })
     }
@@ -124,10 +123,9 @@ export const SESSION_TAB_METHODS = [
         }
       }
       const register = (worktreeId: string): void => {
-        // Why: clients may unsubscribe using the resolved spelling learned from the snapshot.
+        // Accept unsubscribe under the resolved spelling learned from snapshots.
         const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:${worktreeIdentityKey(worktreeId)}`
-        // Why: shared-control can carry multiple subscribers for one worktree on
-        // one socket; include the RPC id so one subscriber cannot evict another.
+        // Include RPC id: multiple same-worktree streams can share one socket without evicting each other.
         subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
         // Switch point: a phone holding the workspace's session open is looking at it.
         const closePhoneSession =
@@ -156,8 +154,7 @@ export const SESSION_TAB_METHODS = [
           signal?.addEventListener('abort', release, { once: true })
         }
       }
-      // Why: register before any await so an unsubscribe or socket close during setup
-      // finds the stream; only an `id:` selector (every phone and web client) names it up front.
+      // Register before awaits so unsubscribe finds setup; id: selectors provide identity immediately.
       const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
       if (explicitWorktreeId) {
         register(explicitWorktreeId)
@@ -194,7 +191,7 @@ export const SESSION_TAB_METHODS = [
             snapshot.worktree !== subscribedWorktree &&
             worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
           ) {
-            // Why: a subscription can arrive before the host publishes its stored spelling.
+            // Subscribe can precede publication of the host's stored spelling.
             try {
               subscribedWorktree =
                 runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
@@ -205,7 +202,7 @@ export const SESSION_TAB_METHODS = [
             }
           }
           if (snapshot.worktree === subscribedWorktree) {
-            // Why: clients file frames by `worktree`; a spelling switch mid-stream splits the tabs.
+            // Keep one stream spelling because clients index frames by worktree.
             const streamSnapshot =
               snapshot.worktree === initial.worktree
                 ? snapshot
@@ -249,7 +246,7 @@ export const SESSION_TAB_METHODS = [
         return { unsubscribed: true }
       }
       runtime.cleanupSubscription(cleanupPrefix)
-      // Why: subscribes register on arrival, so spare any that arrived after this unsubscribe.
+      // Spare subscribes registered after this unsubscribe arrived.
       runtime.cleanupSubscriptionsByPrefix(`${cleanupPrefix}:`, subscriptionRegistrationVersion)
       return { unsubscribed: true }
     }

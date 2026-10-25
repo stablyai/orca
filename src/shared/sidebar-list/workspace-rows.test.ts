@@ -9,7 +9,7 @@ import {
   type WorkspaceRow
 } from './workspace-rows'
 
-/** The rows under their keys' text, so a test can name a key as a literal. */
+/** Permit literal row-key assertions. */
 const buildWorkspaceRows = (
   catalog: Parameters<typeof buildKeyedWorkspaceRows>[0]
 ): Map<string, WorkspaceRow> => new Map(buildKeyedWorkspaceRows(catalog))
@@ -189,7 +189,6 @@ describe('buildWorkspaceRows', () => {
     const otherRepo: Repo = { ...localRepo, id: 'repo-2', path: '/o' }
     const serverRepo: Repo = { ...localRepo, id: 'repo-3', executionHostId: 'runtime:env' }
     const worktrees = [
-      // A local row whose metadata names no host keeps an unqualified key.
       worktree({ id: 'repo-2::/o/a', repoId: 'repo-2' }),
       worktree({ hostId: 'local' }),
       worktree({ hostId: 'ssh:box' }),

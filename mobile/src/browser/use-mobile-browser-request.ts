@@ -3,11 +3,7 @@ import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 export type BrowserPageParams = { worktree: string; page: string }
-/**
- * One command against the current page. It receives the client, the page params and the send
- * options rather than choosing them, so the page guard, the busy flag and the 15 s default live
- * here for every command instead of once per call site.
- */
+// Centralize current-page guard, busy state and 15s default; caller supplies client/page/send options.
 export type BrowserPageCommandSend<Value = unknown> = (
   client: RpcClient,
   base: BrowserPageParams,
@@ -34,11 +30,9 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
     }
   }, [pageId, worktreeId])
 
-  // Generic in the command's own value so a checked reply reaches its caller as what the reader
-  // decoded; a refused or failed command is the `null` every call site already tests for.
+  // Generic reply type preserves reader’s checked value; refused/failed commands stay caller-checked null.
   const sendBrowserRequest = useCallback(
-    // A named function expression rather than a generic arrow: the recorder's module loader
-    // transpiles product sources with the JSX runtime on, where `<Value>` parses as an element.
+    // Use named generic function: recorder transpiles with JSX runtime, where generic arrow <Value> parses as element.
     async function sendBrowserCommand<Value>(
       send: BrowserPageCommandSend<Value>,
       opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}

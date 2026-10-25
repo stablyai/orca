@@ -218,11 +218,7 @@ async function reconcileAllHosts(): Promise<void> {
   await Promise.all([...hostsById.keys()].map((hostId) => enqueueReconcile(hostId)))
 }
 
-/**
- * Track a host whose client has reached `connected`, registering (or retrying a
- * pending unregister) as the current preference requires. The returned function
- * detaches the client on disconnect; the host's tracked state survives it.
- */
+// Keep tracked host intent across disconnects; this disposer detaches only its current connected client.
 export function attachPushRegistration(hostId: string, client: PushClient): () => void {
   const state = hostState(hostId)
   if (state.connection.client !== client) {
@@ -302,7 +298,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   }
 }
 
-/** A rolled token stops delivering, so re-register every connected host at once. */
+// Provider token rollover invalidates delivery, so refresh every connected host immediately.
 export function startPushTokenSync(): () => void {
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
   const stopToken = addPushTokenListener((token) => {

@@ -100,7 +100,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const comment = await this.getMatchingLinearCommentWrite(
         writeId,
         issueId,
@@ -131,7 +131,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const attachment = await this.getMatchingLinearAttachmentWrite(
         writeId,
         issueId,
@@ -163,7 +163,7 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
     try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
+      // Duplicate id may mean the original write landed; only the exact target relationship proves this retry.
       const issue = await this.getMatchingLinearCreatedIssue(
         writeId,
         teamId,

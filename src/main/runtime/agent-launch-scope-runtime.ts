@@ -30,7 +30,7 @@ import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-termi
 type AgentLaunchRuntimeStore = Omit<LaunchScopeRuntimeStore, 'getSettings'> &
   Pick<RuntimeStore, 'getSettings'>
 
-/** The platform an agent in this workspace is quoted for; never throws, unlike the full fact. */
+/** Quoting platform; unlike full runtime resolution, this never throws. */
 export function agentLaunchPlatformForScope(
   store: LaunchScopeRuntimeStore,
   scope: TerminalWorkspaceLaunchScope
@@ -44,11 +44,7 @@ export function agentLaunchPlatformForScope(
       )
 }
 
-/**
- * The runtime an agent launched here runs in: the window's rule, except where one of the terms
- * below holds. There the answer is no runtime, so the path places the agent and the Terminal shell
- * is its PTY, as on main. Only the first term is permanent; the other two are temporary parity.
- */
+/** Apply runtime policy with UNC path authority and temporary folder/OpenCode parity exceptions below. */
 export function agentLaunchProjectRuntime(
   store: LaunchScopeRuntimeStore,
   scope: TerminalWorkspaceLaunchScope,
@@ -56,11 +52,10 @@ export function agentLaunchProjectRuntime(
 ): ProjectExecutionRuntimeResolution | undefined {
   const runtime = resolveLocalLaunchScopeRuntime(store, scope)
   const onWindowsHost = runtime?.status === 'resolved' && runtime.runtime.kind === 'windows-host'
-  // Main had no runtime here: only folders, since every local repo has a project.
+  // Folders can lack project runtime; local repositories have one.
   const mainHadNone = !resolveLocalProjectRuntimeForWorktreeId(store, scope.id)
   const pathDecides =
-    // PERMANENT fix, not parity: a `\\wsl$` cwd runs in WSL whatever the setting says. Keep it
-    // when the temporary terms go; the window adopts it in C2.
+    // UNC cwd proves WSL execution regardless of Windows-host settings; retain beyond the temporary exceptions.
     (onWindowsHost && isWslUncPath(scope.path)) ||
     // TEMPORARY (STA-10231): an explicit Windows host can't be told from the shipped default.
     (onWindowsHost && mainHadNone) ||
@@ -69,9 +64,7 @@ export function agentLaunchProjectRuntime(
   return pathDecides ? undefined : runtime
 }
 
-/** The one runtime fact for an agent launched into this workspace. Throws, under
- *  `PROJECT_RUNTIME_REPAIR_REQUIRED_CODE` and in the settings page's words, when its runtime needs
- *  repair. */
+/** Resolve the launch runtime; report repair-required using its typed code and settings guidance. */
 export function resolveAgentLaunchRuntime(
   store: AgentLaunchRuntimeStore,
   scope: TerminalWorkspaceLaunchScope,
@@ -85,9 +78,9 @@ export function resolveAgentLaunchRuntime(
     }
   }
   const projectRuntime = agentLaunchProjectRuntime(store, scope, agent)
-  // Refused here, before any spawn, where the spawn would refuse it: Windows only.
+  // Match spawn refusal before launching, on Windows only.
   if (process.platform === 'win32' && projectRuntime?.status === 'repair-required') {
-    // OrchestrationError because the launch record keeps a refusal's code only from that class.
+    // The launch ledger preserves refusal codes only from OrchestrationError.
     throw new OrchestrationError(
       PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
       agentLaunchRepairRefusal(projectRuntime.repair)
@@ -99,8 +92,7 @@ export function resolveAgentLaunchRuntime(
   }
 }
 
-/** A new worktree of this repo, before it exists: it lands under a `\\wsl$` base folder when one
- *  is set, else on the repo's own filesystem. */
+/** New worktrees use a configured WSL base directory, otherwise the repo filesystem. */
 export function newWorktreeLaunchScope(
   repo: Repo,
   settings: Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
@@ -116,11 +108,7 @@ export function newWorktreeLaunchScope(
   }
 }
 
-/**
- * The fact for a startup agent, planned before its terminal is created. A runtime that needs repair
- * gives its error instead, so a worktree create goes on and the startup fails with that error as its
- * spawn would; that startup is quoted for the Settings shell.
- */
+/** Resolve before terminal creation; repair failure leaves worktree creation intact and quotes the failed startup for Settings shell. */
 export function resolveStartupAgentLaunchRuntime(
   store: AgentLaunchRuntimeStore,
   scope: TerminalWorkspaceLaunchScope,

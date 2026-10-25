@@ -112,7 +112,7 @@ describe('migration cutover coordinator', () => {
     await stageOrcadMigrationDestination(h.context, h.migrationId)
     const commit = h.destination.commit.getMockImplementation()!
     let diskFull = true
-    // The receipt lands in memory, so reads say committed, but the flush keeps failing.
+    // Committed reads can reflect memory while the durable flush still fails.
     h.destination.commit.mockImplementation(async (manifest) => {
       const state = await commit(manifest)
       if (diskFull) {
@@ -298,7 +298,7 @@ describe('migration cutover coordinator', () => {
         // A build before the client-side size check sent it whole, and the frame fit.
         await h.destination.stage(manifest)
       }
-      // As the real client does: every request that carries the manifest refuses unsent.
+      // Model client refusal before sending oversized manifest requests.
       const refuseUnsent =
         <T>(real: (sent: OrcadMigrationManifest) => Promise<T>) =>
         async (sent: OrcadMigrationManifest): Promise<T> => {

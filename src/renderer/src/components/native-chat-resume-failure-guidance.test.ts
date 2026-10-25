@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resumeFailureGuidance } from './native-chat-resume-failure-guidance'
 
-// Retry is offered as the primary action only where a second attempt can succeed. A refusal that
-// stands sends the user to the chat, the only place it can be continued.
 describe('resumeFailureGuidance', () => {
   it.each([
     ['agent_session_restart_work_superseded', 'open', null],
@@ -21,8 +19,7 @@ describe('resumeFailureGuidance', () => {
     expect(guidance.text.length).toBeGreaterThan(0)
   })
 
-  // The provider's own refusal text lands on the fallback, and the chat then already holds the
-  // refused continuation, so the host reports a retry would not run.
+  // Provider refusals already live in the chat; respect the host’s non-retryable verdict.
   it.each(['codex said no', 'agent_session_conflict'])(
     'offers no retry for %s once the host says a retry would not run',
     (reason) => {
@@ -35,7 +32,6 @@ describe('resumeFailureGuidance', () => {
     }
   )
 
-  // Says what the user can do, never which process holds the chat.
   it.each([
     'agent_session_conflict',
     'agent_session_ownership_unknown',

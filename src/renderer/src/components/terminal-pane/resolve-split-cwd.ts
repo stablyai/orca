@@ -1,8 +1,4 @@
-// Why: resolving the "where should the new split start?" question is a
-// two-layer strategy — OSC 7 from the live shell (fast, authoritative) with a
-// `/proc`-or-lsof-backed IPC fallback for shells that never emit OSC 7 (agent
-// TUIs, minimal sh). Both layers can legitimately come back empty, so the
-// helper always finishes by returning the caller's worktree-root fallback.
+// Prefer live OSC 7 cwd, then provider /proc/lsof lookup, then replayed OSC 7/workspace fallback; both live sources may legitimately lack evidence.
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 export type PaneCwdEntry = {
@@ -56,12 +52,7 @@ export function settlePaneCwdDeferredSpawn(
   }
 }
 
-// Why: sized to cover a cold `lsof -p <pid> -d cwd` on macOS (typically
-// 100–500ms, occasionally up to ~1s). Shorter budgets here would cause the
-// renderer to give up and fall back to the worktree root while the main
-// process keeps working — wasted effort and a worse split. The main side
-// coalesces and caches per-pid, so a dropped call still warms the cache
-// for the next Cmd+D.
+// Allow cold macOS lsof roughly a second; shorter renderer budgets waste main’s work and choose the root fallback, though the shared per-PID cache warms for later splits.
 const GET_CWD_TIMEOUT_MS = 1000
 
 export async function resolveSplitCwd(args: {
@@ -72,14 +63,12 @@ export async function resolveSplitCwd(args: {
 }): Promise<string> {
   const { paneCwdMap, sourcePaneId, sourcePtyId, fallbackCwd } = args
 
-  // 1) Live OSC 7 wins — no IPC round-trip needed.
   const cached = paneCwdMap.get(sourcePaneId)
   if (cached?.confirmed && cached.cwd) {
     return cached.cwd
   }
 
-  // 2) Ask the PTY provider (/proc or lsof). Enforce a soft timeout
-  //    renderer-side so a slow SSH relay can't stall the split.
+  // Bound provider lookup so slow SSH cannot stall a split.
   if (sourcePtyId && !isRemoteRuntimePtyId(sourcePtyId)) {
     try {
       const ipcCwd = await Promise.race<string | null>([
@@ -94,7 +83,6 @@ export async function resolveSplitCwd(args: {
     }
   }
 
-  // 3) Last-ditch: replayed OSC 7 that we couldn't confirm as live.
   if (cached?.cwd) {
     return cached.cwd
   }

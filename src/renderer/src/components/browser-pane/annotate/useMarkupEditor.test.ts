@@ -27,8 +27,7 @@ function secondPointerEvent(
 
 describe('useMarkupEditor.commitPendingText in a non-secure browser context', () => {
   beforeEach(() => {
-    // Match a non-secure browser context (LAN web client over plain HTTP):
-    // getRandomValues stays, randomUUID is undefined.
+    // Simulate a LAN HTTP client: getRandomValues exists but randomUUID does not.
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
       value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }

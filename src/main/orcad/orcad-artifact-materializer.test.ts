@@ -55,7 +55,6 @@ const TARGET = 'linux-x64-glibc' as const
 const PAGE_ASSETS = ['out/mobile-web/index.html']
 const fileReads = vi.hoisted(() => ({ count: 0 }))
 
-// Counts whole-file hash reads without changing read behavior.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -164,7 +163,6 @@ describe('assembleOrcadArtifact', () => {
     const fixture = createTemplate()
     const first = await assembleOrcadArtifact({ ...fixture, target: TARGET })
     const entry = statSync(join(first, 'orcad.js'))
-    // Older versions of the same target, used before this one.
     const older = [1, 2, 3].map((age) => {
       const dir = join(fixture.cacheRoot, TARGET, `0.0.${age}+old`)
       write(join(dir, 'orcad.js'), 'old')
@@ -179,7 +177,6 @@ describe('assembleOrcadArtifact', () => {
     expect(removed).toEqual([older[2]])
     const second = await assembleOrcadArtifact({ ...fixture, target: TARGET })
     expect(second).toBe(first)
-    // A verified hit: the same files, not a re-copy.
     expect(statSync(join(second, 'orcad.js')).ino).toBe(entry.ino)
   })
 
@@ -213,7 +210,6 @@ describe('assembleOrcadArtifact', () => {
     expect(
       readFileSync(join(artifactDir, 'node_modules/node-pty/build/Release/pty.node'), 'utf8')
     ).toBe(`${target}:node_modules/node-pty/build/Release/pty.node`)
-    // The host-side preflight hashes it the same way, so managed orcad can run it.
     expect(await readOrcadArtifactIdentity(artifactDir)).toBe(
       readFileSync(join(artifactDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
     )
@@ -259,7 +255,7 @@ describe('assembleOrcadArtifact', () => {
     for (const filename of orcadArtifactFilenames(TARGET, PAGE_ASSETS)) {
       expect(readFileSync(join(artifactDir, filename)).byteLength).toBeGreaterThan(0)
     }
-    // A Bun-era client's selector would exit 78 on this file without a Bun runtime (R5).
+    // Bun-era clients would require Bun and exit 78 if this marker were present.
     expect(() => readFileSync(join(artifactDir, ORCAD_BUILD_TARGET_FILENAME))).toThrow()
     expect(readFileSync(join(artifactDir, 'agent-browser-linux-x64'), 'utf8')).toBe('browser')
   })
@@ -369,7 +365,6 @@ describe('assembleOrcadArtifact', () => {
     )
   })
 
-  // Regression: a browser digest keyed like orcad.js must not replace the common digest.
   it('rejects a browser named like a required slot file', async () => {
     const fixture = createTemplate()
     rewriteManifest(fixture.templateDir, (manifest) => {
@@ -394,7 +389,7 @@ describe('assembleOrcadArtifact', () => {
 })
 
 describe('assembleOrcadArtifact verification record', () => {
-  // Every fixture file was written this instant; a later clock makes their signatures settled.
+  // Move the clock beyond fixture writes so signatures count as settled.
   const later = (): number => Date.now() + 60_000
   const recordPath = (cacheRoot: string): string =>
     join(cacheRoot, TARGET, ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME)
@@ -403,7 +398,6 @@ describe('assembleOrcadArtifact verification record', () => {
     templateDir: string
     cacheRoot: string
   }): Promise<string> {
-    // The first call copies a fresh slot; the second hashes it once and records it.
     const first = await assembleOrcadArtifact({
       ...fixture,
       target: TARGET,
@@ -421,14 +415,12 @@ describe('assembleOrcadArtifact verification record', () => {
     return first
   }
 
-  // Regression: SSH and local serve keep hashing every launch; a forged record must not bypass it.
   it('neither reads nor writes a record unless the caller trusts it', async () => {
     const fixture = createTemplate()
     const slot = await assembleUntilSlotRecorded(fixture)
     const recorded = readFileSync(recordPath(fixture.cacheRoot), 'utf8')
     const before = fileReads.count
     expect(await assembleOrcadArtifact({ ...fixture, target: TARGET, now: later })).toBe(slot)
-    // Template pass plus the slot's own check, exactly as with no record at all.
     expect(fileReads.count - before).toBe(
       (orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1) * 2
     )
@@ -464,7 +456,6 @@ describe('assembleOrcadArtifact verification record', () => {
     const before = fileReads.count
     const slot = await assembleOrcadArtifact({ ...fixture, target: TARGET })
     const sources = orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1
-    // One template pass plus the copied slot's own check, where three template passes ran before.
     expect(fileReads.count - before).toBe(sources * 2)
     expect(slot).toContain(fixture.cacheRoot)
   })
@@ -575,7 +566,6 @@ describe('packaged template lookup', () => {
     }
   })
 
-  /** An installed app: electron-builder copies out/orcad-template to Resources/orcad-template. */
   function installPackagedApp(): { resourcesDir: string; userData: string } {
     const fixture = createTemplate()
     const root = dirname(fixture.templateDir)

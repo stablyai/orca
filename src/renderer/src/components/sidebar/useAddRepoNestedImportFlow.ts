@@ -259,8 +259,7 @@ export function useAddRepoNestedImportFlow({
       return Promise.resolve()
     }
     const generation = ++nestedImportGenRef.current
-    // Why: only an edited name overrides host naming, so an untouched prefill still lets the host
-    // pick (e.g. the SSH target label for `~`).
+    // Only edited names override host defaults, such as an SSH label for its home directory.
     const enteredName = nestedGroupName.trim()
     const displayName =
       enteredName && enteredName !== defaultProjectGroupNameForPath(nestedScan.selectedPath)

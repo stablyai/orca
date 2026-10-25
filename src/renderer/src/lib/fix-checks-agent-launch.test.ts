@@ -183,8 +183,7 @@ describe('startFixChecksAgent', () => {
       })
     ).resolves.toBe(true)
 
-    // Why: launchAgentInNewTab creates the surface; without the opt-out, activation would
-    // also re-seed a shell in a closed-last-terminal workspace.
+    // The launcher owns creation; activation must not seed a sibling shell after the last terminal closed.
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })

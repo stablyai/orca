@@ -35,8 +35,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/selectors', () => ({
   getAllWorktreesFromState: () => mocks.state.worktreeRows,
   getWorktreeMapFromState: () => mocks.state.worktreeMap,
-  // Host-qualified lookup (STA-4343); this fixture keys one row per id, so the
-  // host only has to agree when the row declares one.
+  // Match declared hosts even though this fixture indexes worktrees by ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const rows = mocks.state.worktreeRows.filter(
       (row) => (row as { id?: string }).id === worktreeId

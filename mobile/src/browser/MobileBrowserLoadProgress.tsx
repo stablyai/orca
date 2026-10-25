@@ -3,8 +3,7 @@ import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors, radii } from '../theme/mobile-theme'
 
-// Same curve as the desktop line (browser-load-progress.tsx): hidden for fast loads, then it eases
-// toward 90% and the real stop finishes it.
+// Match desktop progress: delay fast loads, ease toward 90%, finish on real stop.
 const SHOW_DELAY_MS = 200
 const TRICKLE_STEPS: [atMs: number, scale: number][] = [
   [300, 0.15],

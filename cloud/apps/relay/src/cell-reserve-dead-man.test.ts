@@ -8,12 +8,21 @@ const WINDOW_MS = 60_000
 function setup() {
   const clock = { value: 1_000_000 }
   const logs: string[] = []
-  const deadMan = new ReserveDeadMan('production-gce-c30', () => clock.value, WINDOW_MS, (line) => logs.push(line))
-  const events = (name: string) => logs.map((line) => JSON.parse(line)).filter((line) => line.event === name)
+  const deadMan = new ReserveDeadMan(
+    'production-gce-c30',
+    () => clock.value,
+    WINDOW_MS,
+    (line) => logs.push(line)
+  )
+  const events = (name: string) =>
+    logs.map((line) => JSON.parse(line)).filter((line) => line.event === name)
   return { clock, logs, deadMan, events }
 }
 
-const reserve = (generation: number, flags: Partial<CellFlags> = {}): AppliedControlFlags<CellFlags> => ({
+const reserve = (
+  generation: number,
+  flags: Partial<CellFlags> = {}
+): AppliedControlFlags<CellFlags> => ({
   generation,
   flags: { ...CELL_FLAG_DEFAULTS, ...flags, admitMode: 'reserve' }
 })
@@ -88,8 +97,10 @@ describe('ReserveDeadMan', () => {
     clock.value += WINDOW_MS + 1
     deadMan.mode(reserve(1, { deadManTripSlots: 1 }))
     expect(deadMan.mode(reserve(2, { deadManTripSlots: 1 }))).toBe('reserve')
-    deadMan.permit(1)
     clock.value += WINDOW_MS + 1
+    expect(deadMan.mode(reserve(2, { deadManTripSlots: 1 }))).toBe('reserve')
+    expect(deadMan.pendingTrip()).toEqual({ generation: 2, slots: 1 })
+    deadMan.permit(1)
     expect(deadMan.mode(reserve(2, { deadManTripSlots: 1 }))).toBe('reserve')
     expect(deadMan.pendingTrip()).toEqual({ generation: 2, slots: 1 })
   })

@@ -23,7 +23,7 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
 export type WorktreeStartupFollowup = { expectedProcess: string; prompt: string }
 
-/** A fresh agent the host builds always carries its `agent_started` record; dropping it fails to compile. */
+/** Require agent_started attribution on every host-built fresh launch. */
 type AttributedWorktreeStartupLaunch = WorktreeStartupLaunch & {
   telemetry: NonNullable<WorktreeStartupLaunch['telemetry']>
 }
@@ -31,8 +31,7 @@ type AttributedWorktreeStartupLaunch = WorktreeStartupLaunch & {
 type StartupEnvironment = {
   repo: Repo
   settings: ReturnType<RuntimeStore['getSettings']>
-  /** Where the agent runs: what its command is quoted for, and the fact the create spawns with, or
-   *  the repair error its startup fails with. */
+  /** Resolve the execution host's quoting/spawn fact, or the repair error that refuses startup. */
   getLaunchRuntime: (agent: TuiAgent) => ReturnType<typeof resolveStartupAgentLaunchRuntime>
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
@@ -44,14 +43,13 @@ type StartupEnvironment = {
   launchSource?: string
 }
 
-/** The agent a linked draft starts: the requested one, else the default, else one detected on the
- *  host that runs it. `null` means the draft starts no agent. */
+/** Choose requested, default or execution-host-detected agent; null means no agent. */
 export async function resolveWorktreeStartupDraftAgent(
   environment: Pick<StartupEnvironment, 'repo' | 'settings'> & { requestedAgent?: TuiAgent }
 ): Promise<TuiAgent | null> {
   const { repo, settings } = environment
   const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
-  // Why: `blank` is an explicit shell-only preference, so linked drafts must not auto-pick an agent.
+  // Blank explicitly requests a shell; linked drafts must not auto-pick an agent.
   if (preferredAgent === 'blank') {
     return null
   }
@@ -59,11 +57,10 @@ export async function resolveWorktreeStartupDraftAgent(
     return preferredAgent
   }
   let detected: string[] = []
-  // Why: detection has to run on the machine that will run the agent, and SSH ownership has two
-  // spellings — the raw field probes this client for an `executionHostId: 'ssh:*'`-only repo.
+  // Detect on the execution host; raw connectionId misses executionHostId-only SSH repos.
   const sshConnectionId = getRepoSshConnectionId(repo)
   try {
-    // Why: startup-draft fallback can run from sparse runtime launch envs too.
+    // Sparse launch environments may lack host detection dependencies.
     detected = await detectAgentsOnHost(
       sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' }
     )
@@ -149,8 +146,7 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
-    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
-     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
+    /** Caller delivers any uncarried prompt; report typed-line carry. Absent preserves CLI behavior. */
     onPromptCarry?: (carried: boolean) => void
   }
 ): {

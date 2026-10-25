@@ -23,7 +23,7 @@ function repoHeader(id: string, connectionId?: string): Row {
 }
 
 describe('addHostSectionRows local host label', () => {
-  // The test process's own platform plays a phone's here: it must never name the listed host.
+  // The client’s platform must not determine the listed host’s label.
   it('names an unlisted local host with the label it is given', () => {
     const sectioned = addHostSectionRows({
       rows: [repoHeader('local'), repoHeader('ssh', 'ssh-1')],

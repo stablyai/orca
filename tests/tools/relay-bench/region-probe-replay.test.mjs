@@ -1,8 +1,5 @@
-// Why: the region catalog comes from the director, so it names the destinations this harness
-// fetches. Without vetting, a compromised or spoofed director aims the operator's own host at
-// loopback and private networks, and `redirect: 'error'` never constrains the first request.
-// The all-probes-failed case is here because Math.min of nothing is Infinity, which spread into
-// NaN and made an unreachable region report 'ok'.
+// Refuse catalog destinations on private/loopback networks; redirect:error does not protect the initial request.
+// Also reject all-probes-failed: Math.min() becomes Infinity, then NaN spread formerly passed.
 import { createServer } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sampleRegion, vetProbeOrigins } from './region-probe-replay.mjs'

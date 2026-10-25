@@ -50,7 +50,6 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     act(() => {
       result.current.updateCustomCommand('ollama run llama3.1 {prompt}')
     })
-    // The typed value is shown immediately but NOT written to the backend per keystroke.
     expect(result.current.displayRepoAi.customAgentCommand).toBe('ollama run llama3.1 {prompt}')
     expect(updateRepo).not.toHaveBeenCalled()
     await act(async () => {
@@ -80,7 +79,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     await act(async () => {
       await result.current.saveActionRecipeText('fixCommitFailure')
     })
-    // Baseline advances from setPersisted even before parent re-renders with new props.
+    // Advance the local saved baseline before parent props echo persistence.
     expect(result.current.actionDirtyById.fixCommitFailure).toBe(false)
     expect(
       result.current.displayRepoAi.actionOverrides?.fixCommitFailure?.commandInputTemplate
@@ -97,7 +96,6 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     act(() => {
       result.current.discardActionRecipeText('fixCommitFailure')
     })
-    // Discard drops the draft: dirty clears and the template reverts to the persisted value.
     expect(result.current.actionDirtyById.fixCommitFailure).toBe(false)
     expect(
       result.current.displayRepoAi.actionOverrides?.fixCommitFailure?.commandInputTemplate
@@ -124,7 +122,6 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     await act(async () => {
       result.current.updateEnablement(true)
     })
-    // A failed save must not leave the toggle showing an unsaved value as if it were saved.
     expect(result.current.displayRepoAi.enabled).toBeUndefined()
     expect(result.current.saveError).toBe('Failed to save Source Control AI settings.')
   })
@@ -157,12 +154,11 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     let savePromise: Promise<void> = Promise.resolve()
     await act(async () => {
       savePromise = result.current.saveActionRecipeText('fixCommitFailure')
-      // flush the queue microtask so updateRepo is called and left pending
+      // Flush queued work into updateRepo before leaving the save pending.
       await Promise.resolve()
       await Promise.resolve()
     })
     expect(updateRepo).toHaveBeenCalledTimes(1)
-    // user keeps typing while the save is in flight
     act(() => {
       result.current.updateActionTemplate('fixCommitFailure', 'first-and-more')
     })
@@ -210,7 +206,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
       resolveUpdate(true)
       await savePromise
     })
-    // Completing the previous repo's save must not re-apply its draft onto repo-2.
+    // Old-repo save completion must not reapply its draft to the new repo.
     expect(
       result.current.displayRepoAi.actionOverrides?.fixCommitFailure?.commandInputTemplate
     ).toBe('repo-2-template')
@@ -228,7 +224,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
       result.current.updateActionAgent('fixCommitFailure', 'codex')
       result.current.updateEnablement(true)
     })
-    // Enablement rolls back; the successfully saved agent override must remain visible.
+    // Roll back failed enablement without discarding the successfully saved agent override.
     expect(result.current.displayRepoAi.enabled).toBeUndefined()
     expect(result.current.displayRepoAi.actionOverrides?.fixCommitFailure?.agentId).toBe('codex')
     expect(result.current.saveError).toBe('Failed to save Source Control AI settings.')

@@ -24,11 +24,7 @@ export function getPairedDeviceIdsByEnvironment(
   return result
 }
 
-/**
- * The "Hide other-client workspaces" rule: a workspace this client did not create is someone
- * else's, including one created on the server itself. Phones record the owner they act for as the
- * creator (workspace-creator-context.ts). No creator, or an unnamed pairing, stays visible.
- */
+/** Hide workspaces created by others, including the server itself. Phones attribute to the owner they act for; missing creator/unnamed pairings remain visible. */
 export function isWorkspaceOwnedBySomeoneElse(
   worktree: { creatorProvenance?: unknown; runtimeOwnerEnvironmentId?: string },
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>

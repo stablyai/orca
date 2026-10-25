@@ -39,8 +39,7 @@ export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
   if (splitWebRuntimeTerminal(ptyId, args.direction, args.source, sourcePane)) {
     return
   }
-  // Switch point: main writes the split and starts its terminal; main's frame draws the pane. A
-  // server workspace's handle-less pane goes to that server's main while its frames draw it.
+  // Main starts the split and frames draw it; handle-less server-framed panes use their paired main.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const cwd = splitCwd(args, ptyId)
     const asToday = (): void => splitLocally(args, () => cwd)

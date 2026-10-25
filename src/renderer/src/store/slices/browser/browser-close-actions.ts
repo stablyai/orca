@@ -29,14 +29,11 @@ export function createBrowserCloseActions(
   return {
     closeBrowserTab: (tabId, options) => {
       forgetDesktopCreatedServerTab(tabId)
-      // Why: a cleanup close unwinds a tab that never finished being created — it owns no host
-      // page to close and must not enter the reopen stack as if the user had closed something.
+      // Cleanup unwinds unfinished creation: no host page close and no user reopen history.
       const isCleanup = options?.reason === 'cleanup'
       const closeHere = (drawn?: DrawnBrowserTab): void => {
         let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
-        // Why collected rather than released inside the reducer: revoking is main-process work, and a
-        // grant is the only authority the preview scheme honors — a closed document must stop being
-        // readable, and it must stop being readable even if the reducer bails out below.
+        // Collect grants outside reducer: revocation is main work and closed docs must become unreadable even if reduction bails.
         let docPageIdsToRelease: string[] = []
         let activeBrowserWorktreeIdToNotify: string | null = null
         set((current) => {
@@ -156,8 +153,7 @@ export function createBrowserCloseActions(
           }
           delete nextRecentlyClosedBrowserPagesByWorkspace[tabId]
 
-          // Why omit rather than rebuild: only the closed ids can match, so this touches the
-          // closed pages instead of every pending entry and keeps the record identity when none did.
+          // Omit only closed IDs; avoid rebuilding every pending entry and preserve no-op identity.
           const closedPageIds = closedPages.map((page) => page.id)
           const nextPendingAddressBarFocusByPageId = omitRecordKeys(
             s.pendingAddressBarFocusByPageId,

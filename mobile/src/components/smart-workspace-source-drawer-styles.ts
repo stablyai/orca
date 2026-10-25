@@ -40,8 +40,7 @@ export const smartWorkspaceSourceDrawerStyles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.sm
   },
-  // Why: pin the dock to the sheet bottom so a flex-greedy FlatList cannot
-  // push the TextInput out of the fill frame (and under the keyboard).
+  // Pin dock to fill sheet bottom so flex-greedy FlatList cannot push TextInput below frame/keyboard.
   dock: {
     flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,

@@ -39,14 +39,12 @@ export function createWorktreeAgentFreshnessSelector(
   let cachedSignature = EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
 
   return (state) => {
-    // Why: the status slice bumps the epoch for state/freshness changes;
-    // same-epoch map writes are fresh same-state metadata and cannot alter decay.
+    // Same-epoch writes change metadata only; state/freshness changes bump the epoch.
     if (cachedGlobalEpoch === state.agentStatusEpoch) {
       return cachedSignature
     }
     cachedGlobalEpoch = state.agentStatusEpoch
-    // Why: the global epoch wakes every card, but only cards whose effective
-    // fresh/stale row state changed should render and rebuild their row trees.
+    // Only cards whose effective fresh/stale state changed need a new signature.
     cachedSignature = buildWorktreeAgentFreshnessSignature(state, worktreeId, readNow())
     return cachedSignature
   }

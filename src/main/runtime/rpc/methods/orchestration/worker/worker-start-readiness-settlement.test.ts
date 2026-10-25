@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../orchestration/preamble', () => ({
   buildDispatchPreamble: () => 'preamble',
-  dispatchPreambleSendOptions: (requestId: string) => ({ inputKind: 'driving', requestId })
+  dispatchPreambleSendOptions: (requestId: string) => ({ inputKind: 'orchestration', requestId })
 }))
 vi.mock('./worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

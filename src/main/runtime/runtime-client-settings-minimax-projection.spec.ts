@@ -3,9 +3,7 @@ import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-// Why: the paired client renders the region selector and console link from this projection.
-// Omitting a field here silently falls the client back to its own default, and the RPC-level
-// tests mock the controller, so only a real get() covers it.
+// Missing projection fields silently use client defaults; real get covers region/link data hidden by RPC controller mocks.
 function getProjected(overrides: Partial<GlobalSettings>) {
   const settings = createGlobalSettingsFixture({ workspaceDir: '/w', ...overrides })
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()

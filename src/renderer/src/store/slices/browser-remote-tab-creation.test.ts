@@ -132,8 +132,7 @@ describe('createBrowserSlice runtime guard', () => {
       environmentId: 'env-1',
       url: 'about:blank',
       targetGroupId: 'group-1',
-      // Why: desktop pane groups are client-owned; without the client group the local
-      // reconciler lands the new tab in the first group.
+      // Client group is authoritative desktop placement; without it local reconciliation chooses first group.
       clientTargetGroupId: 'group-1'
     })
     expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
@@ -172,9 +171,7 @@ describe('createBrowserSlice runtime guard', () => {
   })
 
   it('does not create a local fallback tab when remote browser creation fails', async () => {
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321 UX requirement).
+    // Failed remote creation must not fall back local and split workspace ownership (#5321).
     createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
     const { store, main } = await createTestStoreDrawnFromMain({
       ...onePaneGroup('wt-remote'),

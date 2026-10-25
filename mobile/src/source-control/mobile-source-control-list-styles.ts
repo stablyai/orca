@@ -2,8 +2,6 @@ import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-// Changed-files list, section headers, file rows, and the commit bar. Split
-// from the main source-control stylesheet to stay under the line limit.
 export const listStyles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.lg,
@@ -139,7 +137,7 @@ export const listStyles = StyleSheet.create({
     backgroundColor: colors.bgBase,
     color: colors.textPrimary,
     paddingHorizontal: spacing.md,
-    // Through the seam: on the web this must clear the size at which iOS zooms the page on focus.
+    // Keep input sizing above iOS’s web focus-zoom threshold.
     fontSize: TEXT_INPUT_FONT_SIZE
   },
   commitInputDisabled: {

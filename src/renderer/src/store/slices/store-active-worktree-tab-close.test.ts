@@ -15,7 +15,6 @@ import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -25,7 +24,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -34,7 +32,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
-// Main answers the window's browser-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -65,7 +62,7 @@ describe('setActiveWorktree', () => {
     mockApi.worktrees.updateMeta.mockResolvedValue({})
   })
 
-  // Why: a stale unread flag on a closed tab renders a bell the user can never dismiss, since the tab is gone.
+  // Closed tabs cannot receive input to dismiss stranded unread bells.
   it('drops unreadTerminalTabs for a closed tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -91,11 +88,10 @@ describe('setActiveWorktree', () => {
 
     const s = store.getState()
     expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
-    // Siblings untouched.
     expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
   })
 
-  // Why: focus events that normally clear unread never arrive for dead PTYs, so the shutdown path must drop the flags itself.
+  // Dead PTYs receive no focus event to clear unread; shutdown must do it.
   it('drops unread flags for every tab in a shutdown worktree', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -677,7 +673,6 @@ describe('setActiveWorktree', () => {
       },
       openFiles: [makeOpenFile({ id: fileId, worktreeId: wt, filePath: fileId })],
       activeFileIdByWorktree: { [wt]: fileId },
-      // User was on the terminal, not the editor
       activeTabTypeByWorktree: { [wt]: 'terminal' },
       refreshGitHubForWorktree: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn()

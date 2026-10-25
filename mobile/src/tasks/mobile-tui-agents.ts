@@ -8,8 +8,7 @@ import {
   pickTuiAgent
 } from '../../../src/shared/tui-agent-selection'
 
-// Why: one agent registry. Mobile keeps its own names for the favicon domains only, because
-// desktop's live in the renderer catalog next to bundled `?url` icon imports Metro can't load.
+// Reuse the shared registry; only favicon domains stay mobile-owned because Metro cannot load renderer ?url icons.
 export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = TUI_AGENT_AUTO_PICK_ORDER
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = TUI_AGENT_DISPLAY_NAMES
 
@@ -56,7 +55,6 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
 
-// Why: mobile passes raw persisted settings through; the shared helpers already discard non-arrays.
 function asDisabledList(disabled: unknown): Iterable<unknown> | null {
   return Array.isArray(disabled) ? disabled : null
 }

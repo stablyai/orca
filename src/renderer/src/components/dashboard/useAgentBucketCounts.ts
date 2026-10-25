@@ -29,17 +29,11 @@ export type AgentBucketCountState = Pick<
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusEpoch'
 > & {
-  // Why null: counts never render a card's conversation name, so the
-  // generated-title gate is moot and the sidebar stays off settings.
+  // Counts never render generated conversation names; keep this path off settings subscriptions.
   settings: null
 }
 
-// Why module scope rather than useShallow: zustand runs this selector on every
-// store write, and shallow() on a plain object takes the compareEntries path —
-// two Object.entries arrays, 30 tuples and two Maps allocated per write just to
-// conclude nothing moved. Fifteen `===` against the previous slices allocates
-// nothing on the unchanged path, and the result is a pure function of the state
-// so one gate can serve every mounted consumer.
+// Compare slice identities directly: useShallow allocates entries/Maps per store write. This pure state projection shares one allocation-free unchanged path across consumers.
 let previousState: AgentBucketCountState | null = null
 
 /** Test-only: drop the cross-render identity gate so a case starts cold. */
@@ -90,21 +84,14 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   return previousState
 }
 
-/**
- * Per-state agent counts for the sidebar dashboard entry, using the same row
- * and bucket derivation as the pop-out board without allocating its cards.
- * Recomputes only when an input slice changes.
- */
+/** Derive sidebar buckets with shared board rules without allocating cards; subscribe only to relevant input slices. */
 export function useAgentBucketCounts(): AgentBucketCounts {
   const state = useAppStore(selectAgentBucketCountState)
-  // Why a per-hook cache: unrelated status/title writes change one worktree's inputs;
-  // the cache keeps every other worktree's rows without rerunning its row pipeline.
+  // Cache per worktree so status/title churn in one workspace does not rebuild every row pipeline.
   const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
   cacheRef.current ??= createDashboardBucketCountsCache()
   return useMemo(() => {
-    // Why Date.now() is read here and not a dep: idle-decay tracks agentStatusEpoch
-    // ticks (carried in `state`), matching useDashboardData. That epoch doubles as the
-    // cache generation, so a stale-boundary tick recounts every decayed bucket.
+    // Freshness follows agentStatusEpoch in state; read the clock when that generation invalidates the memo, not as a dependency.
     // oxlint-disable-next-line react/purity -- wall time is sampled per epoch tick, as explained above.
     return buildDashboardBucketCounts(state, Date.now(), cacheRef.current, state.agentStatusEpoch)
   }, [state])

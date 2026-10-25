@@ -41,8 +41,7 @@ export function registerTextMateLanguage(
   let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
   monaco.languages.registerTokensProviderFactory(registration.language.id, {
     create: () => {
-      // Why: plain Monaco tokenization requests basic language features; onLanguage
-      // only fires for rich features, so it never loads for a read-only Nim editor.
+      // Basic tokenization never fires rich-feature onLanguage; load read-only Nim through basic language features.
       tokensProviderPromise ??= (
         registration.loadProviderModule ?? loadDefaultProviderModule
       )().then(({ createTextMateTokensProvider }) =>

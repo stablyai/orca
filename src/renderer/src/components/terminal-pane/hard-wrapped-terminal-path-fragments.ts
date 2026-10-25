@@ -13,8 +13,7 @@ export function isHardWrappedPathFragment(text: string): boolean {
 }
 
 export function isIncompleteHardWrappedPathStart(text: string): boolean {
-  // Why: a terminal row can end immediately after a complete root, drive, or
-  // relative prefix, before the continuation contributes path-name characters.
+  // Allow a row to end at a root/drive/relative prefix before the next row supplies the path name.
   return /^(?:[/\\]|\.{1,2}\/|~\/|[A-Za-z]:)$/.test(text)
 }
 

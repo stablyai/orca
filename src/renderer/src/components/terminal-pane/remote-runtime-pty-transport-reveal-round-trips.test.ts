@@ -9,10 +9,7 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// A parked remote pane's reveal used to run terminal.create, THEN open the shared
-// stream, THEN subscribe: two serial round trips before the Subscribe frame left.
-// The stream open has no data dependency on the create, so it now overlaps it.
-// A reveal also claimed the same viewport several times; one claim now suffices.
+// Overlap stream opening with terminal.create and dedupe reveal viewport claims to avoid serial round trips.
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 
@@ -115,8 +112,7 @@ describe('remote pane reveal round trips', () => {
     transport.claimViewport?.(100, 40)
     expect(framesOf(TerminalStreamOpcode.ClaimViewport)).toBe(2)
 
-    // The host answering our claim (desktop-fit, at whatever grid it reports, then an idle or
-    // desktop driver) is not a reason to claim again.
+    // Host fit/driver responses acknowledge our claim; they are not reasons to claim again.
     subscriptionCallbacks?.onResponse({
       ok: true,
       result: { type: 'fit-override-changed', streamId, mode: 'desktop-fit', cols: 159, rows: 69 }

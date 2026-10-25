@@ -3,8 +3,7 @@ import {
   type SetupScriptProbeState
 } from './setup-guide-progress-readiness'
 
-// Why: probe results are shared across every mounted setup-guide consumer so a
-// single bounded probe can settle readiness for all of them at once.
+// Share bounded probe results across mounted checklist consumers.
 const setupScriptProbeCacheListeners = new Set<() => void>()
 let setupScriptProbeCache = INITIAL_SETUP_SCRIPT_PROBE_STATE
 

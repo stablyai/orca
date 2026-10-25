@@ -1,7 +1,4 @@
-// A reply cut off because the Orca running the chat stopped (an update, a quit, a crash), as the
-// host's row about it says, and whether the chat is still sitting on that cut. Derived from the
-// journal each time, never stored: the client shows Continue from it, and the host re-checks it
-// under the session lock before Continue sends anything.
+// Derive Orca-stop cuts from the journal for Continue; never store them. Host rechecks under the session lock before sending.
 
 import {
   readAgentSessionOrcaStop,
@@ -15,9 +12,7 @@ import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
 import { structuredAgentSessionCommandTurnItemIds } from '../structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from '../structured-agent-session-latest-request'
 
-/** The row a quit or update writes for the turn it cut, keyed by the child the quit stopped, so a
- *  retried stop of that child writes no second row. The prefix is one older clients already read
- *  as explaining a cut turn, so they add no row of their own beside it. */
+// Dedupe shutdown rows by stopped child; preserve the legacy prefix so older clients add no duplicate notice.
 export function orcaShutdownRowClientMessageId(
   sessionId: string,
   fence: number,
@@ -26,7 +21,6 @@ export function orcaShutdownRowClientMessageId(
   return `${STALE_SESSION_ROW_PREFIX}${sessionId}:shutdown-${fence}-${generation}`
 }
 
-/** Why Orca stopped, from a status row the host wrote about it; null for any other row. */
 export function orcaStopCauseOfRow(item: AgentJournalRenderItem): AgentSessionOrcaStopCause | null {
   return item.body.kind === 'status'
     ? (readAgentSessionOrcaStop(item.body.orcaStop)?.cause ?? null)
@@ -38,11 +32,7 @@ export type NativeChatOrcaStopCut = {
   cause: AgentSessionOrcaStopCause
 }
 
-/**
- * The latest root turn, when nothing was sent since: no request after it, and no send still on its
- * way. A steer into that turn or a conversation command asks for nothing new
- * (`isStructuredAgentSessionNonRequestRow`). Null otherwise.
- */
+/** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
@@ -73,7 +63,6 @@ export function latestNativeChatTurnSinceRequest(
   return null
 }
 
-/** The rows inside one turn that answer `read`, first match wins. */
 export function findInNativeChatTurn<T>(
   items: readonly AgentJournalRenderItem[],
   turnItemId: string,
@@ -89,7 +78,6 @@ export function findInNativeChatTurn<T>(
   return null
 }
 
-/** The latest root turn, when an Orca stop cut it and nothing was sent since. Null otherwise. */
 export function latestNativeChatOrcaStopCut(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]

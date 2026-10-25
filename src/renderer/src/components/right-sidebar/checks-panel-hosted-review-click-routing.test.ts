@@ -86,8 +86,7 @@ describe('checks panel hosted review modifier hint destination', () => {
     )
   })
 
-  // Why: inverting is inert while links already open in Orca — both meanings of the
-  // modifier land on the system browser, so checking inverts first would misname it.
+  // Inversion is inert when links already open in Orca; the modifier still names the system browser.
   it('names the system browser when inverting is on and links already open in Orca', () => {
     expect(
       resolveChecksPanelHostedReviewModifierDestination(
@@ -97,8 +96,6 @@ describe('checks panel hosted review modifier hint destination', () => {
     ).toBe('system-browser')
   })
 
-  // Why: this is the gesture the invert setting adds — without it the hint stays hidden
-  // and the only way to reach Orca from this button is undiscoverable.
   it('names Orca when inverting is on and links open externally', () => {
     expect(
       resolveChecksPanelHostedReviewModifierDestination(
@@ -143,8 +140,7 @@ describe('checks panel hosted review modifier hint destination', () => {
     ).toBe('orca')
   })
 
-  // Why: openHttpLink gates routing to Orca on a worktree id, so without one the
-  // modifier lands in the system browser either way.
+  // Without a worktree, openHttpLink always sends modifier clicks to the system browser.
   it('stays silent without a worktree', () => {
     expect(
       resolveChecksPanelHostedReviewModifierDestination(

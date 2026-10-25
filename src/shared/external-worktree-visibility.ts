@@ -134,6 +134,6 @@ export function migrateExternalWorktreeVisibilityDefaults(
 export function effectiveAgentWorktreeVisibility(
   repo: Pick<Repo, 'agentWorktreeVisibility'>
 ): ExternalWorktreeVisibility {
-  // Why: scratch worktrees have always defaulted hidden, including for legacy repos.
+  // Legacy repos also default scratch worktrees to hidden.
   return repo.agentWorktreeVisibility === 'show' ? 'show' : 'hide'
 }

@@ -79,9 +79,7 @@ export function settleQuietSearchRevalidate(args: {
       needTrailing = true
     }
   }
-  // Why: do not GC sticky solely because search omitted a row under lag — that
-  // would unhide a successful close under Open. Keep sticky for omitted rows
-  // that still have pending or confirmed authority.
+  // Retain sticky hides for search-omitted rows with pending/confirmed authority so lag cannot unhide a successful membership exit.
   const pageKeys = new Set(
     args.networkItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
   )
@@ -121,9 +119,7 @@ export function settleQuietSearchRevalidate(args: {
   }
   gcStickyHidesAbsentFromPages(safeGcKeys, args.queryKey)
   const quiet = getOrCreateQuietRevalidateState(args.queryKey)
-  // Why: lag counters are aggregated with Math.max across the query, so an orphan
-  // stuck at MAX (item lagged then left the result set) would disable lag-retry
-  // for every row. Drop counters for items fully gone (no page/pending/authority).
+  // Drop orphan lag counters once page/pending/authority references are gone so unrelated rows retain their retry budget.
   for (const lagKey of quiet.lagSkipAttempts.keys()) {
     const itemKey = lagKey.slice(0, lagKey.lastIndexOf('\0'))
     if (safeGcKeys.has(itemKey)) {

@@ -223,8 +223,7 @@ export class RemoteRuntimeSharedControlConnection {
       getSocket: () => this.ws,
       markReady: () => {
         this.diagnostics.markReady()
-        // Why cleared here: these describe the attempt that just succeeded's predecessor.
-        // Left set, a recovered host reads "Connected" next to a stale failure forever.
+        // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
         this.publishDiagnostics()
         this.readyStableReset.schedule({
           getState: () => this.state,

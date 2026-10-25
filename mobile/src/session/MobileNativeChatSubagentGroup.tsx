@@ -15,7 +15,6 @@ import type {
 import { useNow } from '../hooks/use-now'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-// Desktop's StatusDot tones: the working and failed states speak; every settled one stays muted.
 function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
   switch (state) {
     case 'working':
@@ -32,7 +31,7 @@ function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
   }
 }
 
-/** Leaf so the 1 s clock re-renders only the digits, never the row or its message. */
+// Isolate the one-second clock so ticks cannot rerender the containing message.
 function Elapsed({
   startedAt,
   settledAt,
@@ -47,18 +46,14 @@ function Elapsed({
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
-/** One spawn group's row: how many children work, their settled verdict, how long and how many
- *  tokens, with one line per child under it. Live because the host rewrites the row in place, and
- *  drawn exactly as the journal recorded it — a turn boundary is never evidence a child stopped.
- *  Desktop parity: `NativeChatSubagentRun`, from the same shared header; a child's own rows do not
- *  open here, so its line is not a control. */
+// Trust host-recorded child state: a parent turn ending does not prove its children stopped.
 export function MobileNativeChatSubagentGroup({
   block,
   open,
   onToggle
 }: {
   block: NativeChatSubagentGroupBlock
-  /** Held by the transcript, keyed by group, so a recycled list row keeps it. */
+  // Transcript-owned group disclosure survives recycled rows.
   open: boolean
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
@@ -67,8 +62,7 @@ export function MobileNativeChatSubagentGroup({
     return null
   }
   const { working, headline, verdictState, verdict, alertState, alert, clockStartedAt } = header
-  // Spoken whole, as the live line's is: a working group's clock would otherwise make the live
-  // region re-read the row every second (nested Text spans cannot opt out on their own).
+  // Keep the live clock outside the live region or screen readers repeat the whole group every second.
   const settledElapsed =
     !working && clockStartedAt !== null && header.settledAt !== null
       ? formatNativeChatDuration(Math.max(0, (header.settledAt - clockStartedAt) / 1000))

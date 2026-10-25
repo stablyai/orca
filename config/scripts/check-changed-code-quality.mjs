@@ -28,14 +28,12 @@ const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
-    // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
-    // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
+    // Leave config discovery enabled so mobile’s nested config can disable root rules.
     label: 'code quality',
     args: ['--report-unused-disable-directives-severity', 'warn']
   },
   {
-    // Why separate: any JS plugin makes Oxlint hand every file's AST to Node, which costs the
-    // default `oxlint` run several times its native time, so these rules run only in gates.
+    // Keep JS plugins in gates: transferring every AST to Node slows the default native scan.
     label: 'JS plugins',
     args: ['--config', JS_PLUGINS_CONFIG]
   },
@@ -44,8 +42,7 @@ export const OXLINT_SCANS = [
     args: ['--config', 'config/oxlint-code-quality-casting.json']
   },
   {
-    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
-    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    // CI native audit runs before mobile install and cannot see its cycles; keep local changed gate aligned.
     label: 'focused plugins',
     args: [
       '--config',
@@ -68,8 +65,7 @@ export const OXLINT_SCANS = [
     ]
   },
   {
-    // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
-    // findings. Gating added lines holds the line without a repo-wide migration.
+    // Gate added lines against existing renderer design debt (~4.7k findings).
     label: 'design system',
     args: ['--config', 'config/oxlint-design-system.json']
   }
@@ -92,12 +88,8 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     ])
   ],
   [
-    // The rule wants one named handle cleared by name. Both startup effects arm a variable number
-    // of refresh timers, every one of them through addTimer into `timers`, which their cleanups
-    // clear -- a shape the rule reports whether the handles live in an array, a Set, or a nested
-    // helper. The finding predates this list; it surfaced when the effect body changed. This map
-    // keys on file, not line, so the entry covers both effects in it; nothing else in the file
-    // arms a timer, so widening it further is the only alternative, not a narrower option.
+    // Existing timer effects clean variable handle sets through addTimer; rule expects one named handle and falsely reports both.
+    // Exemption is per-file, covering those two effects; this file has no other timer effects.
     'react-doctor(effect-needs-cleanup)',
     new Set(['mobile/src/session/use-mobile-session-startup.ts'])
   ]
@@ -166,11 +158,8 @@ export function collectAddedLineRanges(
   requestedBase,
   { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
 ) {
-  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
-  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
-  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
-  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
-  // still what isolates this branch's own lines.
+  // PR checkout HEAD is the merge commit: first parent identifies base without shallow-clone missing payload ancestry.
+  // Local branch tips still need merge-base to isolate their changes.
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
@@ -257,12 +246,7 @@ function diagnosticLineRange(root, filename, span) {
   return { start: startLine, end: startLine + (highlighted.match(/\n/g)?.length ?? 0) }
 }
 
-// Why: a file-splitting refactor makes every line of the new module an "added"
-// line, so pre-existing lint debt in code that merely MOVED starts failing the
-// changed-lines gate. The only way to satisfy it is to edit the moved code,
-// which is exactly what a behavior-preserving refactor must not do. So a
-// diagnostic is exempt when its highlighted lines already existed, verbatim and
-// contiguous, somewhere in the base revision of the files this change touches.
+// Split files mark moved code added; exempt diagnostic blocks already verbatim/contiguous in touched base files to avoid demanding unrelated edits.
 function normalizeSourceLine(line) {
   return line.replace(/\s+/g, ' ').trim()
 }
@@ -317,10 +301,7 @@ function readBaseSourceBatch(root, comparisonBase, files) {
 }
 
 export function collectBaseLineBlocks(root, comparisonBase, files = null) {
-  // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
-  // often deleted or renamed away. Deleted paths never reach the changed-file list
-  // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
-  // --no-renames: a rename otherwise lists only its new path, which the base lacks.
+  // Read all touched base paths including deletions/rename sources; split code may no longer exist under current paths.
   const paths =
     files ??
     splitNullDelimited(
@@ -372,13 +353,7 @@ function matchMovedCode(highlightedLines, baseBlocks, normalizedBlocks) {
   if (needle.length === 0) {
     return false
   }
-  // Why a near-match rather than an exact contiguous one: a split moves a block
-  // verbatim but a diagnostic's span often reaches past it — most commonly to a
-  // hook dependency array, which legitimately grows when closure variables become
-  // props. Requiring every line to match would report the moved body as new. So:
-  // the block must still start at the same line in the base and appear IN ORDER,
-  // and nearly all of it must be present. Genuinely new code shares neither the
-  // anchor nor the ordering, so it stays reported.
+  // Moved diagnostics can extend into changed dependency arrays; require same base anchor, preserved order and near-complete span rather than exact whole-block equality.
   const MIN_COVERAGE = 0.9
   return baseBlocks.some((block) => {
     let haystack = normalizedBlocks.get(block)

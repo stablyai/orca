@@ -91,12 +91,8 @@ export function isMobilePublishableOpenFile(file: AppState['openFiles'][number])
   )
 }
 
-/**
- * Why a workspace document is held back: it is served to one desktop guest through a grant no
- * mobile client holds, so there is nothing on the other side that could render it — and the wire
- * has no tab kind for it, so an old client would take it for an ordinary browser tab and offer
- * navigation for a page that has no URL. Host and phone parity ships behind capability negotiation.
- */
+// Hold workspace docs back: only desktop guest has their grant, and old wire clients misread unsupported tab kind as navigable browser URL.
+// Negotiate capability before adding host/phone parity.
 export function isMobilePublishableBrowserWorkspace(
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number]
 ): boolean {

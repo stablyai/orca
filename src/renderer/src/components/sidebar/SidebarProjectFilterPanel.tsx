@@ -42,11 +42,7 @@ type SidebarProjectFilterPanelProps = {
   setFilterRepoIds: (ids: string[]) => void
 }
 
-/**
- * Search + selection body of the Projects filter. Lives in its own component so
- * it mounts and unmounts with the submenu panel, which resets the query instead
- * of reopening onto a stale, pre-filtered list.
- */
+/** Mount search state with the submenu so reopening cannot inherit a stale query. */
 export function SidebarProjectFilterPanel({
   availableRepos,
   selectedRepos,
@@ -58,10 +54,7 @@ export function SidebarProjectFilterPanel({
   const [highlightedRepoId, setHighlightedRepoId] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Why: `autoFocus` cannot survive here — it fires during commit, while the
-  // root menu's trapped focus scope is still active and yanks focus back to the
-  // sub-trigger (the submenu only pauses that scope in a later passive effect).
-  // A frame later both focus scopes have settled, so this focus sticks.
+  // Defer focus one frame until Radix’s root trap yields to the submenu; commit-time autofocus gets pulled back.
   useEffect(() => {
     const frame = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(frame)
@@ -86,8 +79,7 @@ export function SidebarProjectFilterPanel({
 
   const handleInputKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      // Why: this command is embedded in a Radix dropdown; text keys should
-      // stay in the search field instead of triggering menu typeahead.
+      // Keep search typing out of Radix menu typeahead.
       if (event.key === 'Backspace' && query === '' && selectedRepos.length > 0) {
         const lastRepo = selectedRepos.at(-1)
         if (lastRepo) {
@@ -109,9 +101,7 @@ export function SidebarProjectFilterPanel({
         return
       }
 
-      // Why: swallowing every ArrowLeft would trap keyboard users in the panel,
-      // since that is the key Radix uses to step back to the parent menu. Only
-      // claim it while the caret still has somewhere to move.
+      // Leave ArrowLeft to Radix at the start of the field so keyboard users can return to the parent menu.
       if (event.key === 'ArrowLeft') {
         const { selectionStart, selectionEnd } = event.currentTarget
         const caretAtStart = selectionStart === 0 && selectionEnd === 0

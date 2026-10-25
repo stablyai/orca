@@ -63,9 +63,7 @@ export function getLeafIdFromPaneKey(paneKey: string): string | null {
   return leafId.length > 0 ? leafId : null
 }
 
-/** Open non-terminal tabs (chats) whose rows their own projection writes and removes, so terminal
- *  cleanup must leave them alone. Terminal owners must still exist in the terminal inventory
- *  instead; unified metadata can lag a close. */
+/** Unified chat/nonterminal rows own their cleanup. Terminal ownership requires terminal inventory because unified metadata can lag close. */
 export function openNonTerminalTabIds(
   state: Pick<AppState, 'unifiedTabsByWorktree'>,
   worktreeId: string

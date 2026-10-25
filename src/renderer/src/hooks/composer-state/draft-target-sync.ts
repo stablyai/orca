@@ -65,7 +65,6 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     tuiAgent
   } = state
 
-  // Persist draft whenever relevant fields change (full-page only).
   useEffect(() => {
     if (!persistDraft) {
       return
@@ -127,7 +126,6 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     tuiAgent
   ])
 
-  // Auto-pick the first eligible repo if we somehow start with none selected.
   useEffect(() => {
     if (isProjectGroupTarget || pendingInitialWorkspaceTarget) {
       return
@@ -147,7 +145,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     setRepoId(folderSourceRepos[0]?.id ?? '')
   }, [folderSourceRepos, repoId, selectedProjectGroup, setRepoId])
 
-  // Why: the sparse dropdown is always visible under Advanced, so presets must load before sparse mode is enabled.
+  // Load presets before sparse mode: its Advanced dropdown is always visible.
   useEffect(() => {
     if (!repoId || !selectedRepoIsGit || selectedRepo?.connectionId) {
       return

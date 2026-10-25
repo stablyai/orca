@@ -37,8 +37,7 @@ export function readJiraBoardIssueDragData(
   const hasTypedPayload = Array.from(dataTransfer.types).includes(JIRA_BOARD_DRAG_ISSUE_MIME)
   const payload = dataTransfer.getData(JIRA_BOARD_DRAG_ISSUE_MIME)
   if (!payload) {
-    // Why: Electron hides getData during dragover, so an empty read with the
-    // typed MIME present means "payload exists but is not readable yet".
+    // Electron hides getData during dragover; a present MIME with empty data is pending readability, not absent payload.
     return hasTypedPayload ? { status: 'hidden' } : { status: 'missing' }
   }
   if (isJiraBoardIssueRefTooLarge(payload)) {

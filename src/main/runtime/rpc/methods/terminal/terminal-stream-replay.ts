@@ -175,7 +175,7 @@ export function isTerminalReadPayloadIncomplete(read: {
   truncated: boolean
   limited?: boolean
 }): boolean {
-  // Why: a limited preview is an incomplete payload even when the retained buffer wasn't truncated.
+  // Limited preview is incomplete even when retained history was not truncated.
   return read.truncated || read.limited === true
 }
 

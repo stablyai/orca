@@ -59,8 +59,7 @@ describe('installed agent skill discovery cache', () => {
   })
 
   it('promotes a rewritten key to most-recent so a rescanned target is not evicted first', () => {
-    // Why: Map.set on an existing key keeps its original insertion order, so a
-    // target rescanned on every focus event would still evict ahead of colder ones.
+    // Map.set does not promote existing keys; refreshed targets need explicit recency updates before eviction.
     writeInstalledAgentSkillDiscoveryCache('hot', result(0))
     for (let index = 1; index < INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX; index += 1) {
       writeInstalledAgentSkillDiscoveryCache(`target-${index}`, result(index))

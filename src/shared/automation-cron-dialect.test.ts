@@ -6,11 +6,7 @@ const ascending = (values: Set<number>): number[] => [...values].sort((left, rig
 
 const EVERY_DAY_OF_MAY = Array.from({ length: 31 }, (_, index) => index + 1)
 
-/**
- * Independent calendar oracle. May 2026 opens on a Friday, so its Mondays are 4/11/18/25,
- * its Sundays 3/10/17/24/31, and its weekend days 2/3, 9/10, 16/17, 23/24 and 30/31. Every
- * expectation below is that hand calendar, never a second call into the parser.
- */
+/** Independent May 2026 calendar oracle: Mondays 4/11/18/25, Sundays 3/10/17/24/31, weekends 2/3, 9/10, 16/17, 23/24, 30/31. Never derive expectations through the parser. */
 function matchingDaysOfMay2026(expression: string): number[] {
   const rule = parseCronExpression(expression)
   const days: number[] = []
@@ -66,8 +62,7 @@ describe('cron bare stepped values (#15723)', () => {
     expect(ascending(parseCronExpression('0 9 * * FRI').daysOfWeek)).toEqual([5])
   })
 
-  // Separateness probe: the #15723 repair only reaches the bare-value branch, so it moves
-  // neither an oversized step nor the day-restriction flags (#15896).
+  // Bare-value repair #15723 must not affect oversized steps/day restriction (#15896).
   it('leaves oversized-step and full-range-day expansions exactly where they were', () => {
     expect(ascending(parseCronExpression('*/90 * * * *').minutes)).toEqual([0])
     expect(ascending(parseCronExpression('5/90 * * * *').minutes)).toEqual([5])
@@ -76,9 +71,7 @@ describe('cron bare stepped values (#15723)', () => {
 })
 
 describe('cron day restriction (#15896)', () => {
-  // Dialect: a day field is restricted iff no term of it ranges over a star; when both day
-  // fields are restricted the day matches on either, otherwise on both. Every expectation
-  // below was taken from robfig/cron v1.2.0, an independent implementation of the same rule.
+  // A day field restricts only without any star term. Match both restricted fields with OR, otherwise AND; independent expectations come from robfig/cron v1.2.0.
   it('ORs an explicit full day-of-month range against a restricted day-of-week', () => {
     expect(matchingDaysOfMay2026('0 9 1-31 * 1')).toEqual(EVERY_DAY_OF_MAY)
   })
@@ -95,8 +88,7 @@ describe('cron day restriction (#15896)', () => {
     expect(matchingDaysOfMay2026('0 9 1,15 * *')).toEqual([1, 15])
   })
 
-  // A star step is still a star, so it does not flip the day rule to OR. Reading `*/2` as
-  // restricted would fire this ~8x more: the 18 odd-or-Monday days, not the 2 that are both.
+  // Star steps remain unrestricted: OR would schedule 18 odd-or-Monday dates instead of the two matching both.
   it('keeps AND when a day field steps over a star', () => {
     expect(matchingDaysOfMay2026('0 9 */2 * 1')).toEqual([11, 25])
     expect(matchingDaysOfMay2026('0 9 */1 * 1')).toEqual([4, 11, 18, 25])

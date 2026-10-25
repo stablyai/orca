@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// STA-4476: the composing-chord deferral waits on the composition, not a deadline (#12871), so it
-// is the sender that has to guarantee an exit — otherwise the wait and its listeners outlive the
-// pane and a later composition flushes a stale chord.
+// Composition waits need sender-owned blur/teardown exits or a later session can flush a stale chord (#12871, STA-4476).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTerminalImeDeferredChordSender,

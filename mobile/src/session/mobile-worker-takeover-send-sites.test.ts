@@ -19,7 +19,6 @@ import { pasteMobileNativeChatImagePaths } from './native-chat/composer/mobile-n
 vi.mock('react-native', () => ({ Keyboard: { dismiss: vi.fn() } }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
 vi.mock('expo-clipboard', () => ({ getStringAsync: async () => 'pasted text' }))
-// Reached through the media seam, which the paste hook now holds instead of the picker modules.
 vi.mock('./mobile-image-source-picker', () => ({
   pickMobileImage: vi.fn(),
   pickMobileImages: vi.fn()

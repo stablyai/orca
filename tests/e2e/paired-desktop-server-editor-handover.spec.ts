@@ -1,13 +1,5 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` hands an editor tab it opened while it
- * mirrored a server workspace to the server's main before that server's frames draw the
- * workspace (H5d): the tab, its file and its unsaved draft stay, and the server's own layout lists
- * the tab under the desktop's id.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-editor-handover.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5d: with ORCA_LAYOUT_OWNER=main, hand a mirror-created editor tab to server authority before its layout frames draw.
+// Keep the desktop’s tab id, file and unsaved draft in the server layout.
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
@@ -33,10 +25,7 @@ const LAYOUT_OWNER_BUILD = existsSync(
 const FILE_NAME = 'handover-note.md'
 const DRAFT = 'unsaved desktop draft'
 
-/**
- * Opens the file while the desktop takes the server for one without layout intents (so the
- * workspace is mirror-drawn and the tab is this desktop's alone), then gives the capability back.
- */
+// Temporarily hide layout-intent support so the desktop opens its own mirror editor, then restore the capability.
 async function openWhileMirrorDrawn(
   client: PairedElectronClient,
   worktreeId: string,

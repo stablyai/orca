@@ -1,4 +1,3 @@
-/** Whether an orcad lock or peer record was written on this machine, where its PID means something. */
 import process from 'node:process'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
@@ -8,10 +7,7 @@ import {
   type OrcadReclaimHintRuntime
 } from '../../shared/orcad-stale-lock-reclaim'
 
-/**
- * Same machine: the same machine identity, or (records without one) the same kernel boot. A record
- * that names neither is local only when no other machine can reach the data root.
- */
+/** Match machine identity, then legacy boot identity; identity-less records require local-only storage. */
 export function orcadLockHolderLocality(
   holder: OrcadPeerMachine,
   self: OrcadPeerMachine,
@@ -34,10 +30,7 @@ export function currentOrcadPeerMachine(): OrcadPeerMachine {
   return { ...(machineIdentity ? { machineIdentity } : {}), ...(bootId ? { bootId } : {}) }
 }
 
-/**
- * Whether a peer's recorded PID means anything here: same machine and kernel boot. A different or
- * unprovable one leaves the peer unverifiable, never exited.
- */
+/** PIDs require a provable machine and boot match; unknown peers are never assumed exited. */
 export function orcadPeerPidIsJudgeableHere(
   peer: OrcadPeerMachine,
   self: OrcadPeerMachine,
@@ -49,13 +42,12 @@ export function orcadPeerPidIsJudgeableHere(
   return orcadLockHolderLocality(peer, self, dataRootIsOnLocalDisk) === 'local'
 }
 
-/** A lock this machine cannot judge; on Linux it names the command that checks and clears it. */
 export function orcadLockHolderUnverifiableError(lock: {
   holder: string
   foreign: boolean
   dataRoot: string
   lockPath: string
-  /** An orcad names its own runtime and entry: managed hosts have no `orca` or `orcad` on PATH. */
+  /** Managed hosts may lack launchers on PATH, so name this runtime/entry in reclaim hints. */
   hintRuntime: OrcadReclaimHintRuntime | null
 }): OrcadInstanceLockError {
   const command = orcadStaleLockReclaimCommand(lock.dataRoot, lock.hintRuntime)

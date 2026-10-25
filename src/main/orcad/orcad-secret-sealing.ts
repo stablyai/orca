@@ -1,8 +1,6 @@
-/** AES-256-GCM sealing for orcad's SecretStore; the key comes from orcad-secret-store.ts. */
 import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from 'node:crypto'
 
-// Why a leading NUL: classifyUnenvelopedCredential reports control bytes as 'sealed', so a
-// sealed file can never be mistaken for a legacy plaintext token.
+// Leading NUL keeps sealed files distinguishable from legacy plaintext credentials.
 const MAGIC = Buffer.from([0x00, 0x4f, 0x48, 0x01])
 const IV_BYTES = 12
 const TAG_BYTES = 16
@@ -10,12 +8,12 @@ const KEY_INFO = 'orca-headless-secret-store/v1'
 
 export const ORCAD_MASTER_KEY_BYTES = 32
 
-/** Binds the stored master key to `hostBinding` so a copied profile cannot unseal elsewhere. */
+/** Mix host binding into the key so a copied profile cannot unseal on another host. */
 export function deriveOrcadSealingKey(masterKey: Buffer, hostBinding: string): Buffer {
   return Buffer.from(hkdfSync('sha256', masterKey, hostBinding, KEY_INFO, ORCAD_MASTER_KEY_BYTES))
 }
 
-/** Detects a wrong key (changed machine identity, replaced keyring item) without a sealed sample. */
+/** Detect wrong keys without needing a sealed credential sample. */
 export function orcadSealingKeyCheck(key: Buffer): string {
   return createHmac('sha256', key).update('orca-headless-secret-store/check').digest('hex')
 }

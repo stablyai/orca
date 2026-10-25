@@ -49,10 +49,7 @@ export function parseRunFilters(args) {
   return filters.length ? filters : undefined
 }
 
-/**
- * Filters of the Vitest CLI run that run-vitest.mjs launched in this process. The argv check
- * keeps a nested Vitest that inherits the environment from using its parent's filters.
- */
+// Ignore inherited filters unless argv identifies this runner's own Vitest invocation.
 export function readRunFilters(env = process.env, argv = process.argv) {
   const launched = env[RUN_ARGS_ENV]
   if (!launched || launched !== JSON.stringify(argv.slice(2))) {

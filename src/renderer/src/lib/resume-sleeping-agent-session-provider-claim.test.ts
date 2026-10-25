@@ -152,13 +152,7 @@ describe('resume sleeping agent provider claims', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // Why a peer in another workspace is reachable at all: adopting an orphaned terminal re-keys
-  // `tabsByWorktree` onto the canonical worktree id and leaves the sleeping records that named the
-  // old one untouched (workspace-session-worktree-id.ts). A provider session id names one
-  // transcript, so the live pane owns it wherever it sits; resuming here forks the agent the user
-  // is watching. `done` is the cell that had no cover: a finished turn on a still-live pane.
-  // The same-workspace half of the same rule, pinned here so this file covers both cells whether or
-  // not #19736 (which fixes this one in `activeOrQueuedResumeClaimsProviderSession` too) has landed.
+  // Orphan adoption rekeys tabs without sleeping records; a live PTY owns its transcript across workspace IDs, including done turns. Cover both same/cross-workspace claims so the sweep never forks that session.
   it('does not fork a provider session a live pane in this workspace already finished a turn on', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
@@ -186,9 +180,7 @@ describe('resume sleeping agent provider claims', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // The load-bearing half of the pair: this is the only case that proves the live arm carries no
-  // workspace scope. The peer is `done` here too — a finished turn on a pane whose shell is still
-  // up — so "live" means the PTY, not the agent.
+  // Only cross-workspace live+done proves ownership ignores workspace scope; live means PTY, not unfinished agent turn.
   it('does not fork a provider session a live pane in another workspace already finished a turn on', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
@@ -196,7 +188,6 @@ describe('resume sleeping agent provider claims', () => {
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
-      // The record's own pane is gone, so nothing local can own its recovery.
       tabsByWorktree: { 'wt-1': [], 'wt-2': [makeTerminalTab('tab-peer')] },
       terminalLayoutsByTabId: {
         'tab-peer': {
@@ -224,7 +215,7 @@ describe('resume sleeping agent provider claims', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  // The same peer without a live PTY is history, not a claim: the session must still come back.
+  // Without a live PTY the peer is history, not a claim; resume must remain possible.
   it('still resumes when the other workspace peer finished and holds no live PTY', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)

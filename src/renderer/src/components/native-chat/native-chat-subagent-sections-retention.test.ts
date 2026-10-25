@@ -16,8 +16,7 @@ import { compareMessages } from './native-chat-session-assembler'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { nativeChatSubagentLiveSections } from './native-chat-subagent-live-frontier'
 
-// The live window the renderer draws sections from, through the real reducer: a
-// section keeps its name and state whatever the window trims or never loaded.
+// Retained roster names/state must survive live-window trimming or never-loaded spawn rows.
 
 const child: AgentJournalProducerLinkage = { agentId: 'task-1', producerKind: 'agent' }
 
@@ -75,7 +74,6 @@ function snapshot(items: AgentJournalRenderItem[]): StructuredAgentSessionState 
   })
 }
 
-/** Live batches of `size` items each; `cursor` defaults to each batch's newest item. */
 function stream(
   state: StructuredAgentSessionState,
   items: AgentJournalRenderItem[],
@@ -145,7 +143,6 @@ describe('subagent sections over the live retained window', () => {
         item(`child-${index}`, index + 3, said('assistant', `step ${index}`), child)
       )
     ])
-    // The parent's own rows pass the retained limit, trimming the prompt and the roster.
     const parent = Array.from({ length: 1_024 }, (_, index) =>
       item(`own-${index}`, index + 8, said('assistant', `note ${index}`))
     )
@@ -164,7 +161,6 @@ describe('subagent sections over the live retained window', () => {
     expect(sections.anchoredAt.size).toBe(0)
     expect(sections.openAt.get(null)).toEqual(['task-1'])
     expect(sections.entries.get('task-1')?.label).toBe('review the PR')
-    // The parent has produced nothing since, so the section is still its live frontier.
     expect(nativeChatSubagentLiveSections(conversation, sections, true)).toEqual(
       new Set(['task-1'])
     )
@@ -199,7 +195,6 @@ describe('subagent sections over the live retained window', () => {
       item('roster', 2, rosterBody),
       item('child-0', 3, said('assistant', 'step 0'), child)
     ]
-    // The host drops an entry it learns was never a subagent, rewriting the roster row.
     const dropped: AgentJournalRenderItem = {
       ...item('roster', 2, {
         kind: 'message',

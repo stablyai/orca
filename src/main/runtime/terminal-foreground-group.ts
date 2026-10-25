@@ -1,8 +1,4 @@
-/**
- * Who holds one pane's terminal, from a `ps` limited to that terminal's processes: a few
- * milliseconds, where the whole-machine capture behind a fresh scan or an `inspectProcess`
- * observation takes seconds on a loaded host and gated every launch paste behind it.
- */
+/** Limit ps to the pane's terminal so launch paste avoids whole-machine scans that take seconds on loaded hosts. */
 
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
@@ -72,13 +68,7 @@ function isShellCommand(command: string): boolean {
   return isShellProcess(executable.split('/').pop() ?? executable)
 }
 
-/**
- * The terminal's foreground process group decides. The launched agent among its members, or any
- * member that is not a shell, is the agent: that finds it behind a wrapper that did not `exec` it,
- * whose own shell name leads the group. A group of shells alone is the shell, whether the pane's
- * own (the launch line has not run, or the agent exited) or a wrapper between commands. The pane's
- * root is never assumed to be the shell: a macOS pane runs its shell under `login`.
- */
+/** Judge the foreground group: any agent/non-shell counts as agent, shell-only wrappers as shell. Never assume root is shell; macOS uses login. */
 export function judgeTerminalForeground(
   rows: readonly ProcessTableRow[],
   rootPid: number,

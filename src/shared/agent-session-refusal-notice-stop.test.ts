@@ -1,5 +1,4 @@
-// A Stop the host could not save, and a card's Cancel whose dismissal it could not save: each
-// says so in its own plain words.
+// Failed Stop and card Cancel persistence need distinct actionable wording.
 
 import { describe, expect, it } from 'vitest'
 import {

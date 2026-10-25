@@ -37,7 +37,7 @@ import type { HostScreenState } from './use-host-screen-state'
 import { forgetRememberedSidebarFeeds, useHostSidebarFeed } from './use-host-sidebar-feed'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
-/** worktree.ps's rows: flat, unpinned, in its own order — not the shape the desktop draws. */
+// Use worktree.ps order and flat rows, which differ from the desktop’s rendered sidebar.
 const LISTED = [
   liveRow({ worktreeId: 'lab::/w/gpu', repoId: 'lab', repo: 'lab', hostId: 'ssh:gpu' }),
   liveRow({ worktreeId: 'orca::/w/child' }),

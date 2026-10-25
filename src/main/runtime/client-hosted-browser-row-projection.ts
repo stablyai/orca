@@ -7,11 +7,7 @@ export type ClientHostedBrowserRowSources = {
   resolveDeviceName(pairedDeviceId: string): string | null
 }
 
-/**
- * Note for anyone widening the row: `active` is deliberately not projected. `listPages` normalizes
- * it against the global active page only on the unscoped call, so a scoped publish and the
- * unscoped hydration snapshot can legitimately disagree about it for the same page.
- */
+/** Omit active: scoped listPages and global hydration legitimately normalize it differently. */
 export function projectClientHostedBrowserRows(
   pages: readonly RuntimeBrowserClientPage[],
   sources: ClientHostedBrowserRowSources
@@ -23,7 +19,7 @@ export function projectClientHostedBrowserRows(
       worktreeId: page.workspaceId,
       url: page.url,
       title: page.title,
-      // Why: an absent host cannot finish a load, so a carried-over spinner would never settle.
+      // An absent host cannot finish a carried-over load spinner.
       loading: hostAbsent ? false : page.loading,
       browserHostClientId: page.placement.browserHostClientId,
       hostDeviceName: page.pairedDeviceId ? sources.resolveDeviceName(page.pairedDeviceId) : null,

@@ -112,7 +112,6 @@ describe('useMobileStructuredAgentSession transcript', () => {
         ]
       })
     )
-    // The turn bars place rows by the same items, so the notice joins the cut turn.
     expect(rendered.hook?.turnJournal.items.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
 

@@ -172,8 +172,7 @@ it('starts the SSH shutdown and the final save at once when no pane grid waits',
   expect(flushesByNextMicrotask).toBe(1)
 })
 
-// The chat teardown decides which chats to offer to resume from the hook server's status store,
-// and finishes after the hook server stops: that stop must leave the store readable.
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })

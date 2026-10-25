@@ -29,8 +29,7 @@ export function showOsc52ClipboardBlockedToast(): void {
         ),
         onClick: () => {
           const store = useAppStore.getState()
-          // Why: open the exact row instead of a generic Terminal page so the
-          // remote-copy failure points to the setting named by the shell message.
+          // Open the exact setting named by the remote-copy failure.
           store.setSettingsSearchQuery('')
           store.openSettingsTarget({
             pane: 'terminal',
@@ -42,8 +41,7 @@ export function showOsc52ClipboardBlockedToast(): void {
       }
     }
   )
-  // Why latch after: a throw above would otherwise burn the session's one notice
-  // without ever showing it, leaving the opted-out user with silent failures.
+  // Latch after successful display so a throw cannot spend the session’s only notice.
   hasShownOsc52ClipboardBlockedToast = true
 }
 
@@ -65,6 +63,6 @@ export function showOsc52ClipboardFailedToast(): void {
       duration: 12_000
     }
   )
-  // Why latch after: same as blocked — don't burn the session notice on a throw.
+  // Latch only after successful display, as for blocked writes.
   hasShownOsc52ClipboardFailedToast = true
 }

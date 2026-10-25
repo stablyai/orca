@@ -10496,6 +10496,17 @@
                 }
               }
             }
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "Não foi possível iniciar: {{value0}}",
+                  "4c119f5e2a": "Ainda não iniciado",
+                  "b817a96fcf": "Parado: {{value0}}"
+                }
+              }
+            }
           }
         }
       },

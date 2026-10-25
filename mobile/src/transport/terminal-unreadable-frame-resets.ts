@@ -1,11 +1,7 @@
 // Why: a host that always sends an unreadable frame must not turn every resubscribe into another reset.
 const RESET_INTERVAL_MS = 30_000
 
-/**
- * Paces the stream resets that recover output from terminal frames this build can't read.
- * At most one batch of resets per interval; a stream that arrives inside the interval is
- * reset when it ends, not dropped. Owners call `forget` wherever they release a stream id.
- */
+// Batch unreadable-frame recovery per interval; defer new streams rather than dropping them. Owners must forget released ids.
 export class TerminalUnreadableFrameResets {
   private lastResetAt: number | null = null
   private readonly handledStreamIds = new Set<number>()

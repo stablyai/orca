@@ -17,7 +17,6 @@ function refusal(code: string, message = 'Nope'): RpcResponse {
   return { id: 'rpc-1', ok: false, error: { code, message }, _meta: meta }
 }
 
-/** Every result partition a policy has to survive. */
 const resultPartitions: [string, unknown][] = [
   ['object result', { value: 1 }],
   ['undefined result', undefined],
@@ -87,8 +86,7 @@ describe('rpcObjectResultOrNull', () => {
   })
 })
 
-// A refusal that illegally carries success-shaped fields: without the `ok` check each of these
-// would read the stray field and answer as if the call had succeeded.
+// Require ok before reading stray success fields on a refusal.
 describe('a refusal carrying stray success fields', () => {
   const strayRefusal = {
     id: 'rpc-1',
@@ -107,7 +105,6 @@ describe('a refusal carrying stray success fields', () => {
     expect(isMethodNotFoundRefusal(strayRefusal)).toBe(true)
   })
 
-  // The mirror case: a success carrying a stray error must not read as a refusal.
   it('does not read a success carrying a stray error as a refusal', () => {
     const straySuccess = {
       id: 'rpc-1',
@@ -142,8 +139,7 @@ describe('isStreamingOpenerReply', () => {
     expect(isStreamingOpenerReply(success({ subscriptionId: 's1' }))).toBe(false)
   })
 
-  // A truthy non-boolean off the wire must not open a stream: the registry would route it to
-  // handleStreamingResponse and wait for frames that never come.
+  // Only boolean streaming opens a registry stream; truthy aliases would wait forever for nonexistent frames.
   it.each([['yes'], [1], [{}]])('refuses a truthy non-boolean streaming flag %j', (flag) => {
     const response = {
       id: 'rpc-1',

@@ -27,12 +27,7 @@ export type BrowserWorkspaceTabClosePlan = {
   localCloseReason?: 'cleanup'
 }
 
-/**
- * Who tears down a browser workspace's tab. A workspace can be owned by one runtime environment,
- * by several at once (pages opened against different environments), by none, or be a pageless
- * mirror of the focused runtime's host tab — and every one of those has to close, or the X does
- * nothing at all.
- */
+/** Close must handle zero, one or several page-owning environments plus pageless focused-runtime mirrors; no ownership shape may leave the X inert. */
 export function planBrowserWorkspaceTabClose({
   state,
   workspaceId,
@@ -51,10 +46,7 @@ export function planBrowserWorkspaceTabClose({
     removesVisibleTab: true
   }
   const pages = state.browserPagesByWorkspace[workspaceId] ?? []
-  // Why: a staged page names an environment before the host has ever heard of the tab, so the owner
-  // branch below would fan session.tabs.close at a page id that does not exist yet — an inert X, and
-  // the in-flight create's snapshot then puts the tab back. The create path owns retiring the host
-  // page; the strip only unwinds the rows this client minted. Must stay ahead of every other case.
+  // Staged tabs name a host before page creation; host-close would hit an unknown ID and creation would restore it. Unwind client rows first; creation owns host retirement.
   if (pages.some((page) => state.remoteBrowserPageHandlesByPageId[page.id]?.staged === true)) {
     return { ...closeLocally, localCloseReason: 'cleanup' }
   }
@@ -64,21 +56,17 @@ export function planBrowserWorkspaceTabClose({
     const activeEnvironmentIds = ownerEnvironmentIds.filter((environmentId) =>
       isEnvironmentActive(environmentId)
     )
-    // Why: with every owning host disconnected there is nobody to close on, so this renderer
-    // finishes the teardown rather than leaving the tab standing.
+    // When all owners disconnect, renderer teardown prevents an inert close.
     return activeEnvironmentIds.length === 0
       ? closeLocally
       : {
           hostEnvironmentIds: activeEnvironmentIds,
           closesLocally: false,
-          // Why: owners are derived from this workspace's pages, so reaching here means it has
-          // some — and a host that still holds pages removes its own mirror through tab sync.
+          // Page owners remove mirrors through sync; avoid racing their retraction.
           removesVisibleTab: false
         }
   }
-  // Why: a workspace with pages of its own and no remote owner is a local fallback — the focused
-  // runtime being connected does not make its tab the host's to close. A PAGELESS one is the
-  // host's mirror and would otherwise be un-closable.
+  // Own pages without remote owners mean local fallback. Only pageless workspaces mirror the focused runtime’s tab.
   if (hasPages || !isEnvironmentActive(focusedEnvironmentId)) {
     return closeLocally
   }

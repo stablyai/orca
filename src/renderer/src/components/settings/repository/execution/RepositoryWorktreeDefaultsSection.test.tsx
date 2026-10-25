@@ -92,8 +92,7 @@ function getWorktreePathInput(): HTMLInputElement {
 }
 
 function setNativeValue(input: HTMLInputElement, text: string): void {
-  // Why: React reads controlled-input changes via the native value setter;
-  // assigning input.value directly is swallowed by React's value tracking.
+  // Use the native setter so React’s controlled-value tracker recognizes the input.
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
   setValue?.call(input, text)
 }
@@ -106,8 +105,7 @@ function typeText(input: HTMLInputElement, text: string): void {
 }
 
 function blurInput(input: HTMLInputElement): void {
-  // Why: React delegates onBlur via focusout (which bubbles) not blur (which
-  // doesn't), so dispatching focusout is required to trigger the React handler.
+  // React onBlur delegates through bubbling focusout, not native blur.
   act(() => {
     input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
   })

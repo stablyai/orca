@@ -14,8 +14,7 @@ export function useGitLabItemDialogState(itemId: string | null) {
   }>(() => ({ itemId, value: '' }))
   const commentDraft = commentDraftState.itemId === itemId ? commentDraftState.value : ''
   if (commentDraftState.itemId !== itemId) {
-    // Why: comment drafts are tied to one GitLab item, so switching the sheet
-    // target must not leave a draft that could post to the wrong MR/issue.
+    // Reset before paint so switching items cannot post the prior item’s draft to the new target.
     setCommentDraftState({ itemId, value: '' })
   }
   const [commentSubmitting, setCommentSubmitting] = useState(false)

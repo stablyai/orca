@@ -1,5 +1,4 @@
-// Two editor tabs for one file in one group (layout-owner builds): a layout-owner window draws only
-// one, so a close could not reach the other. Main never makes the second, and folds a saved one.
+// Layout-owner windows show only one same-file tab per group, leaving duplicates unclosable; main refuses new duplicates and folds saved ones.
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'

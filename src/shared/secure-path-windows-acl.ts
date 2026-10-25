@@ -3,10 +3,7 @@ import { reportSecurePathHardening as report } from './secure-path-hardening-rep
 import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
 import { findSecureDaclViolation, hardenedDaclSddl } from './windows-secure-dacl'
 
-/**
- * Restricts a directory on the thread pool: a rewrite walks every descendant, seconds on a large
- * userData. Never rejects; failures are reported and resolve false so the caller can retry.
- */
+/** Restrict directories off-thread because propagation walks all descendants; report failures and resolve false for retry. */
 export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
   const security = securityFor(dirPath)
   return security ? restrictAsync(security, dirPath, true) : Promise.resolve(false)
@@ -17,8 +14,7 @@ async function restrictAsync(
   targetPath: string,
   isDirectory: boolean
 ): Promise<boolean> {
-  // Verify first: a directory rewrite walks every descendant (seconds on a large userData), so
-  // a path that already reads back correct must never pay it again.
+  // Verify before rewriting: directory propagation can cost seconds on large userData trees.
   if (violationOf(security, targetPath, isDirectory) === null) {
     return true
   }
@@ -59,12 +55,8 @@ export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean
   return verifyAfterApply(security, targetPath, isDirectory)
 }
 
-/**
- * Writes a NEW file that is restricted from the moment it exists, so its contents are never
- * readable under the directory's (possibly broader) inherited DACL. Returns whether the
- * restriction holds. Without the addon the file is written plainly and this is false; with it, a
- * failed create throws like any other write failure.
- */
+/** Create restricted so secrets never inherit a broader directory DACL. Missing addon writes plainly/returns false;
+ * loaded addon create failures throw. Read back to confirm filesystem enforcement. */
 export function writeRestrictedWindowsFile(targetPath: string, contents: string | Buffer): boolean {
   const security = securityFor(targetPath)
   if (!security) {

@@ -91,8 +91,7 @@ async function resolveSavedAgentOverride(
     kind: 'git-worktree',
     ...(repo ? { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) } : {})
   }
-  // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
-  // the direct launch checks installation on the new workspace.
+  // Before workspace creation, paired projects can check enabled only; installation is checked on the created workspace’s host.
   const detected = pendingAgents
     ? (await acquireAgentLaunchChoices(workspace, () => pendingAgents)).detected
     : null

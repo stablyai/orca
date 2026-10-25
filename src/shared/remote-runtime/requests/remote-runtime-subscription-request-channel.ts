@@ -15,11 +15,7 @@ type PendingRemoteRuntimeSubscriptionRequest = {
 
 const MAX_PENDING_SUBSCRIPTION_REQUESTS = 32
 
-/**
- * Requests the caller sends over an existing subscription socket rather than a socket of their
- * own. Why they ride this connection: a lease's requests must share its liveness, so a dead link
- * fails them instead of leaving them to time out against a socket nobody is watching.
- */
+/** Lease requests share the subscription’s socket/liveness so a dead link fails them promptly. */
 export class RemoteRuntimeSubscriptionRequestChannel {
   private readonly pending = new Map<string, PendingRemoteRuntimeSubscriptionRequest>()
 

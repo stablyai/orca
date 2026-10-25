@@ -121,12 +121,8 @@ vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => (
   }
 }))
 
-/**
- * After /clear the current chat keeps the tab id derived from its first session, so reopening that
- * first session from history lands in a suffixed tab. Closing or focusing the reopened tab from
- * main must reach that tab, not the current chat. Runs the real main close/focus path against the
- * real window store, mirror and IPC bridges; only the process boundary is stubbed.
- */
+// After /clear, history reopens the first conversation under a suffixed tab id; real main close/focus must target that tab.
+// Connect real window store/mirror/IPC with only the process boundary stubbed.
 describe('reopened structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-reopen'
   const CURRENT_SESSION = 'clear-x'
@@ -205,8 +201,7 @@ describe('reopened structured session close', () => {
           hostSessionCloses.push(sessionId)
         },
         setSessionTabVisibility: async () => undefined,
-        // The host's tab index, which main opens chat tabs under: the current chat holds its first
-        // session's tab id, so the reopened one has its own (an id names one chat there).
+        // Index the reopened chat separately because the current chat retains its first session’s tab id.
         getSessionTabId: (sessionId: string) =>
           sessionId === CURRENT_SESSION ? CURRENT_TAB : REOPENED_TAB,
         listSessionTabs: () => [
@@ -314,12 +309,8 @@ describe('reopened structured session close', () => {
   })
 })
 
-/**
- * Closing a chat tab removes it from the window at once, while the host is still handling the close.
- * A tab-list frame the host publishes in that gap (a working chat's status update, for one) still
- * lists the chat, and must not put it back at the end of the strip. Runs the real main close path
- * against the real window store and session-tabs mirror; only the process boundary is stubbed.
- */
+// Hold host close after the window removes its chat, then publish a still-listed frame that must not resurrect it.
+// Exercise real main/window/mirror paths with only the process boundary stubbed.
 describe('in-flight structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-stale-frame'
   const SESSIONS = ['chat-a', 'chat-b', 'chat-c'] as const

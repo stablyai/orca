@@ -10,11 +10,7 @@ import type {
   WorkspaceCleanupSortState
 } from '../../../../shared/workspace-cleanup-filter-model'
 
-/**
- * Fields whose value can be absent. Absent rows always sink to the bottom in
- * BOTH directions — flipping direction should reorder the rows that carry the
- * signal, not promote the ones that carry nothing.
- */
+/** Missing signals sort last in either direction; flipping reverses only rows with evidence. */
 const ABSENT_LAST_FIELDS: ReadonlySet<WorkspaceCleanupSortField> = new Set([
   'size',
   'last-visited',
@@ -54,7 +50,6 @@ function comparePrimary(
   return compareNatural(left, right, field) * multiplier
 }
 
-/** Non-zero only when exactly one side is absent for an absent-last field. */
 function compareAbsence(
   left: WorkspaceCleanupFacets,
   right: WorkspaceCleanupFacets,

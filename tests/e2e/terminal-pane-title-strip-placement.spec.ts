@@ -1,8 +1,3 @@
-/**
- * E2E tests for the Set Title overlay strip staying attached to its pane across
- * activation, file drops, moves, and drags.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -51,8 +46,7 @@ async function expectPaneTitleAttachedToLeaf(
     .toBe(true)
 }
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()

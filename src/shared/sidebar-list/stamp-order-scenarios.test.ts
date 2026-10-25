@@ -13,10 +13,7 @@ import {
 import { agentPhaseTransition, nextAgentPhase, type AgentPhase } from '../agent-transitions'
 import { compareSmartStamps, recentStamp } from './stamp-order'
 
-/**
- * Every row of the before/after table in the sort-stamps design note, replayed through the host's
- * classifier and the stamp order every client sorts by.
- */
+/** Replay the sort-stamps design table through the host classifier and shared client ordering. */
 type Row = { id: string; stamps: SortStamps; pane: AgentPaneState; unread: boolean }
 
 const T0 = 10_000_000

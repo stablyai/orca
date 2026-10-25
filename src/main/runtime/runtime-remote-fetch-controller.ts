@@ -55,11 +55,7 @@ export class RuntimeRemoteFetchController {
     return resolved
   }
 
-  /**
-   * Exact-base refreshes skip git's auto-maintenance (full fetches keep it as
-   * git's housekeeping outlet), so their loose refs are never packed. Arm the idle
-   * sweep that pays it back; each fetch pushes the attempt a further quiet period out.
-   */
+  /** Exact-base fetch skips auto-maintenance and leaves loose refs; arm repo maintenance after quiet time, extended by each fetch. */
   private armRefMaintenance(repoPath: string, gitOptions: GitOptions): void {
     void this.getCanonicalRepoKey(repoPath, gitOptions)
       .then((key) => {

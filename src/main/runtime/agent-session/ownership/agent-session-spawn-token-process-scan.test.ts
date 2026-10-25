@@ -6,8 +6,7 @@ import {
 
 describe('agent-session spawn token process scan', () => {
   it('answers null on platforms that cannot read another process environment', async () => {
-    // macOS and Windows have no `/proc/<pid>/environ`. Answering "none" there would free a
-    // reservation whose child is alive and mint a second writer on the same provider session.
+    // No /proc environ on macOS/Windows means unknown, never proof a reservation spawned nothing and may safely admit another writer.
     expect(await scanAgentSessionSpawnTokenProcesses('darwin')).toBeNull()
     expect(await scanAgentSessionSpawnTokenProcesses('win32')).toBeNull()
   })

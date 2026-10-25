@@ -20,7 +20,6 @@ const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
 const MUTATION_ID = '["dev","thread-1","delivery-1"]'
 const PANE_OWNED = { origin: 'worktree-sleep', state: 'done', restoreOnTabOpenOnly: true }
 
-// A headless host holding a running agent's workspace-sleep record for the old pane.
 function makeSleptWorkspace() {
   const record: SleepingAgentSessionRecord = {
     paneKey: PANE_KEY,
@@ -148,7 +147,6 @@ function storedRecord(fixture: Fixture) {
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
-  // Review repro, on the runtime-owned path: the spawn started but its reply was lost.
   it('retains ownership after an ambiguous create with a running resume', async () => {
     const fixture = makeSleptWorkspace()
     const handle = deriveRemoteRuntimeTerminalCreateHandle(
@@ -159,7 +157,6 @@ describe('resumeAgentSessionInWorkspace', () => {
     let started = false
     const { spawn, resume, attachWindow } = makeRuntime(fixture, {
       rows: () => [],
-      // The host starts the agent, but its spawn reply is lost.
       spawn: () => {
         started = true
         return Promise.reject(new Error('spawn reply lost'))
@@ -189,10 +186,9 @@ describe('resumeAgentSessionInWorkspace', () => {
       ok: false,
       reason: 'held_elsewhere'
     })
-    // Why: the same request's retry reconciles the pane it may have started instead of spawning.
     await expect(resume()).resolves.toMatchObject({ ok: true, ptyId: 'resumed-pty' })
     expect(spawn).toHaveBeenCalledOnce()
-    // Why: with a window attached the spawn still carries the runtime the command was quoted for.
+    // An attached window must not change the runtime the resume command was quoted for.
     expect(spawn.mock.calls[0]?.[0]).toHaveProperty('launchRuntime')
     expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
   })
@@ -213,7 +209,6 @@ describe('resumeAgentSessionInWorkspace', () => {
       resolveTerminalWorkspaceLaunchScope: async (selector: string) => {
         if (first) {
           first = false
-          // Why no throw on refusal: the pane's earlier claim now refuses this resume outright.
           const result = await resume()
           if (result.ok) {
             rows = [sessionRow(result.paneKey, Date.now() + 1)]
@@ -239,13 +234,11 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(command).toContain('--resume')
     expect(command).toContain('provider-session-1')
     expect(command).toMatch(/--permission-mode'? '?plan/)
-    // Why: the explicit resume command must spawn in the runtime it was quoted for (Windows/WSL).
+    // The resume must spawn in the Windows/WSL runtime its command was quoted for.
     expect(spawn.mock.calls[0]?.[0]).toHaveProperty('launchRuntime')
-    // Why: the record is claimed pane-owned before the spawn, so no other wake resumes it again.
     expect(storedRecord(fixture)).toMatchObject(PANE_OWNED)
   })
 
-  // Why: main is the only executor of a workspace-sleep wake, so a window never refuses it.
   it('resumes and claims the record with a window already attached', async () => {
     const fixture = makeSleptWorkspace()
     const { spawn, attachWindow, resume } = makeRuntime(fixture)
@@ -370,7 +363,7 @@ describe('resumeAgentSessionInWorkspace', () => {
     }
   )
 
-  // An SSH resume is never seeded into the hook store, so nothing but the claim names its holder.
+  // Before its first hook, only the claim identifies the SSH session holder.
   it('keeps the old pane from resuming before the resumed agent reports a hook', async () => {
     const fixture = makeSleptWorkspace()
     const { spawn, resume, openOldPane } = makeRuntime(fixture, { rows: () => [] })
@@ -405,7 +398,6 @@ describe('resumeAgentSessionInWorkspace', () => {
     }
   )
 
-  // The resumed agent reports, then quits to its shell (row dropped, PTY alive).
   it('frees the session once the resumed agent reported, though it then exited to its shell', async () => {
     const fixture = makeSleptWorkspace()
     let rows: AgentStatusIpcPayload[] = []
@@ -476,7 +468,7 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(spawn).toHaveBeenCalledOnce()
   })
 
-  // A connector reopens through here, so an SSH host out of contact must never read as an exit.
+  // An unreachable SSH host does not prove the agent exited.
   it.each([
     ['unverifiable', false],
     ['live', false],
@@ -540,7 +532,7 @@ describe('resumeAgentSessionInWorkspace', () => {
     )
     expect(storedRecord(fixture)).toMatchObject(PANE_OWNED)
 
-    // Why: the spawn request left, so only the same request's pane may retry it.
+    // An ambiguous dispatch remains owned by the same request's pane.
     await expect(resume({ mutationId: 'another-delivery' })).resolves.toEqual({
       ok: false,
       reason: 'held_elsewhere'
@@ -561,7 +553,6 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
     const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
       rows: () => rows,
       checkHookAgentPresence: async () => 'live',
-      // The host's inventory lists the first resume's PTY, as a live daemon or relay does.
       listProcesses: async () =>
         spawn.mock.calls.length > 0
           ? [

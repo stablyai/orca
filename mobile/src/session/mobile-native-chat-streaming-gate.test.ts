@@ -17,7 +17,6 @@ function assistant(id: string, text: string): NativeChatMessage {
   }
 }
 
-/** Run a sequence of (folded, streamingText) ticks through one gate. */
 function run(ticks: { folded: NativeChatMessage[]; text?: string; live?: boolean }[]): {
   gate: MobileNativeChatStreamingGate
   results: (string | null)[]
@@ -36,9 +35,7 @@ function run(ticks: { folded: NativeChatMessage[]; text?: string; live?: boolean
 
 describe('mobileNativeChatStreamPreview', () => {
   it('drops a preview the provider flagged as tool output', () => {
-    // Regression: a Bash result was published as `lastAssistantMessage` for the status
-    // card, then rendered here as an un-collapsed assistant bubble that no catch-up rule
-    // could retire, so it sat in the chat for the rest of the turn.
+    // Tool output never lands as assistant text, so a synthetic reply bubble could not retire it.
     expect(
       mobileNativeChatStreamPreview(
         {
@@ -72,7 +69,7 @@ describe('deriveMobileNativeChatStreaming', () => {
   it('shows a genuine reply that repeats the previous turn as a prefix', () => {
     const prior = [assistant('a1', 'The tests pass.')]
     const { results } = run([
-      { folded: prior }, // idle tick anchors the pre-stream tail
+      { folded: prior },
       { folded: prior, text: 'The' },
       { folded: prior, text: 'The tests' },
       { folded: prior, text: 'The tests pass.' }
@@ -123,8 +120,8 @@ describe('deriveMobileNativeChatStreaming', () => {
     const landed = [...prior, assistant('a2', 'Done.')]
     const { results } = run([
       { folded: prior },
-      { folded: prior, text: 'Done.' }, // repeated-prefix reply stays visible
-      { folded: landed, text: 'Done.' } // its own turn landed — hide
+      { folded: prior, text: 'Done.' },
+      { folded: landed, text: 'Done.' }
     ])
     expect(results).toEqual([null, 'Done.', null])
   })
@@ -142,9 +139,7 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('keeps the segment baseline through textless ticks while the turn is live', () => {
-    // Chat is hidden mid-stream: the transcript unsubscribes and the status
-    // stops reaching the gate, but the turn has not ended. Coming back, the
-    // stream text returns before the re-read transcript does.
+    // Returning from hidden chat can restore status text before transcript history, while the turn remains live.
     const prior = [assistant('a1', 'Done.')]
     const { results } = run([
       { folded: prior },
@@ -169,10 +164,7 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('hides a reply whose own turn landed before its status text arrived', () => {
-    // The pane stays `working` past the reply (a subagent or a background task
-    // is still live), and the transcript push beats the throttled status text.
-    // Anchoring on that textless tick would adopt the reply as pre-stream
-    // history and render it a second time as a bubble.
+    // Transcript pushes can beat throttled status while background work keeps the pane working; anchoring here would duplicate the reply.
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]
     const { results } = run([
@@ -185,9 +177,7 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('keeps the pre-stream baseline across a hidden gap taken between turns', () => {
-    // Peeking at the terminal while idle tears the transcript down to empty. An
-    // empty tail is not history: adopting it strands the baseline and swallows
-    // the repeated-prefix reply that arrives next.
+    // Hidden chat tears the transcript down to empty; anchoring there would swallow the next repeated-prefix reply.
     const prior = [assistant('a1', 'Done.')]
     const { results } = run([
       { folded: prior },
@@ -199,8 +189,6 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('anchors on the first tail it sees when mounted mid-turn', () => {
-    // Opening a workspace whose agent is already working: that first textless
-    // tick is the only pre-stream history the gate will ever get.
     const prior = [assistant('a1', 'Done.')]
     const { results } = run([
       { folded: prior, live: true },
@@ -222,17 +210,15 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('does not treat the previous turn as a segment start after re-anchoring', () => {
-    // The textless anchor clears the remembered text too. Keeping it would read
-    // the next turn's opener as a new segment, re-anchor onto the reply that
-    // just landed, and render it a second time as a bubble.
+    // Retaining previous-turn text after re-anchoring would classify the next opener as a new segment and duplicate its landed reply.
     const prior = [assistant('a1', 'context')]
     const firstLanded = [...prior, assistant('a2', 'Alpha done')]
     const secondLanded = [...firstLanded, assistant('a3', 'Beta reply')]
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'Alpha', live: true },
-      { folded: firstLanded }, // turn ended — re-anchor onto a2
-      { folded: secondLanded, text: 'Beta', live: true } // a3 already landed
+      { folded: firstLanded },
+      { folded: secondLanded, text: 'Beta', live: true }
     ])
     expect(results).toEqual([null, 'Alpha', null, null])
   })
@@ -243,16 +229,14 @@ describe('deriveMobileNativeChatStreaming', () => {
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'part one' },
-      { folded: partOneLanded, text: 'part one' }, // caught up — hide
-      // Part two is not an extension of part one: new segment, new baseline.
+      { folded: partOneLanded, text: 'part one' },
       { folded: partOneLanded, text: 'part' }
     ])
     expect(results).toEqual([null, 'part one', null, 'part'])
   })
 
   it('falls back to suppress-on-prefix when text arrives on the first tick', () => {
-    // No tail ever observed before the text: a duplicate bubble is worse than
-    // briefly hiding a mount-coincident repeated reply.
+    // Without prior history, prefer briefly hiding a repeated reply over duplicating one already landed.
     const landed = [assistant('a1', 'flushed part still streaming in status')]
     const { results } = run([{ folded: landed, text: 'flushed part' }])
     expect(results).toEqual([null])
@@ -267,8 +251,7 @@ describe('deriveMobileNativeChatStreaming', () => {
   })
 
   it('drops a prior chat baseline when the stream identity changes', () => {
-    // The other chat's tail must not license showing a bubble here — a swapped
-    // scope resets to the mid-stream fallback rather than reusing its baseline.
+    // Another chat’s tail cannot establish which replies landed during this segment.
     const repeatedId = [assistant('a1', 'new answer landed')]
     let gate = createMobileNativeChatStreamingGate('tab-a')
     gate = deriveMobileNativeChatStreaming(gate, repeatedId, undefined, { scopeKey: 'tab-a' }).gate

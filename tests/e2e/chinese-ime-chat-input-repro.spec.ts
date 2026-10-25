@@ -241,8 +241,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
     ]) {
       textarea.addEventListener(type, record, true)
     }
-    // Why: the Linux/Sogou post-composition guard lives on the terminal
-    // element; record terminal-targeted compositionend without doubling key logs.
+    // Record terminal compositionend for Linux/Sogou policy without duplicating key logs.
     pane.terminal.element?.addEventListener('compositionend', record, true)
   })
 }
@@ -285,8 +284,7 @@ async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
       configurable: true
     })
   }, LINUX_IME_POLICY_USER_AGENT)
-  // Why: the Sogou repro validates Linux-gated terminal IME policy on macOS
-  // runners; reload before the terminal pane mounts so lifecycle code sees it.
+  // Reload before terminal mount so lifecycle code sees the emulated Linux/Sogou platform.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 }
@@ -349,9 +347,7 @@ async function commitImeText(session: CDPSession, text: string): Promise<void> {
 }
 
 async function dispatchImeProcessKey(session: CDPSession, code: string): Promise<void> {
-  // Why: Windows IMEs report pre-edit keystrokes as VK_PROCESSKEY (229).
-  // This catches regressions where xterm treats the physical Pinyin key as a
-  // normal Latin character before Chromium delivers the composition update.
+  // Windows IME preedit uses VK_PROCESSKEY 229; physical Pinyin keys must not leak as Latin input.
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key: 'Process',
@@ -377,9 +373,7 @@ async function dispatchCandidateSelectionKey(
   candidate: { key: string; code: string; keyCode: number },
   commitBetweenKeys?: () => Promise<void>
 ): Promise<void> {
-  // Why: #7543 proves Sogou can forward candidate selectors as plain key
-  // events, not Process/229. `text` is set so keyDown produces the natural
-  // keypress — rawKeyDown generates none and would prove nothing about leaks.
+  // Sogou selectors can be plain keys; keyDown with text emits keypress while rawKeyDown would prove no leak (#7543).
   await session.send('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: candidate.key,
@@ -414,9 +408,7 @@ async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
 }
 
 async function dispatchSogouPostCompositionEnd(page: Page, data: string): Promise<void> {
-  // Why: some Sogou/fcitx traces deliver the plain selector key after
-  // compositionend; target the terminal element so Orca's tracker sees the end
-  // without making xterm finalize a synthetic preedit string.
+  // Target the terminal so the late selector guard sees compositionend without xterm finalizing synthetic preedit.
   await page.evaluate((data) => {
     const active = document.activeElement
     if (!(active instanceof HTMLTextAreaElement)) {

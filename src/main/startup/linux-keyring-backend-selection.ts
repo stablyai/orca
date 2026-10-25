@@ -1,23 +1,5 @@
-/**
- * Decide whether to name a `--password-store` backend for Chromium on Linux.
- *
- * Why this exists: Chromium picks its os_crypt backend from the desktop-environment
- * env vars, and recognises none of the tiling compositors (Hyprland, sway, river,
- * niri). On those it selects `basic_text`, whose key Electron never exposes, so
- * `safeStorage.isEncryptionAvailable()` is false and every credential store takes its
- * plaintext fallback — while gnome-keyring sits on the session bus, unasked (#21827).
- *
- * Why this is conservative in both directions:
- *  - It never names a backend for a desktop Chromium *does* resolve. Overriding a
- *    working selection is the one change that could strand already-sealed credentials.
- *  - It only names one when the secret service is present AND its default collection is
- *    already unlocked. A locked collection with no unlock prompter is what made
- *    `isEncryptionAvailable()` block for 76s to first window (STA-5765); refusing to
- *    select libsecret there keeps today's behaviour instead of trading silent plaintext
- *    for a frozen app.
- */
+/** Unrecognized tiling desktops fall back to basic_text despite a usable keyring (#21827). Select libsecret only for an unlocked collection; preserve recognized desktops to avoid stranding credentials and reject locked services to avoid 76s startup stalls (STA-5765). */
 
-/** What the secret service can tell us about sealing, from outside Chromium. */
 export type SecretServiceCollectionState =
   /** Present, and openable without an unlock prompt. */
   | 'unlocked'
@@ -26,14 +8,7 @@ export type SecretServiceCollectionState =
   /** No owner for org.freedesktop.secrets, no default collection, or the probe failed. */
   | 'unavailable'
 
-/**
- * Desktop tokens Chromium resolves to a real backend, lowercased.
- *
- * Sourced from Electron's documented `getSelectedStorageBackend()` mapping plus the
- * `DESKTOP_SESSION` values `base::nix::GetDesktopEnvironment` falls back to. `lxqt` is
- * here because Chromium *identifies* it and then chooses basic_text anyway — it is a
- * resolved desktop, so we leave its selection alone rather than second-guessing it.
- */
+/** Preserve Chromium-recognized desktops, including LXQt which deliberately selects basic_text; tokens follow Electron backend mapping and Chromium desktop fallbacks. */
 const RESOLVED_DESKTOP_TOKENS = new Set([
   'cinnamon',
   'deepin',
@@ -54,25 +29,18 @@ const RESOLVED_DESKTOP_TOKENS = new Set([
   'xubuntu'
 ])
 
-/**
- * Env vars whose mere presence makes Chromium name a desktop, even with an
- * unrecognised `XDG_CURRENT_DESKTOP`. Missing these was the serious bug in the first
- * attempt at this fix: a KDE session reached by `KDE_FULL_SESSION` would have had its
- * kwallet selection overridden with libsecret, stranding everything already sealed.
- */
+/** Presence alone may select a backend; missing KDE signals would override kwallet with libsecret and strand sealed credentials. */
 const DESKTOP_PRESENCE_VARS = [
   'GNOME_DESKTOP_SESSION_ID',
   'KDE_FULL_SESSION',
   'KDE_SESSION_VERSION'
 ] as const
 
-/** True when any signal Chromium consults identifies a desktop it can map to a backend. */
 export function identifiesResolvedDesktop(env: NodeJS.ProcessEnv): boolean {
   if (DESKTOP_PRESENCE_VARS.some((name) => (env[name]?.trim() ?? '') !== '')) {
     return true
   }
-  // XDG_CURRENT_DESKTOP is colon-separated and case-varying in the wild ("Hyprland",
-  // "sway", "GNOME:ubuntu", "X-Cinnamon").
+  // XDG_CURRENT_DESKTOP tokens vary in case and use colon-separated composites.
   const tokens = (env.XDG_CURRENT_DESKTOP ?? '')
     .split(':')
     .concat(env.DESKTOP_SESSION ?? '')
@@ -84,7 +52,7 @@ export function identifiesResolvedDesktop(env: NodeJS.ProcessEnv): boolean {
 export type PasswordStoreDecision = {
   /** The `--password-store` value to append, or null to leave Chromium's choice alone. */
   store: 'gnome-libsecret' | null
-  /** Why, for the startup log — this is the only trace a user or support has. */
+  /** Only startup-log evidence explaining this choice. */
   reason: string
 }
 
@@ -115,7 +83,7 @@ export function resolveLinuxPasswordStore(input: {
     store: null,
     reason:
       collection === 'locked'
-        ? // Selecting libsecret here is what turns plaintext into a 76s startup stall.
+        ? // Selecting locked libsecret can turn plaintext fallback into a 76s startup stall.
           'the secret service is locked, and selecting it would block on an unlock prompt'
         : 'no usable secret service answered on the session bus'
   }

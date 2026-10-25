@@ -67,9 +67,7 @@ class MobileWebShellLoadStateTest {
     assertNull(machine.finished())
   }
 
-  // The page rewrites its own path with history.replaceState before its first render, so
-  // onPageFinished arrives at a URL the navigation policy would refuse. The path is deliberately
-  // not an input: what is asked is whether this load committed.
+  // replaceState rewrites the URL before finish; readiness must depend on commit state.
   @Test
   fun `a load that finished without committing reports nothing`() {
     val machine = MobileWebShellLoadStateMachine()
@@ -87,8 +85,7 @@ class MobileWebShellLoadStateTest {
     assertNull(machine.finished())
   }
 
-  // Chromium commits its error document after onReceivedError returns, so onPageFinished arrives
-  // after the failure; reporting `ready` there would also un-hide the error page.
+  // Chromium finishes its error document after failure; ready would expose it again.
   @Test
   fun `a load that finished after a failure reports nothing`() {
     val machine = MobileWebShellLoadStateMachine()
@@ -113,8 +110,7 @@ class MobileWebShellLoadStateTest {
     assertNull(machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
   }
 
-  // Android defers a document failure past Chromium's error document, so a prop update can land
-  // between the decision and the report; the failure belongs to the load that is already gone.
+  // A prop update can replace a failed load before its deferred report.
   @Test
   fun `a failure decided before a new prop pair reports nothing`() {
     val machine = MobileWebShellLoadStateMachine()

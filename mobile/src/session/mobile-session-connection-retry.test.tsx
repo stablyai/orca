@@ -9,7 +9,6 @@ import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 
 type Presentation = ReturnType<typeof useMobileSessionPresentation>
 
-/** A session whose host the shell's client has failed to reach twenty times. */
 function present(forceReconnectHost: ForceReconnect): Presentation {
   const scope = {
     created: undefined,

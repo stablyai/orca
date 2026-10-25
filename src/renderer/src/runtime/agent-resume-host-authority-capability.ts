@@ -16,12 +16,7 @@ import {
 } from '../../../shared/protocol-version'
 import { AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY } from '../../../shared/agent-session-resume-runtime-capabilities'
 
-// Why: every agent added to RESUMABLE_TUI_AGENTS after agent-session.host-authority.v1 widens the
-// host's ensureAgentSession enum. An older host answers the unknown member with invalid_argument,
-// which runRemoteAgentSessionLaunch does not treat as a fallback signal, so the pane dies instead
-// of degrading to a legacy launch. Probing the agent's own capability keeps version skew safe.
-// The exhaustive Record makes the next RESUMABLE_TUI_AGENTS entry a compile error until its own
-// gate — or a deliberate `undefined` — is declared here.
+// New resumable enum members can make older hosts return invalid_argument instead of legacy fallback, killing panes. Probe per-agent capability; exhaustive Record requires an explicit gate or deliberate undefined for additions.
 const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // These shipped inside agent-session.host-authority.v1's enum, so the generic probe covers them.
   claude: undefined,
@@ -40,8 +35,7 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   droid: undefined,
   grok: undefined,
   devin: undefined,
-  // Ungated on purpose: prime-agent's host-side status hooks and its enum entry both shipped in
-  // a1f61ef, so no host emits a prime-agent provider session without also accepting the member.
+  // Prime-agent hooks and enum shipped together (a1f61ef); no host publishes its session without accepting it.
   'prime-agent': undefined,
   // Ungated to match how main shipped copilot resume; gating it is its own change.
   copilot: undefined,

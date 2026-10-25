@@ -6,9 +6,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { parseBrowserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
 import { OrcaRuntimeService } from './orca-runtime'
 
-// Why the real service: every other suite stubs this resolver, and its two failure branches are
-// what adoption reads as "retire this page" versus "wait for its host". Stubbing the seam that
-// decides destruction proves only that the caller obeys the answer, never that the answer is right.
+// Use the real resolver: adoption retires missing workspaces but preserves pages awaiting an offline host.
 const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
 const WORKSPACE_ID = `folder:${FOLDER_WORKSPACE_ID}`
 
@@ -26,8 +24,6 @@ describe('browser execution host key resolution', () => {
   })
 
   it('holds a resolvable workspace whose execution host cannot be minted yet', async () => {
-    // A workspace pinned to a runtime environment that is not up: the workspace is still there,
-    // so its pages must survive until the host comes back.
     const runtime = createRuntime({ executionHostId: 'runtime:environment-1' })
 
     await expect(runtime.resolveBrowserExecutionHostKeyForWorkspace(WORKSPACE_ID)).resolves.toEqual(

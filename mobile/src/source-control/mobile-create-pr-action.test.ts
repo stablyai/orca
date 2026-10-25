@@ -138,7 +138,6 @@ describe('buildMobileCreatePrAction', () => {
 
     expect(descriptor).toMatchObject({ visible: true, disabled: true, loading: false })
     descriptor.onPress()
-    // disabled is honored by the Pressable; onPress itself is a no-op guard here
     expect(onCreatePr).not.toHaveBeenCalled()
   })
 
@@ -158,7 +157,6 @@ describe('buildMobileCreatePrAction', () => {
     const onCreatePr = vi.fn()
     const descriptor = buildMobileCreatePrAction({
       branch: 'feature',
-      // stale ready snapshot retained during the next request: chrome stays, action does not fire
       eligibilityState: { kind: 'loading', eligibility: eligibility({ canCreate: true }) },
       busyAction: null,
       onCreatePr
@@ -168,14 +166,8 @@ describe('buildMobileCreatePrAction', () => {
   })
 })
 
-// Issue #8411: the Create PR entry renders directly above the Stage All row and
-// the changed-files list, so appearing late shifts the list down by
-// createPrBlock marginTop (12) + createPrButton height (42) = 54pt while the
-// user is already reading it. The row must keep its footprint across the cold
-// eligibility fetch.
+// Cold eligibility must reserve the Create PR row’s footprint so arriving data cannot shift a list being read.
 describe('cold-mount layout stability (issue #8411)', () => {
-  // useMobileHostedReviewEligibility's real cold-mount sequence for a creatable
-  // branch: no prior snapshot exists, so `loading` carries eligibility: null.
   const coldMount: MobileCreatePrEligibilityState[] = [
     { kind: 'loading', eligibility: null },
     { kind: 'ready', eligibility: eligibility({ canCreate: true }) }
@@ -193,7 +185,6 @@ describe('cold-mount layout stability (issue #8411)', () => {
 
     const footprint = descriptors.map(({ visible }) => visible)
 
-    // On the buggy parent this was [false, true] -- the false -> true step is the jump.
     expect(footprint).toEqual([true, true])
   })
 
@@ -235,8 +226,6 @@ describe('cold-mount layout stability (issue #8411)', () => {
       onCreatePr: vi.fn()
     })
 
-    // Reserving space must not make the placeholder actionable: there is no
-    // canCreate/pushFirst answer yet, so a tap has nothing correct to do.
     expect(descriptor.disabled).toBe(true)
   })
 })

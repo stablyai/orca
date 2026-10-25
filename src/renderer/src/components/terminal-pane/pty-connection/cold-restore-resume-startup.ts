@@ -52,16 +52,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const entry = source.liveEntry
     const sleepingRecord = sleepingRecordEntry?.record
     const useLiveEntry = entry !== null
-    // Why: this is the second issuer of `--resume`, and the one that handles a quit/live record
-    // whose pane still exists — the sweep hands those here rather than launching them. A session id
-    // names a transcript on the machine that captured it, so replaying one over a pane now attached
-    // to a different host answers `No conversation found`. Returning null leaves the pane with a
-    // plain shell and the record intact, which the user can resume by hand.
-    //
-    // Two sources are consulted because either can be the one that knows. `session.executionHostId`
-    // is the pane's own transport and is authoritative when set, but it is still unresolved on an
-    // early reattach frame — and failing open on that frame is precisely when a wrong resume slips
-    // out. The catalog's answer for the record's worktree covers that window.
+    // Resume IDs name host-local transcripts: reject cross-host records, using catalog ownership while the pane transport is unresolved; retain the record for manual recovery.
     if (
       agentResumeOriginNamesAnotherExecutionHost(
         useLiveEntry ? entry.connectionId : sleepingRecord?.connectionId,
@@ -81,8 +72,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
-    // Why: the resume line is typed into this pane's live shell, so its quoting must
-    // follow the tab's effective Windows shell, not the win32 PowerShell default.
+    // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
     const resumeTarget = resolveAgentResumeLaunchTarget({
       projectRuntime: session.projectRuntime,
       connectionId: null,
@@ -109,8 +99,6 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       return null
     }
     const coldRestoreLaunchToken = createBrowserUuid()
-    // Why: cold restore means the PTY process is gone but the agent provider
-    // session is still resumable, so the replacement spawn must launch it.
     return {
       agent,
       command: startupPlan.launchCommand,

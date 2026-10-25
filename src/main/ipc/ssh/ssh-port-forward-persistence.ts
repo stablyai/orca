@@ -5,16 +5,13 @@ import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
-  clearForwardFailure,
   forwardKey,
   isForwardBackingOff,
-  recordForwardFailure
+  recordForwardFailure,
+  recordForwardStarted
 } from './ssh-port-forward-unrestored'
 
-/**
- * Saves the live forwards plus every saved one not live, so a forward a restart left unrestored
- * survives a later add or edit (#32484). `dropped` names the one forward the user removed or edited away.
- */
+/** Retain inactive saved forwards across edits; dropped excludes the removed/replaced mapping (#32484). */
 export function persistPortForwards(
   targetId: string,
   dropped?: Pick<SavedPortForward, 'localPort' | 'remoteHost' | 'remotePort'>
@@ -88,16 +85,17 @@ export async function restorePortForwards(
         await portForwardManager!.removeForwardAndWait(entry.id)
         return
       }
-      clearForwardFailure(targetId, saved)
+      recordForwardStarted(targetId, saved)
     } catch (err) {
       // A teardown or reconnect cancelled this start; the next transport retries without a backoff.
       if (
         err instanceof PortForwardTornDownError ||
+        conn.isDisposed() ||
         connectionManager!.getConnection(targetId) !== conn
       ) {
         return
       }
-      recordForwardFailure(targetId, saved)
+      recordForwardFailure(targetId, saved, err)
       console.warn(
         `[ssh] Failed to restore forward :${saved.localPort} → ${saved.remoteHost}:${saved.remotePort}: ${err instanceof Error ? err.message : String(err)}`
       )

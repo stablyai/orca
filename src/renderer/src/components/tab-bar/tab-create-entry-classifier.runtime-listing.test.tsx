@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
-//
-// Why: every other TabBarCreateEntry suite mocks useRuntimeFileListForWorktree, so the classifier
-// has only ever been graded against hand-written RuntimeFileListState values. That is the same
-// seam #21423 shipped a P0 through in the file explorer. This spec runs the classifier on the
-// listing the real hook returns, mocking only the IPC boundary.
+// Exercise classifier state from the real listing hook; hand-built states cannot catch mismatches at that boundary.
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -80,7 +76,6 @@ function HookProbe({
   return null
 }
 
-/** Render the real list hook and return every state it rendered, in order. */
 async function renderFileList(): Promise<RuntimeFileListState[]> {
   const states: RuntimeFileListState[] = []
   const container = document.createElement('div')

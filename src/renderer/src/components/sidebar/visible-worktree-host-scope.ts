@@ -7,10 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 
-/**
- * Which execution hosts the sidebar is currently scoped to, and whether a row
- * belongs to one of them. Split out of visible-worktrees for the line cap.
- */
+/** Null means all hosts; otherwise return the sidebar’s explicit host scope. */
 export function getVisibleWorkspaceHostIdSet(
   state: Pick<AppState, 'workspaceHostScope' | 'visibleWorkspaceHostIds'>
 ): ReadonlySet<ExecutionHostId> | null {
@@ -34,9 +31,3 @@ export function worktreeMatchesVisibleHost(
     ? visibleHostIds.has(getWorktreeExecutionHostId(worktree, repo, defaultHostId))
     : false
 }
-
-/**
- * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
- * handler can read the exact same ordering the user sees on screen. Pass null
- * on unmount.
- */

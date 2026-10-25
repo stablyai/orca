@@ -176,20 +176,16 @@ describe('ActivityThreadListPane collapsible sections', () => {
       )
     })
 
-    // Initially open: thread row should be visible
     expect(container.textContent).toContain('Test agent')
 
-    // Click header to collapse
     const header = container.querySelector('[role="button"]') as HTMLElement
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // Thread row should now be hidden
     expect(container.textContent).not.toContain('Test agent')
     expect(header.getAttribute('aria-expanded')).toBe('false')
 
-    // Click header again to re-expand
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -235,10 +231,8 @@ describe('ActivityThreadListPane collapsible sections', () => {
       )
     })
 
-    // Controlled as collapsed: thread row should not be rendered
     expect(container.textContent).not.toContain('Test agent')
 
-    // Click header
     const header = container.querySelector('[role="button"]') as HTMLElement
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))

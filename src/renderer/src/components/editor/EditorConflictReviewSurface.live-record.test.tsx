@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-// Why: the conflict-review overview is a read-only live view of the file's shared record (G4).
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,7 +109,6 @@ type RenderOptions = {
   reloadContent?: (file: OpenFile) => void
 }
 
-/** Renders the overview as the panel does: drafts through the panel's draft selector. */
 function render(
   store: StoreApi<AppState>,
   review: OpenFile,

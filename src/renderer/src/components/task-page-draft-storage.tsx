@@ -8,7 +8,6 @@ import {
   type NewJiraIssueDraft
 } from '@/store/slices/task-creation-drafts'
 import { useAppStore } from '@/store'
-// Why: hoisted so the type-guard predicate isn't re-allocated on every render.
 export const hasDivergentSources = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {

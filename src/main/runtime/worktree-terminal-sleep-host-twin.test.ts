@@ -13,7 +13,7 @@ await import('./orca-runtime-test-lifecycle.spec')
 const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } =
   await import('./orca-runtime-test-fixtures.spec')
 
-// A `runtime:` stamp with a nested SSH target: this process launches it with no connection.
+// Runtime-nested SSH routes are not dialled from this process.
 const nestedSshRepo = {
   ...store.getRepos()[0],
   executionHostId: 'runtime:env-a' as const,

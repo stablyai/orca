@@ -13,8 +13,7 @@ import { PairedE2EEV2ClientSession } from '../../../src/shared/paired-e2ee-v2-cl
 import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
 import type { PairedE2EENativeBindings } from './paired-e2ee-native-codec'
 
-// Under Node, react-native-libsodium resolves to its web build: the same libsodium C, as wasm.
-// The codec module's half is a stand-in here; its own Kotlin and Swift tests pin it.
+// Use the package’s wasm libsodium under Node; Kotlin/Swift tests pin the separate codec stand-in.
 const secretboxOpenCalls = vi.fn()
 let bindings: PairedE2EENativeBindings | null = null
 
@@ -49,7 +48,6 @@ function libsodiumBindings(): PairedE2EENativeBindings {
   }
 }
 
-/** A fresh module graph, so the once-only detection runs again with or without native. */
 async function load(withNative: boolean) {
   bindings = withNative ? libsodiumBindings() : null
   vi.resetModules()
@@ -115,7 +113,6 @@ const PAYLOADS = [
   JSON.stringify({ dataBase64: b64(randomBytes(150_000)) })
 ]
 
-/** Every desktop frame for counters 0..n, each preceded by the ways a frame can be wrong. */
 function inboundWire(schedule: ReturnType<typeof derivePairedE2EEV2KeySchedule>) {
   const wire: { frame: string; plaintext: string | null }[] = []
   const seal = (payload: string, counter: bigint, key = schedule.desktopToMobileKey) =>
@@ -174,7 +171,6 @@ describe('the native paired E2EE codec', () => {
     const { primitives: fallbackPrimitives, native: absent } = await load(false)
     expect(native).not.toBeNull()
     expect(absent).toBeNull()
-    // What the desktop's own client session runs: tweetnacl, re-encode, TextDecoder.
     const originalPrimitives: PairedE2EEPrimitives = {
       ...fallbackPrimitives,
       openSecretbox: undefined,
@@ -223,7 +219,7 @@ describe('the native paired E2EE codec', () => {
     }
   })
 
-  // The frame is open and the counter advanced before UTF-8, so a native throw must not drop it.
+  // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
   it('falls back to TextDecoder when native UTF-8 throws', async () => {
     const { primitives } = await load(true)
     bindings!.codec.decodeUtf8 = () => {

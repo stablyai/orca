@@ -1,6 +1,4 @@
-// Layout-owner build: a new tab the window draws has its first terminal started by main, under the
-// window's ids, once main has written the tab; the pane waits and then attaches (D1b-1's wait).
-// Starts main's create cannot yet carry keep the window's own spawn (ledger L252).
+// Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -19,10 +17,7 @@ type StartStore = {
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 
-/**
- * Whether a startup needs the window's own spawn: a field main's create does not carry yet. One
- * predicate, so moving these into main (L252) deletes it.
- */
+/** Window spawn carries startup fields main’s create still lacks; remove this predicate when L252 moves them. */
 export function startupNeedsWindowSpawn(startup: TabStartup | undefined): boolean {
   if (!startup) {
     return false
@@ -54,10 +49,7 @@ export function windowTabStartsInMain(state: AppState, tab: TerminalTab): boolea
   )
 }
 
-/**
- * Shows the pane as starting at once, so it waits for main's terminal instead of spawning its
- * own. Returns the mark, which `startWindowTabInMain` or a refusal later takes back.
- */
+/** Mark immediately so panes wait for main; startWindowTabInMain or refusal later removes the mark. */
 export function markWindowTabStarting(
   store: Pick<StartStore, 'getState' | 'setState'>,
   tabId: string,
@@ -83,10 +75,7 @@ export function clearWindowTabMark(
   store.setState({ terminalPaneStartsByPaneKey: rest })
 }
 
-/**
- * Asks main to start the tab's first terminal, with the startup the tab was made with. The mark
- * stays until the pane can attach: main's binding is drawn, or main's own status took over.
- */
+/** Keep the start mark until main’s binding or status arrives so the pane cannot spawn a second terminal. */
 export function startWindowTabInMain(
   store: StartStore,
   tab: TerminalTab,
@@ -131,8 +120,7 @@ export function startWindowTabInMain(
     (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       if (message === 'host_not_owned') {
-        // Main started nothing and does not hold the tab: the pane starts its own, as before.
-        // Not for a tab the user closed meanwhile: nothing would ever take the startup back.
+        // Restore startup only if main started nothing and the tab remains open; closed tabs cannot consume it.
         if (startup && store.getState().terminalLayoutsByTabId[tab.id]) {
           store.setState({
             pendingStartupByTabId: { ...store.getState().pendingStartupByTabId, [tab.id]: startup }
@@ -146,8 +134,7 @@ export function startWindowTabInMain(
         clearWindowTabMark(store, paneKey, mark)
         return
       }
-      // Not given back: main's start may have run it before failing, and a second run is worse.
-      // Main kept the pane, failed with why; its frame shows the same until then.
+      // Never return startup after main may have run it: duplicate execution is worse. Keep main’s failure until its frame arrives.
       const starts = store.getState().terminalPaneStartsByPaneKey
       if (starts[paneKey] === mark) {
         store.setState({
@@ -161,10 +148,7 @@ export function startWindowTabInMain(
   )
 }
 
-/**
- * Keeps the mark until the pane can attach: any binding main draws for it (its start, or a later
- * rebind), main's own status replacing the mark, or the pane leaving the window.
- */
+/** Release on any drawn binding, main status replacement or pane removal so the mark lasts until attachment is possible. */
 function releaseOnceDrawn(
   store: StartStore,
   tabId: string,

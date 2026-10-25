@@ -122,8 +122,7 @@ describe('plain Node entry guard', () => {
     await expect(runCloseBundle(plugin)).rejects.toThrow('did not reject an empty argv')
   })
 
-  // daemon-entry installs a SIGTERM handler, so the smoke deadline only holds if
-  // it escalates to SIGKILL — spawnSync's own timeout would block here forever.
+  // daemon-entry traps SIGTERM; smoke timeout must escalate to SIGKILL or spawnSync can wait forever.
   it('kills a daemon that traps SIGTERM and never exits', async () => {
     const dir = createOutputDir()
     const plugin = createPlainNodeEntryGuardPlugin({ timeoutMs: 250, killGraceMs: 250 })
@@ -138,8 +137,7 @@ describe('plain Node entry guard', () => {
   }, 10_000)
 })
 
-// Why: writeBundle skips names absent from the bundle, so a renamed rollup input
-// would silently stop guarding that entry instead of failing the build.
+// Fail if entry is renamed: writeBundle otherwise skips missing input and silently drops its guard.
 describe('guarded entry names', () => {
   function runBuildStart(plugin: Plugin, input: unknown): void {
     const hook = plugin.buildStart
@@ -169,11 +167,7 @@ describe('guarded entry names', () => {
   })
 })
 
-// Why (#11161): Electron's module is not registered on worker threads either —
-// require("electron") throws "Cannot find module 'electron'" inside a
-// main-process worker and kills it at startup. The worker entries carried only
-// hand-written "must stay electron-free" comments, and the port-scan worker sits
-// one import away from a client that deliberately does require electron.
+// Electron is unavailable in main-process workers too (#11161); transitive imports can kill startup despite entry-local electron-free comments.
 describe('CLI and worker thread entry guard', () => {
   function runEntryWriteBundle(
     plugin: Plugin,
@@ -334,8 +328,7 @@ describe('CLI and worker thread entry guard', () => {
     expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')
   })
 
-  // The real risk is transitive: a worker entry importing a shared chunk that
-  // reaches the electron-requiring client, not a direct import anyone would spot.
+  // Exercise transitive shared-chunk imports into the electron client, where direct-import checks miss startup failures.
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
     const bundle: Rollup.OutputBundle = {

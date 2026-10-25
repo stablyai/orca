@@ -101,7 +101,6 @@ describe('shouldEntryRefresh', () => {
   })
 
   it('treats a PR timestamp exactly at the cutoff as fresh', () => {
-    // Why: the rule is "older than now - grace", strict less-than. Equal is fresh.
     expect(
       shouldEntryRefresh({
         prFetchedAt: NOW - ENTRY_REFRESH_GRACE_MS,

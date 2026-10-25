@@ -42,8 +42,6 @@ const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
 ]
 
-// A host reply that settled fine at the transport but carries no result — the
-// `result-absent` partition of the reply matrix.
 const RESULT_ABSENT_REPLY: RpcResponse = {
   id: 'x',
   ok: true,
@@ -102,11 +100,8 @@ describe('loadPrSidebarData', () => {
       kind: 'ready',
       data: { pr: PR, details: null, checks: CHECKS, checksError: null }
     })
-    // Details (heavy comments payload) are NOT fetched on the critical path.
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
-    // forBranch's PR number is threaded into prForBranch as the linked hint.
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
-    // The fetched PR head wins over the route's cached status SHA.
     expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
       prNumber: 7,
       headSha: 'sha-pr',
@@ -166,8 +161,7 @@ describe('loadPrSidebarData', () => {
     expect(out).toEqual({ kind: 'none' })
   })
 
-  // Checks are contained, not fatal: even a permanent failure keeps the PR on screen,
-  // because the title/body/comments/merge controls do not depend on the checks read.
+  // Checks failure must preserve the PR’s unrelated title/comments/merge controls.
   it('keeps the PR rendered when the checks read fails, carrying the message', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
@@ -179,8 +173,7 @@ describe('loadPrSidebarData', () => {
     })
   })
 
-  // The reply this whole PR is about: a host whose prChecks shape drifted. The reader
-  // refuses it, and the sidebar must still render the PR with a readable checks message.
+  // Reject malformed check payloads while retaining the PR and readable check-error feedback.
   it('keeps the PR rendered when the host sends a checks reply the reader refuses', async () => {
     const sendRequest = vi.fn(async () => RESULT_ABSENT_REPLY)
     const out = await loadPrSidebarData(
@@ -296,7 +289,6 @@ describe('isPrSidebarDetailsPlaceholder / prSidebarDetailsNeedFetch', () => {
     const placeholder = emptyPrSidebarDetails(PR)
     expect(isPrSidebarDetailsPlaceholder(placeholder)).toBe(true)
     expect(isPrSidebarDetailsPlaceholder(DETAILS)).toBe(false)
-    // Host work-item ids use a colon (`pr:7`); placeholders use a hyphen (`pr-7`).
     expect(
       isPrSidebarDetailsPlaceholder({
         ...DETAILS,

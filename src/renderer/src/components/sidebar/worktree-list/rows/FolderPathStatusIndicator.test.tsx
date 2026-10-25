@@ -29,8 +29,7 @@ describe('FolderPathStatusIndicator', () => {
     expect(markup).toContain('text-destructive')
   })
 
-  // Why: losing the marker is worse than an imprecise one — the sidebar then renders a broken
-  // folder workspace as healthy, with nothing to click and nothing to read.
+  // Keep an imprecise marker for unknown host reasons so broken folders cannot appear healthy.
   it('still renders the marker when a newer host sends an undeclared reason', () => {
     const markup = renderIndicator('permission-denied')
 

@@ -231,7 +231,6 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // First activation recovers immediately (retry timestamps start at 0).
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
@@ -240,8 +239,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Two consecutive failures: the retry window doubled to 60s, so an
-      // activation at +30s must not hammer the endpoint again.
+      // Second failure doubles the retry gate to 60s; +30s must remain throttled.
       await vi.advanceTimersByTimeAsync(30 * 1000)
       window.emit('restore')
       await vi.advanceTimersByTimeAsync(0)
@@ -252,7 +250,6 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
 
-      // Three consecutive failures: 120s window.
       await vi.advanceTimersByTimeAsync(60 * 1000)
       window.emit('show')
       await vi.advanceTimersByTimeAsync(0)
@@ -289,28 +286,24 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Recovery fetch succeeds and must clear the failure streak.
       await vi.advanceTimersByTimeAsync(60 * 1000)
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
       expect(service.getState().claude?.status).toBe('ok')
 
-      // The stale-ok snapshot forces a full refresh, which fails again.
       await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
       expect(service.getState().claude?.status).toBe('error')
 
-      // Consume the stale active-retry timestamp so the next windows measure
-      // the post-recovery streak rather than time elapsed before recovery.
+      // Consume the prior activation timestamp so subsequent delays measure the post-recovery streak.
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
 
-      // Post-recovery streak is 2 (not the pre-recovery 4): the window must be
-      // 60s, so +30s stays throttled and +60s retries.
+      // Recovery reset the streak: the second new failure gates 60s, not the pre-recovery 4-failure duration.
       await vi.advanceTimersByTimeAsync(30 * 1000)
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
@@ -347,20 +340,17 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Healthy providers go stale after 5 minutes, so this activation runs a
-      // full fetch that also retries failing Claude (streak now 3 → 120s).
+      // Stale healthy siblings force a full fetch, advancing Claude's failure backoff too.
       await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
 
-      // Why: the full fetch was itself a retry. An activation moments later
-      // must not fire the individual failure lane ahead of the backoff window.
+      // Full fetch already retried Claude; activation cannot bypass its new backoff.
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
 
-      // Once the 120s window elapses, the individual retry lane fires again.
       await vi.advanceTimersByTimeAsync(120 * 1000)
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
@@ -391,12 +381,11 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // Activations that would normally retry immediately must respect the server's Retry-After.
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // The 15- and 30-minute poll cycles land inside the 40-minute window: other providers refresh, Claude is skipped.
+      // Poll cycles inside Retry-After may refresh siblings, never Claude.
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
       expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(1)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
@@ -404,7 +393,6 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // The 45-minute poll cycle is past the window and refetches Claude.
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(service.getState().claude?.status).toBe('ok')
@@ -456,7 +444,7 @@ describe('RateLimitService', () => {
       await service.refresh()
       expect(service.getState().claude?.status).toBe('ok')
 
-      // 31 minutes later the generic 30-minute stale policy would drop the snapshot; rate-limited failures keep it.
+      // Rate-limited display survives beyond the generic stale cutoff.
       await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
       await service.refresh()
 
@@ -492,9 +480,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(service.getState().claude?.status).toBe('error')
 
-      // Why: the retry must not repaint the settled error chip as a loading
-      // "…" chip while the refetch is in flight — that is the flash users see
-      // every cycle when a provider is stuck failing.
+      // Keep settled error chips visible during retry to avoid loading/error flashes.
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(service.getState().claude?.status).toBe('error')
@@ -515,9 +501,7 @@ describe('RateLimitService', () => {
   it('keeps a full-fetch retry on the 5-minute cadence for a provider without a dedicated fetch cycle', async () => {
     vi.useFakeTimers()
     try {
-      // Kimi has no individual fetch cycle, so recovering it re-runs fetchAll
-      // (which hits Claude's tight-budget endpoint). A durable Kimi error must
-      // not drive that full fetch every 30s — it stays on the 5-minute cadence.
+      // Kimi recovery forces a full fetch including tight-budget Claude; retain five-minute cadence instead of 30s retries.
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
       vi.mocked(fetchKimiRateLimits).mockResolvedValue(errorProvider('kimi', 'token expired'))
@@ -531,21 +515,18 @@ describe('RateLimitService', () => {
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
       expect(service.getState().kimi?.status).toBe('error')
 
-      // First activation recovers immediately (retry timestamps start at 0).
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Well past the 30s failure throttle but inside the 5-minute window: the
-      // full fetch (and the Claude read it entails) must not fire again.
+      // Failure-throttle expiry alone must not trigger another Kimi full cycle.
       await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
       window.emit('show')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // After the full 5-minute window the retry fires again.
       await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
       window.emit('restore')
       await vi.advanceTimersByTimeAsync(0)
@@ -613,7 +594,6 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // A focus within MIN_REFETCH_MS after a GOOD fetch must still no-op.
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
 

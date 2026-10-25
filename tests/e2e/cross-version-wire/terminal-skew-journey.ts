@@ -63,11 +63,7 @@ function nameOpcode(build: TerminalWireBuild, opcode: number): string {
   return typeof name === 'string' ? name : `Opcode${opcode}`
 }
 
-/**
- * A pairing that never advanced. Carries the partial record so a caller can read
- * what the wire actually did — which frames the receiving decoder refused, and
- * which steps completed before the stall.
- */
+// Retain the partial wire record on stalls so refused frames and completed barriers remain inspectable.
 export class CrossVersionJourneyStall extends Error {
   readonly step: JourneyStep
   readonly record: JourneyRecord
@@ -80,15 +76,7 @@ export class CrossVersionJourneyStall extends Error {
   }
 }
 
-/**
- * Drive one terminal journey with a fixed script, so the same byte-identical oracle
- * runs for every host/client version pairing:
- *
- *   subscribe -> first snapshot -> input reaches the process -> live output ->
- *   hide/reveal snapshot -> transport drop -> resubscribe -> input still lands.
- *
- * Every step ends on an observed-state barrier, never on elapsed time.
- */
+// Run the same subscribe/input/output/reveal/reconnect journey for every pairing, with observed-state barriers.
 export async function runTerminalSkewJourney(args: {
   hostBuild: TerminalWireBuild
   clientBuild: TerminalWireBuild
@@ -138,8 +126,7 @@ export async function runTerminalSkewJourney(args: {
     }
   }
 
-  // Name opcodes with whichever build knows more of them, so an unknown opcode in
-  // the journey reads as `Opcode17` instead of silently borrowing a wrong name.
+  // Use the richer opcode table for names so unknown opcodes cannot borrow incorrect labels.
   const namingBuild =
     Object.keys(clientBuild.codec.TerminalStreamOpcode).length >=
     Object.keys(hostBuild.codec.TerminalStreamOpcode).length

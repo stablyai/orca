@@ -1,24 +1,6 @@
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
-/**
- * E2E tests for the "Create Workspace" flow in Orca.
- *
- * Why: the old 'create-worktree' modal was replaced by the composer modal
- * (`activeModal === 'new-workspace-composer'`) in #710. A prior version of
- * this spec bypassed the UI entirely — it called `state.createWorktree(...)`
- * directly on the store — which is why the #1186 regression (a React #31
- * crash when `StartFromField` rendered the new `getBaseRefDefault` envelope
- * as JSX) shipped despite a green suite.
- *
- * The spec now drives the real user flow: open the composer, type a
- * workspace name, click Create, and assert the worktree actually
- * materialized and became active. See `tests/e2e/AGENTS.md` for the rule
- * that E2E assertions must target the DOM, not the store.
- *
- * Note: the original StartFromField regression guard was removed with #1191
- * (Tabbed Create Workspace), which deleted StartFromField/StartFromPicker
- * entirely. The render-error sweep below still catches any React #31-class
- * crash in whatever replaces it.
- */
+// Drive the real Create Workspace composer: old direct store creation missed #1186’s React #31 render crash after #710’s modal replacement.
+// #1191 removed StartFromField, but console/pageerror checks still reject equivalent render crashes; see tests/e2e/AGENTS.md.
 
 import type { ConsoleMessage } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -39,10 +21,7 @@ test.describe('Create Workspace', () => {
   test('creates a worktree through the composer UI and activates it', async ({ orcaPage }) => {
     const worktreeIdBefore = await getActiveWorktreeId(orcaPage)
 
-    // Capture render errors for the #1186 guard. React logs "Objects are not
-    // valid as a React child" via console.error before throwing the
-    // minified-production error #31; capture both paths so the test fails
-    // loudly whether the build is dev or prod.
+    // Capture both console’s invalid-React-child message and pageerror #31 for dev/production render failures.
     const pageErrors: Error[] = []
     orcaPage.on('pageerror', (err) => {
       pageErrors.push(err)
@@ -58,24 +37,16 @@ test.describe('Create Workspace', () => {
     const workspaceName = `e2e-create-${Date.now()}`
 
     try {
-      // 1. Open the composer through the visible affordance so the lazy modal
-      // mount path stays covered along with the composer body.
+      // Open via visible affordance to cover lazy modal mount.
       await openSidebarWorkspaceComposer(orcaPage)
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
 
-      // Wait for the composer to settle. The card fires several async effects
-      // on mount (detected-agent probe, name-field autofocus + hydration,
-      // setup-hooks fetch). Clicking before those settle can race Radix's
-      // FocusScope reparenting.
+      // Wait for agent probe/name focus/hydration/setup hooks before clicking through Radix FocusScope reparenting.
       await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
-      // Force the `getBaseRefDefault` IPC to round-trip so any consumer that
-      // renders the envelope (e.g. SourceControl) has a chance to crash
-      // inside the open modal's React tree — the console/pageerror sweep
-      // below is what catches #1186-class regressions now that the
-      // StartFromField trigger no longer exists (#1191).
+      // Round-trip getBaseRefDefault so envelope consumers can trigger #1186-class render errors after #1191 removed StartFromField.
       await orcaPage.evaluate(async () => {
         const repoId = Object.values(window.__store!.getState().worktreesByRepo).flat()[0]?.repoId
         if (!repoId) {
@@ -85,28 +56,17 @@ test.describe('Create Workspace', () => {
       })
       await orcaPage.waitForTimeout(100)
 
-      // 3. Type the workspace name into the unified smart-name input.
-      // The composer's default mode is 'smart'; its placeholder advertises
-      // multiple input shapes ("Type a name, #1234, branch, GitHub or
-      // Linear URL"). Plain free-form text is treated as a workspace name
-      // by submitQuick, which is what we want here.
+      // Plain text in default smart mode submits as workspace name.
       const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
       await nameInput.fill(workspaceName)
 
-      // 4. Click Create. submitQuick starts the background creation
-      // (createWorktree IPC, then activateAndRevealWorktree) and closes the
-      // modal via onCreated.
       const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
       await expect(createButton).toBeEnabled()
       await createButton.click()
 
-      // 5. The modal closes once submitQuick completes successfully. If
-      // something inside the flow threw (IPC failure, hook error), the modal
-      // would stay open with a createError banner — catch that as a fail.
       await expect(dialog).toBeHidden({ timeout: 15_000 })
 
-      // 6. The new worktree must actually exist on disk and in the store.
       await expect
         .poll(async () => worktreeExists(orcaPage, workspaceName), {
           timeout: 10_000,
@@ -114,8 +74,6 @@ test.describe('Create Workspace', () => {
         })
         .toBe(true)
 
-      // 7. The new worktree must become active (different from whatever was
-      // active before we opened the composer).
       await expect
         .poll(
           async () => {
@@ -126,13 +84,9 @@ test.describe('Create Workspace', () => {
         )
         .toBe(true)
 
-      // 8. A terminal tab must auto-create for the new worktree. This is
-      // the downstream signal that `activateAndRevealWorktree` actually
-      // fired, not just that the store row exists.
+      // Require auto-created terminal to prove activateAndRevealWorktree ran beyond creating the store row.
       await ensureTerminalVisible(orcaPage)
 
-      // Final render-error sweep. Any render crash during the flow (whether
-      // it tore down the modal or bubbled past it) shows up here.
       expect(pageErrors, `pageerror fired: ${pageErrors.map((e) => e.message).join(', ')}`).toEqual(
         []
       )
@@ -339,9 +293,7 @@ test.describe('Create Workspace', () => {
             }
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
-          // Why: the fixture repo has no remote and its default branch name
-          // depends on the host's git init.defaultBranch (main vs master), so
-          // resolve the PR base to HEAD, which always exists regardless.
+          // Use HEAD: the remote-less fixture’s default branch depends on host init.defaultBranch.
           ipcMain.handle('worktrees:resolvePrBase', () => {
             counters.__smartResolvePrBaseCount += 1
             return { baseBranch: 'HEAD' }
@@ -378,10 +330,7 @@ test.describe('Create Workspace', () => {
       })
       await expect(orcaPage.getByRole('option', { name: url })).toHaveCount(0)
       await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
-      // Why: quick create reuses the single GitHub lookup from typing (no
-      // redundant re-fetch), and since #5733 ("Create PR worktrees from the PR
-      // head") it resolves the PR start point exactly once at submit time — so
-      // the base resolves once here rather than being skipped.
+      // Quick create reuses typing’s GitHub lookup; #5733 resolves PR head once at submit, requiring one base resolution.
       await expect
         .poll(() =>
           electronApp.evaluate(() => {
@@ -441,9 +390,7 @@ test.describe('Create Workspace', () => {
             })
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
-          // Why: the fixture repo has no remote and its default branch name
-          // depends on the host's git init.defaultBranch (main vs master), so
-          // resolve the PR base to HEAD, which always exists regardless.
+          // Use HEAD: the remote-less fixture’s default branch depends on host init.defaultBranch.
           ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'HEAD' }))
         },
         { title, url }
@@ -453,10 +400,7 @@ test.describe('Create Workspace', () => {
       await expect(nameInput).toBeVisible()
       await nameInput.fill(url)
 
-      // Why: this is the regression PR #4900 missed — selecting the resolved
-      // suggestion row (instead of submitting the raw URL) must not leave the
-      // pasted URL behind as the workspace name. The suggestion popover is
-      // portaled outside the dialog element, so locate it page-wide.
+      // #4900: selecting resolved suggestion must replace the pasted URL as name; locate its portaled row outside the dialog.
       const suggestion = orcaPage.getByRole('option', { name: linkedWorkspacePattern })
       await expect(suggestion).toBeVisible()
       await orcaPage.keyboard.press('Enter')

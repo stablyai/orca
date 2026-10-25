@@ -137,7 +137,6 @@ describe('worktree scan with a repeated path', () => {
     })
   })
 
-  // What git prints for a registration whose gitdir names the main checkout: its own branch and HEAD.
   it('keeps the main checkout over a stale registration on another branch', async () => {
     gitLists([
       MAIN_ROW,

@@ -148,8 +148,7 @@ describe('stripRepoQualifiers', () => {
   })
 
   it('re-quotes a standalone token that contains whitespace', () => {
-    // Standalone quoted tokens are unwrapped by the tokenizer; the stripper
-    // re-wraps them in quotes so they still serialize as one token.
+    // Re-quote standalone phrases or serialization would split them into separate search tokens.
     const stripped = stripRepoQualifiers('"needs review" repo:x/y')
     expect(stripped).toBe('"needs review"')
   })

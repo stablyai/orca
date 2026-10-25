@@ -1,6 +1,4 @@
-// Ledger L104's reason, as a switch-off window shows it: a stored partition an older writer left
-// restores differently once a full save of main's model rewrites it, so main patches only the
-// records a change touches (record-patch-versus-full-save.test.ts).
+// Full main-model saves change legacy partition restoration; patch only touched records (L104, record-patch-versus-full-save.test.ts).
 
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

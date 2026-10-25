@@ -12,8 +12,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: undefined,
         userGpuMode: 'off'
       })
-      // Why: the mode gate downstream forces DOM; the gate stays open so a later
-      // switch to auto/on can re-attach without waiting for a new title frame.
+      // Keep the content gate open while off forces DOM downstream, so later mode changes can reattach immediately.
       expect(decision).toEqual({
         gpuEnabled: true,
         reason: 'user-setting',

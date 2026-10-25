@@ -1,16 +1,5 @@
-/**
- * A tapped start that the composer's own send gate ends, while the microphone is still opening.
- *
- * Established: on Android every mic tap used to raise the permission activity, which pauses and
- * resumes the React host inside `capture.open()`. `enabled` is the composer's `canSend`, and when
- * it went false the `!enabled` Effect reached the same `cancel()` the user's own does, so a tapped
- * start ended at idle with nothing said.
- *
- * Open: what flips `canSend` on that resume. `connState` does not move across a short background;
- * `activeHandle` is the remaining input and nothing yet establishes what clears it. This case is
- * written at the seam so it does not depend on the answer — whatever flips `enabled`, only the
- * user's own cancel may end a tap in silence.
- */
+// Android microphone permission can pause/resume the host inside capture.open; if canSend becomes false, report the interrupted tap rather than silently cancelling it.
+// The cause of the activeHandle change on resume remains unproven; exercise the enabled seam independently of that cause.
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,7 +9,6 @@ import { MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE } from './mobile-dictation-
 type DeviceLog = {
   calls: string[]
   screen: string[]
-  /** Resolves the permission ask, which is what the activity holds open on the device. */
   releasePermission: (() => void) | null
 }
 
@@ -81,7 +69,6 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
-/** Answers everything the hook has forwarded so far, a few rounds deep. */
 async function pump(rpc: FakeRpcClient): Promise<void> {
   for (let round = 0; round < 8; round += 1) {
     for (const request of rpc.requests.splice(0)) {
@@ -118,12 +105,10 @@ describe('a tapped dictation start the composer disables while the microphone is
       await Promise.resolve()
     })
     expect(dictation().status).toBe('starting')
-    // The composer loses its send while the permission ask is still in flight.
     await act(async () => {
       renderer?.update(createElement(Probe, { client: rpc, enabled: false }))
       await pump(rpc)
     })
-    // The activity goes away and the ask finally answers, too late to record anything.
     await act(async () => {
       device.releasePermission?.()
       await pump(rpc)

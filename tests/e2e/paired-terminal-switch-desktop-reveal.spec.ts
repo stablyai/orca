@@ -1,12 +1,4 @@
-/**
- * `orca terminal switch --environment <server>` run on a desktop's machine must move that desktop
- * to the server's terminal (#24688). The server is a windowless `orca serve`, so before this its
- * answer was `navigated: false` and no window moved.
- *
- * Run:
- *   npx playwright test tests/e2e/paired-terminal-switch-desktop-reveal.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #24688: local CLI terminal switch --environment must select that server terminal on the desktop, even when serve has no window.
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalFocus } from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'

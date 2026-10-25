@@ -1,11 +1,4 @@
-/**
- * The chat tab must survive a close that did not land.
- *
- * `closeStructuredAgentSessionChild` hides the tab BEFORE it issues the close, so every failure
- * shape past that point used to leave the user's chat tab pulled out of the durable restore index
- * for a session that is still running — a destructive operation that refused, and still took
- * something away.
- */
+// Unproven close must restore previously visible tabs so running conversations remain in the durable restore index.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -131,7 +124,6 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(outcome).toEqual({ stopped: true, closeAttempted: true })
     expect(host.visible.has(SESSION)).toBe(false)
     expect(retire).toHaveBeenCalledWith(SESSION)
-    // The hide is the only visibility write a settled close performs.
     expect(host.setSessionTabVisibility.mock.calls).toEqual([HIDE_PENDING_CLOSE])
   })
 
@@ -148,7 +140,6 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
       HIDE_PENDING_CLOSE,
       [SESSION, true, TAB_ID]
     ])
-    // Sent once, after the tab is back: a chat worker's Dispatch reads the chat as open.
     expect(host.notifySessionTabHidden.mock.calls).toEqual([[SESSION]])
     expect(host.notifySessionTabHidden.mock.invocationCallOrder[0]).toBeGreaterThan(
       host.setSessionTabVisibility.mock.invocationCallOrder[1]!
@@ -170,8 +161,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
   })
 
   it('leaves the tab retired when a close throws PAST a proven exit', async () => {
-    // `closeStructuredSessionsForWorktree` re-observes and counts this session closed; republishing
-    // the tab here would resurrect it at the next launch for a workspace that is gone.
+    // After proof of exit, worktree teardown retires tabs; restoring them would resurrect deleted workspaces on next launch.
     const host = installHost({ settledThenThrows: true })
 
     const outcome = await closeStructuredAgentSessionChild(SESSION)
@@ -182,9 +172,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
   })
 
   it('does not put the tab back when the caller is discarding the workspace anyway', async () => {
-    // Worktree teardown passes this off for a removal that cannot refuse — force, and the
-    // folder-workspace paths. A tab put back there is a durable reference to a workspace that is
-    // about to be gone, so it republishes the chat at the next launch pointing at it.
+    // Forced/folder teardown cannot refuse; never restore chat tabs referencing the workspace it will delete.
     const host = installHost({ stuck: true })
 
     const outcome = await closeStructuredAgentSessionChild(SESSION, {

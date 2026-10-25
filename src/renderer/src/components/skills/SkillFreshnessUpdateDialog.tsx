@@ -96,11 +96,7 @@ function runOutcomes(run: SkillUpdateRun): ReadonlyMap<string, BundledSkillOutco
   )
 }
 
-/**
- * Why: settling a run re-plans every skills surface, and the plan is null while that re-reads
- * the disk. Holding the last plan keeps the rows on screen as the result appears; only the live
- * plan can authorize Update.
- */
+/** Hold the previous plan while replanning to preserve result rows; only the live plan may authorize Update. */
 function useHeldSkillPlan(
   plan: BundledSkillPlan | null,
   targetKey: string | null
@@ -116,7 +112,6 @@ function useHeldSkillPlan(
   return [plan ?? heldPlan, () => setHeld(null)]
 }
 
-/** A run's progress or result once Update starts; until then the plan's headline or error. */
 function DialogHeadline({
   run,
   unsupported,
@@ -153,7 +148,6 @@ function DialogHeadline({
   )
 }
 
-/** Re-check, Close or Done, and Update; `updatePlan` is null when there is nothing to update. */
 function SkillUpdateFooter({
   showResult,
   isRunning,

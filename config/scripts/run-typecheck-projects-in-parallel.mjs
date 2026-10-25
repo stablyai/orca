@@ -9,10 +9,7 @@ import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-comp
 
 const BYTES_PER_GIB = 1024 ** 3
 
-// Peak heap per project, read from `tsc --extendedDiagnostics` and rounded up. node and
-// web are the expensive pair: run together they exceed a 16 GB CI runner, and an
-// out-of-memory runner is killed mid-check, so the job reports a lost runner instead of a
-// type error. Admission is therefore by memory, not by core count alone.
+// Admit by measured peak tsc heap, not cores alone: node+web exceed 16GB runners and OOM looks like lost runner rather than type error.
 export const TYPECHECK_PROJECTS = [
   { config: 'config/tsconfig.node.json', heapGib: 7 },
   { config: 'config/tsconfig.tc.web.json', heapGib: 6 },
@@ -32,11 +29,7 @@ export function admissibleHeapGib(totalBytes) {
   return Math.max(1, (totalBytes / BYTES_PER_GIB) * 0.75)
 }
 
-/**
- * Heaviest first, admitting another project only while it fits both the memory budget and
- * the core count. A project larger than the whole budget still runs, alone, so a small
- * machine makes progress rather than producing an empty batch forever.
- */
+// Schedule heaviest first within core/memory budgets; oversized project runs alone so small hosts still progress.
 export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
   const pending = [...projects].sort((left, right) => right.heapGib - left.heapGib)
   const batches = []

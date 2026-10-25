@@ -86,8 +86,7 @@ export function ArtifactListRow({
   item: ArtifactListItem
   deleting: boolean
   isSelected: boolean
-  /** False on the list-final row only: its bottom edge is the Load more block's top rule, or the
-   * table container's own border. */
+  /** Omit only the final divider; the next Load more block or table border supplies that edge. */
   showDivider: boolean
   selectArtifact: (slug: string) => void
   deleteArtifact: (item: ArtifactListItem) => void

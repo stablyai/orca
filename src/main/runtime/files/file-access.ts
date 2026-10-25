@@ -51,9 +51,9 @@ export class RuntimeFileAccess {
         : isMobileMarkdownPath(relativePath)
           ? 'markdown'
           : 'text'
-    // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
+    // File kind does not limit the desktop editor: binaries such as PDFs can open too.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
+    // Reject missing paths/directories before clients treat opened:true as success.
     await this.assertOpenTargetIsFile(filePath, target)
     await this.host.openFile(
       worktree.id,

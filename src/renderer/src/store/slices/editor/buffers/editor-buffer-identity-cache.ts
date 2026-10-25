@@ -61,11 +61,7 @@ export function editorBufferIdentityKeyOf(
   return key
 }
 
-/**
- * The record a view belongs to before joins: its identity for edit views (read-only included),
- * else the view itself. Host-mirrored views share among themselves only, never with local views:
- * their buffer state is the host's.
- */
+/** Edit views use identity keys; nonedit views own records. Host mirrors share only with mirrors because host owns their buffer state. */
 export function editorBufferIdForFile(file: OpenFile, state: EditorBufferRouteState): string {
   const key = editorBufferIdentityKeyOf(file, state)
   if (key === null) {

@@ -1,12 +1,7 @@
 import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
 import { getIntlLocale } from '@/i18n/i18n'
 
-/**
- * Returns a short human-readable label for a usage window duration.
- *
- * Why: 10080 minutes (7 days) is hard-coded as "wk" for backward
- * compatibility with the original StatusBar implementation.
- */
+/** Format usage-window duration; retain 10080 minutes → wk compatibility with the original status bar. */
 export function formatWindowLabel(windowMinutes: number): string {
   const locale = getIntlLocale()
   if (locale.startsWith('ru')) {
@@ -47,15 +42,7 @@ export function formatWindowLabel(windowMinutes: number): string {
   return `${windowMinutes}m`
 }
 
-/**
- * Status-bar chip label for a rate-limit window.
- *
- * Why: the popup already shows remaining time via formatResetCountdown
- * ("Resets in 2h 33m"). The chip used fixed windowMinutes labels ("5h"),
- * so the same Codex session looked out of sync (#8378). Prefer remaining
- * duration when resetsAt is known; fall back to the fixed window size only
- * when no reset timestamp is available.
- */
+/** Match popup remaining-time labels when resetsAt exists (#8378); otherwise use fixed window duration. */
 export function formatRateLimitWindowChipLabel(
   window: { windowMinutes: number; resetsAt: number | null },
   now: number = Date.now()

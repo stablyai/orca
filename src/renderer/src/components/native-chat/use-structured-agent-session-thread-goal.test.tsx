@@ -44,7 +44,6 @@ function clearedRow(sequence: number): AgentJournalRenderItem {
 
 type MutateCall = (...args: unknown[]) => Promise<unknown>
 
-/** The hook reads only whether an answer is null, so a mock need not carry the generic. */
 function mutateWith(answer: MutateCall): {
   mutate: StructuredAgentSessionMutate
   calls: MutateCall
@@ -101,7 +100,6 @@ describe('useStructuredAgentSessionThreadGoal', () => {
     const fromHost = harness({ support: { current: older } })
     expect(fromHost.result.current?.goal).toEqual(older)
 
-    // A clear in the window outranks a host answer read before it.
     const cleared = harness({ journalItems: [clearedRow(2)], support: { current: older } })
     expect(cleared.result.current?.goal).toBeNull()
   })

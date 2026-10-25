@@ -92,7 +92,6 @@ export function getClientCreationActionPolicy(
   })
 }
 
-/** The store fields that decide where a runtime's browser pages render. */
 export type RuntimeBrowserHostingState = {
   runtimeStatusByEnvironmentId?: ReadonlyMap<
     string,
@@ -102,10 +101,7 @@ export type RuntimeBrowserHostingState = {
   settings?: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'> | null
 }
 
-/**
- * A runtime with no browser of its own (orcad) whose pages this desktop hosts, network tunnelled
- * through the runtime. A managed SSH deployment keeps desktop tabs on its SSH browser route.
- */
+/** Host orcad browser pages on this desktop through runtime tunnels; managed SSH deployments retain the SSH browser route. */
 export function runtimeHostsPagesOnThisDesktop(
   state: RuntimeBrowserHostingState,
   runtimeEnvironmentId: string

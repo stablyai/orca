@@ -1,5 +1,4 @@
-// A status write costs what it touches: a parent publish or a child update must not grow with
-// every other session's children. Ratios of interleaved medians, so a loaded machine slows both.
+// Check parent/child write cost against unrelated session growth using interleaved median ratios to share machine load.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkInput } from './agent-status-child-work'

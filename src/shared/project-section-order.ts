@@ -6,11 +6,8 @@ import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order
 
 export type ActivityItem = { lastActivityAt?: number }
 
-// Why: disambiguate a section's *own* label, not its anchor checkout's repo
-// name. Substituting repo.displayName made a project header read the project
-// name while it was the only repo-backed section and the checkout name as soon
-// as a second one rendered, so filtering workspaces renamed the project
-// (#16127). Path suffixes still resolve genuinely identical labels.
+// Disambiguate each section’s own label, never its anchor checkout’s name: filtering checkout rows previously renamed
+// project headers (#16127). Path suffixes still resolve genuinely identical labels.
 export function withRepoSectionDisplayLabels<
   E extends ProjectSectionEntry<ActivityItem, ProjectSectionRepo>
 >(entries: readonly [string, E][]): [string, E][] {
@@ -29,12 +26,7 @@ export function withRepoSectionDisplayLabels<
   ])
 }
 
-/**
- * Recent rank for a project header. `hasActivity` projects (at least one
- * visible worktree) always sort before fallback projects, regardless of the
- * numeric values — a placeholder's `addedAt` must never outrank real activity.
- * Within each tier, higher timestamps come first.
- */
+/** Visible activity always beats placeholder addedAt; within each tier, newest timestamps rank first. */
 type RecentRank = { hasActivity: boolean; ts: number }
 
 export function recentRankForEntry(
@@ -48,8 +40,7 @@ export function recentRankForEntry(
     }
   }
   if (max !== Number.NEGATIVE_INFINITY) {
-    // Why: Recent must be timestamp-based, not encounter order — the incoming
-    // array is no longer pre-sorted by recency once decoupled from sortBy.
+    // Use timestamps because incoming rows are no longer presorted once project order is independent of workspace sort.
     return { hasActivity: true, ts: max }
   }
   const addedAt = entry[1].repo?.addedAt
@@ -121,12 +112,7 @@ export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
   return anchor
 }
 
-/**
- * Order project header entries by the user's project-order preference. Manual
- * follows the canonical repoOrder; Recent follows each project's most recent
- * visible workspace activity (descending), with empty/imported-only projects
- * sorting after active ones, then by manual rank, then label.
- */
+/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. */
 export function sortProjectEntries<
   T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
 >(
@@ -165,10 +151,7 @@ export function sortProjectEntries<
   })
 }
 
-/**
- * Project sections in header order. Each header anchors on the repo that leads manual order, so
- * drag and actions target the same persisted order source the row sorter reads.
- */
+/** Anchor headers on the leading manual repo so dragging/actions and row sorting share the persisted ordering source. */
 export function orderProjectSections<
   R extends ProjectSectionRepo,
   E extends ProjectSectionEntry<ActivityItem, R>
@@ -181,8 +164,7 @@ export function orderProjectSections<
   for (const section of sections.values()) {
     section.repo = getManualOrderAnchorRepo(section, repoMap, repoOrder)
   }
-  // Why: project header order is its own user choice (projectOrderBy), decoupled from workspace
-  // sortBy. Manual uses the canonical repoOrder; Recent follows activity.
+  // Project header order is independent of workspace sortBy.
   return sortProjectEntries(Array.from(sections.entries()), projectOrderBy, repoOrder)
 }
 
@@ -192,8 +174,7 @@ export function getLogicalRepoOrderRankById(
 ): Map<string, number> {
   const rankById = new Map<string, number>()
   orderedRepoIds.forEach((repoId, index) => {
-    // Why: paired hosts can contribute the same logical project ID; its merged
-    // header must anchor to the first occurrence instead of whichever host loaded last.
+    // Shared logical project IDs anchor to first occurrence, independent of host load order.
     if (!rankById.has(repoId)) {
       rankById.set(repoId, index)
     }

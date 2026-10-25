@@ -68,8 +68,7 @@ export function verifyDeviceProof(args: {
   )
 }
 
-// Why: labels reach the owner's device list and approval dialog; control and bidi
-// characters could disguise one device as another.
+// Remove controls/bidi from approval/device-list labels so one device cannot disguise itself as another.
 export function sanitizeDeviceLabel(value: unknown, fallback: string): string {
   if (typeof value !== 'string') {
     return fallback

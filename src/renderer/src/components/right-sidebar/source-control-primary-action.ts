@@ -1,5 +1,3 @@
-// Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
-
 import {
   resolveSourceControlCommitAreaPrimaryActionDecision,
   resolveSourceControlPrimaryActionDecision
@@ -25,29 +23,9 @@ export type {
   PrimaryActionInputs
 } from './source-control-primary-action-types'
 
-// Why: the shared module owns the pure state-machine logic; this renderer
-// adapter keeps localized copy and the historical exported shape in place.
+// Shared code owns the state machine; this adapter preserves localized copy and renderer exports.
 
-/**
- * Resolve the primary split-button action.
- *
- * Priority order mirrors the design-doc state machine:
- *   1. In-flight commit locks the primary to a disabled "Commit".
- *   2. In-flight remote operation keeps the current label but disables it.
- *   3. Unresolved conflicts block the commit path entirely.
- *   4. Create PR intent can own the primary; manual prerequisites are
- *      exposed as a visible sibling action by CommitArea.
- *   5. Has staged files + message → plain "Commit" (compound flows live in
- *      the dropdown; after the commit lands, the clean-tree rung rotates
- *      the primary to the appropriate single remote action).
- *   6. Has staged files + no message → disabled "Commit" with a reason.
- *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
- *
- * An undefined upstream status means fetchUpstreamStatus has not resolved
- * yet for this worktree. We return a disabled Commit so the button has a
- * stable frame until the real status lands — otherwise it would flash
- * through "Publish Branch" on every worktree switch.
- */
+/** Keep action priority in the shared resolver; undefined upstream remains loading to avoid transient Publish labels on switches. */
 export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction {
   return toRendererPrimaryAction(resolveSourceControlPrimaryActionDecision(inputs), inputs)
 }

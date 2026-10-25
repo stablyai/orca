@@ -3,15 +3,12 @@ import { buildAgentLaunchRouteInput, type AgentLaunchRouteStore } from './agent-
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
 
-// Deliberately un-mocked: the defect this pins lives in the owner resolution itself, so a suite
-// that stages `getConnectionIdFromState` cannot catch it. Grok is the agent the answer routes on —
-// only agents whose hook discloses no transcript path read the local-readability input at all.
+// Use real owner resolution to catch ambiguous-host fallback; Grok’s local transcript policy makes this answer affect routing.
 const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true }
 const WORKTREE_ID = 'repo-1::/repo/wt-1'
 const WORKSPACE = { kind: 'git-worktree', worktreeId: WORKTREE_ID, repoId: 'repo-1' } as const
 
-/** Rival repos publishing the same worktree id on different hosts: the documented case where owner
- *  resolution refuses to name a connection rather than authorize a local read of a remote path. */
+/** Same-ID workspaces on rival hosts must leave ownership unresolved rather than authorize reading a remote path locally. */
 function storeWithAmbiguousWorktreeRows(
   repoConnectionId: string | null
 ): AgentLaunchRouteStore & { repos: unknown[] } {
@@ -27,8 +24,7 @@ function storeWithAmbiguousWorktreeRows(
 
 describe('launch route transcript readability', () => {
   it('cannot name the connection from the worktree when its rows disagree', () => {
-    // The premise of the fallback: this is what returns `undefined`, and `undefined` is not
-    // evidence that the transcript is unreadable.
+    // An undefined owner answer does not prove the transcript unreadable.
     expect(
       getConnectionIdFromState(storeWithAmbiguousWorktreeRows(null), WORKTREE_ID)
     ).toBeUndefined()

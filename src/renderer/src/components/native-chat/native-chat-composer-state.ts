@@ -99,9 +99,7 @@ export function deriveComposerAutocomplete(
       ? { mode: 'none' }
       : { mode: 'mention', query: mentionMatch[1], triggerKey }
   }
-  // Why: `/` is the shared composer grammar, so a mid-prompt token opens the same
-  // menu a leading one does — it just cannot dispatch. `$` is the skill sigil's own
-  // skills-only menu.
+  // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
   const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
   const query = sigilQuery ?? (profile ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1] : undefined)
   if (query === undefined) {
@@ -134,9 +132,7 @@ function deriveSlashAutocomplete(
   if (dismissedTriggerKey === triggerKey) {
     return { mode: 'none' }
   }
-  // Every agent with a known grammar offers skills here; only the token a pick
-  // inserts differs. The caller owns catalog policy (e.g. Grok ships skills-only
-  // until a verified catalog lands), so this derivation must not re-gate per agent.
+  // Known agent grammar enables skills; the caller owns catalog policy, while this layer formats tokens.
   const skillsEnabled = profile !== null
   const namePrefix = profile?.skillNamePrefix
   // Scanned names take the agent's prefix so they match the names its session reports.
@@ -176,10 +172,7 @@ function deriveSlashAutocomplete(
   }
 }
 
-/** True when one edit both removed and inserted text across the dismissed
- *  trigger token — a wholesale replacement (e.g. select-all + paste), which is
- *  a new trigger occurrence even though a trigger character lands back on the
- *  same draft position. Typing or deleting inside the token is not. */
+/** Replacing across an entire dismissed token starts a new occurrence; typing/deleting within it does not. */
 export function editReplacesTriggerToken(
   previous: string,
   next: string,

@@ -1,5 +1,3 @@
-// One layout tab from today's two records per terminal tab (the row and the tab-bar entry).
-
 import type { Tab } from '../tab-types'
 import type { TerminalTab } from '../terminal-tab-types'
 import type {
@@ -68,11 +66,7 @@ export function loadTerminalTab(
   }
 }
 
-/**
- * A saved session's later editor tabs for a file one group already shows, by tab id → the tab
- * kept: the window's restore folds them the same way (dedupeEditorTabsWithinGroups), keeping the
- * one its strip shows first. Older builds could save them; layout-owner builds only.
- */
+/** In layout-owner builds, fold duplicate editor tabs within a group into the first tab in strip order, matching dedupeEditorTabsWithinGroups. */
 export function duplicateEditorTabAliases(entries: readonly Tab[]): Map<string, string> {
   const aliases = new Map<string, string>()
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {

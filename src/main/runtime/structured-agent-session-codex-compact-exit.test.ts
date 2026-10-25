@@ -1,5 +1,4 @@
-// A Codex child that exits, or that Stop ends, while `/compact` runs, observed the way the shipping
-// adapter observes it: the app-server connection's own exit, not a hand-fed compaction result.
+// Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'

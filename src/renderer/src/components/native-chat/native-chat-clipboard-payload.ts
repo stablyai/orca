@@ -1,7 +1,6 @@
 import { isMacPlatform } from './native-chat-shortcut'
 
-/** Minimal shape shared by React's synthetic ClipboardEvent and the native DOM
- *  ClipboardEvent — the pane-level listener delivers the native one. */
+/** Accept native pane clipboard events and React synthetic events. */
 export type ClipboardEventLike = {
   clipboardData: DataTransfer | null
   preventDefault: () => void
@@ -33,11 +32,7 @@ function labelledFileName(line: string): string {
   return /^(?:\/|[A-Za-z]:[\\/])/.test(line) ? lastPathSegment(line) : line
 }
 
-/**
- * True when the text only labels the copied files, one line per file: a file
- * manager puts that label beside the files, and it is not prompt text.
- * `files` are the copied files' names or paths.
- */
+/** Treat one filename/path/file URL per copied file as attachment labels, not prompt text. */
 export function textOnlyLabelsCopiedFiles(text: string, files: readonly string[]): boolean {
   if (files.length === 0) {
     return false
@@ -64,8 +59,7 @@ export function clipboardEventPromptText(
   return textOnlyLabelsCopiedFiles(text, names) ? '' : text
 }
 
-/** The files a paste event copied, resolved the way a drop resolves its files; empty unless
- *  every file has a local path and the event's text only labels them. */
+/** Use drop-style resolution only when every copied file has a local path and text contains labels alone. */
 export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string[] {
   const files = Array.from(event.clipboardData?.files ?? [])
   const fs = window.api?.fs
@@ -94,8 +88,7 @@ function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
   return filePaths.length > 0 && (text === '' || textOnlyLabelsCopiedFiles(text, filePaths))
 }
 
-/** The clipboard's text, and the files a file manager copied when the text only labels them.
- *  `eventFilePaths`: the files a paste event already carried, instead of reading them again. */
+/** Separate copied-file labels from prompt text; reuse eventFilePaths when the event already resolved them. */
 export async function readClipboardPasteText(
   maxBytes: number,
   eventFilePaths?: string[]

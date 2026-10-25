@@ -52,8 +52,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
-        // Why: the live data attribute updates before React state during navigation,
-        // so it must own the complete active style without stale utility classes.
+        // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget
           ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : isActiveSurface
@@ -66,12 +65,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        // Why: sleep dim carries the awake/sleeping distinction in new-card style,
-        // where quiet statuses share the branch/PR lane (#19624). Same token as
-        // the disconnected dim; legacy keeps its green/gray dots untouched.
-        // Why: no SSH dim — the inline host control now states the disconnected state
-        // explicitly, and a subtree opacity would composite its destructive tint and spinner
-        // down to an illegible alpha (a descendant cannot escape an ancestor's opacity).
+        // Dim disconnected runtimes only; ancestor opacity would make the SSH control’s error tint/spinner illegible.
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
@@ -101,10 +95,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         </div>
       )}
       {isSleeping && newCardStyle && !isDeleting ? (
-        // Why a token mix (see [data-worktree-sleeping-dim] in main.css), not opacity:
-        // opacity dims toward whatever is painted behind, so the step shrank on lighter
-        // surfaces and vanished on custom backgrounds (#19624). Scoped to the parent row
-        // so awake lineage children keep their own brightness.
+        // Mix tokens for background-independent sleep dimming; scope to the parent so awake children stay bright.
         <div data-worktree-sleeping-dim="">{parentCardContent}</div>
       ) : (
         parentCardContent

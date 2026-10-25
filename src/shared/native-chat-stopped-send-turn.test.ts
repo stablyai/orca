@@ -1,6 +1,3 @@
-// Which turn a send a Stop took back before its echo opened, by the turn the host names it answered
-// into, and where it is drawn when that turn's record is not loaded.
-
 import { describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import type {
@@ -94,8 +91,7 @@ function drawn(items: AgentJournalRenderItem[], submissions: AgentJournalSubmiss
 
 describe('a send a Stop took back before its echo', () => {
   it('opens the turn the host names, not an earlier send taken back across it', () => {
-    // `queued` was sent first and taken back after the record too, but the host names `opener`.
-    // Both rows sit where they were taken back.
+    // Both sends were taken back after the record, but explicit host attribution picks opener over earlier queued.
     const items = [
       turn('t1', 3, 'codex:thread-1:t1:0'),
       stopNote('t1', 4),
@@ -157,8 +153,7 @@ describe('a send a Stop took back before its echo', () => {
   })
 
   it('opens no turn the host states it named none for, though it was sent before the record and taken back after', () => {
-    // A page whose turn's echoed opener is on an older page: only the record is loaded.
-    // Its times would pass an older host's clock claim.
+    // Only the turn record is loaded; its echoed opener is on an earlier page. Legacy clock attribution would falsely claim this send.
     const items = [turn('t1', 3, 'codex:thread-1:t1:0', 5), stopNote('t1', 4), sent('queued', 5)]
     const submissions = [
       stopped('queued', {
@@ -202,8 +197,7 @@ describe('a send a Stop took back before its echo', () => {
   })
 })
 
-// Rows a host wrote before it named turns carry neither the turn nor `null`. A newer host still
-// publishes where each was sent and has moved its row to the take-back, so journal order places it.
+// Old chats lack explicit turn attribution; newer hosts still expose sent sequence and move take-back rows, so preserve journal-order placement.
 describe('a send a Stop took back before its echo, in history written before the host named turns', () => {
   it('opens the turn recorded after it was sent and before it was taken back', () => {
     const items = [turn('t1', 2, 'codex:thread-1:t1:0'), stopNote('t1', 3), sent('opener', 4)]

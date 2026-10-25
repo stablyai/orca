@@ -78,16 +78,19 @@ describe('dropInheritedDevInstanceEnv', () => {
       ORCA_USER_DATA_PATH: '/profiles/parent',
       ORCA_DEV_USER_DATA_PATH: '/profiles/parent'
     }
-    dropInheritedDevInstanceEnv(inherited, '/worktrees/child')
-    expect(inherited).toEqual({ ORCA_USER_DATA_PATH: '/profiles/parent' })
-
-    const explicit = { ...inherited, ORCA_DEV_USER_DATA_PATH: '/profiles/mine' }
-    dropInheritedDevInstanceEnv(explicit, '/worktrees/child')
-    expect(explicit.ORCA_DEV_USER_DATA_PATH).toBe('/profiles/mine')
-
     const same = { ...inherited }
     dropInheritedDevInstanceEnv(same, '/worktrees/parent')
     expect(same).toEqual(inherited)
+
+    const explicit = { ...inherited, ORCA_DEV_USER_DATA_PATH: '/profiles/mine' }
+    dropInheritedDevInstanceEnv(explicit, '/worktrees/child')
+    expect(explicit).toEqual({
+      ORCA_USER_DATA_PATH: '/profiles/parent',
+      ORCA_DEV_USER_DATA_PATH: '/profiles/mine'
+    })
+
+    dropInheritedDevInstanceEnv(inherited, '/worktrees/child')
+    expect(inherited).toEqual({ ORCA_USER_DATA_PATH: '/profiles/parent' })
   })
 })
 

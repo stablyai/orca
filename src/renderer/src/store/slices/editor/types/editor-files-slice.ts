@@ -48,7 +48,6 @@ export type OpenFileOptions = {
 }
 
 export type EditorFilesSlice = {
-  // Open files / editor tabs
   openFiles: OpenFile[]
   /** Buffer state per record (file identity, or tab id for views that never share); views mirror it. */
   editorBuffers: EditorBufferRecords
@@ -73,15 +72,12 @@ export type EditorFilesSlice = {
   /** Keeps views on retired environments off every other record, with their drafts. */
   detachRetiredEditorBuffers: (environmentIds: readonly string[]) => void
   activeFileId: string | null
-  activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
+  activeFileIdByWorktree: Record<string, string | null>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId: string | null) => void
   openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: OpenFileOptions) => string
-  /**
-   * openFile for a captured link activation; returns the view, or null when refused. `onShown`
-   * gets the view once drawn: a layout-owner build draws a new tab only with main's frame.
-   */
+  /** Open captured link intent; null on refusal. onShown receives actual view after drawing, which requires main frame in layout-owner builds. */
   openFileForLink: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options: Omit<OpenFileOptions, 'targetGroupId' | 'focusEditor' | 'selection'> | undefined,
@@ -136,7 +132,7 @@ export type EditorFilesSlice = {
   /** `undefined` un-records a baseline a failed operation stamped provisionally. */
   setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void
   clearSelfMoveEcho: (fileId: string) => void
-  /** Atomically retargets open editor sessions across an Orca-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
+  /** Atomically migrate path/ID-keyed editor state without close/reopen; stale/colliding moves leave state unchanged. */
   rekeyOpenFilesForPathChange: (args: {
     rekeys: readonly OpenFilePathRekey[]
     /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */

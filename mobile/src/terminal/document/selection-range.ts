@@ -2,7 +2,6 @@ import { getLineText } from './cell-geometry'
 import type { TerminalDocumentScope, TerminalDocumentSelection } from './document-scope'
 import type { TerminalDocumentLine } from './document-terminal-shape'
 
-/** What counts as one word for select-all and for word seeding. */
 const WORD_RE = /[\p{L}\p{N}_./:@~+=?&#%-]/u
 
 type SelectionUnit = { text: string; start: number; end: number }
@@ -57,7 +56,6 @@ function wordCellRange(line: TerminalDocumentLine | undefined, col: number, cols
   return { start: units[start].start, end: units[end].end }
 }
 
-/** The ordered ends of the selection, whichever way the user dragged it. */
 export type TerminalSelectionRange = {
   start: TerminalDocumentSelection['anchor']
   end: TerminalDocumentSelection['anchor']
@@ -131,11 +129,7 @@ export function applyXtermSelection(scope: TerminalDocumentScope) {
   if (!r) {
     return
   }
-  // Why: term.select(col, row, length) takes a buffer-absolute row,
-  // not a viewport-relative one. Subtracting viewportY here drifts the
-  // selection by the scrollback height — handles render where the user
-  // pressed (their math is independent), but xterm highlights an
-  // off-screen scrollback region and copies the wrong text.
+  // term.select needs buffer-absolute rows; subtracting viewportY would highlight and copy the wrong scrollback.
   let length: number
   if (r.start.row === r.end.row) {
     length = Math.max(1, r.end.col - r.start.col + 1)

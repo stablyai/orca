@@ -75,7 +75,7 @@ function terminalPane(id: number): FakePane {
 function composerHandle(): NativeChatComposerHandle & { element: HTMLElement } {
   const element = document.createElement('div')
   element.contentEditable = 'true'
-  // Production marks the composer field box and the pane-wide drop surface alike.
+  // Composer fields and pane-wide drop surfaces share this scope marker.
   element.dataset.composerScopeKey = 'pane'
   return {
     element,
@@ -109,7 +109,6 @@ function ChatRoot({
   const answerRef = sharedAnswerRef ?? ownAnswerRef
   useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef: answerRef })
   return (
-    // Mirrors NativeChatPaneFileDropSurface, which publishes the composer scope pane-wide.
     <div data-composer-scope-key="pane">
       <div
         ref={(node) => {
@@ -269,7 +268,6 @@ describe('a chat cover owns focus over its terminal', () => {
     f.cover()
     expect(document.activeElement).toBe(f.shell())
     expect(f.pane.terminal.element?.inert).toBe(true)
-    // Any of the unguarded terminal.focus() paths (focus-follows-mouse, pane menus) now no-ops.
     f.pane.terminal.focus()
     expect(document.activeElement).toBe(f.shell())
   })

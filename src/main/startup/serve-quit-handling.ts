@@ -4,13 +4,9 @@ import { quitProcess } from './process-quit-request'
 import { installServeNativeQuitGuard } from './serve-native-quit-guard'
 import { registerServeSignalHandlers } from './serve-signal-handlers'
 
-/**
- * Signals end a serve host; a user or OS-native Quit only closes its desktop windows (#15537).
- * Why after app ready: these Node listeners then preempt Electron's native SIGTERM/SIGINT quit,
- * so the native-quit guard only ever sees user and OS terminates.
- */
+/** Register after ready to reclaim Node signals from Electron native handling; signals terminate serve while user Quit closes desktop windows (#15537). */
 export function installServeQuitHandling(): void {
-  // Why every attempt reaches app.quit(): a page beforeunload can veto an earlier signal.
+  // Retry app.quit for every signal: renderer beforeunload may have vetoed the previous attempt.
   registerServeSignalHandlers(process, quitProcess)
   installServeNativeQuitGuard({
     platform: process.platform,

@@ -64,8 +64,7 @@ const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 
 const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
   antigravity: '--effort low',
-  // Why: Source Control AI action prompts are short, reviewable tasks; the
-  // mini Codex model is a better default hint than the frontier model.
+  // Short, reviewable Source Control prompts default to the mini model.
   codex: '--model gpt-5.4-mini',
   copilot: '--model gpt-5.4-mini',
   omp: '--model <provider/model>'
@@ -99,9 +98,7 @@ export function getSourceControlAgentArgsPlaceholder(
   return `${MODEL_FLAG_BY_AGENT[agentId] ?? '--model'} ${capability.defaultModelId}`
 }
 
-// Why: text-generation actions can only run agents that produce a single
-// response, so restrict the picker while still surfacing an already-selected
-// agent even if it is no longer a supported text generator.
+// Only text generators can run these actions; retain unsupported saved selections for visibility.
 export function getAgentCatalogForAction(
   actionId: AiActionId,
   selectedAgent: TuiAgent | CustomAgentId | null | undefined

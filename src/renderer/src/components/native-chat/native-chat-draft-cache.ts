@@ -4,11 +4,7 @@ import type {
   NativeChatComposerDraftImage,
   NativeChatComposerDraftOwner
 } from './native-chat-composer-draft-storage'
-// The composer's in-progress draft text and its editor document, keyed by the same stable pane
-// scope as image attachments. The composer unmounts when the pane toggles back to the hosted
-// terminal, so without this the typed-but-unsent draft would be lost on every TUI/GUI round-trip.
-// A view of native-chat-composer-draft-store, which owns the whole draft and keeps it across a
-// reload or quit.
+// Expose text/document views of the durable whole-draft store so TUI switches and reloads retain unsent input.
 
 import {
   appendToNativeChatComposerDraft,
@@ -42,8 +38,7 @@ export function writeNativeChatDraftCache(
 // Why: a composer mid-IME-composition keeps showing what it had, so it is told what was appended.
 const appendListeners = new Map<string, Set<(text: string, previous: string) => void>>()
 
-/** Puts text back after whatever is typed, and tells a mounted composer to show it. True once it
- *  is durable, so the copy it came from may go. */
+/** Append returned text and notify mounted composers; true means durable hand-back so its source copy may go. */
 export function appendNativeChatDraftCache(
   scopeKey: string,
   text: string,
@@ -55,7 +50,6 @@ export function appendNativeChatDraftCache(
     return true
   }
   const previous = readNativeChatDraftCache(scopeKey)
-  // Durable now: the copy it came from (a send handed back, a queued card) goes right after this.
   const durable = appendToNativeChatComposerDraft(scopeKey, { text, images }, owner)
   // Why: an addition the draft already held adds nothing, so a composer must not show it again.
   if (readNativeChatDraftCache(scopeKey) !== previous) {
@@ -110,9 +104,7 @@ export function readNativeChatAttachmentCache(
   return readNativeChatComposerDraft(scopeKey).images.map((image) => ({ ...image }))
 }
 
-/** Adds settled images after the ones the draft holds now, durably at once: when Stop gives images
- *  back, the copy they came from goes right after this. Only an image the user attaches
- *  (`fromUser`) takes the place of a placeholder with its file name, as a re-pick does. */
+/** Persist returned images immediately; only explicit user reattachment replaces same-named unavailable placeholders. */
 export function appendNativeChatAttachmentCache(
   scopeKey: string,
   appended: readonly NativeChatComposerImageAttachment[],

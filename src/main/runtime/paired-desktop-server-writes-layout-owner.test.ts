@@ -1,6 +1,4 @@
-// Layout-owner build: what a paired desktop sends a server for a workspace that server's frames draw
-// (H5c-2). A close goes by session.tabs.close, which main applies and whose terminals it stops; a
-// window-style `layout.apply` closeTabs stops nothing, which is why the desktop never routes one.
+// Paired close uses session.tabs.close to stop host terminals; window-style layout.apply assumes its window already stopped them.
 import { describe, expect, it, vi } from 'vitest'
 import {
   LEAF_A,
@@ -36,7 +34,7 @@ const desktopClose = (fixture: Fixture) =>
     clientNavigationId: 'paired-desktop'
   })
 
-// A window's session.tabs rows come from its renderer's publish, which this harness has none of.
+// This harness has no renderer publication, so only main-owned session rows exist.
 describe('a paired desktop’s close of a tab a server’s main owns, with no window', () => {
   it('closes the tab in main’s layout and stops its terminal', async () => {
     const fixture = setupMainOwnedWorkspace()

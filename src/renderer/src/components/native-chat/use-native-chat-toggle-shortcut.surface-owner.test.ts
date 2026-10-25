@@ -63,8 +63,7 @@ function pressToggleFrom(target: HTMLElement): void {
   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
 }
 
-// The floating panel and the main window mount the same surface side by side; one key press
-// must toggle only the surface it came from.
+// Main and floating surfaces mount together; one key press must toggle only its originating surface.
 describe('native chat toggle with the floating panel on screen', () => {
   afterEach(() => {
     cleanup()

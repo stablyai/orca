@@ -20,15 +20,12 @@ describe('classifyMobileNativeChatSend', () => {
   })
 
   it('treats slash tokens outside the agent catalog as unknown, never chat', () => {
-    // `/model` is not a verified Claude command — it still dispatches to the
-    // TUI, so it must not get a chat bubble, but it can't claim a command ran.
     expect(classifyMobileNativeChatSend('claude', '/model sonnet')).toBe('unknown-token')
     expect(classifyMobileNativeChatSend('claude', '/cost')).toBe('unknown-token')
     expect(classifyMobileNativeChatSend('claude', '/diff')).toBe('unknown-token')
   })
 
   it('leaves /context off mobile, which has no way to show its answer', () => {
-    // OpenClaude's report is a transcript row; OMP's is answered by the desktop composer.
     for (const agent of ['openclaude', 'omp']) {
       expect(classifyMobileNativeChatSend(agent, '/context')).toBe('unknown-token')
       expect(classifyMobileNativeChatSend(agent, '/compact')).toBe('command')

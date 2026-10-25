@@ -50,8 +50,7 @@ export function useAutomationsPageSetupState({
     (
       candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
     ): AutomationDraft['setupDecision'] => {
-      // During an edit the selected destination, not the ambient repo-id lookup,
-      // owns setup policy. Repo ids can collide across runtime authorities.
+      // Derive edit setup from the selected destination; ambient repo-ID lookup can collide across authorities.
       const selectedEditEntry =
         local.editingAutomationId !== null && local.editingHostStableKey
           ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)

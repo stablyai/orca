@@ -34,7 +34,6 @@ const repoBaseRefSummariesReader: RpcCompatibleReader<
   salvage: { droppedPaths: [], droppedCount: 0 }
 })
 
-/** Only the base-ref hint is read here; the repo catalog itself has its own callers. */
 export const repoBaseRefListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'repo.base-ref-list-or-skip',

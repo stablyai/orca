@@ -138,7 +138,6 @@ export function buildRuntimeWorktreePsSummaries(args: {
   return summaries
 }
 
-// Switch point: a stamping host tells clients to sort by its stamps.
 function sortStampSummaryFields(
   worktree: Pick<Worktree, 'smartTier' | 'smartAt'>
 ): Pick<RuntimeWorktreePsSummary, 'smartTier' | 'smartAt' | 'sortedByStamps'> {

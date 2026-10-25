@@ -1,7 +1,6 @@
 import type { AskPrompt } from './native-chat-ask-types'
 
-// Why: live status and transcript copies of one question shorten presentation text to different
-// budgets, so identity reads only a prefix every copy keeps.
+// Live/status transcripts shorten question text differently; identity uses a prefix both retain.
 const ASK_DISMISS_KEY_TEXT_PREFIX = 200
 
 function askDismissKeyText(text: string | undefined): string | undefined {

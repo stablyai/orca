@@ -112,9 +112,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
         )
         .then((subscription) => {
           if (this.connectPromise !== connectPromise || (!this.ready && !this.readyRejecter)) {
-            // Why: close/error can arrive before subscribe() resolves because
-            // preload listens before ipcMain.handle() returns. The multiplexer
-            // may already be released; do not retain the late handle.
+            // Preload listens before IPC returns, so close/error can release the multiplexer before subscribe resolves; discard late handles.
             unsubscribeRuntimeEnvironmentForE2e(subscription)
             return
           }

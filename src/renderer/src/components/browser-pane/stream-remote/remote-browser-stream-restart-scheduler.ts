@@ -1,14 +1,4 @@
-// Why a retry budget rather than "retry until it works" or "give up after one try": both extremes
-// fail the user. One attempt strands the pane on any blip with no way back. Unbounded retry hides a
-// genuinely dead stream behind background work that never stops and an error that keeps reappearing.
-//
-// The budget covers the transient case invisibly, then hands control back: once it is spent the pane
-// reports that it stopped and offers an explicit reconnect. That also removes the sharpest edge in
-// this area — misjudging a failure as permanent is no longer unrecoverable, because the user always
-// has a way to ask again.
-//
-// Counts attempts, not elapsed time. A host that refuses fast spends the budget in ~16s; one that
-// accepts and then hangs spends it far more slowly, since each attempt carries its own timeout.
+// Bound automatic attempts before handing control to Reconnect; elapsed time also includes each stream’s ready deadline.
 export const REMOTE_BROWSER_STREAM_RESTART_DELAYS_MS: readonly number[] = [
   500, 1_000, 2_000, 4_000, 8_000
 ]
@@ -27,8 +17,6 @@ export class RemoteBrowserStreamRestartScheduler {
     private readonly onBudgetExhausted: () => void = () => {}
   ) {}
 
-  // Kept for tests: reset()/cancel() restoring the budget is behaviour worth asserting directly,
-  // and the counter is the only honest way to observe it.
   get attemptCount(): number {
     return this.attempt
   }
@@ -43,8 +31,7 @@ export class RemoteBrowserStreamRestartScheduler {
     return this.attempt >= this.delaysMs.length
   }
 
-  // Why: run() resolves true to keep retrying (transient failure), false to stop (success or
-  // superseded/missing). Retries stop regardless once the budget is spent.
+  // True requests another attempt; false stops for success or supersession. Exhaustion stops either outcome.
   schedule(run: RemoteBrowserStreamRestartAttempt): void {
     if (this.timer !== null) {
       return
@@ -75,8 +62,7 @@ export class RemoteBrowserStreamRestartScheduler {
     }, delayMs)
   }
 
-  // Why: a confirmed-live stream ('ready') forgets prior failures so the next drop backs off from
-  // scratch — and gets the whole budget again rather than the tail of an earlier one.
+  // The lifecycle resets after sustained uptime, not ready alone; the next drop then receives a full budget.
   reset(): void {
     this.attempt = 0
   }

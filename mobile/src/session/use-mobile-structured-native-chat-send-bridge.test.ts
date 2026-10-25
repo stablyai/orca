@@ -53,7 +53,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     renderer = null
   })
 
-  // The structured session draws, or holds, what the host took; the composer stays cleared.
+  // Accepted messages remain host-owned; keep the composer cleared.
   it.each(['accepted', 'unknown', 'queued'] as const)(
     'leaves a %s send of a command the active agent owns to the structured session',
     async (outcome) => {

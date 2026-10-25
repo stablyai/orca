@@ -15,8 +15,7 @@ function tableCellFromTarget(target: EventTarget | null): HTMLTableCellElement |
 }
 
 function selectionTableCell(editor: Editor): HTMLTableCellElement | null {
-  // Why: isActive('table') still admits a node selection on the table or a
-  // selection merely spanning it, and selectionCell throws for both.
+  // isActive admits selections spanning the table or its node; selectionCell throws unless the caret is inside.
   if (!isInTable(editor.state)) {
     return null
   }
@@ -119,8 +118,7 @@ export function useRichMarkdownTableControlTarget(
       editor.off('update', activateSelection)
       if (pointerFrameRef.current !== null) {
         window.cancelAnimationFrame(pointerFrameRef.current)
-        // Why: onPointerMove schedules with ??=, so a stale id blocks every
-        // later frame once the effect re-runs on a new editor instance.
+        // Clear canceled frame IDs or ??= prevents pointer updates after an editor swap.
         pointerFrameRef.current = null
       }
       pendingPointerRef.current = null

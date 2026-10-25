@@ -20,8 +20,7 @@ export function mockPanePtyArgs(
   ]
 }
 
-/** Connects a mock pane through the real connectPanePty. Imported lazily so a
- *  test's vi.resetModules() hands back the freshly mocked module graph. */
+/** Import lazily so resetModules selects the freshly mocked connection graph. */
 export async function connectMockPanePty(
   pane: MockPane,
   manager: MockPaneManager,

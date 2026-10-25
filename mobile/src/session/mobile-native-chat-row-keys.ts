@@ -10,19 +10,12 @@ import {
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
 
-/** Where each drawn row sits on the page. A folded row's id is its first message's, so older
- *  messages joining a run would replace the row; its key stays while what it is made of draws. */
+// Keep physical row keys when older messages join a folded run; the folded message id alone would remount it.
 export type MobileNativeChatRowKeys = {
-  /** The chat the keys belong to; nothing they held carries into another. */
   scope: string
-  /** The source window's first message: it changes when a page, a cap trim or a replacement lands,
-   *  even while every row keeps its key. */
   sourceHead: string | undefined
   keyOf: (message: NativeChatMessage) => string
-  /** The key now drawing what a key of the last render drew; undefined once all of it left. */
   current: (key: string) => string | undefined
-  /** The folded message a key's row is drawn for, which sets where the row sits: a roster keeps its
-   *  key while the fold moves it to an older sibling's place. */
   placement: (key: string) => string
 }
 
@@ -33,13 +26,12 @@ export type MobileNativeChatAssignedRows = {
   rows: readonly NativeChatMessage[]
   messages: readonly NativeChatMessage[]
   keyById: ReadonlyMap<string, string>
-  /** Each row's sources, when that render worked them out. */
   sources?: readonly Sources[]
   prepareSources?: () => readonly Sources[]
 }
 type Assigned = MobileNativeChatAssignedRows
 
-/** The fold keeps its sources' block objects, so a block names the message it came from. */
+// Block object identity survives folding and identifies its source message.
 function blockOwners(messages: readonly NativeChatMessage[]): Map<NativeChatBlock, string> {
   const owners = new Map<NativeChatBlock, string>()
   for (const message of messages) {
@@ -52,9 +44,7 @@ function blockOwners(messages: readonly NativeChatMessage[]): Map<NativeChatBloc
   return owners
 }
 
-/** What a row draws, by message and kind, and which of it makes the row what it is: a run is
- *  its assistant and its calls. Its results are content only, so a result left on a row of its
- *  own never takes the run's key. The fold makes a roster's group block; its group stands in. */
+// Use assistant/calls for run identity; results are content only and cannot inherit its key. Rosters use group identity.
 function sourcesOf(row: NativeChatMessage, owners: Map<NativeChatBlock, string>): Sources {
   const own = new Set<string>()
   const results = new Set<string>()
@@ -73,7 +63,6 @@ function sourcesOf(row: NativeChatMessage, owners: Map<NativeChatBlock, string>)
   return { identity, content: content.length > 0 ? content : identity }
 }
 
-/** Physical rows and displayed runs attribute against the same raw snapshot, only when needed. */
 export function prepareMobileNativeChatRowSources(messages: readonly NativeChatMessage[]) {
   let owners: Map<NativeChatBlock, string> | undefined
   const cache = new WeakMap<NativeChatMessage, Sources>()
@@ -128,7 +117,6 @@ export function assignMobileNativeChatRowKeys(
     current()
   }
   if (!fresh && previous?.rows.every((row) => ids.has(row.id))) {
-    // Nothing left: every row keeps its key.
     for (const row of rows) {
       const key = previous.keyById.get(row.id)
       if (key !== undefined) {
@@ -143,8 +131,7 @@ export function assignMobileNativeChatRowKeys(
     current()
     const was = new Map<string, number>()
     before.forEach(({ identity }, at) => identity.forEach((source) => was.set(source, at)))
-    // A row continues the one row its identity came from, if that row's went nowhere else. Two
-    // would be one key for two rows, so neither inherits rather than one being picked by position.
+    // Inherit only one unclaimed origin key; ambiguous origins must not create duplicate row keys.
     const origins = current().map(
       ({ identity }) => new Set(identity.flatMap((s) => was.get(s) ?? []))
     )
@@ -166,8 +153,7 @@ export function assignMobileNativeChatRowKeys(
     }
     take(row, key)
   }
-  // A key no row kept names the first row that took in what it drew. Results left on rows of their
-  // own when a run's last call went name none: the run ended, and its key goes with it.
+  // Redirect lost keys to rows absorbing their identity; orphan results cannot keep a run alive after its last call leaves.
   const drawnAt = new Map<string, number>()
   now?.forEach(({ identity, content }, at) => {
     if (!identity[0]!.startsWith('result:')) {
@@ -189,8 +175,6 @@ export function assignMobileNativeChatRowKeys(
   return { keyById, moved, ...(now ? { sources: now } : {}) }
 }
 
-/** Row keys for one shown chat, against the last committed render only, so what a key held dies
- *  with the rows that held it. */
 export function useMobileNativeChatRowKeys(
   rows: readonly NativeChatMessage[],
   messages: readonly NativeChatMessage[],
@@ -200,7 +184,7 @@ export function useMobileNativeChatRowKeys(
   runOwners: ReadonlyMap<string, string>
   runPlacements: ReadonlyMap<string, string>
 } {
-  // Written at commit: a render React discards must not become the next one's last render.
+  // Commit snapshots only: discarded React renders must not become the next baseline.
   const committed = useRef<
     (Assigned & { scope: string; displayed: Assigned; serial: number }) | null
   >(null)

@@ -18,11 +18,7 @@ const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_JITTER_MS = 250
 
 export type WindowVisibilitySubscriptionContext = {
   visibilityGeneration: number
-  /**
-   * The host ended this stream while the window stayed visible (an end frame, an error response,
-   * or close). Drops it and resubscribes on the retry backoff. Never call it for a transport drop:
-   * reconnect replay owns that, and loss of contact is not an end.
-   */
+  /** Resubscribe host-ended/error streams on backoff. Transport drops are reconnect replay’s responsibility; lost contact alone is no stream end. */
   ended: () => void
 }
 
@@ -115,8 +111,7 @@ export function installWindowVisibilitySubscriptionParking(
     if (disposed || !entry.desired || entry.generation !== generation) {
       return
     }
-    // Why: the new generation fences the ended stream's late frames, and unsubscribing stops an
-    // error-response subscription from being replayed beside its replacement on reconnect.
+    // Fence late frames with a new generation and unsubscribe failed streams so reconnect cannot replay both old and replacement subscriptions.
     entry.generation += 1
     unsubscribeEntry(entry, spec)
     const livedMs = entry.establishedAt > 0 ? Date.now() - entry.establishedAt : 0

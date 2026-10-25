@@ -193,9 +193,7 @@ describe('mixed-version web terminal orphan recovery', () => {
     }
   })
 
-  // Wire-compat Rule 3: recovery must not stall because a newer host publishes a label this client
-  // has never seen. Before narrowing the snapshot validator, any of these rejected the whole read
-  // and the adopted terminal stayed invisible on every retry.
+  // Wire-compat Rule 3: unknown newer-host labels must not reject snapshots and leave adopted terminals invisible on every retry.
   it.each([
     { name: 'a new agent-session provider', extend: (tabs: unknown[]) => [...tabs, newerAgentTab] },
     {

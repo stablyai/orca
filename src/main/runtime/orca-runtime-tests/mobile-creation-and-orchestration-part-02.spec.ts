@@ -37,11 +37,10 @@ describe('OrcaRuntimeService', () => {
         subject: 'after wait'
       })
 
-      // Why: notifyMessageArrived is the send-path hook; it must push-on-idle
-      // without requiring another agent-status transition (#12536).
+      // #12536: message arrival must push to idle agents without another status transition.
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
-      // The push is deferred one microtask so it lands behind any resolved check.
+      // Defer push one microtask behind already-resolved checks.
       await Promise.resolve()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -505,8 +504,7 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
 
     expect(write).not.toHaveBeenCalled()
-    // Why: busy must leave the row undelivered so a later idle can push it;
-    // a stamp-without-write would suppress later delivery (#12584 CodeRabbit).
+    // Busy rows must remain undelivered for later idle; stamping without writing would lose delivery (#12584).
     expect(message.delivered_at).toBeNull()
     db.close()
   })
@@ -538,9 +536,7 @@ describe('OrcaRuntimeService', () => {
       await Promise.resolve()
       write.mockClear()
 
-      // Why no working frame: a resumed agent sitting at its prompt emits an
-      // already-idle title first. The seed left lastAgentStatus 'idle', so there
-      // is no transition — only the liveness edge can release the row (#12536).
+      // Resumed agents can report idle first; seeded idle has no transition, so liveness alone must release mail (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
 
       expect(write).toHaveBeenCalledWith(
@@ -572,8 +568,7 @@ describe('OrcaRuntimeService', () => {
 
       const [terminal] = (await runtime.listTerminals()).terminals
       bindSinglePtyRun(db, terminal.handle)
-      // Why: the persisted title is historical — the agent may have gone busy
-      // across the relaunch, so a seeded 'idle' must not authorize a PTY write.
+      // Persisted idle is historical; never authorize writes to a possibly busy replacement.
       runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
       const message = db.insertMessage({
         from: 'sender',
@@ -589,7 +584,6 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(600)
       expect(message.delivered_at).toBeNull()
 
-      // The first live idle frame authorizes it and the row still delivers.
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(write).toHaveBeenCalledWith(
@@ -626,10 +620,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       write.mockClear()
 
-      // Why: resolveMessageWaiter removes the waiter synchronously, but the check
-      // handler marks its rows read a microtask later. Two sends resuming off one
-      // shared in-flight promise put a no-waiter notify inside that window, so the
-      // push must not inject rows the resolved check is about to return.
+      // Waiter removal precedes read-marking by a microtask; deferred push must not duplicate the resolving check's rows.
       const consumed = runtime
         .waitForMessage(mailbox, { timeoutMs: 5_000 })
         .then(() => db.getUnreadMessages(mailbox).map((row) => (row.read = 1)))

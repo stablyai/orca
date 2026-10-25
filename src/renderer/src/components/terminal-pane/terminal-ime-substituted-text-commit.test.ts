@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// An input source that substitutes text for a printable key commits it through a
-// bare `insertText` with no composition session. Drives a real Terminal wired the
-// way the pane lifecycle wires it, so it covers the whole keydown -> input path.
+// Replay bare insertText substitutions through the pane’s real keydown → input stack without composition sessions.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
@@ -189,16 +187,13 @@ describe('input-source text substitution reaches the terminal', () => {
     expect(type([COMMA], 1)).toBe('，')
   })
 
-  // The gate is bit 3 alone. Every other flag leaves printable keys as text, so the substituted
-  // character must still reach the pane; gating on "kitty active" instead would strip the
-  // substitution from every pane that negotiates anything at all.
+  // Only bit 3 requires printable reports; other flags must preserve substituted text.
   describe.each([
     ['none', 0],
     ['disambiguate', 1],
     ['alternate keys', 4],
     ['disambiguate + alternate keys', 5],
-    // Bit 4 asks for associated text, which only decorates a report bit 3 would already have
-    // produced — on its own it does not turn a printable key into one.
+    // Associated-text bit 4 decorates reports; alone it cannot turn printable input into one.
     ['associated text', 16]
   ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
     it('sends the substituted character raw', () => {
@@ -206,8 +201,7 @@ describe('input-source text substitution reaches the terminal', () => {
     })
   })
 
-  // Bit 1 (`report_event_types`) is orthogonal to bit 3: the press stays raw substituted text,
-  // but the app asked to be told when the key came back up, and the forwarder owns that keyup.
+  // Bit 1 independently requests release events for raw substituted text; this forwarder owns the keyup.
   describe.each([
     ['event types', 2],
     ['disambiguate + event types + alternate keys', 7]
@@ -217,15 +211,12 @@ describe('input-source text substitution reaches the terminal', () => {
     })
   })
 
-  // Bit 3 is `report_all_keys_as_escape_codes`: the app asked for every printable key as a CSI-u
-  // report, so committing raw UTF-8 hands it a byte stream it declined. Re-encode the press that
-  // produced the commit. This is not CJK-specific — it is every printable key in such a pane.
+  // Bit 3 requests CSI-u for every printable key, so re-encode the producing press instead of sending raw UTF-8.
   describe.each([
     ['all keys as escape codes', 8],
     ['all keys + disambiguate', 9]
   ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
     it('sends a CSI-u report for the physical key instead of the substituted character', () => {
-      // `,` is the physical Comma key; U+002C is 44.
       expect(type([COMMA], flags)).toBe('\x1b[44u')
     })
   })
@@ -243,7 +234,6 @@ describe('input-source text substitution reaches the terminal', () => {
   })
 
   it('encodes a multi-character substitution as one report, not one per character', () => {
-    // One press produced `——`; bit 3 reports keys, and this was a single key.
     expect(type([EM_DASH], 8)).toBe('\x1b[45;2u')
   })
 })

@@ -104,15 +104,13 @@ describe('agent pane authority', () => {
     expect(store.getState().activityClearedAtByPaneKey).toEqual({ [SIBLING]: 2_000 })
   })
 
-  // STA-4114: the renderer tombstone outlived the detach/reattach cycle, so a pane
-  // that was still running never showed status again for the rest of its life.
+  // Detach/reattach must lift renderer tombstones or still-running panes lose status permanently (STA-4114).
   it('lifts the retirement fence on re-attach so an in-flight turn can still report done', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'turn in flight' })
     store.getState().retireAgentPaneAuthority(TARGET)
 
-    // The pane re-attached mid-turn: the agent never starts a NEW turn, it only
-    // finishes the one already running, so a turn-triggered revival cannot fire.
+    // Reattach mid-turn emits no new turn; revival cannot wait for one.
     store.getState().setAgentStatus(TARGET, { state: 'done', prompt: 'turn in flight' })
     expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
 

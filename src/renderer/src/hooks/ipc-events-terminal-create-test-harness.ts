@@ -10,8 +10,7 @@ import type {
   TerminalCreateSurfacingStore
 } from './ipc-events-terminal-create-scenario-types'
 
-// Why: the terminal-create surfacing scenario is one long ordered assertion run;
-// its store/window/mock wiring lives here so the assertions stay under budget.
+// Keep ordered scenario assertions in the spec while extracting its store/window wiring to meet the line budget.
 export async function setupTerminalCreateSurfacing(
   isFloatingPanelFocused: () => boolean
 ): Promise<TerminalCreateSurfacingScenario> {
@@ -94,6 +93,7 @@ export async function setupTerminalCreateSurfacing(
     setSshConnectionState: vi.fn(),
     setSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),
+    setUnrestoredPortForwards: vi.fn(),
     clearPortForwards: vi.fn(),
     setDetectedPorts: vi.fn(),
     enqueueSshCredentialRequest: vi.fn(),

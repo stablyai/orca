@@ -2,7 +2,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronUp } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-/** A collapsed prompt above the usable composer; expanding gives it Send again. */
 export function MobileNativeChatPromptStrip({
   title,
   onExpand

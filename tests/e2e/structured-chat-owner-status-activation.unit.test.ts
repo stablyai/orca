@@ -1,8 +1,5 @@
-// A chat whose agent is not running still owns its conversation. Released desktop clients gate
-// worktree activation on the host's owner answer, so a chat at rest that answered anything but
-// `native` blocked the gate, which then skips adopting and resuming the worktree's paneless agents.
-// This drives the real host's answer through the desktop's activation gate for the two ways a chat
-// comes to rest.
+// Resting chats still own their conversation: native owner answers must pass released desktop activation gates and resume paneless agents.
+// Drive the real host answer through that gate for both ways a chat stops running.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

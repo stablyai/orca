@@ -105,7 +105,6 @@ describe('work runs and subagent sections', () => {
     ])
   })
 
-  // The head draws between the calls, open or not, so it ends the run they would have made.
   it('never runs across a section head', () => {
     const rows = [
       row('ask', say('go'), { role: 'user' }),
@@ -124,7 +123,6 @@ describe('work runs and subagent sections', () => {
     ])
   })
 
-  // Only a finished thought folds into the run: one still being thought stays in view.
   it("keeps a working section's open thought out of its run until it ends", () => {
     const rows = (state: NativeChatSubagentState, last: 'running' | 'completed') => {
       sequence = 0

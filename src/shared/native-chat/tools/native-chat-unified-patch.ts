@@ -11,13 +11,8 @@ export type UnifiedPatchLines = {
   truncated: boolean
 }
 
-/** Parses unified patch text, keeping the `@@` ranges as per-row line numbers.
- *  A hunk header whose `@@` is a bare context anchor with no ranges leaves its
- *  rows unnumbered rather than numbered from 1, because a wrong number reads as
- *  authoritative.
- *
- *  `implicitFirstHunk` opens the body as a hunk of unknown position, for the
- *  patch dialect whose first chunk may carry no header at all. */
+/** Use real @@ ranges for file line numbers. Bare context anchors leave rows unnumbered rather than falsely starting at one.
+ * implicitFirstHunk admits headerless initial chunks with unknown positions. */
 export function editLinesFromUnifiedPatch(
   text: string,
   options?: { implicitFirstHunk?: boolean }
@@ -143,9 +138,7 @@ type Section = {
   fromGitHeader: boolean
 }
 
-/** Splits patch text into one section per file it touches. Without this a
- *  multi-file patch renders as a single card under the first file's name, with
- *  the later files' rows and gutter numbers beneath it. */
+/** One section per file; otherwise multi-file patches would place every row/number under the first filename. */
 export function unifiedPatchSections(text: string): {
   sections: UnifiedPatchSection[]
   truncated: boolean
@@ -181,14 +174,10 @@ export function unifiedPatchSections(text: string): {
       inHunk = false
       continue
     }
-    // A header pair is structure outside a hunk. Inside one it is also a file
-    // boundary, but only when a hunk header follows it immediately: a removed
-    // `-- x` over an added `++ y` is never followed by a column-0 `@@`, and
-    // that is what separates the files of a patch written without `diff --git`
-    // headers, where nothing else would end the previous file's hunk.
+    // Inside a hunk, header pairs end a file only when immediately followed by column-zero @@; literal removed --/added ++ content cannot satisfy that.
+    // This supports multi-file patches without diff --git boundaries.
     if (isFileHeaderPair(rows, index) && (!inHunk || (rows[index + 2] ?? '').startsWith('@@'))) {
-      // The pair names the section a `diff --git` just opened; a second pair in
-      // the same section is the next file of a patch written without them.
+      // First pair names the current diff --git section; later pairs open files in header-only patches.
       if (!current || current.hasHeaderPair) {
         current = open()
       }
@@ -233,8 +222,7 @@ function sectionChangeKind(section: Section): UnifiedPatchSection['changeKind'] 
   if (section.oldPath === section.newPath) {
     return 'edited'
   }
-  // Differing sides are a move only where the header says so. Bare pairs carry
-  // whatever paths the producer compared, which may be two directories.
+  // Only explicit Git headers prove moves; bare differing paths may compare directories.
   return section.fromGitHeader ? 'renamed' : 'edited'
 }
 

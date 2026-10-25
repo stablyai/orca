@@ -60,8 +60,7 @@ const usageLimitView = {
 {
   const TURN_MS = 12_000
 
-  // Each turn ends differently. The journal is where each end is recorded, and the lifecycle is
-  // seeded rather than produced, since a crash settles as `interrupted` only once the host proves it.
+  // Seed lifecycle separately: the host must confirm a crash before it settles as interrupted.
   const TURNS: { id: string; end: Pick<AgentJournalTurnItem, 'state' | 'outcome'> }[] = [
     { id: 'user-finished', end: { state: 'completed', outcome: 'success' } },
     { id: 'user-crashed', end: { state: 'interrupted' } },
@@ -149,7 +148,6 @@ const usageLimitView = {
   }
 
   describe('NativeChatMessageList folded turn headers', () => {
-    // A crash-cut turn reads like a finished one; the chat's notice row is what says it stopped.
     it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
       render(
         <NativeChatMessageList
@@ -169,7 +167,6 @@ const usageLimitView = {
         ['Worked for 12s', 'false'],
         ['Interrupted after 12s', 'false']
       ])
-      // The turn's detail stays inside the fold.
       expect(screen.queryByText('narration user-crashed')).toBeNull()
       expect(screen.getByText('answer user-crashed')).toBeInTheDocument()
     })
@@ -333,8 +330,7 @@ const usageLimitView = {
     }
   )
 
-  // The turn still runs while a Stop ends it, so its bar keeps the running clock; only the tail line
-  // says the turn is stopping, and the bar settles to "Interrupted after" once the turn ends.
+  // Stop leaves the bar’s clock running until settlement; only the tail says Stopping.
   describe("the turn bar while a person's Stop ends the turn", () => {
     it('keeps the running clock above the Stopping tail line', () => {
       const transcript = (stopping: boolean) => (
@@ -361,8 +357,7 @@ const usageLimitView = {
     })
   })
 
-  // Where the host does not queue sends, one made while Stopping is held until the turn ends: it is
-  // drawn after the Stopping line, not inside the turn being stopped.
+  // Hosts without queueing hold sends after the Stopping line until the turn ends.
   describe('a message sent while Stopping, before the host has handed it over', () => {
     const pending = {
       id: 'pending-send',
@@ -401,7 +396,6 @@ const usageLimitView = {
       expect(sent.compareDocumentPosition(working)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     })
 
-    // Sent just before the Stop, the host steers it into the turn: it stays there, never jumping.
     it('keeps a send made before the Stop in the turn', () => {
       const { sentWhileStopping: _made, ...beforeStop } = pending
       render(

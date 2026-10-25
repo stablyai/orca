@@ -10,8 +10,7 @@ import {
   readCachedAiVaultSessionResult
 } from './ai-vault-session-result-cache'
 
-/** One Session History list request. Every reader sends it the panel's way, so they share the
- *  host's single cached list and the renderer's result cache instead of evicting each other. */
+/** Match panel requests so readers share host/renderer caches instead of evicting one another. */
 export type AiVaultSessionListRequest = {
   scopePaths: readonly string[]
   executionHostScope: ExecutionHostScope

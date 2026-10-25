@@ -1512,12 +1512,7 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('moves a stranded host off an existing-only cell that stopped serving it', async () => {
-    // Why: C3's decommission created an existing-only cell that rejects
-    // attaches; the #194 pin then loops returning hosts forever while each
-    // grant refreshes their own activity (issue #225). C3 has no
-    // connection-limits row and expired leases are cleaned within a
-    // maintenance cycle, so the only durable evidence is the assignment row:
-    // a recent grant with no live real activity behind it.
+    // C3 rejected attaches on an existing-only cell; repeated grants defeated dormancy (#194, #225). Use recent failed grants on assignment rows: no cap reservations exist, and expired leases are pruned.
     let now = 100
     const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -1562,11 +1557,7 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('keeps migration-only cells pinned inside the stranded window', async () => {
-    // Why: migration-only is an admission class, not a drain signal. Evacuation
-    // targets, an Asia `--mode rollback` and a failed wave's re-isolate all park
-    // loaded cells there durably, and moving those hosts would undo the
-    // evacuation or scatter the region. Only the same-cap roll's isolate stamp
-    // releases the pin, and nothing here sets it.
+    // migration-only durably holds evacuation/Asia rollback/failed-wave hosts; only same-cap roll stamps authorize re-placement.
     let now = 100
     const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -2648,8 +2639,7 @@ describe('RelayAssignmentStore', () => {
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
   })
 
-  // Why: completion needs an enabled target and expiry rollback needs an unregistered one, so a
-  // target disabled after it registered satisfies neither and the migration never leaves the table.
+  // Disabled registered targets satisfy neither completion nor expiry rollback, stranding migration rows.
   async function wedgeRegisteredMigration(
     now: () => number,
     cells: RelayCellConfig[],
@@ -2715,8 +2705,7 @@ describe('RelayAssignmentStore', () => {
     // A disabled target can never satisfy completion, so waiting cannot help.
     expect(await store.completeReadyEvacuations()).toBe(0)
     expect(await store.abortExpiredEvacuations()).toBe(1)
-    // Rollback lands on the disabled source, so the host resolves to nothing and is placed afresh
-    // by evacuateDeadCells; the point is that the row is retired rather than reaped every tick.
+    // Rollback to disabled source resolves empty for evacuateDeadCells to re-place; retire the row rather than revisit every tick.
     expect(await store.resolve(identity)).toBeNull()
     expect(await store.abortExpiredEvacuations()).toBe(0)
   })

@@ -1,6 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// Why: git.diff, git.branchDiff and git.commitDiff all return a GitDiffResult, so capping only the
-// first would leave the other two able to kill a remote socket.
+// Cap every GitDiffResult producer; any uncapped diff method can close a remote socket.
 import { describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
@@ -128,7 +127,7 @@ describe('remote git diff transport budget', () => {
     )
   })
 
-  // Why: the in-process/Unix-socket context sets no clientKind, so desktop-local diffs keep full fidelity.
+  // In-process/Unix-socket callers have no clientKind and retain full diff fidelity.
   it.each(CASES)(
     'leaves $method uncapped for a local caller',
     async ({ method, runtimeMethod, params }) => {

@@ -5,14 +5,7 @@ import type {
 } from './automation-host-catalog-types'
 import type { AutomationHostStatusDescriptor } from './automation-host-status-descriptors'
 
-/**
- * Copy for the query-contract axis.
- *
- * Every degraded entry shares one consequence — view only — but not one cause.
- * A removed target, a target we have not verified since the connection dropped,
- * and a server that advertises no host scoping each get their own sentence, so
- * the badge never claims a server is old on the strength of missing evidence.
- */
+/** Keep degraded query causes distinct: removed/unverified targets do not prove an old server, even though all remain view-only. */
 
 const VIEW_ONLY_LABEL = (): string =>
   translate('auto.components.automations.hostStatus.query.viewOnly', 'View only')

@@ -43,8 +43,7 @@ export type HostAgentLaunch = {
 /** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run. */
 export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?: true }
 
-/** Everything `createWorktree` received, packed once so both transports read from the same record.
- *  The per-attempt fields live on `WorktreeCreateAttempt` instead. */
+/** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */
 export type WorktreeCreateRequest = Omit<CreateWorktreeArgs, 'parentWorkspace' | 'manualOrder'> & {
   options?: CreateWorktreeCallOptions
 }

@@ -1,8 +1,4 @@
-/**
- * orcad on a WSL host is launched by `wsl.exe --exec`, whose PATH misses Linux CLIs installed by
- * the login shell's rc files (claude, opencode, gemini) and carries Windows shims. Its agent
- * detection must hydrate PATH from `$SHELL -ilc` like any packaged build.
- */
+// wsl.exe --exec skips shell setup; hydrate login PATH to find Linux CLIs instead of Windows shims.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const hydration = vi.hoisted(() => ({

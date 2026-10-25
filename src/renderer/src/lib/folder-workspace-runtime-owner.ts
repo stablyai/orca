@@ -80,8 +80,7 @@ function getRestoredRuntimeHostForFolderWorkspace(
   state: FolderWorkspaceRuntimeOwnerState,
   folderWorkspaceId: string
 ): RuntimeExecutionHost | null {
-  // Why: runtime folder catalogs load after session hydration; the saved
-  // per-host session partition is the only owner evidence during that gap.
+  // During catalog hydration, saved per-host session partitions are the only available owner evidence.
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const parsed = parseExecutionHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey?.[workspaceKey]

@@ -64,8 +64,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   const needsGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const isMountAdmitted = useAnyBrowserPageMountAdmission(browserPageIds)
   const isPaintable = isActive || needsGuestPaint || isMountAdmitted
-  // Why: CSS anchor positioning pins the overlay to its owning group's body — a tab move only swaps positionAnchor, no measurement/state.
-  // Orphan branch (no anchorName) stays display:none until the tab is reassigned or destroyed.
+  // Anchor changes move tabs without reparenting guests; unassigned orphans stay hidden.
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName
@@ -118,7 +117,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   )
 })
 
-// Why: memoize so parent re-renders on props this layer doesn't consume don't rerun its selector or assignments mapping (focused-split state comes from the store selector below, not props).
+// Memoize the layer against unrelated parent props; focused-split state comes from its own selector.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive
@@ -160,7 +159,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     return lookup
   }, [groups])
 
-  // Map each browser tab to its owning group; tabs not in any group's unified-tab list are transient mid-move "orphans", not a steady state.
+  // Transient mid-move tabs may have no owning group; keep them as hidden orphans.
   const assignments = useMemo(() => {
     const entries = new Map<string, BrowserOverlayAssignment>()
     for (const tab of unifiedTabs) {
@@ -200,9 +199,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
           />
         )
       })}
-      {/* Why: last in DOM order so the placeholder paints over whichever guest the group was
-          showing — the group's own active tab is untouched, since a client-hosted row owns no
-          unified tab to become active. */}
+      {/* Render last so this tabless placeholder paints above the group’s unchanged active guest. */}
       <ClientHostedBrowserRowOverlaySlot
         worktreeId={worktreeId}
         groups={groups}

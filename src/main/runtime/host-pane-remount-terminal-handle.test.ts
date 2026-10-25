@@ -122,7 +122,6 @@ describe('a host pane remounting onto its same live PTY (#23759)', () => {
       expect(client.messages.some((message) => message.result?.type === 'subscribed')).toBe(true)
     )
 
-    // The host mounts the hidden pane: its leaf has no PTY until the transport reattaches.
     runtime.syncWindowGraph(1, graph(null))
     runtime.syncWindowGraph(1, graph(PTY_ID))
     expect(await handleFor(runtime)).toBe(handle)

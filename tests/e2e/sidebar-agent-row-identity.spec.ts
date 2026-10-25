@@ -10,14 +10,7 @@ import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-input-readiness'
 import { worktreeRow } from './worktree-row-locators'
 
-/**
- * Sidebar agent-row identity, driven by real OSC titles on real PTYs.
- *
- * #10258 — Cursor's only native OSC title is the literal `cursor agent`; it was
- * dropped unconditionally, so a hookless Cursor pane produced no sidebar row.
- * #8940 — an incidental `claude` token inside an OpenCode task title outranked
- * the pane's known owner, flipping the row label + identity icon to Claude Code.
- */
+// Use real PTY OSC titles to retain hookless Cursor’s literal cursor agent (#10258) and keep OpenCode ownership when its task merely mentions claude (#8940).
 
 // The literal Cursor emits on every redraw — the pane's ONLY identity signal.
 const CURSOR_NATIVE_OSC_TITLE = 'Cursor Agent'
@@ -27,10 +20,7 @@ const OPENCODE_TASK_OSC_TITLE = '⠋ use Claude Sonnet'
 /** Printed banner that proves the emitter ran; the OSC title trails it in the same chunk. */
 const PANE_HOLD_MARKER = 'agent pane holding'
 
-// Why: the emitter must never exit — a returning shell prompt would repaint its own
-// cwd title over the agent title, which a real TUI holding the pane never allows.
-// Why one write: a later title-less chunk arms the stale-title probe, which strips
-// the working frame the row depends on.
+// Keep the emitter alive so shell prompts cannot overwrite identity; emit in one chunk to avoid a title-less stale-title probe.
 function oscTitleHolderScript(escapedTitle: string): string {
   return [
     `process.stdout.write('${PANE_HOLD_MARKER}\\r\\n\\u001b]0;${escapedTitle}\\u0007')`,
@@ -46,8 +36,7 @@ async function useFullAgentActivityRows(page: Page): Promise<void> {
       throw new Error('window.__store is not available')
     }
     const state = store.getState()
-    // Why: 'full' renders every agent row with its label inline, so the proof
-    // reads off the rendered sidebar instead of a collapsed summary pill.
+    // Render full rows so assertions read labels/icons instead of summary pills.
     state.setAgentActivityDisplayMode('full')
     if (!state.worktreeCardProperties.includes('inline-agents')) {
       state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
@@ -62,11 +51,7 @@ function paneTitles(page: Page, tabId: string): Promise<string[]> {
   }, tabId)
 }
 
-/**
- * Opens a terminal tab launched as `launchAgent`, exactly like the tab-bar quick
- * launch, and proves the shell round-trips a command before returning — a cold
- * PTY silently swallows the emitter command otherwise.
- */
+// Launch through the tab-bar agent path and prove shell echo before sending the emitter command.
 async function openAgentTab(
   page: Page,
   worktreeId: string,
@@ -89,8 +74,7 @@ async function openAgentTab(
     { worktreeId, launchAgent }
   )
   await waitForActiveTerminalManager(page)
-  // Why the raised budget: the first tab of a cold app can bind its PTY well past
-  // the helper's 15s default on a loaded machine.
+  // Allow cold-app PTY binding beyond the default 15s.
   const ptyId = await waitForActivePanePtyId(page, 45_000)
   expect(
     await waitForRestoredTerminalInputReady(page, ptyId, 20_000),
@@ -99,11 +83,7 @@ async function openAgentTab(
   return { tabId, ptyId }
 }
 
-/**
- * Identity of each rendered sidebar agent row, read off the row's identity icon
- * tooltip (the first titled span in the row) — i.e. the glyph the user sees.
- * Read in one evaluate so a sidebar re-render cannot split the snapshot.
- */
+// Read rendered icon tooltips in one evaluate so rerender cannot split the snapshot.
 function sidebarAgentRowIdentities(page: Page, agentListSelector: string): Promise<string[]> {
   return page.evaluate((selector) => {
     const list = document.querySelector(selector)
@@ -116,10 +96,7 @@ function sidebarAgentRowIdentities(page: Page, agentListSelector: string): Promi
   }, agentListSelector)
 }
 
-/**
- * Waits for the rendered row identities to hold still, then returns them, so the
- * claim below is asserted against one settled snapshot with a readable diff.
- */
+// Return one settled identity snapshot for readable assertions.
 async function settledSidebarAgentRowIdentities(
   page: Page,
   agentListSelector: string
@@ -163,8 +140,7 @@ test('sidebar keeps a Cursor pane visible and an OpenCode pane out of Claude Cod
     oscTitleHolderScript('\\u280b use Claude Sonnet')
   )
   await waitForTerminalOutput(orcaPage, PANE_HOLD_MARKER, 15_000)
-  // Precondition, not the claim under test: this title is filtered on neither
-  // branch, so a failure here means the PTY never emitted it.
+  // Require the always-accepted title as a PTY emission precondition.
   await expect
     .poll(() => paneTitles(orcaPage, openCode.tabId), {
       timeout: 15_000,
@@ -178,8 +154,7 @@ test('sidebar keeps a Cursor pane visible and an OpenCode pane out of Claude Cod
     cursor.ptyId,
     oscTitleHolderScript(CURSOR_NATIVE_OSC_TITLE)
   )
-  // Settle gate: the emitter has run, so the literal has been offered to the title
-  // pipeline — kept as Cursor identity on the fix, dropped on main.
+  // Require emitter output before judging literal-title filtering.
   await waitForTerminalOutput(orcaPage, PANE_HOLD_MARKER, 15_000)
 
   // Only the active worktree's card has agents, so this resolves to one list.
@@ -187,14 +162,11 @@ test('sidebar keeps a Cursor pane visible and an OpenCode pane out of Claude Cod
   const agentList = worktreeRow(orcaPage, worktreeId).locator('[aria-label="Agents"]')
   await expect(agentList.locator('> div').first()).toBeVisible()
 
-  // #10258: the Cursor pane gets a row at all. #8940: the OpenCode pane stays OpenCode.
   expect(await settledSidebarAgentRowIdentities(orcaPage, agentListSelector)).toEqual([
     'Cursor',
     'OpenCode'
   ])
 
-  // Both panes are on the card: the Cursor row exists at all (#10258) next to the
-  // OpenCode row still labelled by its own task text (#8940).
   await expect(agentList.locator('> div')).toHaveCount(2)
   await expect(agentList).toContainText('Cursor')
   await expect(agentList).toContainText('use Claude Sonnet')

@@ -154,9 +154,7 @@ describe('collectUntrackedAdditions', () => {
   })
 
   it('keeps the cache effective across polls for a status-limit-sized change set', async () => {
-    // Why: a cache smaller than the status cap FIFO-evicts every entry, so the
-    // next poll re-reads every file (#8013). Scan the full limit twice; the
-    // second pass must be stat-only.
+    // Caches below the status cap FIFO-evict every entry (#8013); the second full-limit scan must be stat-only.
     lstatMock.mockResolvedValue(mockFileStat(5, 7))
     readFileMock.mockResolvedValue(Buffer.from('a\nb\nc'))
     const paths = Array.from(

@@ -3,8 +3,7 @@ import { collectBrowserPageIds } from './browser-guest-paint-retention'
 
 describe('collectBrowserPageIds identity', () => {
   it('returns one shared reference for every empty input', () => {
-    // useWorktreeBrowserPageIds runs this on every store write, and a worktree with
-    // no browser tabs is the common case; a fresh [] there is pure allocation.
+    // No-browser worktrees are common; preserve the empty reference on every store write to avoid allocation.
     const fromUndefined = collectBrowserPageIds(undefined)
 
     expect(collectBrowserPageIds(null)).toBe(fromUndefined)

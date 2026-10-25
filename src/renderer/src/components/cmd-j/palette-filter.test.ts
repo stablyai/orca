@@ -132,8 +132,7 @@ describe('buildPaletteFilterPredicate', () => {
   })
 
   it('keeps a project row whose repos straddle hosts under either host filter', () => {
-    // project:p1 is checked out on local (r1) and ssh:builder (r2) — filtering to
-    // either host must keep the single row that represents both.
+    // A single project row can represent repositories on both local and SSH hosts.
     for (const hostId of ['local', 'ssh:builder']) {
       const predicate = buildPaletteFilterPredicate(filterOf([hostId], []), model)
       expect(predicate?.matchesProjectRowKey('project:p1')).toBe(true)

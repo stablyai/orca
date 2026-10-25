@@ -41,7 +41,7 @@ export async function reopenClosedUnsavedFiles(
         undefined,
         false
       )
-      // Why the provenance owner: a same-id workspace on another host must not supply the path.
+      // Use provenance ownership so a same-ID workspace on another host cannot supply the recovery path.
       const ownerHostId = operationProvenance.generation.route.executionHostId
       const activeHostId = state.activeWorkspaceExecutionHostId
       const worktree = state.getKnownWorktreeById(
@@ -95,10 +95,7 @@ export async function reopenClosedUnsavedFiles(
   return failed
 }
 
-/**
- * Callbacks retained by the toast keep only a clearable holder, not the recovered text. Dismissing
- * it releases the records kept under `notice`.
- */
+/** Toast callbacks retain a clearable holder; dismissal releases kept records and recovered text. */
 export function showClosedUnsavedFilesToast(
   closed: readonly ClosedUnsavedFile[],
   workspaceLabel: string,

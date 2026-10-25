@@ -10,13 +10,7 @@ export type OpenMobileNativeChatFileTapOptions<T extends FileTapSessionTab> = Om
   'terminalHandle' | 'cwd' | 'line' | 'column'
 >
 
-/**
- * Open a file reference tapped in native chat: same haptic / preview-route /
- * tab-activation flow as terminal taps, but chat paths are worktree-root
- * relative (or absolute), so resolution deliberately passes no terminal handle
- * and no cwd — a terminal's live cwd (e.g. `<worktree>/mobile`) would misplace
- * them. Agent-style `path:line(:col)` citations carry their location through.
- */
+// Resolve chat citations from worktree root without terminal cwd/handle; a live terminal subdirectory would misplace them. Preserve path:line:column locations.
 export function openMobileNativeChatFileTap<T extends FileTapSessionTab>(
   options: OpenMobileNativeChatFileTapOptions<T>
 ): void {

@@ -75,24 +75,16 @@ export function buildSkillCommandForRuntime(
   return command
 }
 
-/**
- * Where a built skill command is going: the user's clipboard (their own shell)
- * or the setup terminal Orca spawns itself.
- */
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 
-/**
- * Adapts a copied skill command for Orca's inline setup terminal auto-paste.
- * Host Windows installs may gain an npx preflight; WSL-targeted PowerShell wrappers
- * must become bash-native because the daemon forces wsl.exe for WSL worktrees.
- */
+/** Adapt clipboard commands for setup terminals: Windows may need npx preflight; WSL wrappers must become native bash for daemon-forced wsl.exe. */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
   effectiveShell: string | undefined,
   runtime?: LocalAgentRuntime,
   currentPlatform = getSkillCommandPlatform()
 ): string {
-  // Why: the created tab is authoritative when project runtime replaces the requested shell.
+  // The created tab’s shell wins when project runtime overrides the requested shell.
   const wslNative = isWslShellName(effectiveShell)
     ? decodeWslSetupTerminalCommand(copiedCommand)
     : null
@@ -116,19 +108,12 @@ function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRunt
   const distroArg = runtime.wslDistro?.trim()
     ? ` -d ${quotePowerShellLiteral(runtime.wslDistro.trim())}`
     : ''
-  // Why: encoding preserves the user's configured login-shell PATH across the Windows argv boundary.
+  // Encode across Windows argv without losing the configured login-shell PATH.
   const encodedScript = encodeWslLoginShellScript(command)
   const visibleCommand = command.replace(/[\r\n]+/g, ' ')
-  // Why $(...) and not a backtick eval: PowerShell treats ` as its own escape
-  // character, so the old `eval "\`printf ...\`"` had the payload's quotes
-  // interacting with two escaping layers and dash saw `case  in` -- the
-  // `word unexpected (expecting "in")` in #14292. Credit: #14785.
-  //
-  // Why not a plain pipe into sh: that hands the payload the pipe as its stdin,
-  // so a setup command that reads input gets base64 remnants instead. Command
-  // substitution runs in a subshell and leaves the terminal's stdin intact.
+  // Command substitution avoids PowerShell backtick-escaping collisions (#14292/#14785) and preserves stdin that piping into sh would consume.
   const shellScript = `sh -c "$(printf %s ${encodedScript} | base64 -d)"`
-  // Why --exec: `--` makes wsl.exe expand $name in the argv it forwards to the guest.
+  // Use --exec because -- expands guest-bound variable references in wsl.exe.
   const wslCommand = `wsl.exe${distroArg} --exec sh -c ${quotePowerShellNativeArgument(shellScript)}`
   return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
 }
@@ -141,9 +126,8 @@ function decodeWslSetupTerminalCommand(command: string): string | null {
     return null
   }
 
-  // Why both separators: commands persisted before the --exec switch must still decode.
+  // Decode persisted wrappers from before both the --exec and pipe changes.
   const encoded =
-    // Both shapes: commands persisted before the pipe switch still decode.
     /(?:--|--exec) sh -c '(?:eval \\"`|sh -c \\"\$\()?printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(
       command
     )?.[1]
@@ -175,12 +159,9 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   const trimmedCommand = command.trim()
   if (
     currentPlatform !== 'win32' ||
-    // Why: skill setup terminals spawn on the focused runtime environment, so a
-    // Windows client must not hand a cmd.exe command to a remote host.
+    // Never send Windows-client cmd.exe setup commands to a focused remote runtime.
     isRemoteRuntimeEnvironmentFocused() ||
-    // Why: the copied command lands in the user's configured shell, and MSYS
-    // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
-    // starting an interactive cmd session instead of running the payload.
+    // MSYS rewrites cmd.exe switches as paths; keep copied commands out of that boundary for POSIX-family shells.
     (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
     !/^npx\s+skills(?:@[\w.-]+)?\s+add\b/i.test(trimmedCommand)
   ) {
@@ -189,9 +170,7 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 
   const missingNpxGuidance =
     'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
-  // Why: cmd.exe is one shell-neutral boundary for PowerShell and Command
-  // Prompt, and it resolves the bare name through PATHEXT for both the
-  // preflight and the executed command, so shims such as npx.exe still count.
+  // cmd.exe provides a common PowerShell/Command Prompt boundary and PATHEXT resolution for npx shims.
   return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
 }
 
@@ -202,10 +181,7 @@ function isPosixFamilyWindowsShellConfigured(): boolean {
 }
 
 function isRemoteRuntimeEnvironmentFocused(): boolean {
-  // Why: the terminal router also weighs how many environments are saved, but
-  // that slice has no subscriber here. Read only the focused id, which every
-  // caller re-renders on: it over-skips rather than ever handing a cmd.exe
-  // command to a remote shell.
+  // Callers track focused ID, not environment count; conservatively skip to avoid sending cmd.exe to remote shells.
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
 }
 

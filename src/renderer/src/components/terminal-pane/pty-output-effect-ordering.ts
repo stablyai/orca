@@ -43,8 +43,7 @@ type OrderedPtyEffects = Pick<
   emptyTitleScanEffect: PendingPtySideEffect['titleScanEffect']
 }
 
-/** One queue entry per payload, title and activity change, in byte order, so the drain's per-entry
- *  budget never splits a chunk's effects out of order. */
+/** Group each chunk’s payload/title/activity changes in byte order so drain budgets cannot reorder its effects. */
 export function enqueueOrderedPtyEffects(
   enqueue: (effect: PendingPtySideEffect) => void,
   {

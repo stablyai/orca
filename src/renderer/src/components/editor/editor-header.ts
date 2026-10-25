@@ -90,9 +90,7 @@ export function getEditorHeaderOpenFileState(
     return { canOpen: false }
   }
 
-  // Why: diff tabs can outlive the current Source Control snapshot. If the
-  // live entry is missing, keep the action enabled instead of hiding a valid
-  // open-file path just because sidebar polling has moved on.
+  // Diff snapshots outlive status rows; missing live entries must not hide an otherwise valid open-file action.
   if (!worktreeEntry) {
     return { canOpen: true }
   }

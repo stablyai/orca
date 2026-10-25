@@ -9,9 +9,7 @@ type RepoOwnerState = {
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
-/** Transport for a GitHub Project row mutation. A row whose `owner/repo` slug matches a known
- *  repo goes to that repo's owner; otherwise (Orca may not track the repo) it goes to
- *  `rowSource`, the host the row was loaded from. */
+/** Route known repo slugs to repo owner; untracked rows use rowSource, the host that loaded them. */
 export function runtimeTargetForProjectRowOwner(
   state: RepoOwnerState,
   owner: string,

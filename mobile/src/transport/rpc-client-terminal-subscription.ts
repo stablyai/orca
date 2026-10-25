@@ -33,9 +33,7 @@ export function updateTerminalSubscriptionViewport(
   }
 }
 
-/** Build the unsubscribe RPC for a streaming method that needs the host told to
- *  tear down (session tabs, native chat), or null when none is required. Keeps
- *  the per-method echo logic out of the rpc-client teardown closure. */
+// Centralize method-specific unsubscribe echoes for explicit host teardown; return null when none is needed.
 export function buildStreamUnsubscribe(
   method: string | undefined,
   params: unknown,

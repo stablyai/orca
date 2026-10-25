@@ -50,8 +50,7 @@ export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
     .map((release) => parseDesktopReleaseTag(release.tag_name))
     .filter((candidate) => candidate && candidate.tag !== current.tag)
     .filter((candidate) => compareDesktopReleaseTags(candidate, current) < 0)
-    // Why: public changelogs should be bounded by releases users could see;
-    // stable releases summarize since the prior stable, not the latest RC.
+    // Bound notes by public releases; stable summarizes since prior stable, not the latest RC.
     .filter((candidate) => current.rc !== null || candidate.rc === null)
     .sort(compareDesktopReleaseTags)
   return previousReleases.at(-1)?.tag ?? ''
@@ -147,8 +146,7 @@ export async function createDraftRelease({
     ...(previousTag ? { previous_tag_name: previousTag } : {})
   }
 
-  // Why: GitHub's generate-notes baseline ignores draft releases, so pass the
-  // previous public changelog boundary explicitly.
+  // generate-notes ignores drafts; pass previous public changelog boundary explicitly.
   const releaseNotes = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${repo}/releases/generate-notes`,
@@ -169,8 +167,7 @@ export async function createDraftRelease({
     if (!Number.isInteger(existingRelease.id)) {
       throw new Error(`Draft release ${tag} is missing a GitHub release id`)
     }
-    // Why: the listing is a snapshot; the draft can be published while notes
-    // generate, and patching then overwrites a live release body.
+    // Draft may publish while notes generate; recheck before overwriting a live body.
     const currentRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -180,9 +177,7 @@ export async function createDraftRelease({
       log(`Release ${tag} was published while notes were generated; leaving it unchanged.`)
       return
     }
-    // Why: the PATCH endpoint supports no conditional/versioned update, so the
-    // GET above cannot close the window. The PATCH response reports the state we
-    // actually wrote to; if publication won, put the published body back.
+    // PATCH has no conditional/version guard; if publication wins the GET/PATCH race, restore the published body.
     const patchedRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -198,8 +193,7 @@ export async function createDraftRelease({
         log(`Release ${tag} was published while notes were patched; its body is unchanged.`)
         return
       }
-      // Why: the rollback must not clobber a body written after our PATCH, so
-      // restore only while the release still carries exactly what we wrote.
+      // Rollback only our exact body or it can clobber a newer edit.
       const releaseBeforeRollback = await githubJson(
         fetchImpl,
         `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -226,11 +220,7 @@ export async function createDraftRelease({
       return
     }
   } else {
-    // Why target_commitish is the tag commit, not omitted: GitHub defaults it
-    // to the repo default branch. A release-cut tag is a detached bump commit,
-    // so that default creates an untagged draft. electron-builder then misses
-    // it by tag name and `--publish always` opens a public release with the
-    // first platform's assets, which /releases/latest serves without the exe.
+    // Set target_commitish to detached release-bump commit; default branch creates an untagged draft that electron-builder misses, publishing incomplete assets to /latest.
     const createdRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases`,

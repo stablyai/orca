@@ -1,8 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 
-// Catalog keys keep their original terminal namespace: they are opaque ids with
-// shipped translations, and the popover is now shared with native chat.
+// Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 
 export type HttpLinkDestination = 'orca' | 'system'
 
@@ -42,7 +41,6 @@ export function httpLinkActionDestinationsFor(
     : { primary: 'system', alternate: 'orca' }
 }
 
-/** A modifier click opens the primary destination; Shift takes the other one. */
 export function httpLinkDirectClickDestination(
   destinations: HttpLinkActionDestinations,
   shiftKey: boolean
@@ -62,7 +60,6 @@ export function httpLinkDestinationLabel(destination: HttpLinkDestination): stri
       )
 }
 
-/** One action per offered destination; surfaces share the labels and the open call. */
 export function buildHttpLinkActions(
   destinations: HttpLinkActionDestinations | undefined,
   open: (destination: HttpLinkDestination | undefined) => void | Promise<void>
@@ -115,8 +112,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     return
   }
   if (deps.modifierHeld) {
-    // Why: the modifier states a destination outright, so it also skips the
-    // one-time routing prompt; openHttpLink resolves which destination it means.
+    // Explicit modifier routing skips the one-time preference prompt; openHttpLink resolves its destination.
     openHttpLink(url, {
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
@@ -134,9 +130,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     return
   }
 
-  // Why: the first link click may need an async preference dialog.
-  // Suppress the browser's default link handling first, then route after the
-  // persisted choice is available.
+  // Prevent native navigation before awaiting the initial routing-preference dialog.
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {

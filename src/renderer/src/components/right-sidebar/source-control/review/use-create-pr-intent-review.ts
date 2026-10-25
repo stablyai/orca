@@ -30,10 +30,7 @@ import type { SourceControlCreateReviewComposer } from './use-create-review-comp
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 
-/**
- * Create-PR intent's unattended review step: it must resolve its own base/title/body (no composer to
- * read) and only reveal the result when the run still owns the foreground worktree.
- */
+/** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({
   activeRepo,
   createHostedReview,

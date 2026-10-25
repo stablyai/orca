@@ -17,15 +17,7 @@ import {
   type EditorBufferReconcileState
 } from './editor-buffer-reconcile-write'
 
-/**
- * Puts every open view on the record its identity names, running the join rules for each view
- * that moves (opened, hydrated, owner resolved, renamed, rejoined): `rekey` when no view holds the
- * identity, else attach, adopt (dirty wins), merge or detach. A view arriving by rename carries the
- * file's new content, so it takes the key: a clean target's views attach to it, a dirty target
- * detaches. With `rejoin`, a detached view rejoins once its side or its partner is clean. `keep`
- * names closing views whose dirty record outlives them. Returns `state`'s own objects for whatever
- * did not change, and the mirror fields each view must now show.
- */
+/** Join moved/opened/hydrated/reowned views by identity (rekey/attach/adopt/merge/detach), preserving unchanged references. Rename carries new disk content: clean targets attach, dirty targets detach. rejoin admits clean partners; keep preserves dirty closed-view records. Return required view mirrors atomically. */
 export function reconcileEditorBufferRecords(
   state: EditorBufferReconcileState,
   identityOf: (file: OpenFile) => string,
@@ -89,7 +81,7 @@ export function reconcileEditorBufferRecords(
     }
   }
 
-  // Source record → where its first moving view landed, so its other views follow without a join.
+  // Route later views to their source record’s first destination without joining again.
   const landedFrom = new Map<string, { want: string; landed: string }>()
   for (const file of moving) {
     const want = desired.get(file.id) ?? file.id
@@ -114,7 +106,7 @@ export function reconcileEditorBufferRecords(
     }
   }
 
-  // Membership: a record with no view left is dropped, unless a no-prompt close asked to keep it.
+  // Drop unviewed records unless no-prompt close requested retention.
   for (const recordId of Object.keys(write.records)) {
     if (!index.views[recordId]?.length) {
       const viewIds = state.editorBufferViews[recordId] ?? []

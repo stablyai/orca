@@ -122,9 +122,7 @@ function CommentCard(props: { index: number; path: string; children: ReactNode }
   )
 }
 
-// Why: the Review PR visual follows the approved HTML mock beat-for-beat. The
-// real app keeps Explorer / Checks in one right-sidebar surface, so the
-// animation selects Checks before the PR status content appears.
+// Select Checks before showing PR status, matching the real shared Explorer/Checks surface.
 export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
   const rootRef = useRef<HTMLDivElement | null>(null)

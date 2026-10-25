@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { legacy7zaRelativePath, resolve7zaPath } from './resolve-7za-path.mjs'
@@ -9,9 +9,7 @@ import { legacy7zaRelativePath, resolve7zaPath } from './resolve-7za-path.mjs'
 const projectRoot = resolve(import.meta.dirname, '../..')
 
 describe('7za path resolution for the Windows signing gates (#6487)', () => {
-  // Why fixtures: 7zip-bin@5.2.0 ships mac/{arm64,x64}, win/{arm64,ia32,x64}
-  // and linux/{arm,arm64,ia32,x64} — a `darwin/` or arch-collapsed guess
-  // resolves to nothing, which is how the gate degraded silently in the first place.
+  // Match upstream mac/win/linux architecture dirs; darwin/ or collapsed-arch guesses silently fail to resolve.
   it.each([
     ['darwin', 'arm64', 'mac/arm64/7za'],
     ['darwin', 'x64', 'mac/x64/7za'],
@@ -26,13 +24,23 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     )
   })
 
-  it('prefers a real legacy binary over the downloaded toolset', async () => {
-    // Only meaningful if a transitive dep reintroduces the package.
-    const legacy = join(projectRoot, ...legacy7zaRelativePath())
-    if (!existsSync(legacy)) {
-      return
+  it('prefers an existing legacy file over the downloaded toolset', async () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'orca 7za legacy '))
+    const previous = process.env.ELECTRON_BUILDER_7ZIP_PATH
+    try {
+      delete process.env.ELECTRON_BUILDER_7ZIP_PATH
+      const legacy = join(scratch, ...legacy7zaRelativePath())
+      mkdirSync(dirname(legacy), { recursive: true })
+      writeFileSync(legacy, 'legacy binary fixture')
+      await expect(resolve7zaPath(scratch)).resolves.toBe(legacy)
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ELECTRON_BUILDER_7ZIP_PATH
+      } else {
+        process.env.ELECTRON_BUILDER_7ZIP_PATH = previous
+      }
+      rmSync(scratch, { recursive: true, force: true })
     }
-    await expect(resolve7zaPath(projectRoot)).resolves.toBe(legacy)
   })
 
   it('resolves an executable 7za that can extract an archive', async () => {
@@ -78,9 +86,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     }
   })
 
-  // Why a directory and not a missing path: PowerShell's `Test-Path $7za` is true
-  // for directories, so a folder-valued override would clear both the resolver's
-  // check and the gate's, then fail as an opaque exec error mid-extraction.
+  // Use directory override: Test-Path accepts it, masking bad resolver validation until extraction fails.
   it('ignores an override that points at a directory', async () => {
     const scratch = mkdtempSync(join(tmpdir(), 'orca 7za dir override '))
     const previous = process.env.ELECTRON_BUILDER_7ZIP_PATH
@@ -99,9 +105,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     }
   }, 120_000)
 
-  // Why concurrency: the stdout diversion patches a process-global function. A
-  // naive save/restore lets the first finisher reinstate a still-diverting stub
-  // as "the original", permanently swallowing stdout for the rest of the process.
+  // Overlap calls to global stdout patch; naive save/restore can permanently restore another caller’s diverting stub.
   it('restores stdout after concurrent resolutions', async () => {
     const before = process.stdout.write
     await Promise.all([
@@ -112,9 +116,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     expect(process.stdout.write).toBe(before)
   }, 120_000)
 
-  // Why a subprocess: app-builder-lib memoises the resolved toolset, so an in-process
-  // assertion passes on the cached value even when a dangling override would abort a
-  // cold release runner.
+  // Use fresh subprocess: app-builder-lib memoizes toolset, hiding dangling-override failures in warm process.
   it('ignores an override that points at a missing file, in a cold process', () => {
     const dangling = join(tmpdir(), 'orca-7za-does-not-exist')
     const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {
@@ -143,11 +145,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     expect(existsSync(result.stdout.trim())).toBe(true)
   }, 120_000)
 
-  // Why a cold cache with VITEST unset: app-builder-lib prints download
-  // progress to stdout, and builder-util suppresses that logging under Vitest —
-  // so an inherited VITEST makes this exact failure invisible. `$7za = (node
-  // ...).Trim()` would otherwise receive two lines and the gate would break on
-  // any runner whose toolset cache was evicted or repaired.
+  // Unset VITEST with cold cache: builder-util suppresses download logs in tests, hiding multiline stdout that breaks PowerShell path capture.
   it('keeps stdout to one path even when the toolset cache is cold', () => {
     const cache = mkdtempSync(join(tmpdir(), 'orca 7za cold cache '))
     try {

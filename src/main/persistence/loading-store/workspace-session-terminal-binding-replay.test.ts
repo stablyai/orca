@@ -178,8 +178,7 @@ describe('workspace session terminal binding replay', () => {
   })
 
   it('fails closed when one tab id is duplicated inside a single worktree list', () => {
-    // Map indexing is last-wins where a linear find was first-wins; the ambiguity
-    // fence must skip these ids so the two strategies can never disagree.
+    // Map last-wins and linear first-wins differ on duplicates; ambiguous IDs must skip replay.
     const prior = session(null)
     prior.tabsByWorktree = {
       [WORKTREE_A]: [

@@ -7,7 +7,6 @@ import {
 
 type Box = { top: number; bottom: number }
 
-/** The parts of a DOM element this reads; on the page the list's scrollable node is one. */
 type Tagged = {
   getBoundingClientRect: () => Box
   getAttribute: (name: string) => string | null
@@ -21,8 +20,6 @@ export type MobileNativeChatScrollNode = Tagged & {
 
 type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
 
-/** Part of what the reader sees: a tool line or its run (`member`), else a row; where it was, and
- *  the message that placed its row. */
 export type MobileNativeChatReadingUnit = {
   key: string
   top: number
@@ -33,18 +30,15 @@ export type MobileNativeChatReadingUnit = {
 const ROW = 'chat-row:'
 const MEMBER = 'chat-member:'
 
-/** A message row's `testID`, which the page draws as `data-testid`. It sets message rows apart from
- *  the top slot and the live status line, which don't move with the messages. */
 export function mobileNativeChatRowId(key: string): string {
   return `${ROW}${key}`
 }
 
-/** A tool line's `testID`, by its line identity, or the run's, inside a row. */
 export function mobileNativeChatMemberId(id: string): string {
   return `${MEMBER}${id}`
 }
 
-/** Tagged elements in document order; ids are compared, never put in a selector. */
+// Compare ids directly; do not interpolate arbitrary ids into selectors.
 function tagged(node: Tagged, prefix: string): { id: string; node: Tagged }[] {
   return Array.from(node.querySelectorAll(`[data-testid^="${prefix}"]`), (element) => ({
     id: element.getAttribute('data-testid')?.slice(prefix.length) ?? '',
@@ -56,8 +50,7 @@ function onScreen(box: Box, view: Box): boolean {
   return box.bottom > view.top && box.top < view.bottom
 }
 
-/** A row's tool lines on screen, else its run when the run's top is (below that top, lines can join
- *  or leave), else the row itself. */
+// Prefer visible tool lines, then a visible run header, then the row as reading anchors.
 function unitsOf(
   row: Tagged,
   view: Box,
@@ -87,15 +80,13 @@ function unitsOf(
   return lines.length > 0 ? lines : [shown[0] ?? self]
 }
 
-/** What the reader is reading, in page order. */
 export function mobileNativeChatReadingPlace(
   scroller: MobileNativeChatScrollNode,
   { placement }: Keys
 ): MobileNativeChatReadingUnit[] {
   const view = scroller.getBoundingClientRect()
   const rows = tagged(scroller, ROW)
-  // Rows in normal flow have ordered bottoms, so the first one on screen is found without
-  // measuring the up to 2,000 above it.
+  // Binary-search ordered row bottoms to avoid measuring thousands of offscreen rows.
   let low = 0
   let high = rows.length
   while (low < high) {
@@ -118,10 +109,7 @@ export function mobileNativeChatReadingPlace(
   return units.concat([rows[end], rows[low - 1]].flatMap((row) => (row ? [self(row)] : [])))
 }
 
-/** Where a held part is drawn now, if the update kept it. A line in the row now drawing its old
- *  row's messages (an orphan result's line is its call's once paired); a run only in the row that
- *  kept its key; a row only while the same message places it, since a group keeps its key when the
- *  fold moves it. */
+// Follow paired results into their call’s row; runs/rows retain anchors only while their original placement identity survives.
 function drawn(
   unit: MobileNativeChatReadingUnit,
   rows: Map<string, Tagged>,
@@ -140,7 +128,6 @@ function drawn(
   return row && tagged(row, MEMBER).find((m) => m.id === member || m.id === paired)?.node
 }
 
-/** How far the first part of `place` the document still draws has moved on screen; 0 when none is. */
 export function mobileNativeChatReadingDrift(
   place: readonly MobileNativeChatReadingUnit[],
   scroller: MobileNativeChatScrollNode,

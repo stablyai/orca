@@ -26,8 +26,7 @@ export class PluginContentPackRegistry {
 
   constructor(
     contentVerifier: PluginContentVerifier,
-    /** Revocation chokepoint: no caller-supplied predicate can readmit a
-     *  killed plugin's language packs, VM recipes, or commands. */
+    /** No caller predicate may readmit revoked contributions. */
     private readonly isKilled: (pluginKey: string) => boolean
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
@@ -71,9 +70,7 @@ export class PluginContentPackRegistry {
     )
 
     while (true) {
-      // `approvedKeys` is a snapshot from before the awaited verification
-      // above, so a kill list arriving during that wait would otherwise still
-      // publish. Re-read revocation here, the last gate before publication.
+      // Approval predates awaited verification; recheck revocation immediately before publication.
       const approveAtomically = (plugin: ValidDiscoveredPlugin): boolean =>
         approvedKeys.has(plugin.pluginKey) &&
         !excluded.has(plugin.pluginKey) &&
@@ -111,7 +108,7 @@ export class PluginContentPackRegistry {
     return null
   }
 
-  /** Every contribution family, in error-reporting order; a new family is one entry here. */
+  /** Keep contribution errors in this family order. */
   private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
     return [
       this.languagePacks,

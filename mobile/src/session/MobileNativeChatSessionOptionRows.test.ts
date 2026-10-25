@@ -59,8 +59,6 @@ describe('DescriptorRows boolean', () => {
     expect(textOf(renderer)).not.toContain('Current value unknown')
   })
 
-  // Both arms: `default` and `unreported` make opposite claims, and only
-  // `unreported` is reachable in the structured lane, so one arm proves nothing.
   it.each([
     {
       name: 'a live unreported boolean is never labelled a default',
@@ -80,7 +78,6 @@ describe('DescriptorRows boolean', () => {
     const renderer = renderRows({ ...FAST, valueSource, transport })
     expect(textOf(renderer)).toContain(shown)
     expect(textOf(renderer)).not.toContain(hidden)
-    // The marker qualifies the value; it must not become part of the control's name.
     expect(findByHostType(renderer.root, 'Switch').props.accessibilityLabel).toBe('Fast mode')
   })
 

@@ -1,6 +1,4 @@
-// A create the host was running when it died is retried under the same operation id. Recovery has
-// released its reservation by then, so the retry continues it at the next fence; a reservation that
-// is still held keeps answering exactly as it did.
+// Retry crash-interrupted create ids at the next fence only after recovery releases the old reservation; held reservations replay unchanged.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -62,7 +60,6 @@ function createRequest(
   }
 }
 
-/** The create reserved, then a restart that could prove nothing released it at fence 2. */
 async function releasedByRestart(now: number): Promise<AgentSessionRecordStore> {
   const first = await open()
   await first.reserveOwner(createRequest())
@@ -97,7 +94,7 @@ describe('a create retried after recovery released its reservation', () => {
       expect.objectContaining({ operationId: OPERATION, outcome: { status: 'pending' } })
     ])
 
-    // A spawn from the first reservation reports in late: refused at its fence, and by token.
+    // Reject late identity from the first reservation by fence and token.
     const lateSpawn = { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' }
     await expect(
       store.commitProcessIdentity({ sessionId: SESSION, fence: 1, process: lateSpawn, now })
@@ -106,7 +103,6 @@ describe('a create retried after recovery released its reservation', () => {
       store.commitProcessIdentity({ sessionId: SESSION, fence: 3, process: lateSpawn, now })
     ).rejects.toThrow('agent_session_ownership_unknown')
 
-    // Retried again while that reservation stands: the same reservation, never a second spawn.
     const mint = vi.fn(() => 'spawn-c')
     const retried = await store.reserveOwner(createRequest({ spawnToken: mint, now }))
     expect(retried.disposition).toBe('replayed')

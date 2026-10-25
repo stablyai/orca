@@ -16,11 +16,7 @@ type StructuredFromNewTab = {
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
 }
 
-/**
- * The new-tab launcher's structured route. The owning host, this machine or a paired server,
- * admits the chat before any of it exists here, so its surface is the host's, and its "no" runs
- * the caller's launch as a terminal where its CLI is installed unless it names what opens instead.
- */
+/** Ask the owning host to admit chat before publication; refusal falls back to the caller’s configured surface or a terminal where the CLI is installed. */
 export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
   worktreeId: string

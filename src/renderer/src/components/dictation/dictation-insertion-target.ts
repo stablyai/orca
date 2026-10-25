@@ -112,8 +112,7 @@ async function insertTextIntoContentEditableTarget(
   }
 
   let textIndex = 0
-  // Why: dictation can produce paste-sized text; chunking avoids one large
-  // execCommand while keeping editor beforeinput/input semantics.
+  // Chunk paste-sized dictation while preserving editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
       return

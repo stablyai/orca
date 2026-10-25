@@ -31,8 +31,7 @@ export type AiVaultChatReplacement = {
   afterTabId: string
   /** Told the new tab's id once it opens. */
   focusIntent: NativeChatComposerFocusIntent
-  /** Called exactly once; null when no launch began. True: it accounted for a failure itself,
-   *  so no failure toast. */
+  /** Called once; null means no launch began. Return true to suppress the already-handled failure toast. */
   onSettled: (settlement: StructuredAgentLaunchSettlement | null) => boolean
 }
 
@@ -40,10 +39,7 @@ export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
   return activateAndRevealWorkspace(workspaceId) !== false
 }
 
-/** Adopt a vault conversation into a new structured chat. The route was decided by the
- *  eligibility gate that showed this action, so it re-enters as a verdict. No legacy fallback:
- *  resume has no terminal equivalent short of the resume command, and switching surface silently
- *  would hide the refusal the user needs to see. */
+/** Adopt through the eligibility verdict; silent terminal fallback would hide actionable refusals. */
 export async function resumeAiVaultSessionInNewChat(
   session: AiVaultSession,
   rowAgent: CliConversationRowAgent,
@@ -52,8 +48,7 @@ export async function resumeAiVaultSessionInNewChat(
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
   try {
-    // Codex rows can live under a shared legacy home; the same preparation the terminal resume
-    // runs re-pins them, and its result is what names the conversation the host will look for.
+    // Reuse terminal preparation to repin Codex rows from legacy shared homes before host lookup.
     const [preparedSession, agent] = await Promise.all([
       prepareAiVaultSessionForResume(session),
       adoptingAgentOnHost(rowAgent, worktreeId)
@@ -113,8 +108,7 @@ export async function resumeAiVaultSessionInNewChat(
   }
 }
 
-/** The first chat the worktree's host does not refuse to take the row over, trying them in order.
- *  A host that cannot answer yet keeps the chat it was asked about, whose own launch reports it. */
+/** Try chats until one is not refused; an unreachable host keeps the requested chat so its launch reports the error. */
 export async function adoptingAgentOnHost(
   rowAgent: CliConversationRowAgent,
   worktreeId: string
@@ -135,9 +129,7 @@ export async function adoptingAgentOnHost(
   return agent
 }
 
-/** The host refuses an adoption whose conversation another chat already holds, and refuses one it
- *  cannot find under any account home it recognises. Both are actionable, and neither is the
- *  generic "could not prepare" the terminal resume reports. */
+/** Ownership conflicts and missing account-home conversations need actionable errors, not generic terminal preparation failures. */
 function notifyAiVaultSessionResumeInChatFailure(
   error: unknown,
   rowAgent: CliConversationRowAgent

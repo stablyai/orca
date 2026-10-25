@@ -87,7 +87,7 @@ export type MailboxCheckOptions = {
   signal?: AbortSignal
 }
 
-/** Layout-owner builds: an empty store whose session holds main's layout, which binds the panes. */
+/** Keep main-owned pane bindings in the fixture's session layout. */
 function mailboxLayoutStore(): RuntimeStore {
   return {
     getRepos: () => [],
@@ -240,7 +240,7 @@ export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void
   await runtime.listTerminals()
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  // Why: the snapshot awaits the headless model's write chain, so both chunks are parsed.
+  // Await the model's write chain so both chunks are parsed.
   await runtime.serializeMainTerminalBuffer(PTY_ID)
 }
 

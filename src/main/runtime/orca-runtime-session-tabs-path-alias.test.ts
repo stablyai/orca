@@ -25,7 +25,6 @@ const ALIAS = 'repo::G:/git/example'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const TAB = `tab::${LEAF}`
 
-/** Uses stable tab and leaf IDs so both path spellings must recover the same terminal. */
 function snapshot(
   worktree = WORKTREE,
   ptyId = 'pty-existing',
@@ -62,7 +61,7 @@ function snapshot(
   }
 }
 
-/** Keeps the renderer authoritative so alias tests cannot pass through saved-session hydration. */
+/** Keep renderer authority so alias tests cannot pass through saved-session hydration. */
 function liveRuntime(
   worktree = WORKTREE,
   additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = []
@@ -73,7 +72,6 @@ function liveRuntime(
   return runtime
 }
 
-/** Publishes tab, leaf, and mobile views together to match an actual renderer graph update. */
 function publishGraph(
   runtime: OrcaRuntimeService,
   worktree = WORKTREE,
@@ -105,7 +103,6 @@ function publishGraph(
   })
 }
 
-/** registerPty as the host's spawn commit runs it: main's layout on the repo's host binds the pane first. */
 function registerBoundPty(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -214,8 +211,7 @@ describe('session tab workspace path aliases', () => {
         const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
         expect(listed.worktree).toBe(WORKTREE)
         if (ORCA_LAYOUT_OWNER_IS_MAIN && binding === 'unpublished') {
-          // A paired server's workspace: its terminals run on that server, which publishes them;
-          // no local record can stand for one, so nothing is rescued from this host's registry.
+          // Server-owned terminals cannot be rescued from this desktop's local registry.
           expect(listed.tabs).not.toContainEqual(expect.objectContaining({ id: TAB }))
         } else {
           expect(listed.tabs).toContainEqual(expect.objectContaining({ id: TAB }))
@@ -342,8 +338,7 @@ describe('session tab workspace path aliases', () => {
     runtime.cleanupSubscriptionsForConnection('alias-connection')
   })
 
-  // Why: clients file frames by their `worktree`, so one stream switching spellings splits a
-  // workspace's tabs across two keys.
+  // Stream frames must use one workspace spelling or clients split tabs across alias keys.
   it('names an early alias subscriber stream by one spelling for its whole life', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)

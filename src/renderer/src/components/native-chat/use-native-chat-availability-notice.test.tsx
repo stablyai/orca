@@ -83,7 +83,6 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   expect([...notices.values()].map((notice) => notice.text)).toEqual(['Your message was not sent.'])
 })
 
-// A signed-out Pi turns the send away before any turn: that send's own line says it.
 it("steps aside while the newest send's own line says the notice's reason", () => {
   const sent = (
     id: string,

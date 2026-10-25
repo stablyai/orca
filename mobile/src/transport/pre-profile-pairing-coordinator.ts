@@ -161,8 +161,7 @@ async function runPairing(
   onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
-  // Why: every pairing artifact must share the preserved host id so re-pairing
-  // updates one card instead of publishing a second identity (STA-1840).
+  // Use the preserved host id for every artifact so re-pairing updates one card (STA-1840).
   const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
     offer.publicKeyB64,
     `host-${now}`
@@ -170,8 +169,7 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
-    // Why: a new scan always wins over a stale journal, but first gives its
-    // recovery a bounded chance to publish an install that already committed.
+    // Give committed recovery a bounded publication chance before the new scan supersedes its journal.
     await dependencies.recoverPendingJournal()
     assertActive(isDisposed)
     journal = createMobileRelayPairingJournal({
@@ -257,8 +255,7 @@ async function runPairing(
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
-    // record of why the phone never got a relay endpoint.
+    // Log the refusal code because LAN-only success otherwise hides why relay was unavailable.
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
     await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
@@ -282,12 +279,8 @@ async function runPairing(
   return { hostId }
 }
 
-/**
- * Why after the save: the saved row starts as its existing name (or "Host N") and the descriptor
- * writer adopt-renames it to the desktop's machine name in the same serialized store chain, so a
- * load issued after pairing returns the desktop-reported name. A recording failure is swallowed —
- * descriptor upkeep must never fail a pairing that already saved.
- */
+// After save, record descriptors on the same serialized chain so pairing returns the adopted machine name.
+// Swallow bookkeeping failures; the host is already committed.
 function recordWinnerDescriptor(
   dependencies: Dependencies,
   hostId: string,

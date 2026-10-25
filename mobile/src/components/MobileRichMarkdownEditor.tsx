@@ -40,41 +40,22 @@ export type MobileRichMarkdownEditorHandle = {
   dismissKeyboard: () => void
 }
 
-/**
- * The rich Markdown editor: the page mounts the document modules under `rich-markdown/` itself,
- * with the toolbar row and the shared editor controller around them.
- *
- * Two seams are the page's rather than the window's. Messages go to `handleMessage` directly and
- * never through `window.ReactNativeWebView`, which on the page is the *shell's* bridge. The URL the
- * Link and Image commands need comes from `TextInputModal`: `window.prompt` was measured to return
- * null in both shells — neither implements the delegate the dialog needs — so on the phone those
- * two commands silently do nothing, and here they ask.
- *
- * `onKeyboardInsetChange` is accepted and never called, which is correct rather than missing. It
- * exists because native `Keyboard` events under-report a WebView's covered area; on the page the
- * document's `visualViewport` reads and the screen's `keyboard-occlusion.web.ts` are the same
- * measurement of the same viewport with the same formula, so driving the prop would lift the
- * screen's own bar twice. The mount supplies no inset source, so there is nothing to report.
- */
+// Mount rich-markdown document directly with shared controller/toolbar; call handleMessage, never shell’s window.ReactNativeWebView bridge.
+// Link/Image ask TextInputModal because both native shells’ window.prompt returns null (no dialog delegate).
+// Accept but never call onKeyboardInsetChange: page visualViewport and keyboard-occlusion already measure same cover, so callback would double-lift toolbar.
 function MobileRichMarkdownEditorWebInner(
   { content, editable, onChange, onOpenLink }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const hostRef = useRef<View>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
-  // The document reports itself ready from inside the mount call, so the controller answers it —
-  // setting the content and the editable flag — while the effect below is still on the line that
-  // built the document and `documentRef` is null. Those are the calls this holds, replayed the
-  // moment there is a handle. Dropping them would leave the editor empty for good.
+  // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
   const beforeMountRef = useRef<((send: RichMarkdownEditorApi) => void)[]>([])
   const receiveRef = useRef<((message: MobileRichMarkdownEditorMessage) => void) | null>(null)
   const [urlPromptKind, setUrlPromptKind] = useState<RichMarkdownUrlPromptKind | null>(null)
-  // The modal's half of `promptForUrl`: the command is waiting on this, and it is answered once,
-  // by a submit, a cancel, or the unmount below.
+  // Settle promptForUrl once via submit/cancel/unmount so no command stays pending.
   const pendingUrlRef = useRef<((url: string | null) => void) | null>(null)
-  // What the user typed, held until the drawer has gone. Measured in WebKit: answering while the
-  // field still had the focus left `execCommand` acting on a document that did not hold the
-  // selection, and Link and Image inserted nothing at all.
+  // Hold typed URL until drawer loses focus; WebKit execCommand otherwise lacks document selection and inserts nothing.
   const answeredUrlRef = useRef<string | null>(null)
 
   const send = useCallback((call: (api: RichMarkdownEditorApi) => void) => {
@@ -135,9 +116,7 @@ function MobileRichMarkdownEditorWebInner(
     [send]
   )
 
-  // In an effect, not during render: React may replay or discard render work, and the document
-  // reads this ref from a callback that outlives the render that mounted it. The mount effect
-  // below is declared after this one, so the first read already sees a sink.
+  // Update sink in effect before mount effect: callback outlives renders, which React may replay/discard.
   useEffect(() => {
     receiveRef.current = handleMessage
   }, [handleMessage])
@@ -160,8 +139,7 @@ function MobileRichMarkdownEditorWebInner(
   const promptForUrl = useCallback(
     (kind: RichMarkdownUrlPromptKind) =>
       new Promise<string | null>((resolve) => {
-        // A second ask while one is open cancels the first, so no command is left awaiting a modal
-        // that has been replaced.
+        // New prompt cancels prior pending command instead of stranding it on replaced modal.
         pendingUrlRef.current?.(null)
         answeredUrlRef.current = null
         pendingUrlRef.current = resolve
@@ -187,15 +165,12 @@ function MobileRichMarkdownEditorWebInner(
     beforeMountRef.current = []
     return () => {
       documentRef.current = null
-      // Answered before the document goes, so a command awaiting the modal resumes into a stopped
-      // document — which refuses it — rather than holding this mount's scope for good.
+      // Settle modal before disposing document so command resumes into stopped/refusing document rather than retaining mount scope.
       pendingUrlRef.current?.(null)
       pendingUrlRef.current = null
       live.dispose()
     }
-    // Mounted once, with `promptForUrl` read from the closure rather than named as a dependency:
-    // re-running this would throw away a live document and the caret in it, and every callback
-    // prop above changes identity on each render.
+    // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
   }, [])
 
   return (

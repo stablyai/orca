@@ -39,8 +39,7 @@ export function useWorkbenchTerminalStoryboard(
     if (reducedMotion || isTwoAgentsChecklist) {
       return
     }
-    // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
-    // no-op so revealing the window resumes the queue instead of skipping an entry.
+    // Pause hidden-window work; revealing resumes the queue without skipping an entry.
     return installWindowVisibilityInterval({
       run: () => setRunIdx((index) => (index + 1) % WORKBENCH_RUN_QUEUE.length),
       runOnVisible: () => {},

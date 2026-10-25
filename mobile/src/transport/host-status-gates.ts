@@ -13,16 +13,10 @@ export type HostStatusGates = {
   floatingWorkspaceEnabled: boolean
   desktopAppVersion: string | null
   compatVerdict: CompatVerdict
-  /** The two protocol numbers the status carried, for callers that evaluate a compat window this
-   *  hook does not own — the mobile web bundle's. Kept as the reply's own fields rather than a
-   *  restated shape so a rename upstream is a build error here. */
+  // Expose reply protocol fields for consumers with their own compatibility windows.
   hostProtocolWindow: HostProtocolWindow
   statusPending: boolean
-  /** Whether the settled answer came from a status this host actually returned and this client
-   *  could decode. Both failure paths below settle the same closed gates an old host with no
-   *  capabilities would produce, so without this a caller cannot tell "this desktop does not have
-   *  the feature" from "nobody answered" — and the mobile web shell's wall is terminal, so it must
-   *  never be shown for the second. */
+  // Distinguish readable old-host status from no usable answer; only the former may justify a terminal compatibility wall.
   statusReadable: boolean
 }
 
@@ -38,9 +32,7 @@ export type HostProtocolWindow = Pick<
 >
 
 const EMPTY_HOST_CAPABILITIES: string[] = []
-// Stable identities: consumers compare gates by reference to decide whether to re-run a step.
-// Both keys stated: the reply schema salvages them as present-and-possibly-undefined, and
-// `evaluateMobileWebBundleCompat` reads an absent number as "oldest host" and "no floor".
+// Keep sentinel identity stable for consumers; explicit undefined keys match salvaged reply fields and mean oldest host/no floor.
 const EMPTY_HOST_PROTOCOL_WINDOW: HostProtocolWindow = {
   protocolVersion: undefined,
   minCompatibleMobileVersion: undefined
@@ -55,8 +47,6 @@ const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
   statusReadable: false
 }
 
-// Reads status.get on connect for capabilities, protocol-compat verdict, and the
-// floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
   hostId: string | undefined
   client: RpcClient | null
@@ -64,8 +54,7 @@ export function useHostStatusGates(args: {
 }): HostStatusGates {
   const { hostId, client, connState } = args
   const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(null)
-  // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
-  // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
+  // Keep proven capabilities across drops while marking them unverified until the reconnect read settles.
   const [unverified, setUnverified] = useState(false)
 
   useEffect(() => {
@@ -99,24 +88,18 @@ export function useHostStatusGates(args: {
     compatVerdict: proven.compatVerdict,
     hostProtocolWindow: proven.hostProtocolWindow,
     statusReadable: proven.statusReadable,
-    // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
-    // longer blanks the capabilities this same host already proved.
     statusPending: connState === 'connected' && unverified
   }
 }
 
-/**
- * Reads status.get until it lands, settling closed on the first failure. Returns the stop function
- * the effect hands back, so the probe's retry timer is owned outside React.
- */
+// Settle closed on first failure while the owned probe keeps retrying; return its stop function to React.
 function startHostStatusRead(
   client: RpcClient,
   hostId: string | undefined,
   settle: (gates: Omit<HostStatusGates, 'statusPending'>) => void
 ): () => void {
   let settledClosed = false
-  // Why: a transient status failure must not trap navigation; conservative feature gates remain
-  // disabled. Later failures keep the first one's answer rather than re-render the same closed gates.
+  // Settle conservative gates once so transient failures cannot trap navigation or repeatedly rerender identical state.
   const settleClosed = () => {
     if (!settledClosed) {
       settledClosed = true
@@ -140,8 +123,7 @@ function startHostStatusRead(
         void recordHostAppVersion(hostId, desktopAppVersion)
       }
       if (hostId) {
-        // Why also here: the web page never runs the connection layer's probe, and the host
-        // screen should not wait for it; the recorder is idempotent across the two feeds.
+        // Record here too because pages lack the connection-layer probe; the recorder tolerates duplicate feeds.
         recordHostDescriptorFromStatus(hostId, status)
       }
       settle({

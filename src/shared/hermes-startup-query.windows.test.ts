@@ -18,8 +18,7 @@ windowsIt('preserves the startup query and spaced custom args in native Windows 
   ].join('\n')
 
   try {
-    // Why: the Node executable is a real native Windows process, so this catches
-    // PowerShell argument marshalling bugs that generated-script assertions miss.
+    // A real native Windows child catches PowerShell marshalling bugs invisible to generated-script assertions.
     copyFileSync(process.execPath, hermesPath)
     writeFileSync(
       join(tempDir, 'chat'),

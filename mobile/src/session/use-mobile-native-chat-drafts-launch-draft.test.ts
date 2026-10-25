@@ -18,9 +18,6 @@ function userTextMessage(id: string, text: string): NativeChatMessage {
   }
 }
 
-// Adoption and retirement of the host-published launch draft (the TUI-input
-// prefill mirrored into the chat composer). Split from the send/pending suite
-// so both stay under the per-file line cap.
 describe('useMobileNativeChatDrafts launch draft', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
@@ -81,7 +78,6 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     )
     expect(state?.composerText).toBe('https://github.com/o/r/issues/12')
 
-    // A user clear must not see the prefill resurrected on the next render.
     act(() => state?.setComposerText(''))
     await act(async () =>
       renderer?.update(
@@ -143,7 +139,6 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     expect(state?.composerText).toBe('')
   })
 
-  // A structured chat draws this phone's accepted send before its row lands; that is a user turn.
   it("declines a launch draft once the phone's own accepted send is drawn", async () => {
     await mount('a')
     const drawn = projectStructuredAgentSessionMessages(
@@ -183,7 +178,6 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     )
     expect(state?.composerText).toBe('')
 
-    // Edited prefill survives resolution on another tab's copy.
     await act(async () =>
       renderer?.update(createElement(Harness, { tabId: 'b', launchDraft: 'issue link' }))
     )
@@ -201,9 +195,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   })
 
   it('holds the launch draft until the transcript read settles', async () => {
-    // `session.tabs` carries launchDraft before the transcript loads. Seeding on
-    // the empty in-flight list would prefill an already-submitted issue link, and
-    // a send tapped before it retracts duplicates it to the agent.
+    // Launch drafts arrive before history; seeding from an unsettled empty list could duplicate an already-submitted prompt.
     await mount('a')
     await act(async () =>
       renderer?.update(
@@ -212,7 +204,6 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     )
     expect(state?.composerText).toBe('')
 
-    // The settled transcript already holds the submitted turn — decline for good.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -241,9 +232,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   })
 
   it('holds the seed while the tab is not resolved to chat view', async () => {
-    // Off chat the session hook is not subscribed, so `messages` is empty for a
-    // reason that says nothing about the transcript — judging the seed from it
-    // would prefill an issue link the agent already submitted in the TUI.
+    // Off-chat empty messages are no transcript evidence; using them could resurrect submitted launch text.
     await mount('a')
     await act(async () =>
       renderer?.update(
@@ -265,8 +254,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   })
 
   it('keeps an adopted prefill when the tab momentarily drops out of the snapshot', async () => {
-    // A session-tabs frame can transiently omit the active tab: the draft then
-    // reads as retracted and chat as inactive, but nothing was resolved.
+    // Transient tab omission looks like draft retraction without proving resolution.
     await mount('a')
     await act(async () =>
       renderer?.update(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
@@ -285,8 +273,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   })
 
   it('does not decline another tab’s prefill from the transcript it is still showing', async () => {
-    // The session hook resets its list in an effect, so the commit that first
-    // sees tab b still carries tab a's turns. Only transcriptLoading says so.
+    // The first tab-b commit retains tab-a history until the effect resets it; loading marks that list untrusted.
     const carriedOver = [userTextMessage('m1', 'sent on a')]
     await mount('a')
     await act(async () =>

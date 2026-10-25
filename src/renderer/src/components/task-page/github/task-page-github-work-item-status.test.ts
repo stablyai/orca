@@ -41,7 +41,6 @@ describe('task-page-github-work-item-status', () => {
   })
 
   it('handles edge cases gracefully', () => {
-    // Issues don't have draft state - should fallback to open styling
     expect(getTaskPageGitHubWorkItemStateLabel({ type: 'issue', state: 'open' })).toBe('Open')
     expect(getTaskPageGitHubWorkItemStateLabel({ type: 'issue', state: 'closed' })).toBe('Closed')
 
@@ -50,7 +49,6 @@ describe('task-page-github-work-item-status', () => {
       'Open'
     )
 
-    // Icon tones for issues should always be muted
     expect(getTaskPageGitHubPRIconTone({ type: 'issue', state: 'open' })).toContain(
       'muted-foreground'
     )
@@ -58,7 +56,6 @@ describe('task-page-github-work-item-status', () => {
       'muted-foreground'
     )
 
-    // Draft PR check
     expect(isTaskPageGitHubDraftPR({ type: 'pr', state: 'draft' })).toBe(true)
     expect(isTaskPageGitHubDraftPR({ type: 'pr', state: 'open' })).toBe(false)
     expect(isTaskPageGitHubDraftPR({ type: 'pr', state: 'merged' })).toBe(false)

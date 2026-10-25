@@ -344,8 +344,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
-          // Why: main dropped `resume <id>` because it could not verify which Codex
-          // account owns the rollout, so this PTY is a new session, not a restore.
+          // Unverified Codex rollout ownership prevents resume; main starts a new session instead.
           return {
             id: 'fresh-pty',
             coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' },

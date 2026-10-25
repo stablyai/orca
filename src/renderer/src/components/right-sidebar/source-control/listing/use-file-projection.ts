@@ -59,12 +59,7 @@ export type SourceControlFileProjection = {
   visibleSelectionEntries: FlatEntry[]
 }
 
-// Why: only one view mode is ever rendered, so building the other mode's projection is pure dead
-// work (precedent: the combined-diff file tree short-circuits the same way while collapsed).
-// The gates below and both branching consumers (section-file-list.tsx, branch-section.tsx) read the
-// same sourceControlViewMode prop within one synchronous render, so a mode switch can never show
-// these. Keep that single source: deriving the mode from a separate store read would let a consumer
-// switch a render before the memos do, and only then could one of these reach the screen.
+// Build only the rendered mode; gates and consumers must use the same synchronous mode prop so empty projections cannot appear.
 const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
   Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>>
 > = Object.freeze({})
@@ -145,11 +140,7 @@ export function useSourceControlFileProjection({
     [unfilteredDisplaySections]
   )
 
-  // Why: sorting before filtering keeps the collator off the keystroke path, and is order-identical
-  // to the old filter-then-sort for any self-consistent comparator (a total order is not required):
-  // a stable sort fixes each element's position by (comparator result, original index), and
-  // Array#filter drops elements without disturbing either, so re-sorting the survivors would
-  // reproduce the same relative order. filter(sort(x)) === sort(filter(x)).
+  // Stable sorting commutes with filtering, including ties; sort once to keep collator work off keystrokes.
   const sortedBranchEntries = useMemo(
     () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
     [branchEntries]
@@ -238,7 +229,7 @@ export function useSourceControlFileProjection({
 
   const visibleSelectionEntries = useMemo(() => {
     const arr: FlatEntry[] = []
-    // Why: list view splices in lazy submodule rows, so selection/range bookkeeping must read the injected rows, not the pre-injection entries.
+    // Selection/ranges must read injected submodule rows so rendered children remain selectable.
     if (sourceControlViewMode === 'list') {
       for (const section of displaySections) {
         if (collapsedSections.has(section.id)) {

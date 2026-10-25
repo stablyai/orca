@@ -1,7 +1,4 @@
-// Why this file exists: a paired client's WorktreeMeta for a runtime host is exempt from
-// gcStaleWorktreeMeta (it skips any row that is not local on both the repo and the meta's hostId),
-// and `forgetPersistedWorktreeMetaForRemovals` used to bail for every non-SSH host. So the client
-// kept a row per remote worktree it had ever seen and dropped none (#17776).
+// Runtime metadata bypasses local GC; formerly SSH-only explicit retirement stranded every paired-runtime worktree ever seen (#17776).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'

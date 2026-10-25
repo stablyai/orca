@@ -16,14 +16,7 @@ function downloadToastId(downloadId: string): string {
   return `browser-download:${downloadId}`
 }
 
-/**
- * A client-hosted page has no download shelf and its bytes never land in this desktop's Downloads
- * folder, so these toasts are the only signal that a download started, landed on the remote
- * workspace, or was refused.
- *
- * Why app-level: the page's pane unmounts on a page switch or close while the download keeps
- * running, and a loading toast whose finish nobody hears has no close button and never expires.
- */
+/** Observe at app scope: downloads land remotely and outlive their panes, so missing completion would leave an unclosable loading toast. */
 export function useBrowserClientHostedDownloadNotices(): void {
   useEffect(() => {
     // Claimed at request time: the finish can arrive after the page's handle is gone.

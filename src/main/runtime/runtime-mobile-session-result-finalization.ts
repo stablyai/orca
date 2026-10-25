@@ -49,8 +49,7 @@ export function finalizeRuntimeMobileSessionTabsResult(
           )
         }
       : {}),
-    // Why: clients draw `tabs` as the strip, but merges append runtime-kept tabs (every chat);
-    // desktop clients draw the group order, so the strip follows it.
+    // Follow group order: merged runtime-kept chat tabs otherwise append to clients' visible strip.
     tabs: tabGroups
       ? orderMobileSessionTabsByGroups(normalizedTabs, tabGroups, tabGroupLayout)
       : normalizedTabs

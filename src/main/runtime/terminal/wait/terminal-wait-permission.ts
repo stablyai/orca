@@ -16,14 +16,16 @@ import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
-import { readTuiIdleHookTurn, type TuiIdleHookTurn } from '../../tui-idle-hook-lane'
+import {
+  readTuiIdleHookTurn,
+  retainedTailIncludes,
+  type TuiIdleHookTurn
+} from '../../tui-idle-hook-lane'
 import { selectFreshExplicitAgentStatusRow } from '../../runtime-hook-agent-row-selection'
 import { isClaudeDialogHoldingPane } from '../../claude-open-dialog-hold'
 
@@ -161,11 +163,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       : null
   }
 
-  /**
-   * The title snapshot and prompt lifecycle the blocked-dialog check compares, both as display
-   * shows them, so the check reaches main's verdict: main compared the pair a stale-working clear
-   * left, and comparing a renderer's echoed clear with the native lifecycle hid a later dialog.
-   */
+  /** Compare display-projected title and lifecycle together; mixing an echoed stale-working clear with native lifecycle can hide a later dialog. */
   protected getTerminalWaitPermissionInputs(
     handle: string,
     ptyId: string,
@@ -203,6 +201,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       hasExplicitIdleTitle: hasExplicitIdleTitle(pty),
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
       lastInputAt: this.terminalRunFacts.readLastInputAt(ptyId),
+      tailIncludes: (text) => retainedTailIncludes(pty.tailBuffer, pty.tailPartialLine, text),
       resolveBlockedText: (state, row) =>
         this.resolveTuiIdleHookBlockedText(ptyId, handles, state, row)
     })
@@ -287,25 +286,8 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return this.terminalWriter.writeChunks(ptyId, text, options)
   }
 
-  /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS
-   *  the command runs under. A WSL pane is spawned as `wsl.exe` through the Windows ConPTY
-   *  (see local-pty-provider), so it pays the ConPTY ingest cost even though its shell is
-   *  Linux; an SSH pane is spawned by node-pty on the remote host, so the client's
-   *  process.platform says nothing about it. */
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
-    const pty = this.ptysById.get(ptyId)
-    const connectionId = pty?.connectionId
-    if (!connectionId) {
-      return process.platform
-    }
-    const remotePlatform = getRegisteredSshState(connectionId)?.remotePlatform
-    if (remotePlatform) {
-      return remotePlatform
-    }
-    // Why: remotePlatform only arrives with the relay handshake; until then the worktree path
-    // flavor is the same signal getAgentLaunchPlatformForRepo already trusts for a remote repo.
-    const worktreePath = pty ? splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath : null
-    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
+    return resolvePtyWriteHostPlatform(this.ptysById.get(ptyId))
   }
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {

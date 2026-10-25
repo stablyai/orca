@@ -50,8 +50,7 @@ function isMountedViewKey(viewKey: string): boolean {
   return false
 }
 
-// Why: tab ids are fresh per opened tab, so a reopened tab only finds its view through the closed tab's entry.
-// Open-but-inactive tabs are unmounted too, so the scope check keeps another live tab's view from being taken.
+// Fresh tab IDs inherit only closed predecessors; inactive open tabs are unmounted too and must retain their own views.
 function findInheritableViewKeys(
   viewKey: string,
   worktreeId: string,
@@ -100,7 +99,7 @@ export function claimCombinedDiffView(
   if (succession && tag && !memoryByViewKey.has(viewKey)) {
     const inheritableKeys = findInheritableViewKeys(viewKey, worktreeId, succession)
     const inherited = memoryByViewKey.get(inheritableKeys.at(-1) ?? '')
-    // Why: move rather than copy, and drop older closed tabs' views of this diff — they hold file bodies nothing can reach.
+    // Move the newest closed view and release older snapshots whose file bodies are unreachable.
     for (const key of inheritableKeys) {
       memoryByViewKey.delete(key)
     }
@@ -118,7 +117,7 @@ export function claimCombinedDiffView(
   return lease
 }
 
-// Why: release only stops tracking — the viewer's unmount snapshot still writes through the lease afterwards.
+// Release mount tracking only; the unmount snapshot still needs this lease to write.
 export function releaseCombinedDiffView(lease: CombinedDiffViewLease): void {
   mountedLeases.delete(lease)
 }
@@ -139,8 +138,7 @@ export function rememberCombinedDiffView(
   })
 }
 
-// Why: a cached view may hold unsaved section edits; invalidation resets only clean, loaded sections so
-// they reload on remount, and a dirty section's guarded save or conflict bar handles a disk change.
+// Invalidate clean sections only; dirty cached edits survive until their guarded save or conflict action handles disk changes.
 function invalidateCleanSections(
   view: CachedCombinedDiffViewState,
   isStale: (section: DiffSection) => boolean

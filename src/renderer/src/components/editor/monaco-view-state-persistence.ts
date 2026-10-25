@@ -17,7 +17,6 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   const { editorInstance, fileIdRef, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
     params
 
-  // Track cursor line for "copy path to line" feature
   const pos = editorInstance.getPosition()
   if (pos) {
     setEditorCursorLine(fileIdRef.current, pos.lineNumber)
@@ -65,7 +64,7 @@ export function restoreMonacoViewState(
   }
 }
 
-// Why: takes the ref, not the instance — the caller runs this from an effect cleanup, where reading `.current` inline trips the ref-in-cleanup lint.
+// Accept the ref so effect cleanup can read the current instance without violating ref-in-cleanup lint.
 export function snapshotMonacoViewState(
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>,
   viewStateKey: string

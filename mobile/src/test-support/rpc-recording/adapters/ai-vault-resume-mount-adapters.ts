@@ -3,14 +3,9 @@ import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'workspace-1'
-/** The shared-home layout `isLegacySharedCodexHome` matches; anything else returns before sending. */
+// Use a path accepted by the legacy shared-Codex-home guard so preparation can reach the wire.
 const LEGACY_CODEX_HOME = '/hosts/codex-runtime-home/home'
 
-/**
- * Resuming a sleeping agent: the legacy-Codex repin the phone asks for first, then the create/send
- * pair that puts the resume command in a terminal. Both are exported async functions taking a
- * client, so the recorded state is each function's own answer and no React host is needed.
- */
 export function aiVaultResumeMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -26,7 +21,6 @@ export function aiVaultResumeMountAdapters(
           prepare(
             client,
             mountFixture<Parameters<typeof prepare>[1]>({
-              // `claude` never reaches the wire: the preparation is Codex-only and returns first.
               agent: name === 'claude' ? 'claude' : 'codex',
               filePath: '/sessions/rollout.jsonl',
               codexHome: LEGACY_CODEX_HOME,
@@ -59,7 +53,6 @@ export function aiVaultResumeMountAdapters(
             WORKTREE,
             mountFixture<Parameters<typeof resume>[2]>({
               command: 'codex resume rollout',
-              // The bare arm drops every optional launch field, which changes the create params.
               ...(name === 'bare'
                 ? {}
                 : {

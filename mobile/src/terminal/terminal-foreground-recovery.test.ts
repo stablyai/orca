@@ -116,8 +116,7 @@ describe('terminal foreground recovery', () => {
     const recovered = recoverActiveTerminalAfterForeground(harness)
 
     expect(recovered).toBe('deferred')
-    // Why this matters: the deferred retry needs the initialized flags intact
-    // so the post-reconnect recovery can still force a scrollback replay.
+    // Deferred recovery must retain initialization state so reconnect can force fresh scrollback.
     expect(harness.initializedHandlesRef.current.has('term-1')).toBe(true)
     expect(harness.unsubscribeTerminal).not.toHaveBeenCalled()
     expect(harness.schedule).not.toHaveBeenCalled()

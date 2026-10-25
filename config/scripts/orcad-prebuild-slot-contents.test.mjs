@@ -194,8 +194,7 @@ describe('highestGlibcNeed', () => {
 
 describe('mergeManifest', () => {
   it('accumulates slots across the per-runner CI builds', () => {
-    // Overwriting would erase every other runner's record, and the release gate would then
-    // reject a matrix that is actually complete.
+    // Preserve other runners’ slot records or a complete matrix fails the release gate.
     const first = mergeManifest(null, next('linux-x64-glibc'))
     const second = mergeManifest(first, next('darwin-arm64'))
     expect(Object.keys(second.slots)).toEqual(['darwin-arm64', 'linux-x64-glibc'])

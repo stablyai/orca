@@ -38,10 +38,7 @@ export function collectTerminalLayoutLeafIds(
   return [...collectTerminalLayoutLeafIds(node.first), ...collectTerminalLayoutLeafIds(node.second)]
 }
 
-/**
- * Resolves a pane close against the panes one copy records. Only a copy that positively shows this
- * pane as its tab's one pane widens the close; a copy recording no panes knows nothing about it.
- */
+/** Only positive evidence that this is the last pane widens a close to its tab; empty copies prove nothing. */
 export function resolvePaneClose(
   leafIds: readonly string[] | null,
   leafId: string
@@ -79,11 +76,7 @@ function readLayoutOwnerLeafIds(copies: TerminalCloseLayoutCopies): readonly str
   return ownerCopies.find((leafIds) => leafIds.length > 0) ?? null
 }
 
-/**
- * The only place main turns a pane close into its tab's close: `last-pane` sends callers down
- * the tab path (and its renderer pin guard); anything else closes that pane or nothing.
- * D1 (main as the single layout writer) collapses the owner read to main's session layout alone.
- */
+/** Only last-pane widens to tab close, including renderer pin guard; main-layout builds resolve against saved main layout alone. */
 export function resolveTerminalCloseTarget(
   target: TerminalSurfaceCloseTarget,
   copies: TerminalCloseLayoutCopies
@@ -97,12 +90,7 @@ export type TerminalSurfaceCloseResult = WorkspaceSessionTerminalTabCloseResult 
   resolution: PaneCloseResolution | 'tab'
 }
 
-/**
- * The membership half of every explicit terminal close: removes a tab, or one pane of a split
- * tab, and advances the repo's topology revision so a stale renderer save cannot restore it.
- * A pane close only ever removes that pane; the resolution says why anything else was a no-op.
- * Every tab close is recorded in the session it was removed from, the owning host's partition.
- */
+/** Commit tab/pane removal and advance topology revision so stale saves cannot restore it. Pane closes never remove siblings; tab closes stamp the owning host partition. */
 export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -192,9 +180,7 @@ export type TerminalSurfaceCloseCommit = {
   ownerMatches: () => boolean
   /** The partitions holding the tab, routed partition first; empty when unroutable. */
   hostIds: () => readonly ExecutionHostId[]
-  /** Owner-fenced closes only: each holder's copy of the tab when the close was asked. A second
-   *  copy that is new or rebound since refuses the close, since `ownerMatches` fences only the
-   *  first. Snapshots, not sessions: the binding writer mutates a session in place. */
+  /** Fence every holder against new/rebound copies, not just ownerMatches' first holder; capture snapshots because binding writes mutate sessions in place. */
   requestedHolders?: ReadonlyMap<ExecutionHostId, PersistedTerminalTabCopy>
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
@@ -277,8 +263,7 @@ export function terminalSurfaceCloseMutation(
         // An unroutable workspace (its folder record is gone) has nothing to close.
         return { value: undefined, persist: false }
       }
-      // Why: a tab no session listed still records its close in the routed partition, so its late
-      // spawn is refused; an existing record (an echo of that close) needs no second write.
+      // Stamp missing tabs in the routed partition to reject late spawns; repeated close echoes need no second write.
       if (
         commit.options.allowMissing &&
         target.kind === 'tab' &&
@@ -297,8 +282,7 @@ export function terminalSurfaceCloseMutation(
       commit.setSession(result.session, hostId)
     }
     commit.onClosed([...new Set(closed.flatMap(({ result }) => result.ptyIdsToKill))])
-    // Why no rollback: bookkeeping must not undo a user's close or skip its kill; a failed write
-    // keeps the removal dirty in memory, so the next write persists it.
+    // Bookkeeping cannot undo user close or skip kill; failed persistence leaves the in-memory removal dirty for the next write.
     return { value: undefined }
   }
 }

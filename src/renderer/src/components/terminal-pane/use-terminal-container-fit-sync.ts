@@ -16,15 +16,7 @@ export function useTerminalContainerFitSync({
   managerRef,
   containerRef
 }: UseTerminalContainerFitSyncArgs): void {
-  // Why: sidebar open/close toggles dispatch SYNC_FIT_PANES_EVENT from a
-  // useLayoutEffect (pre-paint, same frame as the width change) so the
-  // terminal fits synchronously with the new container size, eliminating the
-  // ~16ms "old cols, new container width" flash that a deferred
-  // ResizeObserver rAF would otherwise produce. The subsequent per-pane
-  // ResizeObserver rAF and the 150ms debounced global fit become no-ops
-  // because proposeDimensions() will match current cols/rows (early-return
-  // branch in safeFit). Hidden display:none panes cannot be measured
-  // accurately, so they skip this global path and refit on visibility resume.
+  // Fit synchronously with pre-paint sidebar size changes to avoid a one-frame grid flash; hidden panes defer until reveal and later observers no-op on unchanged dimensions.
   useEffect(() => {
     if (!isSyncFitEnabled) {
       return
@@ -46,13 +38,7 @@ export function useTerminalContainerFitSync({
     if (!container) {
       return
     }
-    // Why: ResizeObserver fires on every incremental size change during
-    // continuous window resizes or layout animations.  Each fitPanes() call
-    // triggers fitAddon.fit() -> terminal.resize() which, when the column
-    // count changes, reflows the entire scrollback buffer and recalculates
-    // the viewport scroll position. On Windows, a single reflow of 10 000
-    // scrollback lines can block the renderer for 500 ms-2 s, freezing the
-    // UI while a sidebar opens or a window resizes.
+    // Coalesce incremental resize fits: column reflow scans scrollback and can block Windows renderers for seconds.
     const RESIZE_DEBOUNCE_MS = 150
     let timerId: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver(() => {

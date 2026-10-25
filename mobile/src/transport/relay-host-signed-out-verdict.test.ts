@@ -96,8 +96,7 @@ describe('relay close reason on the phone', () => {
     expect(onHostCloseReason).not.toHaveBeenCalled()
   })
 
-  // The rejection arrives as a relay-hello AND a close, in an unordered pair.
-  // Whichever lands first, the reason must survive.
+  // Retain close reason whichever arrives first: hello refusal or close.
   it('still reports the reason when the hello refusal lands first', async () => {
     const socket = new FakeSocket()
     const onHostCloseReason = vi.fn()
@@ -181,9 +180,7 @@ describe('the sign-out the cell reported outranks a later plain 4404', () => {
 })
 
 describe('RelayReconnectController cadence', () => {
-  // The reason changes no recovery decision; 4404 keeps the host-offline
-  // backoff it has always had, so a phone on this build retries exactly as
-  // often as one that never hears the reason.
+  // Signed-out reason changes copy only; preserve the host-offline retry cadence.
   it('keeps the host-offline retry delay for a 4404', () => {
     const delays: number[] = []
     const controller = new RelayReconnectController(
@@ -201,7 +198,6 @@ describe('RelayReconnectController cadence', () => {
 
     controller.registerFailure(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE))
 
-    // hostOfflineDelayMs' 5s floor, not the 250ms transport-backoff floor.
     expect(delays.at(-1)).toBe(5_000)
   })
 })

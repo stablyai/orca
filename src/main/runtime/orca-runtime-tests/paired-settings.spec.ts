@@ -53,7 +53,7 @@ describe('OrcaRuntimeService', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
-      // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
+      // Omission silently selects overseas and reports the wrong region.
       minimaxEndpoint: 'cn'
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')

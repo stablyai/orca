@@ -37,7 +37,7 @@ function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
   return snapshotEvent({ items })
 }
 
-// Module scope: the harness assigns these, which a test body's own `let` would narrow to null.
+// Assign through module scope to prevent test-local control-flow narrowing of the harness value to null.
 let renderer: ReactTestRenderer | null = null
 let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
 let listener: ((value: unknown) => void) | null = null

@@ -54,14 +54,13 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     [patchTaskPageWorkItemRows]
   )
 
-  // Why: the per-repo issue-source indicator and retry banner both derive from the same workItemsCache entry, so no extra IPC.
-  // Why: subscribe only to entries this page renders; the selector returns entry refs so shallow equality filters unrelated cache writes.
+  // Read source/retry state from rendered cache entry refs so shallow equality excludes unrelated writes without extra IPC.
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
   )
 
-  // Why: repos that fetched but resolved no GitHub source (#9660) show empty like a genuine zero-result; surface them explicitly with Retry.
+  // Unresolved sources otherwise look like genuine zero results; name them and offer Retry.
   const unresolvedSourceRepos = useMemo(
     () => selectTaskPageUnresolvedSourceRepos(selectedRepos, perRepoSourceState),
     [selectedRepos, perRepoSourceState]
@@ -70,10 +69,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     if (taskSource !== 'github' || githubMode !== 'items') {
       return
     }
-    // Why: inline/dialog edits patch `workItemsCache`; the paged table renders
-    // from a local snapshot so it needs the patched row objects copied across.
-    // Hard guarantee (K4): always overlay pending after reconcile so list
-    // fetch clobbers never paint unprotected coordinator fields.
+    // Copy patched cache rows into local pages and overlay pending mutations so refetches cannot clobber coordinator fields.
     setPages((current) =>
       reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map(
         (page) => (page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null)
@@ -81,7 +77,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     )
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource, setPages])
 
-  // Why: one-time toast per repo when the 'upstream' preference fell back to origin (ref-gated); deliberately don't auto-reset the preference so re-adding upstream later still applies.
+  // Toast upstream fallback once per repo; keep the preference so re-adding upstream restores it.
   const fellBackToastedRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (taskSource !== 'github') {
@@ -111,7 +107,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     }
   }, [selectedRepos, selectedWorkItemsCacheEntries, taskSource])
 
-  // Why: partial-failure retry leaves the cache populated so tasksLoading never flips, giving no feedback; track retry-in-flight per source so only the clicked banner shows "Retrying…".
+  // Cached retries never set tasksLoading; track source keys so only the clicked banner shows progress.
   const [retryingSourceKeys, setRetryingSourceKeys] = useState<ReadonlySet<string>>(() => new Set())
   const handleRetryIssuesFetch = useCallback(
     (sourceKey: string) => {
@@ -119,7 +115,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
       if (!source) {
         return
       }
-      // Why: nonce bump reuses the fetch path as force=true so retry doesn't dedupe onto a still-failing in-flight request (refreshes all repos; Retrying… stays scoped to the clicked source).
+      // Force-refresh all repos to bypass failing in-flight deduplication, while keeping retry feedback source-scoped.
       setRetryingSourceKeys((prev) => {
         const next = new Set(prev)
         next.add(source.sourceKey)

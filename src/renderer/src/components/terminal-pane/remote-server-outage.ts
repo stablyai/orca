@@ -7,10 +7,7 @@ import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import type { RemoteRuntimeRecoveryCause } from './remote-runtime-recovery-copy'
 
-/**
- * The server owning this workspace while its shared connection is down and retrying on its own.
- * One server-level reading, so its panes stay quiet instead of each announcing the same drop.
- */
+/** Read shared server reconnection once so individual panes do not announce the same outage. */
 export function selectRetryingOutageEnvironmentId(
   state: AppState,
   worktreeId: string | null | undefined
@@ -19,8 +16,7 @@ export function selectRetryingOutageEnvironmentId(
   if (!environmentId) {
     return null
   }
-  // Why only 'reconnecting': it is the transport-down verdict. 'checking' and a failed status
-  // probe over a live socket are not a dropped connection, and must not be announced as one.
+  // Only reconnecting proves transport loss; checking or failed probes over a live socket do not.
   const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
   return runtimeHostConnectionStateForEntry(entry) === 'reconnecting' ? environmentId : null
 }

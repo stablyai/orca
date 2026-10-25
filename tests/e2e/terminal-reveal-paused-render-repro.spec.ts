@@ -11,26 +11,9 @@ import {
 import { captureStableTabScreenshot } from './terminal-tab-screenshot'
 import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
-/**
- * Reproduction for the "missing bottom rows on reveal, recover on drag-select"
- * bug (PR #7614). The mechanism is xterm's RenderService gating refreshRows() on
- * its IntersectionObserver: while `_isPaused` is true (the observer can lag a
- * frame behind a just-revealed pane, worse under load), refresh() early-returns
- * and only latches `_needsFullRefresh`. The reveal-repaint's terminal.refresh()
- * is then swallowed and the freshly-cleared render model never repaints.
- *
- * This spec drives the REAL production reveal path (manager.resetWebglTextureAtlases
- * -> resetWebglTextureAtlas -> forceFullViewportPresent) against a real
- * xterm Terminal + RenderService. It:
- *   1. proves the bug: while paused, a plain refresh() renders nothing;
- *   2. proves the fix: the real reveal repaint forces a full-viewport render
- *      through the paused gate and clears the pause latch;
- *   3. confirms recovery at the pixel level.
- *
- * The paused state is set deterministically rather than raced, because headless
- * Electron does not reliably reproduce the observer-lag timing (documented for
- * this bug class). The gate we force is the exact one the field bug hits.
- */
+// #7614: delayed IntersectionObserver leaves RenderService paused; refresh latches _needsFullRefresh but swallows repaint after atlas clear.
+// Force that gate deterministically on real xterm: old refresh must render nothing, production atlas-reset/full-present must clear pause and repaint pixels.
+// Hidden Electron cannot reliably race observer lag, so only _isPaused and render recording are test instrumentation.
 
 const BOTTOM_MARKER = 'REVEAL_PAUSED_RENDER_BOTTOM_MARKER'
 
@@ -63,12 +46,7 @@ type RevealProbeWindow = Window & {
   }
 }
 
-/**
- * Installs an in-page probe that instruments the active pane's REAL xterm
- * RenderService. Everything here runs against production objects; the only
- * test-only code is the recording wrapper around `_renderRows` and the manual
- * flip of `_isPaused` that stands in for the observer-lag race.
- */
+// Instrument production RenderService; manually pause to model observer lag and wrap _renderRows to record effects.
 async function installRevealRenderProbe(page: Page, tabId: string): Promise<void> {
   await page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
@@ -117,9 +95,7 @@ async function installRevealRenderProbe(page: Page, tabId: string): Promise<void
         return service._isPaused === paused
       },
       dirtyModelLikeReveal: () => {
-        // Why: reveal clears the WebGL render model so a full rebuild is forced.
-        // clearTextureAtlas() routes through RenderService and, crucially, also
-        // requests a redraw — which is exactly what the paused gate then eats.
+        // Atlas clear empties the render model and requests the redraw the paused gate swallows.
         const withAtlas = pane as unknown as {
           webglAddon?: { clearTextureAtlas?: () => void }
         }
@@ -131,7 +107,6 @@ async function installRevealRenderProbe(page: Page, tabId: string): Promise<void
         terminal.refresh?.(0, Math.max(0, rows - 1))
       },
       runRealRevealRepaint: () => {
-        // The real production reveal path — contains the fix under test.
         manager.resetWebglTextureAtlases()
       },
       read: () => ({
@@ -343,8 +318,7 @@ async function captureFirstRevealedFrame(page: Page, tabId: string): Promise<Buf
 
 test.describe('terminal reveal paused-render recovery', () => {
   test("reveal repaint forces a render through xterm's paused gate", async ({ orcaPage }) => {
-    // Why: __store / __paneManagers live on the main Orca renderer window
-    // (orcaPage), not Playwright's default first page.
+    // Use orcaPage: the main renderer owns __store/__paneManagers, unlike Playwright’s first page.
     const page = orcaPage
     await waitForSessionReady(page)
     await waitForActiveTerminalManager(page)
@@ -353,15 +327,13 @@ test.describe('terminal reveal paused-render recovery', () => {
 
     await forceWebglOn(page, tabId)
 
-    // Fill the viewport down to the bottom so a swallowed repaint is observable
-    // both in the render ranges and on-screen.
+    // Fill bottom rows so swallowed repaint affects both render ranges and pixels.
     await execInTerminal(
       page,
       ptyId,
       `for i in $(seq 1 40); do echo "line $i ${BOTTOM_MARKER}_$i"; done`
     )
     await waitForTerminalOutput(page, `${BOTTOM_MARKER}_40`)
-    // Clear-screen + reprint so the marker sits on the real bottom rows.
     await execInTerminal(
       page,
       ptyId,
@@ -374,13 +346,10 @@ test.describe('terminal reveal paused-render recovery', () => {
     await installRevealRenderProbe(page, tabId)
     await probeCall(page, 'installProbe')
 
-    // ---- Control: prove the bug. This sequence (clearTextureAtlas + refresh)
-    // is byte-for-byte the PRE-FIX resetWebglTextureAtlas on origin/main, so it
-    // faithfully replays the old reveal path. While paused, it renders nothing.
+    // Control replays pre-fix origin/main’s clearTextureAtlas+refresh while paused; it must render nothing.
     await probeCall(page, 'setPaused', true)
     await probeCall(page, 'dirtyModelLikeReveal')
     await probeCall(page, 'plainRefresh')
-    // Give any (non-existent) queued render a frame to land.
     await page.waitForTimeout(80)
     const afterPlainRefresh = await probeRead(page)
 
@@ -390,7 +359,6 @@ test.describe('terminal reveal paused-render recovery', () => {
       'BUG REPRODUCED: while paused, plain refresh() is swallowed by the gate — no render fires'
     ).toHaveLength(0)
 
-    // ---- Fix: the real reveal repaint must force a full render through the gate.
     await probeCall(page, 'setPaused', true)
     await probeCall(page, 'dirtyModelLikeReveal')
     await probeCall(page, 'runRealRevealRepaint')
@@ -415,8 +383,6 @@ test.describe('terminal reveal paused-render recovery', () => {
       'FIX: pause latch is cleared so the observer can reassert authority cleanly'
     ).toBe(false)
 
-    // ---- Pixel-level confirmation: the surface still shows the correct content
-    // after being driven through the paused gate (no stale/blank bottom rows).
     const afterFix = await captureStableTabScreenshot(page, tabId)
     const diff = compareTerminalScreenshots(revealed, afterFix)
     expect(

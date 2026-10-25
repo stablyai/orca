@@ -6,14 +6,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
 
-// Why: `app.quit()` is deferred before Electron `ready`, so fatal startup gates must use the
-// synchronous `app.exit()`. Run their shipped termination statements under the real binary.
-//
-// Why not a live lock race: Chromium's Linux ProcessSingleton only answers a second process once the
-// browser IO thread is up, which needs `ready` and therefore a display. On a display-less CI runner
-// the "owner" is treated as stale and the duplicate takes the lock, so the race cannot be staged
-// there. Lock acquisition and argv forwarding are covered in `single-instance-lock.test.ts`; what
-// only a real process can settle is what the loser does next, which is what this file pins.
+// Before-ready quit is deferred; execute shipped gate termination under real Electron. A live Linux lock race needs ready/display, so isolate loser exit semantics here; lock/argv tests cover ownership.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const GATE_ENTERED = 'GATE_ENTERED'
@@ -29,7 +22,6 @@ afterAll(() => {
   }
 })
 
-/** Read the `app.*` termination statement from a pre-ready gate in the shipped entrypoint. */
 function readPreReadyTermination(gate: string): string {
   const source = readFileSync(
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
@@ -52,14 +44,14 @@ function buildFixtureMain(termination: string): string {
   return [
     `const { app } = require('electron')`,
     `const { appendFileSync } = require('node:fs')`,
-    // Why: the marker path travels by env — Chromium rewrites argv before the main script sees it.
+    // Use environment for markers because Chromium rewrites argv before main.
     `const marker = process.env.${MARKER_ENV}`,
     `const mark = (name) => appendFileSync(marker, name + '\\n')`,
     `const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = ${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE}`,
     `mark('${GATE_ENTERED}')`,
     termination,
     `mark('${CONTINUED_INTO_STARTUP}')`,
-    // Why: stand in for the rest of `src/main/index.ts`, which on the reported host was display init.
+    // Model startup tail that must not run after a fatal pre-ready gate.
     `mark('${REACHED_TAIL}')`,
     `process.exit(0)`
   ].join('\n')
@@ -96,7 +88,7 @@ function runPreReadyGate(termination: string): FixtureRun {
 describe('pre-ready termination under real Electron', () => {
   it('stops the duplicate launch before any further startup runs, with the already-running code', () => {
     const termination = readPreReadyTermination('if (!hasLock) {')
-    // Why: an empty slice would let the fixture fall through to its own exit and pass vacuously.
+    // Reject an empty source slice or the fixture's own exit passes vacuously.
     expect(termination).not.toBe('')
 
     const run = runPreReadyGate(termination)
@@ -119,7 +111,7 @@ describe('pre-ready termination under real Electron', () => {
   it('reproduces the deferred graceful quit that let the doomed launch keep booting', () => {
     const run = runPreReadyGate('app.quit()')
 
-    // Why: pins the Electron semantic the fix rests on — pre-`ready` `quit()` schedules, it does not stop.
+    // Pin Electron semantics: pre-ready quit schedules exit but does not stop startup.
     expect(run.markers).toEqual([GATE_ENTERED, CONTINUED_INTO_STARTUP, REACHED_TAIL])
     expect(run.status).not.toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
   }, 90_000)

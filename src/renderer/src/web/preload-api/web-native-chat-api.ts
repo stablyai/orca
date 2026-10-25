@@ -122,7 +122,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                   )
                 }
               } else if (!receivedInitial) {
-                // Why: an unrecognized ok payload never flips receivedInitial, stranding the view on 'loading'; settle it empty instead.
+                // Unknown ok payloads otherwise never set receivedInitial, leaving the view loading forever.
                 receivedInitial = true
                 onFrame({
                   type: 'snapshot',
@@ -134,7 +134,7 @@ export function createWebNativeChatApi(): NativeChatApi {
             }
           },
           {
-            // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
+            // Unsubscribe reaps the watcher on view toggle; pane tokens prevent cross-pane teardown.
             buildUnsubscribe: () =>
               buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
           }

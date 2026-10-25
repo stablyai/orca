@@ -1,8 +1,4 @@
-// issue1-ui-flash (host half): `session.tabs` must not manufacture completion or
-// freshness. A neutral live title ('Terminal', an editor, a cwd) is not proof the
-// agent finished, and the identity-only fallback must date its evidence instead of
-// the byte stream — otherwise the host frame is perpetually newer than a paired
-// client's own live status and the pane flaps between the two writers.
+// Neutral titles prove no completion; stamp identity fallback with evidence time so output cannot outrank live client status.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -57,8 +53,7 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
   return runtime
 }
 
-/** Publish a renderer graph: one terminal pane with a live title and the
- *  renderer's own byte-derived agent status (what a paired host mirrors). */
+/** Publish the renderer's terminal/title/byte-derived status as a paired host mirrors it. */
 function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: string): void {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
@@ -192,7 +187,6 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
     )
   })
 
-  // #1437 preserved: a genuine shell prompt is proof the agent released the pane.
   it.each(['zsh', 'bash', 'pwsh'])(
     'clears a stale working to identity-only done under the shell title %s',
     async (shell) => {
@@ -240,11 +234,10 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
       providerSessionOnly: true
     }
     const runtime = await createRuntime([resumeRow])
-    // Title evidence lands once...
     runtime.onPtyData(PTY_ID, '\x1b]0;Terminal\x07', T0)
     const titleObservedAt = Date.now()
 
-    // ...then the pane keeps streaming output with no new status evidence.
+    // Output without new status evidence must not refresh the identity fallback.
     vi.setSystemTime(T0 + 60_000)
     runtime.onPtyData(PTY_ID, 'building...\r\n', T0 + 60_000)
 
@@ -257,7 +250,6 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
       })
     )
 
-    // Republishing after still more output must not refresh the frame.
     vi.setSystemTime(T0 + 120_000)
     runtime.onPtyData(PTY_ID, 'still building...\r\n', T0 + 120_000)
     expect(await projectAgentStatus(runtime)).toEqual(

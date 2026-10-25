@@ -243,7 +243,7 @@ describe('orchestration worker workspace resolution', () => {
       path: localPath,
       hostId: 'local'
     })
-    // Why: this process serves no SSH filesystem, so the SSH folder path is unavailable.
+    // No SSH filesystem provider is installed, so the remote folder is unavailable.
     await expect(runtime.showManagedTerminalWorkspace('id:folder:remote-folder')).rejects.toThrow(
       'folder_workspace_path_unavailable:/srv/app'
     )

@@ -8,28 +8,18 @@ export type MobileNativeChatVisualFrameProps = {
   html: string
   title: string
   mode: MobileNativeChatVisualHostMode
-  /** The frame cannot show this visual (it navigated away, or its web process keeps dying). */
   onFailed: () => void
 }
 
-/** No script runs, so nothing reports a height; a fixed frame the visual scrolls inside. */
+// Sealed frames run no script to report height; use an internally scrolling fixed-height frame.
 const SEALED_INLINE_HEIGHT = 320
 
-/**
- * Inside the hybrid shell's page: the visual rendered sealed, with no script.
- *
- * The page is served under the shell's response-header policy (`script-src 'self'`,
- * `frame-src 'none'`), and a `srcdoc` frame inherits that policy, so a visual's inline scripts
- * cannot run here without loosening the page's own policy. Static markup, CSS and images still
- * render; script-drawn charts do not. An empty `sandbox` keeps the frame an opaque origin that runs
- * nothing and navigates nothing, as the page's HTML preview does.
- */
+// srcdoc inherits shell CSP, so keep visuals static and sandboxed with opaque origin; enabling inline scripts would weaken page policy.
 export const MobileNativeChatVisualFrame = memo(function MobileNativeChatVisualFrame({
   html,
   title,
   mode
 }: MobileNativeChatVisualFrameProps) {
-  // No script runs in this frame, so nothing ever reports on this channel.
   const document = useMemo(
     () =>
       buildNativeChatVisualDocument({
@@ -52,7 +42,7 @@ export const MobileNativeChatVisualFrame = memo(function MobileNativeChatVisualF
   )
 })
 
-/** A DOM style, not a `StyleSheet` entry: this element is an `iframe` and not a react-native view. */
+// Use DOM styles because this is an iframe, not a React Native view.
 const IFRAME_STYLE = {
   border: 'none',
   width: '100%',

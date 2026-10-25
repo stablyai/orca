@@ -271,8 +271,7 @@ describe('automationChangePublications', () => {
   })
 })
 
-// A folder workspace can pin its host directly, and that pin is what dispatch uses.
-// Projecting from the repo alone filed those records under Self while they ran elsewhere.
+// Folder workspace pins decide actual dispatch hosts; repo-only projection mislabeled SSH runs as Self.
 describe('workspace host pin', () => {
   it('files a local record under the SSH host its workspace pins', () => {
     const selector = projectAutomationSelector(

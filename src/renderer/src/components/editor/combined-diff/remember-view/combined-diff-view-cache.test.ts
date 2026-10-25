@@ -24,7 +24,6 @@ function keyFor(scopeId: string, content = contentKey): string {
   return `${content}::${scopeId}`
 }
 
-/** Mounts a tab viewer, scrolls it, then unmounts it as a tab close would. */
 function viewThenUnmount(scopeId: string, scrollTop: number, content = contentKey): void {
   const lease = claimCombinedDiffView(
     keyFor(scopeId, content),
@@ -32,7 +31,7 @@ function viewThenUnmount(scopeId: string, scrollTop: number, content = contentKe
     succession(scopeId, [scopeId], content)
   )
   releaseCombinedDiffView(lease)
-  // Why: the viewer's unmount snapshot writes after release, so mirror that order.
+  // Mirror unmount ordering: snapshot after releasing mount tracking.
   rememberCombinedDiffView(lease, { scrollTop })
 }
 

@@ -1,12 +1,10 @@
-// Once orcad begins to stop, a terminal it admits dies with it uncounted, so admission stays closed
-// until exit: past an update census's 60 s fence, and past a deferring desktop's reopen.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalUpdateAdmission } from '../runtime/terminal/stop/terminal-update-admission'
 import type { installOrcadShutdownSignals } from './orcad-lifecycle'
 import type { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
 import type * as Holder from './orcad-stop-terminal-admission'
 
-// Fresh per test: the holder remembers, for the process, that a stop began.
+// Reset process-wide stop state between tests.
 let stops: {
   installOrcadShutdownSignals: typeof installOrcadShutdownSignals
   prepareOrcadManagedStop: typeof prepareOrcadManagedStop
@@ -38,7 +36,6 @@ function freshAdmission(): TerminalUpdateAdmission {
   return admission
 }
 
-/** An update's last census closed admission; then the desktop deferred and reopened it, or lapsed. */
 function expectHeldPastEveryReopen(): void {
   admission.close(0)
   expect(admission.isClosed()).toBe(true)

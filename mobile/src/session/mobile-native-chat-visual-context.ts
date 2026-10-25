@@ -6,10 +6,7 @@ export type MobileNativeChatVisualRender = (
   index: number
 ) => ReactNode
 
-/**
- * How this transcript renders `::orca-visual` lines, or null where it cannot (no structured chat or
- * no client). Rows read only this, so they never import the WebView frame themselves.
- */
+// Keep rows independent of the WebView frame; null means visuals cannot render here.
 export const MobileNativeChatVisualContext = createContext<MobileNativeChatVisualRender | null>(
   null
 )

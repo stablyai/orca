@@ -27,8 +27,7 @@ export function shouldSuppressDevEducation(args: {
 export function suppressDevEducationForStore(store: DevEducationStore, now = Date.now()): void {
   const onboarding = store.getOnboarding()
   if (onboarding.closedAt === null) {
-    // Why: default dev launches should behave like an already-productive
-    // profile, while the env escape hatch keeps first-run surfaces testable.
+    // Default dev profiles skip first-run surfaces; the env override keeps onboarding testable.
     store.updateOnboarding({
       flowVersion: ONBOARDING_FLOW_VERSION,
       closedAt: now,

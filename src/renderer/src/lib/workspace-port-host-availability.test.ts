@@ -42,8 +42,7 @@ describe('getUnavailableWorkspacePortHosts', () => {
     ])
   })
 
-  // Why: total loss of contact is where naming the host matters most — the merged
-  // projection joins raw internal scan keys, so it cannot name them itself.
+  // Merged failure reasons carry raw scan keys, so total contact loss still needs host-name resolution.
   it('names every host when all of them failed', () => {
     expect(
       getUnavailableWorkspacePortHosts({
@@ -66,8 +65,7 @@ describe('getUnavailableWorkspacePortHosts', () => {
     ])
   })
 
-  // Why: a paired web client's userAgent is not the Orca host's platform, so the
-  // caller labels the local host from the scan's own platform.
+  // Web-client UA does not identify host OS; label local hosts using the scan’s own platform.
   it("carries the failed scan's platform, and null when it is unknown", () => {
     expect(
       getUnavailableWorkspacePortHosts({

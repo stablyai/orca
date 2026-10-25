@@ -11,7 +11,6 @@ import type {
   AttemptObservationPayloadByFacet
 } from './attempt-observation-types'
 
-// Mirrors the inputs worker-terminal-attention-query assembles for the production projection.
 function projectOutcome(
   db: OrchestrationDb,
   dispatchId: string,

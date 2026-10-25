@@ -27,7 +27,6 @@ const PERMISSION_TITLE = '\x1b]0;Codex waiting for permission\x07'
 const IDLE_TITLE = '\x1b]0;Codex idle\x07'
 const WORKING_TITLE = '\x1b]0;Codex working\x07'
 
-/** A runtime whose agent starts a turn on Enter, so an accepted prompt settles. */
 async function createRuntime() {
   return createAgentPromptSubmissionRuntime((runtime, data) => {
     if (data === '\r') {
@@ -89,7 +88,7 @@ describe('agent prompt writer: onPermission wait', () => {
       beforeWrite: async () => {
         checks += 1
         if (checks === 1) {
-          // The guard's async read is where an approval can slip in before the paste.
+          // Approval can arrive during the async guard read, before paste.
           runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
         }
       }

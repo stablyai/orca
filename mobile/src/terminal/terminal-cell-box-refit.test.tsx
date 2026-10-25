@@ -12,7 +12,6 @@ vi.mock('react-native', () => ({
 
 const HANDLE = 'term-1'
 
-/** The session's refit over one open terminal whose document reported a `cellWidth` box. */
 function refitHarness(cellWidth: number) {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
@@ -21,7 +20,6 @@ function refitHarness(cellWidth: number) {
     resize: vi.fn(),
     reflow: vi.fn(),
     clear: vi.fn(),
-    // The reported box, 47 rows high in the 710 px frame.
     fitDimensions: vi.fn((frame: { width: number }) => ({
       cols: Math.floor(frame.width / cellWidth),
       rows: 47
@@ -64,7 +62,6 @@ function refitHarness(cellWidth: number) {
     viewportRef,
     subscribeToTerminal,
     report: (handle: string) => act(() => refit!.notifyTerminalCellBoxChange(handle)),
-    // The session's onLayout: the one frame store, then the width notify.
     layOut: (width: number) =>
       act(() => {
         terminalFrameRef.current = { width, height: 710 }

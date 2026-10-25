@@ -28,8 +28,7 @@ export function countRecordKeysByReference(record: Record<string, unknown>): num
   return count
 }
 
-// Re-measures only rows whose DOM node still matches its virtual key, and publishes the
-// sticky-header slots the render pass reads out of refs.
+// Measure only nodes matching their virtual keys and publish sticky-header slots for rendering.
 export function useVirtualRowMeasurementSync(args: {
   renderRows: RenderRow[]
   virtualization: WorktreeListVirtualizer

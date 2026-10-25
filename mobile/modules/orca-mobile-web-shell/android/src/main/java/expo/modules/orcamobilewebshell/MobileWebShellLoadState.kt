@@ -16,16 +16,7 @@ internal data class MobileWebShellLoadEmission(val state: String, val reason: St
   }
 }
 
-/**
- * What a mount is still allowed to report. A failure is terminal: Chromium commits its own error
- * document after `onReceivedError` returns, and a rule list can fail to compile long after the
- * generation was already refused, so without this a `ready` or a second reason lands on top of a
- * failure the caller has already acted on. Consecutive duplicates are dropped as well.
- *
- * Pure, and the same rule on both platforms, so a JVM test and a `swiftc` check can hold it. The
- * two fields a caller reads directly are volatile: Android decides a document failure from
- * `shouldInterceptRequest`, which Chromium does not run on the UI thread.
- */
+/** Failure is terminal and duplicate reports are dropped: late error-document/rule-list callbacks must never restore ready. Cross-thread readers require volatile state. */
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
   private var last: MobileWebShellLoadEmission? = null
@@ -35,12 +26,7 @@ internal class MobileWebShellLoadStateMachine {
   var epoch: Int = 0
     private set
 
-  /**
-   * Whether a document under the current prop triple has committed. The document a load replaces
-   * stays alive between `stopLoading` and the next commit, and it is same-origin whenever only the
-   * directory or the bridge prop changed, so without this it passes every origin check and speaks
-   * for a load the caller has already been told is `loading`.
-   */
+  /** Accept messages only after the current props’ document commits; the replaced same-origin document can still speak before then. */
   @Volatile
   var hasCommittedDocument = false
     private set
@@ -65,14 +51,7 @@ internal class MobileWebShellLoadStateMachine {
 
   fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
 
-  /**
-   * A load that never committed did not finish.
-   *
-   * This is the whole guard, and it is deliberately not the document's URL: the page rewrites its
-   * own path with `history.replaceState` before its first render, so the document that committed at
-   * "/" reports finishing at "/h/<hostId>". Reading the path here withheld `ready` forever and left
-   * the WebView hidden behind it.
-   */
+  /** Require a commit, not URL equality: history.replaceState changes / to /h/<hostId> before finish, otherwise ready never arrives. */
   fun finished(): MobileWebShellLoadEmission? {
     if (!hasCommittedDocument) return null
     return emit(MobileWebShellLoadEmission("ready", null))
@@ -85,11 +64,7 @@ internal class MobileWebShellLoadStateMachine {
     return emission
   }
 
-  /**
-   * A failure decided during one load and reported after the next one started belongs to neither:
-   * Android has to defer its report past Chromium's error document, and a prop update can land in
-   * between, which would fail the generation that just replaced the one that actually failed.
-   */
+  /** Deferred failures belong to their original load; a prop update may replace it before delivery. */
   fun failedDuring(epoch: Int, reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? =
     if (epoch != this.epoch) null else failed(reason)
 

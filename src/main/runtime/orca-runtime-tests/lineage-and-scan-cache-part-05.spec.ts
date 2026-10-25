@@ -324,7 +324,6 @@ describe('OrcaRuntimeService', () => {
         taskTitle: 'coordinator-created work',
         displayName: 'coordinator-created work',
         orchestrationRunId: runA.id,
-        // The pane has no live agent status, so the fleet projection reports it as unverifiable.
         attention: {
           categories: ['unverifiable'],
           requiresAction: true
@@ -434,7 +433,6 @@ describe('OrcaRuntimeService', () => {
           task: 1,
           run: 1,
           legacyCoordinator: 0,
-          // Per-pane attention is deferred to the single batched query, so this stays at zero.
           attention: 0,
           total: 201
         },

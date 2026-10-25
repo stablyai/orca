@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-// Benchmarks two CPU costs `setLocalWorkspaceSession` pays on every session write — the write
-// that fires on something as ordinary as clicking between two terminal split panes.
-//
-//   1. capTerminalScrollbackSessionBuffer — UTF-8 budget scan per retained scrollback buffer
-//   2. remapPaneKeys                      — pane-key map rebuild that steady state throws away
-//
-// The snapshot disk rewrite on the same path is measured separately (#18764).
-//
-// Each scenario runs the production export against a baseline that reproduces the pre-change
-// shape, so the reported speedup cannot drift away from what production actually does.
+// Benchmark production capTerminalScrollbackSessionBuffer/remapPaneKeys against equivalent pre-change baselines on every-write CPU paths.
+// Snapshot disk rewrite is measured separately (#18764).
 import { spawnSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import fs from 'node:fs'
@@ -95,8 +87,6 @@ function report(label, baselineMs, currentMs, extra = '') {
   return speedup
 }
 
-// ---------------------------------------------------------------- scenario 1
-
 // Verbatim pre-change capTerminalScrollbackSessionBuffer; measureUtf8ByteLength itself is unchanged.
 function baselineCapScrollbackBuffer(buffer) {
   if (
@@ -143,8 +133,6 @@ report(
   capBaselineMs,
   capCurrentMs
 )
-
-// ---------------------------------------------------------------- scenario 2
 
 const paneKeys = {}
 const leafIdByInputLeafIdByTabId = new Map()

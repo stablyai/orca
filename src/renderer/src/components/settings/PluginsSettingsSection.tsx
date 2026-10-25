@@ -47,7 +47,7 @@ export function PluginsSettingsSection({
     const installedPluginKeys = new Set(nextPlugins.map((plugin) => plugin.pluginKey))
     setPlugins(nextPlugins)
     setError(null)
-    // Why: accepted discovery results own installed-plugin identity and invalidate stale UI state.
+    // Accepted discovery owns plugin identity; clear stale dialog/busy state.
     setConsentPluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setRemovePluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setBusyPluginKeys(
@@ -90,8 +90,7 @@ export function PluginsSettingsSection({
     if (!mountedRef.current) {
       return
     }
-    // Why: a mutation result is authoritative at completion time, even when an earlier action
-    // finishes after a later-started action or a passive refresh is still in flight.
+    // Completed mutations supersede older action starts and in-flight passive refreshes.
     listRequestRef.current += 1
     applyPluginList(nextPlugins)
   }
@@ -99,7 +98,7 @@ export function PluginsSettingsSection({
   useEffect(() => {
     mountedRef.current = mounted
     if (!mounted) {
-      // Why: hidden lazy panes must not resurrect dialogs or unresolved async state when reopened.
+      // Reset hidden lazy panes so reopening cannot revive dialogs or unresolved async state.
       setPlugins([])
       setLoading(true)
       setError(null)
@@ -188,7 +187,7 @@ export function PluginsSettingsSection({
     if (!result.ok) {
       throw new Error(result.error)
     }
-    // Why: installation is not consent; select by id and wait for the authoritative list.
+    // Installation grants no consent; select its ID and await authoritative discovery.
     setInstallOpen(false)
     setConsentPluginId(result.pluginKey)
     await loadPluginList(window.api.plugins.refresh())

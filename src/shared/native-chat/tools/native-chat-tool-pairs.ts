@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from './native-chat-types'
+} from '../../native-chat-types'
 
 export type NativeChatToolPair = {
   call?: NativeChatToolCallBlock

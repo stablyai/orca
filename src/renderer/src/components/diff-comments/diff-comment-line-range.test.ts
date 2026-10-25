@@ -7,8 +7,7 @@ import {
   toDiffCommentLineTarget
 } from './diff-comment-line-range'
 
-// One patch hunk covering 10-16, then a gap, then a second hunk at 40-42 — the shape
-// `reviewCommentLineNumbers` ships for a PR file.
+// Match PR patch lines: two hunks separated by an uncommentable gap.
 const HUNK_LINES = new Set([10, 11, 12, 13, 14, 15, 16, 40, 41, 42])
 
 describe('orderLineRange', () => {

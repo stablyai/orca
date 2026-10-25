@@ -82,10 +82,7 @@ export function createWebRuntimeBrowserCreationContext(
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
-  // Why the same predicate the main process uses: this mounts the staged pane one round-trip
-  // before prepareBrowserClientHostPlacement answers, so the two have to reach the same verdict
-  // from the same inputs. A cached status disagreeing with the live one is corrected by
-  // restageWebRuntimeBrowserTabHostingIntent below; it never decides the placement itself.
+  // Match main’s placement predicate for early staging; restage from the live verdict when cached status disagrees.
   const expectsClientHosting = expectsBrowserClientHosting({
     enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
     preference: args.placementPreference,
@@ -111,10 +108,7 @@ export function createWebRuntimeBrowserCreationContext(
   }
 }
 
-/**
- * The client group this create is steered to. With an anchor only an explicit client destination
- * counts; a host-facing targetGroupId would otherwise freeze the row away from the source's group.
- */
+// With an anchor, only explicit client destinations count; host targetGroupId would pin staging outside the source group.
 export function resolveWebRuntimeBrowserClientTargetGroupId(
   args: CreateWebRuntimeSessionBrowserTabArgs
 ): string | undefined {
@@ -140,8 +134,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
     selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
   }
   const stagedTargetGroupId = resolveWebRuntimeBrowserClientTargetGroupId(args)
-  // Why: everything below this point is a host round-trip; stage the tab first so the strip
-  // reacts to the click instead of to the runtime.
+  // Stage before host round-trips so the strip responds immediately.
   context.staged = stageWebRuntimeBrowserTab({
     environmentId,
     worktreeId: args.worktreeId,
@@ -157,10 +150,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       : {}),
     clientHosted: context.expectsClientHosting
   })
-  // Why: sample the focus expectation and arm its guard against the state staging just wrote,
-  // before any await. Sampling after the client-host preparation round-trip baked a switch made
-  // during it into the baseline, so the guard read the user's new tab as "hasn't moved" and
-  // adoption stole focus back.
+  // Arm focus guard against staged state before awaiting; sampling later mistakes intervening navigation for the baseline and steals focus.
   const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
   const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
   const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
@@ -179,8 +169,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       if (
         state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
-        // Why: resolveWebSessionVisibleTabId now reads group state, so a group-only focus move
-        // must re-evaluate it.
+        // Visible tab resolution reads groups, so group-only focus moves must re-evaluate it.
         state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
         state.activeTabIdByWorktree === previousState.activeTabIdByWorktree &&
         state.activeTabType === previousState.activeTabType &&

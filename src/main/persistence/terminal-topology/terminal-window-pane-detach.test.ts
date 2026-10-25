@@ -42,7 +42,6 @@ vi.mock('electron', () => ({
 
 afterEach(closeMoveTestStores)
 
-/** The window's drag-out as `layout.apply` sends it, with the tab id pinned for the assertions. */
 function detach(
   store: Store,
   ptyId: string | null,
@@ -61,7 +60,6 @@ function detach(
   )
 }
 
-// The desktop's move rules (terminal-leaf-move.test.ts), through layout.apply's pane move.
 describe('a window drag-out through layout.apply', () => {
   it('moves the leaf and its binding in one write and re-keys pane-keyed records', async () => {
     const store = openStore(newDataFile())
@@ -150,7 +148,7 @@ describe('a window drag-out through layout.apply', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main holds every pane the window shows, so a one-pane copy is the tab's last pane (L127).
+      // With main owning all shown panes, the home copy determines last-pane refusal.
       await expect(detach(store, 'pty-agent')).resolves.toEqual({ ok: false, code: 'last_pane' })
       expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([SOURCE])
       return
@@ -160,7 +158,6 @@ describe('a window drag-out through layout.apply', () => {
     const session = store.getWorkspaceSession()
     expect(tabsHoldingLeaf(session, MOVED)).toEqual([TARGET])
     expect(session.tabsByWorktree[WT]?.find((tab) => tab.id === SOURCE)?.ptyId).toBeNull()
-    // The window's sibling binds into the source tab later.
     expect(
       await store.persistPtyBinding({
         worktreeId: WT,
@@ -200,7 +197,7 @@ describe('a window drag-out through layout.apply', () => {
     const store = openStore(newDataFile())
     await seedSplitSource(store)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's binding names the moved terminal; the window's claim is not consulted (L127).
+      // Main-owned binding outranks the renderer's claimed PTY.
       const claimed = openStore(newDataFile())
       await seedSplitSource(claimed)
       await expect(detach(claimed, 'pty-other')).resolves.toEqual({
@@ -318,7 +315,6 @@ describe('a window drag-out of an SSH pane held by both partitions', () => {
   })
 })
 
-// STA-9259 through layout.apply: move, reattach, a stale pre-move renderer save, restart.
 describe('STA-9259 sequence through layout.apply', () => {
   it('keeps one owner through reattach, a stale renderer save and a restart', async () => {
     const dataFile = newDataFile()

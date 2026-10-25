@@ -19,8 +19,6 @@ type Params = {
   setShowActionSheet: (next: boolean) => void
 }
 
-// The action-sheet entry runners: each performs an action then dismisses the
-// sheet. Split from the main runners hook to stay under the line limit.
 export function useMobileSourceControlActionSheetRunners(params: Params) {
   const {
     client,

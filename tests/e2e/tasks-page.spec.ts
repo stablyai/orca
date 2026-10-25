@@ -1,20 +1,11 @@
-/**
- * E2E tests for the Tasks page.
- *
- * Verifies that opening the tasks view renders correctly and that the
- * source controls and close affordance are present.
- */
-
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, getStoreState } from './helpers/store'
 import { GITHUB_TASK_SEARCH_IDLE_MS } from '../../src/renderer/src/components/use-github-task-search-commit'
 
-// Why derived: a fixed 400ms cadence left only ~150ms of margin against the idle window
-// on a loaded runner, so one slow keystroke committed a prefix and failed the assertion.
+// Derive cadence from idle timing so slow keystrokes cannot commit a prefix.
 const TASK_SEARCH_TYPING_DELAY_MS = Math.round(GITHUB_TASK_SEARCH_IDLE_MS / 6)
 const TASK_SEARCH_SETTLE_MS = GITHUB_TASK_SEARCH_IDLE_MS + 50
-// Why derived: the probe must outlast the idle window plus a React commit and two
-// store round trips; a flat 2s left ~1.2s of slack on a single-worker runner.
+// Outlast idle timing, React commit and two store roundtrips instead of assuming a flat 2s.
 const TASK_SEARCH_PROBE_TIMEOUT_MS = GITHUB_TASK_SEARCH_IDLE_MS * 6
 
 type RenderedTaskSource = {
@@ -233,8 +224,7 @@ test.describe('Tasks page', () => {
       timeout: 10_000
     })
 
-    // Why: source buttons are provider-availability aware in CI; assert the
-    // stable Tasks chrome instead of a GitHub-only tab set.
+    // Assert stable Tasks chrome because source tabs depend on provider availability.
     let renderedSources: RenderedTaskSource[] = []
     await expect
       .poll(
@@ -276,7 +266,6 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
-    // Sanity: the tasks UI actually painted before we close it.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible()
 
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
@@ -284,13 +273,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe(previousView)
-    // Why: the load-bearing check is that the previous view's DOM actually
-    // re-rendered — a store-only `activeView` assertion would pass even if the
-    // terminal/editor surface had silently stopped mounting. `.xterm` is the
-    // stable class xterm.js emits on every live terminal pane; if the
-    // previous view was terminal (by far the common case in E2E setup), that
-    // element must be visible. Tasks-close also hides the "Close tasks"
-    // button regardless of previous view, so we assert that too.
+    // Require prior-view DOM to remount plus Tasks close control to disappear; activeView alone misses broken rendering.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
     if (previousView === 'terminal') {
       await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
@@ -392,9 +375,7 @@ test.describe('Tasks page', () => {
       'aria-current',
       'page'
     )
-    // Why the wait: outlives the 5s give-up that used to abandon the restore and
-    // overwrite the remembered offset with the committed 0. A list that never paints
-    // must defer the restore, never destroy the position.
+    // Outlast the old 5s restore give-up so an unpainted list cannot overwrite remembered scroll with zero.
     await orcaPage.waitForTimeout(5_500)
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
     await expect
@@ -430,8 +411,7 @@ test.describe('Tasks page', () => {
 
     await expect(existingIssue).toBeVisible()
 
-    // The contract is that no prefix of the typed query is ever queried, not that the
-    // probe is empty at one instant: exactly one request per surface, for the final value.
+    // Require one final-value request per surface, never a typed prefix.
     await expect
       .poll(async () => readTaskSearchRequestProbe(orcaPage), {
         timeout: TASK_SEARCH_PROBE_TIMEOUT_MS

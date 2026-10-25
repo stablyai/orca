@@ -19,8 +19,6 @@ import {
 } from './structured-agent-session-launch-registry'
 import { recordUnlistedCreatedChat } from './structured-agent-session-unlisted-created-chats'
 
-// How a launch's create outcome settles its callers: published, refused, failed or unknown.
-
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {
     notifyStructuredLaunchListeners()

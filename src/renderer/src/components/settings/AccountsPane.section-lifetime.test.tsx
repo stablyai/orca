@@ -128,8 +128,7 @@ it.each([false, true])(
     }
     const view = render(<AccountsPane {...props} />)
     await act(async () => {})
-    // The invariant is identity, not a magic number: the matched section keeps the same DOM
-    // node across every query edit, so editing the query cannot cost an extra read or watcher.
+    // Assert DOM identity across query edits so search cannot remount sections and add reads/watchers.
     const mountedHeading = screen.getByText('Grok (xAI)', { exact: true })
     const watchersAfterMount = fake.watcher.mock.calls.length
     const statusReadsAfterMount = fake.status.mock.calls.length

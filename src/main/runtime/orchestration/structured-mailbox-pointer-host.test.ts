@@ -68,10 +68,7 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('reads the gate facts from the FULL timeline, never a bounded tail', async () => {
-    // The defect this pins: a running turn is announced by ONE lifecycle item, and settlement
-    // tombstones it rather than rewriting it. A long tool-calling turn pushes that item arbitrarily
-    // far from the tail, so any page-sized read reports a busy worker as idle — and `@idle` then
-    // wakes it mid-turn.
+    // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = {
       journalSnapshot: () => ({ items, submissions: [] }),
@@ -151,7 +148,7 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('answers null rather than nothing recorded when the session cannot be read', async () => {
-    // Null retains the pointer; an empty answer would send into a session this runtime cannot see.
+    // Unreadable sessions retain pointers; treating them as empty would authorize an unseen send.
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
       journalSnapshot: () => {
@@ -176,8 +173,7 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
+    // Only accepted consumes mail; pending and unknown must both retain the pointer.
     ['pending', 'unknown'],
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
@@ -197,7 +193,6 @@ describe('structured mailbox pointer host', () => {
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
     ).resolves.toEqual({ kind: 'sent', state: expected })
-    // Per-dispatch caller key: names the dispatch the nudge is for.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
   })
@@ -245,10 +240,7 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {
-    // Direct mail is addressed to the worker's own handle, so there may be no dispatch at all.
-    // The ledger is keyed on (callerKey, operationId): a key derived from the session keeps that
-    // nudge's own retry lane, and leaves the dispatch key byte-identical so nudges already in
-    // flight under it still replay rather than being re-minted as a second turn.
+    // Direct mail has no Dispatch; a session-scoped key preserves its retry lane without changing existing Dispatch ledger keys.
     const send = vi.fn(async (_caller: { callerKey: string }) => ({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }

@@ -26,24 +26,11 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'unified',
   'remark-parse',
   'remark-gfm',
-  // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
-  // not race the later resources/node_modules copy.
+  // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
   'zod'
 ])
-// Why: the telemetry transport is gated by two compile-time constants that
-// only the official CI release workflow sets. Contributor / `pnpm dev` /
-// third-party rebuilds must substitute literal `null` at these sites so
-// `IS_OFFICIAL_BUILD` in `src/main/telemetry/client.ts` evaluates `false`
-// at module load and the track() wrapper short-circuits to console-mirror.
-// The substitution happens at compile time — there is no runtime env-var
-// fallback — so a curious contributor cannot spoof transmission with a
-// shell export.
-//
-// CI injects real values via GitHub Actions secrets
-// (ORCA_BUILD_IDENTITY='stable' | 'rc', ORCA_POSTHOG_WRITE_KEY=phc_...);
-// every other build path resolves these env vars to undefined, which the
-// JSON.stringify below folds to the literal `null`. Ambient declarations
-// for the two constants live in `src/types/build-constants.d.ts`.
+// Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
+// Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
 const ORCA_BUILD_IDENTITY_LITERAL =
   orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
@@ -78,8 +65,7 @@ function createDarkBuildMarkerPlugin(): Plugin {
   }
 }
 
-// Why: official skill installs pin to the commit the build came from, so they match the
-// bundled skills on every channel. Main runs the installer; the renderer prints the command.
+// Pin official skill installs to the bundled commit on every channel; main installs, renderer prints the command.
 const ORCA_BUILD_COMMIT_LITERAL = JSON.stringify(resolveBuildSourceCommit())
 
 function createStartupDiagnosticsBanner(chunkName: string): string {
@@ -206,8 +192,7 @@ function createMainBootstrapPlugin() {
         throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
       }
 
-      // Why: source guards and diagnostics run after Rollup's generated require
-      // prelude, too late to handle a missing bootstrap dependency.
+      // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
       mainChunk.code =
         createBootstrapFatalExitBanner() +
         createStartupDiagnosticsBanner(mainChunk.fileName) +
@@ -216,23 +201,15 @@ function createMainBootstrapPlugin() {
   }
 }
 
-/**
- * Diagnostic escape hatch: an unminified main bundle so a V8 CPU profile of the
- * main process attributes self time to real function names. Release builds never
- * set this, and `pnpm build` does not read it.
- */
+// Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
 const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
 
 export const electronViteConfig: UserConfig = {
   main: {
     build: {
-      // Why: 'esbuild' makes rolldown disable its own minifier and re-print every
-      // chunk through esbuild, which is undeclared here and only resolves via
-      // pnpm hoisting. 'oxc' is rolldown's in-process minifier.
+      // Use Rolldown’s in-process oxc minifier; esbuild mode depends on an undeclared hoisted package.
       minify: MAIN_MINIFY,
-      // Why: 'hidden' emits .js.map with no sourceMappingURL, so the shipped
-      // bundle never references maps that packaging strips out. Release CI
-      // uploads them so minified crash traces stay decodable.
+      // Hidden maps omit sourceMappingURL because packaging strips them; release CI uploads maps for crash decoding.
       sourcemap: 'hidden',
       // PR fixtures discard maps; official releases must always retain them.
       ...(process.env.ORCA_CI_MAIN_SOURCEMAPS === '0' &&
@@ -240,10 +217,7 @@ export const electronViteConfig: UserConfig = {
       orcaBuildIdentity !== 'rc'
         ? { sourcemap: false }
         : {}),
-      // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
-      // execute it from disk. Node's module resolution from the unpacked
-      // directory cannot reach into app.asar; startup-critical pure JS must
-      // also survive a partially copied Windows resources tree.
+      // Forked daemon-entry.js must be unpacked; its Node resolver cannot reach app.asar, and startup-critical JS must survive partial Windows resource copies.
       externalizeDeps: {
         exclude: [...BUNDLED_MAIN_DEPENDENCIES]
       },
@@ -251,8 +225,7 @@ export const electronViteConfig: UserConfig = {
         input: MAIN_BUILD_ENTRY_POINTS,
         // CLI builds replace exported entries; keep their internals separate without moving startup paths.
         preserveEntrySignatures: 'exports-only',
-        // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
-        // consume these stable CommonJS paths.
+        // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
         output: {
           format: 'cjs',
           entryFileNames: '[name].js',
@@ -266,8 +239,6 @@ export const electronViteConfig: UserConfig = {
         ]
       }
     },
-    // Why: compile-time substitution for the telemetry gate. See the block
-    // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
@@ -275,9 +246,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
       ...DARK_BUILD_DEFINES
     },
-    // Why: @xterm/headless declares "exports": null in package.json, which
-    // prevents Vite's default resolver from finding the CJS entry. Point
-    // directly at the published main file so the bundler can inline it.
+    // @xterm/headless declares exports:null; point Vite directly at its published CJS main to permit inlining.
     resolve: {
       alias: {
         '@xterm/headless': resolve('node_modules/@xterm/headless/lib-headless/xterm-headless.js'),
@@ -323,14 +292,9 @@ export const electronViteConfig: UserConfig = {
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
-      // Why: the pop-out dashboard is a second top-level window with its own
-      // React root. It gets its own HTML entry so it can boot independently of
-      // the main window while reusing the same preload/window.api. `index` must
-      // stay listed — overriding input otherwise drops electron-vite's default
-      // renderer entry.
+      // Give pop-out dashboard its own HTML/React root with shared preload API; retain index or overriding input drops electron-vite’s default entry.
       rollupOptions: {
-        // Why: shared chunks must never import an HTML entry whose module mounts
-        // a different React root.
+        // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
         input: {
           index: resolve('src/renderer/index.html'),

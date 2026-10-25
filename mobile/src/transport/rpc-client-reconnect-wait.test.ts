@@ -3,8 +3,7 @@ import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 import { waitForRpcClientReconnected } from './rpc-client-reconnect-wait'
 
-// notifyDuringSubscribe models a client that fires the listener synchronously from
-// onStateChange — the branch that has to survive `unsubscribe` not being assigned yet.
+// Allow synchronous state notification during registration to exercise unsubscribe assignment races.
 function fakeClient(
   initial: ConnectionState,
   options: { notifyDuringSubscribe?: ConnectionState } = {}
@@ -26,7 +25,6 @@ function fakeClient(
     client,
     set: (next) => {
       state = next
-      // Safe to delete during iteration: finish() unsubscribes the current listener.
       for (const listener of listeners) {
         listener(next)
       }
@@ -39,7 +37,6 @@ describe('waitForRpcClientReconnected', () => {
   it('resolves immediately when the transport is already connected', async () => {
     const { client, listenerCount } = fakeClient('connected')
     await expect(waitForRpcClientReconnected(client, 10_000)).resolves.toBe(true)
-    // No subscription at all on the fast path, so nothing to leak.
     expect(listenerCount()).toBe(0)
   })
 
@@ -63,8 +60,7 @@ describe('waitForRpcClientReconnected', () => {
     } finally {
       vi.useRealTimers()
     }
-    // Generous: advanceTimersByTimeAsync yields through REAL macrotasks between ticks,
-    // so vitest's default 5s real-time budget is reachable on a loaded runner.
+    // Virtual-time advancement yields real macrotasks; allow loaded runners more wall-clock time.
   }, 30_000)
 
   it('does not wait out the timeout when the pairing is already revoked', async () => {
@@ -81,13 +77,11 @@ describe('waitForRpcClientReconnected', () => {
       set('auth-failed')
       await expect(pending).resolves.toBe(false)
       expect(listenerCount()).toBe(0)
-      // Nothing left armed that could fire after the caller moved on.
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }
-    // Generous: advanceTimersByTimeAsync yields through REAL macrotasks between ticks,
-    // so vitest's default 5s real-time budget is reachable on a loaded runner.
+    // Virtual-time advancement yields real macrotasks; allow loaded runners more wall-clock time.
   }, 30_000)
 
   it('tears down cleanly when the state change fires synchronously during subscribe', async () => {
@@ -102,7 +96,6 @@ describe('waitForRpcClientReconnected', () => {
     } finally {
       vi.useRealTimers()
     }
-    // Generous: advanceTimersByTimeAsync yields through REAL macrotasks between ticks,
-    // so vitest's default 5s real-time budget is reachable on a loaded runner.
+    // Virtual-time advancement yields real macrotasks; allow loaded runners more wall-clock time.
   }, 30_000)
 })

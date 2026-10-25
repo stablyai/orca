@@ -1,8 +1,4 @@
-/**
- * Internal-only gate for WSL distros as hosts, closed in every build: users must not reach the
- * feature until moving a project between hosts is lossless and it matches today's WSL support.
- * Main and preload read the same launch environment, so they always agree.
- */
+/** Keep WSL hosts internal until project moves are lossless and WSL parity is met. Main/preload agree through the same launch environment. */
 export const WSL_HOSTS_INTERNAL_GATE_ENV = 'ORCA_INTERNAL_WSL_HOSTS'
 
 export function isWslHostsInternalGateOpen(

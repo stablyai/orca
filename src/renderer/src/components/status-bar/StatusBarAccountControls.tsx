@@ -112,5 +112,3 @@ export function AccountRuntimeToggle<TGroup extends { key: string; label: string
     </div>
   )
 }
-
-// Exported so its account-switch/reset logic is preserved for row drill-in even

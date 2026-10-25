@@ -94,7 +94,6 @@ describe('the same folder in a window-owned build', () => {
     mocks.layoutOwnerIsMain = false
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { runtime } = runtimeWithMixedFolder()
-    // Today's whole-projection failure: no workspace is published.
     expect(runtime.subscribeWorkspaceLayouts(() => {}).snapshot).toEqual([])
   })
 })
@@ -105,7 +104,6 @@ describe('a workspace the router throws on', () => {
     const writeListeners = new Set<(hostId: ExecutionHostId | null) => void>()
     const store = {
       getWorkspaceSession: () => session,
-      // Two partitions hold the workspace, so the router throws twice in one projection.
       getWorkspaceSessionHostIds: (): ExecutionHostId[] => ['local', 'ssh:target-1'],
       onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
         writeListeners.add(listener)

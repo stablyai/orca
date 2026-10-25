@@ -153,7 +153,7 @@ describe('orcad profile CLI launcher', () => {
           ''
         ].join('\n')
       )
-      // cmd.exe reparses `%*`, so no batch or PowerShell proxy may shadow the exe.
+      // Batch/PowerShell proxies can reparse cmd.exe arguments instead of preserving them.
       expect((await readdir(binDir())).sort()).toEqual(
         [ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME, 'orca.exe'].sort()
       )

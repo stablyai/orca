@@ -9,10 +9,7 @@ import {
   type PortScanCommandResponse
 } from './port-scan-command-protocol'
 
-// Why (#11161): process creation blocks the event loop that issues it. Running
-// the port scan's probe commands on this worker thread keeps an EDR-hooked
-// CreateProcessW off CrBrowserMain. The client dispatches one request at a
-// time, so this loop stays serial; imports must remain electron-free.
+// Worker-only, Electron-free imports keep inline CreateProcessW stalls off main; the client dispatches serially (#11161).
 
 if (!parentPort) {
   throw new Error('Port scan command worker must run with a parent port.')
@@ -40,8 +37,7 @@ port.on('message', (request: PortScanCommandRequest) => {
     try {
       port.postMessage(response)
     } catch {
-      // A non-cloneable result would otherwise post nothing and leave the client
-      // waiting out its deadline; fail that request fast instead.
+      // Clone failure must reply promptly rather than strand the client until its deadline.
       port.postMessage({
         id: request.id,
         ok: false,

@@ -30,7 +30,7 @@ describe("a pane's resume outcome (layout-owner build)", () => {
     register.set(PANE_KEY, 'restored', { ptyId: 'pty-new' })
     expect(changed).toHaveBeenCalledOnce()
 
-    // The start's bind write has not landed: the pane still shows its old terminal.
+    // Before spawn bind commits, the old terminal must not receive the new fact.
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-old', ptyGeneration: 1 }))).toBeNull()
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-new', ptyGeneration: 2 }))).toBe(
       'restored'
@@ -44,7 +44,7 @@ describe("a pane's resume outcome (layout-owner build)", () => {
     const { register } = outcomes()
     register.set(PANE_KEY, 'restored', { ptyId: 'pty-1', afterGeneration: 4 })
 
-    // The frame before the start's bind still shows the old terminal under the same id.
+    // The same PTY id with an old generation still identifies the pre-start binding.
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-1', ptyGeneration: 4 }))).toBeNull()
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-1', ptyGeneration: 5 }))).toBe('restored')
   })
@@ -129,7 +129,7 @@ describe("main's start records a resume outcome only when it wakes the pane's re
             onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
           }) => {
             args.onResumeOutcome?.('pty-1', 'restored')
-            // The pane's bind is written after the report, as the spawn commit does.
+            // Commit the pane bind after the report, as spawn does.
             bind?.()
             if (bumps) {
               generation = (boundGeneration ?? 0) + 1
@@ -150,7 +150,6 @@ describe("main's start records a resume outcome only when it wakes the pane's re
     await start(woke, true)
     expect(woke.peek(PANE_KEY)).toBe('restored')
 
-    // A Session History, phone or forked-chat resume: the window showed no banner for those.
     const other = outcomes().register
     await start(other, false)
     expect(other.peek(PANE_KEY)).toBeNull()
@@ -166,7 +165,7 @@ describe("main's start records a resume outcome only when it wakes the pane's re
   it('waits past the old bind of a pane this process never bound (a relaunch resume)', async () => {
     const { register } = outcomes()
     await start(register, true, undefined)
-    // A frame before the bind still shows the pane's saved terminal, which kept its id.
+    // The saved binding keeps its id; only a newer generation can reveal the new fact.
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-1' }))).toBeNull()
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-1', ptyGeneration: 1 }))).toBe('restored')
   })
@@ -182,7 +181,7 @@ describe("main's start records a resume outcome only when it wakes the pane's re
   })
 
   it('keeps the outcome on the binding the pane shows when its bind wrote nothing new', async () => {
-    // An SSH relay's same-id reattach matches the stored binding, so no generation is bumped.
+    // Same-id SSH reattach can preserve the binding without raising generation.
     const { register } = outcomes()
     await start(register, true, 3, undefined, { bumps: false })
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'pty-1', ptyGeneration: 3 }))).toBe('restored')

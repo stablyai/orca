@@ -232,12 +232,24 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('reads the camelCase thread_source spelling', () => {
-    expect(readCodexNonUserOrigin({ id: 'child', threadSource: 'agent' })).toEqual({
+    expect(readCodexNonUserOrigin({ id: 'child', threadSource: 'subagent' })).toEqual({
       source: null,
       kind: null,
       kindLabel: null,
-      threadSource: 'agent',
+      threadSource: 'subagent',
       parentage: null
     })
+  })
+
+  it('keeps top-level threads whose thread_source is a client feature label', () => {
+    // Codex Desktop automation runs and agent-created threads are the user's own work.
+    for (const threadSource of ['automation', 'agent_created_thread']) {
+      expect(
+        readCodexNonUserOrigin({ id: 'run', source: 'vscode', thread_source: threadSource })
+      ).toBeNull()
+    }
+    expect(
+      readCodexNonUserOrigin({ id: 'review', thread_source: 'guardian_review' })?.threadSource
+    ).toBe('guardian_review')
   })
 })

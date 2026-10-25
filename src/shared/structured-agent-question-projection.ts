@@ -95,9 +95,7 @@ function projectQuestions(items: readonly AgentJournalRenderItem[]): {
   messages: NativeChatMessage[]
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
 } {
-  // Consume one question item for each matching tool call. A Set would hide every
-  // same-text call in a turn after the first question item, which can lose a real
-  // duplicate call when only one prompt was journalled.
+  // Count matching question items; a Set would hide extra same-text tool calls that were never journalled as prompts.
   const questionsByTurn = new Map<string, Map<string, number>>()
   const rows: { item: AgentJournalRenderItem; projection: Projection; turn: string }[] = []
   let turn = ''

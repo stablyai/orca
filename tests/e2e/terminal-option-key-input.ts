@@ -55,10 +55,7 @@ async function getPaneKittyKeyboardFlags(page: Page): Promise<number> {
   })
 }
 
-/**
- * Dispatches the keydown macOS delivers for an Option-composed key: `key` is
- * already the composed glyph while `code` still names the physical key.
- */
+// Dispatch macOS Option composition: key contains the glyph, code retains the physical key.
 export async function pressOptionComposedKey(
   page: Page,
   press: { key: string; code: string; shiftKey?: boolean; side?: 'left' | 'right' }
@@ -127,9 +124,7 @@ export async function pressOptionComposedKey(
 }
 
 async function armKittyKeyboardFromPty(page: Page, ptyId: string, flags: number): Promise<void> {
-  // Why: this is the byte a real kitty-protocol TUI pushes at startup; routing it
-  // through the PTY exercises the same output-scanning mirror the policy reads.
-  // `cat` stays in the foreground: flags left armed at exit are grounded by the host.
+  // Send real kitty startup bytes through PTY to exercise the policy’s mirrored output scan; keep cat alive so host exit grounding cannot clear flags.
   await execInTerminal(page, ptyId, `printf '\\033[>${flags}u'; cat`)
   await expect
     .poll(async () => getPaneKittyKeyboardFlags(page), {

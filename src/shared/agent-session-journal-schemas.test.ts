@@ -20,8 +20,7 @@ const RESOLUTION = {
   resolvedAt: null
 } as const
 
-// Canonical fixtures are typed: if a shape here stops compiling, the schema
-// audit below is validating the wrong model.
+// Typed fixtures ensure the schema audit validates the canonical model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
   {
     kind: 'message',
@@ -179,8 +178,6 @@ describe('nested corruption is rejected', () => {
     expect(
       isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'x', turnLifecycle: true })
     ).toBe(false)
-    // A KNOWN block type with a broken payload must not slip through as a
-    // "future" block.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -194,8 +191,6 @@ describe('nested corruption is rejected', () => {
   })
 
   it('rejects a subagent roster whose entries are malformed', () => {
-    // A KNOWN block type stays a known block: it must not fall through to the
-    // forward-tolerant arm just because its payload is wrong.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -237,8 +232,7 @@ describe('nested corruption is rejected', () => {
       observedAt: 1_000
     }
     expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
-    // `''` is PRESENT. Admitting it would hide the row from its own author on
-    // every parent-scoped surface — the defect linkage exists to remove.
+    // An empty id is present and would hide the row from its author on parent-scoped surfaces.
     expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
     expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
     expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
@@ -292,9 +286,7 @@ describe('forward tolerance', () => {
   })
 
   it('admits a turn outcome from a later vocabulary but rejects a non-string one', () => {
-    // Open like `state`: a verdict a newer build writes keeps the row readable,
-    // and `readAgentJournalTurnOutcome` is what stops it being acted on. A
-    // non-string stays fatal — the row is structurally wrong, not just newer.
+    // Keep newer string verdicts readable for the outcome reader; nonstrings remain structural damage.
     const turn = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 'partially-refused' })).toBe(true)
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 7 })).toBe(false)

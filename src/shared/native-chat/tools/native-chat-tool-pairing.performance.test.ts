@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-fold'
+import { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-pairs'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from './native-chat-types'
+} from '../../native-chat-types'
 
 function call(callId?: string): NativeChatToolCallBlock {
   return { type: 'tool-call', name: 'Bash', input: {}, ...(callId !== undefined ? { callId } : {}) }

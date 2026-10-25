@@ -1,5 +1,4 @@
-// Compatibility facade for the split runtime test harness.
-// Keep this path stable while setup.spec.ts owns Vitest mock registration.
+// Preserve the split-harness import path; setup.spec.ts owns mock registration.
 import * as setup from './orca-runtime-test-mocks/setup.spec'
 import * as importedValues from './orca-runtime-test-mocks/imported-values.spec'
 
@@ -141,8 +140,7 @@ export const ORIGIN_REMOTE_URL = setup.ORIGIN_REMOTE_URL
 export const ORIGIN_HEAD_COMPONENT = setup.ORIGIN_HEAD_COMPONENT
 export const ORIGINAL_PLATFORM = setup.ORIGINAL_PLATFORM
 export const ORIGINAL_PLATFORM_DESCRIPTOR = setup.ORIGINAL_PLATFORM_DESCRIPTOR
-// Re-export mock bindings directly so TypeScript does not have to name Vitest's
-// private inferred spy implementation types in this compatibility facade.
+// Direct re-exports avoid naming Vitest private inferred spy types.
 export {
   removeWorktreeLinkedPathsMock,
   findExistingWorktreeSymlinkPathsMock,
@@ -239,7 +237,7 @@ export {
   deleteWorktreeHistoryDirMock
 } from './orca-runtime-test-mocks/setup.spec'
 
-// Preserve the instance-side types for fragments that use these constructors in annotations.
+// Fragments use constructor exports as instance types too.
 export type OrcaRuntimeService = InstanceType<typeof importedValues.exportedOrcaRuntimeService>
 export type EventEmitter = InstanceType<typeof importedValues.exportedEventEmitter>
 export type OrchestrationDb = InstanceType<typeof importedValues.exportedOrchestrationDb>

@@ -97,8 +97,7 @@ function clickEvent(): MouseEvent {
   } as unknown as MouseEvent
 }
 
-// Why: runtimes bind per workspace, so the global activeRuntimeEnvironmentId is
-// null even while the clicked pane lives on a remote host.
+// Workspace runtimes can own the clicked pane while the global active runtime is null.
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })

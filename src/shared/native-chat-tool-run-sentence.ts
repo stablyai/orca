@@ -1,22 +1,11 @@
-// The one line a settled run of tool calls reads as.
-//
-// A run header names the whole run, so it may only say things true of all of it.
-// The previous header said that by printing the calls themselves — a count, then
-// a monospace list of tool names and arguments — which reads as a debug dump
-// beside the prose it sits under. This says it in words instead, one clause per
-// category in the order the run first used them: "Read 7 files, ran 17 commands,
-// and searched 4 times".
-//
-// Built on the category vocabulary that already picks each row's glyph, so the
-// sentence and the icon beside it can never claim different things.
+// Summarize categories in first-use order using the same vocabulary as glyphs so headers and icons agree.
 
 import { nativeChatToolCategory, type NativeChatToolCategory } from './native-chat-tool-icon'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { toolInputCommand } from './native-chat-tool-summary'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
-/** Singular/plural per category. Desktop maps these onto `translate`; mobile
- *  formats them directly, so both surfaces read one vocabulary. */
+/** Shared singular/plural category copy; desktop translates and mobile formats directly. */
 export const NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY: Record<
   NativeChatToolCategory,
   { one: string; many: string }
@@ -33,8 +22,7 @@ export const NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY: Record<
   other: { one: 'Used 1 tool', many: 'Used {{value0}} tools' }
 }
 
-/** The present-tense clauses, while the run is still live. Same shape as the
- *  settled ones so the header's text changes in place and nothing else does. */
+/** Live clauses mirror settled shape so status updates change text in place. */
 export const NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY: Record<
   NativeChatToolCategory,
   { one: string; many: string }
@@ -63,9 +51,7 @@ export type NativeChatToolRunClause = {
   count: number
 }
 
-/** Each category the run touched, in the order it first used them, with how many
- *  calls it made. First-use order rather than a count ranking: the sentence then
- *  reads in the order the work happened. */
+/** Count categories in first-use order so the sentence follows the work, not count ranking. */
 export function nativeChatToolRunClauses(
   calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolRunClause[] {
@@ -77,9 +63,7 @@ export function nativeChatToolRunClauses(
   return [...counts].map(([category, count]) => ({ category, count }))
 }
 
-/** Join rendered clauses into one sentence. Only the first keeps its capital:
- *  the rest continue the sentence. Lowercasing is locale-aware, and applies to
- *  the clause's first character only, so an acronym inside it survives. */
+/** Capitalize only the first clause; locale-lowercase later first characters while preserving internal acronyms. */
 export function joinNativeChatToolRunClauses(
   clauses: readonly string[],
   format: {
@@ -120,12 +104,8 @@ export function nativeChatToolRunSentence(
   if (calls.length === 0) {
     return null
   }
-  // A lone shell call keeps its own command: `git push` identifies the work
-  // better than "Ran 1 command" can, and it is the row the reader would open
-  // anyway. A call carrying no command has nothing better than its category.
-  // Not while live: the command is then the preview beside the sentence, and a
-  // header that swapped shape when the second call arrived is the swap this row
-  // exists to avoid.
+  // Settled lone shell calls show their command instead of Ran 1 command. While live, commands stay in the adjacent preview;
+  // keep header shape stable when another call arrives.
   if (calls.length === 1 && !live) {
     const command = toolInputCommand(calls[0].input)
     if (command !== null && command.length > 0) {

@@ -25,13 +25,13 @@ export default function ClaudeAccountSwitchDialog(): React.JSX.Element | null {
     getClaudeAccountSwitchPrompt,
     getClaudeAccountSwitchPrompt
   )
-  // Why keyed: each switch asks afresh, with the box unticked and every session selected.
+  // Reset selections and the preference checkbox for each new switch prompt.
   return prompt ? <SwitchPromptDialog key={prompt.id} prompt={prompt} /> : null
 }
 
 function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): React.JSX.Element {
   const [dontAskAgain, setDontAskAgain] = useState(false)
-  // Why unticks, not ticks: every listed session starts selected.
+  // Track exclusions because every offered session starts selected.
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(() => new Set())
   const count = prompt.sessions.length
   const chosen = prompt.sessions
@@ -57,7 +57,7 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
     <Dialog
       open
       onOpenChange={(open) => {
-        // Why: closing never undoes the switch; it answers "Keep as is".
+        // Closing keeps sessions as-is without undoing the account switch.
         if (!open) {
           answerClaudeAccountSwitchPrompt('keep', { dontAskAgain })
         }

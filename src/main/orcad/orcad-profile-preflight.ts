@@ -23,7 +23,7 @@ import {
   resolveBundledOrcadSlot
 } from './orcad-bundled-runtime'
 
-/** Check every packaged start before a profile index, data-root lock or import is touched. */
+/** Qualify packaged startup before touching profile indexes, data-root locks or imports. */
 export async function preflightBundledOrcadStartup(): Promise<void> {
   const directory = resolveBundledOrcadSlot()
   if (!isRunningAsBundledOrcadRuntime(directory)) {
@@ -35,7 +35,7 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   const result = await runProcess({
     program: process.execPath,
     args: [join(directory, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
-    // The preflight compiles the same bundle again, so it shares the server's code cache.
+    // Reuse the serving runtime code cache for this identical bundle.
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...orcadCompileCacheEnv(directory) },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
@@ -54,7 +54,6 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   }
 }
 
-/** Only disposable state is opened; no server, profile index or host adapters are installed. */
 export async function runOrcadProfilePreflight(
   nonce: string | undefined,
   options: { nativeFeatures?: boolean } = {}
@@ -70,7 +69,7 @@ export async function runOrcadProfilePreflight(
     })
   }
   const result = await preflightProfileStateRuntime()
-  // Why only inside the pinned runtime: a host Node rollback launcher never serves this slot.
+  // Host Node rollback launchers do not serve the bundled slot.
   if (isRunningAsBundledOrcadRuntime(directory)) {
     await preflightOrcadNativeRuntime(options)
   }

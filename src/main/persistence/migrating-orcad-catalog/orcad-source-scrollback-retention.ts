@@ -15,12 +15,7 @@ type RetentionRuntime = Pick<
   'state' | 'terminalScrollbackSnapshotStorage' | 'retainedScrollbackRefsByMigrationId'
 >
 
-/**
- * Holds every snapshot an unfinished migration's manifest names, from the journaled export until
- * the destination commits or the migration is abandoned, so a tab closed meanwhile still sends
- * its bytes on any retry. An inline buffer has no file, so its bytes are written to its ref first.
- * Released refs no session names are deleted.
- */
+/** Persist signed snapshots until commit/abandonment so tab closes cannot break transfer retries. */
 export function syncOrcadMigrationScrollbackRetention(
   runtime: RetentionRuntime,
   pending: readonly OrcadMigrationManifest[]

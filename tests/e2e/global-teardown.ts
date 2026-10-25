@@ -1,10 +1,3 @@
-/**
- * Playwright globalTeardown: cleans up the test git repo and worktrees.
- *
- * Why: the temp repo created by globalSetup should be removed after the
- * test run so we don't litter the user's /tmp with test directories.
- */
-
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, existsSync, realpathSync, rmSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'

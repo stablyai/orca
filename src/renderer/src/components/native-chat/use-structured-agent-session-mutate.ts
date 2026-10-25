@@ -1,9 +1,4 @@
-// One structured-session mutation, fenced and idempotent.
-//
-// Every call is its own action with its own client operation id, so a press is never answered
-// from an earlier one. The host answers a second Stop of a named turn or task quietly; against an
-// older host that does not, this client joins one still on its way instead of stopping twice.
-// Command replies settle independently of provider generations; only late pane presentation expires.
+// Give each press its own operation ID; join pending targeted Stops only for older hosts. Command settlement survives provider changes; late pane presentation does not.
 
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
@@ -55,8 +50,7 @@ export type AdmitStructuredAgentSessionAction = () => StructuredAgentSessionActi
 /** Captures the issuing pane visit for late presentation, never command or draft settlement. */
 export type CaptureStructuredAgentSessionPresentation = () => () => boolean
 
-/** A Stop naming its turn or task; one naming neither acts on whatever runs when the host reaches
- *  it, so a second press is a Stop of its own. */
+/** Only targeted Stops are joinable; untargeted presses stop whatever is running when each reaches the host. */
 function namesWhatItStops(fingerprintMethod: string, fields: Record<string, unknown>): boolean {
   if (fingerprintMethod !== 'agentSession.cancel') {
     return false
@@ -90,7 +84,6 @@ export function useStructuredAgentSessionMutate(args: {
   enabled?: boolean
   /** Capture the original press fence for host admission, including older hosts. */
   stateRef: { current: { fence: number | null } }
-  /** The chat's agent, which a refusal about it names. */
   agentName?: string
 }): {
   write: StructuredAgentSessionWrite
@@ -177,7 +170,7 @@ export function useStructuredAgentSessionMutate(args: {
       ) {
         return send<T>(method, fingerprintMethod, fields, pressedFence)
       }
-      // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
+      // Older hosts lack quiet repeated Stops; retain joining until none remain supported.
       const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
       const joined = inFlightStops.current.get(key)
       if (joined) {

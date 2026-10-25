@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-// Why: the sibling TabGroupSplitLayout.test.ts calls components as plain
-// functions and cannot exercise the drag gesture; these tests real-render the
-// handle to pin the STA-3328 contract — pointermove writes pane styles
-// directly and the store is committed exactly once, on release.
+// Render real drag handles to prove pointer moves write styles directly and store state commits only on release.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -161,8 +158,7 @@ describe('TabGroupSplitLayout divider drag', () => {
       handle.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 340 }))
     })
 
-    // Why: the drag must never publish store updates per move (STA-3328) —
-    // the panes track the pointer via direct style writes instead.
+    // Do not publish per-move store writes; direct pane styles track the pointer until release.
     expect(setTabGroupSplitRatioMock).not.toHaveBeenCalled()
     expect(firstPane.style.flex).toBe('0.34 1 0%')
     expect(secondPane.style.flex).toBe('0.66 1 0%')

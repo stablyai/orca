@@ -111,8 +111,7 @@ async function forceKillPidTree(pid) {
     return
   }
 
-  // Why: a detached validation daemon can outlive Electron and retain access
-  // to the disposable credential root unless the whole tree is captured first.
+  // Capture detached daemon trees before Electron dies or survivors can retain disposable credentials.
   const pids = [...readPosixDescendantPids(pid), pid]
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
@@ -178,8 +177,7 @@ function readValidationDaemonPids(userDataDir) {
 }
 
 export async function cleanupValidationDaemons(userDataDir) {
-  // Why: Orca intentionally keeps its daemon warm after app quit, but this
-  // harness must never leave a process holding disposable account credentials.
+  // Production keeps daemons warm after app quit; this harness must remove every process holding disposable credentials.
   for (const pid of readValidationDaemonPids(userDataDir)) {
     await forceKillPidTree(pid)
   }

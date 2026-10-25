@@ -5,15 +5,7 @@ import type {
   MobileGitBranchCompareSummary
 } from '../source-control/mobile-branch-compare'
 
-// The replies the diff-review screen and the PR branch-context loader read: `git.branchCompare`
-// normalized, `worktree.show`'s review notes, `git.diff` / `git.branchDiff`, and the three
-// file-level git mutations. Checked against GitBranchCompareResult and GitDiffResult in
-// src/shared/git-diff-compare-types.ts and the worktree record in src/shared/runtime-types.ts,
-// all of which src/main/runtime/rpc/methods/git.ts and worktree.ts return verbatim.
-//
-// These are projections, not the verbatim payloads the Changes screen publishes. Where main's
-// hand parser dropped a member, so does this schema; where it answered a value the consumer
-// immediately turned into its own error, the schema refuses instead, so the error names the method.
+// These review projections normalize host payloads; the Changes screen’s readers preserve them verbatim.
 
 const GIT_BRANCH_CHANGE_STATUS = ['modified', 'added', 'deleted', 'renamed', 'copied'] as const
 const GIT_BRANCH_COMPARE_STATUS = [
@@ -27,17 +19,9 @@ const GIT_BRANCH_COMPARE_STATUS = [
 
 type GitBranchCompareStatus = (typeof GIT_BRANCH_COMPARE_STATUS)[number]
 
-// Built once: readProjectedCompareStatus runs on every reply.
 const gitBranchCompareStatusSchema = z.enum(GIT_BRANCH_COMPARE_STATUS)
 
-/**
- * One committed change.
- *
- * `status` is a closed set on purpose, where the Changes screen's verbatim reader opens it: main
- * dropped a row whose status it did not recognise — `untracked` included, which cannot be a
- * committed change — so degrading an unknown arm to `modified` here would add a row main never
- * drew. `path` is non-empty because main's `!path` drop is falsy, not nullish.
- */
+// Keep committed statuses closed: unknown/untracked rows were never displayed here. Empty paths also drop.
 const branchChangeEntrySchema = z.looseObject({
   path: z.string().min(1),
   status: z.enum(GIT_BRANCH_CHANGE_STATUS),
@@ -46,15 +30,7 @@ const branchChangeEntrySchema = z.looseObject({
   removed: salvagedOptional('removed', z.number().finite())
 })
 
-/**
- * The compare summary the review screen and the PR branch context share.
- *
- * `baseRef`, `compareRef` and `changedFiles` are required and answer for the whole reply: main
- * returned null when any was missing, and three screens route on that null. `status` is the one
- * member main coerced rather than dropped — an unreadable or absent status became `error`, which
- * formatMobileBranchCompareSummary renders — so it is read as unknown and coerced in the
- * transform rather than declared as an enum, whose absence would be fatal.
- */
+// Missing compare identity/count rejects the reply; unreadable status alone degrades to error for the summary.
 const branchCompareSummarySchema = z.looseObject({
   baseRef: z.string().min(1),
   compareRef: z.string().min(1),
@@ -67,14 +43,7 @@ const branchCompareSummarySchema = z.looseObject({
   errorMessage: salvagedOptional('errorMessage', z.string())
 })
 
-/**
- * The normalized compare both review loaders read.
- *
- * `entries` is a required array because main answered null without one, and a salvaging array so a
- * single unreadable row drops instead of failing the compare. No `.catch(null)`: every caller
- * turned main's null into an error string of its own ("Committed changes response was invalid"),
- * so refusing here names the method in that same slot instead of inventing a second vocabulary.
- */
+// Require the entries container but salvage rows; reject unreadable compares so callers name the method instead of rendering partial data.
 export const branchCompareProjectionSchema: z.ZodType<MobileGitBranchCompareResult, unknown> = z
   .looseObject({
     summary: branchCompareSummarySchema,
@@ -101,8 +70,7 @@ export const branchCompareProjectionSchema: z.ZodType<MobileGitBranchCompareResu
     }))
   }))
 
-// Main coerced an unreadable compare status to 'error' rather than dropping the reply, and the
-// summary line renders off that value, so the coercion is the behaviour rather than a defect.
+// Preserve the legacy error fallback because the summary renders from it.
 function readProjectedCompareStatus(value: unknown): GitBranchCompareStatus {
   const parsed = gitBranchCompareStatusSchema.safeParse(value)
   return parsed.success ? parsed.data : 'error'
@@ -113,15 +81,7 @@ export type MobileReviewWorktreeMetadata = {
   mobileDiffReview: unknown
 }
 
-/**
- * The two review members the screen keeps off the worktree record.
- *
- * Neither is required: both are normalized downstream (mobile-diff-review-loaders.ts:119-120 hands
- * them to normalizeMobileDiffComments and normalizeMobileDiffReviewState, which accept anything),
- * and a worktree that has never been reviewed carries neither. `worktree` is salvaged rather than
- * required for the same reason main tolerated it: a record it could not read became two absent
- * members, not an error.
- */
+// Absent or unreadable worktree review fields normalize downstream; never-reviewed worktrees legitimately have neither.
 export const reviewWorktreeMetadataSchema = z
   .looseObject({
     worktree: salvagedOptional(
@@ -160,28 +120,14 @@ const reviewTooLargeDiffSchema = z
   })
   .transform((diff) => ({ kind: 'too-large' as const, byteLength: diff.byteLength }))
 
-/**
- * A single file's diff, as the review screen renders it.
- *
- * Three arms and nothing else, because the screen has a render for each and no fallback: main
- * answered null for any other shape and mobile-diff-review-loaders.ts:175 turned that null into
- * "Diff response was invalid" on the spot. Refusing instead puts the method in that message. The
- * arm set is closed for the same reason the entry status is: a kind this build cannot render is
- * not a diff it can degrade into one.
- */
+// Keep text/binary/too-large closed because the screen has no renderer for an unknown arm.
 export const reviewGitDiffSchema = z.union([
   reviewTextDiffSchema,
   reviewBinaryDiffSchema,
   reviewTooLargeDiffSchema
 ])
 
-/**
- * The three file-level git mutations and the bulk stage.
- *
- * Nothing is declared: use-mobile-diff-review-git-actions.ts:42 discards the interpretation and
- * :80 reads only the acceptance verdict, so every member here would be a requirement with no
- * reader behind it.
- */
+// Mutation callers read only acceptance; requiring unused payload fields would reject usable replies.
 export const reviewGitMutationSchema = z.unknown()
 
 export type MobileReviewGitDiffResult = z.output<typeof reviewGitDiffSchema>

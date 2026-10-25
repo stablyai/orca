@@ -4,8 +4,7 @@ import {
   type NativeChatVisualTheme
 } from '../../../../shared/native-chat-visual-shell'
 
-// The visual blends into the thread: its background and text follow the chat column, which a
-// chat's own appearance can set apart from the app root.
+// Visuals inherit the chat’s appearance scope, which can differ from the app root.
 const SCOPED_SOURCES: Partial<Record<string, readonly string[]>> = {
   '--background': ['--chat-canvas', '--background'],
   '--foreground': ['--chat-foreground', '--foreground'],
@@ -48,10 +47,7 @@ function themeSnapshot(theme: NativeChatVisualTheme): string {
   return JSON.stringify(theme)
 }
 
-/**
- * The theme a visual should wear, updated when the app theme or the chat's appearance changes.
- * Compares resolved values, so unrelated style writes (a sidebar drag) never produce a new theme.
- */
+/** Track resolved chat/app theme values; unrelated style mutations must not produce new themes. */
 export function useNativeChatVisualTheme(
   elementRef: RefObject<Element | null>
 ): NativeChatVisualTheme {

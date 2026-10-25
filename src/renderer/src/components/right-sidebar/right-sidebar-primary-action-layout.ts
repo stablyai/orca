@@ -1,6 +1,4 @@
-// Why: sidebar primaries rotate labels as git/review state changes. Filling the
-// pane keeps their right edge aligned with the surrounding editor chrome; the
-// primary half must shrink first so split-button chevrons never overflow.
+// Fill the pane as labels rotate; shrink the primary half first to keep split chevrons within bounds.
 export const RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS =
   'flex w-full min-w-0 items-stretch [&>*:first-child]:flex-1 [&>*:first-child>button]:w-full [&>button:first-child]:w-full'
 

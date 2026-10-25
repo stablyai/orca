@@ -69,7 +69,7 @@
 1 src/renderer/src/components/new-workspace/use-smart-workspace-secondary-searches.ts
 2 src/renderer/src/components/new-workspace/use-work-item-source-foundation.ts
 1 src/renderer/src/components/new-workspace/use-work-item-source-search.ts
-3 src/renderer/src/components/right-sidebar/checks-panel-hosted-review-click-routing.ts
+2 src/renderer/src/components/right-sidebar/checks-panel-hosted-review-click-routing.ts
 1 src/renderer/src/components/right-sidebar/checks-panel/use-checks-panel-create-review.tsx
 1 src/renderer/src/components/right-sidebar/FolderWorkspacePrChecksRow.tsx
 1 src/renderer/src/components/right-sidebar/source-control/sync/git-history-commit-context-menu.tsx
@@ -212,7 +212,7 @@
 1 src/renderer/src/hooks/ipc-events/settings-sidebar-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/terminal-request-ipc-bridge.ts
-2 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
+1 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
 1 src/renderer/src/hooks/useActiveProjectSkillRuntime.ts
 1 src/renderer/src/hooks/useEditorExternalWatch.ts
 1 src/renderer/src/hooks/useInstalledAgentSkills.ts
@@ -334,7 +334,7 @@
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
 1 src/renderer/src/web/preload-api/web-app-api.ts
 3 src/renderer/src/web/preload-api/web-preference-normalization.ts
-22 src/renderer/src/web/preload-api/web-preferences-store.ts
+21 src/renderer/src/web/preload-api/web-preferences-store.ts
 13 src/renderer/src/web/preload-api/web-settings-api.ts
 9 src/renderer/src/web/preload-api/web-ui-api.ts
 3 src/renderer/src/web/preload-api/web-workspace-session-api.ts

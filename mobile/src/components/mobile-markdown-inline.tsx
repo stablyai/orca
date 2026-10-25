@@ -13,8 +13,7 @@ import { MarkdownText } from './mobile-markdown-text'
 import { plainText } from './mobile-markdown-tree'
 
 export type MarkdownInlineContext = {
-  /** When provided, detected file paths and file-target hrefs render as tappable and invoke
-   *  this with the path text; without it, paths render as plain text. */
+  // File targets call this when viewer exists; omit to keep paths plain.
   onOpenFile?: (pathText: string) => void
   tone: MarkdownTone
   textScale: number
@@ -22,13 +21,11 @@ export type MarkdownInlineContext = {
 
 type SpanStyle = TextProps['style']
 
-// Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
-// scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
+// Send web/mail links to system handler; desktop-compatible file:/scheme-less targets go to onOpenFile.
 export function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
-    // The seam, not react-native's `Linking`: this module is in the tasks page closure, and inside
-    // the shell's WebView `openURL` resolves without opening anything.
+    // Use link-opening seam: RN Linking inside shell page resolves without opening anything.
     openExternalLink(route.url)
     return
   }

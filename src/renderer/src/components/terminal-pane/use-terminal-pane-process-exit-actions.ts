@@ -16,7 +16,6 @@ import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
-/** Owns the restart/close actions for panes whose PTY process has exited. */
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
     clearCodexRestartNotice,
@@ -210,9 +209,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       return
     }
 
-    // A replacement can commit tab/layout ownership while a remounted xterm
-    // is still carrying the previous DOM marker. Allow an unbound transport to
-    // catch up, but never let a live mismatched transport overwrite its owner.
+    // Unbound remounts may catch up to replacement ownership; a live mismatched transport must never overwrite it.
     for (const pane of manager.getPanes()) {
       const expectedPtyId = panePtyLayoutBindings?.[pane.leafId]
       if (!expectedPtyId) {

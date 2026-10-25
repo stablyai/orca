@@ -1,16 +1,8 @@
-// Why: a half-open tunnel (devtunnel/NAT drop) never delivers a ws `close`,
-// so edge-triggered reconnect logic on the client side never fires while the
-// server has long since reaped its end (#7718/#7489). This monitor gives
-// client sockets a level-based liveness check: ping on a cadence and declare
-// the socket dead when no inbound traffic (frames, pings, or pongs) arrives
-// within the window, so the existing close/reconnect path can run.
+// Half-open tunnels never emit close, preventing reconnect (#7718/#7489). Ping periodically and require any inbound activity
+// so existing close/reconnect paths run. RFC 6455 control pings work with older embedded ws servers too.
 
-// Why: pings ride the RFC 6455 control-frame layer, which every supported
-// server (and the `ws` package it embeds) answers automatically — this stays
-// backward compatible with old servers that predate client-side liveness.
 export const REMOTE_RUNTIME_SOCKET_PING_INTERVAL_MS = 10_000
-// Why: just under two server heartbeat periods (15s), so a dead link is
-// detected on a similar horizon to the server's own ping/terminate reaper.
+// Detect loss just under two server heartbeat periods (15s), aligning with the host reaper.
 export const REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS = 25_000
 
 export type RemoteRuntimeSocketLivenessOptions = {
@@ -18,9 +10,7 @@ export type RemoteRuntimeSocketLivenessOptions = {
   livenessTimeoutMs?: number
 }
 
-// Why: after sleep or a network change a socket can read OPEN while its path is gone; the normal
-// cadence needs ~30-40 s to prove that. A resume probe starts the liveness window at once, and a
-// miss at this deadline only re-pings: a relayed or lossy path can take longer to come back.
+// Resume probes start liveness immediately on OPEN-but-dead sockets; this deadline only re-pings because relayed/lossy paths may recover later.
 export const REMOTE_RUNTIME_SOCKET_RESUME_PROBE_DEADLINE_MS = 8_000
 // Why: inbound data this recent suggests the path survived; the regular keepalive still covers a miss.
 export const REMOTE_RUNTIME_SOCKET_RESUME_PROBE_RECENT_ACTIVITY_MS = 3_000

@@ -14,7 +14,6 @@ import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
-/** What the person sees and can do, in the words the desktop uses. */
 function busyCommandText(
   command: AgentSessionConversationCommand,
   busy: 'working' | 'prompt'
@@ -35,9 +34,8 @@ export async function dispatchMobileStructuredCommand(input: {
   fence: number
   pending: { current: boolean }
   controller: StructuredAgentSessionComposerOptions
-  /** What the agent still has in flight that refuses a command now; null when nothing does. */
   busy: () => 'working' | 'prompt' | null
-  /** The host holds this command as a card behind work in flight, so nothing here holds it. */
+  // Queued commands are held by the host; client work must not refuse them first.
   waitsInLine: (command: AgentSessionConversationCommand) => boolean
   /** `refusedWhile`: what the phone showed the refused command waiting on. */
   onError: MobileNativeChatSendErrorReporter

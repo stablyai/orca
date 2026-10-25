@@ -12,8 +12,7 @@ import type {
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
 
-// Why: the tasks barrel pulls the whole react-native screen graph in; re-export only the
-// linear pieces this hook uses, straight from their leaf modules, and count grouping calls.
+// Import real Linear leaves without the native screen barrel; count their grouping calls.
 const groupingInputSizes: number[] = []
 
 vi.mock('./mobile-tasks-dependencies', async () => {
@@ -69,8 +68,6 @@ const ASSIGNEES = [
 const GROUPINGS: LinearGroupBy[] = ['none', 'status', 'assignee', 'priority', 'team']
 const ORDERINGS: LinearOrderBy[] = ['priority', 'updated', 'identifier']
 
-/** Deterministic issues: every field is a pure function of the index, so grouping,
- *  ordering and comparison counts repeat exactly across runs. */
 function makeIssue(index: number): LinearIssue {
   const state = STATES[(index * 3) % STATES.length]!
   const team = TEAMS[(index * 5) % TEAMS.length]!
@@ -116,8 +113,6 @@ const DEFAULT_INPUT: ProbeInput = {
   githubProjectPickerSearch: ''
 }
 
-/** The hook mutates the model it is handed, so each render gets a fresh envelope around
- *  the same input identities — exactly how the picker projection feeds it in the app. */
 function createModel(input: ProbeInput): PickerProjectionModel {
   return mountFixture<PickerProjectionModel>({
     effectiveRepoIds: new Set<string>(),
@@ -160,8 +155,7 @@ function createModel(input: ProbeInput): PickerProjectionModel {
 
 type Projection = ReturnType<typeof useMobileTasksProviderViewProjection>
 
-// Why: a stack, not a nullable handle — the react-test-renderer types degrade to `any`
-// when mobile dependencies are absent, and a union with them trips the type-aware gate.
+// Use a renderer stack: missing mobile types degrade handles to any, making a nullable union fail type-aware lint.
 const mounted: ReactTestRenderer[] = []
 let latest: Projection | null = null
 let renderCount = 0
@@ -201,7 +195,6 @@ function current(): Projection {
   return latest
 }
 
-/** The pre-change board memo, kept verbatim as the parity and count oracle. */
 function legacyProjection(input: ProbeInput): {
   issuesForView: LinearIssue[]
   listSections: LinearIssueSection[]
@@ -228,8 +221,6 @@ function legacyProjection(input: ProbeInput): {
 
 type WorkCounts = { groupingCalls: number; issueVisits: number; comparisons: number }
 
-/** Counts the projection's grouping calls, per-issue grouping visits, and sort-comparator
- *  invocations. Operation counts only — nothing here is time, CPU or memory. */
 function countLinearWork(run: () => void): WorkCounts {
   const nativeSort = Array.prototype.sort
   let comparisons = 0
@@ -430,8 +421,7 @@ describe('useMobileTasksProviderViewProjection grouping work', () => {
     expect(after.groupingCalls).toBe(1)
     expect(before.issueVisits).toBe(100)
     expect(after.issueVisits).toBe(50)
-    // Both legacy groupings re-sorted an already sorted 50-issue array (n-1 comparisons
-    // each); one call is gone and the other groups without re-sorting.
+    // Legacy groupings each re-sorted 50 ordered issues; reuse sorting before grouping to avoid both comparator passes.
     expect(before.comparisons - after.comparisons).toBe(2 * (input.items.length - 1))
   })
 

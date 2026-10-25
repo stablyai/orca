@@ -20,7 +20,7 @@ export function updateTaskStatus(
   const terminalStatus = status === 'completed' || status === 'failed'
   const requiresActiveDispatch = status === 'dispatched'
   const permitsActiveDispatch = terminalStatus || requiresActiveDispatch
-  // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot stale the snapshot.
+  // Reserve the WAL writer before lifecycle reads to avoid a stale snapshot.
   const transaction = beginLifecycleWriteTransaction(this.db, UPDATE_TASK_STATUS_SAVEPOINT)
   try {
     const task = this.getTask(id)
@@ -35,10 +35,7 @@ export function updateTaskStatus(
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(id) as { id: string } | undefined
-    // Why: a supervised worker owns its Task for as long as it is alive. Every status this
-    // function lets past the active-Dispatch check must clear the same worker check, or the Task
-    // re-opens under a worker whose own lifecycle can no longer settle it (#16904 relay wedge).
-    // A no-op re-assert of `dispatched` re-opens nothing and stays legal.
+    // A live supervised worker forbids Task reopening; a dispatched no-op remains legal (#16904).
     const reopensUnderWorker = requiresActiveDispatch && task.status !== 'dispatched'
     const activeWorker =
       terminalStatus || reopensUnderWorker
@@ -94,8 +91,7 @@ export function updateTaskStatus(
         throw error
       }
       const current = this.getTask(id)
-      // A concurrent writer may have already applied the requested status;
-      // preserve idempotency for that race, but never hide an invalid edge.
+      // A concurrent identical update is idempotent; invalid lifecycle edges still fail.
       if (!current || current.status !== status) {
         throw error
       }

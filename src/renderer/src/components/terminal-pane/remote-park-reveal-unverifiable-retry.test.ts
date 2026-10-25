@@ -19,15 +19,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-/**
- * End to end through connectPanePty: a parked remote-runtime pane is revealed,
- * the host answers its snapshot probe with `unavailable: 'no-serializable-buffer'`
- * ("not proof the pane is empty", per the host's own comment), and the pane must
- * keep asking on the hidden-output restore loop's budget rather than paint blank
- * once and go quiet. The request count and the loss banner are the oracle: with
- * the reveal collapsing the answer to null, the count stays at one forever and
- * the banner never appears.
- */
+/** Park reveal’s no-serializable-buffer answer is unverifiable, never empty; reuse the shared bounded restore budget and eventually recover or disclose loss instead of silently stopping after one probe. */
 const REMOTE_PTY_ID = 'remote:env-1@@pty-1'
 const HOST_IMAGE_MARKER = 'HOST-IMAGE-AFTER-PARK'
 const BANNER_FRAGMENT = 'main recovery was unavailable'
@@ -210,8 +202,7 @@ describe('parked remote pane reveal with an unverifiable host snapshot', () => {
       availability: { kind: 'retry-worthy', cause: 'host-no-serializable-buffer' },
       snapshot: null
     }
-    // Why the deferred second answer: the loop arms its 2s re-ask timer when an
-    // answer lands, and that timer must be created under fake timers to advance.
+    // Resolve the second answer under fake timers so its deferred retry deadline is controllable.
     const secondAnswer = createDeferred<typeof declined>()
     const serializeBufferOutcome = vi
       .fn()

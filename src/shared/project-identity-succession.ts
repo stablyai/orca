@@ -21,17 +21,9 @@ function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-/**
- * Carries persisted per-project user state (and the rows that point at it) across a
- * project id change. Project ids are derived from repo identity, so `repo:` -> `git:` ->
- * `github:` promotion and remote re-probes rewrite them mid-session; matching only on id
- * would drop the user's runtime preference and leave a ghost row behind.
- *
- * Predecessor rule when several prior rows overlap a surviving project: most shared
- * `sourceRepoIds` wins, then newest `updatedAt`, then lowest prior id (then lowest new id).
- * Each prior row is claimed by at most one surviving project, so two distinct user
- * preferences are never merged into one — the unclaimed row keeps its own identity.
- */
+/** Carry user state/references through repo→git→github identity promotion and re-probes, preserving preferences without ghost rows.
+ * Choose predecessors by shared source repos, newest updatedAt, then lowest prior/new IDs. Claim each prior once:
+ * never merge distinct preferences; unmatched rows retain their own identity. */
 export function carryProjectStateThroughIdentityChange(
   projectedProjects: readonly Project[],
   previousProjects: readonly Project[]

@@ -5,7 +5,6 @@ import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
-/** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
@@ -42,8 +41,7 @@ export function bindPluginHostServices(input: {
       if (!context) {
         return null
       }
-      // Why: retain the internal id only for host-side terminal membership;
-      // the public handler projects it out because it embeds provider paths.
+      // Retain path-bearing worktree IDs for host membership checks; public projections exclude them.
       return {
         worktreeId: context.worktreeId,
         branch: context.branch,

@@ -10,12 +10,7 @@ import { derivedGoldens } from './derived-goldens'
 import { readGolden } from './golden-recording'
 import { readScenarios } from './scenario-input'
 
-/**
- * Every request a golden records putting on the wire, parsed by the host's own dispatcher against
- * the host's own params schema. The goldens script the host's replies, so a request the real host
- * would refuse with `invalid_argument` is recorded as a success unless something checks it here;
- * and a desktop change that tightens a schema is invisible to every golden without this.
- */
+// Parse recorded requests with host schemas; scripted successes can otherwise certify params a real host rejects.
 
 const root = resolve(import.meta.dirname, '../../../..')
 const manifest = readScenarios(
@@ -25,11 +20,7 @@ const manifest = readScenarios(
 const directory =
   process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
-/**
- * Keys the host's schema strips that the phone sends on purpose, each with its reason. Only an
- * older or newer host reading the key justifies an entry; an entry nothing strips fails, so the list
- * only shrinks.
- */
+// Allow stripped keys only for mixed-version compatibility; fail stale entries so the inventory cannot grow silently.
 const STRIPPED_KEY_INVENTORY: readonly InventoryEntry[] = []
 
 type WireRequest = { method: string; params: unknown; golden: string }
@@ -65,7 +56,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Paths present in what was sent and absent from what the handler receives. */
 function strippedPaths(sent: unknown, parsed: unknown, path = ''): string[] {
   if (Array.isArray(sent) && Array.isArray(parsed)) {
     return sent.flatMap((entry, index) => strippedPaths(entry, parsed[index], `${path}[${index}]`))
@@ -88,7 +78,6 @@ function isEmptyParams(params: unknown): boolean {
 
 type InventoryEntry = { method: string; path: string; reason: string }
 
-/** Every way the host would refuse, ignore or trim a request, plus inventory entries nothing uses. */
 function contractProblems(
   requests: readonly WireRequest[],
   inventory: readonly InventoryEntry[]
@@ -143,10 +132,10 @@ describe('recorded requests against the host params contract', () => {
     const requests = wireRequests()
     expect(requests.length).toBeGreaterThan(100)
     expect(contractProblems(requests, STRIPPED_KEY_INVENTORY)).toEqual([])
-    // Reads and resolves every golden; a loaded CI worker takes longer than the default 5 s.
+    // Resolving the full golden corpus can exceed the default timeout on loaded CI workers.
   }, 60_000)
 
-  // The corpus has no instance of these today, so each rule is shown to fire on a made-up request.
+  // Seed violations absent from the corpus so every contract rule proves it can fire.
   it('names an unknown method, a refusal, ignored params, a dropped key and a stale entry', () => {
     const request = (method: string, params: unknown): WireRequest => ({
       method,

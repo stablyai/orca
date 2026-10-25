@@ -198,7 +198,6 @@ describe('useStructuredAgentSessionRead history window', () => {
       first = result.current.loadOlder()
     })
     expect(result.current.loadingOlder).toBe(true)
-    // A rail jump asking while scroll-to-top's page is in flight joins it.
     act(() => {
       second = result.current.loadOlder()
     })
@@ -378,7 +377,6 @@ describe('useStructuredAgentSessionRead currency', () => {
       { initialProps: { isVisible: true } }
     )
     await waitFor(() => expect(emits).toHaveLength(1))
-    // History alone is not the host's present.
     expect(view.result.current.readCurrent).toBe(false)
 
     // A resume with nothing missed is an empty frame that changes no state.
@@ -395,8 +393,7 @@ describe('useStructuredAgentSessionRead currency', () => {
     act(() => emits[1]!(frame(900, false)))
     await waitFor(() => expect(view.result.current.readCurrent).toBe(true))
 
-    // The stream closing under a pane that is showing: what it holds is stale until the reconnect,
-    // and an update still waiting to be applied when it closed must not say otherwise.
+    // A close makes retained state stale; a queued stream update must not mark it current afterward.
     act(() => {
       emits[1]!(frame(950, false))
       closes[1]!()
@@ -407,9 +404,7 @@ describe('useStructuredAgentSessionRead currency', () => {
   })
 })
 
-// A workspace delete closes its structured chats while the pane is still mounted, so every read
-// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
-// lost that race must not leave the pane holding an error the live transport is about to clear.
+// Workspace deletion briefly leaves mounted chats with unknown ownership; an older-page failure must not replace the conversation the stream is retiring.
 describe('useStructuredAgentSessionRead older page failures', () => {
   afterEach(cleanup)
 
@@ -445,7 +440,6 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     return { result, outcome }
   }
 
-  // A failed older page is the list's to retry; it must never replace the loaded conversation.
   it.each([
     ['a closed session', refusal('agent_session_ownership_unknown')],
     ['any other reason', new Error('journal read failed')]
@@ -477,9 +471,7 @@ describe('useStructuredAgentSessionRead older page failures', () => {
   })
 })
 
-// A loaded chat that loses contact is the transport's to retry: only a refusal the host sent, or a
-// chat that never loaded, is owed the failure. A loaded chat with no messages yet would otherwise
-// trade its empty state for the full-pane error on every blip.
+// Keep loaded chats, including empty ones, through transport blips; show explicit host refusals or initial-load failures.
 describe('useStructuredAgentSessionRead stream failures', () => {
   afterEach(cleanup)
 
@@ -515,7 +507,7 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     expect(result.current.state.readRefusal).toBeUndefined()
   })
 
-  // A refusal whose reason this build doesn't know is still the host's answer, so it is owed too.
+  // Unknown host refusal reasons are still authoritative answers.
   it.each([
     ['with its reason', { reason: 'journalUnavailable' }],
     ['without a reason', undefined]

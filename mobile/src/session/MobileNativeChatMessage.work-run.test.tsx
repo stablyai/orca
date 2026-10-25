@@ -1,6 +1,3 @@
-// A work run on the phone, as desktop draws one: the run's first row draws every member's calls
-// under one header with the thoughts among them, and the rows it absorbed draw nothing.
-
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -57,7 +54,6 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
-// Android: a long press opens the row's actions sheet instead of selecting text.
 vi.mock('../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
@@ -117,7 +113,6 @@ it('draws a run that opens on a thought as one header, the thought inside it', (
   })
   const tree = renderer!
   expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
-  // Folded, the run shows its sentence only.
   expect(tree.root.findAll((node) => String(node.type) === 'Brain')).toHaveLength(0)
   act(() =>
     tree.root
@@ -168,7 +163,6 @@ it("opens a grouped thought's own actions on a long press, not the run's first r
       .props.onPress()
   })
   act(() => {
-    // The innermost: the thought's own text, inside the row that holds the run.
     tree.root
       .findAll((node) => String(node.type) === 'Pressable' && node.props.onLongPress)
       .at(-1)!

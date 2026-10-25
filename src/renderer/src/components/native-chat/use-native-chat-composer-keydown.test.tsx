@@ -261,7 +261,6 @@ describe('useNativeChatComposerKeyDown', () => {
       const field = render(<Composer {...props} />).container.querySelector('textarea')!
       return {
         field,
-        // The draft after the press, and whether the handler claimed the key.
         press: (key: string, init: KeyboardEventInit = {}) => {
           const claimed = !fireEvent.keyDown(field, { key, ...init })
           return { draft: field.value, claimed }

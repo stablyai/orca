@@ -153,7 +153,6 @@ describe('host-created workspaces awaiting their agent chat', () => {
     }
   )
 
-  // The phone creates through agent.launch; a reported bug left a plain "Terminal 1" beside Setup.
   it('gives a paired-device chat launch Setup and the chat with no plain shell', async () => {
     const { runtime, spawn } = chatCreateRuntime({
       setupScriptLaunchMode: 'new-tab',

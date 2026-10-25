@@ -7,8 +7,7 @@ type SessionTabsStreamState = {
   cancelled?: boolean
 }
 
-/** Older hosts register a tabs stream only as they emit the first snapshot, so an earlier unsubscribe
- *  finds nothing there. Newer hosts register on arrival and still send that snapshot, so the hold only delays. */
+// Older hosts register only with the first snapshot, so hold cancellation until then; newer hosts safely tolerate the delay.
 function awaitsRegistration(stream: SessionTabsStreamState): boolean {
   return (
     stream.method === 'session.tabs.subscribe' && stream.sent === true && !stream.receivedSnapshot

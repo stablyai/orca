@@ -102,9 +102,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           activeSessionTabTypeRef.current !== 'terminal') ||
         !liveInputTerminalHandlesRef.current.has(handle)
       ) {
-        // Why: a stale handle must not keep local mirror state alive — the next
-        // active terminal would inherit wrong erase counts. A null tab type is
-        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
+        // Stale handles must drop mirror erase counts, but null tab type during list lag does not prove departure.
         resetMirrorState()
         return false
       }
@@ -120,9 +118,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
 
       clearHeldCommitTimer()
-      // Why: text the platform positively marked as preedit is not text yet, so
-      // no idle timer may commit it. Only an unreported hold is a guess that has
-      // to settle on its own.
+      // Reported preedit must never idle-commit; only unreported heuristic holds may settle on a timer.
       if (step.heldText.length > 0 && composing === undefined) {
         heldCommitTimerRef.current = setTimeout(() => {
           heldCommitTimerRef.current = null
@@ -152,8 +148,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       waitForPendingLiveInputFlush
     ]
   )
-  // Why: assigning during render is not replay-safe. The only read is inside a
-  // held-commit timer, which fires long after commit, so an effect is soon enough.
+  // Commit the timer’s input ref in an effect; render writes would leak discarded work.
   useEffect(() => {
     runMirrorStepRef.current = runMirrorStep
   }, [runMirrorStep])
@@ -181,8 +176,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
           : await waitForPendingLiveInputFlush()
 
-      // Why: an explicit flush ends the field's editing session; the echoed PTY
-      // text stays, so local mirror state must restart from empty.
+      // Flush ends the field session while retaining PTY echo, so local mirror state restarts empty.
       clearPendingLiveInputCommit()
       return result
     },
@@ -195,7 +189,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       const pendingHandle = pendingLiveInputHandleRef.current
       const flushState = pendingLiveInputFlushRef.current
       if (pendingHandle && pendingHandle !== handle) {
-        // Why: another terminal's queued deltas must not drain into this one.
+        // Never drain another terminal’s queued deltas into the current one.
         cancelTerminalLivePendingFlush(flushState)
       } else if (pendingHandle === handle && heldLiveInputTextRef.current.length > 0) {
         const sentText = sentLiveInputTextRef.current

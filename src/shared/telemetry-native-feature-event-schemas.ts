@@ -11,7 +11,6 @@ import {
   optInViaSchema
 } from './telemetry-property-schemas'
 
-// Native chat (terminal⇄chat toggle) adoption; view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
 export const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
 export const nativeChatToggledSchema = z
   .object({
@@ -20,7 +19,7 @@ export const nativeChatToggledSchema = z
     agent_kind: agentKindSchema
   })
   .strict()
-// `runtime`: local vs SSH/remote agent PTY; `'unknown'` when unresolved at send time.
+// unknown means runtime was unresolved at send time.
 export const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
 export const nativeChatMessageSentSchema = z

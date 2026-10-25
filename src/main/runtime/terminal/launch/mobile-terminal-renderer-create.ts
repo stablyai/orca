@@ -93,8 +93,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    // Older mobile clients append their optimistic tab, so make the host append too until the
-    // client advertises the grouped placement contract.
+    // Older mobile clients optimistically append; match until they advertise grouped placement.
     const requestedAfterTabId = opts.afterTabId
     const afterTabId =
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
@@ -186,8 +185,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           opts.signal?.removeEventListener('abort', onAbort)
           reject(new Error('Terminal creation timed out'))
         }, 10_000)
-        // Why: a dead client connection cancels the wait; the renderer tab (and
-        // its shell) stays alive for the host and mirrors on reconnect (#7718).
+        // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
         const onAbort = (): void => {
           clearTimeout(timer)
           getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
@@ -234,13 +232,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       if (opts.activate !== false) {
         this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
       }
-      // Why: register the wait before the renderer's PTY spawn arrives so that
-      // spawn (registerPty) can publish the pty-backed surface main-side even if
-      // graph-sync is stalled (#7587). Removed in the finally below.
+      // Register before spawn arrival so registerPty can publish despite stalled graph sync; remove in finally (#7587).
       const pendingCreateKey = `${worktreeId}::${reply.tabId}`
-      // Why: a rescue publishes into the active group (opts.targetGroupId is not
-      // threaded); the renderer's reconciling publication then moves the tab to the
-      // requested group, so any wrong-group placement is cosmetic and stall-window-only.
+      // Rescue uses the active group; renderer reconciliation later moves the tab into its requested group.
       this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
         activate: opts.activate !== false,
         paired: pairedCreate,
@@ -249,9 +243,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
       try {
-        // Why: the PTY spawn and the tabCreate reply race on independent IPC
-        // channels; if the spawn already registered, publish immediately so the
-        // wait resolves without depending on a graph sync.
+        // Spawn and tabCreate replies race across IPC channels; publish already-registered PTYs without waiting for graph sync.
         this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
         const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
           timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
@@ -271,14 +263,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           return readySurface
         }
         if (opts.signal?.aborted) {
-          // Why: nobody awaits this create anymore; don't materialize or roll back — the renderer's own publication settles the tab.
+          // Disconnected callers no longer await creation; let renderer publication settle the tab.
           throw new Error('client_disconnected')
         }
         const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
         if (!pendingSurface) {
           throw new Error('Timed out waiting for terminal surface after creation')
         }
-        // Why: a hidden renderer can publish the tab shell before the PTY spawns; reuse the same identity so later focus adopts instead of creating another tab.
+        // Hidden renderers may publish tab shells before spawn; reuse identity so later focus adopts the tab.
         return await this.createRuntimeOwnedMobileSessionTerminal(
           worktreeId,
           opts.activate !== false,
@@ -301,7 +293,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           }
         )
       } catch (error) {
-        // Why: publication latency (hidden renderer) can trip the surface timeout; rescue only when a live PTY backs the tab, else a ghost tab skips rollback (#7587).
+        // Hidden-renderer publication can time out; rescue only a live-backed tab or rollback would leave a ghost (#7587).
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
           const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
           if (rescued) {
@@ -309,14 +301,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             return rescued
           }
         }
-        // Why: don't roll back on a client disconnect or a live shell already backing the tab — that would kill a visible terminal ("tab dies after ~10s", #7718).
+        // Disconnect or a live backing shell must never trigger tab rollback (#7718).
         if (
           isClientDisconnectedError(error) ||
           this.hasLiveShellForRendererTab(worktreeId, reply.tabId)
         ) {
           throw error
         }
-        // Why: renderer made the tab but no live PTY backs it (real spawn/handle failure); roll it back so it can't linger as a ghost in mobile snapshots.
+        // A real spawn/handle failure left no live backing PTY; remove the ghost tab.
         this.notifier?.closeTerminal(reply.tabId)
         throw error
       } finally {

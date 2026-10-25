@@ -1,19 +1,12 @@
-// Secrets scrubber for the error-tracking lane (see telemetry-error-tracking.md
-// §The redactor). Runs at three locations — sink-write, bundle-collection, and
-// server-ingest; the server pass is defense-in-depth since the client runs on an
-// attacker-controllable binary, and it additionally drops PostHog identity keys.
-//
-// The five rule families run in order; the string passes are idempotent, which
-// is what makes the three-location placement safe.
-//
-// No per-attribute length cap: envelope bounds already cap size, and truncation
-// would eat the tail of long stack chains — the most diagnostic part.
+// Apply idempotent redaction at sink write, bundle collection and server ingest.
+// Server mode also strips product-telemetry identity keys.
+// Envelope bounds limit size; truncating attributes would lose diagnostic stack tails.
 
-// `\b` stops this from stealing rule-4's `FOO_SECRET=` matches; the value alternation eats the whole `Bearer <jwt>`/`Token <pat>` segment.
+// Word boundaries preserve FOO_SECRET matches; consume full Bearer/Token values.
 const LABELED_KV =
   /\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b\s*[:=]\s*(?:Bearer\s+\S+|Token\s+\S+|\S+)/gi
 
-// Tagged tokens let triage see what was redacted without the key. Order is most-specific-first: `sk-ant-` before `sk-`, or the Anthropic tag is lost.
+// Match specific providers first so sk-ant- retains its Anthropic tag.
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'anthropic-key', re: /sk-ant-[a-zA-Z0-9_-]{40,}/g },
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
@@ -30,22 +23,22 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'slack-token', re: /xox[baprsoe]-[A-Za-z0-9-]{10,}/g },
   {
     tag: 'pem',
-    // Lazy `[\s\S]+?` so two back-to-back PEM blocks redact independently, not as one gobbled span.
+    // Lazy matching redacts adjacent PEM blocks independently.
     re: /-----BEGIN [A-Z ]+-----[\s\S]+?-----END [A-Z ]+-----/g
   }
 ]
 
-// Strip URL userinfo — both `user:pass@` and bare-token `<pat>@` (seen in failing git stderr); keep host+path for debug context.
+// Strip both user:pass@ and token@ while retaining host/path diagnostics.
 const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
-// Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
+// Match whole multiline .env values, including Bearer tails, but skip empty values.
 const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/my
-// Exact `\s*` for the non-ASCII whitespace runs the inline scan hands off (NBSP, BOM, U+2028\u2026).
+// Match the engine’s non-ASCII whitespace semantics (NBSP, BOM, U+2028…).
 const WHITESPACE_RUN = /\s*/y
-// The terminator set `.` and `^`/m use; scanned with `indexOf` so no-match lines never enter the regex engine.
+// Scan regex line terminators without invoking the regex engine for no-match lines.
 const LINE_TERMINATORS = ['\n', '\r', '\u2028', '\u2029'] as const
 
-// Attribute keys dropped regardless of value. Matched case-insensitively since HTTP headers vary in case.
+// Case-insensitive because HTTP header casing varies.
 const CLIENT_ATTR_BLOCKLIST = new Set([
   'env',
   'environment',
@@ -66,7 +59,7 @@ const CLIENT_ATTR_BLOCKLIST = new Set([
   'headers.authorization'
 ])
 
-// Identity keys: valid in telemetry but stripped from bundles to prevent re-identifying PostHog history (see telemetry-error-tracking.md).
+// Strip product-telemetry identity keys so bundles cannot re-identify telemetry history.
 const SERVER_ATTR_BLOCKLIST_EXTRA = new Set([
   'install_id',
   'installid',
@@ -82,7 +75,7 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   if (CLIENT_ATTR_BLOCKLIST.has(k)) {
     return true
   }
-  // Drop by key family: keys like `ANTHROPIC_API_KEY`/`x-api-key` carry plain values string redaction can't classify.
+  // Drop secret-key families whose unlabeled values cannot be classified by string rules.
   if (
     /\b(api[-_]?key|token|secret|password|bearer|authorization|private[-_]?key)\b/i.test(key) ||
     /(apikey|token|secret|password|authorization|bearer|privkey|privatekey)/.test(normalized)
@@ -95,31 +88,30 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   return false
 }
 
-/** Apply rules 1–4 to a string. Idempotent, which makes triple-application safe. */
+/** Idempotent so sink, bundle and server passes can safely repeat. */
 export function redactString(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     return input
   }
   let out = input
 
-  // Rule 1 — labeled key-value. Drop the key alongside the value; the label name adds no debug context once the value is gone.
   out = out.replace(LABELED_KV, '[redacted:labeled-kv]')
 
-  // Rule 2 — provider-key fingerprints. Tag names (`anthropic-key`) are stable wire identifiers third-party NDJSON tools grep for.
+  // Redaction tags are stable identifiers used by external NDJSON tools.
   for (const { tag, re } of PROVIDER_PATTERNS) {
     out = out.replace(re, `[redacted:${tag}]`)
   }
 
-  // Rule 3 — URL userinfo. After rule 2 so a key-shaped userinfo value gets the more specific redaction first.
+  // Provider shapes run first to retain specific tags in URL userinfo.
   out = out.replace(URL_USERINFO, '$1[redacted]@')
 
-  // Rule 4 — .env-shape line: keep key, redact value. Last so rule 1 wins over a coincidentally .env-shaped substring.
+  // Labeled redaction wins over coincidental .env-shaped substrings.
   out = redactEnvironmentLines(out)
 
   return out
 }
 
-/** Index of the first non-`\s` code unit at or after `index`, or `input.length`. ASCII is the spec-fixed set; anything else defers to the engine. */
+/** Scan ASCII whitespace directly; defer non-ASCII semantics to the regex engine. */
 function skipWhitespace(input: string, index: number): number {
   const length = input.length
   while (index < length) {
@@ -144,14 +136,14 @@ function redactEnvironmentLines(input: string): string {
   const parts: string[] = []
   let copiedThrough = 0
   let start = 0
-  // Each terminator kind is searched at most once per occurrence; -2 marks "not searched yet", -1 "none remain".
+  // Search each terminator kind once per occurrence; -2 is unsearched, -1 exhausted.
   const nextTerminator = [-2, -2, -2, -2]
   while (start < input.length) {
     const content = skipWhitespace(input, start)
     if (content === input.length) {
       break
     }
-    // Only a `[A-Z_]` first content char can match; failed starts within the leading whitespace all see the same key.
+    // Leading whitespace cannot change the first key character; reject impossible starts once.
     const code = input.charCodeAt(content)
     if ((code >= 0x41 && code <= 0x5a) || code === 0x5f) {
       ENV_LINE.lastIndex = start
@@ -159,7 +151,6 @@ function redactEnvironmentLines(input: string): string {
       if (match) {
         parts.push(input.slice(copiedThrough, start), `${match[1]}=[redacted:env-value]`)
         copiedThrough = ENV_LINE.lastIndex
-        // `.*` stops at end of input or a line terminator, so the next line starts one past it.
         start = copiedThrough + 1
         continue
       }
@@ -187,11 +178,7 @@ function redactEnvironmentLines(input: string): string {
   return parts.join('')
 }
 
-/**
- * Recursively redact a value of unknown shape (strings get rules 1–4; containers
- * recurse; primitives pass through). The `seen` WeakSet guards against cycles,
- * which serialized error objects in span-event payloads occasionally contain.
- */
+/** Recurse through containers with cycle protection for error payloads. */
 export function redactValue(
   value: unknown,
   mode: RedactorMode = 'client',
@@ -223,7 +210,7 @@ export function redactValue(
     seen.add(value)
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      // Why: re-redacting parsed NDJSON can surface secrets nested below attributes (headers, identity payloads).
+      // Parsed NDJSON may contain nested auth and identity fields outside attributes.
       if (shouldDropAttributeKey(k, mode)) {
         continue
       }
@@ -231,11 +218,9 @@ export function redactValue(
     }
     return out
   }
-  // Functions / symbols: coerce to a label; they don't appear in legitimate spans.
   return `[unsupported:${typeof value}]`
 }
 
-/** Redact an attributes record: drop blocked keys, recursively redact the rest. */
 export function redactAttributes(
   attrs: Readonly<Record<string, unknown>>,
   mode: RedactorMode = 'client'
@@ -249,8 +234,6 @@ export function redactAttributes(
   }
   return out
 }
-
-// ── Span-record redaction (the public entry point used by the sink) ──────
 
 export type SpanEvent = {
   readonly name: string
@@ -277,11 +260,7 @@ export type RedactableSpan = {
   readonly exit: SpanExit
 }
 
-/**
- * Redact a complete span record into a fresh record (input not mutated) so the
- * redactor stays safe to run mid-pipeline and idempotent. The exit `cause` holds
- * the stack trace — a likely secret-leak site — so rules 1–4 run there too.
- */
+/** Return a fresh record; redact exit causes too because stacks can contain secrets. */
 export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'): RedactableSpan {
   const redactedAttrs = redactAttributes(span.attributes, mode)
   const redactedEvents: SpanEvent[] = span.events.map((ev) => ({

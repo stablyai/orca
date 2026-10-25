@@ -47,8 +47,7 @@ export async function createDocsOgImage({ title, url }: { title: string; url: st
 
   const [logoData, geistRegular, geistBold] = await Promise.all([
     readFile(join(process.cwd(), 'public/docs/logo.svg'), 'base64'),
-    // next/og's Satori renderer accepts static TrueType fonts, while the
-    // browser stylesheet uses the smaller variable WOFF2 variant.
+    // Satori requires static TrueType fonts; the browser uses smaller variable WOFF2.
     readFile(join(fontsDir, 'Geist-Regular.ttf')),
     readFile(join(fontsDir, 'Geist-Bold.ttf'))
   ])

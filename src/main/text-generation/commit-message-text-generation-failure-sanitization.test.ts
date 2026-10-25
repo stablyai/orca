@@ -386,7 +386,6 @@ describe('generateCommitMessageFromContext', () => {
     expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
       true
     )
-    // The bare domain link survives path redaction so the remedy stays usable.
     expect(result.error).toContain('claude.ai/settings/usage')
     expect(result.error.length).toBeLessThanOrEqual(300)
   })

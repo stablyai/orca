@@ -59,8 +59,7 @@ beforeEach(() => {
   calls.createSupportAnswers.splice(0)
 })
 
-// An outage is not an answer: the chat stays as "Could not confirm" with Retry, and the launch
-// keeps its prompt, instead of being forgotten as though the host had said no.
+// Outage proves no refusal; retain unconfirmed state/prompt for Retry instead of forgetting the launch.
 describe('a structured launch whose host stops answering', () => {
   it('stays unconfirmed when the reply to a sent create is lost and the retry cannot reach it', async () => {
     calls.createSupportAnswers.push('supported', 'offline')

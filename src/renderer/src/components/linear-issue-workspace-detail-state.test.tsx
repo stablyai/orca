@@ -125,7 +125,6 @@ describe('Linear issue workspace detail state', () => {
       project: { id: 'project-server', name: 'Server project' },
       dueDate: '2026-09-01'
     }
-    // Why: list issues never carry `project`, so hydration owns it.
     expect(mergeLinearIssueHydration(fetched, current, true)).toEqual({
       ...current,
       project: fetched.project,
@@ -203,10 +202,7 @@ describe('Linear issue workspace detail state', () => {
 })
 
 describe('mergeLinearIssueHydration project preservation', () => {
-  // Why: Linear *list* issues never carry `project` — only getIssue maps it, via
-  // includeProject: true. So `project` must never join the preserved-from-current
-  // set: an edit made while getIssue is in flight would overwrite the hydrated
-  // project with the list issue's undefined, permanently blanking it.
+  // Only details carry project; preserving the list’s undefined value after an edit would erase the hydrated project.
   it('takes project from the hydrated detail even when the user has edited', () => {
     const listIssue = { ...issue('ENG-1'), project: undefined }
     const hydrated = { ...issue('ENG-1'), project: { id: 'p1', name: 'Compiler' } }
@@ -227,7 +223,6 @@ describe('mergeLinearIssueHydration project preservation', () => {
   })
 
   it('keeps project out of the preserved-field set', () => {
-    // Guards the list itself: adding 'project' here is the exact regression.
     const listIssue = { ...issue('ENG-1'), project: undefined }
     const hydrated = { ...issue('ENG-1'), project: { id: 'p2', name: 'Runtime' } }
 

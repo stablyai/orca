@@ -5,9 +5,7 @@ import { baseRuleId, scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { listTrackedFiles, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on the flaky-test ast-grep rules in config/ast-grep/rules/flaky-tests: wall-clock reads,
-// real-time waits, polling loops, unquarantined skips, and unexplained timeout bumps. Each row
-// counts one rule in one file, so fixing one pattern cannot pay for adding another.
+// Count each flaky-test rule per file so fixing one pattern cannot pay for adding another.
 
 const BASELINE_PATH = 'config/flaky-test-pattern-baseline.txt'
 const RULE_FILTER = '^test-'
@@ -44,8 +42,7 @@ function git(root, args) {
   })
 }
 
-// Why: these patterns are common, so a whole-tree count breaks every PR as soon as any merge adds
-// one. Enforce only the files this change touches; unchanged files keep their grandfathered counts.
+// Scope enforcement to changed files so unrelated merges cannot invalidate every PR's baseline.
 export function listChangedFiles(root = process.cwd()) {
   if (process.env.ORCA_FLAKY_TEST_RATCHET_ALL === '1') {
     return null

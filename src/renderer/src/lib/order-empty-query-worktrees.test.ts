@@ -25,8 +25,7 @@ function wt(overrides: Partial<Worktree> & { id: string; displayName: string }):
 
 describe('orderEmptyQueryWorktrees', () => {
   it('ranks a recently visited (quiet) worktree above a noisy never-visited one', () => {
-    // Why: the core bug — an SSH worktree the user just visited must outrank
-    // a locally noisy worktree even when the latter has a newer lastActivityAt.
+    // Recent user focus must outrank newer incidental background activity on another host.
     const ssh = wt({ id: 'ssh', displayName: 'ssh', lastActivityAt: 1_000 })
     const local = wt({ id: 'local', displayName: 'local', lastActivityAt: 9_999 })
     const result = orderEmptyQueryWorktrees({
@@ -71,8 +70,7 @@ describe('orderEmptyQueryWorktrees', () => {
   })
 
   it('does not crash the switcher when a visible worktree has no displayName (crash 99657ab1)', () => {
-    // displayName is typed `string` but arrives undefined for persisted/discovered
-    // worktrees; the bare localeCompare tie-break used to throw and take down Cmd+J.
+    // Persisted/discovered displayName can be undefined despite its type; raw localeCompare once crashed Cmd+J.
     const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
     const unnamed = wt({
       id: 'b',
@@ -100,8 +98,7 @@ describe('orderEmptyQueryWorktrees', () => {
     expect(result.visibleWorktreesForState.map((w) => w.id)).toEqual(['cur', 'other'])
   })
 
-  // Why: `repoId::path` repeats across hosts, so a bare-id filter treated the SSH twin as
-  // current too and dropped it from the rows — the host it lived on became unreachable.
+  // Filter current workspace by host too or its same-ID SSH twin becomes unreachable.
   it('keeps the same-id worktree on the other host switchable', () => {
     const local = wt({ id: 'shared', displayName: 'local', hostId: 'local' })
     const ssh = wt({ id: 'shared', displayName: 'ssh', hostId: 'ssh:box' })

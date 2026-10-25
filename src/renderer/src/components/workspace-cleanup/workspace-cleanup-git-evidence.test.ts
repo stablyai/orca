@@ -112,8 +112,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
   })
 
   it("never applies one host's git evidence to another host's same-id row", () => {
-    // STA-4343: a dirty remote row must not mark the local same-id row dirty
-    // (or vice versa) — the evidence index is keyed by host, not by id.
+    // Host-qualified evidence must never apply one host’s dirty state to another host’s same-ID row (STA-4343).
     const localRow = { ...deferredCandidate('a'), executionHostId: 'local' as const }
     const remoteEvidence = {
       ...makeFacetCandidate({

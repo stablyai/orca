@@ -1,31 +1,9 @@
-/**
- * Replay safety for `agent.launch`.
- *
- * A launch creates a workspace, an agent, or both. When its reply is lost, the caller cannot tell
- * "the host never saw it" from "the host ran it and the answer went missing" — and mobile retries a
- * lost create by design (`worktree-create-retry.ts`), so the retry is the ordinary case, not the
- * edge. Retrying without an operation id is how one tap becomes two agents in two workspaces.
- *
- * The fix is the ledger `agentSession.*` already runs on: the caller names the operation once, the
- * host records that name durably before doing anything, and every later arrival of that name gets
- * the recorded answer rather than a second agent. What this module adds is the launch-shaped parts
- * of that contract — the digest over what a launch DOES, and the child id its inner attach reserves
- * under.
- *
- * This is safety, not recovery. Nothing here probes for a surface a previous attempt may have left
- * behind, adopts one, or finishes an interrupted publication; an operation whose outcome is unknown
- * stays unknown and is refused.
- */
+/** Lost replies are retried, including mobile workspace creation: claim an operation ID durably before side effects, then replay its recorded answer. Unknown outcomes stay refused; this ledger neither adopts nor recovers orphaned surfaces. */
 
 import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
 import { parseAgentSessionOperationTimestamp } from './agent-session-host-authority'
 
-/**
- * The launch fields that decide what the call does. The operation id itself is excluded — it names
- * the operation, it is not part of it — and so is every mutable host setting: the route a launch
- * takes depends on the user's default surface, and folding that in would make an honest retry
- * conflict merely because the setting moved between the two attempts.
- */
+/** Digest launch behavior, excluding its operation ID and mutable host settings; changed defaults must not conflict with an honest retry. */
 export type AgentLaunchFingerprintInput = {
   agent: string
   target:
@@ -35,36 +13,20 @@ export type AgentLaunchFingerprintInput = {
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
-  /** In: a launch carrying `--model opus` is a different operation from one without, so a retry
-   *  that changed them must conflict rather than replay the first answer. `null` is a value here,
-   *  not an absence — "explicitly no arguments" differs from "use the settings default". */
+  /** Arguments change operation identity; null explicitly clears defaults and differs from absence. */
   agentArgs?: string | null
-  /** In: it decides both where the agent runs and, through the `tui_launch_command` downgrade,
-   *  which surface it gets. Two launches differing only in `cwd` are genuinely two operations. */
+  /** cwd changes both execution location and structured-to-terminal routing. */
   cwd?: string
-  /** In: it is baked into the pane's PTY env and names the tab the caller placed, so a retry that
-   *  reserved another pane must conflict rather than replay a key its placement cannot find. */
+  /** Pane identity enters the PTY env; another reservation must not replay an unreachable pane. */
   paneKey?: string
-  /** In: a retry that minted another session is a different request, since replaying would answer
-   *  with a conversation this caller did not mint. */
+  /** Another caller-minted session names a different launch. */
   sessionId?: string
   /** In: unlike the user's default surface, an explicit pick is what the call asks to run. */
   surface?: string
-  /**
-   * `launchSource` is deliberately absent, and this is the reasoned exclusion rather than an
-   * oversight: it is telemetry, so two launches differing only in which button produced them do the
-   * same thing, and folding it in would make an honest retry that got re-attributed conflict with
-   * its own original. That is the rule the mutable host settings above are excluded under — the
-   * digest covers what the call DOES — and the cost of leaving it out is only that a replay reports
-   * the first attempt's attribution, which is the truthful answer: one launch happened.
-   *
-   * `placement` and `presentation` are absent by the same rule: they say where the tab sits and whose
-   * view moves, not what runs, so a retry that moved them replays the first answer.
-   */
+  /** Exclude launchSource, placement and presentation: they change attribution/view, not execution. Replays truthfully retain the first launch's attribution. */
 }
 
-/** Host-computed, never accepted from the caller: a digest a client supplies is a digest a buggy
- *  client can make agree with anything. */
+/** Compute on the host; trusting a caller digest permits false matches. */
 export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput): string {
   return canonicalAgentSessionDigest({
     method: 'agent.launch',
@@ -84,18 +46,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
 
 const OPERATION_ID_ENTROPY_LENGTH = 32
 
-/**
- * The id the launch's inner `agentSession.attach` reserves under.
- *
- * The ledger keys a row on `(callerKey, operationId)` with no method in it, and a structured launch
- * reserves in that same ledger under the same caller. Forwarding the launch's own id would make the
- * attach meet the launch's row, disagree with its fingerprint, and refuse a conflict before
- * anything was created. Derived rather than random so the child of a given launch is always the
- * same id — a launch is claimed once, and a claim that could name a different child each time would
- * be ownership in name only.
- *
- * The launch's timestamp is kept so the child ages out on the same schedule as its parent.
- */
+/** Derive a stable child attach ID distinct from its parent: the ledger keys callerKey+operationId without method, so reusing the parent conflicts. Keep its timestamp for equal expiry. */
 export function deriveAgentLaunchChildOperationId(operationId: string): string | null {
   const timestamp = parseAgentSessionOperationTimestamp(operationId)
   if (timestamp === null) {

@@ -46,8 +46,7 @@ describe('DashboardPopoutRoot', () => {
     cleanup()
   })
 
-  // Why: this window has no App shell, so without the hooks the terminal
-  // preview's ownership listeners would never see a menu command at all.
+  // Without an App shell, these hooks alone translate menu IPC for preview ownership listeners.
   it('translates app-menu clipboard IPC into renderer ownership events', async () => {
     const onPaste = vi.fn()
     const onSelectionAction = vi.fn()

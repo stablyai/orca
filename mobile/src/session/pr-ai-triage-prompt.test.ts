@@ -34,8 +34,7 @@ describe('getBrokenChecks / hasBrokenChecks', () => {
 })
 
 describe('buildFixChecksPrompt', () => {
-  // The wrapper only renames fields onto buildFixBrokenChecksPrompt, so assert the
-  // mapping and nothing else; prompt wording is pinned by that builder's own tests.
+  // Assert wrapper field mapping here; the shared builder’s tests own prompt wording.
   it('maps mobile PR fields onto the shared prompt builder', () => {
     const prompt = buildFixChecksPrompt({
       prNumber: 42,
@@ -78,7 +77,7 @@ describe('buildResolveConflictsPrompt', () => {
     expect(prompt).toContain('origin/main')
     expect(prompt).toContain('"src/a.ts" (Conflict)')
     expect(prompt).toContain('Conflicted files reported by the pull request (2)')
-    expect(prompt).toContain('git reset --hard') // safety rule mentions it as forbidden
+    expect(prompt).toContain('git reset --hard')
   })
 
   it('handles a missing base ref and empty file list', () => {

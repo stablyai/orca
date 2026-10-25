@@ -63,11 +63,7 @@ const jsoncParserEsm = {
   }
 }
 
-/**
- * Where the bundle leaves the one-byte range, if anywhere. A single non-ASCII character makes V8 hold
- * the whole ~11 MB server source as a two-byte string (~21 MB); esbuild escapes strings itself but
- * not regex literals or tagged templates.
- */
+// One non-ASCII character makes V8 store the ~11MB bundle as ~21MB two-byte text; esbuild escapes strings but leaves regex/tagged-template literals.
 export function findNonAsciiSource(source) {
   let index = 0
   while (index < source.length && source.charCodeAt(index) < 0x80) {

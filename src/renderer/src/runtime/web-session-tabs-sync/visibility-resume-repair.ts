@@ -6,7 +6,6 @@ import {
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import type { VisibilityResumeBatch } from './visibility-resume-types'
 
-/** Write the tombstone + surviving-host replay a resume repair decided on, in one store patch. */
 export function applyVisibilityResumeRepairs(
   batch: VisibilityResumeBatch,
   operations: readonly WebSessionTabsSnapshotOperation[]

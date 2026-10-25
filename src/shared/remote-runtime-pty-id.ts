@@ -1,5 +1,4 @@
-// Why: shared so main can name the paired runtime a mirrored PTY belongs to;
-// the encoding lives here rather than in the renderer transport that mints it.
+// Share encoding outside renderer transport so main can identify mirrored PTY runtime owners.
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const REMOTE_PTY_OWNER_SEPARATOR = '@@'
 

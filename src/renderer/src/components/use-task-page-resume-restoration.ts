@@ -92,7 +92,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
 
-    // Why: settings/UI hydrate async; apply the restored Tasks context exactly once so later source/filter clicks stay local.
+    // Restore async-hydrated context once so later source/filter choices remain local.
     taskResumeAppliedRef.current = true
     setTaskResumeApplied(true)
   }, [
@@ -233,7 +233,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setLinearCustomViewsLoading
   ])
 
-  // Why: fetch the full Linear team list so the selector shows all teams, not just those with issues in the fetch window.
+  // Fetch all teams; the current issue window may contain only a subset.
   return model
 }
 export type TaskPageResumeRestorationModel = ReturnType<typeof useTaskPageResumeRestoration>

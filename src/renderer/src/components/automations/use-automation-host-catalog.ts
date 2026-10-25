@@ -46,14 +46,7 @@ import {
 import { useAutomationDesktopSshRegistrations } from './use-automation-desktop-ssh-registrations'
 import { useAutomationHostCatalogSourceState } from './use-automation-host-catalog-source-state'
 
-/**
- * Owns the per-host query controller and the two catalogs the page needs.
- *
- * There are deliberately two: the one applied to the controller is derived from
- * mirrored store state only, because applying a catalog advances generations and
- * cancels in-flight work, and a catalog derived from query results would do that
- * every time a query landed. The display catalog folds those results back in.
- */
+/** Keep query and display catalogs separate: apply mirrored membership to the controller, then fold query health into display without cancelling work on every cache commit. */
 
 export type AutomationHostCatalogView = {
   catalog: AutomationHostCatalog
@@ -66,11 +59,7 @@ export type AutomationHostCatalogView = {
   recover: (action: AutomationHostRecoveryAction, entry?: AutomationHostCatalogEntry | null) => void
   /** Manual refresh of every host in view, bypassing TTL where reachable. */
   refreshHosts: () => void
-  /**
-   * Invalidates the host a local write just landed on, without waiting for the
-   * authority's own event. The event still arrives and is harmless; what this
-   * removes is the round trip between the save returning and the list agreeing.
-   */
+  /** Invalidate written hosts immediately so the list reflects save without waiting for the authority event; a later duplicate event is harmless. */
   notifyAuthorityChange: (event: AutomationAuthorityChangeEvent) => void
 }
 
@@ -97,31 +86,23 @@ export function useAutomationHostCatalog(
     () => getHostDisplayLabelOverrides(settings).get('local') ?? getLocalExecutionHostLabel(),
     [settings]
   )
-  // Why a ref: the controller outlives every render, so its legacy-partition
-  // callback must read the latest repo tables, not the ones it was created with.
+  // The controller outlives renders; its partition callback needs current authority repo tables.
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
   const repoTablesRef = useRef(repoTables)
   repoTablesRef.current = repoTables
   const makeController = useCallback(
     () =>
       createAutomationHostQueryController({
-        // Scoped to the answering authority: another host's identically named repo
-        // is not evidence about this one, and its absence is not evidence either.
+        // Use the answering authority’s repo evidence; colliding IDs or absences on another host prove nothing.
         legacyPartitionContext: (authority) =>
           automationAuthorityPartitionContext(repoTablesRef.current, authority),
-        // Wired by the lifecycle effect below instead: a controller built during
-        // render must hold no window subscription, or StrictMode's doubled
-        // initializer leaks a live listener per mount.
+        // Let the lifecycle effect subscribe; render-time controllers would leak listeners under StrictMode’s doubled initializer.
         eventTarget: null
       }),
     []
   )
   const [controller, setController] = useState<AutomationHostQueryController>(makeController)
-  // Create-in-render, dispose-in-cleanup is asymmetric under StrictMode's
-  // simulated unmount: the cleanup disposes the only controller, and a disposed
-  // controller silently drops every write invalidation — the list then never
-  // shows a create until the app reloads. The effect owns the whole lifecycle:
-  // it replaces a disposed controller and unsubscribes before disposing.
+  // StrictMode cleanup disposes the first controller; the effect replaces it and owns subscribe/unsubscribe/dispose so later writes still refresh.
   useEffect(() => {
     if (controller.isDisposed()) {
       setController(makeController())
@@ -152,8 +133,7 @@ export function useAutomationHostCatalog(
     [automationHostFilter, sourceState.desktopAliasEnvironmentId]
   )
   const selectedStableKey = automationHostFilterStableKey(hostFilter)
-  // The saved selection references itself: without this the catalog would omit a
-  // removed host the user is still filtered to, and absence would read as removal.
+  // Include the persisted selection so a removed-but-selected host remains projected until resolution decides its fate.
   const referencedStableKeys = useMemo(
     () =>
       new Set([
@@ -176,10 +156,7 @@ export function useAutomationHostCatalog(
     [cacheVersion, desktopLabel, orphanCount, referencedStableKeys, sourceState]
   )
 
-  // Why a signature rather than the catalog object: health and label changes
-  // re-derive the catalog but must not re-apply it, since applying cancels work.
-  // The generation fingerprint is embedded whole rather than summarised, so a
-  // change the commit fence would reject can never fail to re-apply here.
+  // Apply by complete generation/scheduler signature, not catalog identity; label/health changes must not cancel work.
   const applySignature = useMemo(
     () =>
       [
@@ -215,9 +192,7 @@ export function useAutomationHostCatalog(
       resolveAutomationHostFilter({
         filter: hostFilter,
         catalog,
-        // Deliberately not `referencedStableKeys`: that set includes the saved
-        // selection so the catalog still projects it, and a selection that
-        // referenced itself could never be dropped when its host really goes.
+        // Exclude the selection’s self-reference here or it could prevent its positively removed host from ever being dropped.
         referencedStableKeys: new Set([
           ...(options.referencedStableKeys ?? []),
           ...catalog.entries

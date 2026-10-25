@@ -35,8 +35,7 @@ export function resolveMobileNewWorkspaceDialogRepoId({
   activeRepoId?: string | null
   focusedHostScope?: ExecutionHostScope | null
 }): string {
-  // Why: Metro cannot bundle runtime imports from the root shared tree today.
-  // Keep this mirror in sync with src/shared/new-workspace-dialog-repo.ts.
+  // Metro cannot bundle this root runtime import; mirror src/shared/new-workspace-dialog-repo.ts.
   const focusedHostRepo =
     focusedHostScope && focusedHostScope !== 'all'
       ? eligibleRepos.find((repo) => getMobileRepoExecutionHostId(repo) === focusedHostScope)
@@ -52,7 +51,7 @@ export function resolveMobileNewWorkspaceDialogRepoId({
   return resolvedRepo?.id ?? ''
 }
 
-/** Whether two listed repos are the same one: a repo id names one repo per host, not overall. */
+// Repo ids are unique per host, not globally.
 export function isSameMobileWorkspaceRepo(
   a: MobileNewWorkspaceDialogRepo,
   b: MobileNewWorkspaceDialogRepo

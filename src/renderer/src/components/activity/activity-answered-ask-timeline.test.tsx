@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A settled parent whose subagent asks and is answered. Its done keeps the turn's own end time,
-// which the blocked ask postdates, so the Activity row must read the pane's row for its state and
-// order the timeline by when each switch was seen, not by the states' own times.
+// An answered subagent ask restores its parent’s older turn-end timestamp. Order switches by observation time, but read unread/state from the pane’s current turn.
 
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -174,7 +172,6 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     const row = thread(renderActivity())
     expect(activityThreadStatusId(row)).toBe('done')
     expect(activityThreadRowCopy(row).needsAttention).toBe(false)
-    // Newest first: the answer's done, the ask, then the turn's original done.
     expect(row.events.map((event) => event.state)).toEqual(['done', 'blocked', 'done'])
     expect(row.events.map((event) => [event.state, event.timestamp, event.observedAt])).toEqual([
       ['done', SETTLED, ANSWERED],
@@ -206,8 +203,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
       emit({ type: 'status', session: summary({ updatedAt: askedAt + 200 }) })
     }
 
-    // Every done repeats the turn's end, so only when each was seen keeps them apart and in order;
-    // the oldest of the six falls to the per-pane cap.
+    // Repeated done events share a turn end; observation times distinguish/order them before the per-pane cap.
     expect(thread(renderActivity()).events.map((event) => [event.state, event.observedAt])).toEqual(
       [
         ['done', ASKED + 1_000],

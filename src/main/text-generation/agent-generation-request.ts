@@ -82,9 +82,7 @@ export async function runGenerationRequest(input: {
       result = await execute(retry)
     }
   }
-  // Why: only a custom command runs a raw model whose chat template can swallow
-  // the opening think tag; a built-in agent's message may just mention the tag.
-  // PR fields are JSON, so they strip only when parsing fails instead.
+  // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.
   if (
     !result.success ||
     !isCustomAgentId(input.params.agentId) ||

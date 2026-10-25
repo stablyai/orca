@@ -1,6 +1,4 @@
-// Layout-owner build: what the next startup reconnects, derived by main from its own layout, its
-// terminal records and its SSH connections, never taken from a window's save. The rules are the
-// window's (buildTerminalSessionData, buildActiveConnectionIdsAtShutdown), read from main's state.
+// Derive shutdown reconnect facts from main-owned layout, terminal records and SSH connections, matching window capture rules without depending on window saves.
 
 import { isPaneSleepRecord } from '../../../../shared/agent-session-resume'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'

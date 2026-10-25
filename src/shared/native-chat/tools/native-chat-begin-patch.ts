@@ -8,14 +8,8 @@ const MOVE_HEADER = /^\*\*\* Move to: (.+)$/
 /** Envelope structure that carries no file content of its own. */
 const CONTROL_LINE = /^\*\*\* (?:End of File|Environment ID:)/
 
-/** The envelope reaches a command tool as one of its patch or command
- *  arguments, either whole or as one word of the argument vector it runs.
- *  Recover its text. Callers must gate this on the tool being one that runs a
- *  patch: a file's own contents may quote an envelope.
- *
- *  `requireApplyCommand` is for a general command tool, where the envelope
- *  proves nothing on its own — a command writing documentation quotes one
- *  without applying it, and the command must say it is applying it. */
+/** Recover envelopes from patch/command arguments, including argv words. Caller must restrict eligible tools: file contents can quote patches.
+ * General command tools requireApplyCommand because a quoted envelope alone proves no edit occurred. */
 export function unwrapBeginPatch(
   input: unknown,
   options?: { requireApplyCommand?: boolean }
@@ -30,26 +24,18 @@ export function unwrapBeginPatch(
   }
   const end = source.indexOf(END, start)
   if (end === -1) {
-    // Without the closing marker there is nothing separating the patch body from
-    // whatever the command line continues with, and trailing shell syntax would
-    // render as file content the agent never wrote.
+    // Require the end marker so trailing shell syntax cannot become fictitious file content.
     return null
   }
   return source.slice(start, end + END.length)
 }
 
-/** The arguments that carry a patch or the command line that applies one. Only
- *  these are searched: any other value is data the tool operates on, and a file
- *  whose own contents quote an envelope would otherwise be read as a patch
- *  against some other file entirely. */
+/** Search only patch/command arguments; other values may be file data quoting an unrelated patch. */
 const ENVELOPE_ARGUMENTS = ['input', 'command', 'patch', 'arguments', 'script'] as const
-/** What a command tool runs to apply an envelope, as opposed to quoting one.
- *  Both spellings the runner accepts, since either one really applies it. */
+/** Accepted apply-command spellings distinguish applying from quoting an envelope. */
 const APPLY_COMMAND = /apply_?patch/
 
-/** The call payload may itself be a string holding JSON. Decoding it here, in
- *  the one consumer that needs its structure, keeps every other reader of the
- *  call input seeing exactly what the provider sent. */
+/** Decode JSON-string payloads only in this structural consumer; other readers retain provider input unchanged. */
 function envelopeSource(input: unknown, requireApplyCommand: boolean): string | null {
   if (typeof input === 'string') {
     const record = jsonRecord(input)
@@ -80,8 +66,7 @@ function jsonRecord(value: string): Record<string, unknown> | null {
   }
 }
 
-/** A command tool's argument is a vector, so the envelope sits one level in and
- *  the words that apply it may be a different element than the envelope. */
+/** An argv element may carry the envelope while another names the apply command. */
 function envelopeArgument(
   record: Record<string, unknown>,
   requireApplyCommand: boolean
@@ -110,8 +95,7 @@ export function editFilesFromBeginPatch(envelope: string): NativeChatEditFile[] 
   const sections: { kind: 'Add' | 'Update' | 'Delete'; path: string; body: string[] }[] = []
   const moves = new Map<number, string>()
 
-  // Split on both newline forms once, so every marker below can be matched
-  // exactly rather than each pattern having to tolerate a trailing `\r`.
+  // Split CRLF once so marker matching needs no trailing-CR allowances.
   for (const raw of envelope.split(/\r?\n/)) {
     const header = FILE_HEADER.exec(raw)
     if (header) {
@@ -154,10 +138,7 @@ export function editFilesFromBeginPatch(envelope: string): NativeChatEditFile[] 
         })
       ]
     }
-    // The first chunk of an update may carry no hunk header at all, and a
-    // section may carry no body either. The envelope named the file, so it is
-    // reported with whatever rows it has rather than dropped from a multi-file
-    // envelope with nothing to say it went missing.
+    // Keep files named by empty or headerless sections; silently dropping them would misreport a multi-file edit.
     const parsed = editLinesFromUnifiedPatch(body, { implicitFirstHunk: true })
     return [
       finalizeEditFile({

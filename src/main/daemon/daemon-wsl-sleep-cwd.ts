@@ -1,16 +1,11 @@
-/**
- * The folder a bridge WSL pane's shell is in when it sleeps. Bash on the bridge reports no folder
- * (no OSC 7), so without this the final checkpoint keeps the spawn folder and wake reopens the
- * pane at the workspace root. Windows only; any failure keeps that old behaviour.
- */
+/** Bridge WSL bash lacks OSC 7; read its shell folder before Sleep so wake avoids the spawn folder. Failures retain the old fallback. */
 import { toWindowsWslUncPath } from '../../shared/wsl-paths'
 import {
   readWslGuestPaneProcesses,
   readWslGuestPaneShellCwd
 } from '../wsl/wsl-guest-pane-processes'
 
-// Sleep waits on this; a distro that does not answer must not eat the teardown budget, which
-// the final checkpoint and the kill still need.
+// Reserve teardown time for the final checkpoint and kill when a distro does not answer.
 const READ_BUDGET_MS = 3_000
 const READ_SHARE_OF_DEADLINE = 0.25
 

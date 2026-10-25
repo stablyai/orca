@@ -6,18 +6,12 @@ import { useAllHostClients } from '../transport/use-all-host-clients'
 import { NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from './push-registration'
 
 export type RemotePushHostSupport = {
-  /** At least one paired host advertises `notifications.remote-push.v1`. */
   supported: boolean
-  /** Whether the answer above is final rather than "nobody has replied yet". */
+  // False while a connected host’s capability remains unanswered.
   resolved: boolean
 }
 
-/**
- * Whether background push can be offered at all. The desktop advertises the
- * capability in `status.get`, so the answer needs a connected host — until one
- * replies the screen must stay silent rather than tell someone to update a
- * desktop that is already current.
- */
+// Wait for status replies before offering push or an update prompt; silence cannot prove a current desktop lacks support.
 export function useRemotePushCapableHosts(): RemotePushHostSupport {
   const [hostIds, setHostIds] = useState<string[]>([])
   const [hostsLoaded, setHostsLoaded] = useState(false)
@@ -33,8 +27,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
           setHostsLoaded(true)
         }
       })
-      // Why nothing on failure: an unread catalog marked loaded resolves the answer as
-      // "no paired host supports push", which tells the user to update a current desktop.
+      // Unread catalog is unresolved, not evidence every paired desktop lacks push.
       .catch(() => {})
     return () => {
       cancelled = true
@@ -43,8 +36,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
 
   const clients = useAllHostClients(hostIds)
 
-  // Why pruned rather than left: an answer for a host that is no longer paired is a
-  // vote from a desktop this phone cannot receive a push from.
+  // Remove votes from unpaired hosts because their pushes cannot reach this phone.
   useEffect(() => {
     setSupportedByHostId((previous) => {
       const kept = Object.entries(previous).filter(([hostId]) => hostIds.includes(hostId))
@@ -52,9 +44,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
     })
   }, [hostIds])
 
-  // Why diffed by client identity rather than restarted on every `clients` value:
-  // useAllHostClients rebuilds the array on each connection tick, so a plain
-  // dependency tears down and re-runs every host's probe whenever any host moves.
+  // Diff client identities: useAllHostClients rebuilds its array on every tick, which must not restart unchanged probes.
   useEffect(() => {
     const connected = new Map(
       clients
@@ -98,9 +88,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
   const answeredHostIds = hostIds.filter((hostId) => hostId in supportedByHostId)
   return {
     supported: answeredHostIds.some((hostId) => supportedByHostId[hostId]),
-    // A connected host that has not answered yet is exactly the case the silence is
-    // for, so one outstanding probe holds the whole section back. Disconnected hosts
-    // do not: their earlier answer stands, and one that never answered never will.
+    // Outstanding connected probes keep the section unresolved; disconnected hosts retain prior answers without waiting forever for missing ones.
     resolved:
       (hostsLoaded && hostIds.length === 0) ||
       (answeredHostIds.length > 0 &&

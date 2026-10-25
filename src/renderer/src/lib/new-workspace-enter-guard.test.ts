@@ -76,8 +76,7 @@ describe('shouldAllowComposerEnterSubmitTarget', () => {
   })
 
   it('allows ancestor targets after a source selection drops focus', () => {
-    // Why: post-selection focus can land on body, html, or the DialogContent
-    // root — any ancestor wrapping the composer is a legitimate fallback.
+    // Post-selection focus may land on any composer ancestor, including body/html/dialog root.
     const composer = new FakeHTMLElement()
     const dialogContent = new FakeHTMLElement()
     const body = new FakeHTMLElement()

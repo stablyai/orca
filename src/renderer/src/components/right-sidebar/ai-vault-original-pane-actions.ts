@@ -53,8 +53,7 @@ export function useAiVaultOriginalPaneActions(): {
     },
     [originalPaneLookupState.unifiedTabsByWorktree]
   )
-  // Why: loading, filtered, or collapsed views may render no session rows.
-  // Build once on the first actual lookup, then share it across visible rows.
+  // Build on first lookup because loading, filtered, or collapsed views may render no rows.
   const getOriginalPaneIndex = useMemo(
     () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
     [originalPaneLookupState]

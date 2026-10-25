@@ -1,5 +1,4 @@
-// Long-lived dev server for component fixtures: Vite + one headless Chromium.
-// Started (detached) and reused by fixtures-shot.mjs and the fixtures MCP server.
+// Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
@@ -121,8 +120,7 @@ async function routeFixtureRequest(req, res, runner, stop) {
   }
 }
 
-// Why: with HMR off Vite never re-expands import.meta.glob, so a new or deleted
-// fixture file must invalidate the registry module that owns the glob.
+// With HMR off, fixture additions/deletions must invalidate the registry's import.meta.glob.
 function invalidateFixtureRegistry(server) {
   const registryModules = server.moduleGraph.getModulesByFile(fixtureRegistryPath)
   for (const module of registryModules ?? []) {

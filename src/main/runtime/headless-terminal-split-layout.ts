@@ -7,14 +7,7 @@ import {
   removeLayoutLeaf
 } from '../../shared/workspace-layout/terminal-pane-tree'
 
-/**
- * Insert a newly split-off leaf into a terminal tab's persisted layout tree.
- *
- * Why: a headless ("Orca server") split only updated the live session snapshot,
- * never the persisted workspace-session layout, so a later snapshot rebuild
- * re-derived from the stale single-leaf layout and collapsed the split. This
- * builds the durable post-split layout so the split survives rebuilds.
- */
+/** Persist headless splits so snapshot rebuilds cannot collapse them to a stale single pane. */
 export function buildHeadlessTerminalSplitLayout(
   existing: TerminalLayoutSnapshot | undefined,
   args: {
@@ -24,7 +17,7 @@ export function buildHeadlessTerminalSplitLayout(
     direction: 'horizontal' | 'vertical'
   }
 ): TerminalLayoutSnapshot {
-  // Why: the stored tree may already hold the new leaf; it is placed again beside its source.
+  // Remove an existing copy before replacing the leaf beside its source.
   const currentRoot = existing?.root ? removeLayoutLeaf(existing.root, args.leafId) : null
   const existingRoot: TerminalPaneLayoutNode = currentRoot ?? {
     type: 'leaf',
@@ -49,7 +42,6 @@ export function buildHeadlessTerminalSplitLayout(
   }
 }
 
-/** Count the leaves in a layout tree (a split has ≥2; a single pane has 1). */
 export function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
     return 0

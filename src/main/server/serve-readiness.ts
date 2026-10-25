@@ -26,13 +26,7 @@ export type ServeReadiness = {
   advertisedEndpoint: string | null
   managedWslCliReconciliation: 'pending' | 'settled' | 'failed'
   pairing: ServePairingReadiness
-  /**
-   * Build identity, Node ABI and the cross-process terminal-daemon self-test.
-   *
-   * Optional because the Electron `--serve` host does not publish one yet; readers must
-   * treat its absence as "not reported", never as healthy. Additive, so an older client
-   * parsing this payload is unaffected.
-   */
+  /** Optional for older/Electron hosts: absence means unreported, never healthy. Carries build identity, Node ABI and terminal-daemon self-test. */
   health?: OrcadHealth
 }
 

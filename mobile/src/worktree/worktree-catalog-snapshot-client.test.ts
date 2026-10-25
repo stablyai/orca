@@ -184,7 +184,6 @@ describe('WorktreeCatalogSnapshotClient', () => {
     )
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    // Host A's response is still in flight when the screen switches to host B.
     const stale = await snapshots.fetch(firstClient, 'host-1')
     admitFetched(snapshots, await snapshots.fetch(secondClient, 'host-2'))
     expect(admitFetched(snapshots, stale)).toBeNull()
@@ -196,8 +195,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     })
   })
 
-  // Why (STA-3123): a failed worktree.ps rendered as "0 worktrees"; callers need the
-  // failure code to show an error state instead of an empty host.
+  // Catalog failure must remain distinct from an empty host (STA-3123).
   it('surfaces the RPC error code on failure and keeps the admitted token', async () => {
     const responses: unknown[] = [
       { id: 'request', ok: true, result: { worktrees: [], snapshotId: 'snapshot-1' } },
@@ -221,9 +219,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     })
   })
 
-  // Why this belongs here: `use-host-worktree-catalog.ts:125` keys its `invalid_response` state on
-  // the error *class*, and no adapter mounts that screen, so this is the only place the class is
-  // pinned. Deleting the reader leaves a host-payload defect reported to the user as a network one.
+  // The screen keys invalid_response on the error class; pin it here so host payload defects cannot become network failures.
   it('rejects with RpcIncompatibleReplyError when the host answers a result the reader refuses', async () => {
     const client = clientWithResults('all')
     const snapshots = new WorktreeCatalogSnapshotClient()

@@ -1,5 +1,4 @@
-// Headless `orca serve` never opens a window. Hook-derived "<Agent> ready" titles used to be
-// driven from the window's listener and dropped without a window, so Hermes never settled.
+// Headless serve has no window listener; hook-derived ready titles must still settle the runtime tracker.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +57,7 @@ describe('synthetic agent titles without a window', () => {
     expect(hooks.ingest.mock.calls[0][1]).toContain('Hermes ready')
   })
 
-  // A ready title left in the tracker outranks fresh working status, so tui-idle would pass mid-turn.
+  // Stale ready titles outrank new working status and falsely satisfy tui-idle mid-turn.
   it('replaces the ready title with a working one when the next turn starts', () => {
     driveSyntheticTitleFromHookStatus(hermesStatus('done'))
     driveSyntheticTitleFromHookStatus(hermesStatus('working'))

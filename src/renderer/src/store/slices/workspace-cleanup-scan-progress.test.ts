@@ -518,7 +518,6 @@ describe('workspace cleanup scan progress', () => {
     terminalProbe.resolve(false)
     await secondScan
     firstPending.resolve({ scannedAt: NOW - 1, candidates: [firstCandidate], errors: [] })
-    // Why: the first fleet scan was superseded when the second started.
     await expect(firstScan).rejects.toBeInstanceOf(WorkspaceCleanupScanSupersededError)
 
     expect(
@@ -610,8 +609,7 @@ describe('workspace cleanup scan progress', () => {
     await second
     expect(store.getState().workspaceCleanupScan).toMatchObject(secondResult)
 
-    // Why: the first fleet scan was superseded when the second started — its
-    // late settlement must neither surface nor clobber the newer result.
+    // Superseded scan settlement must neither surface nor overwrite the newer result.
     firstPending.resolve(firstResult)
     await expect(first).rejects.toBeInstanceOf(WorkspaceCleanupScanSupersededError)
     expect(store.getState().workspaceCleanupScan).toMatchObject(secondResult)
@@ -648,9 +646,7 @@ describe('workspace cleanup scan progress', () => {
     const second = store.getState().scanWorkspaceCleanup({ skipGitWorktreeIds: ['second'] })
     const firstAgain = store.getState().scanWorkspaceCleanup({ skipGitWorktreeIds: ['first'] })
 
-    // Why: each new fleet scan supersedes the previous one — only the latest
-    // request may run, and a re-issued key starts fresh rather than joining
-    // the cancelled scan.
+    // Reissued keys start fresh; they cannot join a superseded/cancelled fleet scan.
     expect(scan).toHaveBeenCalledTimes(3)
     firstPending.resolve({ scannedAt: NOW, candidates: [], errors: [] })
     secondPending.resolve({ scannedAt: NOW, candidates: [], errors: [] })

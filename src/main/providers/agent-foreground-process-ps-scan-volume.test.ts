@@ -1,13 +1,4 @@
-// Regression guard for issue #6288 (CPU half): bound the volume of full
-// process-table `ps` scans driven by agent foreground-process inspection.
-//
-// Drives the REAL local call site (`resolveAgentForegroundProcess`) under the
-// documented agent-completion cadence (ACTIVE_POLL_INTERVAL_MS = 750ms in
-// agent-completion-coordinator.ts) across several concurrently-inspecting agent
-// panes, and counts how many full process-table scans actually
-// spawn. Pre-fix the call site forked one `ps` per pane per tick; with the
-// shared snapshot cache the scans collapse to ~one per tick regardless of pane
-// count, while each pane still resolves the same foreground identity.
+// #6288: at the 750ms completion cadence, concurrent panes must share a scan and retain their own agent identity.
 import type * as FsPromises from 'node:fs/promises'
 import type * as DarwinTerminalNames from '../../shared/darwin-terminal-names'
 import type * as FullReader from '../../shared/process-table-snapshot-reader'
@@ -43,15 +34,13 @@ let fullReader: typeof FullReader
 let foreground: typeof Foreground
 
 const ACTIVE_POLL_INTERVAL_MS = 750 // mirrors agent-completion-coordinator.ts
-const PANE_COUNT = 6 // reporter saw it with "only three projects" -> several agent panes
+const PANE_COUNT = 6
 const WINDOW_SECONDS = 30
 const TICKS = Math.floor((WINDOW_SECONDS * 1000) / ACTIVE_POLL_INTERVAL_MS)
 
 const shellPid = (pane: number): number => 100 + pane * 1000
 
-// A real `ps` returns the whole system, so one shared snapshot must contain
-// every pane's shell + foreground codex child. Each pane resolves its own
-// agent from the single scan.
+// The shared system snapshot must contain every pane and its agent.
 function processRows(): PsFixtureRow[] {
   return Array.from({ length: PANE_COUNT }, (_, pane) => {
     const shell = shellPid(pane)
@@ -140,14 +129,11 @@ describe.each(['darwin', 'linux'])('#6288 foreground ps scan volume (%s)', (host
           foreground.resolveAgentForegroundProcess(shellPid(pane), 'node')
         )
       )
-      // Caching must not change the answer: every pane still resolves the agent.
       expect(resolved.every((name) => name === 'codex')).toBe(true)
     }
 
     const totalInspections = PANE_COUNT * TICKS
-    // Pre-fix this equals totalInspections (one scan per inspection). With the
-    // shared cache, concurrent panes within a tick share one scan and the 500ms
-    // TTL forces a fresh scan each new 750ms tick -> ~one scan per tick.
+    // The 500ms TTL expires each 750ms tick; concurrent panes should still share one scan.
     expect(psScanCount.value).toBe(TICKS)
     expect(psScanCount.value).toBeLessThan(totalInspections / 2)
   })

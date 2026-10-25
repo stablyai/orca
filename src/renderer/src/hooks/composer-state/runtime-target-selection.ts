@@ -154,7 +154,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#22204).
+  // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
       return { kind: 'withheld', reason: 'Select a project first.' }
@@ -188,7 +188,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     worktreesByRepo
   ])
 
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
+  // SSH deploys the shim as orca; Linux’s local orca-ide rename must not affect remote commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
 
   const selectedRepoStartupShell = resolveExecutionHostAgentStartupShell(
@@ -244,12 +244,12 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [selectedRepo]
   )
 
-  // Why: key on repo id, not the repo object — updateRepo replaces it by reference and would re-run this effect, wiping the user's chosen recipe.
+  // Key recipes by repo ID; updateRepo object replacement must not erase the user’s selection.
   const selectedRecipeRepoId = selectedRepo?.id ?? null
 
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
 
-  // Why: gate recipe probing on the experimental toggle, since discovery can surface setup errors for a hidden feature.
+  // Only probe enabled experiments or hidden features can raise setup errors.
   const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
 
   const {

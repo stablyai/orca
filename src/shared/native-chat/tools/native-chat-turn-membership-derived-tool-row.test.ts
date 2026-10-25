@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from './agent-session-journal-types'
+  AgentJournalRenderItem
+} from '../../agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { foldToolMessages } from './native-chat-tool-fold'
-import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
-import { nativeChatTurnMembership } from './native-chat-turn-membership'
-import type { NativeChatMessage, NativeChatRole } from './native-chat-types'
-import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { nativeChatRowsInDrawOrder } from '../../native-chat-turn-grouping'
+import { nativeChatTurnMembership } from '../../native-chat-turn-membership'
+import type { NativeChatMessage, NativeChatRole } from '../../native-chat-types'
+import { projectStructuredItemsToNativeChat } from '../../structured-agent-session-projection'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 const inTurn = (turnItemId: string): AgentJournalTurnScope => ({ kind: 'turn', turnItemId })

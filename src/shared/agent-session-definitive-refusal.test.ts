@@ -21,15 +21,14 @@ describe('definitive agent-session create refusals', () => {
   })
 
   it('does not answer the durable-settlement question, which disagrees on the one code that matters', () => {
-    // Guards the reuse this allowlist exists to avoid: settlement state calls the definitive
-    // refusal pending-admission, which would rule out the fallback it is meant to allow.
+    // Settlement calls this pending-admission; reusing that classifier would wrongly prevent fallback.
     expect(agentSessionRefusalOperationState('structured_agent_session_unsupported')).toBe(
       'pending-admission'
     )
     expect(isDefinitiveAgentSessionCreateRefusal('structured_agent_session_unsupported')).toBe(true)
   })
 
-  // Pins the RPC half (round-2 S5): transport and client-minted codes never allow a fallback.
+  // Transport/client-minted codes cannot authorize fallback.
   it.each([
     'runtime_error',
     'timeout',

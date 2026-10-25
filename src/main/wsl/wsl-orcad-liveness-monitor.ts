@@ -1,4 +1,3 @@
-/** The supervisor's timers, power-resume wake, holder re-ensure and held watch. */
 import type {
   Supervised,
   WslOrcadLivenessDependencies,

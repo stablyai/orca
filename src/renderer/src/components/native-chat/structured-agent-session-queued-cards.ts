@@ -1,5 +1,4 @@
-// What the queued-message cards above the composer show, derived per publish —
-// the wire carries no hold label (§ labels are client policy, not host state).
+// Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
@@ -15,24 +14,20 @@ import {
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
 
-/** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
   | 'turn'
-  /** The whole queue is paused: the header row says why and offers Resume, so the card makes
-   *  no promise about when it sends — not even after an answer, which does not drain it. */
+  /** The header owns queue-wide pause wording; answering a prompt does not resume draining. */
   | 'queue-paused'
   | 'paused'
   | 'behind-returned'
   | 'returned'
-  /** On its way to the host, which holds no card for it yet: it reads as sending, and nothing
-   *  can act on it until the host's card replaces it under the same id. */
+  /** Disable actions until the host replaces this sending card under the same id. */
   | 'sending'
 
 export type QueuedMessageCard = {
   messageId: string
   position: number
-  /** The draft's text blocks joined. */
   text: string
   /** The draft's images, which an edit of its text keeps. */
   images?: readonly NativeChatImageRefBlock[]
@@ -46,7 +41,6 @@ export type QueuedMessageCard = {
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
-  /** Another agent's card: who sent it. */
   from?: AgentMessageSource
 }
 
@@ -61,13 +55,7 @@ function queuedMessageCardImages(
   return images.length > 0 ? { images } : {}
 }
 
-/**
- * Cards in queue order. A waiting card is hidden once a submission hands it off
- * (`queuedMessageId`) and that hand-off is live: on a multi-page catch-up the shrunk
- * list rides only the final page, so the bubble and the card would otherwise briefly
- * coexist. A rejected hand-off is exactly what sent the draft back, so it hides
- * nothing. Presentation only — no durable state. Returned cards never hide.
- */
+/** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
@@ -116,8 +104,7 @@ export function projectQueuedMessageCards(
   })
 }
 
-/** A command card waits in line: a later send goes behind it, even with follow-ups off. A card
- *  held on its own (kept, couldn't send) is skipped by the queue, so nothing is behind it. */
+/** Later sends queue behind commands even with follow-ups off; individually held cards do not block them. */
 export function commandCardWaiting(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined
 ): boolean {
@@ -127,8 +114,7 @@ export function commandCardWaiting(
   )
 }
 
-/** The pause the header row names, while it holds a card. A pause over cards Resume would not
- *  send (returned, held on their own, or behind a returned one) offers nothing to press. */
+/** Offer Resume only while the queue pause holds a card it could actually send. */
 export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
   queuePause: AgentSessionQueuePause | null
@@ -136,8 +122,7 @@ export function queuedMessagesQueuePause(
   return cards.some((card) => card.hold === 'queue-paused') ? queuePause : null
 }
 
-/** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
- *  returned is not waiting on the turn, so its action is plainly Send. A command never steers. */
+/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
@@ -150,7 +135,6 @@ export function newestSteerableQueuedMessageCard(
   return newest && !newest.command && newest.hold !== 'sending' ? newest : null
 }
 
-/** A queue send still on its way, as the card it is about to become. */
 export function sendingQueuedMessageCards(
   entries: readonly StructuredAgentSessionPendingSend[]
 ): QueuedMessageCard[] {
@@ -165,11 +149,7 @@ export function sendingQueuedMessageCards(
   }))
 }
 
-/**
- * The sends the transcript draws as pending bubbles. One the host holds as a card (same id) is a
- * card, and so is one asking to be queued while the agent works, which would otherwise paint in the
- * transcript until its card appears. A recorded one stays drawn until its row arrives.
- */
+/** Host-owned cards and active queue requests stay out of transcript echoes; recorded sends remain until their row arrives. */
 export function pendingSendsOutsideQueuedCards<
   Send extends { clientMessageId: string; delivery?: 'queue-if-active' }
 >(pending: readonly Send[], heldIds: readonly string[], isWorking: boolean): readonly Send[] {
@@ -181,7 +161,6 @@ export function pendingSendsOutsideQueuedCards<
   return next.length === pending.length ? pending : next
 }
 
-/** Queue sends without a host card or submission yet, drawn as sending cards. */
 export function pendingQueueSendsOnTheirWay(
   pending: readonly StructuredAgentSessionPendingSend[],
   heldIds: readonly string[],

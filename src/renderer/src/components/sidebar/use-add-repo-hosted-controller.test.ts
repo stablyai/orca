@@ -64,9 +64,7 @@ describe('useAddRepoHostedController', () => {
       onOpenChange,
       onProjectAdded: vi.fn()
     })
-    // Why: folder/non-git outcomes navigate (folder-workspace activation or
-    // the confirm-non-git-folder store modal); leaving the composer open
-    // would hide that navigation behind a stale project selection.
+    // Folder handoffs navigate away, so the composer must not remain above the new surface.
     closeForFolderHandoff()
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
@@ -86,8 +84,7 @@ describe('useAddRepoHostedController', () => {
     await finishProjectAdd?.('repo-1', 'local_folder_picker')
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedRepo')
     expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
-    // Why: closing before selection keeps the composer visible under the
-    // dialog's close animation while the new project lands in the picker.
+    // Close the nested dialog before selecting the project so its animation reveals the composer.
     expect(order).toEqual(['close', 'added'])
   })
   it.each([true, false])(

@@ -1,9 +1,4 @@
-/**
- * Which local projects a move into a distro's host may take (mover design, section 1): a repo or
- * folder workspace on host `local` whose every path is a UNC path of that distro, never through a
- * Windows drive mount. Anything that touches the distro but breaks the rule is refused with a
- * reason, so the preview can say why instead of silently leaving it behind.
- */
+// Move local repos/folders only when every path stays in one distro outside Windows drive mounts.
 import { posix } from 'node:path'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
@@ -14,12 +9,8 @@ import { isDrvfsLinuxPath, resolveWslRepoWorktreeBasePath } from '../../../share
 import { wslUncPathToLinux } from './wsl-move-path-rewriter'
 
 export type WslMoveScopeRefusal =
-  /** Its folder sits on a Windows drive reached through the distro; it stays a Windows project. */
-  | 'windows-drive'
-  /** Some of its paths are in another distro or on Windows. */
-  | 'mixed-locations'
-  /** It already runs on another host. */
-  | 'not-local'
+  /** Distro access does not make Windows-drive projects Linux-owned. */
+  'windows-drive' | 'mixed-locations' | 'not-local'
 
 export type WslMoveScope = {
   repoIds: string[]
@@ -37,7 +28,7 @@ export function collectWslMoveScope(state: WslMoveScopeState, distro: string): W
   const scope: WslMoveScope = { repoIds: [], folderWorkspaceIds: [], refused: [] }
   for (const repo of state.repos) {
     const paths = repoPaths(repo)
-    // A repo outside the distro that keeps any path inside it is refused, not skipped.
+    // Partly in-distro repos must refuse visibly rather than disappear from the preview.
     if (!paths.some((path) => wslUncPathToLinux(path, distro) !== null)) {
       continue
     }
@@ -56,7 +47,7 @@ export function collectWslMoveScope(state: WslMoveScopeState, distro: string): W
     if (wslUncPathToLinux(workspace.folderPath, distro) === null) {
       continue
     }
-    // This row alone: another host may hold a folder workspace with the same id.
+    // Isolate this row: other hosts may reuse the same folder ID.
     const remote =
       resolveFolderWorkspaceHost({ ...hostState, folderWorkspaces: [workspace] }, workspace.id)
         .kind !== 'local'
@@ -70,14 +61,13 @@ export function collectWslMoveScope(state: WslMoveScopeState, distro: string): W
   return scope
 }
 
-/** Every absolute path a repo row keeps; each must stay in the distro after the move. */
 function repoPaths(repo: Repo): string[] {
   const base = repo.worktreeBasePath
     ? resolveWslRepoWorktreeBasePath(repo.path, repo.worktreeBasePath)
     : undefined
   return [
     repo.path,
-    // A relative base stays beside the repo; it is checked once resolved against it.
+    // Resolve relative bases before checking distro ownership.
     ...(base ? [isRelative(base) ? posixJoinUnc(repo.path, base) : base] : []),
     ...(repo.folderUpgradeGitRootPath ? [repo.folderUpgradeGitRootPath] : []),
     ...(repo.customWorktreeVisibilitySources ?? []).map((source) => source.rootPath),
@@ -86,12 +76,11 @@ function repoPaths(repo: Repo): string[] {
   ]
 }
 
-/** `C:trees` is drive-relative, i.e. on Windows, not beside the repo. */
+/** Drive-relative C:trees stays on Windows. */
 function isRelative(path: string): boolean {
   return !/^(?:[A-Za-z]:|[\\/])/.test(path)
 }
 
-/** `repoUnc` joined with a relative base, kept in UNC form so the distro check still applies. */
 function posixJoinUnc(repoUnc: string, relative: string): string {
   return `${repoUnc.replace(/[\\/]+$/, '')}/${relative.replace(/\\/g, '/')}`
 }
@@ -112,6 +101,6 @@ function refusalFor(
     }
     linuxPaths.push(posix.normalize(linux.replace(/\\/g, '/')))
   }
-  // Windows folds the `/mnt/<drive>` tail of a UNC path case-insensitively, so `\MNT\C` is drive C.
+  // Windows folds the /mnt/<drive> UNC tail case-insensitively.
   return linuxPaths.some((path) => isDrvfsLinuxPath(path.toLowerCase())) ? 'windows-drive' : null
 }

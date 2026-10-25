@@ -5,6 +5,7 @@ import {
   createAgentPromptSubmissionRuntime
 } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
+import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import type { RuntimeTerminalWriter } from './runtime-terminal-writer'
@@ -211,6 +212,76 @@ describe('agent prompt submission runtime', () => {
       '\x1b]9999;{"state":"waiting","agentType":"aider"}\x07',
       Date.now()
     )
+
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
+    expect(writes).toEqual([])
+  })
+
+  // Why real timers until the send: the emulator drains on timers, and the screen may clear only once quiet.
+  async function settleScreen(runtime: OrcaRuntimeService, handle: string): Promise<void> {
+    const outputAt = Date.now()
+    vi.useRealTimers()
+    await runtime.readTerminal(handle, { screen: true })
+    vi.useFakeTimers({ now: Math.max(outputAt, Date.now()) + TUI_IDLE_QUIESCENCE_MS })
+  }
+
+  it('sends to a ready Codex composer whose erased dialog the line tail still holds', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        // Why the echo: it ends the quiet the screen clear needs before the pre-Enter check.
+        runtime.onPtyData('pty-prompt', '\x1b[22;1H› review this', Date.now())
+      } else if (data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      }
+    }, 'codex')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 80, rows: 24 })
+    // Codex 0.154's exec approval, then its in-place repaint once approved (no OSC 7501, Stop hook failed).
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b[14;3HWould you like to run the following command?\x1b[16;3H$ touch made.txt' +
+        '\x1b[18;1H› 1. Yes, proceed (y)\x1b[19;3H3. No, and tell Codex what to do differently (esc)' +
+        '\x1b[21;3HPress enter to confirm or esc to cancel',
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
+
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b[12;1H\x1b[J• done\x1b[22;1H› Ask Codex to do anything',
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('refuses a settled dialog taller than the live window, as OpenCode 2 paints its permission prompt', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined, 'opencode')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 80, rows: 24 })
+    // Why every row drawn: permission.tsx gives the dialog a ┃ left border and maxHeight 15.
+    const rows = [
+      '┃',
+      '┃  △ Permission required',
+      ...Array.from({ length: 11 }, (_, index) => `┃    $ ./step-${index}.sh`),
+      '┃',
+      '┃  Allow once  Reject                         ctrl+f fullscreen'
+    ]
+    runtime.onPtyData(
+      'pty-prompt',
+      rows.map((row, index) => `\x1b[${index + 8};1H${row}`).join(''),
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
 
     await expect(
       runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
@@ -445,8 +516,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why (#16095): a still-working agent can never produce a `→working` edge, so the old predicate
-  // was unsatisfiable for every follow-up prompt; pane output after Enter is the evidence left.
+  // #16095: an already-working agent has no new working edge; post-Enter output supplies delivery evidence.
   it('accepts pane output after Enter while the agent is already working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -496,8 +566,7 @@ describe('agent prompt submission runtime', () => {
     })
   })
 
-  // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
-  // the same path a headless `orca serve` host and a minimized desktop window take.
+  // Provider hooks reach headless/minimized runtimes without window or OSC-title evidence.
 })
 
 const PTY = 'pty-input-dispatch'
@@ -545,7 +614,9 @@ describe('terminal input dispatch through the current runtime', () => {
     await expect(
       target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
-    expect(writer).toHaveBeenCalledOnce()
+    expect(writer).toHaveBeenCalledExactlyOnceWith(PTY, { text: 'hello' }, 'hello', {
+      inputKind: 'driving'
+    })
   })
 })
 

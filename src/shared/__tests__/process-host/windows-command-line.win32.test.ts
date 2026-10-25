@@ -9,16 +9,7 @@ import {
   WINDOWS_ARGUMENT_CORPUS_ENV
 } from '../../../packages/process-host/src/__fixtures__/windows-argument-corpus'
 
-/**
- * The other half of the encoding proof: the unit test checks the bytes against
- * a model of `CommandLineToArgvW`, and this one checks that a real `.cmd` shim
- * on a real Windows box receives exactly what was sent.
- *
- * Both are needed. Two parsers read the line and they disagree, so an encoding
- * can satisfy the model and still be shredded by cmd — which is what shipped.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Real Windows cmd-shim round trips complement the CommandLineToArgvW model: the two parsers disagree, so either proof alone can miss corruption. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 describeOnWindows('Windows .cmd argument round-trip', () => {
@@ -28,8 +19,7 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-cmd-argv-'))
     shim = join(dir, 'echoargs.cmd')
-    // A shim shaped like the npm/agent CLI wrappers that actually break:
-    // `@echo off` plus `%*` forwarding into a real program.
+    // Match real npm shims: echo off and %* forwarding into Node.
     writeFileSync(shim, '@echo off\r\nnode "%~dp0echoargs.js" %*\r\n')
     writeFileSync(
       join(dir, 'echoargs.js'),
@@ -49,8 +39,7 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
     const result = await runProcess({
       program: shim,
       args: [value],
-      // Why a populated env: `%F%` and `%VAR%` must be live variables here, or
-      // the percent cases pass by accident against an undefined name.
+      // Populate variables so percent-expansion cases cannot pass against undefined names.
       env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV },
       timeoutMs: 30_000
     })
@@ -59,9 +48,7 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
   })
 
   it('delivers the whole corpus in one invocation', async () => {
-    // The composed case is the one that regressed: a single argument can look
-    // fine while leaving cmd mid-quote, and only the NEXT argument's `&` shows
-    // it — as a truncation plus command execution.
+    // One argument can leave cmd mid-quote; the next argument's ampersand exposes truncation/command execution.
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
     const result = await runProcess({
       program: shim,

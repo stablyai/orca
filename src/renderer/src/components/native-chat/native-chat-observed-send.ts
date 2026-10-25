@@ -7,13 +7,12 @@ import {
   type NativeChatSendOptions
 } from './native-chat-input-clear'
 
-/** Observe write refusals without mistaking transport success for provider acceptance. */
 export function sendNativeChatObservedWrites(
   ptyId: string,
   writes: readonly { data: string; delayBeforeMs: number }[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
-  // Why: only an answer that dismisses its card needs the provider's acknowledgment.
+  // Dismiss answer cards only after provider acknowledgment.
   const writeOptions = options.onDeliverySettled
     ? ({ requireWriteSettlement: true } as const)
     : undefined
@@ -59,8 +58,7 @@ export function sendNativeChatObservedWrites(
               }
               writeAt(index + 1)
             })
-            // A lost acknowledgment is not a refusal: never re-send these bytes, but still submit
-            // a body that may have landed, as the unobserved path does.
+            // Lost acknowledgments must not replay bytes; submit the possibly delivered body as on the unobserved path.
             .catch(() => {
               if (isCancelled()) {
                 return

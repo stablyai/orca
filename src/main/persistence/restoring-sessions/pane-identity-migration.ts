@@ -21,7 +21,7 @@ export type TerminalTabLookup = {
   get(tabId: string): TerminalTab | undefined
 }
 
-/** Resolves tabs on demand while retaining first-match ordering and scan progress. */
+/** Lazy scans preserve first-match ordering and resume where the previous lookup stopped. */
 export function createLazyTerminalTabLookup(session: WorkspaceSessionState): TerminalTabLookup {
   const tabsByWorktree = Object.entries(session.tabsByWorktree ?? {})
   const tabsById = new Map<string, TerminalTab>()
@@ -43,13 +43,12 @@ export function createLazyTerminalTabLookup(session: WorkspaceSessionState): Ter
         while (tabIndex < tabs.length) {
           const currentIndex = tabIndex
           tabIndex += 1
-          // Array#some, used by the prior lookup, skips sparse holes.
+          // Preserve Array#some behavior on sparse arrays.
           if (!(currentIndex in tabs)) {
             continue
           }
           const tab = tabs[currentIndex]
           const tabId = tab.id
-          // Preserve first-match behavior when persisted IDs collide.
           if (!tabsById.has(tabId)) {
             tabsById.set(tabId, tab)
           }
@@ -74,7 +73,7 @@ export type PaneAliasNormalizationOptions = {
 
 type LegacyPaneKeyAlias = Omit<LegacyPaneKeyAliasEntry, 'ptyId'> & { ptyId?: string }
 
-/** Includes unbound aliases needed by the live hook server, even though they are not persisted. */
+/** Include unbound aliases needed by live hooks even though persistence omits them. */
 export function collectLegacyPaneKeyAliasesForTab(args: {
   tabId: string
   tab: TerminalTab | undefined
@@ -101,7 +100,7 @@ export function collectLegacyPaneKeyAliasesForTab(args: {
     if (!numeric) {
       return
     }
-    // Why: PaneManager ids are 1-based; a zero-based alias in split layouts makes tab:1 ambiguous and misroutes panes.
+    // PaneManager is 1-based; zero-based split aliases would make tab:1 ambiguous.
     const legacyPaneKey = `${args.tabId}:${numeric}`
     registeredLegacyPaneKeys.add(legacyPaneKey)
     legacyPaneKeyAliasEntries.push({
@@ -136,7 +135,7 @@ export function collectLegacyPaneKeyAliasesForTab(args: {
       try {
         paneKey = makePaneKey(args.tabId, fallbackLeafId)
       } catch {
-        // Why: a persisted tabId can be malformed; skip the alias instead of aborting the whole load-time normalization.
+        // Skip malformed persisted tab IDs without aborting the whole normalization.
       }
     }
     if (paneKey) {

@@ -1,7 +1,6 @@
 import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from './agent-status-types'
 
-// Why: OMP's plan review overlay holds the keyboard, so Orca's extension reads this
-// OSC before the overlay does and answers through ctx.resolvePlanReview.
+// OMP’s overlay owns keyboard input; the extension intercepts this OSC and answers through ctx.resolvePlanReview first.
 export const OMP_PLAN_REVIEW_ANSWER_PREFIX = '\x1b]7503;orca-plan-review;'
 
 /** OMP's own choice ids; `refine` needs feedback, so the card dismisses the overlay instead. */

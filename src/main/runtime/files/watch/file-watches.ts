@@ -35,7 +35,7 @@ export class RuntimeFileWatches {
     options: { followSymlinks?: boolean } = {}
   ): Promise<DirEntry[]> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    // Why: providers do not promise this order, so sort before returning.
+    // Providers do not guarantee directory ordering.
     return sortDirEntries(
       await requireRuntimeFileProvider(target, this.host).readDir(target.path, options)
     )
@@ -48,8 +48,7 @@ export class RuntimeFileWatches {
     signal?: AbortSignal
   ): Promise<() => Promise<void>> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, '')
-    // Why: watcher keys must scope teardown to the owning host; a `runtime:` host throws here
-    // rather than registering a lease under this client's namespace.
+    // Reject runtime-host namespace mismatches before registering watcher leases.
     const sshTargetId = runtimeFileSshTargetId(target)
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
@@ -67,7 +66,7 @@ export class RuntimeFileWatches {
           const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
           return { unsubscribe: close, rootPaths: [target.path, rootPath] }
         }
-        // Why: the forked watcher keeps the blocking crawl and native faults out of the main/`serve` process (issues #5308, #8212).
+        // #5308/#8212: isolate native faults and blocking crawls from main/serve.
         const dispose = await watchFileExplorerInWatcherProcess(
           rootPath,
           callback,
@@ -96,7 +95,7 @@ export class RuntimeFileWatches {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
     if (!connectionId) {
-      // Why: setup can fail before registerRuntimeFileWatcherRelease publishes its callback while the child owner still lives.
+      // Failed setup may still own a child without having published a lease-release callback.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
     }

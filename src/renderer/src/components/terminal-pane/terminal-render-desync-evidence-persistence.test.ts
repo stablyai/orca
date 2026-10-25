@@ -5,8 +5,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { createCaptureId } from './terminal-render-desync-evidence-persistence'
 
 describe('createCaptureId', () => {
-  // A real paneKey is two UUIDs joined by ':'. Unbounded, the id ran 124 chars and main
-  // rejected every capture with 'Invalid render-desync capture id'.
+  // Real pane keys exceeded main’s capture-ID limit; bound the ID so captures are not silently rejected.
   it('stays inside the id main will accept for a realistic paneKey', () => {
     const paneKey = makePaneKey(createBrowserUuid(), createBrowserUuid())
 

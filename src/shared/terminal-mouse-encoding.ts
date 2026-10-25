@@ -9,12 +9,7 @@ type TerminalWithMouseStateCore = {
   _core?: { mouseStateService?: { activeEncoding?: unknown } }
 }
 
-/**
- * Reads the encoding xterm itself parsed. Its public `modes` exposes the
- * tracking protocol but not the encoding, and SerializeAddon omits it, so a
- * restored pane otherwise emits legacy `ESC [ M` reports that a ConPTY host
- * types into the app as text (#23818).
- */
+/** Public modes omit encoding and SerializeAddon loses it; read xterm’s parsed value to prevent ConPTY treating legacy reports as text (#23818). */
 export function readTerminalMouseEncoding(
   terminal: TerminalWithMouseStateCore
 ): TerminalMouseEncoding {

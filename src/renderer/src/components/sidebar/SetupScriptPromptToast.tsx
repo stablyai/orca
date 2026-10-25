@@ -30,8 +30,7 @@ export function showSavedInProjectSettingsToast(input: {
   onOpenSettings: () => void
   description?: React.ReactNode
 }): void {
-  // Why: the save confirmation is also the fastest path back to the exact
-  // local setup editor the user just changed.
+  // Save confirmation links back to the exact local setup editor just changed.
   toast.success(<SavedInProjectSettingsToast onOpenSettings={input.onOpenSettings} />, {
     description: input.description
   })

@@ -19,7 +19,7 @@ import {
 } from '../native-chat/native-chat-permission-mode-labels'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 
-/** The chat's wording for a mode; `own` names the agent when there is one. */
+/** Use chat-mode wording; own names the agent when available. */
 export function agentPermissionChoiceLabel(
   choice: AgentPermissionChoice,
   agentLabel: string | null
@@ -220,7 +220,6 @@ export function AgentPermissionMenu({
   )
 }
 
-/** The flag Orca adds, drawn inside the Arguments box; removing it means the agent's own settings. */
 export function AgentPermissionArgsChip({
   label,
   flag,

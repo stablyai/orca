@@ -4,12 +4,8 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on Store writes addressed by a bare repo or worktree id (R4-2). A local row and an SSH
-// row can share an id, so an id-only write lands on whichever row matches first. Writes take the
-// row's identity instead: `RepoHostTarget` (src/shared/repo-host-identity.ts) or
-// `HostWorktreeTarget` (src/shared/worktree/host-qualified-identity.ts). Entries may only go away.
-// Matched by the first parameter's NAME, whatever its type (`string`, `Repo['id']`, a brand), so a
-// retyped id still counts. Known limit: an id inside an object parameter (`{ projectId }`) is not seen.
+// Bare-ID writes can edit the wrong local/SSH twin; require RepoHostTarget/HostWorktreeTarget and allow counts only to decrease.
+// Match parameter names regardless of types; known limit: IDs inside object parameters are not detected.
 
 const BASELINE_PATH = 'config/id-only-store-write-baseline.txt'
 const COMPOSITION = 'src/main/persistence/loading-store/store-domain-composition.ts'
@@ -136,8 +132,7 @@ export function findIdOnlyWrites(className, source) {
   return found
 }
 
-// Lookups that pick a repo row by id alone. A write fed by one edits whichever twin comes first, even
-// when the method itself takes the row (review-5 #10: an SSH setup edit renamed its local sibling).
+// ID-only row lookups can misroute writes even when mutator takes a row (#review-5: SSH setup renamed local twin).
 const LOOKUP_ROOT = 'src/main/persistence/'
 const REPO_ROW_LOOKUP = /\brepos\s*\??\.\s*(?:find|findIndex|findLast|findLastIndex)\s*\(/g
 // A predicate that names a host (or compares whole rows' host ids) is host-scoped.

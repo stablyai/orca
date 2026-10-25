@@ -62,8 +62,7 @@ describe('assertPortNotShadowingListener', () => {
 
 describe('WebSocketTransport beside a wildcard listener', () => {
   it('moves past a port another runtime serves on every interface instead of shadowing it', async () => {
-    // The defect this pins: Windows (and macOS) let 127.0.0.1:P bind over another process's
-    // 0.0.0.0:P, so a managed orcad silently took loopback traffic meant for the desktop runtime.
+    // Windows/macOS allow loopback binds over another process's wildcard, stealing paired clients' desktop-runtime traffic.
     const heldPort = await listen('0.0.0.0')
     const nextPort = await freePort()
     const transport = new WebSocketTransport({

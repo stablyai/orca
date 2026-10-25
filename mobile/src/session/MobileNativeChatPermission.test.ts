@@ -112,7 +112,6 @@ describe('MobileNativeChatPermission', () => {
     expect(actions.props.style).toMatchObject({ flexShrink: 0 })
   })
 
-  // Same card as desktop: what is asked, why, and the path it needs, never the provider's ask-rule bookkeeping.
   it('names a blocked path the request does not show, but never the matched ask rule', async () => {
     const fromJournal = {
       title: 'Claude wants to run git push',
@@ -182,10 +181,8 @@ describe('MobileNativeChatPermission', () => {
     const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
     const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
 
-    // Same shared region as every other context row, so it inherits the cap.
     expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
     expect(findByHostType(content, 'MobileMarkdown').props.content).toBe(planText)
-    // The path renders as an interpolated child, so match within the children.
     const planFileShown = findAllByHostType(content, 'Text').some((node) => {
       const children = Array.isArray(node.props.children)
         ? node.props.children
@@ -193,7 +190,6 @@ describe('MobileNativeChatPermission', () => {
       return children.includes('/repo/PLAN.md')
     })
     expect(planFileShown).toBe(true)
-    // A typed plan replaces the generic detail rather than rendering both.
     expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Approve plan' })).toHaveLength(1)
   })
@@ -210,7 +206,6 @@ describe('MobileNativeChatPermission', () => {
             permission: {
               title: 'Review proposed change',
               ...(detail ? { detail } : {}),
-              // A subject kind a newer build wrote; this build draws only plans.
               subject: JSON.parse('{"kind":"diff","path":"a.ts"}'),
               prompt: { itemId: 'approval-1', expectedRevision: 2 },
               options: [

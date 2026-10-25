@@ -24,7 +24,6 @@ it('reuses one collator per directory while preserving capped scan order', async
       const result = await scanWarpThemeDirectory(directory, undefined, { themeFileLimit: 6 })
       expect(result.files.map((file) => file.label)).toEqual(expected.slice(0, 6))
       expect(result.themeFileLimitHit).toBe(true)
-      // One directory needs collation; the single-entry nested folder needs none.
       expect(construct).toHaveBeenCalledExactlyOnceWith(undefined, { sensitivity: 'base' })
       expect(localeCompare).not.toHaveBeenCalled()
     } finally {

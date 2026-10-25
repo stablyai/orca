@@ -131,10 +131,7 @@ export function listWorkerTerminalResources(
     }
   }
   if (params.after) {
-    // Order and fence must share one key, or a row created between pages moves across the cut.
-    // Pages walk down from the newest row, so the continuation takes what sits below the anchor.
-    // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
-    // `rowid < NULL` matched nothing and the page read as a finished, empty inventory.
+    // Fence and order by rowid; resolve old cursors from their anchor and reject missing anchors after reset.
     where.push('d.rowid < ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
@@ -142,7 +139,7 @@ export function listWorkerTerminalResources(
   let detailValues = values
   let detailLimit = params.limit
   if (params.terminalState) {
-    // Terminal state is derived by one TS function; page it before reading detail columns.
+    // Derive states and page before fetching detail columns.
     const matching = scanWorkerTerminalStates
       .call(this, where, values)
       .filter((row) => row.terminalState === params.terminalState)

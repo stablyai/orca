@@ -15,14 +15,11 @@ type Props = {
   question: MobileChatQuestion
   onAnswer: (text: string) => Promise<boolean>
   onCancel?: (prompt?: NonNullable<MobileChatQuestion['prompt']>) => Promise<boolean>
-  /** Fold the card to a strip and free Send, writing nothing. */
+  // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }
 
-/** Renders an agent's choice prompt as a tappable card. Single-select answers
- *  on tap; multi-select toggles then Submits; an always-present text entry lets
- *  the user answer freely (the escape hatch) when the heuristic misreads the
- *  options or none apply. */
+// Keep free text available when heuristic options are incomplete or misread.
 export function MobileNativeChatQuestion({
   question,
   onAnswer,
@@ -97,7 +94,7 @@ export function MobileNativeChatQuestion({
   const canSendFreeText =
     allowOther && (answerText.length > 0 || question.freeTextInput?.allowEmpty === true) && !sending
 
-  // Stable keys for option rows even if an agent repeats a label.
+  // Include occurrence in keys because an agent may repeat option labels.
   const optionRows = useMemo(
     () =>
       question.options.map((label, index) => ({

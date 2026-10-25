@@ -45,7 +45,7 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
       const result = await runProcess({
         program: '/bin/ps',
         args: ['-p', String(pid), '-o', 'stat=,lstart='],
-        // Why: lstart is local time; the hook capture pins the same zone so the strings compare.
+        // Pin the hook capture's zone/locale so local-time lstart strings compare.
         env: { ...process.env, TZ: 'UTC0', LC_ALL: 'C', LANG: 'C' },
         timeoutMs: 1000,
         maxOutputBytes: 4096
@@ -72,7 +72,7 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
   } catch {
     return { verdict: 'unverifiable' }
   }
-  // Why: no Windows hook captures an identity yet, so there is nothing to compare against.
+  // Windows hooks capture no comparable process identity yet.
   return { verdict: 'unverifiable' }
 }
 
@@ -93,6 +93,6 @@ export async function probeAgentProcessPresence(
     return 'exited'
   }
   onSuspensionObserved?.(observed.stopped === true)
-  // Why: a suspended (Ctrl-Z) agent still exists but is not running in its terminal.
+  // Ctrl-Z suspension proves existence but not active terminal ownership.
   return observed.stopped ? 'unverifiable' : 'live'
 }

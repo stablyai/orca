@@ -56,11 +56,9 @@ function feedbackImageShrinkTargetBytes(fitBytes: number): number {
   return Math.min(MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES, fitBytes)
 }
 
-// Why: APNG's acTL chunk precedes its first IDAT; shrinking would keep only frame one.
-// Walks chunk headers so metadata ahead of acTL or bytes that spell it are not misread.
+// Walk PNG chunks: acTL before first IDAT marks APNG, which shrinking would flatten; metadata may contain misleading bytes.
 function isAnimatedPng(data: Uint8Array): boolean {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
-  // Each chunk after the 8-byte signature is length, type, payload, CRC.
   for (let offset = 8; offset + 8 <= data.byteLength; offset += 12 + view.getUint32(offset)) {
     const type = String.fromCharCode(...data.subarray(offset + 4, offset + 8))
     if (type === 'acTL') {
@@ -73,7 +71,6 @@ function isAnimatedPng(data: Uint8Array): boolean {
   return false
 }
 
-/** Fits as-is, or can be shrunk into its capped share of the space left instead of refused. */
 function canAttachWithin(file: File, fitBytes: number): boolean {
   if (file.size <= fitBytes) {
     return true
@@ -87,14 +84,7 @@ function canAttachWithin(file: File, fitBytes: number): boolean {
   )
 }
 
-/**
- * Whether a paste should be consumed. Extraction stays broad so unsupported
- * image types still reach the rejection toast, but swallowing the paste when
- * nothing is attachable would also discard any text riding along on the
- * clipboard. Every limit readFeedbackImageFiles checks from a file's type and
- * size is mirrored here. Checks that need its bytes (dimensions, APNG, whether a
- * shrink fits) cannot run synchronously; mixed text pastes require an as-is fit.
- */
+/** Consume only attachable image pastes and mirror synchronous type/size gates. Byte-dependent checks cannot run here, so mixed-text pastes require an as-is fit to avoid losing text. */
 export function hasAttachableFeedbackImage(
   files: readonly File[],
   existingCount = 0,
@@ -155,11 +145,7 @@ function feedbackImageDisplayName(file: File): string {
   )
 }
 
-/**
- * Converts picked/pasted/dropped files into drafts, optimizing full-resolution PNG for any that would not
- * fit. Rejections and compressions come back as messages, because a silently
- * dropped or degraded attachment is the exact failure this feature exists to fix.
- */
+/** Build drafts, shrinking oversized images to full-resolution PNG; return rejection/compression messages so attachment loss or degradation is never silent. */
 export async function readFeedbackImageFiles(
   files: readonly File[],
   existingCount: number,
@@ -210,8 +196,7 @@ export async function readFeedbackImageFiles(
         )
         break
       }
-      // Why: "larger than" holds only for a file the whole budget could not take;
-      // otherwise it was the space the other attachments use that refused it.
+      // Use size-only refusal only if the entire budget could not fit it; otherwise name space used by other attachments.
       const addSizeError = (fitsWholeBudget: boolean): void =>
         addError(() =>
           fitsWholeBudget
@@ -299,8 +284,7 @@ export async function readFeedbackImageFiles(
       remaining -= 1
       remainingBytes -= image.size
       images.push({
-        // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN
-        // web client over plain HTTP); createBrowserUuid falls back safely.
+        // Use createBrowserUuid because plain-HTTP LAN clients lack crypto.randomUUID.
         id: `${file.name}-${file.size}-${createBrowserUuid()}`,
         name: fileName,
         contentType: image.type,
@@ -310,8 +294,7 @@ export async function readFeedbackImageFiles(
       })
     }
   } catch (error) {
-    // Why: a rejected read never returns these drafts, and an un-revoked object
-    // URL pins its blob for the life of the renderer.
+    // Rejected reads return no drafts; revoke their object URLs or blobs stay pinned for the renderer’s lifetime.
     images.forEach(releaseFeedbackImageDraft)
     throw error
   }

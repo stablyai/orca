@@ -79,7 +79,6 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ sessionId: 'serve-dead-pty', worktreeId: TEST_WORKTREE_ID })
     )
     expect(spawn.mock.calls[0]![0].command).toBeUndefined()
-    // Why: the disabled-agent fallback keeps the tab's agent identity; only the startup command is skipped.
     expect(activated.tabs[0]).toMatchObject({
       type: 'terminal',
       status: 'ready',
@@ -88,7 +87,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('collapses duplicate mobile terminal entries when renderer and headless leaf ids diverge for the same pty', async () => {
-    // Switch point: the window draws main's own panes, so its leaf ids are main's and never diverge.
+    // The renderer draws main's layout when main owns the panes.
     const rendererLeafId = ORCA_LAYOUT_OWNER_IS_MAIN ? HEADLESS_LEAF_ID : HEADLESS_SECOND_LEAF_ID
     const ptyId = 'serve-persisted-pty'
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
@@ -169,7 +168,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps distinct split mobile terminal ptys under the same parent tab', async () => {
-    // Switch point: the window draws main's own panes, so its leaf ids are main's and never diverge.
+    // The renderer draws main's layout when main owns the panes.
     const rendererLeftLeafId = ORCA_LAYOUT_OWNER_IS_MAIN
       ? HEADLESS_LEAF_ID
       : '33333333-3333-4333-8333-333333333333'
@@ -292,7 +291,6 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not mark persisted PTY id collisions ready without matching pane identity', async () => {
-    // The saved pane carries the incarnation of the terminal it ran before the restart.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         terminalPtyIncarnationsByPaneKey: {
@@ -313,7 +311,6 @@ describe('OrcaRuntimeService', () => {
         { id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'Unrelated PTY' }
       ]
     })
-    // The colliding live terminal's own spawn commit bound other-tab, under its own incarnation.
     registerBoundPty(runtime, 'persisted-pty', TEST_WORKTREE_ID, null, {
       tabId: 'other-tab',
       leafId: '99999999-9999-4999-8999-999999999999',
@@ -357,7 +354,6 @@ describe('OrcaRuntimeService', () => {
       id: `host-tab-${index}`,
       ptyId: `missing-pty-${index}`
     }))
-    // Each pane has its own leaf id, as every pane a layout mints does.
     const terminalLayoutsByTabId = Object.fromEntries(
       tabs.map((tab, index) => [
         tab.id,
@@ -431,7 +427,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('durably tears down a runtime-owned SSH headless tab when renderer cleanup fails', async () => {
-    // #8958: the renderer relay can't see headless tabs, so its advisory fallback must not block authoritative teardown/flush.
+    // #8958: a renderer relay cannot see headless tabs and must not veto host teardown.
     const persistedPtyId = 'ssh:ssh-1@@relay-pty'
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -463,7 +459,6 @@ describe('OrcaRuntimeService', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const closeTerminalTab = vi.fn(async () => {})
     const durableStore = withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
-    // As the Store runs main's `layout.apply`: one durable write.
     const runtime = new OrcaRuntimeService(
       Object.assign(durableStore, {
         applyLayoutCommand: durableSessionLayoutApply(durableStore, {
@@ -487,7 +482,6 @@ describe('OrcaRuntimeService', () => {
     expect(kill).toHaveBeenCalledWith(persistedPtyId)
     expect(flushOrThrow).toHaveBeenCalledTimes(1)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main closes in its own layout, so no renderer cleanup runs to fail.
       expect(closeTerminal).not.toHaveBeenCalled()
     } else {
       expect(closeTerminal).toHaveBeenCalledWith('host-tab')
@@ -582,7 +576,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main closes the tab in its own layout; no renderer acknowledges anything.
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(closeTerminal).not.toHaveBeenCalled()
     } else {
@@ -597,7 +590,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps the renderer close transaction for an adopted runtime-owned tab', async () => {
-    // The renderer pin state can be newer than the debounced session, so once adopted its live close guard must win over stale persisted metadata.
+    // Live renderer pin state overrides stale debounced session metadata after adoption.
     const servePtyId = 'serve-adopted-1'
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -656,7 +649,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main's layout holds the pin, unpinned here, and main closes the tab itself.
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
       ).resolves.toEqual({ closed: true })

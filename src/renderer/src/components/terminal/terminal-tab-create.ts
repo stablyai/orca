@@ -27,9 +27,7 @@ export function createNewTerminalTab(
   }
   const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web clients receive host-owned terminal tabs through
-    // session.tabs. Creating a local tab first races the host snapshot and can
-    // leave stale remote handles in the web store.
+    // Paired web clients receive host-owned tabs through session.tabs; creating locally races that snapshot and leaves stale handles.
     const onSettled = options?.onSettled
     const launch = createWebRuntimeSessionTerminal(
       {
@@ -57,8 +55,7 @@ export function createNewTerminalTab(
     ...(options?.command ? { pendingStartup: { command: options.command } } : {})
   })
   state.setActiveTabType('terminal', activeWorktreeId)
-  // Why: without a saved order the tab bar falls back to terminals-first, so
-  // persist the current visual order with the new terminal last.
+  // Save visual order with the new terminal last or fallback ordering puts terminals first.
   persistAgentLaunchTabOrder(activeWorktreeId, tabId)
   options?.onSettled?.(true)
 }

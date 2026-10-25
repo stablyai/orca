@@ -19,7 +19,7 @@ function message(id: string, role: NativeChatMessage['role']): NativeChatMessage
   }
 }
 
-/** A fresh slot array each call, the way the list rebuilds it every render. */
+/** Rebuild slots each call as the transcript does on every render. */
 function slotsOf(messages: NativeChatMessage[]) {
   let turn: string | undefined
   const turnKeys = messages.map((entry) => {
@@ -41,7 +41,7 @@ function slotsOf(messages: NativeChatMessage[]) {
   })
 }
 
-/** No test but the preview's reads the rows the slots came from. */
+/** Only preview tests need the rows backing these slots. */
 const NO_ROWS = { messages: [], turnKeys: [] }
 
 const CONVERSATION = [
@@ -105,7 +105,6 @@ describe('message rail hook', () => {
     expect(result.current.previewReply).toBe('Thinking')
     rerender(streamed('Thinking it through'))
     expect(result.current.previewReply).toBe('Thinking it through')
-    // Closed, the rail's state stops following the stream.
     act(() => result.current.onPreview(null))
     const closed = result.current
     rerender(streamed('Thinking it through, done'))
@@ -133,9 +132,7 @@ describe('message rail hook', () => {
     vi.useRealTimers()
   })
 
-  // `slots` is rebuilt on every render, so a listener effect that depended on it
-  // would unsubscribe and cancel its pending idle timer on every frame of a
-  // streaming turn — and the highlight would never settle.
+  // Depending on fresh slots would cancel the scroll-idle timer on each streaming frame, preventing settlement.
   it('subscribes to scroll once across renders that rebuild the slots', () => {
     const element = document.createElement('div')
     const scrollRef = { current: element }
@@ -146,7 +143,6 @@ describe('message rail hook', () => {
         useNativeChatMessageRail({ scrollRef, slots, turnRows: NO_ROWS, virtualItems: [] }),
       { initialProps: { slots: slotsOf(CONVERSATION) } }
     )
-    // Same prompts, new array identity — exactly what a re-render produces.
     rerender({ slots: slotsOf(CONVERSATION) })
     rerender({ slots: slotsOf(CONVERSATION) })
 
@@ -154,8 +150,7 @@ describe('message rail hook', () => {
     expect(scrollSubscriptions).toHaveLength(1)
   })
 
-  // A jump that cannot bring its row to the top lands clamped at the bottom, where
-  // the position report would light the last tick instead of the clicked one.
+  // A clamped jump leaves another row at the fold; keep the clicked tick lit.
   describe('a clicked tick', () => {
     /** Five 100px rows; `u2` (row 2) clamped 50px below the top at max scroll. */
     function clampedJump() {
@@ -201,13 +196,12 @@ describe('message rail hook', () => {
       settle()
       settle()
       expect(result.current.activeId).toBe('u2')
-      // A row above measuring late moves the content and the offset together.
+      // Late measurement above the row shifts both content and offset.
       view.shift = 30
       view.scrollTop = 180
       rerender({ slots: slotsOf(CONVERSATION) })
       settle()
       expect(result.current.activeId).toBe('u2')
-      // A long session trims its oldest rows as new ones arrive.
       view.shift = 0
       view.scrollTop = 50
       rerender({ slots: slotsOf(CONVERSATION.slice(1)) })
@@ -219,7 +213,7 @@ describe('message rail hook', () => {
 
     it('is let go once its row moves, whatever moved it', () => {
       const { result, view, settle, unmount } = clampedJump()
-      // No scroll: a jump that did not move the view still settles.
+      // Even a jump that fires no scroll must settle.
       act(() => vi.runAllTimers())
       view.scrollTop = 100
       settle()
@@ -236,7 +230,6 @@ describe('message rail hook', () => {
       unmount()
     })
 
-    // The reader kept scrolling past the jump before it settled: the row is off screen.
     it('is not held when the reader carried its row off screen before it settled', () => {
       const { result, view, settle, unmount } = clampedJump()
       view.scrollTop = 0
@@ -304,7 +297,6 @@ describe('message rail hook', () => {
     ])
     expect(result.current.items.at(0)).toMatchObject({ slotIndex: null, text: 'older prompt 0' })
     expect(result.current.items.at(-1)).toMatchObject({ id: 'u1', slotIndex: 0 })
-    // The sampled ticks keep both ends of the whole thread, not of the loaded page.
     expect(result.current.ticks.at(0)?.id).toBe('older-0')
     expect(result.current.ticks.at(-1)?.id).toBe('u1')
   })

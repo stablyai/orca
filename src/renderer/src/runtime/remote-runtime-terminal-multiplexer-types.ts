@@ -200,10 +200,7 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
-  // Why: Output frames carry a UTF-16 offset high-water `seq`; a jump past the
-  // expected next offset means the server dropped frames under backpressure.
-  // Track it so a gap triggers a self-healing snapshot resync instead of
-  // silently rendering corrupt/missing output (frame-drop resync).
+  // Output seq is the UTF-16 high-water; offset gaps expose backpressure drops and trigger snapshot recovery instead of corrupt paint.
   expectedSeq: number | undefined
   // Why: compare command probes when initial/live frames supplied no high-water.
   commandProbeBaselineSeq: number | undefined
@@ -231,9 +228,7 @@ export type RemoteRuntimeSnapshotInfo = {
   unavailable?: TerminalSnapshotUnavailableReason
   /** History rows above the screen; absent from hosts that predate the field. */
   scrollbackRows?: number
-  // Why: a mid-escape tail the emulator could not serialize; the transport
-  // must write it AFTER the replay reset so the next live chunk completes it
-  // instead of rendering literally (#7329).
+  // Replay reset precedes the unserializable mid-escape tail so live output completes it instead of printing it literally (#7329).
   pendingEscapeTailAnsi?: string
 }
 

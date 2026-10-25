@@ -55,8 +55,7 @@ export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => P
   }
 }
 
-// Why: a live map that is nowhere near the cap must not pay for a 500-string key array on every
-// accepted update, so the count is threaded in and the keys are materialized only to evict.
+// Carry live count so sub-cap updates avoid allocating 500 keys; materialize only for eviction.
 const liveAgentStatusCounts = new WeakMap<Record<string, AgentStatusEntry>, number>()
 
 export function countLiveAgentStatuses(entries: Record<string, AgentStatusEntry>): number {

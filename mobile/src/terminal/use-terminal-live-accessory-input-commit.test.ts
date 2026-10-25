@@ -121,11 +121,9 @@ function createAccessoryInputCommitHarness({
 
 describe('terminal live accessory inactive input commit result', () => {
   it('Given live input is disabled with an active flush When accessory raw fallback is requested Then waits before allowing raw send', async () => {
-    // Given
     const deferredFlush = createDeferredBoolean()
     let settled = false
 
-    // When
     const resultPromise = getTerminalLiveAccessoryInactiveInputCommitResult(
       () => deferredFlush.promise
     )
@@ -134,39 +132,32 @@ describe('terminal live accessory inactive input commit result', () => {
     })
     await Promise.resolve()
 
-    // Then
     expect(settled).toBe(false)
     deferredFlush.resolve(true)
     await expect(resultPromise).resolves.toEqual({ kind: 'allow-raw' })
   })
 
   it('Given live input is disabled with a failed active flush When accessory raw fallback is requested Then suppresses raw send', async () => {
-    // Given
     const waitForPendingLiveInputFlush = async (): Promise<boolean> => false
 
-    // When
     const result = await getTerminalLiveAccessoryInactiveInputCommitResult(
       waitForPendingLiveInputFlush
     )
 
-    // Then
     expect(result).toEqual({ kind: 'suppress-raw' })
   })
 })
 
 describe('terminal live accessory input commit hook', () => {
   it('Given raw accessory bytes with a held syllable When committed Then flushes held text before sending bytes', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       heldText: '한',
       sentText: '',
       pendingHandle: 'terminal-a'
     })
 
-    // When
     const result = await harness.commit({ bytes: '\x1b' })
 
-    // Then
     expect(harness.flushPendingLiveInputText).toHaveBeenCalledWith('terminal-a')
     expect(harness.sent).toEqual(['\x1b'])
     expect(result).toEqual({ kind: 'handled' })
@@ -187,60 +178,44 @@ describe('terminal live accessory input commit hook', () => {
   })
 
   it('Given raw accessory bytes with no held text When committed Then allows the raw send without flushing', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({ pendingHandle: null })
 
-    // When
     const result = await harness.commit({ bytes: '\x1b' })
 
-    // Then
     expect(result).toEqual({ kind: 'allow-raw' })
     expect(harness.flushPendingLiveInputText).not.toHaveBeenCalled()
     expect(harness.sent).toEqual([])
   })
 
-  /**
-   * The device trace's variant (a), and not a web-only case: the field holds a mirror of text the
-   * PTY already echoed, so a control that ends the line ends the field's editing session too. The
-   * held-text branch has always done this through the flush; with nothing held the control took
-   * the branch above and the sent text stayed in the field, where the next keystrokes appended to
-   * it. Nothing here is composing, which is the state ASCII leaves on every platform.
-   */
+  // Line-ending controls must clear mirrored text even with no held preedit; otherwise later keystrokes append to the previous command.
   it('Given an accessory Enter with mirrored sent text and no held text When committed Then ends the field session before the raw send', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       pendingHandle: 'terminal-a',
       sentText: 'ls'
     })
 
-    // When
     const result = await harness.commit({ bytes: '\r' })
 
-    // Then
     expect(harness.flushPendingLiveInputText).toHaveBeenCalledWith('terminal-a')
-    // Still the caller's send: the hook deferring and sending would put two returns on the wire.
+    // The caller sends this control; a second hook send would duplicate Return.
     expect(result).toEqual({ kind: 'allow-raw' })
     expect(harness.sent).toEqual([])
   })
 
   it('Given an accessory Enter whose field session cannot be ended When committed Then suppresses the raw send', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       pendingHandle: 'terminal-a',
       sentText: 'ls',
       flushResult: false
     })
 
-    // When
     const result = await harness.commit({ bytes: '\r' })
 
-    // Then
     expect(result).toEqual({ kind: 'suppress-raw' })
     expect(harness.sent).toEqual([])
   })
 
   it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       composing: true,
       heldText: 'ni hao',
@@ -248,33 +223,27 @@ describe('terminal live accessory input commit hook', () => {
       pendingHandle: 'terminal-a'
     })
 
-    // When
     const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
 
-    // Then
     expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'ni ha', true)
     expect(result).toEqual({ kind: 'handled' })
     expect(harness.sent).toEqual([])
   })
 
   it('Given accessory backspace with an unreported hold When committed Then preserves the Android fallback', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       heldText: '한글',
       sentText: '',
       pendingHandle: 'terminal-a'
     })
 
-    // When
     const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
 
-    // Then
     expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', '한', undefined)
     expect(result).toEqual({ kind: 'handled' })
   })
 
   it('Given accessory backspace with mirrored sent text When committed Then mirrors the shortened field so the diff emits DEL', async () => {
-    // Given
     const harness = createAccessoryInputCommitHarness({
       composing: false,
       heldText: '',
@@ -282,10 +251,8 @@ describe('terminal live accessory input commit hook', () => {
       pendingHandle: 'terminal-a'
     })
 
-    // When
     const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
 
-    // Then
     expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'a', false)
     expect(result).toEqual({ kind: 'handled' })
   })

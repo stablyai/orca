@@ -14,7 +14,6 @@ import { readGolden } from '../rpc-recording/golden-recording'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
 
-/** The run a corpus that diverged exactly as the pin says would hand the rule. */
 function asPinned(): Map<string, PageClosureObservation> {
   const run = new Map<string, PageClosureObservation>()
   for (const [family, goldens] of Object.entries(C5_PAGE_CLOSURE)) {
@@ -31,15 +30,7 @@ describe('the C5 page closure', () => {
     expect(new Set(goldens).size).toBe(goldens.length)
   })
 
-  /**
-   * The totals, asserted beside the per-id pins rather than instead of them.
-   *
-   * A walk that compares each id to its own verdict cannot see a table built wrong in a way that is
-   * self-consistent. Deriving this file with a reader that skipped the wrapped entries in
-   * `c1-page-closure.ts` produced exactly that: every inherited pin it did read agreed, the
-   * mismatch list came back empty, and three `result-absent-stream-release` goldens had quietly
-   * become `result-absent-settlement`. The counts are what showed it.
-   */
+  // Assert class totals beside per-id pins; a self-consistent misderived table can satisfy each pin while losing wrapped entries.
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
       identical: 66,
@@ -51,17 +42,7 @@ describe('the C5 page closure', () => {
   })
 
   it("inherits C1's families whole, with the verdicts C1 committed", () => {
-    // Not "the same families": the same goldens in them, at the same verdicts. C2's rule does not
-    // reproduce these — it disagrees on 13 of the 103, being `tasks.smart-source-search` 7,
-    // `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 — so inheritance is the
-    // derivation, and this is what says the inheritance happened rather than a re-derivation that
-    // looked close. The count is the one C2's and C3's files state; this file said 10 until the
-    // derivation was re-run.
-    //
-    // Compared against the imported object rather than the committed text, which is sound here
-    // because `C5_PAGE_CLOSURE` inlines its families instead of spreading C1's: there is no
-    // spread for an edited entry to be laundered through. `pinsFromSource` is what the composed
-    // tables use.
+    // C5 inlines its pins, so compare imported C1 directly; composed spread tables need source parsing to detect overwritten inherited entries.
     for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
       expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
@@ -80,7 +61,6 @@ describe('the C5 page closure', () => {
   })
 
   it('has a byte-identical golden in every family it adds, unlike C2 s five', () => {
-    // So the pin on each of these means more than "the divergence kept its name".
     const added = Object.entries(C5_PAGE_CLOSURE).filter(([family]) => !(family in C1_PAGE_CLOSURE))
     const wholly = added
       .filter(([, pins]) => !Object.values(pins).includes('identical'))
@@ -91,10 +71,7 @@ describe('the C5 page closure', () => {
   it('pins goldens that exist, in the family the corpus records them under', () => {
     for (const [family, goldens] of Object.entries(C5_PAGE_CLOSURE)) {
       for (const id of Object.keys(goldens)) {
-        // Through the corpus's own reader, which checks the format version and the value pool and
-        // throws a named diagnostic otherwise. The assertion this file wants is about `family`, and
-        // asserting the shape in order to read one field made this test the second place that
-        // decides what a golden is.
+        // Use the corpus decoder instead of inventing another golden-shape check.
         const recorded = readGolden(GOLDENS, id)
         expect({ id, family: recorded.family }).toEqual({ id, family })
       }

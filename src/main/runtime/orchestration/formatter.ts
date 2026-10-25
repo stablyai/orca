@@ -98,8 +98,7 @@ export function formatMessageBanner(
   return lines.join('\n')
 }
 
-// Why: grouping multiple banners under a single wrapper line lets agents detect
-// the message block boundary and parse each banner individually.
+// One wrapper marks the message block boundary while leaving each banner independently parseable.
 export function formatMessagesForInjection(messages: MessageRow[]): string {
   if (messages.length === 0) {
     return ''

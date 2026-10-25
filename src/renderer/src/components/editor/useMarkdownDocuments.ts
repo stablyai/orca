@@ -64,8 +64,7 @@ export function useMarkdownDocuments(
   onSave: (content: string) => Promise<boolean>
 ): UseMarkdownDocumentsResult {
   const worktreeId = activeFile.worktreeId
-  // Why: PTY activity replaces worktree metadata; only a routing-path change
-  // should wake every mounted editor's document-link controller.
+  // PTY metadata churn must not wake every document-link controller unless the routing path changed.
   const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)

@@ -17,8 +17,7 @@ vi.mock('expo-crypto', async () => {
   }
 })
 
-// The phone pages whatever grid the host names, so a small one keeps hashing and base64 cheap; the
-// link's cost per window is modelled in time below, not derived from the payload's size.
+// Use a small grid for cheap payload work; model slow-link cost with time rather than bytes.
 const RANGE_GRID = 1024
 const ONE_WAY_LATENCY_MS = 150
 /** One 384 KiB window sealed at ~40 KB/s, the slow relayed path #29697 reported. */
@@ -47,12 +46,7 @@ function noiseBytes(byteLength: number, seed: number): Uint8Array {
   })
 }
 
-/**
- * A host behind one ordered link: replies leave in the order they were made and each window
- * occupies the link for `windowTransferMs`, as on the desktop's E2EE socket. Requests go through
- * the phone's real request tracker, so its per-request timeout is the one a real fetch runs under.
- * `windowTransferMs: null` is a link that stops carrying anything after the manifest.
- */
+// Serialize replies on one link through the real request tracker; null transfer time stalls after manifest.
 function slowLinkHost(files: Record<string, Uint8Array>, windowTransferMs: number | null) {
   const assets = Object.entries(files)
     .map(([path, content]) => ({
@@ -139,7 +133,6 @@ function slowLinkHost(files: Record<string, Uint8Array>, windowTransferMs: numbe
   return { client, delivered: () => delivered, pending: () => tracker.size() }
 }
 
-/** Twelve windows: four assets of three, the shape of the bundle's larger images. */
 function bundleFiles(): Record<string, Uint8Array> {
   return Object.fromEntries(
     [0, 1, 2, 3].map((seed) => [`assets/image-${seed}.png`, noiseBytes(RANGE_GRID * 3, seed)])
@@ -188,11 +181,10 @@ describe('fetchMobileWebBundle over a slow link', () => {
 
     expect(isMobileWebBundleTransportFailure(outcome.error)).toBe(true)
     expect(String(outcome.error)).toContain('stalled')
-    // The manifest's round trip, then the stall budget; not the ten-minute per-read backstop.
+    // Fail against fetch-wide inactivity, not the per-read backstop.
     expect(outcome.settledAt - startedAt).toBeLessThan(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS + 1_000)
     expect(host.delivered()).toBe(1)
-    // The stalled reads still pending afterwards hold the reassembly buffers, so they must not
-    // outlive the fetch by long either.
+    // Pending reads retain reassembly buffers and must settle soon after fetch failure.
     expect(host.pending()).toBe(0)
     expect(Date.now() - startedAt).toBeLessThanOrEqual(6 * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
   })

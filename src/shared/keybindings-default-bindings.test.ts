@@ -1,4 +1,3 @@
-// Per-platform default bindings and action metadata in the registry.
 import { describe, expect, it } from 'vitest'
 import {
   agentTabActionId,
@@ -161,12 +160,9 @@ describe('keybindings', () => {
       )
     ).toBe(false)
 
-    // Why: tab.rename (Mod+R) intentionally shares its binding with
-    // browser.reload, but the two live in different scopes (tabs vs browser),
-    // so customizing tab.rename to its default must not flag a conflict.
+    // Tab rename/reload intentionally share Mod+R in different scopes; re-saving the default must not report conflict.
     expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+R'] })).toEqual([])
-    // Why: tab/workspace rename share the same active workspace keydown path,
-    // so Settings must reject user overrides that make one shadow the other.
+    // Tab/workspace rename share active-workspace keydown handling; warn when overrides shadow each other.
     expect(findKeybindingConflicts('darwin', { 'workspace.rename': ['Mod+R'] })).toEqual([
       {
         binding: 'Mod+R',
@@ -182,8 +178,7 @@ describe('keybindings', () => {
   })
 
   it('defaults tab-switch chords to the swapped convention for fresh installs', () => {
-    // New users get the widespread mapping: Shift+bracket cycles all tabs,
-    // Alt+bracket cycles within the active type.
+    // Fresh installs cycle all tabs with Shift+bracket, same-type tabs with Alt+bracket.
     expect(getEffectiveKeybindingsForAction('tab.nextAllTypes', 'darwin')).toEqual([
       'Mod+Shift+BracketRight'
     ])
@@ -199,9 +194,7 @@ describe('keybindings', () => {
   })
 
   it('pins the pre-swap chords via LEGACY_TAB_SWITCH_BINDINGS for upgrading installs', () => {
-    // These are what the seed migration writes so pre-existing users keep the
-    // shortcuts they learned; overriding an action with its legacy value must
-    // reproduce the old effective binding.
+    // Migration pins learned legacy chords; overriding with those values must reproduce prior bindings.
     expect(LEGACY_TAB_SWITCH_BINDINGS).toEqual({
       'tab.nextSameType': ['Mod+Shift+BracketRight'],
       'tab.previousSameType': ['Mod+Shift+BracketLeft'],
@@ -261,8 +254,7 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Alt+W'], 'darwin')).toBe('⌘⌥W')
     expect(formatKeybindingList(['Mod+Alt+W'], 'linux')).toBe('Ctrl+Alt+W')
 
-    // Why: macOS Option+W composes to a glyph (∑), so the chord must resolve
-    // through the physical-code fallback rather than the logical key.
+    // macOS Option+W produces ∑; match the physical code fallback.
     const macComposedCloseAll = {
       key: '∑',
       code: 'KeyW',
@@ -287,8 +279,7 @@ describe('keybindings', () => {
         terminalShortcutPolicy: 'orca-first'
       })
     ).toBe(true)
-    // Why: close-all is a workspace tab command, so terminal-first mode should
-    // keep passing the chord through to shells and TUIs.
+    // Terminal-first preserves close-all chords for shells/TUIs because this is a workspace-tab action.
     expect(
       keybindingMatchesAction('tab.closeAll', linuxCloseAll, 'linux', undefined, {
         context: 'terminal',
@@ -296,8 +287,7 @@ describe('keybindings', () => {
       })
     ).toBe(false)
 
-    // Why: Mod+Alt+W and Mod+W are neighbors; the extra Alt must keep the two
-    // actions from firing on each other's chord.
+    // The extra Alt must distinguish adjacent close-all/close-active chords.
     const macCloseActive = {
       key: 'w',
       code: 'KeyW',
@@ -314,8 +304,7 @@ describe('keybindings', () => {
     expect(definition?.group).toBe('Tabs')
     expect(definition?.scope).toBe('tabs')
 
-    // Why: both live in the Tabs scope, so rebinding closeAll onto Mod+W must
-    // surface as a conflict with tab.close in Settings.
+    // Shared Tabs scope must flag closeAll overrides colliding with tab.close.
     expect(findKeybindingConflicts('darwin', { 'tab.closeAll': ['Mod+W'] })).toContainEqual({
       binding: 'Mod+W',
       actionIds: expect.arrayContaining(['tab.close', 'tab.closeAll'])
@@ -344,9 +333,7 @@ describe('keybindings', () => {
   it('captures and round-trips the macOS Option-composed maximize chord', () => {
     const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
 
-    // Why: macOS Option+A composes to a glyph (å), so capture must resolve the
-    // chord through the physical-code fallback rather than the composed key,
-    // matching the matcher so a user override round-trips to the same binding.
+    // Option+A produces å; capture and matching must share physical fallback so overrides round-trip.
     const macComposedMaximize = {
       key: 'å',
       code: 'KeyA',
@@ -360,7 +347,6 @@ describe('keybindings', () => {
       value: 'Mod+Alt+Shift+A'
     })
     expect(keybindingMatchesAction(maximizeAction, macComposedMaximize, 'darwin')).toBe(true)
-    // The captured override formats back to the same effective shortcut.
     expect(
       getEffectiveKeybindingsForAction(maximizeAction, 'darwin', {
         [maximizeAction]: ['Mod+Alt+Shift+A']

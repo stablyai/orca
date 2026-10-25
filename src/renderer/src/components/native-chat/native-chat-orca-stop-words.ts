@@ -1,6 +1,3 @@
-// The words for a reply Orca's own stop cut off, by cause and machine. One function, so the chat's
-// row wording can change in one place.
-
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session-orca-stop'
 import { joinSentences } from '../../../../shared/sentence-joining'
@@ -42,8 +39,7 @@ function stoppedSentence(
   return cause === 'quit' && remoteHost ? remoteQuit(machine) : STOPPED[cause](machine)
 }
 
-/** The row's sentence. Where the host can continue a cut, Continue is the way on, so the row does
- *  not say it again; decided by the host, not the button, so the words never change on screen. */
+/** Base wording on host continuation support so the sentence stays stable as the button changes. */
 export function nativeChatOrcaStopRowText(
   cause: AgentSessionOrcaStopCause,
   machine: string,

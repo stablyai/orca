@@ -1,5 +1,4 @@
-// Every pane write, a client's layout.apply or a terminal main starts, goes through one guard that
-// keeps a closed tab closed; a client's own ids are also refused when another tab holds them.
+// Both runtime and client admission must preserve closed tabs and refuse cross-tab ID collisions.
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -21,7 +20,6 @@ function applied(
   return change.session ?? session
 }
 
-/** Tab one, closed by the user; tab two, open. */
 function closedAndOpen(): WorkspaceSessionState {
   let session = getDefaultWorkspaceSession()
   for (const ids of [ONE, TWO]) {
@@ -69,7 +67,7 @@ describe('the closed-id guard on every pane write, and the taken-id guard on a c
       ok: false,
       code: 'tab_exists'
     })
-    // A paired host starts each pane of a client's tab as a create under that tab's id.
+    // Paired hosts create each pane under the client's existing tab ID.
     expect(admitPaneToSession(HOST, session, createInTwo).value).toBe('admitted')
   })
 

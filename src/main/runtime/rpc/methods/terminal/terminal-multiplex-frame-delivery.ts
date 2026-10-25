@@ -27,7 +27,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (state.closed) {
       return false
     }
-    // Why: a seq-less Output chunk must carry sentinel 0, not the control-frame state.cursor, or it poisons the client's frame-drop tracker.
+    // Seq-less Output uses sentinel zero; a control cursor would corrupt client drop tracking.
     const resolvedSeq =
       typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : state.cursor++
     let sent: RpcBinarySendResult
@@ -38,7 +38,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       return false
     }
     if (sent === false) {
-      // Why: false means the transport discarded this frame; reconnect is the only available retry boundary with an authoritative snapshot.
+      // False means transport discarded the frame; only reconnect supplies an authoritative retry snapshot.
       state.closeMultiplex()
       return false
     }
@@ -62,7 +62,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     state.sendFrame(stream.streamId, TerminalStreamOpcode.WriteUnavailable)
   }
   state.sendInputAck = (stream, appliedSeq, kind): void => {
-    // Why: a detached stream's client already resends on its successor, which acks again.
+    // Detached-stream clients resend on successors, which acknowledge again.
     if (!isMultiplexStreamAttached(state, stream) || stream.inputSessionId === null) {
       return
     }

@@ -149,8 +149,7 @@ describe('transport rejection stays on the promise channel', () => {
     expect(isRpcDeliveryUnknown(caught)).toBe(true)
   })
 
-  // The cutover predicate matches class or exact message because instanceof misses across
-  // bundle copies; a clone from another copy must still read as a cutover through the descriptor.
+  // instanceof misses foreign bundle copies; cutover detection must also accept the exact message.
   it('keeps a cutover error from another bundle copy recognisable', async () => {
     class ForeignBundleCutoverError extends Error {}
     const error = new ForeignBundleCutoverError('RPC interrupted by connection migration')
@@ -301,8 +300,7 @@ describe('an incompatible reply', () => {
     expect((caught as RpcIncompatibleReplyError).issues.length).toBeGreaterThan(0)
   })
 
-  // A reply nobody can read says nothing about what the host did, so it must not look like
-  // either of the two errors the mutation retry loops replay on.
+  // Unreadable replies prove no mutation failure and must not match errors that authorize retry.
   it('authorizes no retry', async () => {
     const caught = await runRpcOperation(
       connectedSession(incompatible),
@@ -320,7 +318,6 @@ describe('an incompatible reply', () => {
     ).resolves.toBeNull()
   })
 
-  // `message` reaches toasts and screen copy, so the machine token lives on `code`/`name` instead.
   it('carries readable copy in the message and the token on code and name', async () => {
     const caught = await runRpcOperation(
       connectedSession(incompatible),

@@ -7,8 +7,6 @@ export const UI_ZOOM_MAX = 5
 
 export type UIZoomDirection = 'in' | 'out' | 'reset'
 
-/** Step an Electron zoom level one increment in the given direction, clamped
- *  to the app's supported range. 'reset' returns the 100% level. */
 export function stepUIZoomLevel(current: number, direction: UIZoomDirection): number {
   if (direction === 'reset') {
     return 0
@@ -17,9 +15,7 @@ export function stepUIZoomLevel(current: number, direction: UIZoomDirection): nu
   return Math.max(UI_ZOOM_MIN, Math.min(UI_ZOOM_MAX, next))
 }
 
-/** The scale Chromium applies to renderer CSS pixels at this zoom level.
- *  Renderer CSS px x factor = window DIP, which is why native geometry
- *  (traffic lights, OS cursor coords, emulated guest viewports) must convert. */
+/** CSS pixels × zoom factor = window DIP; convert for traffic lights, OS cursor positions and guest viewports. */
 export function uiZoomFactorFromLevel(level: number): number {
   return UI_ZOOM_BASE ** level
 }

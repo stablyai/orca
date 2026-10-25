@@ -208,7 +208,7 @@ describe('OrcaRuntimeService', () => {
       }))
     })
     expect(secondClient).toMatchObject({ adopted: false, topologyRevision: 1 })
-    // Switch-on, main's layout holds the binding (listed below); the record copies are never written (L80).
+    // Main-owned bindings live in the layout, not the record's legacy copies.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(agentPty).toMatchObject({
         tabId: 'tab-agent',
@@ -490,9 +490,7 @@ describe('OrcaRuntimeService', () => {
     const kill = vi.fn(() => true)
     const READY_SCREEN =
       ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n'
-    // Why scrollbackRows-aware: a visible-only request gets the grid in `data`;
-    // a scrollback request gets history. Collapsing the two would let a test
-    // pass on evidence the caller never asked for.
+    // Model visible-grid and scrollback responses separately so tests cannot pass on unrequested history.
     const serializeProviderBuffer = vi
       .fn()
       .mockImplementation(async (_ptyId: string, opts?: { scrollbackRows?: number }) => ({
@@ -589,8 +587,7 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
     ).resolves.toMatchObject({ satisfied: true })
-    // Why: the ready banner stays in scrollback for the whole session, so a
-    // working grid must not inherit idleness from its own history (#15569 review).
+    // A ready banner retained in scrollback must not make a working grid appear idle (#15569).
     serializeProviderBuffer.mockResolvedValueOnce({
       data: '  working on it (12s)\r\n  Esc to interrupt\r\n',
       scrollbackAnsi: READY_SCREEN,
@@ -653,8 +650,7 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
     ).rejects.toThrow('timeout')
     expect(serializeProviderBuffer).toHaveBeenCalledTimes(6)
-    // Why args, not counts: the one-shot responses above ignore their options,
-    // so only this asserts every idle probe asked for the visible grid alone.
+    // Assert options because the stubbed responses ignore whether the probe requested scrollback.
     expect(serializeProviderBuffer.mock.calls.slice(1)).toEqual([
       ['pty-legacy', { scrollbackRows: 0 }],
       ['pty-legacy', { scrollbackRows: 0 }],

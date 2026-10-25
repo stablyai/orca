@@ -1,10 +1,5 @@
-/**
- * Sleeping a workspace on an orcad-managed SSH host while the network to that host is gone: the
- * host cannot confirm the stop, so the workspace stays open with today's "kept open" toast and its
- * shell keeps running on the host; sleeping again once the network is back puts it to sleep. Loss
- * of contact is never taken as the terminals exiting. (The seeded workspace is the default branch,
- * which Hide sleeping never hides, so the row stays either way.)
- */
+// Without host contact, Sleep must keep the workspace open and shell alive until a connected retry confirms stop.
+// The default-branch fixture remains listed under Hide sleeping in either outcome.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { startFreezableTcpProxy, type FreezableTcpProxy } from './helpers/freezable-tcp-proxy'

@@ -1,5 +1,4 @@
-// Starts the repo's TypeScript 7 language server for coding agents, adapting its pull-only
-// diagnostics into pushed publishDiagnostics for clients that only accept pushes.
+// Adapt TypeScript 7 pull diagnostics for agent clients that only accept publishDiagnostics.
 import { spawnProcess } from '@orca/process-host'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from './run-typecheck-projects-in-parallel.mjs'
@@ -57,10 +56,7 @@ export function encodeLspMessage(message) {
   return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body])
 }
 
-/**
- * Sits between an agent client and the server. When the client did not advertise pull
- * diagnostics, it pulls after each open/change/save and on server refresh, then pushes.
- */
+// For push-only clients, pull diagnostics after open/change/save or server refresh, then publish them.
 export function createDiagnosticsBridge({
   toClient,
   toServer,

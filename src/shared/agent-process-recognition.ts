@@ -57,9 +57,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
-      // Why: claude-agent-teams is an Orca wrapper whose child process is the
-      // real `claude` binary. Do not let wrapper configs overwrite canonical
-      // CLI ownership for the same foreground process name.
+      // claude-agent-teams wraps real claude; wrapper config must not overwrite its canonical foreground ownership.
       if (!PROCESS_TO_AGENT.has(normalized)) {
         PROCESS_TO_AGENT.set(normalized, agent)
       }
@@ -72,8 +70,7 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (exact) {
     return exact
   }
-  // Why: node-pty can report Codex's packaged platform binary
-  // (for example codex-aarch64-ap) instead of the launch command.
+  // node-pty may report Codex's packaged platform binary rather than its launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
@@ -87,9 +84,7 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
-  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>` binary, so
-  // the foreground name never equals `muse` itself. The `muse-bin-` prefix also covers
-  // comm-truncated rows (`muse-bin-1.0.3-R`) without matching unrelated `muse-*` tools.
+  // Muse execs a versioned muse-bin binary; this prefix also covers truncated comm without matching unrelated muse-* tools.
   if (normalized.startsWith('muse-bin-')) {
     return PROCESS_TO_AGENT.get('muse')
   }
@@ -153,10 +148,7 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
-// Why: `muse` execs a versioned `muse-bin-<version>` binary (see above), so the
-// exact-name check never matches and readiness/follow-up delivery would stall.
-// Scoped to muse: a generic `-suffix` rule would misclassify short agent names
-// (see the ante-obsidian test).
+// Muse's versioned binary needs a scoped prefix match; generic suffix matching would misclassify names such as ante-obsidian.
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
   expectedProcess: string
@@ -186,9 +178,7 @@ export function recognizeAgentProcess(
 
 export function recognizeAgentProcessFromCommandLine(
   commandLine: string | null | undefined,
-  // Why: TUI consumers (status hooks, shell shadows) filter out headless
-  // one-shots (`claude -p …`); non-interactivity guards include them — a
-  // one-shot agent can't answer a prompt either.
+  // TUI status/shadows exclude headless one-shots; non-interactivity guards include them because they cannot answer prompts.
   options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
   if (!commandLine) {

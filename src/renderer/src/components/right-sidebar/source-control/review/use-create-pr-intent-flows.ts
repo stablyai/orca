@@ -5,10 +5,7 @@ import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-rev
 import { useSourceControlCreatePrIntentRun } from './use-create-pr-intent-run'
 import type { SourceControlReviewFlows } from './use-review-flows'
 
-/**
- * The one-click intent: commit, push and open a review in a single run. Reads its own git state
- * through dedicated probes rather than the panel's, so a stale render cannot mis-sequence the run.
- */
+/** Probe Git between intent steps so stale panel renders cannot mis-sequence commit/push/review. */
 export function useSourceControlCreatePrIntentFlows(
   foundation: SourceControlPanelFoundation,
   commitFlows: SourceControlCommitFlows,

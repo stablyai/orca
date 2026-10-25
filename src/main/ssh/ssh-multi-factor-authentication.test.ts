@@ -45,7 +45,6 @@ function parseFixtureKey(privateKey: string): ParsedKey {
   return key
 }
 
-/** An ssh-agent stand-in holding one key, so the agent rung can satisfy a publickey stage. */
 class SingleKeyAgent extends BaseAgent<ParsedKey> {
   private readonly key = parseFixtureKey(generatePrivateKey())
 
@@ -76,10 +75,7 @@ type MfaServer = {
   close: () => Promise<void>
 }
 
-/**
- * An OpenSSH-style `AuthenticationMethods a,b` host: each stage partial-succeeds into the next.
- * A stage given as a list accepts any of its methods; `authorizedKey` limits publickey to one key.
- */
+/** Model ordered AuthenticationMethods stages with partial success; method arrays allow alternatives and authorizedKey scopes publickey. */
 async function startMultiFactorServer(
   stages: (AuthStage | AuthStage[])[],
   authorizedKey?: ParsedKey
@@ -220,7 +216,6 @@ function makeResolved(port: number, identityFile: string[]): SshResolvedConfig {
   }
 }
 
-/** Drives ssh2 the way SshConnection does: one credential per keyboard-interactive prompt. */
 function connectWithOrcaConfig(
   target: SshTarget,
   resolved: SshResolvedConfig | null,
@@ -318,8 +313,7 @@ describe('multi-stage SSH authentication', () => {
       )
 
       await expect(ready).resolves.toBeUndefined()
-      // After the password stage partially succeeds the host only offers keyboard-interactive;
-      // re-offering keys there is what exhausts MaxAuthTries on real MFA hosts.
+      // Do not re-offer keys after password partial success; it exhausts MaxAuthTries before MFA.
       expect(server.attempts.filter((method) => method === 'publickey')).toHaveLength(0)
     } finally {
       await server.close()
@@ -370,8 +364,7 @@ describe('multi-stage SSH authentication', () => {
     })
 
     it('holds a first-factor challenge back until the attempt that carries the deferred key', async () => {
-      // A host taking either a key or a keyboard-interactive password, where only the deferred key
-      // is authorized: a challenge on the agent-first attempt is a dialog the key makes unnecessary.
+      // Deferred authorized keys must precede optional first-factor challenges to avoid needless prompts.
       const server = await startMultiFactorServer(
         [['publickey', 'keyboard-interactive']],
         deferredKey
@@ -419,8 +412,7 @@ describe('multi-stage SSH authentication', () => {
     })
 
     it('answers the second factor when the host first offered both a key and the challenge', async () => {
-      // ssh2 keeps the pre-agent list (publickey and keyboard-interactive) after the agent key
-      // partially succeeds, so only the agent's signature shows this challenge is a second factor.
+      // ssh2 retains pre-agent methods after partial success; the observed signature proves this is a second factor.
       const server = await startMultiFactorServer([
         ['publickey', 'keyboard-interactive'],
         'keyboard-interactive'

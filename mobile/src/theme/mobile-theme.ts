@@ -1,5 +1,4 @@
-// Orca mobile design tokens — matches desktop graphite/dark palette.
-// All screen files should import from here instead of using inline hex values.
+// Share desktop graphite tokens across mobile screens instead of introducing inline colors.
 
 export const colors = {
   bgBase: '#111111',
@@ -7,11 +6,9 @@ export const colors = {
   bgRaised: '#242424',
   borderSubtle: '#2a2a2a',
   editorSurface: '#1e1e1e',
-  // The chat composer: one lifted box whose round controls sit a step above it.
   composerSurface: '#1d1d1d',
   composerBorder: 'rgba(255, 255, 255, 0.08)',
   composerControl: '#2a2a2a',
-  // A picked skill inside the composer's text.
   skillToken: '#8ab4f8',
   skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
 
@@ -19,24 +16,20 @@ export const colors = {
   textSecondary: '#a1a1a1',
   textMuted: '#8c8c8c',
 
-  // Crisp near-white surface for the single primary action on a screen (the
-  // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
-  // disabled chrome, while staying monochrome (STYLEGUIDE: color is for state).
+  // Keep the primary-action surface bright and monochrome so it reads as a filled button.
   surfaceBright: '#f5f5f5',
 
   accentBlue: '#3b82f6',
-  // Text/icon color on a filled accent (accentBlue) button, where the muted
-  // textPrimary would lack contrast against the saturated fill.
+  // White text preserves contrast on saturated accent fills.
   onAccent: '#ffffff',
 
   statusGreen: '#22c55e',
   statusAmber: '#f59e0b',
   statusRed: '#ef4444',
-  // Merge CTA fill + its on-fill text, mirroring the desktop ChecksPanel's
-  // bg-green-600 "Squash and merge" button (green-600 / white).
+  // Match desktop’s merge CTA fill and text.
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
-  // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
+  // Match desktop’s merged-PR purple.
   statusPurple: '#a78bfa',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
@@ -45,8 +38,7 @@ export const colors = {
   // Desktop's `--diff-*-gutter`: a tinted row's line-number column.
   diffAddedGutter: 'rgba(129, 184, 139, 0.3)',
   diffDeletedGutter: 'rgba(199, 78, 57, 0.32)',
-  // Desktop's `--chat-diff-*`: diff text in the chat, mixed toward the foreground so it reads on a
-  // tinted row where the git decoration colours would not.
+  // Mix chat diff text toward foreground so it remains readable on tinted rows.
   chatDiffAdded: '#a5ccac',
   chatDiffRemoved: '#d68273',
 
@@ -63,8 +55,7 @@ export const colors = {
   terminalBg: '#1a1b26'
 } as const
 
-/** On your own message's fill (`colors.textPrimary`), where the dark palette's light text would
- *  vanish; its body text is `colors.bgBase`. */
+// Use dark copy on your own message’s bright fill.
 export const onBrightColors = {
   secondary: '#4a4a4a',
   link: '#1e40af',
@@ -86,7 +77,6 @@ export const radii = {
   input: 6,
   camera: 8,
   composer: 24,
-  // Attachment thumbnails and file cards inside the composer.
   composerItem: 12
 } as const
 

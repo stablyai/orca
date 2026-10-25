@@ -65,8 +65,7 @@ describe('parseManualNetworkAddress', () => {
     })
 
     it('rejects a MagicDNS-shaped hostname with a malformed label', () => {
-      // Leading/trailing hyphens are invalid in any RFC 1123 label,
-      // regardless of the `.ts.net` suffix.
+      // RFC 1123 forbids leading/trailing label hyphens even under ts.net.
       expect(parseManualNetworkAddress('-foo.ts.net').ok).toBe(false)
     })
   })
@@ -111,10 +110,7 @@ describe('parseManualNetworkAddress', () => {
     })
 
     it('rejects a host whose last label is numeric as an ambiguous IPv4', () => {
-      // The WHATWG URL parser downstream treats "ends in a number" as an IPv4
-      // signal and would reinterpret or fail to resolve these (`123` ->
-      // `0.0.0.123`; `foo.123` -> no-op fallback), so accepting one here would
-      // validate an address the main process dials differently.
+      // WHATWG URLs reinterpret numeric endings as IPv4 (123 → 0.0.0.123) or fail; accepting them would validate a host main dials differently.
       const bad = [
         '123',
         '123:8080',
@@ -132,8 +128,7 @@ describe('parseManualNetworkAddress', () => {
     })
 
     it('still accepts a hostname whose last label merely contains digits', () => {
-      // Only a fully-numeric (or hex) final label is ambiguous; a label like
-      // `com` or `nas1` is a normal hostname.
+      // Only wholly numeric/hex endings are ambiguous; nas1 remains a hostname.
       expect(parseManualNetworkAddress('host2.example.com').ok).toBe(true)
       expect(parseManualNetworkAddress('my-nas1').ok).toBe(true)
     })

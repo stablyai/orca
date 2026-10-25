@@ -11,7 +11,6 @@ function toBlocker(value: unknown): Blocker {
   return { ...record, id, sessionID }
 }
 
-/** One pane's TUI: its route, its view of the shared session store, and the shared event bus. */
 export function fakeTui(version = '2.0.14') {
   const listeners = new Set<(event: { details: BusEvent }) => void>()
   const sessions = new Map<
@@ -22,10 +21,9 @@ export function fakeTui(version = '2.0.14') {
   const running = new Set<string>()
   const permissions = new Map<string, Blocker[]>()
   const forms = new Map<string, Blocker[]>()
-  // What the server answers when the TUI re-fetches a permission list (reconnect).
   const serverPermissions = new Map<string, Blocker[]>()
   let permissionFetch: Promise<void> = Promise.resolve()
-  // Why: OpenCode keeps storage.memory across plugin hot reloads within one TUI process.
+  // OpenCode keeps storage.memory across hot reloads within the same TUI.
   const memories = new Map<string, unknown>()
   let route: { type: string; sessionID?: string } = { type: 'home' }
   const rootOf = (id: string): string => {
@@ -87,11 +85,9 @@ export function fakeTui(version = '2.0.14') {
     navigate(sessionID: string) {
       route = { type: 'session', sessionID }
     },
-    // The session data stops reporting a run without this TUI seeing its end event.
     loseEnd(sessionID: string) {
       running.delete(sessionID)
     },
-    // The session data reports a run whose start this TUI never saw.
     loseStart(sessionID: string) {
       running.add(sessionID)
       const session = sessions.get(sessionID)
@@ -99,7 +95,6 @@ export function fakeTui(version = '2.0.14') {
         session.outcome = undefined
       }
     },
-    // Holds the next permission list fetch until the returned release is called.
     holdPermissionFetch(): () => void {
       let release = (): void => {}
       permissionFetch = new Promise((resolve) => {
@@ -107,7 +102,7 @@ export function fakeTui(version = '2.0.14') {
       })
       return release
     },
-    // Ending events reach listeners before the session snapshot catches up.
+    // Deliver events before updating the snapshot, matching OpenCode’s end-event ordering.
     emit(event: BusEvent) {
       const sessionID = String(event.data.sessionID)
       let notified = false

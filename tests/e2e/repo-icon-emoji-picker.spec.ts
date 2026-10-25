@@ -1,9 +1,4 @@
-/**
- * Coverage for the full native emoji picker that replaced the hardcoded
- * 12-emoji grid in the repo icon settings (RepositoryIconTabs "Emoji" tab).
- * Verifies search + selection persist through the existing RepoIcon
- * contract, and captures the new picker for the PR screenshot record.
- */
+// Verify full-catalog emoji search/selection persists through RepoIcon and renders in repository settings.
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
@@ -11,9 +6,10 @@ import type { Repo } from '../../src/shared/repo-types'
 
 /** Opens the repo settings panel and pins the UI language to English. */
 async function openRepoSettings(page: Page, repoId: string): Promise<void> {
-  // Why: the host OS locale (e.g. ko-KR) drives Orca's default UI language.
-  // Pin English so this spec's locators are stable across dev machines and CI.
-  await page.evaluate(() => window.__store!.getState().updateSettings({ uiLanguage: 'en' }))
+  // Pin English because host locale controls default UI language.
+  await page.evaluate(async () => {
+    await window.__store!.getState().updateSettings({ uiLanguage: 'en' })
+  })
   await page.evaluate((repoId) => {
     const state = window.__store!.getState()
     state.openSettingsTarget({ pane: 'repo', repoId })
@@ -26,7 +22,6 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
   }
 }
 
-/** Captures a full-page screenshot and attaches it to the test report. */
 async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
   const screenshotPath = testInfo.outputPath(`${name}.png`)
   await page.screenshot({ path: screenshotPath })
@@ -51,7 +46,6 @@ test.describe('Repository icon emoji picker', () => {
     const picker = repoSection.locator('.repo-icon-emoji-picker')
     await expect(picker).toBeVisible({ timeout: 10_000 })
 
-    // Full catalog with search — the removed grid only ever offered 12 fixed emoji.
     const searchInput = picker.getByPlaceholder('Search emoji')
     await expect(searchInput).toBeVisible()
     await searchInput.fill('rocket')

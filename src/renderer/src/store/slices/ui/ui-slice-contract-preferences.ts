@@ -130,7 +130,7 @@ export type UISliceSurfaces = {
   ) => void
   setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
-  /** Whether the pet overlay is currently visible. Persisted so "Hide pet" survives reload. Independent of the experimentalPet flag (which gates whether it can render at all). */
+  /** Persisted pet visibility, independent of the experimentalPet render gate. */
   petVisible: boolean
   setPetVisible: (v: boolean) => void
   /** Which pet is active — a bundled id or a custom UUID. Persisted via PersistedUIState. */
@@ -140,7 +140,7 @@ export type UISliceSurfaces = {
   customPets: CustomPet[]
   addCustomPet: (model: CustomPet) => void
   removeCustomPet: (id: string) => void
-  /** Pet overlay size in CSS pixels (square). User-adjustable so an oversized imported sprite isn't stuck on screen. */
+  /** Square CSS-pixel size so imported sprites can be resized. */
   petSize: number
   setPetSize: (size: number) => void
   pendingRevealWorktree: UISliceCore['pendingRevealWorktree']
@@ -152,7 +152,7 @@ export type UISliceSurfaces = {
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
-  /** The floating workspace's directory, resolved from its setting the same way the runtime resolves a floating session's cwd. Null until resolved. */
+  /** Floating cwd resolved like runtime session cwd; null until resolved. */
   floatingWorkspacePath: string | null
   setFloatingWorkspacePath: (path: string | null) => void
   /** Whether the floating workspace overlay is open; on screen only while the feature is enabled too. */
@@ -162,11 +162,11 @@ export type UISliceSurfaces = {
 
 export type UISlicePersistence = {
   persistedUIReady: boolean
-  /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
+  /** Last hydrated/flushed values; debounced persistence diffs here to write only this client’s edits (STA-5781). */
   persistedUIWriteBaseline: PersistedUIWriteBaseline | null
-  /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
+  /** Preserve local values during in-flight writes so echoes cannot revert newer flip-backs. */
   persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
-  /** Bumped whenever hydration replaces the baseline; an ack whose write predates the bump must not fold, or it would erase a remote write that landed during the round trip. */
+  /** Baseline hydration generation fences old acks so they cannot erase intervening remote writes. */
   persistedUIWriteBaselineGeneration: number
   notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
   /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */

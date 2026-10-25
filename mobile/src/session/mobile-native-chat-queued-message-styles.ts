@@ -2,17 +2,14 @@ import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { COMPOSER_INSET_TOP } from './mobile-native-chat-composer-styles'
 
-// A card's actions touch as 44pt targets (platform floor) inside its row: Android drops touches
-// outside the parent, so the row is at least that tall and nothing overhangs it.
+// Keep 44pt targets inside the parent row because Android drops outside touches.
 const MIN_TOUCH_TARGET = 44
 const HEADER_HEIGHT = spacing.xl + spacing.sm
 const META_LINE_HEIGHT = typography.metaSize + spacing.xs
 
-// How far the box runs under the composer's top edge, so the two read as one piece.
 const COMPOSER_TUCK = 12
 
 export const queuedMessageStyles = StyleSheet.create({
-  // Inset from the composer's sides, and pulled down behind it: the composer draws after it.
   list: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.xs,
@@ -35,8 +32,7 @@ export const queuedMessageStyles = StyleSheet.create({
     gap: spacing.xs,
     paddingLeft: spacing.md
   },
-  // Large text: Clear all and Resume on a line of their own, under the label; at the largest sizes
-  // one button is all a small phone's line holds, so they wrap.
+  // Wrap header actions onto their own lines at large text sizes.
   headerActionsLine: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -78,7 +74,6 @@ export const queuedMessageStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontVariant: ['tabular-nums']
   },
-  // A long reason truncates in the space left; the count beside it never does.
   headerCaption: {
     flex: 1,
     minWidth: 0,
@@ -154,7 +149,6 @@ export const queuedMessageStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radii.button
   },
-  // The composer's 40pt button width; the row's last action keeps the full 44.
   iconAction: {
     minHeight: MIN_TOUCH_TARGET,
     width: 40,

@@ -44,8 +44,7 @@ export function DiffSectionHeader({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            // Why: stop both mouse-down and click on the path affordance so
-            // the parent section-toggle row cannot consume the interaction.
+            // Stop both mousedown and click so copying the path cannot toggle the parent section.
             void window.api.ui.writeClipboardText(path).catch((error) => {
               console.error('Failed to copy diff path:', error)
             })
@@ -81,11 +80,9 @@ export function DiffSectionHeader({
         {onOpenPreview != null && (
           <button
             type="button"
-            // Why: always visible (not hover-reveal) so HTML preview matches the
-            // single-file editor header and stays usable without hover (touch).
+            // Keep preview visible for touch and consistent with the single-file header.
             className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
             onClick={(event) => {
-              // Why: header owns stopPropagation so callers cannot forget and toggle the section.
               event.stopPropagation()
               onOpenPreview(event)
             }}
@@ -102,7 +99,7 @@ export function DiffSectionHeader({
           </button>
         )}
         <button
-          // Why: always visible so open-file matches Eye preview and works without hover (touch).
+          // Keep open-file visible for touch, matching preview.
           type="button"
           className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
           onClick={(event) => {

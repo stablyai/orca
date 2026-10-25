@@ -50,8 +50,7 @@ export async function requestTerminalTabCloseFromRenderer(
       TERMINAL_TAB_CLOSE_TIMEOUT_MS
     )
     const onResponse = (event: Electron.IpcMainEvent, response: TerminalTabCloseResponse): void => {
-      // Why: request IDs are visible to renderer code; only the selected main
-      // window may commit or reject its lifecycle transaction.
+      // Visible request IDs confer no authority; only the selected window may commit/reject its lifecycle transaction.
       if (event.sender !== webContents || response.requestId !== requestId) {
         return
       }

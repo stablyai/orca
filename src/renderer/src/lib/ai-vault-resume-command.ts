@@ -45,11 +45,7 @@ export type AiVaultResumeWorktreeArgs = {
 }
 
 export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
-  // Why an `env -u` prefix on the agent rather than a preceding clear statement:
-  // this text is COPIED, so it runs in a shell Orca never spawned and cannot
-  // seed. A clear statement has to test `$fish_pid`, an unbound expansion that
-  // aborts the line under `set -u` — and because the clear came first, it took
-  // the agent launch down with it (the regression that reverted #14863).
+  // Copied lines run in unknown shells; env -u avoids fish_pid probing that aborts under set -u before agent launch (#14863).
   const clearEnvNames =
     args.session.agent === 'codex' && args.session.codexHome === null
       ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
@@ -63,16 +59,7 @@ export function buildAiVaultResumeStartupForWorktree(
   return buildAiVaultResumeForWorktree(args, false)
 }
 
-/**
- * Rebuilds a drag-drop resume startup under the account home the host
- * substituted, or null when the payload cannot be repinned.
- *
- * Why: the drag payload's prebuilt command pins the session's recorded home,
- * which the substitution just proved belongs to the wrong account. A null
- * sessionCwd is a real value (session has no cwd; rebuild without a cd
- * prefix); only an ABSENT sessionCwd — a payload from an older serializer —
- * declines, because the original cwd is unrecoverable.
- */
+/** Rebuild with the substituted account home; the prebuilt command pins the wrong account. null cwd means no cd; absent cwd is an older payload whose original directory cannot be recovered. */
 export function buildAiVaultDropRepinStartup(args: {
   state: AiVaultResumeWorktreeArgs['state']
   payload: Pick<
@@ -103,8 +90,7 @@ export function buildAiVaultDropRepinStartup(args: {
 function buildAiVaultResumeForWorktree(
   args: AiVaultResumeWorktreeArgs,
   embedCwd: boolean,
-  /** Copy-path only: names the pasted line must strip off the agent itself.
-   *  Spawned startups drop them through `envToDelete` instead. */
+  /** Copied lines strip env from the agent command; spawned startups use envToDelete. */
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   assertAntigravityReferenceTarget(args)
@@ -152,7 +138,6 @@ function buildAiVaultResumeForWorktree(
   })
 }
 
-/** The platform and live shell a resume line is written for, and the Codex home it pins. */
 export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
@@ -160,8 +145,7 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
     !isLocalSession && args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
-  // Why: local shell settings do not describe a remote Windows host, whose
-  // queued resume command uses the remote default PowerShell syntax.
+  // Local shell settings cannot describe remote Windows hosts; preserve remote PowerShell-default quoting.
   const liveShell: AgentStartupShell | undefined =
     platform === 'win32'
       ? isLocalSession

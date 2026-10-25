@@ -1,12 +1,5 @@
-/**
- * Regression test for Hangul IME composition in the repository Display Name
- * setting (jamo decomposition: typing 가나다 produced ㄱㅏㄴㅏㄷㅏ).
- *
- * Why CDP: Playwright's keyboard API cannot drive IME composition. The CDP
- * `Input.imeSetComposition` command goes through Blink's real composition
- * pipeline, so a controlled-input value reset mid-composition cancels the
- * composition exactly like a real OS IME session.
- */
+// Reproduce 가나다 → ㄱㅏㄴㅏㄷㅏ from controlled Display Name resets during real Blink composition.
+// Use CDP Input.imeSetComposition because Playwright keyboard events cannot drive IME composition.
 import type { CDPSession, Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
@@ -26,11 +19,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
   }
 }
 
-/**
- * Minimal 2-set Korean IME combination table for the key sequence ㄱㅏㄴㅏㄷㅏ.
- * Returns the next composition text, plus the syllable to commit when the new
- * key cannot join the pending composition (간 + ㅏ → commit 가, compose 나).
- */
+// Model 2-set Korean ㄱㅏㄴㅏㄷㅏ joins and commits when a key cannot extend the pending syllable.
 function combineJamo(pending: string, key: string): { commit?: string; compose: string } {
   const joins: Record<string, { commit?: string; compose: string }> = {
     'ㄱ+ㅏ': { compose: '가' },
@@ -49,21 +38,8 @@ function combineJamo(pending: string, key: string): { commit?: string; compose: 
   return joins[`${pending}+${key}`] ?? { commit: pending, compose: key }
 }
 
-/**
- * Emulates a real 2-set Korean IME typing 가나다 slowly (keys: ㄱㅏㄴㅏㄷㅏ).
- *
- * Adaptive on purpose: a real OS IME is cancelled (ImeCancelComposition) when
- * the page rewrites the text backing its composition — exactly what a
- * controlled React input does when its store echo is async. That browser→IME
- * channel is not observable from page JS (no compositionend fires), so the
- * emulator detects the same condition directly: an input event whose value the
- * page clobbered right afterwards. After a clobber the IME restarts from an
- * empty state on the next key, which is what turned 가나다 into ㄱㅏㄴㅏㄷㅏ.
- *
- * The per-key delay models slow human typing: it gives the async updateRepo
- * store echo time to land between keystrokes, which is exactly the condition
- * that produced the full jamo decomposition.
- */
+// Emulate slow Korean IME typing and detect controlled-value clobbers after input; browser IME cancellation emits no observable compositionend.
+// Restart composition after each clobber, reproducing per-key async store echoes that split syllables into bare jamo.
 async function typeHangulGanadaSlowly(
   session: CDPSession,
   page: Page,
@@ -74,8 +50,7 @@ async function typeHangulGanadaSlowly(
     w.__imeClobbered = false
     el.addEventListener('input', () => {
       const seen = (el as HTMLInputElement).value
-      // Why: React restores the controlled value after the input event's
-      // dispatch but later than its microtasks, so poll on a macrotask.
+      // Poll on a macrotask because React restores controlled values after input microtasks.
       setTimeout(() => {
         if ((el as HTMLInputElement).value !== seen) {
           w.__imeClobbered = true
@@ -113,11 +88,7 @@ async function typeHangulGanadaSlowly(
     await page.waitForTimeout(200)
   }
 
-  // Why: a real IME commits the pending syllable (space/enter) at the end of a
-  // word, firing compositionend. Without this final commit the controlled
-  // input stays in composing state, so the component's defer-until-compositionend
-  // persist never runs. insertText replaces the composing region in place, so it
-  // finalizes to the same text rather than double-committing.
+  // Finish with compositionend so deferred persistence runs; insertText replaces the current region without double-committing.
   await session.send('Input.insertText', { text: committed + pending })
 }
 
@@ -143,9 +114,7 @@ test.describe('Repository Display Name IME composition', () => {
     const session = await orcaPage.context().newCDPSession(orcaPage)
     await typeHangulGanadaSlowly(session, orcaPage, displayNameInput)
 
-    // Why: with the store-bound controlled input, the async updateRepo echo
-    // reset the field mid-composition, aborting the IME session per keystroke
-    // and committing bare jamo (ㄱㅏㄴㅏㄷㅏ) instead of syllables.
+    // Require composed syllables despite async updateRepo echoes that previously cancelled each key.
     await expect(displayNameInput).toHaveValue('가나다')
 
     // The per-keystroke persist still reaches the store.

@@ -2,10 +2,7 @@ import { RELAY_ADMISSION_BUDGETS } from '@orca-cloud/relay-contract'
 import type { RelayCellConfig } from './config.js'
 import type { RelayDatabase, SqlRow } from './database.js'
 
-// The one owner of relay_cell_connection_limits.hard_cap. The director's configured cap and the
-// cap the cell last reported enforcing can differ while a cell is being resized; placement must
-// never count seats a running process does not have, so every capacity reader takes the lower.
-// A NULL report (a row no heartbeat has stamped yet) compares unknown and falls to the ELSE arm.
+// During resize, placement uses min(configured, reported) to avoid phantom seats; unstamped NULL reports take configured cap via ELSE.
 export const EFFECTIVE_HARD_CAP_SQL = `(CASE WHEN limits.reported_hard_cap < limits.hard_cap
   THEN limits.reported_hard_cap ELSE limits.hard_cap END)`
 
@@ -45,9 +42,7 @@ export function readCellConnectionCap(row: SqlRow): CellConnectionCap {
   }
 }
 
-// A cell may run below the configured cap (it has not been rolled onto a raise yet), never above
-// it, and its unobserved allowance is part of the placement ceiling so it must match exactly.
-// Returns the cap to record, or undefined when the report does not fit.
+// Reported cap may lag below configured, never exceed it; unobserved bound must match placement’s ceiling exactly. Return undefined for invalid reports.
 export function reportedHardCapWithinLimit(
   limit: SqlRow,
   report: { connectionHardCap?: number; connectionUnobservedBound?: number }
@@ -105,11 +100,7 @@ export async function recordReportedHardCap(
   }
 }
 
-// A cap-only change (same unobserved bound, either direction) changes nothing placement reads
-// beyond min(): the stored report stands, or failing one (a row an older director wrote) the cap
-// the cell was configured with until now is recorded as its report, so a raise waits for the cell
-// to report it. Telemetry rows survive, so a deploy that interleaves revisions with different caps
-// cannot wipe the fleet's headroom. A bound change keeps the old fail-closed reset.
+// Cap-only changes preserve reports/telemetry; seed missing legacy reports from the old cap so raises wait for heartbeat. This tolerates interleaved revisions; bound changes retain fail-closed reset.
 export async function writeCellConnectionLimit(
   transaction: RelayDatabase,
   cell: Pick<RelayCellConfig, 'id' | 'connectionHardCap' | 'connectionUnobservedBound'>,

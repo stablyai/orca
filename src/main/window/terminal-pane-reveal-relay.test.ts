@@ -68,7 +68,7 @@ describe('revealTerminalPaneInWindow', () => {
     const { requestId } = sentRequest()
     expect(sentRequest()).toEqual({ ...target, requestId })
 
-    // Why: request ids are readable by any renderer, so only the targeted window may answer.
+    // Visible request IDs confer no authority; only the targeted window can answer.
     reply({}, requestId, false)
     reply(webContents, 'other-request', false)
     reply(webContents, requestId, true)

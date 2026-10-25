@@ -185,8 +185,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         manager,
         paneTransports: paneTransportsRef.current,
         existingLayout: existing,
-        // Why resolved: a pane that serializes empty mid-replay must fall back to whichever home
-        // holds its last good copy, not only the shared one.
+        // Empty mid-replay captures must fall back to the last good shared or local buffer.
         priorBuffersByLeafId: resolveLeafScrollbackBuffers({
           shared: existing,
           localOnly: state.localOnlyScrollbackByTabId[tabId]
@@ -195,9 +194,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
       if (options?.localOnly && layout.buffersByLeafId) {
-        // Why split: the ordinary cold park fires on every workspace hide, and buffersByLeafId
-        // rides the remote projection. Keep the structure (root, ptyIds, titles) in the shared
-        // layout and put the bytes in the local-only field, which the export never enumerates.
+        // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
         const { buffersByLeafId, ...structureOnly } = layout
         setTabLayout(tabId, structureOnly)
         setTabLocalOnlyScrollback(tabId, buffersByLeafId)

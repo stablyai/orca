@@ -216,7 +216,6 @@ describe('pending changes over the desktop’s values', () => {
   it('keep only the latest intent for a section toggled twice', () => {
     const pending = addPendingViewChange([collapse(1, true)], collapse(2, false))
     expect(pending.map((change) => change.opId)).toEqual([2])
-    // The desktop already shows it expanded, the latest intent, so nothing waits.
     expect(reconcilePendingViewChanges(pending, { collapsedGroups: [] }, 2)).toEqual([])
   })
 
@@ -243,7 +242,6 @@ describe('pending changes over the desktop’s values', () => {
     }
     const pending = addPendingViewChange([narrowed], widened)
     expect(pending).toHaveLength(2)
-    // The scope the first wrote holds; its host list is the second's to settle.
     const waiting = reconcilePendingViewChanges(pending, { workspaceHostScope: 'ssh:a' }, 2)
     expect(waiting.map((change) => change.opId)).toEqual([2])
   })

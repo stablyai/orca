@@ -7,9 +7,8 @@ import {
 
 const LiveAgentWorktreeStatusSchema = z.enum(['working', 'monitoring', 'permission'])
 
-/** What keeps one workspace out of the sleeping sweep, as its host sees it. */
+/** Host-observed activity that prevents sleeping; lost contact is unverifiable, never gone. */
 const WorkspaceActivityFactsSchema = z.object({
-  /** Execution-boundary vocabulary: a host that only lost contact is unverifiable, never gone. */
   terminal: z.enum(['live', 'unverifiable']).nullable(),
   browser: z.boolean(),
   structuredChat: z.boolean(),
@@ -23,7 +22,7 @@ export const WorkspaceActivityFactsSnapshotSchema = z.object({
   facts: z.record(z.string(), WorkspaceActivityFactsSchema)
 })
 
-/** What a paired server reports for one of its own workspaces; the tabs are its clients' to add. */
+/** Server-owned activity; its clients add browser/chat tabs. */
 export const HostReportedActivitySchema = WorkspaceActivityFactsSchema.pick({
   terminal: true,
   agent: true
@@ -42,7 +41,7 @@ export const IDLE_WORKSPACE_ACTIVITY: WorkspaceActivityFacts = {
   agent: null
 }
 
-/** A host's bare-id activity under each key its rows list that id at; an unlisted id has no row. */
+/** Map host-local activity to every listed row key; unlisted IDs have no row. */
 export function keyWorkspaceActivityByRow(
   facts: Readonly<Record<string, WorkspaceActivityFacts>>,
   rows: Readonly<Record<string, { id: string }>>
@@ -84,7 +83,6 @@ export function liveAgentStatusOf(
   return entry.workingMode === 'monitoring' ? 'monitoring' : 'working'
 }
 
-/** A permission wait outranks work, and foreground work outranks monitoring. */
 export function strongerLiveAgentStatus(
   current: LiveAgentWorktreeStatus | null | undefined,
   next: LiveAgentWorktreeStatus

@@ -17,8 +17,7 @@ type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInser
     pastedTextEditor: (() => NativeChatComposerInput | null) | null
   }
 
-/** Typed and pasted insertion for the composer, exposed on the handle the chat
- *  root uses to route keystrokes and pastes into it. Returns the paste handler. */
+/** Expose typed/pasted insertion to pane routing and return the paste handler. */
 export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs

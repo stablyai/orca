@@ -199,16 +199,13 @@ export function getPosixPtyProcessGroups(
   if (!root || !hasControllingTty(root.tty)) {
     return null
   }
-  // Why: a development daemon can inherit its launch TTY. Never group-signal
-  // when Orca itself shares the PTY; fall back to the already-scoped root kill.
+  // A dev daemon may share the PTY; never group-signal Orca itself.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
   let members = rows.filter((row) => row.tty === root.tty)
   if (readSessionId) {
-    // Why: every devpts instance (e.g. each container) numbers ptys from 0, so a tty
-    // match alone can name another namespace's session. The node-pty shell leads its own
-    // session; setsid'd descendants dropped this tty and were never candidates (#16714).
+    // Container devpts numbers overlap: prove the root leads this session; setsid descendants no longer own its TTY (#16714).
     if (readSessionId(rootPid) !== rootPid) {
       return null
     }
@@ -287,15 +284,13 @@ export function signalPosixPtyProcessGroups(
         }
         throw error
       }
-      // Why: the PTY exit callback may reap a group between `ps` and killpg.
-      // ESRCH is proof that this captured owner is already gone, not failure.
+      // Exit callbacks may reap captured groups before killpg; ESRCH already proves them gone.
       if (!isProcessAlreadyGone(error) && firstError === undefined) {
         firstError = error
       }
       continue
     }
-    // Outside the try: this catch is the ESRCH contract, and a throw from the
-    // breadcrumb path would be rethrown as a failed kill.
+    // Keep breadcrumbs outside the kill catch so diagnostic errors cannot be classified as signal failures.
     if (signal === 'SIGKILL') {
       recordSelfInitiatedTreeKill({
         pid: pgid,

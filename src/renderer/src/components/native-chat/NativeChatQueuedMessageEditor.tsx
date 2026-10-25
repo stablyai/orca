@@ -14,8 +14,7 @@ import {
   type QueuedEditAttachTarget
 } from './use-native-chat-queued-edit-image-intake'
 
-/** The inline editor that replaces a queued card's row while it is edited. It lives in the card,
- *  not the composer, so it stays usable while a question or approval holds the composer's slot. */
+/** Edit inside the card so questions and approvals occupying the composer do not block queued-draft editing. */
 export function NativeChatQueuedMessageEditor({
   editor,
   sender,
@@ -104,8 +103,7 @@ export function NativeChatQueuedMessageEditor({
         value={editor.text}
         readOnly={editor.acquiring || editor.saving}
         onChange={(event) => editor.change(event.currentTarget.value)}
-        // Enter or Cmd/Ctrl+Enter saves, Shift+Enter is a newline, Escape cancels; an IME's own
-        // Enter and Escape never get here (`ImeTextarea`). Handled keys stay out of the prompt.
+        // Handle save/cancel keys outside the prompt; ImeTextarea keeps IME Enter/Escape out of this handler.
         onKeyDown={(event) => {
           const mod = isMacPlatform() ? event.metaKey : event.ctrlKey
           if (event.key === 'Escape') {
@@ -128,7 +126,6 @@ export function NativeChatQueuedMessageEditor({
       />
       <div className="mt-1.5 flex items-center gap-1.5">
         {intake.editable ? <QueuedEditAttachButton onAttach={intake.attach} /> : null}
-        {/* Without image input an empty edit just disables Save, as a text-only edit does. */}
         {intake.editable ? (
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             {empty

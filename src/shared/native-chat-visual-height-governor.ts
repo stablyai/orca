@@ -2,8 +2,7 @@ import { clampNativeChatVisualHeight } from './native-chat-visual-shell'
 
 const WINDOW_MS = 1_000
 const MAX_CHANGES_PER_WINDOW = 20
-// A page sized from the frame (100vh plus a margin) grows by the same small step on every report;
-// an animated expansion grows by varying steps and is left alone.
+// Repeated equal small growth reveals frame-relative sizing loops; variable-step animation is allowed.
 const RUNAWAY_STEP_PX = 64
 const RUNAWAY_STEP_TOLERANCE_PX = 1
 const RUNAWAY_GAP_MS = 500
@@ -14,11 +13,7 @@ export type NativeChatVisualHeightDecision =
   | { kind: 'defer'; retryInMs: number }
   | { kind: 'ignore' }
 
-/**
- * Turns a visual's reported heights into frame heights: clamped, rate-limited, and frozen against
- * further growth once the page is plainly growing because the frame grew (the same small step, again
- * and again). Shrinking stays allowed.
- */
+/** Clamp/rate-limit heights and freeze repeated frame-induced growth; continue allowing shrinkage. */
 export function createNativeChatVisualHeightGovernor(): {
   decide: (reported: number, now: number) => NativeChatVisualHeightDecision
 } {

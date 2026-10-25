@@ -12,13 +12,11 @@ import {
 import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 
-// Why this guard exists: xterm auto-replies to query sequences (DA1/DECRQM/OSC 10-11/CPR) via onData → shell stdin, so replaying recorded PTY bytes leaks stray replies onto the new shell's prompt.
-// The per-pane counter suppresses synthetic onData during replay parsing; xterm's user-input signal keeps real keystrokes flowing.
+// Guard replay auto-replies from shell stdin while xterm’s provenance keeps real typing flowing.
 
 export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 
-// Why stall handling exists: the decrement only runs on xterm's write completion; a wedged WriteBuffer or disposed-terminal race can drop it forever, latching the guard so it eats every keystroke (issue #2836).
-// Why release is probe-certified, not time-based: a blind timeout during a slow replay would leak xterm auto-replies into the shell/agent TUIs, so an empty FIFO probe certifies wedged only after a fully quiet window.
+// Lost completions can latch input forever; certify stalls with a FIFO probe plus a fully quiet window, since blind timeout release could leak replies (#2836).
 const REPLAY_GUARD_STALL_CHECK_MS = 10_000
 
 type ReplayTerminalOptions = {
@@ -79,11 +77,7 @@ type ReplayGuardWriteCallbacks = {
   onWriteFailure: () => void
 }
 
-/**
- * Engage the replay counter for one write and return its settlement callbacks.
- * Release runs exactly once — from write completion or the probe-certified stall
- * path — so a lost completion cannot latch the guard.
- */
+/** One write owns one counter settlement; parse completion or probe-certified failure releases it exactly once. */
 function engageReplayGuard(
   map: Map<number, number>,
   paneId: number,
@@ -168,9 +162,7 @@ function engageReplayGuard(
   }
 }
 
-/** Writes `data` into the pane's terminal with the replay guard engaged, so
- *  xterm's auto-replies to embedded query sequences don't leak to the shell.
- *  The counter increments/decrements so nested replays compose correctly. */
+/** Replay with a per-write guard so nested writes suppress auto-replies through their own parse completions. */
 export function replayIntoTerminal(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
@@ -238,8 +230,7 @@ export function replayIntoTerminalAsync(
   })
 }
 
-/** Resolves once every replay write queued on this terminal has parsed. A delayed
- *  FIFO probe covers a lost sentinel without treating elapsed time as proof. */
+/** Wait for every queued replay parse; delayed FIFO probes cover lost sentinels without treating elapsed time alone as proof. */
 export function waitForTerminalReplayWritesParsed(
   terminal: ReplayGuardWriteTarget,
   options: Pick<ReplayTerminalOptions, 'stallCheckMs'> = {}

@@ -1,6 +1,6 @@
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
-// Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
+// Leaf UUIDs survive pane break-out; exact match also supports legacy/unparseable keys.
 export function isEquivalentPaneKey(a: string, b: string): boolean {
   if (a === b) {
     return true
@@ -21,8 +21,7 @@ export function parseWorkerTerminalPriorOwnerIds(value: string): string[] | null
   }
 }
 
-// Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
-// text after the first ':', so this narrows candidates without deciding equivalence itself.
+// An indexable suffix prefilter narrows candidates; isEquivalentPaneKey still decides equivalence.
 export const RUN_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(coordinator_pane_key, instr(coordinator_pane_key, ':') + 1)"
 export const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =

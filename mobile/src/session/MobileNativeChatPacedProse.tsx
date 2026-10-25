@@ -6,7 +6,7 @@ import {
   type MobileNativeChatPacedText
 } from './use-mobile-native-chat-paced-text'
 
-/** One message owns the reveal; frames redraw only its prose subtree. */
+// Keep frame-driven reveal renders inside this message’s prose subtree.
 export function MobileNativeChatPacedProse({
   rowKey,
   blocks,

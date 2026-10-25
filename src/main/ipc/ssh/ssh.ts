@@ -49,6 +49,7 @@ import {
 } from './ssh-ipc-context'
 import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
 import { persistPortForwards } from './ssh-port-forward-persistence'
+import { recordForwardFailure } from './ssh-port-forward-unrestored'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { setSshHostServedListener } from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
@@ -84,6 +85,8 @@ const SSH_IPC_CHANNELS = [
   'ssh:updatePortForward',
   'ssh:removePortForward',
   'ssh:listPortForwards',
+  'ssh:listUnrestoredPortForwards',
+  'ssh:removeSavedPortForward',
   'ssh:listDetectedPorts'
 ] as const
 
@@ -125,6 +128,13 @@ export function registerSshHandlers(
           `[ssh] Port forward ${entry.localPort} → ${entry.remoteHost}:${entry.remotePort} closed unexpectedly${
             reason.detail ? `: ${reason.detail}` : ''
           }`
+        )
+        // An ssh that starts and later dies backs off like one that never started.
+        recordForwardFailure(
+          entry.connectionId,
+          entry,
+          reason.detail ?? 'exited unexpectedly',
+          'exit'
         )
       }
       persistPortForwards(entry.connectionId)

@@ -236,7 +236,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('drains a post-submit synchronized frame on the fast path when its end marker arrives late', async () => {
-      // Why (STA-1041): a submit-opened DEC 2026 frame must drain fast (~16ms) by open time, even when ConPTY splits its close past the 150ms window.
+      // Submit-opened DEC 2026 frames keep the fast ~16ms drain even when ConPTY splits their close past 150ms (STA-1041).
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
@@ -257,7 +257,6 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
-        // Enter submits; the synchronized repaint frame opens immediately after.
         sendTerminalInputThroughPane(pane, '\r')
         const repaintBody = 'opencode repaint '.repeat(200)
         expect(repaintBody.length).toBeGreaterThan(2048)
@@ -272,7 +271,6 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         expect(endChunk.length).toBeGreaterThan(2048)
         capturedDataCallback.current?.(endChunk)
 
-        // Fast path: the latency-sensitive coalesce window is ~16ms, not 1000ms.
         vi.advanceTimersByTime(20)
         expect(pane.terminal.write).toHaveBeenCalledTimes(1)
       } finally {
@@ -282,7 +280,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('keeps coalescing a synchronized frame end with no recent input behind the 1s fallback', async () => {
-      // Why (STA-1041): fast path is keystroke-only; a background split redraw waits the full fallback so Windows never rasterizes the transient cursor.
+      // Only keystrokes arm the fast path; background redraws retain the full fallback to hide transient Windows cursors (STA-1041).
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
@@ -303,7 +301,6 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
-        // No terminal input: this synchronized redraw is not submit-driven.
         const repaintBody = 'opencode repaint '.repeat(200)
         capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
         // Let the frame body drain via its 250ms hold-safety fallback before isolating the closing chunk.
@@ -313,11 +310,9 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         const endChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
         capturedDataCallback.current?.(endChunk)
 
-        // The fast 16ms window must NOT flush a background split-restore frame.
         vi.advanceTimersByTime(20)
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
-        // The full coalesce fallback still drains it so the frame is never lost.
         vi.advanceTimersByTime(1000)
         expect(pane.terminal.write).toHaveBeenCalledTimes(1)
       } finally {
@@ -327,8 +322,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     })
 
     it('clears the synchronized latch when ConPTY splits the frame end marker', async () => {
-      // Why: issue #8754 — a split \x1b[?2026l left the foreground latch armed, so every later
-      // chunk was held as frame body and the visible pane froze until the tab was blurred.
+      // Split DEC 2026 closes must release the foreground latch or later output freezes until blur (#8754).
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
@@ -354,14 +348,12 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         vi.advanceTimersByTime(300)
         pane.terminal.write.mockClear()
 
-        // ConPTY splits the closing marker across two chunks.
         capturedDataCallback.current?.(`${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?202`)
         capturedDataCallback.current?.('6l')
         vi.advanceTimersByTime(1100)
         expect(pane.terminal.write).toHaveBeenCalled()
         pane.terminal.write.mockClear()
 
-        // The frame is closed, so ordinary output must paint instead of being held as frame body.
         capturedDataCallback.current?.('command finished\r\n')
         vi.advanceTimersByTime(20)
         expect(pane.terminal.write).toHaveBeenCalled()
@@ -393,7 +385,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
-        // Load-bearing: Enter opens an INTERACTIVE frame that stays OPEN — the leak precondition, since the buggy set-branch is gated on !active.
+        // Keep the interactive frame open: the faulty !active branch only leaks when a prior frame is still active.
         sendTerminalInputThroughPane(pane, '\r')
         const repaintBody = 'opencode repaint '.repeat(200)
         expect(repaintBody.length).toBeGreaterThan(2048)
@@ -402,21 +394,18 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         vi.advanceTimersByTime(500)
         pane.terminal.write.mockClear()
 
-        // One chunk closes the prior frame and opens a new one ~500ms post-keystroke; the recompute must judge the new frame non-interactive from its own open time.
+        // Close and reopen after the interactive window; classify the new frame from its own start time.
         capturedDataCallback.current?.(`\x1b[?2026l\x1b[?2026h${repaintBody}`)
         vi.advanceTimersByTime(40)
         pane.terminal.write.mockClear()
 
-        // The new frame's split restore + end marker arrive in a later chunk.
         const staleEndChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
         expect(staleEndChunk.length).toBeGreaterThan(2048)
         capturedDataCallback.current?.(staleEndChunk)
 
-        // The fast ~16ms window must NOT flush this stale non-interactive frame.
         vi.advanceTimersByTime(20)
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
-        // Only the full 1s coalesce fallback drains it, restoring the protection.
         vi.advanceTimersByTime(1000)
         expect(pane.terminal.write).toHaveBeenCalledTimes(1)
       } finally {
@@ -447,7 +436,6 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
-        // Frame 1: submit-driven and interactive; opens and closes cleanly.
         sendTerminalInputThroughPane(pane, '\r')
         const repaintBody = 'opencode repaint '.repeat(200)
         expect(repaintBody.length).toBeGreaterThan(2048)
@@ -460,15 +448,12 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         vi.advanceTimersByTime(40)
         pane.terminal.write.mockClear()
 
-        // Frame 2's split cursor restore + end marker arrive in a later chunk.
         const secondEndChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
         capturedDataCallback.current?.(secondEndChunk)
 
-        // The fast ~16ms window must NOT flush this non-interactive second frame.
         vi.advanceTimersByTime(20)
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
-        // The full 1s coalesce fallback drains it so the frame is never lost.
         vi.advanceTimersByTime(1000)
         expect(pane.terminal.write).toHaveBeenCalledTimes(1)
       } finally {

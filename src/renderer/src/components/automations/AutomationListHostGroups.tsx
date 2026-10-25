@@ -17,15 +17,7 @@ import {
 } from './automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 
-/**
- * The All-hosts list: rows grouped by authority, each host anchoring its own
- * status row.
- *
- * The status sits on the host header rather than on the rows because it is a
- * fact about the host, and because a host with no rows still has to say why —
- * an unreachable host that rendered as an empty gap would read as "nothing
- * scheduled here", which is the one thing we have not established.
- */
+/** Keep status on each host header, including hosts with no rows; unreachable must never read as an empty schedule. */
 
 export type AutomationListHostGroupsProps = Omit<AutomationListLocalRowsProps, 'rows'> & {
   groups: readonly AutomationHostVisibleGroup[]

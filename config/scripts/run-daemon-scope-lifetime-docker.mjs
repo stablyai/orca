@@ -94,8 +94,7 @@ async function bundle(mode) {
   })
 }
 
-// Why three releases: OOMPolicy on scopes is rejected by systemd 249 (Ubuntu 22.04), accepted by
-// Debian's 252 and native from 253 (Debian 13's 257).
+// Cover OOMPolicy rejected by systemd 249, Debian-backported 252 support and native 253+ (Debian 13 uses 257).
 const baseImages = (
   process.env.ORCA_DAEMON_SCOPE_BASE_IMAGES ??
   'ubuntu:22.04,debian:bookworm-slim,debian:trixie-slim'

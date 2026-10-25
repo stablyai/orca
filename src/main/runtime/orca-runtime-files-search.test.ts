@@ -179,8 +179,7 @@ describe('RuntimeFileCommands', () => {
       const child = createRuntimeSearchChild()
       Object.defineProperty(child, 'pid', { value: undefined })
       Object.defineProperties(child, { stdout: { value: undefined }, stderr: { value: undefined } })
-      // Why a root that exists: an ENOENT spawn failure is also what a vanished workspace looks
-      // like, so this stays about the binary only while the search root is reachable.
+      // Keep root reachable so ENOENT proves missing binary rather than vanished workspace.
       resolveAuthorizedPathMock.mockResolvedValue(process.cwd())
       wslAwareSpawnMock.mockReturnValue(child)
 
@@ -205,8 +204,7 @@ describe('RuntimeFileCommands', () => {
     }
   )
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // WSL cd failure 97 exceeds rg's 0/1/2; classify it before binary-unavailable errors.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },

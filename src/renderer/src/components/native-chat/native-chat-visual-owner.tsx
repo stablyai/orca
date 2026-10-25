@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 
-/** The structured chat a transcript belongs to: where its visuals are read and what owns them. */
 export type NativeChatVisualOwner = {
   target: RuntimeClientTarget
   sessionId: string
@@ -16,7 +15,6 @@ export function useNativeChatVisualOwner(): NativeChatVisualOwner | null {
   return useContext(NativeChatVisualOwnerContext)
 }
 
-/** Names the structured chat below it as the owner of the visuals its replies show. */
 export function NativeChatVisualOwnerProvider({
   target,
   sessionId,

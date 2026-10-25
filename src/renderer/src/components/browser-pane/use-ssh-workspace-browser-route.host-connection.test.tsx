@@ -144,8 +144,7 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
   })
 
   it('keeps a failed route on its card while another pane redials the host, then recovers on connect', async () => {
-    // The e2e sequence: the user disconnects, a browser tab classifies the dead host, and the
-    // workspace's terminal redials it. Dial transients must not swap the card for "preparing".
+    // A sibling terminal redials the failed host; transient dialing must preserve the classified error card.
     setHost('unavailable')
     mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
     mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })

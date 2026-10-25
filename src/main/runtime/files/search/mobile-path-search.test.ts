@@ -100,8 +100,7 @@ describe('RuntimeMobileFilePathSearchCache', () => {
   })
 
   it('reloads an unevicted key once its TTL has elapsed', async () => {
-    // TTL expiry without capacity pressure — exercises the now >= expiresAt path
-    // that LRU eviction otherwise masks.
+    // Isolate TTL expiry from capacity eviction.
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
     const load = vi.fn(async (path: string) => ({ paths: [path], totalCount: 1, truncated: false }))
 

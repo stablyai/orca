@@ -73,9 +73,7 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
-// Why: a flat manifest keeps registration order explicit and provides one
-// grep-point for "what methods does the RPC server expose?" — useful when
-// auditing the security boundary or wiring new CLI commands.
+// Keep registration order and the full RPC/security surface visible in one manifest.
 export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,

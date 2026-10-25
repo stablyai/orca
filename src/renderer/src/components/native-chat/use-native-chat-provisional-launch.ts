@@ -11,7 +11,6 @@ import { subscribeStructuredAgentLaunchStatus } from '@/lib/structured-agent-ses
 import { relaunchFailedStructuredAgentSessionWithMessage } from '@/lib/structured-agent-session-launch-message'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
-/** A chat this view launched: a new conversation, or one resumed from history. */
 export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'
   /** The encoded selection the launch seeded, shown until the host names the model. */
@@ -46,7 +45,7 @@ function useLaunchView(
       read,
       subscribe: (notify: () => void) =>
         subscribeStructuredAgentLaunchStatus(() => {
-          // Capture accepted picks even when retirement happens before React renders.
+          // Capture accepted picks even if retirement precedes React rendering.
           read()
           notify()
         })
@@ -99,7 +98,6 @@ export function useNativeChatProvisionalLaunch(
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
-  // While the chat starts it takes no send, so Send stays off and the text stays in the box.
   const starting = lifecycle === 'pending' || lifecycle === 'visibility-unknown'
   const sendThroughLaunch = useCallback(
     (text: string, withImages: boolean, send: () => boolean | 'queued'): boolean | 'queued' => {
@@ -109,7 +107,6 @@ export function useNativeChatProvisionalLaunch(
       if (lifecycle !== 'failed' || !worktreeId) {
         return send()
       }
-      // A failed start restarts, and a text message goes as the restart's first message.
       if (!withImages && text.trim()) {
         return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
       }

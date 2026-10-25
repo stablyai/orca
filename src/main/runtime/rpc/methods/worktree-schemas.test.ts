@@ -113,9 +113,7 @@ describe('worktree RPC schemas', () => {
   })
 
   it('keeps a blanked display name on remote hosts instead of dropping the clear', () => {
-    // Blanking sends displayName:'' meaning "fall back to the branch/folder name".
-    // Coercing it to undefined made updateManagedWorktreeMeta's omitUndefinedProperties
-    // drop the key, so an SSH/paired-web rename-to-blank silently kept the old name.
+    // Blank displayName must survive omitUndefinedProperties to restore branch/folder fallback on SSH and paired web.
     const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', displayName: '' })
 
     expect(parsed.displayName).toBe('')

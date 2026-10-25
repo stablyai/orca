@@ -91,12 +91,9 @@ export type OpenCodeUsageDailyAggregate = {
 export type OpenCodeUsagePersistedDatabase = OpenCodeUsageProcessedDatabase & {
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
-  /** Session ids this database counted. Sibling copies (opencode-backup.db)
-   *  duplicate sessions; ownership keeps each session counted by exactly one
-   *  cached database across incremental scans. */
+  /** Persist ownership so sibling backups cannot double-count sessions across scans. */
   ownedSessionIds: string[]
-  /** True when this database saw sessions already claimed by another database.
-   *  When that owner disappears, only deferred databases need reparse. */
+  /** Only databases with deferred claims need reparse when an owner disappears. */
   hasDeferredClaims: boolean
 }
 

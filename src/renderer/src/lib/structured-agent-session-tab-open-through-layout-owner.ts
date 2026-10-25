@@ -1,6 +1,4 @@
-// A chat tab open in a layout-owner build: the window sends the open under the chat's own tab id;
-// main's frame draws the tab, and only then does the window select it. A caller acting on the
-// returned tab in the store waits with `afterPendingTab`.
+// Send open with the chat’s own tab ID, select only after main draws it, and use afterPendingTab before reading the returned tab from store.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'

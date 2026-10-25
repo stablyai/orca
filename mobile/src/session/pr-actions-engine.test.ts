@@ -37,14 +37,13 @@ describe('PrActionsEngine — scoped busy clear (overlapping actions)', () => {
       updatePRState: () => newer.promise
     })
 
-    // Start merge (sets busy = merge) but don't let it resolve yet.
     const mergePromise = engine.merge()
     expect(engine.isBusy({ kind: 'merge' })).toBe(true)
 
     const statePromise = engine.updateState('closed')
     expect(engine.isBusy({ kind: 'state' })).toBe(true)
 
-    // Now let the slow merge finish. Its finally must NOT clear a busy it no longer owns.
+    // Late merge completion must not clear a newer action’s busy state.
     slow.resolve({ ok: true })
     await mergePromise
     expect(engine.isBusy({ kind: 'state' })).toBe(true)
@@ -118,11 +117,9 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       refetch: () => {},
       onChange
     })
-    // Idle: error is already null. Action start must only notify for busy, not a
-    // redundant clearError path.
+    // Already-clear error state must not add a redundant action-start notification.
     onChange.mockClear()
     const p = engine.merge()
-    // First notify is setBusy only (setError(null) no-ops).
     expect(onChange).toHaveBeenCalledTimes(1)
     await p
   })

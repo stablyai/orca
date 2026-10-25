@@ -2,7 +2,6 @@ import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKSPACE = 'workspace-1'
-/** The artifact a scenario reads; the path decides which of the two artifact methods it asks. */
 function artifactSource(absolutePath: string) {
   return {
     source: 'terminalArtifact' as const,
@@ -17,12 +16,6 @@ function artifactSource(absolutePath: string) {
 
 const ARTIFACT = artifactSource('/logs/run.txt')
 
-/**
- * The file reads and writes a session file tab runs: ownership capture before a mutation, the
- * preview loader with its terminal-artifact grant refresh, the artifact save, and the tab doc's
- * three shapes. Each is an exported async function taking a client, so the recorded state is the
- * function's own answer and no React host is needed.
- */
 export function fileRequestMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -75,7 +68,6 @@ export function fileRequestMountAdapters(
           save(client, ARTIFACT, 'next', {
             onTerminalArtifactSourceRefreshed: (source: unknown) =>
               effect('artifact-source-refreshed', source),
-            // The verified arm re-reads the artifact first; the blind arm writes straight away.
             ...(name === 'blind' ? {} : { baseContent: 'base' })
           }).then((value: unknown) => {
             saved = value

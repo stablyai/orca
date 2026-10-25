@@ -12,12 +12,11 @@ export type PiHistoryResumePointWrite = {
   handle: AgentSessionProviderHandle
 }
 
-/** Where the chat's journal and Pi's entries were last known to meet; null is a session with no
- *  entries yet. */
+/** Last entry reconciled with the journal; null means the session has no entries yet. */
 export type PiHistoryAnchor = { entry: string | null }
 
 export type PiHistoryCaptureDeps = {
-  /** Revises the open's handle in place with where the chat's journal meets Pi's entries. */
+  /** Persist the reconciled Pi leaf and journal cursor in the open handle. */
   persistResumePoint?: (write: PiHistoryResumePointWrite) => Promise<void>
 }
 
@@ -26,28 +25,22 @@ export type PiHistoryCaptureParts = {
   fence: number
   connection: Pick<PiRpcConnection, 'request'>
   sink: StructuredAgentSessionEventSink | undefined
-  /** Resolves once the timeline holds no events the sink refused. */
+  /** Wait until every timeline event is accepted by the sink. */
   drained: () => Promise<void>
-  /** Changes whenever the chat's Pi does anything after a turn. */
   activity: () => number
   handle: () => AgentSessionProviderHandle | null
   persist?: PiHistoryCaptureDeps['persistResumePoint']
   logger: StructuredAgentSessionLogger
 }
 
-/**
- * After each turn the chat's Pi ran, saves the claim that its entries are shown: Pi's leaf, and the
- * journal position its rows reached. Bookkeeping only: never awaited by the turn, never failing a
- * send. A capture the chat moved past, or one that fails, saves nothing, so the next open treats
- * that turn as not accounted for and skips rather than duplicates.
- */
+/** Save reconciled cursors off the send path; failed or superseded captures leave later opens to skip ambiguous history. */
 export class PiHistoryCapture {
   private anchor: PiHistoryAnchor | undefined
   private queue: Promise<void> = Promise.resolve()
 
   constructor(private readonly parts: () => PiHistoryCaptureParts) {}
 
-  /** Built with its session, before the parts it reads when a turn ends exist. */
+  // Capture is constructed before its session dependencies exist.
   static forSession(
     session: Parameters<typeof piRpcHistoryCaptureParts>[0],
     deps: () => Parameters<typeof piRpcHistoryCaptureParts>[1]
@@ -55,7 +48,7 @@ export class PiHistoryCapture {
     return new PiHistoryCapture(() => piRpcHistoryCaptureParts(session, deps()))
   }
 
-  /** Only an open that left the claim at Pi's current leaf lets captures continue from it. */
+  /** Continue only when the opening claim reached Pi's current leaf. */
   start(anchor: PiHistoryAnchor | undefined): void {
     this.anchor = anchor
   }
@@ -101,7 +94,7 @@ export class PiHistoryCapture {
       return
     }
     const entry = answer.leafId
-    // The anchor only keeps the next read small; the saved claim is what an open trusts.
+    // The persisted claim governs future opens; this anchor only bounds the next read.
     this.anchor = { entry }
     await deps.persist?.({
       sessionId: deps.sessionId,
@@ -118,7 +111,6 @@ export class PiHistoryCapture {
   }
 }
 
-/** A session's parts, read when a turn ends: the capture is built before they exist. */
 function piRpcHistoryCaptureParts(
   session: Pick<PiRpcSession, 'input' | 'connection' | 'lane' | 'turns' | 'openedLink'>,
   deps: PiHistoryCaptureDeps & { logger: StructuredAgentSessionLogger }

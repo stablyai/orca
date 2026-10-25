@@ -1,6 +1,4 @@
-// The production wiring of the idle-edge mail redrive: the host the runtime installs must report
-// every status change to the runtime's mail redrive. The integration test installs its own callback,
-// so without this nothing pins the line that connects the two in the real app.
+// Exercise production status-to-mail-redrive wiring; integration tests inject that callback and cannot detect missing runtime wiring.
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'

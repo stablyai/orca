@@ -5,8 +5,7 @@ import { requestSkillFreshnessUpdateDialog } from '../skills/skill-freshness-upd
 import { useLatestSkillUpdateRun } from '../skills/skill-update-run-store'
 import { updatedSkillsLabel } from '../skills/skill-plan-op-copy'
 
-// Why: always rendered (not gated by `statusBarItems`). The dialog can be closed
-// while the run continues, so this segment is the only surface left reporting it.
+// Keep reporting after the update dialog closes; statusBarItems must not hide the remaining progress surface.
 export function SkillUpdateStatusSegment({
   iconOnly
 }: {

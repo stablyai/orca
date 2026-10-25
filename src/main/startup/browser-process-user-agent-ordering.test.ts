@@ -3,17 +3,13 @@ import { runMainProcessPreflight } from './main-process-preflight'
 
 const mocks = vi.hoisted(() => {
   const events: string[] = []
-  // Why a two-word app token: this file sets the dev app name to "Orca Development", and Electron
-  // builds the app token from that name. A single-token fixture could not exhibit the multi-word
-  // leak the cleaner exists to handle, so it disagreed with the scenario it set up.
-  // Why the engine comment: a real app.userAgentFallback always carries it, and the cleaner only
-  // touches identities that do — a fixture without it models a string Electron cannot produce.
+  // Use a two-word app token to expose partial removal; retain the engine identity required by the real cleaner.
   let userAgent =
     'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Orca Development/0.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
   const app = {
     isPackaged: false,
     exit: vi.fn(),
-    // Real `app` always carries this; preflight reads it to decide the Linux keyring backend.
+    // Preflight reads commandLine to select the Linux keyring backend.
     commandLine: { hasSwitch: vi.fn(() => false), appendSwitch: vi.fn() },
     getVersion: vi.fn(() => '1.0.0'),
     getPath: vi.fn(() => '/canonical-user-data'),
@@ -301,7 +297,6 @@ describe('browser process user-agent startup ordering', () => {
       mode: 'clean',
       userAgent: mocks.userAgent()
     })
-    // Both app-name words must be gone, not just the last: a single \S+ would have left "Orca".
     expect(mocks.userAgent()).not.toMatch(/Electron/)
     expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
   })

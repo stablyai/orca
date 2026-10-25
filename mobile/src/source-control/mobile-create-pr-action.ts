@@ -70,9 +70,7 @@ export function buildMobileCreatePrAction({
       onPress: noop
     }
   }
-  // Why: mirror desktop's structural provider gate (supportsHostedReviewCreation)
-  // instead of relying on the host always emitting a hidden blockedReason for
-  // non-creatable providers.
+  // Mirror the desktop provider gate; do not depend on hosts supplying hidden blocked reasons.
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,
@@ -85,13 +83,10 @@ export function buildMobileCreatePrAction({
   }
   const copy = hostedReviewCopy(eligibility.provider)
   const label = `Create ${copy.titleLabel}`
-  // Any in-flight git work blocks the action: runGitWorkflow no-ops while
-  // busyActionRef is set, so an enabled-looking button would silently do nothing.
+  // Busy workflows no-op; disable the action rather than expose an inert button.
   const busy = busyAction !== null
   const loading = busyAction !== null && BUSY_ACTIONS.has(busyAction)
-  // Why: while a newer eligibility request is loading we keep the prior ready
-  // snapshot for stable chrome, but must not act on it — treat stale-loading as
-  // disabled so a tap cannot fire against an out-of-date canCreate/pushFirst.
+  // Retain stale chrome during reload, but never create from its outdated eligibility.
   const stale = eligibilityState.kind === 'loading'
   const pushFirst = eligibility.blockedReason === 'needs_push'
 
@@ -103,8 +98,7 @@ export function buildMobileCreatePrAction({
       disabled,
       loading,
       pushFirst,
-      // Why: never hand a disabled descriptor a live handler — a tap must be a
-      // true no-op when busy/stale, not a deferred create against stale state.
+      // Disabled descriptors must have no live handler that can act against stale state.
       onPress: disabled ? noop : () => onCreatePr(pushFirst)
     }
   }

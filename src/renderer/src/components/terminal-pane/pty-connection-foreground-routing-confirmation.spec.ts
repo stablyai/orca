@@ -61,7 +61,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
     })
 
     describe('foreground routing confirmation authority', () => {
-      // Why: bindings share the tab-1/LEAF_1 pane key; give each case its own tabId so no other test's publish pollutes it.
+      // Use unique tab IDs to isolate published identity from sibling tests sharing LEAF_1.
       async function connectRestoredPaneForForegroundSampling(
         args: {
           ptyId?: string
@@ -144,8 +144,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           shellForeground: false
         }
 
-        // Hidden pane: sampleVisiblePaneForegroundAgent bails, so nothing would ever
-        // clear a pending flag. It must fail closed to the legacy encoding instead.
+        // Hidden panes skip visible sampling, so fail closed to legacy encoding without leaving an uncleared pending flag.
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()

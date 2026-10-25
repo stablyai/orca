@@ -49,11 +49,7 @@ export type ActivateOpenedSourceControlDiffTabOptions<T extends OpenedMobileSess
   switchSessionTab: (tab: T) => void
 }
 
-// Activation for a diff tab opened by tapping a changed file in the docked
-// source-control panel. Unlike the terminal path there is no "source terminal"
-// to guard against; instead we cancel if the user moved to a different tab
-// after the tap (no focus steal) and treat the diff already being active as
-// success. Returns true once activation is settled so retries can stop.
+// Diff opens have no source terminal; settle already-active tabs and stop activation if the user changed tabs after the tap.
 export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileSessionTabCandidate>(
   options: ActivateOpenedSourceControlDiffTabOptions<T>
 ): Promise<boolean> {
@@ -75,13 +71,11 @@ export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileS
     return false
   }
   const activeTabId = options.getActiveTabId()
-  // The post-open snapshot may already show the opened diff as active; that is
-  // success, not a focus steal, so settle without re-activating.
+  // Already-active diff tabs settle without another activation.
   if (activeTabId === opened.id) {
     return true
   }
-  // No focus steal: if the user moved to a different tab after the tap, leave
-  // them there instead of yanking focus back to the diff.
+  // A newer user selection must win over this asynchronous open.
   if (activeTabId !== options.activeTabIdAtTap) {
     return false
   }

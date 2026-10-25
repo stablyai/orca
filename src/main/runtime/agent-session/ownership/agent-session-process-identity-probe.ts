@@ -1,12 +1,5 @@
-/**
- * PID-reuse-safe process identity probe for the single-writer lease.
- *
- * Pids are reused within minutes on a busy host, and reuse happens precisely in the recovery
- * case, so a bare pid match is never proof. Every element of the identity tuple is unavailable
- * somewhere — start time costs a CIM query on Windows and is missing in some containers, /proc
- * does not exist on macOS — so an unanswerable identity reports `indeterminate` and is never read
- * as alive or dead.
- */
+/** PID presence alone cannot protect a single-writer lease from reuse.
+ * Start time/token evidence varies by host; unavailable identity stays indeterminate, never alive/dead proof. */
 
 import { readFile } from 'node:fs/promises'
 import type {
@@ -20,7 +13,7 @@ import {
   readWindowsProcessIdentityTableFresh
 } from '../../../windows/windows-process-table'
 
-/** Start times drift by scheduler granularity and clock reads; compare with a tolerance. */
+// Allow scheduler/clock granularity differences in process start times.
 export const PROCESS_START_TIME_TOLERANCE_MS = 2_000
 
 const PROCESS_START_TIME_TIMEOUT_MS = 5_000
@@ -39,7 +32,7 @@ function defaultIsPidPresent(pid: number): boolean {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    // Why: only ESRCH proves absence; permission and transient host failures must fail closed.
+    // Only ESRCH proves absence; permissions and transient failures remain inconclusive.
     return (error as NodeJS.ErrnoException)?.code !== 'ESRCH'
   }
 }
@@ -50,7 +43,7 @@ async function readLinuxProcessStartTimeMs(pid: number): Promise<number | null> 
       readFile(`/proc/${pid}/stat`, 'utf-8'),
       readFile('/proc/stat', 'utf-8')
     ])
-    // Field 22 is starttime in clock ticks; the comm field can contain spaces, so cut past ") ".
+    // /proc comm may contain spaces; parse starttime (field 22) after its closing parenthesis.
     const fields = stat.slice(stat.lastIndexOf(') ') + 2).split(' ')
     const ticks = Number(fields[19])
     const bootTimeSeconds = Number(/^btime\s+(\d+)$/m.exec(systemStat)?.[1])
@@ -114,14 +107,12 @@ async function readDarwinProcessStartTimesMs(
 }
 
 async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null> {
-  // A binary without the creation-time flag (one built before Orca's patch) would
-  // otherwise scan the whole table to produce `null` every time.
+  // Without creation-time capability, a full native scan would only return null.
   if (!isWindowsProcessStartTimeAvailable()) {
     return null
   }
   try {
-    // Identity flag set: only the creation time is read, so no command line is
-    // worth an `OpenProcess` per process here.
+    // Identity-only reads avoid per-process command-line OpenProcess calls.
     const row = (await readWindowsProcessIdentityTableFresh()).find(
       (candidate) => candidate.pid === pid
     )
@@ -150,10 +141,7 @@ async function readWindowsProcessStartTimesMs(
   return observed
 }
 
-/**
- * Process start time is the cross-platform PID-reuse guard when no provider hook can echo the
- * spawn token back to the owner probe.
- */
+/** Start time guards PID reuse when no provider hook can echo the spawn token. */
 export async function readProcessStartTimeMs(
   pid: number,
   platform: NodeJS.Platform = process.platform
@@ -224,10 +212,7 @@ export async function probeAgentSessionProcessIdentities(args: {
   )
 }
 
-/**
- * Probe one recorded owner. `observedExit` short-circuits everything: Orca watching that exact
- * process exit is the strongest evidence available.
- */
+/** Observed exit of this exact owner outranks other identity probes. */
 export async function probeAgentSessionProcessIdentity(args: {
   identity: AgentSessionProcessIdentity
   observedExit?: boolean
@@ -258,7 +243,7 @@ export async function probeAgentSessionProcessIdentity(args: {
     if (observed !== null) {
       if (Math.abs(observed - identity.processStartTimeMs) > PROCESS_START_TIME_TOLERANCE_MS) {
         if (matchedOn.includes('spawn-token')) {
-          // Why: contradictory evidence cannot prove that a token-authenticated child is dead.
+          // Contradictions cannot prove a token-authenticated child dead.
           return { outcome: 'indeterminate', reason: 'process identity evidence contradicted' }
         }
         return { outcome: 'identity-mismatch', field: 'process-start-time' }
@@ -267,8 +252,7 @@ export async function probeAgentSessionProcessIdentity(args: {
     }
   }
   if (matchedOn.length === 0) {
-    // Why: the pid exists and nothing PID-reuse-safe could be checked. Reporting a match here is
-    // exactly the case that produces two writers on one provider session.
+    // Existing PID without reuse-safe evidence cannot authorize another writer.
     return {
       outcome: 'indeterminate',
       reason: 'pid present but neither spawn token nor start time could be verified'
@@ -277,11 +261,7 @@ export async function probeAgentSessionProcessIdentity(args: {
   return { outcome: 'identity-matched', matchedOn }
 }
 
-/**
- * Probe a reservation that has no recorded process. `reservation-unused` requires positive proof
- * that nothing started — no process carrying the token and no provider-side activity after the
- * reservation — not an assumption that the crash beat the spawn.
- */
+/** Unrecorded reservations need positive no-start proof: neither token-bearing processes nor later provider activity. */
 export async function probeAgentSessionReservation(args: {
   spawnToken: string
   findProcessesWithSpawnToken: (spawnToken: string) => Promise<number[] | null>
