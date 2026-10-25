@@ -1,7 +1,7 @@
 import { runProcessSync, spawnProcess } from '@orca/process-host'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { availableParallelism, loadavg, totalmem } from 'node:os'
+import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
@@ -159,34 +159,9 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
   )
 }
 
-const MIN_TSRS_CHECKERS = 4
-
-/**
- * tsrs defaults to one checker per core for each project, so concurrent checks from many
- * agents oversubscribe a shared machine. Split only the cores the load average leaves idle.
- */
-export function resolveTsrsCheckers({ env = process.env, cores, load, projectsInFlight }) {
-  const pinned = env.ORCA_TYPECHECK_CHECKERS
-  if (pinned !== undefined && pinned !== '') {
-    const checkers = Number(pinned)
-    if (!Number.isInteger(checkers) || checkers < 1) {
-      throw new Error('ORCA_TYPECHECK_CHECKERS must be a positive integer')
-    }
-    return checkers
-  }
-  const idleCores = Math.max(0, cores - load)
-  return Math.min(
-    cores,
-    Math.max(MIN_TSRS_CHECKERS, Math.floor(idleCores / Math.max(1, projectsInFlight)))
-  )
-}
-
-export function resolveTypecheckCommand(
-  config,
-  { compiler, bunExecutable, bunThreads, checkers, root }
-) {
+export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
   if (compiler === 'tsrs') {
-    return resolveTsrsTypecheckCommand(config, root, { checkers })
+    return resolveTsrsTypecheckCommand(config, root)
   }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
@@ -204,13 +179,10 @@ export function resolveTypecheckCommand(
   }
 }
 
-function checkProject(
-  config,
-  { compiler, bunExecutable, bunThreads, checkers, root, spawnCompiler }
-) {
+function checkProject(config, { compiler, bunExecutable, bunThreads, root, spawnCompiler }) {
   return new Promise((resolve, reject) => {
     const child = spawnCompiler({
-      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, checkers, root }),
+      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }),
       stdio: 'inherit'
     })
     child.on('error', reject)
@@ -235,22 +207,16 @@ export async function runTypecheckProjects({
   projects = TYPECHECK_PROJECTS,
   spawnCompiler = spawnProcess,
   memoryBytes = totalmem(),
-  parallelism = availableParallelism(),
-  load = loadavg()[0]
+  parallelism = availableParallelism()
 } = {}) {
   const batches = typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism })
   if (compiler === 'bun' || compiler === 'tsrs') {
     // Keep a freed compiler slot busy while its peer finishes.
     const pending = batches.flat()
     const failures = []
-    const slots = Math.max(0, ...batches.map((batch) => batch.length))
-    const checkers =
-      compiler === 'tsrs'
-        ? resolveTsrsCheckers({ cores: parallelism, load, projectsInFlight: slots })
-        : undefined
     let next = 0
     await Promise.all(
-      Array.from({ length: slots }, async () => {
+      Array.from({ length: Math.max(0, ...batches.map((batch) => batch.length)) }, async () => {
         while (next < pending.length) {
           const index = next++
           try {
@@ -258,7 +224,6 @@ export async function runTypecheckProjects({
               compiler,
               bunExecutable,
               bunThreads,
-              checkers,
               root,
               spawnCompiler
             })

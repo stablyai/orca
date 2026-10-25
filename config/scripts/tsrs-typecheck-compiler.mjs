@@ -23,7 +23,7 @@ export function resolveTsrsLauncher(root) {
   return { launcher: join(dirname(manifestPath), bin.tsrs), version }
 }
 
-export function resolveTsrsTypecheckCommand(config, root, { checkers } = {}) {
+export function resolveTsrsTypecheckCommand(config, root) {
   const { launcher, version } = resolveTsrsLauncher(root)
   const project = relative(root, resolve(root, config))
   const identity = createHash('sha256').update(project).digest('hex').slice(0, 12)
@@ -41,8 +41,7 @@ export function resolveTsrsTypecheckCommand(config, root, { checkers } = {}) {
       '--incremental',
       'true',
       '--tsBuildInfoFile',
-      join(cacheDirectory, `${basename(config, '.json')}-${identity}.tsbuildinfo`),
-      ...(checkers === undefined ? [] : ['--checkers', String(checkers)])
+      join(cacheDirectory, `${basename(config, '.json')}-${identity}.tsbuildinfo`)
     ],
     cwd: root
   }
