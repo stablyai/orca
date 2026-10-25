@@ -5,6 +5,24 @@
  */
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 
+// Caller frames captured where a spawn enters the daemon router, before any await drops them.
+const callersBySessionId = new Map<string, string[]>()
+
+/** Records who asked for this session's spawn; the async spawn path keeps no caller frames. */
+export function rememberSpawnCaller(sessionId: string | undefined): void {
+  if (!sessionId) {
+    return
+  }
+  const frames = (new Error('wsl spawn caller').stack ?? '')
+    .split('\n')
+    .slice(2, 10)
+    .map((frame) => frame.trim())
+  callersBySessionId.set(sessionId, frames)
+  if (callersBySessionId.size > 64) {
+    callersBySessionId.delete(callersBySessionId.keys().next().value ?? '')
+  }
+}
+
 export function logWslSpawnOrigin(spawn: {
   sessionId: string
   wslDistro: string | undefined
@@ -16,12 +34,7 @@ export function logWslSpawnOrigin(spawn: {
   if (!spawn.wslDistro) {
     return
   }
-  // The frames above the daemon client name the caller; four are enough to tell them apart.
-  const caller = (new Error('wsl spawn origin').stack ?? '')
-    .split('\n')
-    .slice(2)
-    .filter((frame) => !/[\\/]daemon[\\/]/.test(frame))
-    .slice(0, 4)
-    .map((frame) => frame.trim())
+  const caller = callersBySessionId.get(spawn.sessionId) ?? []
+  callersBySessionId.delete(spawn.sessionId)
   console.info('[wsl-spawn-origin]', JSON.stringify({ ...spawn, caller }))
 }

@@ -1,6 +1,7 @@
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
+import { rememberSpawnCaller } from './daemon-spawn-origin-log'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -57,6 +58,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    rememberSpawnCaller(opts.sessionId)
     if (this.retirement.admissionClosed) {
       throw new Error('Terminal daemon is decommissioning')
     }
