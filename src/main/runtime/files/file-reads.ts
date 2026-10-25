@@ -24,7 +24,11 @@ import {
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
-import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem-auth'
+import {
+  extraRootsForPersistedOpenFile,
+  resolveRuntimeAuthorizedPath
+} from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -49,15 +53,25 @@ export class RuntimeFileReads {
     const { worktree } = target
     // Why: an `ssh:` host fails before path validation, as it always has.
     requireLocalRuntimeFileRoute(target)
-    if (!isSafeMobileRelativePath(relativePath)) {
+    const persisted = !isSafeMobileRelativePath(relativePath)
+      ? findPersistedOpenFilePath(store, worktree.id, relativePath)
+      : null
+    if (!isSafeMobileRelativePath(relativePath) && !persisted) {
       throw new Error('invalid_relative_path')
     }
-    if (isMobileBinaryPath(relativePath)) {
+    const targetCheckPath = persisted ? persisted.filePath : relativePath
+    if (isMobileBinaryPath(targetCheckPath)) {
       throw new Error('binary_file')
     }
 
-    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = await readLocalMobileFile(filePath, store)
+    const filePath = persisted
+      ? persisted.filePath
+      : joinWorktreeRelativePath(worktree.path, relativePath)
+    const content = await readLocalMobileFile(
+      filePath,
+      store,
+      persisted ? { extraRoots: persisted.extraRoots } : undefined
+    )
     const truncated = truncateMobileFilePreview(content)
 
     return {
@@ -78,10 +92,31 @@ export class RuntimeFileReads {
       maxContentBytes === undefined
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
         : previewableBinaryByteLimit(maxContentBytes)
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    requireLocalRuntimeFileRoute(target)
+    const store = this.host.requireStore()
+    let rawPath: string
+    let authOptions: ResolveAuthorizedPathOptions | undefined
+    if (!isSafeMobileRelativePath(relativePath)) {
+      const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+      requireLocalRuntimeFileRoute(target)
+      const persisted = findPersistedOpenFilePath(store, target.worktree.id, relativePath)
+      if (!persisted) {
+        const explorerTarget = await resolveFileExplorerPath(
+          this.host,
+          worktreeSelector,
+          relativePath
+        )
+        rawPath = explorerTarget.path
+      } else {
+        rawPath = persisted.filePath
+        authOptions = { extraRoots: persisted.extraRoots }
+      }
+    } else {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      requireLocalRuntimeFileRoute(target)
+      rawPath = target.path
+    }
     // Why: sized by extension instead of a stat round trip.
-    const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveRuntimeAuthorizedPath(rawPath, store, authOptions)
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
@@ -172,12 +207,36 @@ export class RuntimeFileReads {
   }
 }
 
-async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
+function findPersistedOpenFilePath(
+  store: RuntimeStore,
+  worktreeId: string,
+  relativePath: string
+): { filePath: string; extraRoots: readonly string[] } | null {
+  const openFile = store
+    .getWorkspaceSession?.()
+    ?.openFilesByWorktree?.[worktreeId]?.find(
+      (candidate) =>
+        !candidate.externalSshTargetId &&
+        (candidate.relativePath === relativePath || candidate.filePath === relativePath)
+    )
+  if (!openFile) {
+    return null
+  }
+  const extraRoots = extraRootsForPersistedOpenFile(openFile.filePath)
+  return extraRoots.length > 0 ? { filePath: openFile.filePath, extraRoots } : null
+}
+
+async function readLocalMobileFile(
+  filePath: string,
+  store: RuntimeStore,
+  options?: ResolveAuthorizedPathOptions
+): Promise<string> {
   // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
   const { bytes } = await readLocalRuntimeFilePrefix(
     filePath,
     store,
-    MOBILE_FILE_READ_MAX_BYTES + 1
+    MOBILE_FILE_READ_MAX_BYTES + 1,
+    options
   )
   return bytes.toString('utf8')
 }
@@ -186,9 +245,10 @@ async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promi
 export async function readLocalRuntimeFilePrefix(
   filePath: string,
   store: RuntimeStore,
-  maxBytes: number
+  maxBytes: number,
+  options?: ResolveAuthorizedPathOptions
 ): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store)
+  const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store, options)
   const fileStat = await stat(authorizedPath)
   const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')

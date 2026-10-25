@@ -6,6 +6,7 @@ import {
   resolveFilesystemRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem-auth'
 import type {
   createLocalFilesystemProvider,
   LocalFilesystemProvider,
@@ -80,11 +81,18 @@ export function requireLocalRuntimeFileRoute(target: {
 /** A provider for the target's own host, authorized against `host`'s store. */
 export function requireRuntimeFileProvider(
   target: { executionHostId: ExecutionHostId },
-  host: RuntimeLocalFileHost
+  host: RuntimeLocalFileHost,
+  authOptions?: ResolveAuthorizedPathOptions
 ): LocalFilesystemProvider {
   return requireLocalRuntimeFileRoute(target).createProvider({
     requireStore: () => host.requireStore(),
-    resolveAuthorizedPath: resolveRuntimeAuthorizedPath
+    resolveAuthorizedPath: authOptions?.extraRoots?.length
+      ? (targetPath, store, options = {}) =>
+          resolveRuntimeAuthorizedPath(targetPath, store, {
+            ...options,
+            extraRoots: [...(options.extraRoots ?? []), ...(authOptions.extraRoots ?? [])]
+          })
+      : resolveRuntimeAuthorizedPath
   })
 }
 

@@ -20,6 +20,7 @@ import { OrchestrationError } from './orchestration/orchestration-error'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { FILE_METHODS } from './rpc/methods/files'
 import { SESSION_TAB_MARKDOWN_METHODS } from './rpc/methods/session-tab-markdown-methods'
+import type * as ChatScratchFileRoot from './files/chat-scratch-file-root'
 
 // Why: authorization is not under test; both runtimes read a temp workspace the store never registered.
 vi.mock('./files/chat-scratch-file-root', async (importOriginal) => ({
@@ -687,6 +688,53 @@ describe("a phone's Markdown tab with no window, on a desktop's untitled documen
       runtime.saveMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, untitled, read.version, '# Phone\n')
     ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
     expect(await readFile(untitled, 'utf8')).toBe('# Phone\n')
+  })
+
+  it('authorizes reading and saving a persisted external Markdown tab outside workspace roots', async () => {
+    const actualAuth = await vi.importActual<typeof ChatScratchFileRoot>(
+      './files/chat-scratch-file-root'
+    )
+    const externalDir = await mkdtemp(join(tmpdir(), 'orca-external-markdown-tab-'))
+    const externalFile = join(externalDir, 'ai_era_early_childhood_education.md')
+    await writeFile(externalFile, '# External Brain Doc\n')
+    try {
+      const runtime = await runtimeOnHost('local', sessionWithFile(externalFile, externalFile))
+      const authSpy = vi
+        .spyOn(await import('./files/chat-scratch-file-root'), 'resolveRuntimeAuthorizedPath')
+        .mockImplementation(actualAuth.resolveRuntimeAuthorizedPath)
+
+      const read = await runtime.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, externalFile)
+      expect(read).toMatchObject({
+        tabId: externalFile,
+        filePath: externalFile,
+        relativePath: externalFile,
+        content: '# External Brain Doc\n',
+        editable: true
+      })
+      expect(authSpy).toHaveBeenCalledWith(
+        externalFile,
+        expect.anything(),
+        expect.objectContaining({
+          extraRoots: [externalFile]
+        })
+      )
+
+      await expect(
+        runtime.saveMobileMarkdownTab(
+          `id:${TEST_WORKTREE_ID}`,
+          externalFile,
+          read.version,
+          '# Updated External Brain Doc\n'
+        )
+      ).resolves.toMatchObject({
+        content: '# Updated External Brain Doc\n',
+        isDirty: false
+      })
+      expect(await readFile(externalFile, 'utf8')).toBe('# Updated External Brain Doc\n')
+      authSpy.mockRestore()
+    } finally {
+      await rm(externalDir, { recursive: true, force: true })
+    }
   })
 })
 
