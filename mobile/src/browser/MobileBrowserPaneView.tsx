@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { Linking } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
@@ -141,7 +141,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             disabled={controlsDisabled}
             label="Open PDF externally"
             onPress={() => {
-              void Linking.openURL(tab.url)
+              openExternalLink(tab.url)
             }}
           >
             <ExternalLink size={15} color={buttonColor(!controlsDisabled)} />

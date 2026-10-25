@@ -32,6 +32,14 @@ type Props = {
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
+  if (mobilePdfHandoffMime(options.relativePath)) {
+    const media = {
+      worktreeId: options.worktreeId ?? '',
+      relativePath: options.relativePath,
+      mimeType: 'application/pdf'
+    }
+    return <MobilePdfHandoff media={media} client={options.client ?? null} title={options.title} />
+  }
   if (preview.status === 'loading') {
     return (
       <View style={styles.state}>
@@ -51,14 +59,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         <Text style={styles.stateText}>Empty file</Text>
       </View>
     )
-  }
-  if (mobilePdfHandoffMime(options.relativePath)) {
-    const media = {
-      worktreeId: options.worktreeId ?? '',
-      relativePath: options.relativePath,
-      mimeType: 'application/pdf'
-    }
-    return <MobilePdfHandoff media={media} client={options.client ?? null} title={options.title} />
   }
   if (preview.kind === 'media') {
     return (

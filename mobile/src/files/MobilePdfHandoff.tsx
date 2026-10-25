@@ -3,8 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import type { MobileFileMedia } from './mobile-file-media'
-import { downloadMobileFileMedia } from './mobile-file-media-download'
-import { createMobileMediaSink } from './mobile-media-preview-cache'
+import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
@@ -27,20 +26,44 @@ export function MobilePdfHandoff(props: Props) {
       return
     }
     const controller = new AbortController()
-    let sink: ReturnType<typeof createMobileMediaSink> | null = null
+    const parts: Uint8Array[] = []
+    const sink: MobileMediaSink = {
+      append: (bytes) => {
+        parts.push(new Uint8Array(bytes))
+      },
+      finish: () => 'pending',
+      dispose: () => {
+        parts.length = 0
+      }
+    }
+    let fileUri: string | null = null
     setState({ status: 'downloading', bytes: 0, total: 0 })
     void (async () => {
       try {
-        sink = createMobileMediaSink(media.relativePath, media.mimeType)
-        const uri = await downloadMobileFileMedia(
-          client,
-          media,
-          sink,
-          controller.signal,
-          (bytes, total) => setState({ status: 'downloading', bytes, total })
+        await downloadMobileFileMedia(client, media, sink, controller.signal, (bytes, total) =>
+          setState({ status: 'downloading', bytes, total })
         )
+        if (controller.signal.aborted) {
+          return
+        }
+        const total = parts.reduce((sum, part) => sum + part.byteLength, 0)
+        const bytes = new Uint8Array(total)
+        let offset = 0
+        for (const part of parts) {
+          bytes.set(part, offset)
+          offset += part.byteLength
+        }
+        const FileSystem = await import('expo-file-system')
+        const safeName = (media.relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
+          /[^a-zA-Z0-9._-]/g,
+          '_'
+        )
+        const file = new FileSystem.File(FileSystem.Paths.cache, `orca-pdf-handoff-${safeName}`)
+        file.create({ overwrite: true })
+        file.write(bytes)
+        fileUri = file.uri
         if (!controller.signal.aborted) {
-          setState({ status: 'ready', uri })
+          setState({ status: 'ready', uri: fileUri })
         }
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -53,7 +76,15 @@ export function MobilePdfHandoff(props: Props) {
     })()
     return () => {
       controller.abort()
-      sink?.dispose()
+      sink.dispose()
+      if (fileUri) {
+        try {
+          const FileSystem = require('expo-file-system')
+          new FileSystem.File(fileUri).delete()
+        } catch {
+          // Best effort cleanup.
+        }
+      }
     }
   }, [client, media, attempt])
 
