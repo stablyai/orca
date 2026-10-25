@@ -1,4 +1,7 @@
-import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
+import {
+  AgentHookStartup,
+  listenForAgentHooksOnPreferredPort
+} from '../../../shared/agent-hook-startup'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -17,12 +20,16 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
+import { isManagedHttpHookRequest } from '../managed-http-hook'
+import { admitHttpHookBody, endHookRequest } from './server-claude-http-hook-admission'
 
 type HookServerStartOptions = {
   env?: string
   userDataPath?: string
   endpointNamespace?: string
   statusHooksEnabled?: boolean
+  /** Keep the published port and token, so http hook URLs and surviving PTY env stay valid. */
+  reuseEndpoint?: boolean
 }
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
@@ -51,7 +58,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
       // Namespace dev endpoints per instance; packaged endpoints stay stable for PTY reconnect.
       this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
     }
-    this.token = randomUUID()
+    const published = this.readReusableEndpoint(options?.reuseEndpoint === true)
+    this.token = published?.token ?? randomUUID()
     this.endpointFileWritten = false
     this.closeStatusSnapshotWriter()
     if (this.statusHooksEnabled) {
@@ -61,14 +69,13 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
       return
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+      const httpHook = isManagedHttpHookRequest(req.url)
       if (req.method !== 'POST') {
-        res.writeHead(404)
-        res.end()
+        endHookRequest(res, httpHook, 404)
         return
       }
       if (req.headers['x-orca-agent-hook-token'] !== this.token) {
-        res.writeHead(403)
-        res.end()
+        endHookRequest(res, httpHook, 403)
         return
       }
       const statusHookGeneration = this.statusHookGeneration
@@ -100,14 +107,12 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (!isStatusCurrent()) {
-          res.writeHead(404)
-          res.end()
+          endHookRequest(res, httpHook, 404)
           return
         }
         await this.initializeStatusHookOwner()
         if (!isStatusCurrent()) {
-          res.writeHead(404)
-          res.end()
+          endHookRequest(res, httpHook, 404)
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
@@ -121,13 +126,17 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         }
         const source = resolveHookSource(pathname)
         if (!source) {
-          res.writeHead(404)
-          res.end()
+          endHookRequest(res, httpHook, 404)
           return
         }
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
         trackEmptyPaneKeyHook(hookBody)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
+        const paneBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
+        const aliasedBody = admitHttpHookBody(httpHook, source, paneBody, req.headers, this.state)
+        if (aliasedBody === null) {
+          endHookRequest(res, httpHook, 204)
+          return
+        }
         if (await this.ingestTmuxHook(source, aliasedBody)) {
           res.writeHead(204)
           res.end()
@@ -209,9 +218,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     })
     const server = this.server
     try {
-      await listenForAgentHooks(
+      await listenForAgentHooksOnPreferredPort(
         server,
-        0,
+        published?.port ?? 0,
         isCurrent,
         () => {
           const address = server.address()

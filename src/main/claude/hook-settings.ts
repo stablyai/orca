@@ -187,11 +187,15 @@ function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
   )
 }
 
+const httpHookFields = (hook: HookCommandConfig): string =>
+  JSON.stringify([hook.type ?? 'command', hook.url, hook.headers, hook.allowedEnvVars])
+
 export function hasSameManagedHookInvocation(
   actual: HookCommandConfig,
   expected: HookCommandConfig
 ): boolean {
   return (
+    httpHookFields(actual) === httpHookFields(expected) &&
     actual.command === expected.command &&
     actual.shell === expected.shell &&
     JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])

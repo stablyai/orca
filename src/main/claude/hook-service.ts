@@ -33,7 +33,6 @@ import {
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -47,12 +46,12 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
-import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
   type ClaudeManagedHookPlan
 } from './claude-managed-hook-events'
+import { managedClaudeEventHooks } from './claude-http-tool-hooks'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -124,12 +123,8 @@ export class ClaudeHookService {
     // Count either Windows launcher form: installation falls back to .cmd when the exe cannot be placed.
     const exePath = this.usesWindowsEntry ? getWindowsClaudeHookExecutablePath(scriptPath) : null
     const events = this.managedHookPlan(options).install.map((event) => event.eventName)
-    const { missing, matchedForms } = findManagedEventHookForms(config, events, (eventName) =>
-      [null, exePath].map((path) =>
-        // An installed exec form proves its CLI accepted it, whatever the probe now reports.
-        getManagedEventHook(eventName, scriptPath, this.options.settings, path, { execForm: true })
-      )
-    )
+    const hooks = managedClaudeEventHooks(this.options, config, options, scriptPath, exePath)
+    const { missing, matchedForms } = findManagedEventHookForms(config, events, hooks.formsFor)
     const presentCount = matchedForms.length
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
@@ -183,11 +178,10 @@ export class ClaudeHookService {
 
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
-    const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
+    const hooks = managedClaudeEventHooks(this.options, config, options, scriptPath, exePath)
     let nextConfig = applyManagedHooks(
       config,
-      (eventName) =>
-        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
+      hooks.hookFor,
       getManagedScriptFileName(this.options.settings),
       plan
     )

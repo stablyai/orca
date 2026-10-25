@@ -20,10 +20,14 @@ import {
   getWindowsNativeHookAgent,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
 } from './windows-native-hook-executable'
+import { isManagedHttpHookUrl } from './managed-http-hook'
 
 export type HookCommandConfig = {
-  type: 'command'
+  type: 'command' | 'http'
   command: string
+  url?: string
+  headers?: Record<string, string>
+  allowedEnvVars?: string[]
   args?: string[]
   timeout?: number
   async?: boolean
@@ -90,6 +94,7 @@ export function createManagedCommandMatcher(
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
     return (
+      isManagedHttpHookUrl(command, scriptStem) ||
       needles.some((needle) => normalizedCommand.includes(needle)) ||
       normalizedCommand.split('\n').some((line) => `${line} `.includes(nativeHook))
     )
@@ -213,7 +218,10 @@ export function removeManagedCommands(
 
 function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
   const args = Array.isArray(hook.args) ? hook.args : []
-  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+  return (
+    matches(hook.type === 'http' ? hook.url : hook.command) ||
+    args.some((arg) => typeof arg === 'string' && matches(arg))
+  )
 }
 
 export function hookDefinitionHasManagedCommand(

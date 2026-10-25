@@ -78,3 +78,22 @@ export function listenForAgentHooks(
     server.listen(port, '127.0.0.1')
   })
 }
+
+/** Bind the port a previous run published so http hook URLs stay valid; any failure takes a fresh one. */
+export async function listenForAgentHooksOnPreferredPort(
+  server: Server,
+  preferredPort: number,
+  isCurrent: () => boolean,
+  onBound: () => void,
+  onRuntimeError: (error: Error) => void
+): Promise<void> {
+  if (preferredPort > 0) {
+    try {
+      await listenForAgentHooks(server, preferredPort, isCurrent, onBound, onRuntimeError)
+      return
+    } catch (error) {
+      console.warn(`[agent-hooks] port ${preferredPort} unavailable, using a new one:`, error)
+    }
+  }
+  await listenForAgentHooks(server, 0, isCurrent, onBound, onRuntimeError)
+}

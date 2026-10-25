@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import {
   getEndpointFileName,
+  readPublishedEndpoint,
   writeEndpointFile
 } from '../../../shared/agent-hook-listener/endpoint-publication'
 import {
@@ -29,6 +30,10 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
     return env
   }
 
+  get listeningPort(): number {
+    return this.port
+  }
+
   get endpointFilePath(): string | null {
     return this.endpointFilePathCache
   }
@@ -51,6 +56,12 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     this.endpointFileWritten = ok
+  }
+
+  protected readReusableEndpoint(reuse: boolean): { port: number; token: string } | null {
+    return reuse && this.endpointFilePathCache
+      ? readPublishedEndpoint(this.endpointFilePathCache)
+      : null
   }
 
   protected configureEndpointPaths(userDataPath: string, endpointNamespace?: string): void {

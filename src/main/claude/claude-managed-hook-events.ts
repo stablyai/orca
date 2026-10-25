@@ -87,6 +87,14 @@ export const CLAUDE_MANAGED_EVENTS = [
   CLAUDE_SESSION_END_EVENT
 ] as const
 
+// Two posts per tool call carry most hook volume, and the script never spools these three.
+// The rest stay on the script, which proves the agent's process and survives an Orca restart.
+export const CLAUDE_HTTP_TOOL_HOOK_EVENTS: readonly string[] = [
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure'
+]
+
 export type ManagedHookEvent = {
   eventName: string
   definition: Omit<HookDefinition, 'hooks'>

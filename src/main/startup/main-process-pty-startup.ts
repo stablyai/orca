@@ -23,6 +23,10 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
+import {
+  isClaudeHttpToolHooksRequested,
+  startClaudeHttpToolHooks
+} from '../claude/claude-http-tool-hooks'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
   indexPersistedPaneKeyPtyIds,
@@ -170,13 +174,18 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       agentHookServer.setTransportInterferenceListener((report) => {
         track('agent_hook_transport_blocked', { count: report.count })
       })
+      const claudeHttpToolHooks = isClaudeHttpToolHooksRequested()
       await agentHookServer.start({
         statusHooksEnabled: isAgentStatusHooksEnabled(settings),
         env: app.isPackaged ? 'production' : 'development',
         // Hooks read this file at invocation to reach the new process after restart; namespace dev worktrees sharing orca-dev.
         userDataPath: app.getPath('userData'),
-        endpointNamespace: state.devAgentHookEndpointNamespace
+        endpointNamespace: state.devAgentHookEndpointNamespace,
+        reuseEndpoint: claudeHttpToolHooks
       })
+      if (claudeHttpToolHooks && agentHookServer.listeningPort > 0) {
+        startClaudeHttpToolHooks(agentHookServer.listeningPort)
+      }
       logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
     },
     onDaemonError: (error) => {

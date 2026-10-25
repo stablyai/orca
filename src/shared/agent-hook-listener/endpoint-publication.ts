@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 
 import { sweepStaleAgentHookEndpointTemps } from '../agent-hook-endpoint-temp-cleanup'
@@ -82,5 +90,40 @@ export function writeEndpointFile(
       }
     }
     return false
+  }
+}
+
+const REUSABLE_TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/** Port and token a previous run published, when the file is still this user's and owner-only. */
+export function readPublishedEndpoint(finalPath: string): { port: number; token: string } | null {
+  if (process.platform === 'win32') {
+    return null
+  }
+  try {
+    const stat = statSync(finalPath)
+    if (!stat.isFile() || (stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()) {
+      return null
+    }
+    const values = new Map<string, string>()
+    for (const line of readFileSync(finalPath, 'utf8').split('\n')) {
+      const separator = line.indexOf('=')
+      if (separator > 0) {
+        values.set(line.slice(0, separator), line.slice(separator + 1).trim())
+      }
+    }
+    const port = Number(values.get('ORCA_AGENT_HOOK_PORT'))
+    const token = values.get('ORCA_AGENT_HOOK_TOKEN') ?? ''
+    if (
+      !Number.isInteger(port) ||
+      port < 1024 ||
+      port > 65535 ||
+      !REUSABLE_TOKEN_PATTERN.test(token)
+    ) {
+      return null
+    }
+    return { port, token }
+  } catch {
+    return null
   }
 }
