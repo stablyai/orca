@@ -216,6 +216,22 @@ export type NativeChatShownModel = {
   tracked: TrackedNativeChatSessionOption | undefined
 }
 
+/** Why: two providers can serve the same model name, so a shared label cannot say
+ *  which endpoint the next message uses. The id is unique and names the provider
+ *  first, so it survives the pill's truncation where a trailing suffix would not. */
+function repeatedLabels(labels: readonly string[]): Set<string> {
+  const seen = new Set<string>()
+  const repeated = new Set<string>()
+  for (const label of labels) {
+    if (seen.has(label)) {
+      repeated.add(label)
+    } else {
+      seen.add(label)
+    }
+  }
+  return repeated
+}
+
 /** The model descriptor, then the controls that apply, each showing the chat's value for it.
  *  Values and controls arrive apart, so a caller decides which model's controls apply. */
 export function nativeChatSessionOptionDescriptors(args: {
@@ -233,9 +249,10 @@ export function nativeChatSessionOptionDescriptors(args: {
   // Why: callers reconcile the tracked model into `models` (see
   // withTrackedNativeChatModel), so every listed row is a real choice and the
   // trigger never shows a value without one.
+  const sharedLabels = repeatedLabels(models.map((model) => model.label))
   const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
-    label,
+    label: sharedLabels.has(label) ? id : label,
     ...(description ? { description } : {})
   }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
