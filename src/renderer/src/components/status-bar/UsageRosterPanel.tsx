@@ -46,9 +46,10 @@ function shortLabel(
     return section.label
   }
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two
-  // don't both render as "wk".
+  // don't both render as "wk". When remaining duration is requested, the two
+  // windows' reset times differ, so the countdown labels never collide (#13041).
   if (section.window === p.fableWeekly) {
-    return 'Fable'
+    return useRemainingDuration ? formatRateLimitWindowChipLabel(section.window) : 'Fable'
   }
   if (p.provider === 'zcode' && section.window === p.monthly) {
     return section.label
