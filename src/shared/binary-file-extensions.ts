@@ -37,6 +37,8 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.pptx',
   '.xls',
   '.xlsx',
+  // 3D models
+  '.glb',
   // Fonts
   '.eot',
   '.otf',

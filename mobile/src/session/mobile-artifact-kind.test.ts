@@ -12,6 +12,11 @@ describe('classifyMobileArtifact', () => {
     expect(classifyMobileArtifact('logo.svg')).toBe('other')
   })
 
+  it('classifies GLB models (case-insensitive)', () => {
+    expect(classifyMobileArtifact('models/bunny.glb')).toBe('model')
+    expect(classifyMobileArtifact('Bunny.GLB')).toBe('model')
+  })
+
   it('classifies html extensions', () => {
     expect(classifyMobileArtifact('index.html')).toBe('html')
     expect(classifyMobileArtifact('a/b/page.HTM')).toBe('html')

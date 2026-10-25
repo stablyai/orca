@@ -9,6 +9,7 @@ import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileModelPreview } from './MobileModelPreview'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -79,6 +80,9 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         </ScrollView>
       </View>
     )
+  }
+  if (preview.kind === 'model') {
+    return <MobileModelPreview base64={preview.base64} title={options.title} />
   }
   if (preview.kind === 'markdown') {
     return options.editable ? (

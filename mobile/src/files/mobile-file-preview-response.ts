@@ -1,5 +1,6 @@
 import type { MobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { GLB_MIME_TYPE } from '../../../src/shared/model-file-extensions'
 import type { RpcFailure } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
@@ -24,6 +25,12 @@ export type MobileFilePreviewResult =
     }
   | {
       status: 'ready'
+      kind: 'model'
+      /** The GLB's bytes, base64. */
+      base64: string
+    }
+  | {
+      status: 'ready'
       kind: MobileFilePreviewTextKind
       content: string
       truncated: boolean
@@ -44,8 +51,12 @@ export function normalizeMobileFilePreviewResult(
   relativePath: string,
   result: unknown
 ): MobileFilePreviewResult {
-  if (classifyMobileArtifact(relativePath) === 'image') {
+  const artifactKind = classifyMobileArtifact(relativePath)
+  if (artifactKind === 'image') {
     return normalizeImagePreviewResult(result)
+  }
+  if (artifactKind === 'model') {
+    return normalizeModelPreviewResult(result)
   }
   return normalizeTextPreviewResult(relativePath, result)
 }
@@ -123,6 +134,23 @@ function normalizeImagePreviewResult(result: unknown): MobileFilePreviewResult {
     kind: 'image',
     dataUri: `data:${preview.mimeType};base64,${preview.content}`
   }
+}
+
+function normalizeModelPreviewResult(result: unknown): MobileFilePreviewResult {
+  if (
+    !result ||
+    typeof result !== 'object' ||
+    !('isBinary' in result) ||
+    result.isBinary !== true ||
+    !('mimeType' in result) ||
+    result.mimeType !== GLB_MIME_TYPE ||
+    !('content' in result) ||
+    typeof result.content !== 'string' ||
+    result.content.length === 0
+  ) {
+    return previewError('binary_file')
+  }
+  return { status: 'ready', kind: 'model', base64: result.content }
 }
 
 function normalizeTextPreviewResult(

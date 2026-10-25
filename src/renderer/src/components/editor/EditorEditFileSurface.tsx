@@ -8,6 +8,7 @@ import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
   CsvPagedViewer,
+  GltfFileViewer,
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
@@ -44,6 +45,7 @@ export function EditorEditFileSurface({
   isMermaid,
   isCsv,
   isNotebook,
+  isGltf,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -76,6 +78,7 @@ export function EditorEditFileSurface({
   isMermaid: boolean
   isCsv: boolean
   isNotebook: boolean
+  isGltf: boolean
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -285,6 +288,16 @@ export function EditorEditFileSurface({
       onDirtyStateHint={activeFile.readOnly ? undefined : handleDirtyStateHint}
       onContentChange={activeFile.readOnly ? undefined : handleContentChange}
       onSave={activeFile.readOnly ? undefined : handleSave}
+    />
+  ) : isGltf && mdViewMode === 'rich' ? (
+    <GltfFileViewer
+      key={activeFile.id}
+      content={currentContent}
+      filePath={activeFile.filePath}
+      relativePath={activeFile.relativePath}
+      worktreeId={activeFile.worktreeId}
+      runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      externalSshTargetId={activeFile.externalSshTargetId}
     />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer

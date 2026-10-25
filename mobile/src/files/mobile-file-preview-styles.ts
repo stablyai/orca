@@ -125,6 +125,56 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.editorSurface
   },
+  modelStage: {
+    flex: 1,
+    position: 'relative'
+  },
+  modelCanvasHost: {
+    ...StyleSheet.absoluteFillObject
+  },
+  modelCanvasHidden: {
+    opacity: 0
+  },
+  modelOverlay: {
+    ...StyleSheet.absoluteFillObject
+  },
+  modelFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.md,
+    rowGap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
+  },
+  modelFooterButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button
+  },
+  modelFooterControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  modelFooterClip: {
+    height: 32,
+    maxWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button
+  },
+  modelFooterText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
   imageScrollContent: {
     flexGrow: 1,
     alignItems: 'center',

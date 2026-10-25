@@ -21239,5 +21239,22 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "glbPreview": {
+    "loading": "Loading 3D model…",
+    "contextLost": "The 3D view was reset by the graphics driver. Reopen the file to view it again.",
+    "parseFailed": "Unable to display this 3D model. It may be corrupt, use an unsupported extension, or reference files that could not be read.",
+    "resetView": "Reset view",
+    "wireframe": "Wireframe",
+    "stats": "{{vertices}} vertices · {{triangles}} triangles",
+    "viewMode": "3D",
+    "animationFallback": "Animation {{index}}",
+    "guides": "Grid and axes",
+    "playAnimation": "Play animation",
+    "pauseAnimation": "Pause animation",
+    "animation": "Animation",
+    "dimensionsTitle": "Width × height × depth, in meters",
+    "dimensions": "{{width}} × {{height}} × {{depth}} m",
+    "gridCell": "Grid {{size}} m"
   }
 }

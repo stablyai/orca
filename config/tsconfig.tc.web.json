@@ -74,7 +74,8 @@
   "compilerOptions": {
     "paths": {
       "@renderer/*": ["../src/renderer/src/*"],
-      "@/*": ["../src/renderer/src/*"]
+      "@/*": ["../src/renderer/src/*"],
+      "three/examples/jsm/loaders/GLTFLoader.js": ["../src/renderer/src/three-gltf-loader.d.ts"]
     }
   }
 }

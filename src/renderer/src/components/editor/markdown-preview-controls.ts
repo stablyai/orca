@@ -1,9 +1,12 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { EditorToggleValue } from './EditorViewToggle'
+import { isGltfFilePath } from '../../../../shared/model-file-extensions'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
+  // Why: glTF stays 'json' for Monaco and every other language consumer; only its path marks the 3D view.
+  filePath?: string
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -11,6 +14,7 @@ const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly 
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const GLTF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
 
 // Why: every editable file (markdown, mermaid, or plain code) can flip into
@@ -63,6 +67,10 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
 
   if (target.language === 'notebook' && target.mode === 'edit') {
     return NOTEBOOK_VIEW_MODES
+  }
+
+  if (target.mode === 'edit' && target.filePath !== undefined && isGltfFilePath(target.filePath)) {
+    return GLTF_VIEW_MODES
   }
 
   return NO_VIEW_MODES

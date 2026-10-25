@@ -1,5 +1,5 @@
 import { mobileFileMediaMime } from './mobile-file-media'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { isMobileBinaryPreviewArtifact } from '../session/mobile-artifact-kind'
 import { defaultScheduleTimer } from '../transport/timer-scheduler'
 import {
   createMobileFilePreviewHref,
@@ -37,7 +37,7 @@ export function canPreviewMobileFileRow(item: {
 }): boolean {
   return (
     item.kind === 'text' ||
-    classifyMobileArtifact(item.relativePath) === 'image' ||
+    isMobileBinaryPreviewArtifact(item.relativePath) ||
     mobileFileMediaMime(item.relativePath) !== null
   )
 }

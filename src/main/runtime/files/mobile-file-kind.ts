@@ -4,6 +4,7 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
   '.gif',
+  '.glb',
   '.heic',
   '.ico',
   '.jpeg',
