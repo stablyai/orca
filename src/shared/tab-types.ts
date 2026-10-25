@@ -32,6 +32,7 @@ export type WorkspaceVisibleTabType =
   | 'browser'
   | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
+export type CtrlTabScope = 'workspace' | 'all'
 
 // Many content kinds collapse to editor; resolve a concrete tab and project forward instead of trying to invert equality.
 export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {

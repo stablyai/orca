@@ -163,6 +163,7 @@ export type UiCommandEventApi = {
   onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
+  onCtrlTabToggleScope: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
   onDictationKeyDown: (callback: () => void) => () => void
   onExportPdfRequested: (callback: () => void) => () => void

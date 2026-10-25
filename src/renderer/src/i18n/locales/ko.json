@@ -3670,7 +3670,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
-            "07ad4cd0b7": "탭 전환"
+            "07ad4cd0b7": "탭 전환",
+            "scopeAll": "모든 워크스페이스",
+            "scopeWorkspace": "이 워크스페이스",
+            "noOtherTabs": "다른 탭 없음",
+            "outsideWorkspace": "탭을 보려면 워크스페이스로 이동하세요"
           },
           "SortableTab": {
             "ab19f603eb": "탭 이름 바꾸기 {{value0}}",

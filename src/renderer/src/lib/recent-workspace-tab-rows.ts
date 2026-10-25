@@ -29,7 +29,7 @@ export type RecentWorkspaceTabRow = {
 }
 
 export type RecentWorkspaceTabOrderInputs = {
-  rows: readonly RecentWorkspaceTabRow[]
+  rows: readonly Pick<RecentWorkspaceTabRow, 'id' | 'occurrenceId' | 'lastFocusedAt'>[]
 }
 
 const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
@@ -91,7 +91,7 @@ export function resolveRecentWorkspaceTabStatus(
 
 /** Unknown visit times stay at the bottom in their existing order. */
 export function orderRecentWorkspaceTabs({ rows }: RecentWorkspaceTabOrderInputs): string[] {
-  const visitedAt = (row: RecentWorkspaceTabRow): number =>
+  const visitedAt = (row: RecentWorkspaceTabOrderInputs['rows'][number]): number =>
     typeof row.lastFocusedAt === 'number' &&
     Number.isFinite(row.lastFocusedAt) &&
     row.lastFocusedAt > 0

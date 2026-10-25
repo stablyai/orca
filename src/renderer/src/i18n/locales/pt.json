@@ -16414,7 +16414,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Mudar de Aba",
-            "07ad4cd0b7": "Mudar de abas"
+            "07ad4cd0b7": "Mudar de abas",
+            "scopeAll": "Todos os espaços de trabalho",
+            "scopeWorkspace": "Este espaço de trabalho",
+            "noOtherTabs": "Nenhuma outra aba",
+            "outsideWorkspace": "Abra um espaço de trabalho para ver suas abas"
           },
           "shell": {
             "icons": {

@@ -8,6 +8,10 @@ import { searchBrowserPages } from './browser-palette-search'
 import { buildSearchableSimulatorTabs, searchSimulatorTabs } from './simulator-palette-search'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 import { buildOpenTabSearchEntries } from '../components/tab-bar/open-tab-search-entries'
+import {
+  buildAllWorkspacesRecentTabSwitcherModel,
+  type AllWorkspacesRecentTabState
+} from '../components/tab-bar/all-workspaces-recent-tab-switching'
 
 const SHARED_WORKTREE_ID = 'repo-shared::/workspace'
 const RUNTIME_HOST_ID = 'runtime:paired-host'
@@ -456,5 +460,68 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     })
 
     expect(entries).toEqual([])
+  })
+
+  it('lists Ctrl+Tab agent chats only under the host that owns them', () => {
+    const state: AllWorkspacesRecentTabState = {
+      activeBrowserTabId: null,
+      activeFileId: null,
+      activeFileIdByWorktree: {},
+      activeGroupIdByWorktree: {},
+      activeTabId: null,
+      activeTabIdByWorktree: {},
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: {},
+      activeWorkspaceExecutionHostId: null,
+      activeWorktreeId: null,
+      agentStatusByPaneKey: {},
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: {},
+      folderWorkspaces: [],
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      openFiles: [],
+      paneForegroundAgentByPaneKey: {},
+      repos: [],
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {},
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabsByWorktree: {
+        [SHARED_WORKTREE_ID]: [
+          makeTab({
+            id: 'local-chat',
+            contentType: 'agent-session',
+            executionHostId: 'local',
+            label: 'Local chat',
+            lastFocusedAt: 1
+          }),
+          makeTab({
+            id: 'remote-chat',
+            contentType: 'agent-session',
+            executionHostId: RUNTIME_HOST_ID,
+            label: 'Remote chat',
+            lastFocusedAt: 2
+          }),
+          // Why: a chat with no host could belong to either workspace, so the list leaves it out.
+          makeTab({
+            id: 'legacy-chat',
+            contentType: 'agent-session',
+            executionHostId: undefined,
+            label: 'Legacy chat',
+            lastFocusedAt: 3
+          })
+        ]
+      },
+      worktreesByRepo: { 'repo-shared': pairedWorktrees() }
+    }
+    const model = buildAllWorkspacesRecentTabSwitcherModel(state, { mode: 'mru', sidebarOrder: [] })
+
+    expect(
+      model?.items.map((item) => [item.label, item.location, item.result.executionHostId])
+    ).toEqual([
+      ['Remote chat', 'Paired SSH workspace', RUNTIME_HOST_ID],
+      ['Local chat', 'Local workspace', 'local']
+    ])
   })
 })

@@ -27,7 +27,6 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
-import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
@@ -259,8 +258,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
-  /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
-  ctrlTabOrderMode?: CtrlTabOrderMode
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */

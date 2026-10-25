@@ -3829,7 +3829,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
-            "07ad4cd0b7": "Basculer entre les onglets"
+            "07ad4cd0b7": "Basculer entre les onglets",
+            "scopeAll": "Tous les espaces de travail",
+            "scopeWorkspace": "Cet espace de travail",
+            "noOtherTabs": "Aucun autre onglet",
+            "outsideWorkspace": "Accédez à un espace de travail pour voir ses onglets"
           },
           "SortableTab": {
             "ab19f603eb": "Renommer l'onglet {{value0}}",

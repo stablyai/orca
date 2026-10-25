@@ -37,11 +37,17 @@ function stateWithTabs(
   | 'activeGroupIdByWorktree'
   | 'activeTabId'
   | 'activeTabType'
+  | 'agentStatusByPaneKey'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
+  | 'layoutByWorktree'
   | 'openFiles'
+  | 'paneForegroundAgentByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
+  | 'terminalLayoutsByTabId'
   | 'unifiedTabsByWorktree'
 > {
   // Include only actual group tabs; extra tabs absent from tabOrder would be appended by strip reconciliation.
@@ -56,16 +62,22 @@ function stateWithTabs(
     activeGroupIdByWorktree: { [WT]: GROUP },
     activeTabId: null,
     activeTabType: 'editor',
+    agentStatusByPaneKey: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {
       [WT]: [{ id: GROUP, worktreeId: WT, activeTabId, tabOrder, recentTabIds }]
     },
+    layoutByWorktree: {},
     openFiles: tabs.map((entry) => ({
       id: entry.entityId,
       worktreeId: WT
     })) as AppState['openFiles'],
+    paneForegroundAgentByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    sleepingAgentSessionsByPaneKey: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: { [WT]: tabs }
   }
 }

@@ -3670,7 +3670,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
-            "07ad4cd0b7": "タブを切り替える"
+            "07ad4cd0b7": "タブを切り替える",
+            "scopeAll": "すべてのワークスペース",
+            "scopeWorkspace": "このワークスペース",
+            "noOtherTabs": "他のタブはありません",
+            "outsideWorkspace": "タブを表示するには、ワークスペースに移動してください"
           },
           "SortableTab": {
             "ab19f603eb": "タブ {{value0}} の名前を変更します",

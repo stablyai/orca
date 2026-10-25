@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenTabSearchResult } from './open-tab-search'
+import type { AgentSessionTabSwitchResult } from './open-tab-selection-routing'
 
 const mocks = vi.hoisted(() => ({
   activateWorkspaceTab: vi.fn(),
   activateBrowserPage: vi.fn(),
   activateSimulatorTab: vi.fn(),
+  activateAgentSessionTab: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
   requestBrowserFocus: vi.fn()
 }))
@@ -19,6 +21,9 @@ vi.mock('@/lib/browser-page-palette-activation', () => ({
 }))
 vi.mock('@/lib/simulator-tab-palette-activation', () => ({
   activateSimulatorTabPaletteResult: mocks.activateSimulatorTab
+}))
+vi.mock('@/lib/agent-session-tab-palette-activation', () => ({
+  activateAgentSessionTabPaletteResult: mocks.activateAgentSessionTab
 }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
@@ -79,6 +84,13 @@ const simulatorResult: OpenTabSearchResult = {
   groupId: 'group-2'
 }
 
+const agentSessionResult: AgentSessionTabSwitchResult = {
+  executionHostId: 'runtime:host-1',
+  source: 'agent-session',
+  worktreeId: 'wt-1',
+  tabId: 'structured-agent-session-chat-1'
+}
+
 describe('activateOpenTabSearchResult', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -89,6 +101,7 @@ describe('activateOpenTabSearchResult', () => {
       focusTarget: 'address-bar'
     })
     mocks.activateSimulatorTab.mockReturnValue({ status: 'activated', tabId: 'tab-3' })
+    mocks.activateAgentSessionTab.mockReturnValue({ status: 'activated' })
   })
 
   it('activates a workspace tab by its identifiers and focuses the terminal surface', () => {
@@ -135,15 +148,26 @@ describe('activateOpenTabSearchResult', () => {
     })
   })
 
-  it('leaves focus unchanged after activating a simulator tab', () => {
-    const outcome = activateOpenTabSearchResult(simulatorResult)
-
+  it('leaves focus unchanged after activating a simulator tab or an agent chat', () => {
+    expect(activateOpenTabSearchResult(simulatorResult)).toEqual({
+      status: 'activated',
+      focus: null
+    })
     expect(mocks.activateSimulatorTab).toHaveBeenCalledWith({
       executionHostId: 'runtime:host-1',
       tabId: 'tab-3',
       worktreeId: 'wt-1'
     })
-    expect(outcome).toEqual({ status: 'activated', focus: null })
+
+    expect(activateOpenTabSearchResult(agentSessionResult)).toEqual({
+      status: 'activated',
+      focus: null
+    })
+    expect(mocks.activateAgentSessionTab).toHaveBeenCalledWith({
+      executionHostId: 'runtime:host-1',
+      tabId: 'structured-agent-session-chat-1',
+      worktreeId: 'wt-1'
+    })
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 
@@ -165,14 +189,21 @@ describe('activateOpenTabSearchResult', () => {
       status: 'failed',
       message: 'Mobile emulator tab no longer exists'
     })
+
+    mocks.activateAgentSessionTab.mockReturnValue({ status: 'failed', reason: 'missing-tab' })
+    expect(activateOpenTabSearchResult(agentSessionResult)).toEqual({
+      status: 'failed',
+      message: 'Tab no longer exists'
+    })
   })
 
-  it.each([terminalResult, browserResult, simulatorResult])(
+  it.each([terminalResult, browserResult, simulatorResult, agentSessionResult])(
     'preserves a blocked $source jump without scheduling focus',
     (result) => {
       mocks.activateWorkspaceTab.mockReturnValue({ status: 'blocked' })
       mocks.activateBrowserPage.mockReturnValue({ status: 'blocked' })
       mocks.activateSimulatorTab.mockReturnValue({ status: 'blocked' })
+      mocks.activateAgentSessionTab.mockReturnValue({ status: 'blocked' })
 
       expect(activateOpenTabSearchResult(result)).toEqual({ status: 'blocked' })
       expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
@@ -184,7 +215,12 @@ describe('activateOpenTabSearchResult', () => {
     mocks.activateWorkspaceTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
     mocks.activateBrowserPage.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
     mocks.activateSimulatorTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
+    mocks.activateAgentSessionTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
 
+    expect(activateOpenTabSearchResult(agentSessionResult)).toEqual({
+      status: 'failed',
+      message: 'Workspace no longer exists'
+    })
     expect(activateOpenTabSearchResult(terminalResult)).toEqual({
       status: 'failed',
       message: 'Workspace no longer exists'

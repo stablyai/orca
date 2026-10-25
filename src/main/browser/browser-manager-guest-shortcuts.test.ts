@@ -440,7 +440,7 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
   })
 
-  it('forwards browser guest Ctrl+Tab keydown and Ctrl release', () => {
+  it('forwards browser guest Ctrl+Tab keydown, the Ctrl+A scope toggle and Ctrl release', () => {
     const rendererSendMock = vi.fn()
     const guest = {
       id: 407,
@@ -479,6 +479,10 @@ describe('browserManager', () => {
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 
+    const toggleInput = { type: 'keyDown', code: 'KeyA', key: 'a', meta: false, control: true }
+    const selectAllPreventDefault = vi.fn()
+    // Why: outside the switcher, Ctrl+A must stay the page's select-all.
+    beforeInputHandler?.({ preventDefault: selectAllPreventDefault }, toggleInput)
     const keyDownPreventDefault = vi.fn()
     beforeInputHandler?.(
       { preventDefault: keyDownPreventDefault },
@@ -492,6 +496,12 @@ describe('browserManager', () => {
         shift: false
       }
     )
+    const togglePreventDefault = vi.fn()
+    beforeInputHandler?.({ preventDefault: togglePreventDefault }, toggleInput)
+    // Why: a held A auto-repeats; it must not flip the scope back and forth.
+    beforeInputHandler?.({ preventDefault: vi.fn() }, { ...toggleInput, isAutoRepeat: true })
+    // Why: Ctrl+Shift+A selects all terminal text on Linux and Windows, so it is not the toggle.
+    beforeInputHandler?.({ preventDefault: vi.fn() }, { ...toggleInput, key: 'A', shift: true })
     const keyUpPreventDefault = vi.fn()
     beforeInputHandler?.(
       { preventDefault: keyUpPreventDefault },
@@ -508,9 +518,14 @@ describe('browserManager', () => {
 
     // Preventing keydown loses the commit keyup in Electron.
     expect(keyDownPreventDefault).not.toHaveBeenCalled()
+    expect(togglePreventDefault).not.toHaveBeenCalled()
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
+    expect(selectAllPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock.mock.calls).toEqual([
+      ['ui:ctrlTabKeyDown', { shiftKey: false }],
+      ['ui:ctrlTabToggleScope'],
+      ['ui:ctrlTabKeyUp']
+    ])
   })
 
   it('respects disabled browser guest tab-switch bindings', () => {

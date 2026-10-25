@@ -3685,7 +3685,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
-            "07ad4cd0b7": "Cambiar pestañas"
+            "07ad4cd0b7": "Cambiar pestañas",
+            "scopeAll": "Todos los espacios de trabajo",
+            "scopeWorkspace": "Este espacio de trabajo",
+            "noOtherTabs": "No hay otras pestañas",
+            "outsideWorkspace": "Ve a un espacio de trabajo para ver sus pestañas"
           },
           "SortableTab": {
             "ab19f603eb": "Cambiar nombre de pestaña {{value0}}",

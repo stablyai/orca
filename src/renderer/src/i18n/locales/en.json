@@ -3977,7 +3977,11 @@
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
-            "07ad4cd0b7": "Switch tabs"
+            "07ad4cd0b7": "Switch tabs",
+            "scopeAll": "All workspaces",
+            "scopeWorkspace": "This workspace",
+            "noOtherTabs": "No other tabs",
+            "outsideWorkspace": "Go to a workspace to see its tabs"
           },
           "SortableTab": {
             "ab19f603eb": "Rename tab {{value0}}",

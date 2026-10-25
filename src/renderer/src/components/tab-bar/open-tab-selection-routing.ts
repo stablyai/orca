@@ -2,11 +2,20 @@
 
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { translate } from '@/i18n/i18n'
+import {
+  activateAgentSessionTabPaletteResult,
+  type AgentSessionTabPaletteActivationTarget
+} from '@/lib/agent-session-tab-palette-activation'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
 import { activateWorkspaceTabPaletteResult } from '@/lib/workspace-tab-palette-activation'
 import type { OpenTabSearchResult } from './open-tab-search'
+
+/** Ctrl+Tab's row for an agent chat; Cmd+J does not list agent chats. */
+export type AgentSessionTabSwitchResult = AgentSessionTabPaletteActivationTarget & {
+  source: 'agent-session'
+}
 
 export type OpenTabSelectionOutcome =
   | { status: 'activated'; focus: (() => void) | null }
@@ -27,7 +36,28 @@ function failed(reason: string, staleMessage: string): OpenTabSelectionOutcome {
   }
 }
 
-export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTabSelectionOutcome {
+export function activateOpenTabSearchResult(
+  result: OpenTabSearchResult | AgentSessionTabSwitchResult
+): OpenTabSelectionOutcome {
+  if (result.source === 'agent-session') {
+    const activation = activateAgentSessionTabPaletteResult({
+      executionHostId: result.executionHostId,
+      tabId: result.tabId,
+      worktreeId: result.worktreeId
+    })
+    if (activation.status === 'blocked') {
+      return activation
+    }
+    if (activation.status === 'failed') {
+      return failed(
+        activation.reason,
+        translate('auto.components.tab.bar.TabBarCreateEntry.4f0d9a71c2', 'Tab no longer exists')
+      )
+    }
+    // Activating a chat already focuses its composer.
+    return { status: 'activated', focus: null }
+  }
+
   if (result.source === 'browser') {
     const activation = activateBrowserPagePaletteResult({
       executionHostId: result.executionHostId,

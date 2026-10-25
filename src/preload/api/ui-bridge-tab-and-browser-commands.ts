@@ -165,6 +165,11 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:ctrlTabKeyUp', listener)
     return () => ipcRenderer.removeListener('ui:ctrlTabKeyUp', listener)
   },
+  onCtrlTabToggleScope: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:ctrlTabToggleScope', listener)
+    return () => ipcRenderer.removeListener('ui:ctrlTabToggleScope', listener)
+  },
   onToggleStatusBar: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:toggleStatusBar', listener)

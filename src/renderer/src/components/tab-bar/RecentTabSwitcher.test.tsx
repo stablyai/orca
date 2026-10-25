@@ -25,6 +25,16 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
+vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+
+vi.mock('./all-workspaces-recent-tab-switching', () => ({
+  buildAllWorkspacesRecentTabSwitcherModel: vi.fn(() => null)
+}))
+
+vi.mock('./open-tab-selection-routing', () => ({
+  activateOpenTabSearchResult: vi.fn()
+}))
+
 import RecentTabSwitcher from './RecentTabSwitcher'
 
 const WORKTREE_ID = 'wt-1'
@@ -97,7 +107,8 @@ function installWindowApi(): void {
           ctrlTabKeyDownCallback = callback
           return vi.fn()
         }),
-        onCtrlTabKeyUp: vi.fn((_callback: CtrlTabKeyUpCallback) => vi.fn())
+        onCtrlTabKeyUp: vi.fn((_callback: CtrlTabKeyUpCallback) => vi.fn()),
+        onCtrlTabToggleScope: vi.fn(() => vi.fn())
       }
     }
   })

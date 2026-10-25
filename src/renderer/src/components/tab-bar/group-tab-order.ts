@@ -138,7 +138,7 @@ export function getGroupVisibleTabOrder(
   })
 }
 
-/** Prefer active-group ordering; use legacy workspace order only before split-group hydration. */
+/** Prefer the order of `groupId` (the active group unless a caller walks every split pane); use legacy workspace order only before split-group hydration. */
 export function getActiveTabNavOrder(
   state: Pick<
     AppState,
@@ -151,7 +151,8 @@ export function getActiveTabNavOrder(
     | 'browserTabsByWorktree'
   >,
   worktreeId: string,
-  ids: ActiveTabNavOrderIds = {}
+  ids: ActiveTabNavOrderIds = {},
+  groupId: string | undefined = state.activeGroupIdByWorktree[worktreeId]
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds =
@@ -169,9 +170,8 @@ export function getActiveTabNavOrder(
       .filter((tab) => tab.contentType === 'agent-session')
       .map((tab) => tab.id)
 
-  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
-  const group = activeGroupId
-    ? (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
+  const group = groupId
+    ? (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === groupId)
     : undefined
 
   if (group) {

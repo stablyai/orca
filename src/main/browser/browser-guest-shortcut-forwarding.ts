@@ -5,6 +5,7 @@ import {
   nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { isRecentTabSwitcherScopeToggle } from '../../shared/recent-tab-switcher-scope-toggle'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import {
@@ -80,6 +81,18 @@ export function setupGuestShortcutForwarding(args: {
       ctrlTabSwitching = true
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      return
+    }
+
+    if (
+      ctrlTabSwitching &&
+      input.type === 'keyDown' &&
+      isRecentTabSwitcherScopeToggle(input, process.platform)
+    ) {
+      // Why: no preventDefault, for the same reason as Tab above; the page also gets Ctrl+A.
+      if (!input.isAutoRepeat) {
+        resolveRenderer(browserTabId)?.send('ui:ctrlTabToggleScope')
+      }
       return
     }
 

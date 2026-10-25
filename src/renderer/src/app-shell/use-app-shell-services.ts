@@ -27,6 +27,7 @@ import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useTabFocusRecency } from './use-tab-focus-recency'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
@@ -47,6 +48,7 @@ export function useAppShellServices(): void {
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
+  useTabFocusRecency({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
   useAutomationDispatchEvents()
   // Poll above the removable sidebar to keep rebase/merge badges fresh; wait for session readiness to protect first paint.

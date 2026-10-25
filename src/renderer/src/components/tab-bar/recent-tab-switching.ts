@@ -1,5 +1,17 @@
-import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type {
+  CtrlTabOrderMode,
+  CtrlTabScope,
+  Tab,
+  TabContentType,
+  TabGroup
+} from '../../../../shared/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-group-moves'
+import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { resolveOpenTabOccupantAgent } from '@/lib/open-tab-occupant-agent'
+import { orderRecentWorkspaceTabs } from '@/lib/recent-workspace-tab-rows'
 import type { AppState } from '../../store/types'
 import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 import { getActiveTabNavOrder, type VisibleTabRef } from './group-tab-order'
@@ -10,6 +22,8 @@ export type RecentTabSwitcherItem = TypeCyclableTab & {
   label: string
   contentType: TabContentType
   isDirty: boolean
+  /** The chat's provider, or the agent that runs in a terminal; drives the row icon. */
+  agent: TerminalAgent | null
 }
 
 export type RecentTabSwitcherModel = {
@@ -24,11 +38,17 @@ type RecentTabSwitchingState = Pick<
   | 'activeGroupIdByWorktree'
   | 'activeTabId'
   | 'activeTabType'
+  | 'agentStatusByPaneKey'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
+  | 'layoutByWorktree'
   | 'openFiles'
+  | 'paneForegroundAgentByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
+  | 'terminalLayoutsByTabId'
   | 'unifiedTabsByWorktree'
 > & { settings?: AppState['settings'] }
 
@@ -38,8 +58,28 @@ export function normalizeCtrlTabOrderMode(
   return value === 'sequential' ? 'sequential' : 'mru'
 }
 
+export function normalizeCtrlTabScope(value: string | null | undefined): CtrlTabScope {
+  return value === 'all' ? 'all' : 'workspace'
+}
+
 function getVisibleTabKey(tab: VisibleTabRef): string {
   return tab.tabId ?? `${tab.type}:${tab.id}`
+}
+
+// Why: no shortcut moves the focus to another tab strip, so This workspace lists every strip,
+// panes from left to right. One strip keeps the exact list of the per-strip switcher.
+function getWorkspaceTabOrder(state: RecentTabSwitchingState, worktreeId: string): VisibleTabRef[] {
+  const groups = state.groupsByWorktree[worktreeId] ?? []
+  if (groups.length <= 1) {
+    return getActiveTabNavOrder(state, worktreeId)
+  }
+  const groupIds = new Set([
+    ...collectTabGroupLayoutGroupIds(state.layoutByWorktree[worktreeId]),
+    ...groups.map((group) => group.id)
+  ])
+  return [...groupIds]
+    .filter((groupId) => groups.some((group) => group.id === groupId))
+    .flatMap((groupId) => getActiveTabNavOrder(state, worktreeId, {}, groupId))
 }
 
 function findActiveGroup(
@@ -93,19 +133,50 @@ function getTabLabel(
   return resolveUnifiedTabLabel(tab, generatedTitlesEnabled, fallback)
 }
 
+// Why: the same identity check as the tab strip and Cmd+J, so an agent terminal shows its agent icon.
+function resolveRowAgent(
+  state: RecentTabSwitchingState,
+  entry: VisibleTabRef,
+  backingTab: Tab | undefined,
+  terminalTab: TerminalTab | undefined,
+  label: string
+): TerminalAgent | null {
+  if (entry.type === 'agent-session') {
+    return agentTypeToIconAgent(backingTab?.agentSessionAgent)
+  }
+  if (entry.type !== 'terminal') {
+    return null
+  }
+  return resolveOpenTabOccupantAgent({
+    tabId: entry.id,
+    title: label,
+    defaultTitle: terminalTab?.defaultTitle,
+    launchAgent: terminalTab?.launchAgent,
+    layout: state.terminalLayoutsByTabId[entry.id],
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey
+  })
+}
+
 function toSwitcherItem(
+  state: RecentTabSwitchingState,
   entry: VisibleTabRef,
   tabById: ReadonlyMap<string, Tab>,
+  terminalTabById: ReadonlyMap<string, TerminalTab>,
   dirtyFileIds: ReadonlySet<string>,
   generatedTitlesEnabled: boolean
 ): RecentTabSwitcherItem {
   const backingTab = entry.tabId ? tabById.get(entry.tabId) : undefined
+  const label = getTabLabel(backingTab, generatedTitlesEnabled, entry.id)
   return {
     ...entry,
     key: getVisibleTabKey(entry),
-    label: getTabLabel(backingTab, generatedTitlesEnabled, entry.id),
+    label,
     contentType: backingTab?.contentType ?? (entry.type === 'editor' ? 'editor' : entry.type),
-    isDirty: entry.type === 'editor' && dirtyFileIds.has(entry.id)
+    isDirty: entry.type === 'editor' && dirtyFileIds.has(entry.id),
+    agent: resolveRowAgent(state, entry, backingTab, terminalTabById.get(entry.id), label)
   }
 }
 
@@ -149,18 +220,42 @@ function orderByMru(
   return ordered
 }
 
+// Why: each strip keeps its own recent list, so across strips the visit times decide, as in All workspaces.
+function orderByLastFocus(
+  entries: readonly VisibleTabRef[],
+  tabsByKey: ReadonlyMap<string, RecentTabSwitcherItem>,
+  tabById: ReadonlyMap<string, Tab>,
+  activeKey: string | null
+): RecentTabSwitcherItem[] {
+  const ordered = orderRecentWorkspaceTabs({
+    rows: entries.map((entry) => ({
+      id: getVisibleTabKey(entry),
+      lastFocusedAt: entry.tabId ? tabById.get(entry.tabId)?.lastFocusedAt : undefined
+    }))
+  }).flatMap((key) => tabsByKey.get(key) ?? [])
+  const activeIndex = activeKey ? ordered.findIndex((item) => item.key === activeKey) : -1
+  if (activeIndex > 0) {
+    const [active] = ordered.splice(activeIndex, 1)
+    ordered.unshift(active)
+  }
+  return ordered
+}
+
 export function buildRecentTabSwitcherModel(
   state: RecentTabSwitchingState,
   worktreeId: string,
   mode: CtrlTabOrderMode
 ): RecentTabSwitcherModel | null {
-  const visibleEntries = getActiveTabNavOrder(state, worktreeId)
+  const visibleEntries = getWorkspaceTabOrder(state, worktreeId)
   if (visibleEntries.length <= 1) {
     return null
   }
 
   const tabById = new Map(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+  )
+  const terminalTabById = new Map(
+    (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
   const dirtyFileIds = new Set(
     state.openFiles
@@ -170,15 +265,25 @@ export function buildRecentTabSwitcherModel(
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const itemByKey = new Map(
     visibleEntries.map((entry) => {
-      const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled)
+      const item = toSwitcherItem(
+        state,
+        entry,
+        tabById,
+        terminalTabById,
+        dirtyFileIds,
+        generatedTitlesEnabled
+      )
       return [item.key, item] as const
     })
   )
   const activeKey = getActiveVisibleTabKey(state, worktreeId, visibleEntries)
   const group = findActiveGroup(state, worktreeId)
+  const splitIntoStrips = (state.groupsByWorktree[worktreeId] ?? []).length > 1
   const orderedItems =
     mode === 'mru'
-      ? orderByMru(visibleEntries, itemByKey, group, activeKey)
+      ? splitIntoStrips
+        ? orderByLastFocus(visibleEntries, itemByKey, tabById, activeKey)
+        : orderByMru(visibleEntries, itemByKey, group, activeKey)
       : visibleEntries.map((entry) => itemByKey.get(getVisibleTabKey(entry))!).filter(Boolean)
 
   const activeIndex = activeKey ? orderedItems.findIndex((item) => item.key === activeKey) : -1

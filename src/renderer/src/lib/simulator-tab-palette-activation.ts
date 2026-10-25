@@ -1,11 +1,6 @@
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorkspace } from './worktree-activation'
-import {
-  findAmbiguousWorktreeIds,
-  getPaletteOwnershipWorktreeIds,
-  isUnifiedTabOwnedByWorktree
-} from './unified-tab-host-ownership'
+import { revealUnifiedTabPaletteTarget } from './unified-tab-palette-reveal'
 
 export type SimulatorTabPaletteActivationFailure = 'missing-tab' | 'missing-worktree'
 
@@ -20,47 +15,18 @@ export type SimulatorTabPaletteActivationTarget = {
   worktreeId: string
 }
 
-export function activateSimulatorTabPaletteResult({
-  executionHostId,
-  tabId,
-  worktreeId
-}: SimulatorTabPaletteActivationTarget): SimulatorTabPaletteActivationResult {
-  const initialState = useAppStore.getState()
-  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
-    getPaletteOwnershipWorktreeIds(initialState)
-  )
-  if (!executionHostId && ambiguousWorktreeIds.has(worktreeId)) {
-    return { status: 'failed', reason: 'missing-worktree' }
+export function activateSimulatorTabPaletteResult(
+  target: SimulatorTabPaletteActivationTarget
+): SimulatorTabPaletteActivationResult {
+  const revealed = revealUnifiedTabPaletteTarget(target, 'simulator')
+  if (revealed.status !== 'revealed') {
+    return revealed
   }
-  const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
-  if (!worktree) {
-    return { status: 'failed', reason: 'missing-worktree' }
-  }
-  const tabs = (initialState.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-    (candidate) => candidate.id === tabId
-  )
-  const tab = tabs[0]
-  if (
-    tabs.length !== 1 ||
-    tab.contentType !== 'simulator' ||
-    !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
-  ) {
-    return { status: 'failed', reason: 'missing-tab' }
-  }
-
-  const targetHostId = executionHostId ?? worktree.hostId
-  const activated = activateAndRevealWorkspace(
-    worktree.id,
-    targetHostId ? { executionHostId: targetHostId } : {}
-  )
-  if (!activated) {
-    return { status: 'blocked' }
-  }
-
+  const { tab } = revealed
   const state = useAppStore.getState()
-  state.focusGroup(worktreeId, tab.groupId)
-  state.activateTab(tab.id, { worktreeId })
+  state.focusGroup(target.worktreeId, tab.groupId)
+  state.activateTab(tab.id, { worktreeId: target.worktreeId })
   state.setActiveTab(tab.id)
-  state.setActiveTabType('simulator', worktreeId)
+  state.setActiveTabType('simulator', target.worktreeId)
   return { status: 'activated', tabId: tab.id }
 }
