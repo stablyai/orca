@@ -79,7 +79,7 @@ let capturedRowActivations: {
 }[] = []
 
 const activationMocks = vi.hoisted(() => ({
-  activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorkspace: vi.fn(),
   activateTabAndFocusPane: vi.fn()
 }))
 
@@ -106,7 +106,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: activationMocks.activateAndRevealWorktree
+  activateAndRevealWorkspace: activationMocks.activateAndRevealWorkspace
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
@@ -405,7 +405,7 @@ describe('WorktreeCardAgents', () => {
     expect(capturedRowActivations).toHaveLength(1)
     capturedRowActivations[0].onActivate('tab-1', 'tab-1:1')
 
-    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(activationMocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
