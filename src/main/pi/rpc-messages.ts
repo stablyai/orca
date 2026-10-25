@@ -15,6 +15,10 @@ const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
 
+// Pi writes the call's identity before its result, so it survives in an oversized end's prefix.
+const SKIPPED_TOOL_END_HEAD =
+  /^\{"type":"tool_execution_end","toolCallId":"([^"\\]+)","toolName":"([^"\\]+)"/
+
 const PI_TEXT_CHANNELS: Partial<Record<string, 'assistant' | 'reasoning'>> = {
   text_delta: 'assistant',
   text_end: 'assistant',
@@ -219,6 +223,24 @@ export class PiRpcMessages {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${event.toolCallId}`,
         body
+      }
+    ]
+  }
+
+  /** An oversized tool result is content, not a short error, so its call closes as completed. */
+  skipped(type: string, prefix: string, turn: string): ProviderTimelineEvent[] {
+    const tool = type === 'tool_execution_end' ? SKIPPED_TOOL_END_HEAD.exec(prefix) : null
+    return [
+      ...(tool ? this.tool({ type, toolCallId: tool[1], toolName: tool[2] }) : []),
+      // One row per turn: a second close of the same item is dropped.
+      {
+        type: 'item.close',
+        item: `oversized:${turn}`,
+        body: {
+          kind: 'status',
+          tone: 'warning',
+          text: 'Pi sent an update too large to show, so part of this turn is missing here.'
+        }
       }
     ]
   }

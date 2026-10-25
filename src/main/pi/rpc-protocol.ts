@@ -59,6 +59,14 @@ export const piRpcMessageEventSchema = z.object({
 })
 export type PiRpcMessageEvent = z.infer<typeof piRpcMessageEventSchema>
 
+/** Events whose payload the chat never shows; only their lifecycle step matters. */
+export const PI_RPC_LIFECYCLE_ONLY_EVENTS: ReadonlySet<string> = new Set([
+  'turn_end',
+  'agent_end',
+  'compaction_end',
+  'auto_compaction_end'
+])
+
 export const piRpcToolEventSchema = z.object({
   type: z.enum(['tool_execution_start', 'tool_execution_update', 'tool_execution_end']),
   toolCallId: z.string(),
