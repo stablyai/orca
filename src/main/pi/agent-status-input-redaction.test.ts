@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
-async function postedInput(input: unknown, eventName = 'tool_call', kind: 'omp' | 'pi' = 'omp') {
+async function postedInput(
+  input: unknown,
+  eventName = 'tool_execution_start',
+  kind: 'omp' | 'pi' = 'omp'
+) {
   const harness = createAgentStatusExtensionHarness({ kind })
   await harness.callHook(eventName, { toolName: 'custom', input, args: input })
   await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
@@ -91,13 +95,15 @@ describe('generated status input redaction', () => {
     expect(await postedInput(input)).toEqual(input)
   })
 
-  it('sanitizes both hook input shapes for Pi as well as OMP', async () => {
-    for (const kind of ['omp', 'pi'] as const) {
-      for (const event of ['tool_call', 'tool_execution_start']) {
-        expect(await postedInput({ path: '~/.ssh/id_rsa' }, event, kind)).toEqual({
-          redacted: true
-        })
-      }
+  it('sanitizes every hook input shape each runtime registers', async () => {
+    for (const [kind, event] of [
+      ['omp', 'tool_execution_start'],
+      ['pi', 'tool_call'],
+      ['pi', 'tool_execution_start']
+    ] as const) {
+      expect(await postedInput({ path: '~/.ssh/id_rsa' }, event, kind)).toEqual({
+        redacted: true
+      })
     }
   })
 })
