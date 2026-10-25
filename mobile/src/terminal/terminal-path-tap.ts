@@ -224,7 +224,7 @@ function isFullRowPathToken(slice: WrappedRowSlice): boolean {
 function canRowStartWrappedPath(slice: WrappedRowSlice): boolean {
   return (
     Boolean(slice.trailingToken) &&
-    (slice.trailingToken.length === slice.content.length || /[\\/]/.test(slice.trailingToken))
+    (slice.trailingToken.length === slice.content.length || /[\\/_-]/.test(slice.trailingToken))
   )
 }
 
@@ -238,7 +238,7 @@ function hasReachedWrapWidth(
   }
   const nextBreakIndex = next.leadingToken.indexOf('-')
   const wrapSlack = /[\\/\-.]$/.test(prev.trailingToken)
-    ? nextBreakIndex >= 0
+    ? nextBreakIndex !== -1
       ? nextBreakIndex + 1
       : next.leadingToken.length
     : 0
@@ -262,7 +262,10 @@ function canRowContinueWrappedPath(
     !next.leadingToken ||
     (next.leadingToken === '-' &&
       (next.content.length === 1 || /\s/.test(next.content.charAt(1)))) ||
-    /^(?:~[\\/]|\/{2}|\\\\|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(next.leadingToken)
+    /^(?:~[\\/]|\/{2}|\\\\|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(next.leadingToken) ||
+    (prev.trailingToken.length < prev.content.length &&
+      !/[\\/]/.test(prev.trailingToken) &&
+      (/[\\/]/.test(next.leadingToken) || !/\.[A-Za-z0-9]/.test(next.leadingToken)))
   ) {
     return false
   }
@@ -368,7 +371,11 @@ export function matchWrappedFilePathAtRowColumn(
         joinedText += slice.content
       }
       const hardMatched = matchFilePathAtColumn(joinedText, joinedCol)
-      if (hardMatched && /[\\/]/.test(hardMatched.pathText)) {
+      if (
+        hardMatched &&
+        (/[\\/]/.test(hardMatched.pathText) ||
+          (/[_-]/.test(hardMatched.pathText) && /\.[A-Za-z0-9]{1,8}$/.test(hardMatched.pathText)))
+      ) {
         return hardMatched
       }
     }

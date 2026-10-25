@@ -5,6 +5,7 @@ import type {
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
+import { resolveMissingTerminalFileTap } from './mobile-file-tap-fallback-resolve'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
 import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
@@ -106,7 +107,14 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const resolved = accepted.value as RuntimeTerminalPathResolution
+  let resolved = accepted.value as RuntimeTerminalPathResolution
+  if (
+    !resolved.exists &&
+    !resolved.isDirectory &&
+    shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
+  ) {
+    resolved = (await resolveMissingTerminalFileTap(options, resolved)) ?? resolved
+  }
   if (!resolved.exists || resolved.isDirectory) {
     reportOpenFailure(options)
     return

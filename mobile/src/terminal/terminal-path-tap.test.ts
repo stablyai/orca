@@ -278,6 +278,73 @@ describe('matchFilePathAtColumn', () => {
     }
   })
 
+  it('reconstructs hard-wrapped bare filenames with CJK punctuation prefixes in bin workspace', () => {
+    const eduRows = [
+      { text: '  已生成专供爷爷阅读的文档：ai_era_early_childhood_educat', isWrapped: false },
+      { text: '  ion.md。', isWrapped: false }
+    ]
+    const eduExpected = {
+      pathText: 'ai_era_early_childhood_education.md',
+      line: null,
+      column: null
+    }
+    expect(
+      matchWrappedFilePathAtRowColumn(eduRows, 0, colOf(eduRows[0]!.text, 'ai_era'), 58)
+    ).toEqual(eduExpected)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(eduRows, 1, colOf(eduRows[1]!.text, 'ion.md'), 58)
+    ).toEqual(eduExpected)
+
+    const retellRows = [
+      { text: '  本地校准与审计产物：typesafe_shanghai_pro', isWrapped: false },
+      { text: '  b.json、grok_shanghai_prob.md、xhs_post_s', isWrapped: false },
+      { text: '  creenshot.png。', isWrapped: false }
+    ]
+    expect(
+      matchWrappedFilePathAtRowColumn(retellRows, 0, colOf(retellRows[0]!.text, 'typesafe'), 46)
+    ).toEqual({
+      pathText: 'typesafe_shanghai_prob.json',
+      line: null,
+      column: null
+    })
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        retellRows,
+        1,
+        colOf(retellRows[1]!.text, 'grok_shanghai_prob.md'),
+        46
+      )
+    ).toEqual({
+      pathText: 'grok_shanghai_prob.md',
+      line: null,
+      column: null
+    })
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        retellRows,
+        1,
+        colOf(retellRows[1]!.text, 'xhs_post_s'),
+        46
+      )
+    ).toEqual({
+      pathText: 'xhs_post_screenshot.png',
+      line: null,
+      column: null
+    })
+    expect(
+      matchWrappedFilePathAtRowColumn(
+        retellRows,
+        2,
+        colOf(retellRows[2]!.text, 'creenshot.png'),
+        46
+      )
+    ).toEqual({
+      pathText: 'xhs_post_screenshot.png',
+      line: null,
+      column: null
+    })
+  })
+
   it('does not join a following status row onto an unwrapped path', () => {
     const rows = [{ text: '  Created /tmp/out' }, { text: '  Done' }]
     const expected = {
