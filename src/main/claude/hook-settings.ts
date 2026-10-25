@@ -47,6 +47,9 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
+/** Exec form (`args`) is only valid for Claude versions that support it. */
+export type NativeHookFormOptions = { execForm?: boolean }
+
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
   return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
 }
@@ -104,10 +107,11 @@ export function getManagedEventHook(
   eventName: string,
   scriptPath: string,
   settings = CLAUDE_HOOK_SETTINGS,
-  nativeHookPath: string | null = null
+  nativeHookPath: string | null = null,
+  options: NativeHookFormOptions = {}
 ): HookCommandConfig {
   return process.platform === 'win32'
-    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath)
+    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath, options)
     : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
 }
 
@@ -121,7 +125,8 @@ export function getRemoteManagedEventCommand(eventName: string, scriptPath: stri
 export function getManagedLifecycleHook(
   scriptPath: string,
   settings = CLAUDE_HOOK_SETTINGS,
-  nativeHookPath: string | null = null
+  nativeHookPath: string | null = null,
+  options: NativeHookFormOptions = {}
 ): HookCommandConfig {
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
@@ -133,6 +138,16 @@ export function getManagedLifecycleHook(
     return {
       type: 'command',
       command: `${nativeCommand} ${agent}`,
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  // Git Bash needs a spaced path quoted, which the no-Git-Bash PowerShell host cannot parse.
+  if (nativeHookPath && options.execForm) {
+    return {
+      type: 'command',
+      command: nativeHookPath,
+      // The exe ignores argv[2]; the script path lets builds without exec-form support replace this entry.
+      args: [getWindowsNativeHookAgent(scriptPath), scriptPath],
       timeout: MANAGED_HOOK_TIMEOUT_SECONDS
     }
   }

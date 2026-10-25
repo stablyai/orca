@@ -3,7 +3,7 @@
 id: native-chat-no-arbitrary-font-size
 language: typescript
 severity: error
-message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See "Chat type scale" in docs/STYLEGUIDE.md.'
+message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See docs/styleguide/native-chat.md.'
 files:
   - '**/src/renderer/src/components/native-chat/**'
 ignores:
@@ -17,7 +17,7 @@ rule:
 id: native-chat-no-arbitrary-font-size-tsx
 language: tsx
 severity: error
-message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See "Chat type scale" in docs/STYLEGUIDE.md.'
+message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See docs/styleguide/native-chat.md.'
 files:
   - '**/src/renderer/src/components/native-chat/**'
 ignores:

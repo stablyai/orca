@@ -94,7 +94,7 @@ describe('AutomationsPage refresh', () => {
 
   // The manual All-hosts refresh: without a control wired to it, a host whose
   // entry stopped short has nothing that re-queries it.
-  it('re-queries every host in view from the header refresh action', async () => {
+  it('re-queries the desktop host in view from the header refresh action', async () => {
     const { container } = await renderPage()
     api.automations.listScoped.mockClear()
 

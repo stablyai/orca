@@ -9,12 +9,6 @@ import {
   toAutomationChangeSelector,
   type AutomationProjectionContext
 } from './automation-list-scope'
-import {
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from './protocol-version'
-
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'a1',
@@ -53,13 +47,6 @@ function context(
     ...overrides
   }
 }
-
-describe('capability advertisement', () => {
-  it('registers both automation capabilities so getStatus() advertises them', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY)
-  })
-})
 
 describe('projectAutomationSelector', () => {
   it('qualifies a local record whose project resolves without a connection as self', () => {

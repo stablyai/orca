@@ -9,7 +9,7 @@ import { wrapTerminalBracketedPasteText } from '../../../shared/terminal-bracket
 
 // A launch's first prompt goes in right after the caller saw the agent's composer accept input, as
 // the desktop's own draft paste did: Enter one turn after the paste, not after the render settles.
-async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code') {
+async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code', startsTurn = true) {
   const writes: { data: string; at: number }[] = []
   const runtime = new OrcaRuntimeService(store)
   const startedAt = Date.now()
@@ -24,7 +24,9 @@ async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code') {
           setTimeout(() => runtime.onPtyData('pty-bg', `frame ${delay}`, Date.now()), delay)
         }
       }
-      acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+      if (startsTurn) {
+        acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+      }
       return true
     },
     kill: () => true,
@@ -84,22 +86,29 @@ describe('a launch prompt into a composer the caller saw ready', () => {
     }
   })
 
-  it.each(['codex', 'qwen-code'] as const)(
-    'sends %s its second Enter after its retry delay, as the desktop paste did',
-    async (agent) => {
+  it.each([
+    { agent: 'codex', startsTurn: false, enters: 2 },
+    { agent: 'qwen-code', startsTurn: false, enters: 2 },
+    { agent: 'codex', startsTurn: true, enters: 1 }
+  ] as const)(
+    'sends $agent a second Enter after its retry delay only when no turn started: $startsTurn',
+    async ({ agent, startsTurn, enters }) => {
       vi.useFakeTimers()
       try {
-        const { runtime, handle, writes } = await launchedAgentPane(agent)
+        const { runtime, handle, writes } = await launchedAgentPane(agent, startsTurn)
 
         const send = runtime.sendTerminalAgentPrompt(handle, 'explain this commit', {
           inputKind: 'launch',
-          composerReady: true
+          composerReady: true,
+          acceptQueued: true,
+          requestId: 'launch-retry',
+          observationTimeoutMs: 0
         })
         await vi.advanceTimersByTimeAsync(51)
         expect(writes.filter((write) => write.data === '\r')).toHaveLength(1)
         await vi.advanceTimersByTimeAsync(1_200)
         await send
-        expect(writes.filter((write) => write.data === '\r')).toHaveLength(2)
+        expect(writes.filter((write) => write.data === '\r')).toHaveLength(enters)
       } finally {
         vi.useRealTimers()
       }

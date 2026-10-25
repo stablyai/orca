@@ -23,6 +23,9 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
 // Older CLIs reject the whole settings file on an unknown top-level key.
 export const CLAUDE_STATUS_LINE_FIRST_VERSION = '1.0.64'
 
+// Exec-form hooks (`args`) spawn without a shell, so a spaced path needs no quoting.
+const CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION = '2.1.139'
+
 // Unknown versions get the core lifecycle/statusLine floor until a probe resolves their actual version.
 export const UNRESOLVED_CLAUDE_VERSION = CLAUDE_STATUS_LINE_FIRST_VERSION
 
@@ -54,6 +57,11 @@ export function claudeKnowsHookEvent(
 
 export function claudeKnowsStatusLine(version: string | null | undefined): boolean {
   return claudeKnowsSince(version, CLAUDE_STATUS_LINE_FIRST_VERSION)
+}
+
+// Unknown versions keep the shell form because an older CLI ignores `args`.
+export function claudeAcceptsExecFormHooks(version: string | null | undefined): boolean {
+  return claudeVersionReaches(version, CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION)
 }
 
 /** Probe with the launch cwd and env so version-manager shims select the same CLI. */

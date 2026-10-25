@@ -566,7 +566,7 @@ describe('AutomationsPage owner conflicts', () => {
     expect(mocks.listPanel?.isActionEnabled(orphanedRow, 'run-now')).toBe(false)
   })
 
-  it('greys out the actions on a row no owner could be captured for', async () => {
+  it('keeps delete enabled on a row with no captured owner metadata', async () => {
     const automation = makeAutomation({ id: 'a-1' })
     api.automations.list.mockResolvedValue([automation])
     api.automations.listScoped.mockRejectedValue(new Error('offline'))

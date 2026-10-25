@@ -22,6 +22,7 @@
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
     "audit:react-doctor": "node config/scripts/run-audit-tool.mjs react-doctor . --yes --no-supply-chain --no-telemetry --blocking none",
     "audit:dead-code": "node config/scripts/run-audit-tool.mjs knip --config config/knip.json",
+    "check:changed": "node config/scripts/check-changed.mjs",
     "check:code-quality:changed": "node config/scripts/check-changed-code-quality.mjs",
     "lint:js-plugins": "oxlint --config config/oxlint-js-plugins.json src config tests mobile native .github",
     "lint:ast-grep": "ast-grep scan --config config/sgconfig.yml --min-severity warning src config tests mobile",

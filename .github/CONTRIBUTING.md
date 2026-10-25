@@ -118,6 +118,14 @@ In PowerShell, use `$env:ORCA_DEV_MAIN_SOURCEMAPS='0'` before `pnpm dev`.
 Remove the variable when debugging the main process with source maps. Renderer and
 preload settings are unaffected; production builds always keep their hidden main maps.
 
+To try Vite's experimental bundled dev mode for the renderer, set `ORCA_DEV_BUNDLED=1`
+before `pnpm dev` (PowerShell: `$env:ORCA_DEV_BUNDLED='1'`). The renderer is served as a
+few bundled chunks instead of thousands of module requests, so the first render and full
+reloads are faster. HMR still works, but each edit rebuilds the affected chunks. While a
+rebuild is pending, a newly opened pop-out, space, or web window may get placeholder HTML
+until the bundle is ready. The mode is opt-in and experimental. Unset the variable if the renderer
+misbehaves, and report the problem with the variable noted.
+
 Local installs use pnpm's global virtual store: each package version is one slot
 under `~/pnpm/store` that every worktree links to, instead of a full `node_modules` per worktree.
 An existing worktree converts on its next `pnpm install`, and an older branch without the setting

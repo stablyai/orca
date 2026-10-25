@@ -13,20 +13,25 @@ function routeForHost(hostId: string | null | undefined): TerminalWorktreeRoute 
 }
 
 /**
- * Which host a terminal tab's close goes to: the worktree catalog's route, else the one host the
- * tab's own PTY ids name, else the host recorded on its unified tab. Null when nothing names one,
- * e.g. before the catalog hydrates (#11308); per-PTY teardown still fails closed then.
+ * Which host a terminal tab's close goes to: the paired runtime the tab's own PTY names (a
+ * workspace can mirror terminals from several, #31983), else the worktree catalog's route, else
+ * the one host the tab's PTY ids name, else the host recorded on its unified tab. Null when nothing
+ * names one, e.g. before the catalog hydrates (#11308); per-PTY teardown still fails closed then.
  */
 export function resolveTerminalCloseRoute(
   state: AppState,
   worktreeId: string,
   terminalTabId: string
 ): TerminalWorktreeRoute | null {
+  const row = state.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === terminalTabId)
+  const rowHost = parseExecutionHostId(getPtyExecutionHost(row?.ptyId))
+  if (rowHost?.kind === 'runtime') {
+    return { runtimeEnvironmentId: rowHost.environmentId }
+  }
   const catalogRoute = resolveTerminalWorktreeRoute(state, worktreeId)
   if (catalogRoute) {
     return catalogRoute
   }
-  const row = state.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === terminalTabId)
   const ptyHosts = new Set(
     collectPtyIdsForTab(state, terminalTabId, row?.ptyId ?? null)
       .map(getPtyExecutionHost)

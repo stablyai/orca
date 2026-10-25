@@ -77,7 +77,7 @@ describe('execution-host OpenCode model startup', () => {
     expect(probeOpenCodeLaunchCapabilities).not.toHaveBeenCalled()
   })
 
-  it.each(['2.0.14', '2.0.16', '2.1.4'])(
+  it.each(['2.0.16', '2.0.19', '2.1.4'])(
     'launches v2 %s in isolation and keeps one-time model preferences out of resume state',
     async (version) => {
       vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
@@ -187,7 +187,7 @@ describe('execution-host OpenCode model startup', () => {
     expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
 
-  it.each(['1.18.29', '2.0.13', '2.1.5-beta.1', '3.0.0'])(
+  it.each(['1.18.29', '2.0.13', '2.0.14', '2.0.18', '2.1.5-beta.1', '3.0.0'])(
     'refuses unverified version %s before model probing',
     async (version) => {
       vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
