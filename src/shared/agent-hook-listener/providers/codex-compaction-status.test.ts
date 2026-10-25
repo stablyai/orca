@@ -3,7 +3,11 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeAndAccept, PANE_KEY } from '../../agent-hook-listener-test-harness'
-import { createHookListenerState, type HookListenerState } from '../listener-state'
+import {
+  createHookListenerState,
+  seedLegacyAgentStatusForTests,
+  type HookListenerState
+} from '../listener-state'
 import { pollCodexTranscriptStatus } from './codex-transcript-poll'
 import { transcriptPollUpdate } from '../transcript-poll-policy'
 
@@ -55,7 +59,7 @@ describe('Codex compaction status', () => {
     }
   )
 
-  it('keeps a live turn and its child roster so transcript completion still settles the row', () => {
+  it('keeps a compacted parent and live child until their own completions', () => {
     hook({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Do work' })
     const original = hook({ hook_event_name: 'SubagentStart', agent_id: 'child-1' })
     if (!original) {
@@ -63,10 +67,12 @@ describe('Codex compaction status', () => {
     }
     const lead = state.codexLeadStateByPaneKey.get(PANE_KEY)
     const transcript = state.codexSubagentTranscriptByPaneKey.get(PANE_KEY)
+    const roster = state.codexSubagentRosterByPaneKey.get(PANE_KEY)
 
     expect(hook({ hook_event_name: 'SessionStart', source: 'compact' })).toBeNull()
     expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toBe(lead)
     expect(state.codexSubagentTranscriptByPaneKey.get(PANE_KEY)).toBe(transcript)
+    expect(state.codexSubagentRosterByPaneKey.get(PANE_KEY)).toBe(roster)
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'child-1', state: 'working' })
     ])
@@ -78,8 +84,25 @@ describe('Codex compaction status', () => {
     }
     expect(transcriptPollUpdate('codex', original, polled)).toMatchObject({
       hookEventName: 'Stop',
-      payload: { state: 'done', prompt: 'Do work', mainAgent: { state: 'done' } }
+      payload: {
+        state: 'working',
+        prompt: 'Do work',
+        mainAgent: { state: 'done' },
+        subagents: [{ id: 'child-1', state: 'working' }]
+      }
     })
+    seedLegacyAgentStatusForTests(state, polled)
+    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({
+      state: 'done',
+      turnId: 'turn-1'
+    })
+    const stopped = hook({ hook_event_name: 'SubagentStop', agent_id: 'child-1' })
+    expect(stopped?.payload).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
+    expect(stopped?.payload.subagents).toBeUndefined()
+    expect(
+      hook({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-2', prompt: 'Next' })?.payload
+    ).toMatchObject({ state: 'working', prompt: 'Next', mainAgent: { state: 'working' } })
+    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)?.turnId).toBe('turn-2')
   })
 
   it('preserves a pending human question across compaction', () => {
