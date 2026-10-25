@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { isTerminalPaneCloseChord } from './terminal-shortcut-policy'
 
 export type CloseTerminalDialogCopyKind = 'command' | 'agent'
 
@@ -37,6 +39,35 @@ export default function CloseTerminalDialog({
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
+  const keybindings = useAppStore((state) => state.keybindings)
+
+  // Why: a second close chord while the prompt is open means "I'm sure" (#21603).
+  // Confirm with the live opt-out tick so checkbox-then-Cmd+W still persists it. The
+  // opening chord can't reach this listener (the dialog mounts after its probe) and
+  // repeats are ignored, so a held key can't skip the prompt.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.repeat || event.defaultPrevented) {
+        return
+      }
+      const platform: NodeJS.Platform = navigator.userAgent.includes('Mac')
+        ? 'darwin'
+        : navigator.userAgent.includes('Windows')
+          ? 'win32'
+          : 'linux'
+      if (!isTerminalPaneCloseChord(event, platform, keybindings)) {
+        return
+      }
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      onConfirm(dontAskAgain)
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [open, dontAskAgain, onConfirm, keybindings])
 
   // Why: each reopen represents a fresh confirmation, so clear the old choice
   // during render rather than briefly painting it while the dialog opens.
@@ -69,7 +100,7 @@ export default function CloseTerminalDialog({
         }
       }}
     >
-      <DialogContent className="max-w-sm" showCloseButton={false}>
+      <DialogContent className="max-w-sm" showCloseButton={false} data-close-terminal-dialog="true">
         <CloseTerminalDialogBody
           isAgent={isAgent}
           trimmedTabLabel={trimmedTabLabel}
