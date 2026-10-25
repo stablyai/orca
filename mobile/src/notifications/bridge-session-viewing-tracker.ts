@@ -129,11 +129,11 @@ export function ingestBridgeWorktreeListPayload(hostId: string, payload: unknown
 export function noteBridgeHostClientMessage(hostId: string, message: BridgeClientMessage, isConnected: () => boolean): void {
   const hostKey = normalizeHostKey(hostId)
   const state = getOrCreateBridgeSessionState(hostKey)
-  const params = asRecord(message.params)
   if (message.type === 'request' && (message.method === 'worktree.list' || message.method === 'worktree.ps')) {
     state.worktreeListRequestsById.add(message.id)
     return
   }
+  const params = 'params' in message ? asRecord(message.params) : undefined
   if ((message.type === 'subscribe' && message.method === 'session.tabs.subscribe') || (message.type === 'request' && message.method === 'session.tabs.list')) {
     const worktreeId = stripWorktreePrefix(params?.worktree)
     if (!worktreeId) {
@@ -293,9 +293,7 @@ export function readBridgeNotificationAgentContext(
     const tab = tabs ? (paneKey ? notificationPaneTab(tabs, paneKey) : tabs.find((t) => t.type === 'terminal' && Boolean(t.agentStatus))) : undefined
     if (tab?.type === 'terminal' && tab.agentStatus) {
       const historyPrompt = tab.agentStatus.stateHistory
-        ?.slice()
-        .reverse()
-        .find((entry) => typeof entry.prompt === 'string' && entry.prompt.trim().length > 0)
+        ?.findLast((entry) => typeof entry.prompt === 'string' && entry.prompt.trim().length > 0)
         ?.prompt?.trim()
       prompt = prompt ?? (tab.agentStatus.prompt?.trim() || historyPrompt || undefined)
       const reply = tab.agentStatus.lastAssistantMessage ?? tab.agentStatus.lastCompletedAssistantMessage

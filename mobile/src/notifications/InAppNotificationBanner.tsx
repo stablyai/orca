@@ -68,11 +68,7 @@ export function InAppNotificationBanner() {
   const isTerminalBell = banner.title.startsWith('Bell in ')
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
   const badgeIcon = isUrgent ? '⚡' : isTerminalBell ? '🔔' : '✅'
-  const badgeLabel = isUrgent
-    ? 'Needs input'
-    : isTerminalBell
-      ? 'Terminal bell'
-      : 'Completed'
+  const badgeLabel = isUrgent ? 'Needs input' : isTerminalBell ? 'Terminal bell' : 'Completed'
   const canNavigate = Boolean(banner.hostId)
   const promptText = banner.prompt?.trim() ?? ''
   const hasPrompt = promptText.length > 0
@@ -169,9 +165,7 @@ export function InAppNotificationBanner() {
           <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
           <View style={styles.content}>
             <View style={styles.headerRow}>
-              <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
-                <Text style={[styles.badgeText, { color: accentColor }]}>{badgeIcon}</Text>
-              </View>
+              <Text style={[styles.badgeIcon, { color: accentColor }]}>{badgeIcon}</Text>
               <Text numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
                 {banner.title}
               </Text>
@@ -182,11 +176,7 @@ export function InAppNotificationBanner() {
               </Text>
             ) : null}
             {banner.body.length > 0 ? (
-              <Text
-                numberOfLines={hasPrompt ? 1 : 2}
-                ellipsizeMode="tail"
-                style={styles.body}
-              >
+              <Text numberOfLines={hasPrompt ? 1 : 2} ellipsizeMode="tail" style={styles.body}>
                 {banner.body}
               </Text>
             ) : null}
@@ -252,22 +242,11 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs + 2
+    gap: spacing.xs + 1
   },
-  badge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.row
-  },
-  badgeUrgent: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)'
-  },
-  badgeComplete: {
-    backgroundColor: 'rgba(34, 197, 94, 0.16)'
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700'
+  badgeIcon: {
+    fontSize: 12,
+    lineHeight: 16
   },
   title: {
     flex: 1,
