@@ -5,14 +5,14 @@ import { getFollowSymlinkedDirectoriesEntry, getLanguageEntries } from './appear
 import { matchesSettingsSearch } from './settings-search'
 
 // Native language names must remain searchable from every UI locale so users can switch languages.
-const NATIVE_LANGUAGE_WORDS = ['语言', '語言', '언어', '言語', 'Idioma', 'Langue']
+const NATIVE_LANGUAGE_WORDS = ['语言', '語言', '언어', '言語', 'Idioma', 'Langue', 'Язык']
 
 describe('getLanguageEntries', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en')
   })
 
-  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr', 'pt'])(
+  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr', 'pt', 'ru'])(
     'indexes every native word for "language" under the %s UI locale',
     async (locale) => {
       await i18n.changeLanguage(locale)

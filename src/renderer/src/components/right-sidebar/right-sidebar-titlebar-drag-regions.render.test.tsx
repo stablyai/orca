@@ -13,7 +13,8 @@ import {
 } from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
-import { setRendererUiLanguage, translate } from '@/i18n/i18n'
+import { i18n, setRendererUiLanguage, translate } from '@/i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
 
 const mockAppState = vi.hoisted(() => ({
   rightSidebarOpen: true,
@@ -255,6 +256,11 @@ describe('rendered right sidebar titlebar drag regions', () => {
         )
       ).toBe(true)
       expect(container.querySelector('[aria-label^="Source Control"]')).toBeNull()
+      await act(() => i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE))
+      expect(container.querySelector('[aria-label^="[Source Control]"]')).not.toBeNull()
+      await act(() => setRendererUiLanguage('en'))
+      expect(container.querySelector('[aria-label^="Source Control"]')).not.toBeNull()
+      expect(container.querySelector('[aria-label^="[Source Control]"]')).toBeNull()
     } finally {
       await act(async () => root.unmount())
       await setRendererUiLanguage('en')

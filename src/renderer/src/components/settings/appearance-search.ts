@@ -60,6 +60,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       '言語',
       'Idioma',
       'Langue',
+      'Язык',
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',
         'locale'
