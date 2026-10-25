@@ -32,6 +32,7 @@ import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import {
   findWslMovedProjectMove,
   releaseWslMove,
+  wslMoveReleaseRefusal,
   wslMoveWorkspacesInScope
 } from '../persistence/moving-wsl-projects/wsl-move-use-locally'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
@@ -189,6 +190,11 @@ function registerWslMoveUseHereHandler(
       )
       if (unsavedWorkspaceIds.length > 0) {
         return { released: false, reason: 'unsaved-files', unsavedWorkspaceIds }
+      }
+      // Why before the stop: a refused undo must leave the host's copies running (awin verify-9, X1).
+      const refusal = wslMoveReleaseRefusal(userDataPath, found.move)
+      if (refusal) {
+        return refusal
       }
       // The host's copies stop first, or an agent the move resumed there runs beside this one.
       const stop = await createUndoPorts().stopHostCopies(found.move)

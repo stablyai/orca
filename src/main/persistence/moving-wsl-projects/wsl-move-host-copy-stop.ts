@@ -22,6 +22,12 @@ export async function stopWslMoveHostCopies(
   port: WslMoveHostCopyPort,
   exitWaitMs = EXIT_WAIT_MS
 ): Promise<WslMoveHostCopyStop> {
+  // Why first: a host that cannot answer for every workspace must not have any of them stopped.
+  for (const id of hostWorkspaceIds) {
+    if ((await port.liveTerminals(id)) === null) {
+      return 'unreachable'
+    }
+  }
   for (const id of hostWorkspaceIds) {
     const slept = await port.sleepWorkspace(id)
     if (slept === null) {

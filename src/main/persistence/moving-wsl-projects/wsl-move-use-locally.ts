@@ -71,6 +71,27 @@ export function findWslMovedProjectMove(
   return { move }
 }
 
+/**
+ * Why `releaseWslMove` would refuse, read without changing anything, so undo can refuse before it
+ * stops the host's copies; null when the release would go ahead.
+ */
+export function wslMoveReleaseRefusal(
+  userDataPath: string,
+  move: WslMoveCutover
+): Extract<WslMoveUseLocallyResult, { released: false }> | null {
+  if (isWslMoveRunning(move.manifest.source.distro)) {
+    return { released: false, reason: 'move-running' }
+  }
+  try {
+    const newest = listWslMoveCutoverChain(userDataPath, move.journalKey).at(-1)
+    return newest && newest.migrationId !== move.migrationId
+      ? { released: false, reason: 'superseded', ...newerMoveOf(userDataPath, move) }
+      : null
+  } catch (error) {
+    return { released: false, reason: 'failed', detail: describe(error) }
+  }
+}
+
 /** Drops the committed move so its retained source rows list here again. */
 export function releaseWslMove(
   userDataPath: string,
