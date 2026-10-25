@@ -3,7 +3,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 import { readCachedRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
-import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime-connect-bound'
+import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime/remote-runtime-connect-bound'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 
 export function resolveRuntimeEnvironmentConnection(

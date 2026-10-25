@@ -8,7 +8,7 @@ import {
   readRuntimeEdgeAuth,
   writeRuntimeEdgeAuth
 } from '../../credentials/runtime-edge-auth-store'
-import { remoteRuntimeConnectOptions } from '../../../shared/remote-runtime-connect-bound'
+import { remoteRuntimeConnectOptions } from '../../../shared/remote-runtime/remote-runtime-connect-bound'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import {
   addOrUpdateEnvironmentFromPairingCode,

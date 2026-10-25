@@ -8,10 +8,10 @@ import {
 } from '../main/browser/browser-local-https-test-certificate'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
 import type { PairedRuntimeConnection } from './paired-runtime-connection'
-import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
-import { sendRemoteRuntimeRequestOnSocket } from './remote-runtime-request-socket'
-import { subscribeRemoteRuntimeTransport } from './remote-runtime-subscription-transport'
-import { remoteRuntimeConnectOptions } from './remote-runtime-connect-bound'
+import { openRemoteRuntimeWebSocket } from './remote-runtime/requests/remote-runtime-request-websocket'
+import { sendRemoteRuntimeRequestOnSocket } from './remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from './remote-runtime/requests/remote-runtime-subscription-transport'
+import { remoteRuntimeConnectOptions } from './remote-runtime/remote-runtime-connect-bound'
 
 const servers: Server[] = []
 const originalCAs = getCACertificates('default')

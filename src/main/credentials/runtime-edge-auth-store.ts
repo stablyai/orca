@@ -14,7 +14,7 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime-connect-bound'
+import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime/remote-runtime-connect-bound'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 
 type EdgeAuth = NonNullable<PairedRuntimeConnection['edgeAuth']>
