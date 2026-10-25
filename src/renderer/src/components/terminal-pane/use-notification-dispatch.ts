@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
+import { isChildAgentNotificationMuted } from '@/attention/hidden-child-agent-notification-mute'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
@@ -111,6 +112,15 @@ export function dispatchTerminalNotification(
   if (
     event.source === 'agent-task-complete' &&
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
+  ) {
+    return false
+  }
+  if (
+    event.source === 'agent-task-complete' &&
+    agentStatus?.state !== 'blocked' &&
+    agentStatus?.state !== 'waiting' &&
+    event.paneKey !== undefined &&
+    isChildAgentNotificationMuted(state, event.paneKey)
   ) {
     return false
   }

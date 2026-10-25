@@ -1,6 +1,10 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
+} from '../../../../shared/agent-status-types'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status-contract'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
@@ -26,8 +30,11 @@ export type NotificationDispatchMockState = {
   suppressedPtyExitIds: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   browserTabsByWorktree: Record<string, unknown[]>
-  retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
+  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
+  acknowledgedAgentsByPaneKey: Record<string, number>
+  agentsShowChildAgents: boolean
   worktreesByRepo: Record<
     string,
     {
@@ -96,6 +103,9 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
     browserTabsByWorktree: {},
     retainedAgentsByPaneKey: {},
     agentStatusByPaneKey: { [PANE_KEY]: makeAgentStatus(PANE_KEY) },
+    runtimeAgentOrchestrationByPaneKey: {},
+    acknowledgedAgentsByPaneKey: {},
+    agentsShowChildAgents: false,
     worktreesByRepo: {
       repo1: [
         { id: 'wt-primary', repoId: 'repo1', displayName: 'master', branch: 'master' },
