@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
 import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
@@ -92,7 +93,7 @@ export function sshTargetConnectFailureText(
 ): string {
   return sshConnectFailureText(
     useAppStore.getState().sshConnectionStates.get(targetId),
-    error instanceof Error ? error.message : fallback
+    extractIpcErrorMessage(error, fallback)
   )
 }
 

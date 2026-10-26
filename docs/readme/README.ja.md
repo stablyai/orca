@@ -220,7 +220,10 @@ _パッケージマネージャーからもインストールできます:_
 
 ```bash
 # macOS (Homebrew)
+# 必ず完全な名前を使ってください。単なる `orca` は無関係な Plotly の cask です。
 brew install --cask stablyai/orca/orca
+# 既存のインストールをアップグレード
+brew upgrade --cask stablyai/orca/orca
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin

@@ -66,15 +66,17 @@ Orca uses the same SSH transfer path as the connection. Folder download appears 
 
 This is a desktop-only action — the web client doesn't expose Download because it relies on Electron's save dialog.
 
-## Open a remote workspace in VS Code
+## Open a remote workspace in VS Code, Cursor, or Zed
 
-For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to VS Code Remote-SSH when your configured app is VS Code or VS Code Insiders (`code` / `code-insiders`, or a direct path to those launchers).
+For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to an editor that opens SSH hosts itself, when your configured app is VS Code, VS Code Insiders, Cursor, or Zed (`code` / `code-insiders` / `cursor` / `zed`, or a direct path to those launchers).
 
-1. Configure **Settings → General → Open in menu** so VS Code is listed (preset or custom command).
-1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → **VS Code**.
-1. Orca launches VS Code with Remote-SSH against that host and the worktree path (`--remote ssh-remote+<host> <path>`). The menu entry may show a **Remote SSH** badge.
+1. Configure **Settings → General → Open in menu** so the editor is listed (preset or custom command).
+1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → the editor.
+1. Orca launches the editor against that host and the worktree path. The menu entry may show a **Remote SSH** badge.
+   - VS Code and Cursor use Remote-SSH: `--remote ssh-remote+<host> <path>`. A host on a port other than 22 needs an alias in your local SSH config.
+   - Zed uses its SSH URL: `zed ssh://[user@]host[:port]/<path>`, so custom ports work without an alias. A manual host with an identity file, jump host, or proxy command still needs an alias, because the URL can't carry those.
 
-**Not supported for this remote path:** Cursor, Zed, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
+**Not supported for this remote path:** other editors, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
 
 ## Kerberos / GSSAPI
 

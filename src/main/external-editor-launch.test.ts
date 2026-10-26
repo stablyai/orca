@@ -8,11 +8,30 @@ vi.mock('./codex-cli/command', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
+import type { SshTarget } from '../shared/ssh-types'
 import { getCmdExePath } from './win32-utils'
-import {
-  resolveExternalEditorLaunchSpec,
-  resolveVsCodeRemoteSshLaunchSpec
-} from './external-editor-launch'
+import { resolveExternalEditorLaunchSpec } from './external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from './remote-ssh-editor-launch'
+
+const BUILDER_ALIAS: SshTarget = {
+  id: 'ssh-1',
+  label: 'Builder',
+  host: 'builder.example.com',
+  port: 2222,
+  username: 'ada',
+  source: 'ssh-config',
+  configHost: 'builder'
+}
+
+function remoteLaunchSpec(
+  command: string,
+  pathValue: string,
+  options: Parameters<typeof resolveRemoteSshEditorLaunchSpec>[3],
+  target: SshTarget = BUILDER_ALIAS
+) {
+  const result = resolveRemoteSshEditorLaunchSpec(command, pathValue, target, options)
+  return result.ok ? result.launchSpec : null
+}
 
 describe('resolveExternalEditorLaunchSpec', () => {
   beforeEach(() => {
@@ -480,7 +499,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
   })
 })
 
-describe('resolveVsCodeRemoteSshLaunchSpec', () => {
+describe('resolveRemoteSshEditorLaunchSpec', () => {
   beforeEach(() => {
     resolveCliCommandMock.mockReset()
     resolveCliCommandMock.mockImplementation((command: string) => command)
@@ -488,7 +507,7 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
 
   it.each(['code', 'code-insiders'])('builds exact Remote-SSH arguments for %s', (command) => {
     expect(
-      resolveVsCodeRemoteSshLaunchSpec(command, '/home/Ada Lovelace/project', 'builder', {
+      remoteLaunchSpec(command, '/home/Ada Lovelace/project', {
         platform: 'linux'
       })
     ).toEqual({
@@ -506,7 +525,7 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
     'C:\\Tools\\code-insiders.bat'
   ])('supports the direct Windows launcher %s', (command) => {
     expect(
-      resolveVsCodeRemoteSshLaunchSpec(command, 'C:\\Users\\Ada Lovelace\\project', 'builder', {
+      remoteLaunchSpec(command, 'C:\\Users\\Ada Lovelace\\project', {
         platform: 'win32'
       })?.spawnArgs
     ).toEqual(['--remote', 'ssh-remote+builder', 'C:\\Users\\Ada Lovelace\\project'])
@@ -515,7 +534,7 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
   it('supports an existing direct POSIX launcher path containing spaces', () => {
     const command = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
     expect(
-      resolveVsCodeRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+      remoteLaunchSpec(command, '/srv/project', {
         platform: 'darwin',
         fileExists: (candidate) => candidate === command
       })
@@ -530,7 +549,7 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
     const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
 
     expect(
-      resolveVsCodeRemoteSshLaunchSpec('code', '/home/ada/project', 'user@host', {
+      remoteLaunchSpec('code', '/home/ada/project', {
         platform: 'darwin',
         fileExists: (candidate) => candidate === macCli
       })
@@ -538,27 +557,55 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
       kind: 'executable',
       hideWindowsConsole: true,
       spawnCmd: macCli,
-      spawnArgs: ['--remote', 'ssh-remote+user@host', '/home/ada/project']
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/ada/project']
     })
   })
 
   it('recognizes a simple CLI name resolved to a Windows shim', () => {
     resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\Code.CMD')
     expect(
-      resolveVsCodeRemoteSshLaunchSpec('code', '/srv/project', 'builder', {
+      remoteLaunchSpec('code', '/srv/project', {
         platform: 'win32'
       })
     ).toMatchObject({ spawnCmd: 'C:\\Tools\\Code.CMD' })
   })
 
-  it.each(['cursor', 'zed', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
+  it('opens Cursor through Remote-SSH in a new window', () => {
+    expect(remoteLaunchSpec('cursor', '/srv/project', { platform: 'linux' })?.spawnArgs).toEqual([
+      '--new-window',
+      '--remote',
+      'ssh-remote+builder',
+      '/srv/project'
+    ])
+  })
+
+  it('opens Zed with an ssh:// URL that keeps a manual custom port', () => {
+    const manualTarget: SshTarget = { ...BUILDER_ALIAS, source: 'manual', configHost: undefined }
+    expect(
+      remoteLaunchSpec('zed', '/home/Ada Lovelace/project', { platform: 'linux' }, manualTarget)
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: 'zed',
+      spawnArgs: ['ssh://ada@builder.example.com:2222/home/Ada%20Lovelace/project']
+    })
+  })
+
+  it('still requires an SSH config alias for a VS Code custom port', () => {
+    const manualTarget: SshTarget = { ...BUILDER_ALIAS, source: 'manual', configHost: undefined }
+    expect(
+      resolveRemoteSshEditorLaunchSpec('code', '/srv/project', manualTarget, { platform: 'linux' })
+    ).toEqual({ ok: false, reason: 'ssh-alias-required', host: 'builder.example.com', port: 2222 })
+  })
+
+  it.each(['subl', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
     'rejects unsupported and compound SSH commands: %s',
     (command) => {
       expect(
-        resolveVsCodeRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        resolveRemoteSshEditorLaunchSpec(command, '/srv/project', BUILDER_ALIAS, {
           platform: 'linux'
         })
-      ).toBeNull()
+      ).toEqual({ ok: false, reason: 'remote-editor-unsupported' })
     }
   )
 })

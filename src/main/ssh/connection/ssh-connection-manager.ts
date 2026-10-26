@@ -8,6 +8,7 @@ import {
 } from '../ssh-credential-decline'
 import { createSshUserDisconnectedError, isSshUserDisconnected } from '../ssh-user-disconnect'
 import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
+import { markSshSessionStartFailure } from '../ssh-session-start-failure'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {
@@ -39,6 +40,17 @@ export class SshConnectionManager {
 
   /** `probe`: a user's connection test, which a Disconnect does not refuse. */
   async connect(target: SshTarget, options?: { probe?: boolean }): Promise<SshConnection> {
+    try {
+      return await this.openSession(target, options)
+    } catch (error) {
+      throw markSshSessionStartFailure(error)
+    }
+  }
+
+  private async openSession(
+    target: SshTarget,
+    options?: { probe?: boolean }
+  ): Promise<SshConnection> {
     // Refuse user-disconnected hosts before pool reuse, including transports opened by connection tests (#30086).
     if (!options?.probe && isSshUserDisconnected(target.id)) {
       throw createSshUserDisconnectedError(target.label)

@@ -220,7 +220,10 @@ _O mediante un gestor de paquetes:_
 
 ```bash
 # macOS (Homebrew)
+# Usa siempre el nombre completo; `orca` a secas es un cask de Plotly no relacionado.
 brew install --cask stablyai/orca/orca
+# Actualizar una instalación existente
+brew upgrade --cask stablyai/orca/orca
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
