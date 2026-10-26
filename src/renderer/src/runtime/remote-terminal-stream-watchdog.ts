@@ -88,6 +88,9 @@ export function createRemoteTerminalStreamWatchdog(
 
   return {
     beginOutputDelivery(bytes) {
+      if (disposed) {
+        return () => {}
+      }
       const delivery = { startedAtMs: Date.now() }
       outstandingDeliveryBytes += bytes
       unsettledDeliveries.add(delivery)
