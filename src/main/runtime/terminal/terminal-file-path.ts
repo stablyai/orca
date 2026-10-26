@@ -12,15 +12,24 @@ export function resolveTerminalAbsolutePath(args: {
   connectionId?: string
   terminalFileUriHostname?: string | null
 }): string {
-  const expanded = normalizeTerminalFileUriAuthorityPath(
-    args.expanded,
-    args.connectionId,
-    args.terminalFileUriHostname,
+  const expanded = normalizeLeadingSlashDrivePath(
+    normalizeTerminalFileUriAuthorityPath(
+      args.expanded,
+      args.connectionId,
+      args.terminalFileUriHostname,
+      args.worktreePath
+    ),
     args.worktreePath
   )
-  const absolutePath = isRuntimePathAbsolute(expanded)
-    ? expanded
-    : resolveRuntimePath(args.base, expanded)
+  const isWindowsDriveBase =
+    /^[A-Za-z]:[\\/]/.test(args.base) &&
+    /^[A-Za-z]:[\\/]/.test(args.worktreePath) &&
+    !parseWslPath(args.worktreePath)
+  const targetPath =
+    isWindowsDriveBase && /^\/(?![\\/])/.test(expanded) ? expanded.slice(1) : expanded
+  const absolutePath = isRuntimePathAbsolute(targetPath)
+    ? targetPath
+    : resolveRuntimePath(args.base, targetPath)
   if (args.connectionId) {
     return normalizeLeadingSlashDrivePath(absolutePath, args.worktreePath)
   }

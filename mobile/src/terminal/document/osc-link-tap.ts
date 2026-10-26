@@ -82,7 +82,10 @@ export function initialOscLinkAtCell(scope: TerminalDocumentScope, row: number, 
 }
 
 export function terminalOscLinkTarget(uri: unknown): TerminalOscLinkTarget | null {
-  if (typeof uri !== 'string') {
+  if (
+    typeof uri !== 'string' ||
+    /[\u0080-\u009f]|[\u00c2-\u00f4][\u0080-\u00bf]+|(?:^|[\\/])[\u00c2-\u00f4]$/.test(uri)
+  ) {
     return null
   }
   if (/^https?:/i.test(uri)) {

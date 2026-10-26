@@ -4,15 +4,32 @@ export type ParsedFileLinkLocation = {
   column: number | null
 }
 
+function collapseRepeatedTrailingFilename(pathText: string): string {
+  const lastSep = Math.max(pathText.lastIndexOf('/'), pathText.lastIndexOf('\\'))
+  if (lastSep < 0) {
+    return pathText
+  }
+  const basename = pathText.slice(lastSep + 1)
+  if (basename.length < 4 || basename.length % 2 !== 0) {
+    return pathText
+  }
+  const half = basename.slice(0, basename.length / 2)
+  if (basename.slice(basename.length / 2) !== half || !/\.[A-Za-z0-9_+-]+$/.test(half)) {
+    return pathText
+  }
+  return `${pathText.slice(0, lastSep + 1)}${half}`
+}
+
 export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | null {
   const match =
     /^(.*?)(?:#(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?|(?::(\d+)(?:-\d+)?)(?::(\d+))?)?$/i.exec(
       value
     )
-  const pathText = match?.[1]
-  if (!pathText) {
+  const rawPathText = match?.[1]
+  if (!rawPathText) {
     return null
   }
+  const pathText = collapseRepeatedTrailingFilename(rawPathText)
   const lineRaw = match[2] ?? match[4]
   const columnRaw = match[3] ?? match[5]
   const line = lineRaw ? Number.parseInt(lineRaw, 10) : null

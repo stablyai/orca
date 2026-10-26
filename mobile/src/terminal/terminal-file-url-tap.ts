@@ -25,6 +25,9 @@ export function resolveTerminalFileUrlTap(uri: string): TappedFilePath | null {
 }
 
 export function resolveTerminalOscFileTap(uri: string): TappedFilePath | null {
+  if (/[\u0080-\u009f]|[\u00c2-\u00f4][\u0080-\u00bf]+|(?:^|[\\/])[\u00c2-\u00f4]$/.test(uri)) {
+    return null
+  }
   return resolveTerminalFileUrlTap(uri) ?? parseOscPathLikeTarget(uri)
 }
 

@@ -57,6 +57,17 @@ export async function resolveMissingTerminalFileTap<T extends FileTapSessionTab>
     }
   }
 
+  if (/^\/(?![\\/]|[A-Za-z]:)/.test(options.pathText)) {
+    const withoutLeadingSlash = await tryResolveCandidatePath(
+      options,
+      worktree,
+      options.pathText.slice(1)
+    )
+    if (withoutLeadingSlash) {
+      return withoutLeadingSlash
+    }
+  }
+
   const matchingTabPaths = new Set<string>()
   for (const tab of options.getSessionTabs()) {
     if (
@@ -85,7 +96,11 @@ export async function resolveMissingTerminalFileTap<T extends FileTapSessionTab>
   }
 
   try {
-    const psResponse = await resumeWorktreeListRead.request(options.client, {}, { timeoutMs: 3_000 })
+    const psResponse = await resumeWorktreeListRead.request(
+      options.client,
+      {},
+      { timeoutMs: 3_000 }
+    )
     const psAccepted = resumeWorktreeListRead.interpret(psResponse)
     if (!psAccepted.accepted) {
       return null

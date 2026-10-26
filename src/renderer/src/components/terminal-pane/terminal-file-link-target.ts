@@ -54,15 +54,21 @@ export function resolveFileLinkTarget(
   parsed: ParsedTerminalFileLink,
   host: FileLinkHost
 ): FileLinkTarget | null {
-  const resolved = host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
+  const linkWslDistro = terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
+  const isNativeWindowsCwd =
+    Boolean(host.cwd && /^[A-Za-z]:[\\/]/.test(host.cwd)) &&
+    !terminalPathWslDistro(host.worktreePath, linkWslDistro)
+  const normalizedParsed =
+    isNativeWindowsCwd && /^\/(?![\\/]|[A-Za-z]:)/.test(parsed.pathText)
+      ? { ...parsed, pathText: parsed.pathText.slice(1) }
+      : parsed
+  const resolved = host.cwd
+    ? resolveTerminalFileLink(normalizedParsed, host.cwd, host.homePath)
+    : null
   if (!resolved) {
     return null
   }
-  const absolutePath = mapTerminalFilePath(
-    resolved.absolutePath,
-    host.worktreePath,
-    terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
-  )
+  const absolutePath = mapTerminalFilePath(resolved.absolutePath, host.worktreePath, linkWslDistro)
   const fileContext = getTerminalFileContext(
     host.worktreeId,
     host.worktreePath,

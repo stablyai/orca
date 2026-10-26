@@ -303,6 +303,23 @@ describe('RuntimeFileCommands', () => {
       expect(result).toMatchObject({ relativePath: 'docs/readme.md', exists: true })
     })
 
+    it('resolves a single-leading-slash path against a native Windows drive worktree', async () => {
+      const { commands } = createRuntimeFileCommands({ path: 'D:/code/写作' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+        'D:/code/写作'
+      )
+
+      expect(result).toMatchObject({
+        relativePath: '小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+        absolutePath: 'D:/code/写作/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+        exists: true
+      })
+    })
+
     it('reports directories including the workspace root', async () => {
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)

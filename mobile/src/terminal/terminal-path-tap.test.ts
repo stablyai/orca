@@ -345,6 +345,47 @@ describe('matchFilePathAtColumn', () => {
     })
   })
 
+  it('reconstructs hard-wrapped Chinese paths and collapses ConPTY-leaked duplicate basenames', () => {
+    const writingRows = [
+      { text: '章全新正文：/小说/三国坞堡穿越/卷一/正文/第01', isWrapped: false },
+      { text: '章-验棺.md第01章-验棺.md（路径：D:\\code', isWrapped: false },
+      { text: '  \\写作\\小说\\三国坞堡穿越\\卷一\\正文\\第01章-', isWrapped: false },
+      { text: '  验棺.md）', isWrapped: false }
+    ]
+    const expectedRelative = {
+      pathText: '/小说/三国坞堡穿越/卷一/正文/第01章-验棺.md',
+      line: null,
+      column: null
+    }
+    const expectedDrive = {
+      pathText: 'D:\\code\\写作\\小说\\三国坞堡穿越\\卷一\\正文\\第01章-验棺.md',
+      line: null,
+      column: null
+    }
+    expect(
+      matchWrappedFilePathAtRowColumn(writingRows, 0, colOf(writingRows[0]!.text, '小说'), 46)
+    ).toEqual(expectedRelative)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        writingRows,
+        1,
+        colOf(writingRows[1]!.text, '章-验棺.md'),
+        46
+      )
+    ).toEqual(expectedRelative)
+    expect(
+      matchWrappedFilePathAtRowColumn(writingRows, 2, colOf(writingRows[2]!.text, '写作'), 46)
+    ).toEqual(expectedDrive)
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(
+        writingRows,
+        3,
+        colOf(writingRows[3]!.text, '验棺.md'),
+        46
+      )
+    ).toEqual(expectedDrive)
+  })
+
   it('does not join a following status row onto an unwrapped path', () => {
     const rows = [{ text: '  Created /tmp/out' }, { text: '  Done' }]
     const expected = {
