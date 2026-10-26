@@ -101,6 +101,18 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'qwen3-asr-0.6b-int8',
+    label: 'Qwen3-ASR',
+    description:
+      '30 languages with automatic language detection, including Chinese, English, Japanese, and Korean. Largest download of the local models.',
+    type: 'qwen3-asr',
+    provider: 'local',
+    language: 'multilingual',
+    ...getSpeechModelDownloadMetadata('qwen3-asr-0.6b-int8'),
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',
