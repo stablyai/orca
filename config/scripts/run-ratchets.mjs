@@ -11,7 +11,9 @@ const RUN_ELSEWHERE = new Set([
   // Needs the PR diff base; the cross-version-wire job runs it.
   'check-runtime-launcher-protocol-ratchet.mjs',
   // Its own background preflight step, so it overlaps lint and typecheck.
-  'check-main-sync-spawn-ratchet.mjs'
+  'check-main-sync-spawn-ratchet.mjs',
+  // ast-grep-gates.mjs checks it from the ast-grep lint scan instead of scanning again.
+  'check-flaky-test-pattern-ratchet.mjs'
 ])
 
 export function listRatchetScripts(scriptsDir) {

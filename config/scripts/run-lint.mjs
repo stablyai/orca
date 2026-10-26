@@ -15,8 +15,7 @@ export const LINT_STEPS = [
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',
-  'check:flaky-test-pattern-ratchet',
-  'lint:ast-grep',
+  'lint:ast-grep-gates',
   'check:main-sync-spawn-ratchet',
   'lint:js-plugins',
   'oxlint',
@@ -50,7 +49,9 @@ export const LINT_STEPS = [
 const BARE_COMMANDS = {
   oxlint: 'oxlint',
   // process-host and compat-boundary imports from one TypeScript parse, as CI runs them.
-  'check:import-boundaries': 'bun config/scripts/check-import-boundaries.mjs'
+  'check:import-boundaries': 'bun config/scripts/check-import-boundaries.mjs',
+  // lint:ast-grep and the flaky-test ratchet from one scan, as CI runs them.
+  'lint:ast-grep-gates': 'node config/scripts/ast-grep-gates.mjs'
 }
 
 function parseMaxWorkers(argv) {
