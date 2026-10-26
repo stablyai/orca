@@ -13,22 +13,23 @@ import type {
 } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
+import type * as MobileNativeChatRowPropsModule from './use-mobile-native-chat-row-props'
+import type * as MobileNativeChatRowProjectionModule from './mobile-native-chat-row-projection'
+import type * as MobileNativeChatMessageDetailModule from './use-mobile-native-chat-message-detail'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatRowContent } from './MobileNativeChatRowItemSource'
 
-vi.mock('react-native', async () => {
-  return {
-    ActivityIndicator: 'ActivityIndicator',
-    ScrollView: 'ScrollView',
-    Platform: { OS: 'web' },
-    Pressable: 'Pressable',
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-    Text: 'Text',
-    View: 'View'
-  }
-})
+vi.mock('react-native', async () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  ScrollView: 'ScrollView',
+  Platform: { OS: 'web' },
+  Pressable: 'Pressable',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  Text: 'Text',
+  View: 'View'
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
@@ -61,7 +62,7 @@ const operations = vi.hoisted(() => ({
   state: new Array<string>()
 }))
 vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./use-mobile-native-chat-row-props')>()
+  const actual = await importOriginal<typeof MobileNativeChatRowPropsModule>()
   return {
     ...actual,
     resolveMobileNativeChatRowProps(
@@ -73,7 +74,7 @@ vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
   }
 })
 vi.mock('./mobile-native-chat-row-projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mobile-native-chat-row-projection')>()
+  const actual = await importOriginal<typeof MobileNativeChatRowProjectionModule>()
   return {
     equalMobileNativeChatRowContent(
       ...args: Parameters<typeof actual.equalMobileNativeChatRowContent>
@@ -84,7 +85,7 @@ vi.mock('./mobile-native-chat-row-projection', async (importOriginal) => {
   }
 })
 vi.mock('./use-mobile-native-chat-message-detail', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./use-mobile-native-chat-message-detail')>()
+  const actual = await importOriginal<typeof MobileNativeChatMessageDetailModule>()
   return {
     ...actual,
     useMobileNativeChatMessageDetail(
@@ -485,7 +486,7 @@ it.each([false, true])(
       sequence: 4,
       observedAt: 4,
       revision: 2,
-      body: textBody(grouped ? 'reasoning' : 'assistant', short + ' FULL TAIL')
+      body: textBody(grouped ? 'reasoning' : 'assistant', `${short} FULL TAIL`)
     }
     scroller.scrollHeight = 10000
     vi.useFakeTimers()
@@ -506,7 +507,7 @@ it.each([false, true])(
     expect(recovery()).toBeNull()
     expect([...rendered.keys()]).toEqual(grouped ? [head, target] : [head])
     act(() => vi.advanceTimersByTime(400))
-    expect(shown()).toBe(short + ' FULL TAIL')
+    expect(shown()).toBe(`${short} FULL TAIL`)
 
     const replaced = items.map((item) => (item.itemId === target ? { ...item, revision: 3 } : item))
     show(replaced)
