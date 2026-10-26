@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -112,6 +112,48 @@ async function expectRefusal(promise: Promise<unknown>, code: string): Promise<v
 }
 
 describe('RuntimeClient runtime-source fence', () => {
+  it('refuses an explicit request pin after metadata is replaced before send', async () => {
+    const original = await startRuntime({ runtimeId: 'runtime-original', installationId: SOURCE_A })
+    const replacement = await startRuntime({
+      runtimeId: 'runtime-replacement',
+      installationId: SOURCE_A
+    })
+    launchedBy(SOURCE_A, 'runtime-original')
+    const client = new RuntimeClient(original.userDataPath, 2_000, null, null, 'orca')
+    await client.call('status.get')
+    writeFileSync(
+      join(original.userDataPath, 'orca-runtime.json'),
+      readFileSync(join(replacement.userDataPath, 'orca-runtime.json'))
+    )
+    await expectRefusal(
+      client.call(
+        'agentSession.respondToApproval',
+        { sessionId: 'session', itemId: 'approval' },
+        {
+          expectedRuntimeSource: { sourceId: SOURCE_A, runtimeId: 'runtime-original' }
+        }
+      ),
+      'runtime_source_mismatch'
+    )
+    expect(original.methods).toEqual(['status.get'])
+    expect(replacement.methods).toEqual([])
+  })
+
+  it('puts an explicit request pin on the actual local answer wire', async () => {
+    const runtime = await startRuntime({ runtimeId: 'runtime-answer', installationId: SOURCE_A })
+    delete process.env[RUNTIME_SOURCE_ID_ENV]
+    delete process.env[RUNTIME_SOURCE_INCARNATION_ENV]
+    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
+    const pin = { sourceId: SOURCE_A, runtimeId: 'runtime-answer' }
+    await client.call(
+      'agentSession.respondToQuestion',
+      { sessionId: 'session', itemId: 'question' },
+      { expectedRuntimeSource: pin }
+    )
+    expect(runtime.methods).toEqual(['agentSession.respondToQuestion'])
+    expect(runtime.expectations).toEqual([pin])
+  })
+
   it('refuses another live runtime before the request reaches it', async () => {
     const runtime = await startRuntime({ runtimeId: 'runtime-b', installationId: SOURCE_B })
     launchedBy(SOURCE_A, 'runtime-a')

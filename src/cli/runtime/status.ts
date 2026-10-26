@@ -101,3 +101,41 @@ function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliS
     }
   }
 }
+
+/** Projects an authenticated host reply into CLI status without treating unknown state as ready. */
+export function projectRemoteCliStatus(
+  response: RuntimeRpcSuccess<RuntimeStatus>,
+  environmentSelector: string | null
+): RuntimeRpcSuccess<CliStatusResult> {
+  const graphState = response.result.graphStatus
+  return {
+    id: response.id,
+    ok: true,
+    result: {
+      target: {
+        kind: 'environment',
+        environment: environmentSelector ?? 'pairing-code'
+      },
+      app: projectRemoteAppStatus(response.result),
+      runtime: {
+        state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
+        reachable: true,
+        connectionState: runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: response.result
+        }),
+        runtimeId: response.result.runtimeId,
+        ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+        ...(response.result.remoteUpdateSupport
+          ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
+          : {}),
+        ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
+        ...(response.result.degradations ? { degradations: response.result.degradations } : {})
+      },
+      graph: {
+        state: graphState
+      }
+    },
+    _meta: response._meta
+  }
+}

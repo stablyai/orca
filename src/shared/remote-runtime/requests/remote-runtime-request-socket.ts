@@ -25,10 +25,15 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
-import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../runtime-types'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
+/** Owns one E2EE RPC socket through authentication, optional preflight, bounded reply and cleanup. */
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   connection: PairedRuntimeConnection,
   method: string,
@@ -37,7 +42,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -62,7 +68,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         deviceToken: connection.credential.deviceToken,
         method,
         params,
-        envelope
+        envelope,
+        expectedRuntimeSource
       })
     )
   }

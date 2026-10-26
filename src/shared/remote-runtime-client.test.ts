@@ -433,6 +433,41 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
+  it('sends the request runtime pin without changing orchestration fields over encryption', async () => {
+    const observed = vi.fn()
+    const server = await createOneShotServer({ onRequest: observed })
+    const envelope = {
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'mutation_1'
+    }
+    const pin = { sourceId: '11111111-1111-4111-8111-111111111111', runtimeId: 'runtime-test' }
+    await sendRemoteRuntimeRequest(
+      server.pairing,
+      'agentSession.respondToQuestion',
+      { sessionId: 'session' },
+      1000,
+      envelope,
+      undefined,
+      [],
+      pin
+    )
+    expect(observed).toHaveBeenCalledOnce()
+    expect(observed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'agentSession.respondToQuestion',
+        params: { sessionId: 'session' },
+        expectedRuntimeSource: pin,
+        ...envelope
+      })
+    )
+    expect(envelope).toEqual({
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'mutation_1'
+    })
+  })
+
   it('sends orchestration authentication fields in the admitted encrypted request', async () => {
     let receivedRequest: Record<string, unknown> | null = null
     const server = await createOneShotServer({
@@ -480,6 +515,7 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(receivedRequest).not.toHaveProperty('orchestrationCapability')
     expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
     expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
+    expect(receivedRequest).not.toHaveProperty('expectedRuntimeSource')
   })
 })
 

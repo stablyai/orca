@@ -211,6 +211,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
   },
   {
+    name: 'agent-requests',
+    keys: ['agent requests list', 'agent requests get', 'agent requests answer'],
+    /** Defers native-request dependencies until this command group is dispatched. */
+    load: async () => (await import('./handlers/agent-requests.js')).AGENT_REQUEST_HANDLERS
+  },
+  {
     name: 'connector',
     keys: [
       'connector start',

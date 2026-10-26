@@ -4,7 +4,10 @@ import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { markEnvironmentUsed } from './environments'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
@@ -26,6 +29,7 @@ export class RemoteRuntimeCompatGate {
     private readonly environmentSelector: string | null
   ) {}
 
+  /** Checks remote compatibility when needed and carries the explicit pin to the target transport. */
   send<TResult>(args: {
     transport: WebSocketTransport
     connection: PairedRuntimeConnection
@@ -33,6 +37,7 @@ export class RemoteRuntimeCompatGate {
     params: unknown
     timeoutMs: number
     envelope?: RuntimeOrchestrationEnvelope
+    expectedRuntimeSource?: ExpectedRuntimeSource
   }): Promise<RuntimeRpcResponse<TResult>> {
     if (this.checked || args.method === 'status.get') {
       return args.transport.sendWebSocketRequest<TResult>(
@@ -40,7 +45,8 @@ export class RemoteRuntimeCompatGate {
         args.method,
         args.params,
         args.timeoutMs,
-        args.envelope
+        args.envelope,
+        args.expectedRuntimeSource
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
@@ -59,7 +65,8 @@ export class RemoteRuntimeCompatGate {
           })
         }
       },
-      args.envelope
+      args.envelope,
+      args.expectedRuntimeSource
     )
   }
 

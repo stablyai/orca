@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
-import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import {
   isDurableMutation,
   isOrchestrationMutation,
@@ -11,7 +13,7 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, projectRemoteAppStatus } from './status'
+import { getCliStatus, projectRemoteCliStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import {
@@ -82,6 +84,7 @@ export class RuntimeClient {
     return this.remote !== null
   }
 
+  /** Routes authenticated RPCs with optional target-local pins and existing mutation recovery. */
   async call<TResult>(
     method: string,
     params?: unknown,
@@ -89,6 +92,7 @@ export class RuntimeClient {
       timeoutMs?: number
       legacyTerminalPrompt?: true
       terminalPromptPreflight?: { runtimeId: string | null }
+      expectedRuntimeSource?: ExpectedRuntimeSource
     } & RuntimeOrchestrationEnvelope
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
@@ -147,7 +151,8 @@ export class RuntimeClient {
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
-          envelope
+          envelope,
+          expectedRuntimeSource: options?.expectedRuntimeSource
         })
       } catch (error) {
         throw recover(error, null)
@@ -164,7 +169,11 @@ export class RuntimeClient {
     }
     const metadata = readMetadata(this.userDataPath)
     // Refusal precedes sending, so there is no request to recover.
-    const expectedRuntimeSource = await this.runtimeSourceFence.check(metadata, method)
+    const expectedRuntimeSource = await this.runtimeSourceFence.check(
+      metadata,
+      method,
+      options?.expectedRuntimeSource
+    )
     let response
     try {
       response = await sendRequest<TResult>(
@@ -210,41 +219,12 @@ export class RuntimeClient {
     return this.requestTimeoutMs
   }
 
+  /** Returns local or paired-host status while applying the paired runtime compatibility check. */
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     if (this.remote) {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
-      const graphState = response.result.graphStatus
-      return {
-        id: response.id,
-        ok: true,
-        result: {
-          target: {
-            kind: 'environment',
-            environment: this.environmentSelector ?? 'pairing-code'
-          },
-          app: projectRemoteAppStatus(response.result),
-          runtime: {
-            state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
-            reachable: true,
-            connectionState: runtimeHostConnectionState({
-              hasStatusEntry: true,
-              status: response.result
-            }),
-            runtimeId: response.result.runtimeId,
-            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
-            ...(response.result.remoteUpdateSupport
-              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
-              : {}),
-            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
-            ...(response.result.degradations ? { degradations: response.result.degradations } : {})
-          },
-          graph: {
-            state: graphState
-          }
-        },
-        _meta: response._meta
-      }
+      return projectRemoteCliStatus(response, this.environmentSelector)
     }
     return getCliStatus(this.userDataPath)
   }

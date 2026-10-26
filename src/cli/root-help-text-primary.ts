@@ -87,6 +87,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Agents:',
   '  agent launch              Start an agent in a worktree, as a chat or terminal per your settings',
+  '  agent requests list|get|answer  Inspect or answer one explicitly scoped native session',
   '',
   'Files:',
   '  file open                 Open a file as a tab, view stays put (--focus brings you to it)',

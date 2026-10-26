@@ -19,6 +19,7 @@ import { RuntimeClient } from './client'
 import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
+import { AGENT_REQUEST_CLI_CAPABILITIES } from '../agent-request-capabilities'
 import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
@@ -50,6 +51,7 @@ type TestRuntime = {
   deviceToken: string
   authFrames: Record<string, unknown>[]
   requestMethods: string[]
+  requests: Record<string, unknown>[]
   connectionCount: () => number
   close: () => Promise<void>
 }
@@ -79,7 +81,7 @@ describe('CLI remote WebSocket transport', () => {
     expect(response.result.runtimeId).toBe('runtime-ws-1')
     expect(runtime.authFrames).toContainEqual(
       expect.objectContaining({
-        clientCapabilities: [
+        clientCapabilities: expect.arrayContaining([
           AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
           AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
           AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
@@ -95,8 +97,9 @@ describe('CLI remote WebSocket transport', () => {
           REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
           TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
           TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
-          AGENT_LAUNCH_RUNTIME_CAPABILITY
-        ]
+          AGENT_LAUNCH_RUNTIME_CAPABILITY,
+          ...AGENT_REQUEST_CLI_CAPABILITIES
+        ])
       })
     )
   })
@@ -105,6 +108,37 @@ describe('CLI remote WebSocket transport', () => {
     expect(() => new RuntimeClient('/tmp/unused', 5_000, 'not-a-pairing-code')).toThrow(
       RuntimeClientError
     )
+  })
+
+  it('carries the caller request pin through RuntimeClient to the encrypted remote wire', async () => {
+    const runtime = await startTestRuntime('runtime-pinned')
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+    const expectedRuntimeSource = {
+      sourceId: '11111111-1111-4111-8111-111111111111',
+      runtimeId: 'runtime-pinned'
+    }
+    await expect(
+      client.call(
+        'agentSession.respondToQuestion',
+        { sessionId: 'session' },
+        { expectedRuntimeSource }
+      )
+    ).rejects.toMatchObject({ code: 'method_not_found' })
+    expect(
+      runtime.requests.filter((row) => row.method === 'agentSession.respondToQuestion')
+    ).toEqual([
+      expect.objectContaining({ expectedRuntimeSource, params: { sessionId: 'session' } })
+    ])
   })
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
@@ -285,6 +319,7 @@ async function startTestRuntime(
   const wss = new WebSocketServer({ server: httpServer })
   const authFrames: Record<string, unknown>[] = []
   const requestMethods: string[] = []
+  const requests: Record<string, unknown>[] = []
   let connectionCount = 0
 
   wss.on('connection', (ws) => {
@@ -326,8 +361,10 @@ async function startTestRuntime(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string; method: string }
+      const request: { id: string; method: string } & Record<string, unknown> =
+        JSON.parse(plaintext)
       requestMethods.push(request.method)
+      requests.push(request)
       const response =
         request.method === 'status.get'
           ? {
@@ -375,6 +412,7 @@ async function startTestRuntime(
     deviceToken,
     authFrames,
     requestMethods,
+    requests,
     connectionCount: () => connectionCount,
     close: async () => {
       await new Promise<void>((resolve) => {

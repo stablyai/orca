@@ -3,7 +3,7 @@ import {
   stringifyJsonWithinByteLimit
 } from './node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
-import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
+import type { ExpectedRuntimeSource, RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
 // Why: a host refuses a larger client frame by closing the socket (1009), failing every call on it.
@@ -69,18 +69,21 @@ export function measureRemoteRuntimeSubscriptionParams(params: unknown): number 
   }
 }
 
+/** Serializes a bounded RPC frame with an explicit transport pin, leaving forwarding metadata intact. */
 export function serializeRemoteRuntimeRpcRequest(args: {
   requestId: string
   deviceToken: string
   method: string
   params: unknown
   envelope?: RuntimeOrchestrationEnvelope
+  expectedRuntimeSource?: ExpectedRuntimeSource
 }): string {
   return serializeRemoteRuntimePayload({
     id: args.requestId,
     deviceToken: args.deviceToken,
     method: args.method,
     params: args.params,
+    expectedRuntimeSource: args.expectedRuntimeSource,
     orchestrationCapability: args.envelope?.orchestrationCapability,
     orchestrationContractVersion: args.envelope?.orchestrationContractVersion,
     orchestrationRequestId: args.envelope?.orchestrationRequestId,
