@@ -1,4 +1,5 @@
-import { chmod, mkdir, mkdtemp, rm, stat, symlink } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { chmod, mkdir, mkdtemp, rm, rmdir, stat, symlink } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,6 +25,8 @@ async function shortBase(): Promise<string> {
 afterEach(async () => {
   await Promise.all([...owned].map((path) => rm(path, { recursive: true, force: true })))
   owned.clear()
+  // Remove the per-user folder only when no other Orca run left anything in it.
+  await rmdir(`/tmp/oacp-${uid}`).catch(() => undefined)
 })
 
 describe('acpRunRootFitsSocket', () => {
@@ -106,7 +109,13 @@ posix('resolveAcpTempRoot', () => {
         shortBase: base
       })
       expect(root.startsWith(join(base, `oacp-${uid}`))).toBe(true)
-      expect(acpRunRootFitsSocket(root, platform)).toBe(true)
+      // The fixture base is longer than /tmp, so measure the production path, which any user id fits.
+      const productionRoot = acpShortTempRoot({
+        shortBase: '/tmp',
+        uid,
+        dataRoot: join(LONG_DATA_DIRECTORY, 'acp-temp', 'grok')
+      })
+      expect(acpRunRootFitsSocket(productionRoot, platform)).toBe(true)
       const info = await stat(join(base, `oacp-${uid}`))
       expect(info.isDirectory()).toBe(true)
       expect(info.uid).toBe(uid)
@@ -115,14 +124,15 @@ posix('resolveAcpTempRoot', () => {
   )
 
   it('lets a real socket with the full name budget bind under a run folder in the short root', async () => {
-    const base = await shortBase()
+    // Real /tmp, as in production: a longer fixture base would break the budget for 9-digit user ids.
     const root = resolveAcpTempRoot({
-      dataDirectory: LONG_DATA_DIRECTORY,
+      dataDirectory: join('/orca-data', randomUUID(), 'd'.repeat(70)),
       agent: 'grok',
       platform: process.platform,
-      uid,
-      shortBase: base
+      uid
     })
+    owned.add(root)
+    expect(root.startsWith(`/tmp/oacp-${uid}/`)).toBe(true)
     const folder = await acpRunFolder(root)
     const socketPath = join(folder.path, 'x'.repeat(ACP_SOCKET_NAME_BUDGET))
     const server = createServer()
