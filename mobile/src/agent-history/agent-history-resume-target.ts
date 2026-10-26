@@ -40,13 +40,13 @@ function mobileAiVaultResumeTargetBlockMessage(status: AiVaultResumeTargetStatus
 
 /** The host's terminal platform already reflects the project runtime: native Windows or no WSL proves null; a WSL runtime proves no distro. */
 function mobileResumeTargetWslDistro(
-  worktree: Worktree | undefined,
+  worktree: Worktree,
   hostPlatform: NodeJS.Platform | null
 ): string | null | undefined {
   if (hostPlatform && hostPlatform !== 'win32') {
     return null
   }
-  return hostPlatform === 'win32' && worktree?.terminalPlatform === 'win32' ? null : undefined
+  return hostPlatform === 'win32' && worktree.terminalPlatform === 'win32' ? null : undefined
 }
 
 export function resolveMobileAiVaultSessionResumeTarget(args: {
@@ -78,13 +78,16 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
 
   let blockedStatus: AiVaultResumeTargetStatus | null = null
   for (const candidateWorktreeId of candidateWorktreeIds) {
-    const targetStatus = getAiVaultResumeWorkspaceTargetStatus(catalog, candidateWorktreeId)
+    const worktree = catalog.findWorktree(candidateWorktreeId)
+    // Why: host resolution falls back to the repo, which outlives a deleted workspace.
+    const targetStatus = worktree
+      ? getAiVaultResumeWorkspaceTargetStatus(catalog, candidateWorktreeId)
+      : 'unknown'
     blockedStatus ??= targetStatus
     // Why: the host refuses phone terminals in a workspace another runtime owns.
-    if (targetStatus !== 'local' && targetStatus !== 'ssh') {
+    if (!worktree || (targetStatus !== 'local' && targetStatus !== 'ssh')) {
       continue
     }
-    const worktree = catalog.findWorktree(candidateWorktreeId)
     if (
       !canResumeAiVaultSessionOnTarget({
         sessionFilePath: args.session.filePath,
@@ -103,15 +106,13 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
       status: 'ready',
       worktreeId: candidateWorktreeId,
       targetStatus,
-      workspacePath: worktree?.path ?? null,
-      terminalPlatform: worktree?.terminalPlatform ?? null
+      workspacePath: worktree.path,
+      terminalPlatform: worktree.terminalPlatform ?? null
     }
   }
 
   return {
     status: 'blocked',
-    message: mobileAiVaultResumeTargetBlockMessage(
-      blockedStatus ?? getAiVaultResumeWorkspaceTargetStatus(catalog, args.activeWorktreeId)
-    )
+    message: mobileAiVaultResumeTargetBlockMessage(blockedStatus ?? 'unknown')
   }
 }

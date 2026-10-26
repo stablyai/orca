@@ -440,4 +440,14 @@ describe('mobile AI Vault resume target guards', () => {
     })
     expect(target.status === 'ready' ? target.targetStatus : target.message).toBe('ssh')
   })
+
+  it('blocks a route workspace that is gone from the live list even though its repo remains', () => {
+    const target = resolve({
+      session: session({ cwd: '/Users/ada/repo/deleted/src' }),
+      activeWorktreeId: 'local-repo::/Users/ada/repo/deleted',
+      worktrees: [],
+      repos
+    })
+    expect(target.status).toBe('blocked')
+  })
 })
