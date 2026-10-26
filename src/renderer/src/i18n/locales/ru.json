@@ -10695,7 +10695,8 @@
             "resumeInChatFailed": "Не удалось продолжить сессию в новом чате.",
             "resumeInNewCliUnavailable": "Эту сессию нельзя открыть в CLI.",
             "resumeInNewCliHostTooOld": "Обновите Orca на сервере этого чата, чтобы продолжить его в новом CLI.",
-            "folderWorkspaceUnavailable": "Рабочее пространство папки больше недоступно."
+            "folderWorkspaceUnavailable": "Рабочее пространство папки больше недоступно.",
+            "sessionDeleteCheckingHost": "Проверяем {{value0}}…"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Сканирование сессий",
@@ -10764,7 +10765,8 @@
             "resumeInNewNativeChat": "Продолжить в новом чате",
             "resumeInNewCli": "Продолжить в новом терминале",
             "resumeInNewCliTooltipFork": "Начать новую сессию агента в терминале с копией этого разговора.",
-            "resumeInNewCliTooltipChat": "Этот чат останется без изменений."
+            "resumeInNewCliTooltipChat": "Этот чат останется без изменений.",
+            "deleteReasonHostUpdateRequired": "Обновите {{value0}}, чтобы удалять сессии отсюда."
           },
           "BulkActionBar": {
             "60ed678138": "выбрано",
@@ -11904,7 +11906,8 @@
           "AiVaultSessionDeleteDialog": {
             "confirm": "Удалить",
             "title": "Удалить этот сеанс?",
-            "description": "«{{value0}}» будет удалён. После удаления его нельзя будет продолжить даже из командной строки {{value1}}."
+            "description": "«{{value0}}» будет удалён. После удаления его нельзя будет продолжить даже из командной строки {{value1}}.",
+            "remoteDescription": "Сессия «{{value0}}» будет удалена с {{value2}}. После удаления её нельзя будет продолжить даже из командной строки {{value1}}."
           },
           "pull": {
             "policy": {
