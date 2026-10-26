@@ -235,8 +235,16 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     if (!activeTab) {
       return
     }
+    const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(activeTab, terminals)
     // Why: status receipts rewrite sessionTabs without a new visit.
-    const recordedKey = [hostId, worktreeId, activeTab.id, activeTab.title, worktreeName].join('\0')
+    const recordedKey = [
+      hostId,
+      worktreeId,
+      activeTab.id,
+      activeTab.title,
+      worktreeName,
+      hostAgentIdentity ?? ''
+    ].join('\0')
     if (lastRecordedCardKeyRef.current === recordedKey) {
       return
     }
@@ -247,7 +255,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
         worktreeId,
         worktreeName: worktreeName || '',
         tab: activeTab,
-        hostAgentIdentity: getMobileTerminalTabHostAgentIdentity(activeTab, terminals)
+        hostAgentIdentity
       })
     )
   }, [activeSessionTabId, hostId, sessionTabs, terminals, worktreeId, worktreeName])

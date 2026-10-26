@@ -15,7 +15,7 @@ function rememberRecentSessionCard(args: {
   worktreeId: string | undefined
   worktreeName: string | undefined
   tab: MobileSessionTab
-  terminals?: MobileSessionKeyboardStateModel['terminals']
+  terminals: MobileSessionKeyboardStateModel['terminals']
 }): void {
   if (!args.hostId || !args.worktreeId) {
     return
