@@ -1,3 +1,4 @@
+import type { AgentSessionHoldingTerminal } from '../../../shared/agent-session-holding-terminal'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf,
@@ -42,7 +43,7 @@ const TYPED_START_REFUSALS = [
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
-function typedStartRefusal(
+export function typedStartRefusal(
   reason: string | undefined
 ): (typeof TYPED_START_REFUSALS)[number] | undefined {
   return TYPED_START_REFUSALS.find((typed) => typed === reason)
@@ -164,7 +165,9 @@ export type StructuredAgentSessionStartFailureCause =
   | { failure: SubmissionRejectionFact }
 
 /** Failure rows and rejected sends share one sentence/fact. */
-export type StructuredAgentSessionStartFailureWords = AgentJournalDispatchRejection
+export type StructuredAgentSessionStartFailureWords = AgentJournalDispatchRejection & {
+  heldByTerminal?: AgentSessionHoldingTerminal
+}
 
 export function structuredAgentSessionStartFailureFact(
   cause: StructuredAgentSessionStartFailureCause
@@ -192,9 +195,16 @@ export function structuredAgentSessionStartFailure(
   cause: StructuredAgentSessionStartFailureCause,
   context: AgentSessionFailureWordsContext = {}
 ): StructuredAgentSessionStartFailureWords {
-  return agentSessionFailureWords(structuredAgentSessionStartFailureFact(cause), {
-    ...context,
-    ...('refusal' in cause && cause.newSession ? { messageSubmitted: false } : {}),
-    surface: 'rejection'
-  })
+  const heldByTerminal =
+    'refusal' in cause && cause.refusal.code === 'agent_session_operation_invalid'
+      ? cause.refusal.details?.terminal
+      : undefined
+  return {
+    ...agentSessionFailureWords(structuredAgentSessionStartFailureFact(cause), {
+      ...context,
+      ...('refusal' in cause && cause.newSession ? { messageSubmitted: false } : {}),
+      surface: 'rejection'
+    }),
+    ...(heldByTerminal ? { heldByTerminal } : {})
+  }
 }

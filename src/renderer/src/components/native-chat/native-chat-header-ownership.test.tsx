@@ -356,7 +356,7 @@ it('keeps the real Continue pending operation disabled across header hide/reveal
   mocks.launch.mockResolvedValue(undefined)
   const view = render(overlay(true))
   const source = chat(view.container, 'chat-0')
-  const button = () => within(source).getByRole('button', { name: 'Continue with Terminal Agent' })
+  const button = () => within(source).getByRole('button', { name: 'Show as terminal' })
   expect(fullRequest).not.toHaveBeenCalled()
   fireEvent.click(button())
   expect(button().hasAttribute('disabled')).toBe(true)

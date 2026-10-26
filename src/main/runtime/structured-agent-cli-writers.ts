@@ -5,7 +5,10 @@ import {
   chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../shared/structured-agent-cli-conversation-adoption'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session-wire-refusals'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
 import { getFreshShellForegroundSnapshot } from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
@@ -30,6 +33,7 @@ export type CliWriterConversation = {
   process?: AgentProcessIdentity
 }
 export type CliWriterLink = CliWriterConversation & {
+  paneKey?: string
   worktreeId: string
   terminal: () => CliWriterTerminal | null
 }
@@ -66,8 +70,19 @@ export async function assertCliConversationWritersExited(
   providerSessionId: string,
   source?: CliWriterCoordinates
 ): Promise<void> {
-  const refuse = () =>
-    agentSessionRefusalError('agent_session_conflict', { reason: 'conversationHeldElsewhere' })
+  const refuse = (at?: { paneKey?: string; worktreeId?: string }, pane?: CliWriterPane | null) =>
+    agentSessionRefusalError('agent_session_conflict', {
+      reason: 'conversationHeldElsewhere',
+      ...(at?.paneKey && at.worktreeId
+        ? {
+            terminal: {
+              paneKey: at.paneKey,
+              worktreeId: at.worktreeId,
+              ...(pane ? { incarnationId: pane.incarnationId } : {})
+            }
+          }
+        : {})
+    })
   const isConversation = (rowAgent: unknown, id: string | undefined) =>
     adoptsCliConversations(rowAgent) &&
     CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent].some((rowChat) =>
@@ -79,7 +94,7 @@ export async function assertCliConversationWritersExited(
   // The pane's PTY itself, not a recorded pid: a wrapper pid can read exited beside a paused agent.
   const censusPane = async (
     read: () => CliWriterTerminal | null,
-    worktreeId: string | undefined,
+    at: { paneKey?: string; worktreeId?: string },
     absentAdmits: boolean
   ) => {
     const terminal = read()
@@ -90,17 +105,19 @@ export async function assertCliConversationWritersExited(
     const pane = terminal?.pane
     if (
       !pane ||
-      host.sleeping(worktreeId ?? '') ||
+      host.sleeping(at.worktreeId ?? '') ||
       !(await host.shellAlone(pane)) ||
       read()?.pane?.identity !== pane.identity
     ) {
-      throw refuse()
+      throw refuse(at, pane)
     }
-    proofs.push(() => !host.sleeping(worktreeId ?? '') && read()?.pane?.identity === pane.identity)
+    proofs.push(
+      () => !host.sleeping(at.worktreeId ?? '') && read()?.pane?.identity === pane.identity
+    )
   }
   try {
     if (source) {
-      await censusPane(() => host.terminal(source), source.worktreeId, true)
+      await censusPane(() => host.terminal(source), source, true)
     }
     const savedCandidates = () =>
       host
@@ -147,7 +164,7 @@ export async function assertCliConversationWritersExited(
       const matching = saved.filter(matches)
       const observed = host.observation(row)
       if (!observed || !observed.current()) {
-        throw refuse()
+        throw refuse(row)
       }
       proofs.push(() => observed.current())
       const pane = paneOf(row)
@@ -158,7 +175,7 @@ export async function assertCliConversationWritersExited(
         presence === 'unverifiable' ||
         (pane && paneOf(row)?.identity !== pane.identity)
       ) {
-        throw refuse()
+        throw refuse(row, pane)
       }
       if (!host.terminal(row)) {
         proofs.push(() => !host.terminal(row))
@@ -173,12 +190,12 @@ export async function assertCliConversationWritersExited(
         continue
       }
       if (observed.topology !== 'pane-owned' || host.sleeping(row.worktreeId ?? '')) {
-        throw refuse()
+        throw refuse(row, pane)
       }
       if (presence === 'exited' && matching.length === 0) {
-        await censusPane(() => host.terminal(row), row.worktreeId, true)
+        await censusPane(() => host.terminal(row), row, true)
         if (!observed.current()) {
-          throw refuse()
+          throw refuse(row)
         }
         continue
       }
@@ -190,7 +207,7 @@ export async function assertCliConversationWritersExited(
         host.sleeping(row.worktreeId ?? '') ||
         matching.some((record) => !host.saved().includes(record) || !matches(record))
       ) {
-        throw refuse()
+        throw refuse(row, pane)
       }
       const current = () =>
         paneOf(row)?.identity === pane.identity && !host.sleeping(row.worktreeId ?? '')
@@ -208,9 +225,9 @@ export async function assertCliConversationWritersExited(
         !link.paneOwned ||
         (link.process && (await probeAgentProcessPresence(link.process)) !== 'exited')
       ) {
-        throw refuse()
+        throw refuse(link, link.terminal()?.pane)
       }
-      await censusPane(link.terminal, link.worktreeId, false)
+      await censusPane(link.terminal, link, false)
     }
     for (const [record, identity] of savedIdentities) {
       if (covered.has(record)) {
@@ -218,7 +235,7 @@ export async function assertCliConversationWritersExited(
       }
       const [paneKey, worktreeId, , savedAgent] = identity
       if (savedAgent === 'opencode' || savedAgent === 'opencode2') {
-        throw refuse()
+        throw refuse({ paneKey, worktreeId })
       }
       const coordinates = { paneKey, worktreeId }
       const terminal = host.terminal(coordinates)
@@ -228,7 +245,7 @@ export async function assertCliConversationWritersExited(
       }
       const pane = terminal.pane
       if (!pane) {
-        throw refuse()
+        throw refuse({ paneKey, worktreeId })
       }
       const current = () =>
         savedCurrent(record) &&
@@ -236,7 +253,7 @@ export async function assertCliConversationWritersExited(
         paneOf(coordinates)?.identity === pane.identity &&
         !host.rows().some((row) => row.paneKey === paneKey)
       if (!current() || !(await host.shellAlone(pane)) || !current()) {
-        throw refuse()
+        throw refuse({ paneKey, worktreeId }, pane)
       }
       covered.set(record, current)
     }
@@ -248,7 +265,10 @@ export async function assertCliConversationWritersExited(
     ) {
       throw refuse()
     }
-  } catch {
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      throw error
+    }
     throw refuse()
   }
 }

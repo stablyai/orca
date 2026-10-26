@@ -1,3 +1,4 @@
+import { readAgentSessionRefusalDetails } from '../../../shared/agent-session-refusal-details'
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionRecordFixture,
@@ -308,4 +309,60 @@ describe('the store fallback copy', () => {
       classifyStoreFailure(new Error('agent_session_checkpoint_stale'), 7, null)
     ).toMatchObject({ details: { currentFence: 7 }, currentFence: 7 })
   })
+})
+
+it('whitelists terminal identity only on terminal refusals, preserving legacy payloads', () => {
+  const terminal = { paneKey: 'tab:leaf', worktreeId: 'workspace' }
+  for (const [code, reason] of [
+    ['agent_session_conflict', 'conversationHeldElsewhere'],
+    ['agent_session_operation_invalid', 'conversationOpenInTerminal']
+  ] as const) {
+    expect(readAgentSessionRefusalDetails(code, { reason, terminal })).toEqual({ reason, terminal })
+    expect(readAgentSessionRefusalDetails(code, { reason })).toEqual({ reason })
+    for (const bad of [
+      null,
+      {},
+      { paneKey: ' ', worktreeId: 'w' },
+      { paneKey: 't:l', worktreeId: 3 }
+    ]) {
+      expect(readAgentSessionRefusalDetails(code, { reason, terminal: bad })).toEqual({ reason })
+    }
+  }
+  expect(
+    readAgentSessionRefusalDetails('agent_session_conflict', {
+      reason: 'conversationHeldElsewhere',
+      terminal,
+      owner: { sessionId: 's', workspaceId: 'w' }
+    })
+  ).not.toHaveProperty('terminal')
+  expect(
+    readAgentSessionRefusalDetails('agent_session_operation_invalid', {
+      reason: 'attachFailed',
+      terminal
+    })
+  ).toEqual({ reason: 'attachFailed' })
+})
+
+it('bounds optional holder evidence without changing the refusal from old/new hosts', () => {
+  const reason = 'conversationHeldElsewhere'
+  const terminal = { paneKey: 't:leaf', worktreeId: 'w', incarnationId: 'life' }
+  expect(readAgentSessionRefusalDetails('agent_session_conflict', { reason, terminal })).toEqual({
+    reason,
+    terminal
+  })
+  expect(
+    readAgentSessionRefusalDetails('agent_session_conflict', {
+      reason,
+      terminal: { ...terminal, incarnationId: 'x'.repeat(257) }
+    })
+  ).toEqual({ reason, terminal: { paneKey: 't:leaf', worktreeId: 'w' } })
+  for (const bad of [
+    { ...terminal, paneKey: 'x'.repeat(513) },
+    { ...terminal, worktreeId: 'x'.repeat(4097) },
+    { ...terminal, paneKey: 't\0leaf' }
+  ]) {
+    expect(
+      readAgentSessionRefusalDetails('agent_session_conflict', { reason, terminal: bad })
+    ).toEqual({ reason })
+  }
 })

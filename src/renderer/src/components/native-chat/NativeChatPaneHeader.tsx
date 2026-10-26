@@ -20,7 +20,8 @@ export function NativeChatPaneHeader({
   groupId,
   nativeChat,
   focused,
-  colorScheme
+  colorScheme,
+  topRightAction
 }: {
   tabId: string
   worktreeId: string
@@ -28,6 +29,7 @@ export function NativeChatPaneHeader({
   nativeChat: NativeChatTabSession
   focused: boolean
   colorScheme: React.CSSProperties['colorScheme']
+  topRightAction?: React.ReactNode
 }): React.JSX.Element {
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
   const theme = useAppStore((state) => state.settings?.theme)
@@ -45,6 +47,7 @@ export function NativeChatPaneHeader({
       style={HEADER_STYLE}
     >
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+        {topRightAction}
         {nativeChat.agent && agentForksConversations(nativeChat.agent) ? (
           <NativeChatResumeInCliButton
             tabId={tabId}
@@ -109,7 +112,8 @@ export function nativeChatPaneHeader(
     | 'contextMenuActions'
   >,
   worktreeId: string | null,
-  colorScheme: React.CSSProperties['colorScheme']
+  colorScheme: React.CSSProperties['colorScheme'],
+  topRightAction?: React.ReactNode
 ): React.JSX.Element | null {
   return view.isVisible && worktreeId && view.groupId && !view.contextMenuActions ? (
     <NativeChatPaneHeader
@@ -119,6 +123,20 @@ export function nativeChatPaneHeader(
       nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
       focused={view.isFocusedGroup}
       colorScheme={colorScheme}
+      topRightAction={topRightAction}
     />
   ) : null
+}
+
+export function nativeChatPaneCaptureHandlers(
+  ...handlers: React.DOMAttributes<HTMLDivElement>[]
+): React.DOMAttributes<HTMLDivElement> {
+  return {
+    onPointerDownCapture: (event) => {
+      handlers.forEach((handler) => handler.onPointerDownCapture?.(event))
+    },
+    onKeyDownCapture: (event) => {
+      handlers.forEach((handler) => handler.onKeyDownCapture?.(event))
+    }
+  }
 }

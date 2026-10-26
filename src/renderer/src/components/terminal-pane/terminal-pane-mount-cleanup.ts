@@ -24,6 +24,7 @@ export function cleanupTerminalPaneMount(args: {
   expandedStyleSnapshots: Map<HTMLElement, { display: string; flex: string }>
   unregisterRuntimeTab: () => void
   cancelResize: () => void
+  permanent?: boolean
 }): void {
   const {
     manager,
@@ -41,11 +42,13 @@ export function cleanupTerminalPaneMount(args: {
   const tabRemainsInWorktree = Boolean(
     currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
   )
-  if (!tabRemainsInWorktree) {
+  if (args.permanent || !tabRemainsInWorktree) {
     cancelQueuedTerminalPaneSplitRequests(tabId, worktreeId)
   }
-  // Global ownership permits handoff across the bucket gap before a rehomed surface mounts, including deferred splits without PTY IDs.
-  const tabStillExists = isTerminalTabPresent(currentStore, tabId)
+  // Handoff retention is deliberately broader: a tab move removes the old
+  // worktree bucket before the replacement surface mounts, so use the shared
+  // global ownership check to let an ID-less deferred split survive a rehome.
+  const tabStillExists = !args.permanent && isTerminalTabPresent(currentStore, tabId)
   unregisterRuntimeTab()
   cancelResize()
   restoreExpandedLayoutFrom(expandedStyleSnapshots)
@@ -68,24 +71,27 @@ export function cleanupTerminalPaneMount(args: {
   disposeAll(refs.imeCompositionDisposablesRef.current)
   disposeAll(refs.imeNativeTextForwarderDisposablesRef.current)
 
-  captureParkedTerminalPaneCandidates(
-    tabId,
-    worktreeId,
-    manager.getPanes().map((pane) => {
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-      const binding = panePtyBindingsRef.current.get(pane.id) as
-        | { isUntouchedFreshSpawnPty?: (candidate: string) => boolean }
-        | undefined
-      return {
-        ptyId,
-        workspaceOwner: captureNotificationTransportOwner(paneTransportsRef.current.get(pane.id)),
-        paneId: pane.id,
-        leafId: pane.leafId,
-        drivesTabTitle: manager.getActivePane()?.id === pane.id,
-        untouchedFreshSpawn: ptyId !== null && (binding?.isUntouchedFreshSpawnPty?.(ptyId) ?? false)
-      }
-    })
-  )
+  if (tabStillExists) {
+    captureParkedTerminalPaneCandidates(
+      tabId,
+      worktreeId,
+      manager.getPanes().map((pane) => {
+        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+        const binding = panePtyBindingsRef.current.get(pane.id) as
+          | { isUntouchedFreshSpawnPty?: (candidate: string) => boolean }
+          | undefined
+        return {
+          ptyId,
+          workspaceOwner: captureNotificationTransportOwner(paneTransportsRef.current.get(pane.id)),
+          paneId: pane.id,
+          leafId: pane.leafId,
+          drivesTabTitle: manager.getActivePane()?.id === pane.id,
+          untouchedFreshSpawn:
+            ptyId !== null && (binding?.isUntouchedFreshSpawnPty?.(ptyId) ?? false)
+        }
+      })
+    )
+  }
   for (const [paneId, transport] of paneTransportsRef.current) {
     const ptyId = transport.getPtyId()
     const deferredSplitHandoff = deferredSplitHandoffs.get(paneId)
@@ -99,6 +105,7 @@ export function cleanupTerminalPaneMount(args: {
       deferredSplitHandoffs.delete(paneId)
     }
     if (
+      args.permanent ||
       shouldDetachPaneTransportOnUnmount({
         tabStillExists,
         tabId,

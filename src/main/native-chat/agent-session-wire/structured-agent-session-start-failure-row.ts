@@ -77,7 +77,13 @@ export function structuredAgentSessionStartFailureRow(
   return {
     kind: 'item',
     identity: structuredAgentSessionStartFailureRowIdentity(startKey),
-    body: { kind: 'status', text: words.reason, tone: 'error', failure: words.rejection },
+    body: {
+      kind: 'status',
+      text: words.reason,
+      tone: 'error',
+      failure: words.rejection,
+      ...(words.heldByTerminal ? { heldByTerminal: words.heldByTerminal } : {})
+    },
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   }
 }

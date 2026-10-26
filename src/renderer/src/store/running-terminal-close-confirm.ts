@@ -4,6 +4,7 @@ import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/Clo
 /** A pending confirmation for closing a terminal tab whose shell still has a
  *  running child process. `onConfirm` performs the original close. */
 export type RunningTerminalCloseConfirmRequest = {
+  signal?: AbortSignal
   terminalTabId: string
   tabLabel: string
   copyKind: CloseTerminalDialogCopyKind
@@ -17,6 +18,7 @@ export type RunningTerminalCloseConfirmState = {
   confirmRunningTerminalClose: () => void
   /** Opting out accepts visible and queued requests; no disabled confirmation may remain waiting. */
   confirmAllRunningTerminalCloses: () => void
+  cancelRunningTerminalCloseRequest: (request: RunningTerminalCloseConfirmRequest) => void
   dismissRunningTerminalClose: () => void
 }
 
@@ -67,12 +69,13 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
     requestRunningTerminalCloseConfirm: (request) => {
       const visible = get().runningTerminalCloseConfirm
       // Async process probes allow duplicate clicks before opening; share one prompt while resolving both closes.
-      if (visible?.terminalTabId === request.terminalTabId) {
+      if (!request.signal && !visible?.signal && visible?.terminalTabId === request.terminalTabId) {
         set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
         return
       }
       const queuedIndex = queuedRequests.findIndex(
-        (queued) => queued.terminalTabId === request.terminalTabId
+        (queued) =>
+          !request.signal && !queued.signal && queued.terminalTabId === request.terminalTabId
       )
       if (queuedIndex !== -1) {
         queuedRequests[queuedIndex] = mergeRequests(queuedRequests[queuedIndex]!, request)
@@ -105,6 +108,17 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       // No guard to arm: the queue is empty, so there is no next prompt to mis-click.
       for (const request of pending) {
         request?.onConfirm()
+      }
+    },
+
+    cancelRunningTerminalCloseRequest: (request) => {
+      if (get().runningTerminalCloseConfirm === request) {
+        guardNextAction(advanceRequest())
+      } else {
+        const index = queuedRequests.indexOf(request)
+        if (index !== -1) {
+          queuedRequests.splice(index, 1)
+        }
       }
     },
 

@@ -95,6 +95,64 @@ function writerLayoutStore(): RuntimeStore {
 
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
+  it.each(['source', 'row', 'link', 'saved', 'final'] as const)(
+    'names the actual %s blocker, leaving a final proof failure unnamed',
+    async (kind) => {
+      const check = inspection('unverifiable')
+      const blocker = { paneKey: 'blocker:leaf', worktreeId: 'workspace' }
+      check.host.rows = () => []
+      if (kind === 'source') {
+        check.host.shellAlone = async () => false
+      }
+      if (kind === 'row') {
+        check.host.rows = () => [{ ...row, ...blocker }]
+      }
+      if (kind === 'link') {
+        check.host.links = () => [
+          { ...blocker, agent: 'codex', id: 'conversation', paneOwned: false, terminal: () => null }
+        ]
+      }
+      if (kind === 'saved') {
+        check.host.saved = () => [
+          {
+            ...blocker,
+            agent: 'opencode',
+            providerSession: { key: 'session_id', id: 'conversation' },
+            prompt: '',
+            state: 'done',
+            origin: 'live',
+            capturedAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }
+      if (kind === 'final') {
+        let calls = 0
+        check.host.rows = () => [{ ...row }]
+        check.host.observation = () => ({
+          topology: 'pane-owned',
+          presence: async () => 'exited',
+          current: () => ++calls < 4
+        })
+      }
+      const run = assertCliConversationWritersExited(
+        check.host,
+        kind === 'saved' ? 'opencode' : 'codex',
+        'conversation',
+        kind === 'source' ? blocker : undefined
+      )
+      await expect(run).rejects.toMatchObject({
+        refusal: {
+          details:
+            kind === 'final' ? { reason: 'conversationHeldElsewhere' } : { terminal: blocker }
+        }
+      })
+      if (kind === 'final') {
+        await expect(run).rejects.not.toHaveProperty('refusal.details.terminal')
+      }
+    }
+  )
+
   it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
     await expect(inspection('unverifiable').run()).rejects.toMatchObject(refusal)
     for (const cause of ['missing-row', 'sleeping', 'failed-scan', 'unknown-topology'] as const) {
@@ -516,3 +574,55 @@ describe('execution-host conversation writer inspection', () => {
     await expect(check('opencode')).resolves.toBeUndefined()
   })
 })
+
+it.each([10, 100])(
+  'resolves holder coordinates only on refusal across %s execution links',
+  async (count) => {
+    class CountedRuntime extends OrcaRuntimeService {
+      paneReads = 0
+      countReads() {
+        const read = this.paneOfPty.bind(this)
+        this.paneOfPty = (...args) => {
+          this.paneReads++
+          return read(...args)
+        }
+      }
+    }
+    const runtime = new CountedRuntime(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? writerLayoutStore() : null,
+      undefined,
+      { getAgentProviderSessionSnapshot: () => [] }
+    )
+    const leafFor = (i: number) => `11111111-1111-4111-8111-${String(i).padStart(12, '0')}`
+    for (let i = 0; i < count; i++) {
+      const leafId = leafFor(i)
+      const tabId = `tab-${i}`,
+        ptyId = `pty-${i}`
+      bindPaneFirst(runtime, { worktreeId: 'workspace', tabId, leafId, ptyId })
+      runtime.registerPty(ptyId, 'workspace', null, { tabId, leafId, incarnationId: `life-${i}` })
+      runtime.recordCliWriterConversation({
+        paneKey: `${tabId}:${leafId}`,
+        connectionId: null,
+        receivedAt: 1,
+        stateStartedAt: 1,
+        providerSession: { key: 'session_id', id: `conversation-${i}` },
+        payload: { state: 'done', prompt: '', agentType: 'codex' }
+      })
+    }
+    runtime.countReads()
+    await expect(
+      runtime.assertStructuredAdoptionTerminalWritersExited('codex', 'unrelated')
+    ).resolves.toBeUndefined()
+    expect(runtime.paneReads).toBe(0)
+    await expect(
+      runtime.assertStructuredAdoptionTerminalWritersExited('codex', `conversation-${count - 1}`)
+    ).rejects.toMatchObject({
+      refusal: {
+        details: {
+          terminal: { paneKey: `tab-${count - 1}:${leafFor(count - 1)}`, worktreeId: 'workspace' }
+        }
+      }
+    })
+    expect(runtime.paneReads).toBeLessThanOrEqual(2)
+  }
+)

@@ -159,6 +159,17 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('shutdown', () => {
+    it('fences the actual local shutdown before cancelling or signalling a replacement', async () => {
+      const kill = mockProc.kill
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+      await expect(
+        provider.shutdown(id, { immediate: true, expectedIncarnationId: 'earlier' })
+      ).rejects.toThrow('terminal_handle_stale')
+      expect(kill).not.toHaveBeenCalled()
+      await provider.shutdown(id, { immediate: true, expectedIncarnationId: incarnationId })
+      expect(kill).toHaveBeenCalled()
+    })
+
     it('kills the PTY process', async () => {
       // Cleanup replaces kill to prevent recycled-PID SIGHUP; capture the spy before shutdown (docs/fix-pty-fd-leak.md).
       const killSpy = mockProc.kill

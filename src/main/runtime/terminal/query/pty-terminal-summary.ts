@@ -254,14 +254,8 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
 
   protected assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
     const runtimePty = this.getLivePtyForHandle(handle)
-    if (runtimePty) {
-      if (runtimePty.pty.ptyId !== expectedPtyId) {
-        throw new Error('terminal_handle_stale')
-      }
-      return
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (leaf.ptyId !== expectedPtyId) {
+    const ptyId = runtimePty ? runtimePty.pty.ptyId : this.getLiveLeafForHandle(handle).leaf.ptyId
+    if (ptyId !== expectedPtyId) {
       throw new Error('terminal_handle_stale')
     }
   }
@@ -289,6 +283,15 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     const existingHandle = this.handleByLeafKey.get(leafKey)
     if (existingHandle) {
       const existingRecord = this.handles.get(existingHandle)
+      if (
+        existingRecord &&
+        existingRecord.worktreeId === leaf.worktreeId &&
+        existingRecord.ptyId &&
+        !leaf.ptyId &&
+        this.getPtyLivenessVerdict(existingRecord.ptyId)?.status === 'exited'
+      ) {
+        return existingHandle
+      }
       if (
         existingRecord &&
         existingRecord.rendererGraphEpoch === this.rendererGraphEpoch &&

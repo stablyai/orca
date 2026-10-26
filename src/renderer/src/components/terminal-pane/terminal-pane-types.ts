@@ -1,3 +1,4 @@
+import type { TerminalPaneCloseCallbacks } from '@/constants/terminal'
 export type TerminalPaneProps = {
   tabId: string
   worktreeId: string
@@ -10,5 +11,5 @@ export type TerminalPaneProps = {
   // Why: one-off command terminals keep split shortcuts but hide the prominent header button.
   showSplitButton?: boolean
   onPtyExit: (ptyId: string, exitCode?: number) => void
-  onCloseTab: () => void
+  onCloseTab: (callbacks?: TerminalPaneCloseCallbacks) => void
 }

@@ -1,7 +1,11 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { createContext, useContext } from 'react'
 
 /** Host stop details; only hosts known not to support continuation suppress Continue. */
 export type NativeChatOrcaStopView = {
+  heldTerminal?: {
+    executionHostId: ExecutionHostId
+  }
   hostLabel: string | null
   remoteHost: boolean
   continueAvailable: boolean

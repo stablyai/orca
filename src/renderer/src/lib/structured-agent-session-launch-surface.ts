@@ -66,7 +66,8 @@ export function findStructuredLaunchTab(args: {
 
 export function captureStructuredLaunchSurfaceAddress(
   worktreeId: string,
-  targetGroupId?: string
+  targetGroupId?: string,
+  afterTabId?: string
 ): StructuredLaunchSurfaceAddress {
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree[worktreeId] ?? []
@@ -75,12 +76,16 @@ export function captureStructuredLaunchSurfaceAddress(
     tabs: state.unifiedTabsByWorktree[worktreeId] ?? [],
     activeGroupId: state.activeGroupIdByWorktree[worktreeId],
     targetGroupId,
+    afterTabId,
     lookupWorktrees: () => []
   })
+  const order = groups.find((group) => group.id === placement.groupId)?.tabOrder ?? []
   return {
     worktreeId,
     targetGroupId: placement.groupId,
-    precedingTabIds: groups.find((group) => group.id === placement.groupId)?.tabOrder ?? []
+    precedingTabIds: placement.anchorTabId
+      ? order.slice(0, order.indexOf(placement.anchorTabId) + 1)
+      : order
   }
 }
 

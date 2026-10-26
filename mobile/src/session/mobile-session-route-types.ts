@@ -23,6 +23,7 @@ export type MobileSessionTab =
       title: string
       parentTabId?: string
       leafId?: string
+      incarnationId?: string | null
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null

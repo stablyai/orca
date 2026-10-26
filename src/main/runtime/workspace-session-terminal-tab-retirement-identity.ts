@@ -1,3 +1,7 @@
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
+import type { TerminalHandleRecord } from './runtime-terminal-contracts'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { TerminalSurfaceCloseIdentity } from '../../shared/terminal-tab-close'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
@@ -155,4 +159,67 @@ export function captureAcknowledgedTerminalTabRetirement(
       )
     return { matches, hasPersistedTab: remaining !== null }
   }
+}
+
+export { captureTerminalSurfaceIdentity as captureTerminalSurfaceCloseIdentity } from '../../shared/terminal-tab-close'
+
+/** A captured source narrows the existing authenticated handle; it cannot address another owner. */
+export function isOriginalTerminalHandle(args: {
+  runtimeId: string
+  record: TerminalHandleRecord | undefined
+  currentPty: RuntimePtyWorktreeRecord | null | undefined
+  paneOfPty: PtyPaneOf
+  leaf: RuntimeLeafRecord | undefined
+  source: TerminalSurfaceCloseIdentity
+  incarnation: string | undefined
+}): boolean {
+  const { runtimeId, record, currentPty, paneOfPty, leaf, source, incarnation } = args
+  return (
+    !!incarnation &&
+    !!source.ptyId &&
+    source.incarnationId === incarnation &&
+    !!record &&
+    record.runtimeId === runtimeId &&
+    record.worktreeId === source.worktreeId &&
+    record.ptyId === source.ptyId &&
+    (!currentPty ||
+      (currentPty.incarnationId === incarnation && currentPty.worktreeId === source.worktreeId)) &&
+    (!leaf ||
+      (leaf.worktreeId === source.worktreeId && (!leaf.ptyId || leaf.ptyId === source.ptyId))) &&
+    ((record.tabId === source.tabId && record.leafId === source.leafId) ||
+      (!!currentPty && paneOfPty(currentPty).paneKey === `${source.tabId}:${source.leafId}`))
+  )
+}
+
+/** Derives presentation from the authenticated addressed owner, retaining absent-row evidence. */
+export function captureAddressedTerminalPresentation(args: {
+  runtimeId: string
+  record: TerminalHandleRecord | undefined
+  currentPty: RuntimePtyWorktreeRecord | null | undefined
+  paneOfPty: PtyPaneOf
+  leaf: RuntimeLeafRecord | null | undefined
+  row: TerminalSurfaceCloseIdentity | null | undefined
+  address: { worktreeId: string; tabId: string; leafId: string }
+  ptyId: string | null
+  incarnationId: string | null | undefined
+}): TerminalSurfaceCloseIdentity | null {
+  const { row, address, leaf, ptyId, incarnationId } = args
+  const source: TerminalSurfaceCloseIdentity = {
+    ...address,
+    createdAt: row?.createdAt ?? null,
+    generation: row?.generation ?? 0,
+    hasLeaf: !!leaf || row?.hasLeaf === true,
+    ptyId,
+    incarnationId: incarnationId ?? null
+  }
+  return (!row?.ptyId || row.ptyId === ptyId) &&
+    (!row?.incarnationId || row.incarnationId === incarnationId) &&
+    isOriginalTerminalHandle({
+      ...args,
+      source,
+      leaf: leaf ?? undefined,
+      incarnation: incarnationId ?? undefined
+    })
+    ? source
+    : null
 }

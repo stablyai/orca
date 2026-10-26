@@ -1,3 +1,4 @@
+import type { AgentSessionHoldingTerminal } from './agent-session-holding-terminal'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -38,6 +39,7 @@ export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
 export type NativeChatTextBlock = {
   type: 'text'
+  heldByTerminal?: AgentSessionHoldingTerminal
   text: string
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string

@@ -13,6 +13,7 @@ import {
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
+  TerminalClose,
   TerminalReveal,
   TerminalSplit,
   TerminalWait
@@ -220,14 +221,22 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.close',
     permission: 'workspace',
-    params: TerminalHandle,
+    params: TerminalClose,
     handler: async (params, context) => ({
       close: await withTerminalCloseAttribution(
         'terminal.close',
         context,
         'terminal',
         params.terminal,
-        () => context.runtime.closeTerminal(params.terminal)
+        () =>
+          params.originalPresentation
+            ? context.runtime.closeTerminal(
+                params.terminal,
+                params.expectedIncarnationId,
+                params.originalPresentation,
+                params.force
+              )
+            : context.runtime.closeTerminal(params.terminal, params.expectedIncarnationId)
       )
     })
   }),

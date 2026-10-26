@@ -22,6 +22,7 @@ export type MobileTerminalSessionTab = {
   title: string
   parentTabId?: string
   leafId?: string
+  incarnationId?: string | null
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
@@ -132,6 +133,7 @@ function mobileSessionTabEqual(
         b.type === 'terminal' &&
         a.parentTabId === b.parentTabId &&
         a.leafId === b.leafId &&
+        a.incarnationId === b.incarnationId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
         a.launchDraft === b.launchDraft &&

@@ -1,7 +1,13 @@
 import { SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS } from '../ipc/pty/delivery/visibility-state'
 
-/** Preserve pane bindings across intentional exits: reversible keeps a wake hint; replaced awaits immediate or reconnect-time replacement. */
-export type TerminalIntentionalStopKind = 'reversible' | 'replaced'
+/**
+ * Why main stopped a PTY on purpose. These kinds keep the pane's binding through the exit:
+ * - `reversible`: sleep or hibernation; the binding is the wake hint.
+ * - `closing`: physical teardown is externally owned; explicit presentation removal follows.
+ * - `replaced`: a restart stops the old process, or a reattach finds it gone; a new one takes over,
+ *   at once or (after a daemon restart) when the pane next connects.
+ */
+export type TerminalIntentionalStopKind = 'reversible' | 'replaced' | 'closing'
 
 type IntentionalStopOwners = { inFlight: number; stopped: boolean }
 

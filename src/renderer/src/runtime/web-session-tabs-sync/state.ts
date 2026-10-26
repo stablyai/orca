@@ -231,6 +231,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'acknowledgedAgentsByPaneKey'
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'
+      | 'agentConversationsByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'

@@ -1,3 +1,10 @@
+import { useContext } from 'react'
+import { MobileHeldTerminalContext } from './mobile-held-terminal-context'
+export { MobileHeldTerminalContext } from './mobile-held-terminal-context'
+import { HELD_TERMINAL_CONTINUE_SENTENCE } from '../../../src/shared/agent-session-failure-copy'
+import { parsePaneKey } from '../../../src/shared/stable-pane-id'
+import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
+import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../src/shared/agent-session-host-status-rows'
@@ -32,6 +39,7 @@ export function MobileNativeChatNoticeRow({
   onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
+  const holder = useContext(MobileHeldTerminalContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -95,7 +103,27 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
-      const lineText = usageLimitLineText(notice)
+      const pane = notice.heldByTerminal && parsePaneKey(notice.heldByTerminal.paneKey)
+      const tab =
+        holder &&
+        notice.failure?.kind === 'conversationOpenInTerminal' &&
+        notice.heldByTerminal?.worktreeId === holder.worktreeId &&
+        pane
+          ? holder.tabs.find(
+              (tab) =>
+                tab.type === 'terminal' &&
+                !!notice.heldByTerminal?.incarnationId &&
+                tab.incarnationId === notice.heldByTerminal.incarnationId &&
+                (tab.parentTabId ?? tab.id) === pane.tabId &&
+                tab.leafId === pane.leafId
+            )
+          : undefined
+      const lineText =
+        tab && holder
+          ? HELD_TERMINAL_CONTINUE_SENTENCE.replace(/<\/?terminal>/g, '')
+              .replace('{{agent}}', tuiAgentDisplayName(holder.agent))
+              .replace('{{terminal}}', getMobileSessionTabTitle(tab))
+          : usageLimitLineText(notice)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),

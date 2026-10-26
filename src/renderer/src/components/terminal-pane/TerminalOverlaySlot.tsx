@@ -82,9 +82,15 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           onClosed: captureEmptiedReaction()
         })
       }}
-      onCloseTab={() => {
-        // Use the guarded close path so pinned terminals still require confirmation.
-        closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
+      onCloseTab={(callbacks) => {
+        const reactToClose = captureEmptiedReaction()
+        closeTerminalTab(terminalTabId, {
+          ...callbacks,
+          onClosed: () => {
+            reactToClose()
+            callbacks?.onClosed?.()
+          }
+        })
       }}
     />
   )

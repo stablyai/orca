@@ -327,3 +327,17 @@ describe('mobile terminal records', () => {
     ).toEqual(['pty-1', 'pty-2'])
   })
 })
+
+it('preserves equal terminal lifetimes but publishes replacements and legacy loss', () => {
+  const tab = {
+    type: 'terminal' as const,
+    id: 't',
+    title: 'Shell',
+    terminal: 'handle',
+    isActive: true,
+    incarnationId: 'original'
+  }
+  expect(mobileSessionTabsEqual([tab], [{ ...tab }])).toBe(true)
+  expect(mobileSessionTabsEqual([tab], [{ ...tab, incarnationId: 'replacement' }])).toBe(false)
+  expect(mobileSessionTabsEqual([tab], [{ ...tab, incarnationId: undefined }])).toBe(false)
+})

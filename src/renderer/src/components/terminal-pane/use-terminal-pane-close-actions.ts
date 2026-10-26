@@ -1,10 +1,12 @@
+import { useTerminalPaneLocalClose } from './use-terminal-pane-local-close'
+import type {
+  RequestActiveTerminalPaneCloseDetail,
+  TerminalPaneCloseCallbacks
+} from '@/constants/terminal'
 import { useCallback, useEffect, useRef } from 'react'
 import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane-close'
 import { useAppStore } from '../../store'
-import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
 import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
@@ -13,19 +15,15 @@ import {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
-import { clearPaneTerminalError } from './terminal-error-accumulation'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
-import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
-import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
-import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
+  const cancelCloseRef = useRef<(() => void) | undefined>(undefined)
   const confirmedCloseRef = useRef<(() => void) | null>(null)
   const {
-    clearSessionRestoredBannerForPane,
     managerRef,
     onCloseTab,
     paneCwdRef,
@@ -33,96 +31,52 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     pendingCloseConfirmation,
     persistLayoutSnapshot,
     setPendingCloseConfirmation,
-    setTerminalErrorsByPaneId,
-    syncPanePtyLayoutBinding,
-    syncPanePtyLayoutBindingForLeaf,
     tabId,
     updateSettings,
     worktreeId
   } = controller
-  // The window's half of a split pane's close: its transport, status and pane go.
-  const closePaneLocally = useCallback(
-    (paneId: number, committedLeafId?: string) => {
-      const manager = managerRef.current
-      // Why the pane check: main's answer can land after the pane already went.
-      if (!manager || (committedLeafId && manager.getLeafId(paneId) !== committedLeafId)) {
-        return
-      }
-      // A sibling went while main answered: this pane is now the tab's last, so the tab closes.
-      if (committedLeafId && manager.getPanes().length <= 1) {
-        onCloseTab()
-        return
-      }
-      const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
-      closeWebRuntimeTerminal(ptyId, worktreeId)
-      clearSessionRestoredBannerForPane(paneId)
-      const leafId = manager.getLeafId(paneId)
-      if (leafId) {
-        const launchPane = useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
-        if (launchPane?.leafId === leafId && !launchPane.outcome) {
-          // The user closed a launch pane whose agent is still starting; main stops that launch.
-          noteAgentLaunchPaneClosedByUser(tabId, leafId)
-        }
-        if (!committedLeafId) {
-          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
-        }
-        retireUnboundIpcTerminalPane({
-          getState: useAppStore.getState,
-          tabId,
-          leafId,
-          transport: paneTransportsRef.current.get(paneId),
-          getTransports: () => paneTransportsRef.current
-        })
-        useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
-        useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
-      }
-      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
-      if (leafId) {
-        retireUnboundRuntimeTerminalPane({
-          getState: useAppStore.getState,
-          tabId,
-          leafId,
-          transport: paneTransportsRef.current.get(paneId),
-          getTransports: () => paneTransportsRef.current
-        })
-        syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
-      } else {
-        syncPanePtyLayoutBinding(paneId, null)
-      }
-      manager.closePane(paneId)
-    },
-    [
-      clearSessionRestoredBannerForPane,
-      onCloseTab,
-      syncPanePtyLayoutBinding,
-      syncPanePtyLayoutBindingForLeaf,
-      tabId,
-      worktreeId,
-      managerRef,
-      paneTransportsRef,
-      setTerminalErrorsByPaneId
-    ]
-  )
+  const closePaneLocally = useTerminalPaneLocalClose(controller)
   const executeClosePane = useCallback(
-    (paneId: number) => {
+    (paneId: number, callbacks?: TerminalPaneCloseCallbacks) => {
       const manager = managerRef.current
-      if (!manager) {
+      if (!manager || callbacks?.isCurrent?.() === false) {
+        callbacks?.onCancel?.()
         return
       }
       if (manager.getPanes().length <= 1) {
-        onCloseTab()
+        onCloseTab(
+          callbacks?.onConfirm
+            ? {
+                ...callbacks,
+                onConfirm: (force) => {
+                  cancelCloseRef.current = undefined
+                  callbacks.onConfirm?.(force)
+                }
+              }
+            : callbacks
+        )
+        return
+      }
+      if (callbacks?.onConfirm) {
+        cancelCloseRef.current = undefined
+        callbacks.onConfirm()
         return
       }
       const leafId = manager.getLeafId(paneId)
+      if (!leafId) {
+        callbacks?.onCancel?.()
+        return
+      }
       // Switch point: main closes the pane first; the window removes it when main's frame does.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
-        leafId &&
         sendUserPaneCloseToLayoutOwner(
           { worktreeId, tabId, leafId, paneId },
-          { getManager: () => managerRef.current, closeTab: onCloseTab, closePaneLocally }
+          {
+            getManager: () => managerRef.current,
+            closeTab: onCloseTab,
+            closePaneLocally
+          }
         )
       ) {
         return
@@ -136,34 +90,67 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [tabId, managerRef]
   )
   const handleRequestClosePane = useCallback(
-    (paneId: number) => {
+    (paneId: number, callbacks?: TerminalPaneCloseCallbacks) => {
+      cancelCloseRef.current?.()
+      cancelCloseRef.current = undefined
+      confirmedCloseRef.current = null
+      if (callbacks?.signal?.aborted) {
+        callbacks.onCancel?.()
+        return
+      }
+      cancelCloseRef.current = callbacks?.onCancel
       if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
-        executeClosePane(paneId)
+        executeClosePane(paneId, callbacks)
         return
       }
       const transport = paneTransportsRef.current.get(paneId)
       const pending = capturePendingTerminalPaneClose(controller, paneId, useAppStore.getState)
       const ptyId = transport?.getPtyId() ?? pending?.ptyId
       if (!ptyId) {
-        executeClosePane(paneId)
+        executeClosePane(paneId, callbacks)
         return
       }
       const settings = useAppStore.getState().settings
+      let active = true
+      let probeTimeout: ReturnType<typeof setTimeout> | undefined
+      const cancel = () => {
+        if (!active) {
+          return
+        }
+        active = false
+        clearTimeout(probeTimeout)
+        callbacks?.signal?.removeEventListener('abort', cancel)
+        cancelCloseRef.current = undefined
+        confirmedCloseRef.current = null
+        setPendingCloseConfirmation(null)
+        callbacks?.onCancel?.()
+      }
+      cancelCloseRef.current = cancel
+      callbacks?.signal?.addEventListener('abort', cancel, { once: true })
       const close = (): void => {
-        if (!pending || pending.isCurrent()) {
-          executeClosePane(paneId)
+        if (!active) {
+          return
+        }
+        active = false
+        callbacks?.signal?.removeEventListener('abort', cancel)
+        cancelCloseRef.current = undefined
+        if ((!pending || pending.isCurrent()) && callbacks?.isCurrent?.() !== false) {
+          executeClosePane(paneId, callbacks)
+        } else {
+          callbacks?.onCancel?.()
         }
       }
       let decided = false
       const decide = (act: () => void): void => {
-        if (decided) {
+        if (decided || !active) {
           return
         }
         decided = true
         act()
       }
       const confirmClose = (): void => {
-        if (pending && !pending.isCurrent()) {
+        if ((pending && !pending.isCurrent()) || callbacks?.isCurrent?.() === false) {
+          cancel()
           return
         }
         confirmedCloseRef.current = close
@@ -172,7 +159,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           copyKind: getCloseDialogCopyKind(paneId)
         })
       }
-      const probeTimeout = setTimeout(
+      probeTimeout = setTimeout(
         () =>
           decide(
             pending && settings?.skipCloseTerminalWithRunningProcessConfirm ? close : confirmClose
@@ -205,17 +192,29 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [executeClosePane, getCloseDialogCopyKind]
   )
 
-  const closeActivePane = useCallback((): void => {
-    const manager = managerRef.current
-    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
-    if (pane) {
-      handleRequestClosePane(pane.id)
-    }
-  }, [handleRequestClosePane, managerRef])
-  useEffect(
-    () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
-    [closeActivePane, tabId]
+  const closeActivePane = useCallback(
+    (request: RequestActiveTerminalPaneCloseDetail): void => {
+      const manager = managerRef.current
+      const pane = request.leafId
+        ? manager?.getPanes().find((p) => manager.getLeafId(p.id) === request.leafId)
+        : (manager?.getActivePane() ?? manager?.getPanes()[0])
+      if (pane) {
+        handleRequestClosePane(pane.id, request)
+      } else {
+        request.onCancel?.()
+      }
+    },
+    [handleRequestClosePane, managerRef]
   )
+  useEffect(() => {
+    const stop = onActiveTerminalPaneCloseRequest(tabId, closeActivePane)
+    return () => {
+      stop()
+      cancelCloseRef.current?.()
+      cancelCloseRef.current = undefined
+      confirmedCloseRef.current = null
+    }
+  }, [closeActivePane, tabId])
   const handleSearchSelectedText = useCallback((selectedText: string): void => {
     useAppStore.getState().showRightSidebarSearch({ query: selectedText })
   }, [])
@@ -237,6 +236,8 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [pendingCloseConfirmation, updateSettings, setPendingCloseConfirmation]
   )
   const handleCancelClose = useCallback(() => {
+    cancelCloseRef.current?.()
+    cancelCloseRef.current = undefined
     confirmedCloseRef.current = null
     setPendingCloseConfirmation(null)
   }, [setPendingCloseConfirmation])

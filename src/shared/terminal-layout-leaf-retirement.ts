@@ -55,6 +55,8 @@ export function retireLeavesFromTerminalLayout(
       layout.expandedLeafId && retainedLeafIdSet.has(layout.expandedLeafId)
         ? layout.expandedLeafId
         : null,
+    chatLeafId:
+      layout.chatLeafId && !retiredLeafIds.has(layout.chatLeafId) ? layout.chatLeafId : undefined,
     ptyIdsByLeafId: omitLeafRecords(layout.ptyIdsByLeafId, retiredLeafIds),
     buffersByLeafId: omitLeafRecords(layout.buffersByLeafId, retiredLeafIds),
     scrollbackRefsByLeafId: omitLeafRecords(layout.scrollbackRefsByLeafId, retiredLeafIds),

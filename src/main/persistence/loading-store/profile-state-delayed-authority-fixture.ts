@@ -144,7 +144,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
       reader.close()
     }
   }
-  return { store, authority, readState }
+  return { store, authority, readState, directory, path }
 }
 
 // Runtime spawns bind only a pane admitted before the process starts.

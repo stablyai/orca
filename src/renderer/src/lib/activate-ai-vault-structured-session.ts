@@ -81,9 +81,19 @@ export async function activateAiVaultStructuredSession(
   deps: StructuredSessionActivationDeps = defaultDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
+  return (await activateAiVaultStructuredSessionVerified(session, deps, target)) !== 'none'
+}
+
+/** `activated` only when the chat's tab is really active; `reported` means the click's toast said why
+ *  not, which a caller retiring something on success must not read as success. */
+export async function activateAiVaultStructuredSessionVerified(
+  session: Pick<AiVaultSession, 'structuredSession'>,
+  deps: StructuredSessionActivationDeps = defaultDeps,
+  target?: RuntimeClientTarget
+): Promise<'activated' | 'reported' | 'none'> {
   const structured = session.structuredSession
   if (!structured) {
-    return false
+    return 'none'
   }
   // Coalesce clicks across refresh/probe/reveal timeouts to avoid duplicate sequences and toasts.
   const hostKey = executionHostIdForStructuredTarget(
@@ -106,13 +116,13 @@ export async function activateAiVaultStructuredSession(
   }
 }
 
-const activationsInFlight = new Map<string, Promise<boolean>>()
+const activationsInFlight = new Map<string, Promise<'activated' | 'reported'>>()
 
 async function activateStructuredSession(
   structured: NonNullable<AiVaultSession['structuredSession']>,
   deps: StructuredSessionActivationDeps,
   host?: RuntimeClientTarget
-): Promise<boolean> {
+): Promise<'activated' | 'reported'> {
   const target = {
     worktreeId: structured.workspaceId,
     sessionId: structured.sessionId,
@@ -132,19 +142,19 @@ async function activateStructuredSession(
         } else {
           deps.unavailable()
         }
-        return true
+        return 'reported'
       }
       await refreshedWithoutThrowing(deps, structured.workspaceId, host)
       if (!deps.activate(target)) {
         deps.unavailable()
-        return true
+        return 'reported'
       }
     }
   }
   if (useAppStore.getState().activeWorktreeId !== structured.workspaceId) {
     activateAndRevealWorktree(structured.workspaceId)
   }
-  return true
+  return 'activated'
 }
 
 /** Refresh is advisory; failures return false so reveal can still proceed. */

@@ -1,3 +1,10 @@
+import { useMemo } from 'react'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { useHeldTerminalNotice } from './native-chat-held-terminal'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
@@ -7,6 +14,7 @@ import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
   isClaudeSignInFailureKind,
+  useNativeChatClaudeSignIn,
   nativeChatClaudeSignInLabel,
   type NativeChatClaudeSignIn
 } from './native-chat-claude-sign-in'
@@ -20,12 +28,14 @@ function nativeChatLaunchNotice({
   failure = null,
   agentLabel,
   onRetry,
-  claudeSignIn = null
+  claudeSignIn = null,
+  heldTerminal = null
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
   agentLabel?: string
   onRetry: () => void
+  heldTerminal?: { content?: React.JSX.Element; action?: NativeChatComposerNotice['action'] } | null
   /** Replace Retry with sign-in until authentication succeeds. */
   claudeSignIn?: NativeChatClaudeSignIn | null
 }): NativeChatComposerNotice | null {
@@ -54,12 +64,13 @@ function nativeChatLaunchNotice({
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
   const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
   return {
-    content: signInContent,
+    content: heldTerminal?.content ?? signInContent,
     key: 'launch',
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
-      claudeSignIn && isClaudeSignInFailureKind(failure?.details?.reason)
+      heldTerminal?.action ??
+      (claudeSignIn && isClaudeSignInFailureKind(failure?.details?.reason)
         ? {
             label: nativeChatClaudeSignInLabel(claudeSignIn),
             onClick: claudeSignIn.signIn,
@@ -70,7 +81,7 @@ function nativeChatLaunchNotice({
           : {
               label: translate('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
               onClick: onRetry
-            }
+            })
   }
 }
 
@@ -80,6 +91,7 @@ export function structuredSessionNotices({
   sessionError,
   composerError,
   claudeSignIn = null,
+  heldTerminal = null,
   availability = null,
   hostPermission = null
 }: {
@@ -91,6 +103,7 @@ export function structuredSessionNotices({
   agentLabel: string
   sessionError: string | null
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
+  heldTerminal?: { content?: React.JSX.Element; action?: NativeChatComposerNotice['action'] } | null
   claudeSignIn?: NativeChatClaudeSignIn | null
   availability?: NativeChatComposerNotice | null
   hostPermission?: NativeChatComposerNotice | null
@@ -101,6 +114,7 @@ export function structuredSessionNotices({
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,
+    heldTerminal,
     claudeSignIn
   })
   return [
@@ -119,4 +133,36 @@ export function structuredSessionNotices({
       : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]
+}
+
+export function useStructuredSessionNotices(
+  input: Omit<Parameters<typeof structuredSessionNotices>[0], 'heldTerminal' | 'claudeSignIn'> & {
+    agent: AgentType
+    target: RuntimeClientTarget
+    startFailures: readonly AgentSessionFailureFact[]
+    stopView: NativeChatOrcaStopView
+  }
+) {
+  const { target, stopView } = input
+  const executionHostId = executionHostIdForStructuredTarget(target)
+  const view = useMemo(
+    () => ({ ...stopView, heldTerminal: { executionHostId } }),
+    [stopView, executionHostId]
+  )
+  const heldTerminal = useHeldTerminalNotice(
+    input.launch.failure?.terminal,
+    executionHostId,
+    input.agentLabel
+  )
+  const claudeSignIn = useNativeChatClaudeSignIn({
+    agent: input.agent,
+    target,
+    failure: input.launch.failure,
+    failureRows: input.startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
+  })
+  return {
+    notices: structuredSessionNotices({ ...input, heldTerminal, claudeSignIn }),
+    stopView: view,
+    claudeSignIn
+  }
 }

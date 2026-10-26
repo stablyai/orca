@@ -1,4 +1,13 @@
 import { vi } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  agentSessionRecordFixture,
+  agentSessionLeaseFixture
+} from '../../../src/shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../src/shared/agent-session-record'
+import type { AiVaultChatForkSource } from '../../../src/shared/ai-vault-resume-preparation'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
@@ -17,7 +26,13 @@ export function structuredHostStub(
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
   return {
-    // Keep restart-resume spies flat for manifest/delta assertions; installableHost rebuilds the nested member.
+    getRecord: vi.fn<(sessionId: string) => AgentSessionRecord | null>(() => null),
+    switchToTerminal: vi.fn<StructuredAgentSessionHost['switchToTerminal']>(async () => undefined),
+    switchToChat: vi.fn<StructuredAgentSessionHost['switchToChat']>(async () => ({ ok: true })),
+    // The restart-resume surface hangs off a host MEMBER rather than the root, but its spies stay
+    // flat here: callers iterate this map asserting every entry is a spy that did not run, and
+    // `installableHost` below is what reassembles the member. Keeping them flat also lets the
+    // manifest name them to prove a call reached the host.
     restartResumableList: vi.fn(async () => []),
     restartResumableFailures: vi.fn(async () => []),
     restartResumableDismiss: vi.fn(async () => 0),
@@ -118,7 +133,7 @@ export function installableHost(
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       modelCatalog: { read: hostCalls.modelCatalog },
-      store: { getRecord: () => null, getOperationRow: () => null }
+      store: { getRecord: hostCalls.getRecord, getOperationRow: () => null }
     },
     restartResume: {
       list: hostCalls.restartResumableList,
@@ -131,6 +146,54 @@ export function installableHost(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
   return host as unknown as StructuredAgentSessionHost
+}
+
+/** A saved conversation for the real switch handler's account and transcript checks. */
+export async function structuredSwitchSource(
+  sessionId: string,
+  workspaceId: string,
+  thread: string
+) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-cross-version-switch-'))
+  const codexHome = join(root, 'codex-home')
+  const sessions = join(codexHome, 'sessions')
+  const filePath = join(sessions, `rollout-${thread}.jsonl`)
+  await mkdir(sessions, { recursive: true })
+  await writeFile(
+    filePath,
+    `${JSON.stringify({ type: 'session_meta', payload: { id: thread, cwd: root } })}\n`
+  )
+  const record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId })),
+    provider: 'codex',
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId,
+      workspaceKind: 'git-worktree'
+    },
+    accountHome: { variable: 'CODEX_HOME', path: codexHome },
+    launchDirectory: root,
+    providerHandleChain: [
+      {
+        linkId: 'link-1',
+        origin: 'created',
+        mintedAtFence: 7,
+        observedAt: 1_000,
+        handle: codexProviderHandle(thread)
+      }
+    ]
+  }
+  const source: AiVaultChatForkSource = {
+    agent: 'codex',
+    sourceAgent: 'codex',
+    sessionId: thread,
+    cwd: root,
+    codexHome,
+    filePath,
+    executionHostPlatform: process.platform
+  }
+  return { record, source, dispose: () => rm(root, { recursive: true, force: true }) }
 }
 
 const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }

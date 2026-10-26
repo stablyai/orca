@@ -142,7 +142,9 @@ export type StructuredAgentSessionHostDeps = {
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
-  /** Advisory tab-hidden notice; failures are logged. */
+  /** Explicit switch admission also includes direct chat assignments, even at rest. */
+  hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** A chat tab left the screen: closed, or its workspace removed. Advisory; a throw is logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
   assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>

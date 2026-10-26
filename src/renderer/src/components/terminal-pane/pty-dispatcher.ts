@@ -60,7 +60,7 @@ export type PtyDataMeta = {
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
 const ptyExitSidecars = new Map<
   string,
-  Set<(code: number, context: { hadPrimary: boolean }) => void>
+  Set<(code: number, context: { hadPrimary: boolean; incarnationId?: string }) => void>
 >()
 export const ptyWriteUnavailableHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
@@ -225,7 +225,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
 
 export function subscribeToPtyExit(
   ptyId: string,
-  watcher: (code: number, context: { hadPrimary: boolean }) => void
+  watcher: (code: number, context: { hadPrimary: boolean; incarnationId?: string }) => void
 ): () => void {
   ensurePtyDispatcher()
   let set = ptyExitSidecars.get(ptyId)

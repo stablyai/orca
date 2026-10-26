@@ -1,3 +1,4 @@
+import { retireChatForAdmittedTerminalLaunch } from '../../runtime/session-tabs/structured-session-terminal-launch-retirement'
 import { agentHookServer } from '../../agent-hooks/server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
@@ -29,10 +30,10 @@ export type PtySpawnPaneKeyAliases = {
   opaqueRemintedSpawnPaneKey: string | null
 }
 
-/** Everything a registered spawn publishes, in one order for both lanes; nothing here awaits. */
-export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
+/** Everything a registered spawn publishes, in one order for both lanes. */
+export async function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   input: PtySpawnCommitInput<Reply>
-): Reply {
+): Promise<Reply> {
   const { state } = input
   const { deps, args, result } = state
   const runtime = deps.runtime
@@ -128,6 +129,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
+  await retireChatForAdmittedTerminalLaunch(runtime, args, input.joinPayload.reply)
   resolvePaneSpawnReservation(
     state.paneSpawnReservationKey,
     state.paneSpawnReservation,

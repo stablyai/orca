@@ -1,3 +1,4 @@
+import { useHeldTerminalNotice } from './native-chat-held-terminal'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -71,6 +72,12 @@ export function NativeChatNoticeRow({
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
+  const holder = orcaStopView.heldTerminal
+  const heldNotice = useHeldTerminalNotice(
+    block.failure?.kind === 'conversationOpenInTerminal' ? block.heldByTerminal : undefined,
+    holder?.executionHostId,
+    agentName ?? 'The agent'
+  )
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'divider') {
     const label =
@@ -202,7 +209,7 @@ export function NativeChatNoticeRow({
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
+          {heldNotice?.content ?? antigravitySignInContent ?? text}
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
@@ -217,15 +224,15 @@ export function NativeChatNoticeRow({
           />
         ) : null}
       </div>
-      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
+      {heldNotice?.action || (claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind)) ? (
         <Button
           type="button"
           variant="outline"
           size="xs"
-          disabled={claudeSignIn.signingIn}
-          onClick={claudeSignIn.signIn}
+          disabled={heldNotice?.action?.disabled ?? claudeSignIn?.signingIn}
+          onClick={heldNotice?.action?.onClick ?? claudeSignIn?.signIn}
         >
-          {nativeChatClaudeSignInLabel(claudeSignIn)}
+          {heldNotice?.action?.label ?? (claudeSignIn && nativeChatClaudeSignInLabel(claudeSignIn))}
         </Button>
       ) : null}
       {block.providerFrame || detail ? (

@@ -527,3 +527,25 @@ describe('thread goal fields', () => {
     }
   })
 })
+
+it('optional mixed-version terminal evidence never changes the durable refusal fact', () => {
+  const failure = { kind: 'conversationOpenInTerminal' as const }
+  for (const terminal of [
+    undefined,
+    { paneKey: 't:leaf', worktreeId: 'w' },
+    { paneKey: 't:leaf', worktreeId: 'w', incarnationId: 'life' },
+    { paneKey: 't:leaf', worktreeId: 'w', incarnationId: 'x'.repeat(257) },
+    { paneKey: 'x'.repeat(513), worktreeId: 'w' }
+  ]) {
+    const read = AgentJournalItemBodySchema.parse({
+      kind: 'status',
+      text: 'Existing fallback',
+      failure,
+      ...(terminal ? { heldByTerminal: terminal } : {})
+    })
+    expect(read).toMatchObject({ text: 'Existing fallback', failure })
+    if (terminal?.paneKey.length === 513) {
+      expect(read).toHaveProperty('heldByTerminal', undefined)
+    }
+  }
+})

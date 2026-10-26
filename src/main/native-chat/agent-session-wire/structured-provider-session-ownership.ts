@@ -2,6 +2,7 @@ import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agen
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session-lease-adjudication'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { inPlaceSwitchEnabled } from '../../../shared/structured-agent-cli-conversation-adoption'
 import {
   keysMayMatch,
   recordConversationKey,
@@ -57,8 +58,8 @@ export function agentSessionLeasePossiblyWriting(lease: AgentSessionLease): bool
 }
 
 /** Agents whose chats let a terminal resume the same conversation once the chat stopped writing. */
-export function sameIdTerminalResumeEnabled(_provider: StructuredAgentId): boolean {
-  return false
+export function sameIdTerminalResumeEnabled(provider: StructuredAgentId): boolean {
+  return inPlaceSwitchEnabled(provider)
 }
 
 /** Whether a terminal resume of this link's conversation is refused. */

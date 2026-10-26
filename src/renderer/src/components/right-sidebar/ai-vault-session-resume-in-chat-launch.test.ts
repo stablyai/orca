@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
-type BeginArgs = { beforeOpen?: (sessionId: string) => boolean | void }
+type BeginArgs = {
+  beforeOpen?: (sessionId: string) => boolean | void
+  plan?: { requestId?: string }
+  afterTabId?: string
+  focusIntent?: unknown
+}
 type Launch = {
   sessionId: string
   settlement: Promise<StructuredAgentLaunchSettlement>
@@ -13,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
   prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
   activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
+  heldToast: vi.fn<(input: { fallback: string; executionHostId?: string }) => void>(),
   toastError: vi.fn<(message: string) => void>(),
   admitStructuredLaunchOnHost:
     vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
@@ -21,6 +27,15 @@ const mocks = vi.hoisted(() => ({
   activeWorktreeId: 'other-worktree'
 }))
 
+vi.mock('../native-chat/native-chat-held-terminal', () => ({
+  toastHeldTerminal: (input: { fallback: string; executionHostId?: string }) => {
+    mocks.heldToast(input)
+    mocks.toastError(input.fallback)
+  }
+}))
+vi.mock('@/lib/structured-agent-session-launch-surface', () => ({
+  captureStructuredLaunchSurfaceAddress: () => ({ worktreeId: 'worktree-1', precedingTabIds: [] })
+}))
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner: () => ({ executionHostId: 'local', target: { kind: 'local' } })
@@ -88,7 +103,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     })
   })
 
-  it('reveals the workspace and opens chat before provider settlement', async () => {
+  it('defers publication and workspace activation until provider settlement', async () => {
     let settle!: (value: StructuredAgentLaunchSettlement) => void
     const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
       settle = resolve
@@ -103,12 +118,15 @@ describe('resumeAiVaultSessionInNewChat', () => {
     expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
       expect.objectContaining({
         plan: expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } }),
-        hooks: {}
+        hooks: {},
+        deferPublication: true
       })
     )
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
     settle({ kind: 'structured', sessionId: 'session-1' })
+    await settlement
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
   })
 
   // Where `opencode` is 1.x, only the OpenCode 2 chat can load a 2.x conversation.
@@ -211,4 +229,36 @@ describe('resumeAiVaultSessionInNewChat', () => {
     await Promise.resolve()
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
+})
+
+it('keeps refused History publication deferred and offers no automatic retry', async () => {
+  vi.clearAllMocks()
+  const onSettled = vi.fn(() => false)
+  const failure = Object.assign(new Error('held'), {
+    refusal: {
+      code: 'agent_session_conflict',
+      details: {
+        reason: 'conversationHeldElsewhere',
+        terminal: { paneKey: 't:l', worktreeId: 'worktree-1' }
+      }
+    }
+  })
+  mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValueOnce({
+    sessionId: 'first',
+    tab: { id: 'first' },
+    settlement: Promise.resolve({ kind: 'failed', error: failure })
+  })
+  await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'first-click', {
+    afterTabId: 'source',
+    focusIntent: { request: vi.fn(), cancel: vi.fn() },
+    onSettled
+  })
+  await vi.waitFor(() => expect(mocks.heldToast).toHaveBeenCalledOnce())
+  const recovery = mocks.heldToast.mock.calls[0][0]
+  expect(recovery).not.toHaveProperty('onContinue')
+  expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledOnce()
+  expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0]).toMatchObject({
+    deferPublication: true
+  })
+  expect(onSettled).toHaveBeenCalledOnce()
 })

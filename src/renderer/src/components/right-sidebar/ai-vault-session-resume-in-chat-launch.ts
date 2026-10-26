@@ -1,3 +1,6 @@
+import { captureStructuredLaunchSurfaceAddress } from '@/lib/structured-agent-session-launch-surface'
+import { toastHeldTerminal } from '../native-chat/native-chat-held-terminal'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -20,7 +23,6 @@ import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
-import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
@@ -47,35 +49,37 @@ export async function resumeAiVaultSessionInNewChat(
   requestId: AgentLaunchRequestId,
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
+  const owner = structuredLaunchOwner(
+    { route: 'structured-native-chat', executionHostId: session.executionHostId },
+    worktreeId
+  )
+  const surfaceAddress = captureStructuredLaunchSurfaceAddress(
+    worktreeId,
+    undefined,
+    replacing?.afterTabId
+  )
+  const notify = (error: unknown) =>
+    notifyAiVaultSessionResumeInChatFailure(error, rowAgent, owner?.executionHostId)
   try {
-    // Reuse terminal preparation to repin Codex rows from legacy shared homes before host lookup.
-    const [preparedSession, agent] = await Promise.all([
-      prepareAiVaultSessionForResume(session),
-      adoptingAgentOnHost(rowAgent, worktreeId)
-    ])
+    const preparedSession = await prepareAiVaultSessionForResume(session)
+    const agent = await adoptingAgentOnHost(rowAgent, worktreeId, owner?.executionHostId)
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId,
+      executionHostId: owner?.executionHostId,
       agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
     const selection = useAppStore.getState()
-    const waitForCreate = workspaceHasSleepingAgentSessions(selection, worktreeId)
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: {},
       ...(replacing
         ? { afterTabId: replacing.afterTabId, focusIntent: replacing.focusIntent }
         : {}),
-      beforeOpen: waitForCreate
-        ? undefined
-        : () => {
-            if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-              return activateAiVaultResumeWorkspace(worktreeId)
-            }
-            return true
-          }
+      deferPublication: true,
+      target: { surfaceAddress }
     })
     if (!launch) {
       replacing?.onSettled(null)
@@ -84,7 +88,6 @@ export async function resumeAiVaultSessionInNewChat(
     void launch.settlement.then((settlement) => {
       const state = useAppStore.getState()
       if (
-        waitForCreate &&
         settlement.kind === 'structured' &&
         state.activeWorktreeId !== worktreeId &&
         state.activeWorktreeId === selection.activeWorktreeId &&
@@ -99,11 +102,11 @@ export async function resumeAiVaultSessionInNewChat(
       }
       const handled = replacing?.onSettled(settlement) === true
       if (settlement.kind === 'failed' && !settlement.notified && !handled) {
-        notifyAiVaultSessionResumeInChatFailure(settlement.error, rowAgent)
+        notify(settlement.error)
       }
     })
   } catch (error) {
-    notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
+    notify(error)
     replacing?.onSettled(null)
   }
 }
@@ -111,10 +114,14 @@ export async function resumeAiVaultSessionInNewChat(
 /** Try chats until one is not refused; an unreachable host keeps the requested chat so its launch reports the error. */
 export async function adoptingAgentOnHost(
   rowAgent: CliConversationRowAgent,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): Promise<TuiAgent> {
   const [first, ...rest] = CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent]
-  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+  const owner = structuredLaunchOwner(
+    { route: 'structured-native-chat', executionHostId },
+    worktreeId
+  )
   const selector = toRuntimeWorktreeSelector(worktreeId)
   let agent: TuiAgent = first
   for (const next of rest) {
@@ -132,21 +139,33 @@ export async function adoptingAgentOnHost(
 /** Ownership conflicts and missing account-home conversations need actionable errors, not generic terminal preparation failures. */
 function notifyAiVaultSessionResumeInChatFailure(
   error: unknown,
-  rowAgent: CliConversationRowAgent
+  rowAgent: CliConversationRowAgent,
+  executionHostId?: ExecutionHostId
 ): void {
   const failure = structuredLaunchFailure(error)
   if (
     hasRuntimeRpcErrorCode(error, 'agent_session_conflict') ||
     failure?.code === 'agent_session_conflict'
   ) {
-    toast.error(
-      failure?.details?.reason === 'conversationHeldElsewhere' && !failure.owner
-        ? cliConversationExitGuidance(rowAgent)
-        : translate(
-            'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
-            'Another chat is already holding this conversation.'
-          )
-    )
+    if (
+      failure?.details?.reason === 'conversationHeldElsewhere' &&
+      !failure.owner &&
+      executionHostId
+    ) {
+      toastHeldTerminal({
+        executionHostId,
+        terminal: failure.terminal,
+        agent: agentLabel(rowAgent),
+        fallback: cliConversationExitGuidance(rowAgent)
+      })
+    } else {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
+          'Another chat is already holding this conversation.'
+        )
+      )
+    }
     return
   }
   if (

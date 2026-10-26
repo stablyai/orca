@@ -153,8 +153,12 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             const terminal = () => ({
               pane: this.ptysById.get(pty.ptyId) === pty ? this.cliWriterPtyPane(pty.ptyId) : null
             })
+            const paneKey = () => this.paneOfPty(pty).paneKey ?? undefined
             return [...conversations.byKey.values()].map((conversation) => ({
               ...conversation,
+              get paneKey() {
+                return paneKey()
+              },
               worktreeId: pty.worktreeId,
               terminal
             }))

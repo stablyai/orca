@@ -1,5 +1,6 @@
 // Hold provisional chats in server-drawn groups until publication; send placement in server IDs so created tabs retain their intended position (L270).
 
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
@@ -38,23 +39,27 @@ type TabPlacement = NonNullable<StructuredAgentSessionCreateParams['tabPlacement
 function chatTabPlacement(
   environmentId: string,
   worktreeId: string,
-  tabId: string
+  tabId: string,
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 ): TabPlacement | undefined {
   const route = serverLayoutApplyRoute(environmentId, worktreeId)
   const group = useAppStore
     .getState()
     .groupsByWorktree[worktreeId]?.find((entry) => entry.tabOrder.includes(tabId))
-  if (!group) {
+  const groupId = group?.id ?? surfaceAddress?.targetGroupId
+  if (!groupId) {
     return undefined
   }
   // No route while a reconnected stream awaits its snapshot: the group alone (frames keep its id).
   const afterTabId = route
-    ? group.tabOrder
-        .slice(0, group.tabOrder.indexOf(tabId))
+    ? (group
+        ? group.tabOrder.slice(0, group.tabOrder.indexOf(tabId))
+        : (surfaceAddress?.precedingTabIds ?? [])
+      )
         .map((id) => route.serverTabId(id))
         .findLast((id) => id !== null)
     : undefined
-  return { groupId: group.id, ...(afterTabId ? { afterTabId } : {}) }
+  return { groupId, ...(afterTabId ? { afterTabId } : {}) }
 }
 
 /** Read placement synchronously as create is sent; yielding lets a retiring source invalidate the launch. */
@@ -62,6 +67,7 @@ export function withFrameDrawnChatTabPlacement(intent: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
+  surfaceAddress?: StructuredLaunchSurfaceAddress
   params: StructuredAgentSessionCreateParams
 }): StructuredAgentSessionCreateParams {
   const environmentId = frameDrawnEnvironment(intent.target, intent.worktreeId)
@@ -78,7 +84,8 @@ export function withFrameDrawnChatTabPlacement(intent: {
     ? chatTabPlacement(
         environmentId,
         intent.worktreeId,
-        structuredAgentSessionTabId(intent.sessionId)
+        structuredAgentSessionTabId(intent.sessionId),
+        intent.surfaceAddress
       )
     : undefined
   return tabPlacement ? { ...intent.params, tabPlacement } : intent.params

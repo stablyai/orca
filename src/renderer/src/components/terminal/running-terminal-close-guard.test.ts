@@ -409,3 +409,46 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 })
+
+describe('close-attempt consent lifetime', () => {
+  it.each([1, 10])(
+    'releases %s cancelled probes/prompts and ignores late probe completion',
+    async (count) => {
+      vi.clearAllMocks()
+      setState()
+      for (const phase of ['probe', 'dialog'] as const) {
+        for (let i = 0; i < count; i++) {
+          const probe = Promise.withResolvers<{
+            foregroundProcess: string
+            hasChildProcesses: boolean
+          }>()
+          inspectRuntimeTerminalProcessMock.mockReturnValueOnce(probe.promise)
+          const owner = new AbortController(),
+            onCancel = vi.fn(),
+            onClose = vi.fn()
+          const remove = vi.spyOn(owner.signal, 'removeEventListener')
+          guardRunningTerminalClose({
+            terminalTabId: 'tab-1',
+            tabLabel: 'Shell',
+            signal: owner.signal,
+            onClose,
+            onCancel
+          })
+          if (phase === 'dialog') {
+            probe.resolve({ foregroundProcess: 'codex', hasChildProcesses: true })
+            await settleProbe()
+            expect(visibleRequest()).not.toBeNull()
+          }
+          owner.abort()
+          probe.resolve({ foregroundProcess: 'codex', hasChildProcesses: true })
+          await settleProbe()
+          expect(visibleRequest()).toBeNull()
+          expect(onCancel).toHaveBeenCalledOnce()
+          expect(onClose).not.toHaveBeenCalled()
+          expect(remove).toHaveBeenCalledOnce()
+        }
+      }
+      expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(count * 2)
+    }
+  )
+})

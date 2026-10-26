@@ -4,6 +4,7 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionHoldingTerminal } from '../../../shared/agent-session-holding-terminal'
 import type { AgentSessionConversationOwner } from '../../../shared/agent-session-refusal-details'
 import {
   agentSessionRefusalFailure,
@@ -18,6 +19,7 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
    *  workspace can't run the chat. */
   causeText?: string
   owner?: AgentSessionConversationOwner
+  terminal?: AgentSessionHoldingTerminal
 }
 
 /** Why a host said it can't run a chat in this workspace, and what to do instead. */
@@ -57,7 +59,10 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
       : undefined
   const failure = {
     ...agentSessionRefusalFailure(refusal),
-    ...(owner ? { owner } : {})
+    ...(owner ? { owner } : {}),
+    ...(refusal.details && 'terminal' in refusal.details && refusal.details.terminal
+      ? { terminal: refusal.details.terminal }
+      : {})
   }
   const message = error instanceof Error ? error.message : undefined
   return failure.code === 'agent_session_operation_invalid' &&

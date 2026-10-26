@@ -5,7 +5,10 @@ import type * as launchModule from '../structured-agent-session-launch-create-ca
 import type { AgentSessionLaunchPlan } from '../agent-session-launch-plan'
 import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
-import { StructuredAgentSessionCreateRefusalError } from '../structured-agent-session-launch-errors'
+import {
+  StructuredAgentSessionCreateUnknownOutcomeError,
+  StructuredAgentSessionCreateRefusalError
+} from '../structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
 import {
@@ -446,3 +449,44 @@ it.each(['expiry', 'purge'])('created pane publication: %s', async (order) => {
     )
   }
 })
+
+it.each(['refused', 'unknown', 'ready'] as const)(
+  'deferred resume publishes only a ready or recovery tab, and focuses once: %s',
+  async (outcome) => {
+    const reply = Promise.withResolvers<{ sessionId: string; fence: number }>()
+    mocks.launch.mockReturnValue(reply.promise)
+    const focus = { request: vi.fn(), cancel: vi.fn() }
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan: adoptAgentSessionLaunchVerdict({
+        requestId: 'deferred',
+        route: 'structured-native-chat',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        executionHostId: 'local',
+        resumeFrom: { providerSessionId: 'provider' }
+      }),
+      hooks: {},
+      deferPublication: true,
+      focusIntent: focus
+    })
+    if (!launch) {
+      throw new Error('No launch')
+    }
+    await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
+    expect(useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []).toHaveLength(0)
+    if (outcome === 'ready') {
+      reply.resolve({ sessionId: launch.sessionId, fence: 1 })
+    } else {
+      reply.reject(
+        outcome === 'unknown'
+          ? new StructuredAgentSessionCreateUnknownOutcomeError('lost', 'runtime_unavailable')
+          : new StructuredAgentSessionCreateRefusalError('held', 'agent_session_conflict')
+      )
+    }
+    await launch.settlement
+    await main.settle()
+    const tabs = useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []
+    expect(tabs).toHaveLength(outcome === 'refused' ? 0 : 1)
+    expect(focus.request).toHaveBeenCalledTimes(outcome === 'refused' ? 0 : 1)
+  }
+)

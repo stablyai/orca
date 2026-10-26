@@ -39,6 +39,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
   providerSession?: AgentProviderSessionMetadata
+  /** A chat's switch: sent only to a host advertising the agent's switch capability. */
+  resumeOrigin?: 'switch'
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean

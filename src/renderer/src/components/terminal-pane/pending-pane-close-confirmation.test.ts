@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { preparePendingSplitClose } from './pending-split-close-test-fixture'
+import {
+  preparePendingSplitClose,
+  mountPendingCloseOwner
+} from './pending-split-close-test-fixture'
 import { preparePendingRuntimeClose } from './pending-runtime-pane-close-test-fixture'
 import { flushPtySideEffects } from './pty-transport-test-harness'
 import type { PtyRunningWorkProbe } from '../terminal/pty-running-work-probe'
@@ -227,3 +230,81 @@ it.each(['probe', 'dialog'] as const)(
     expect(p.closed()).toBe(false)
   }
 )
+
+it.each(['cancel', 'replacement', 'confirm'] as const)(
+  'settles a leaf-targeted close callback after %s',
+  async (outcome) => {
+    const p = await prepare()
+    const onConfirm = vi.fn(),
+      onCancel = vi.fn()
+    let current = true
+    p.actions.handleRequestClosePane(1, { isCurrent: () => current, onConfirm, onCancel })
+    p.verdict('live')
+    await flushPtySideEffects()
+    if (outcome === 'cancel') {
+      p.actions.handleCancelClose()
+    } else {
+      if (outcome === 'replacement') {
+        current = false
+      }
+      p.actions.handleConfirmClose(false)
+    }
+    await p.settle()
+    expect(onConfirm).toHaveBeenCalledTimes(outcome === 'confirm' ? 1 : 0)
+    if (outcome === 'confirm') {
+      expect(onConfirm).toHaveBeenCalledWith()
+    }
+    expect(onCancel).toHaveBeenCalledTimes(outcome === 'confirm' ? 0 : 1)
+  }
+)
+
+it.each([1, 10])(
+  'unmount cancels %s preconsent owners and suppresses late probe payloads',
+  async (count) => {
+    for (let i = 0; i < count; i++) {
+      const p = await prepare()
+      Object.assign(window, { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+      const unmount = mountPendingCloseOwner()
+      const onCancel = vi.fn(),
+        onConfirm = vi.fn()
+      p.actions.handleRequestClosePane(1, { onCancel, onConfirm })
+      unmount?.()
+      p.verdict('live')
+      await p.settle()
+      p.actions.handleConfirmClose(false)
+      expect(onCancel).toHaveBeenCalledOnce()
+      expect(onConfirm).not.toHaveBeenCalled()
+      expect(p.controller.setPendingCloseConfirmation).not.toHaveBeenCalledWith(
+        expect.objectContaining({ paneId: 1 })
+      )
+      expect(window.removeEventListener).toHaveBeenCalledOnce()
+    }
+  }
+)
+it('confirmed ownership survives pane unmount and abort removes an unconfirmed split dialog', async () => {
+  const p = await prepare()
+  Object.assign(window, { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  const unmount = mountPendingCloseOwner()
+  const abort = new AbortController()
+  const onCancel = vi.fn(),
+    onConfirm = vi.fn()
+  p.actions.handleRequestClosePane(1, { signal: abort.signal, onCancel, onConfirm })
+  p.verdict('live')
+  await flushPtySideEffects()
+  p.actions.handleConfirmClose(false)
+  unmount?.()
+  expect(onConfirm).toHaveBeenCalledOnce()
+  expect(onCancel).not.toHaveBeenCalled()
+  await p.settle()
+  const next = await prepare()
+  const cancel = vi.fn()
+  const owner = new AbortController()
+  next.actions.handleRequestClosePane(1, { signal: owner.signal, onCancel: cancel })
+  next.verdict('live')
+  await flushPtySideEffects()
+  owner.abort()
+  next.actions.handleConfirmClose(false)
+  expect(cancel).toHaveBeenCalledOnce()
+  expect(next.controller.setPendingCloseConfirmation).toHaveBeenLastCalledWith(null)
+  await next.settle()
+})

@@ -59,6 +59,17 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
+// The tab card turns into a hover card when it carries the switch action; render it like the tooltip.
+vi.mock('@/components/ui/hover-card', async () => {
+  const tooltip = await import('@/components/ui/tooltip')
+  return {
+    HoverCard: tooltip.Tooltip,
+    HoverCardTrigger: tooltip.TooltipTrigger,
+    HoverCardContent: tooltip.TooltipContent
+  }
+})
+vi.mock('./TabSessionSwitchHoverAction', () => ({ TabSessionSwitchHoverAction: () => null }))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: () => null,

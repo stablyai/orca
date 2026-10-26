@@ -54,6 +54,9 @@ function controller(
     isPendingTerminalRecoveryParked: false,
     showEmptyState: false,
     terminals: [],
+    sessionTabs: [],
+    worktreeId: 'workspace',
+    nativeChatController: { nativeChatAgent: 'codex' },
     notifyTerminalFrame,
     dictation: { isRecording: false },
     nativeChatSendError: { message: null, clear: () => {} }

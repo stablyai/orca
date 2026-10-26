@@ -52,6 +52,17 @@ describe('renderer layout writes', () => {
     expect(countLayoutWrites(src, rendererRatchet, 'a.tsx')).toBe(3)
   })
 
+  it('reads Object.hasOwn property names while retaining computed and direct writes', () => {
+    expect(
+      countLayoutWrites("Object.hasOwn(requested, 'terminalLayoutsByTabId')", rendererRatchet)
+    ).toBe(0)
+    const writes = "patch.terminalLayoutsByTabId = next; patch['terminalLayoutsByTabId'] = next"
+    expect(countLayoutWrites(writes, rendererRatchet)).toBe(2)
+    const other =
+      "Object.hasOwn('terminalLayoutsByTabId', key); other.hasOwn(state, 'terminalLayoutsByTabId'); Object.other(state, 'terminalLayoutsByTabId')"
+    expect(countLayoutWrites(other, rendererRatchet)).toBe(3)
+  })
+
   it('allows only the frozen mirror writers', () => {
     expect(rendererRatchet.allowed('src/renderer/src/store/workspace-layout-cache.ts')).toBe(true)
     expect(

@@ -1,3 +1,4 @@
+import type { TerminalPaneCloseCallbacks } from '@/constants/terminal'
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
@@ -8,8 +9,8 @@ import type { TerminalCreateController } from './use-terminal-create-actions'
 
 export function useTerminalCloseActions(controller: TerminalCreateController) {
   const { consumeSuppressedPtyExit } = controller
-  const handleCloseTab = useCallback((tabId: string) => {
-    closeTerminalTab(tabId)
+  const handleCloseTab = useCallback((tabId: string, callbacks?: TerminalPaneCloseCallbacks) => {
+    closeTerminalTab(tabId, callbacks)
   }, [])
 
   const handleCloseBrowserTab = useCallback((tabId: string) => {

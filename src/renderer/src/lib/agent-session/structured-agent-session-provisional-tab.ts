@@ -29,6 +29,7 @@ import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-de
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
+  findStructuredLaunchTab,
   openStructuredAgentSessionProvisionalTab
 } from '../structured-agent-session-launch-surface'
 
@@ -105,6 +106,23 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       if (args.activate !== false) {
         focusIntent?.request(launch.tab.id)
       }
+    } else if (launch && args.deferPublication) {
+      void launch.settlement.then((settlement) => {
+        if (
+          (settlement.kind === 'structured' || settlement.kind === 'visibility-unknown') &&
+          worktreeId
+        ) {
+          const tab = findStructuredLaunchTab({
+            worktreeId,
+            sessionId: settlement.sessionId,
+            executionHostId: launch.executionHostId
+          })
+          tabOpened = tab !== null
+          if (tab && args.activate !== false) {
+            focusIntent?.request(tab.id)
+          }
+        }
+      })
     } else if (!launch) {
       cancelIfNoTab()
     }
@@ -144,7 +162,11 @@ export function beginStructuredAgentSessionProvisionalLaunch(
         ...args,
         target: {
           ...args.target,
-          surfaceAddress: captureStructuredLaunchSurfaceAddress(worktreeId, args.targetGroupId)
+          surfaceAddress: captureStructuredLaunchSurfaceAddress(
+            worktreeId,
+            args.targetGroupId,
+            args.afterTabId
+          )
         }
       }
     }

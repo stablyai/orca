@@ -1,3 +1,4 @@
+import { useAiVaultInPlaceAgent, useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
@@ -104,6 +105,9 @@ export function VaultSessionRow({
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
+  const inPlaceAgent = useAiVaultInPlaceAgent(session)
+  const switchLoading =
+    useInPlaceSwitchCapability(session.executionHostId, session.agent) === undefined
   const latestTurn = latestSessionConversationTurn(session)
   const deleteBlockedReason = onRequestDelete
     ? aiVaultSessionDeleteBlockedReason(session)
@@ -285,6 +289,8 @@ export function VaultSessionRow({
           onContinueInNewSession={onContinueInNewSession}
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
+          inPlaceAgent={inPlaceAgent}
+          switchLoading={switchLoading}
           onCopyResume={onCopyResume}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}

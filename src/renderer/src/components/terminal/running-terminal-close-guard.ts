@@ -53,12 +53,17 @@ export function collectTabPtyIds(
 }
 
 export function guardRunningTerminalClose(params: {
+  signal?: AbortSignal
   terminalTabId: string
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
 }): void {
   const { terminalTabId, tabLabel, onClose, onCancel } = params
+  if (params.signal?.aborted) {
+    onCancel?.()
+    return
+  }
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId)
@@ -70,11 +75,21 @@ export function guardRunningTerminalClose(params: {
 
   // Probe, timeout, and errors race; only the first decision may own the close.
   let decided = false
+  let cancelPrompt = () => {}
+  const dispose = () => params.signal?.removeEventListener('abort', cancel)
+  const cancel = () => {
+    decided = true
+    cancelPrompt()
+    dispose()
+    onCancel?.()
+  }
+  params.signal?.addEventListener('abort', cancel, { once: true })
   const closeNow = (): void => {
     if (decided) {
       return
     }
     decided = true
+    dispose()
     onClose()
   }
   const confirmClose = (busyPtyIds: readonly string[]): void => {
@@ -82,13 +97,23 @@ export function guardRunningTerminalClose(params: {
       return
     }
     const copyKind = resolveBusyPtyCloseCopyKind(terminalTabId, busyPtyIds)
-    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+    const request = {
+      signal: params.signal,
       terminalTabId,
       tabLabel,
       copyKind,
-      onConfirm: onClose,
-      ...(onCancel ? { onCancel } : {})
-    })
+      onConfirm: () => {
+        dispose()
+        onClose()
+      },
+      onCancel: () => {
+        dispose()
+        onCancel?.()
+      }
+    }
+    const store = useRunningTerminalCloseConfirmStore.getState()
+    store.requestRunningTerminalCloseConfirm(request)
+    cancelPrompt = () => store.cancelRunningTerminalCloseRequest(request)
     // Claim ownership only once the prompt opens so thrown lookups can still fall through.
     decided = true
   }

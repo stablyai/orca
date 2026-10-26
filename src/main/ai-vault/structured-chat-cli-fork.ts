@@ -72,12 +72,13 @@ export function isStructuredChatCliForkSourceCurrent(
   )
 }
 
-export async function prepareStructuredChatCliFork(
-  args: AiVaultPrepareChatForkArgs,
-  prepare: AiVaultSessionResumePreparation
-): Promise<AiVaultPrepareSessionResumeResult> {
+/** The chat's current conversation on this host, as its CLI would open it; `fork` keeps its copy rules. */
+export async function resolveStructuredChatCliSource(
+  sourceChat: AiVaultPrepareChatForkArgs['sourceChat'],
+  fork: boolean
+) {
   const host = getStructuredAgentSessionHost()
-  const record = host?.deps.store.getRecord(args.sourceChat.sessionId)
+  const record = host?.deps.store.getRecord(sourceChat.sessionId)
   const registration = record && structuredAgentRuntimeRegistration(record.provider)
   const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)
   if (
@@ -85,13 +86,13 @@ export async function prepareStructuredChatCliFork(
     !record ||
     !registration ||
     !head ||
-    record.location.workspaceId !== args.sourceChat.workspaceId ||
+    record.location.workspaceId !== sourceChat.workspaceId ||
     record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     record.location.wslDistro !== null ||
     // A typed locator has no CODEX_HOME path; forking would silently use the default account.
     (record.provider === 'codex' && !isLegacyAgentSessionAccountHome(record.accountHome)) ||
     !isAiVaultAgent(record.provider) ||
-    !agentForksConversations(record.provider)
+    (fork && !agentForksConversations(record.provider))
   ) {
     throw new Error('This chat has no saved conversation available on this host.')
   }
@@ -113,6 +114,16 @@ export async function prepareStructuredChatCliFork(
     throw new Error('This chat has no saved conversation to copy.')
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
+  return { host, record, registration, head, agent, cwd, providerSessionId }
+}
+
+/** Prepares the record's current conversation on its execution host, without a History inventory. */
+export async function prepareStructuredChatCliFork(
+  args: AiVaultPrepareChatForkArgs,
+  prepare: AiVaultSessionResumePreparation
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const source = await resolveStructuredChatCliSource(args.sourceChat, true)
+  const { record, registration, agent, cwd, providerSessionId } = source
   if (agentForksThroughChat(agent)) {
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
     const copy = result.forkedSession
@@ -132,6 +143,17 @@ export async function prepareStructuredChatCliFork(
       }
     }
   }
+  return prepareStructuredChatCliTranscript(source, prepare, true)
+}
+
+/** The transcript a terminal resume (or `fork`) opens, under the account home the host prepared.
+ *  A same-id resume refuses a substituted home: another home is another conversation. */
+export async function prepareStructuredChatCliTranscript(
+  source: Awaited<ReturnType<typeof resolveStructuredChatCliSource>>,
+  prepare: AiVaultSessionResumePreparation,
+  fork: boolean
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const { host, record, registration, head, agent, cwd, providerSessionId } = source
   const importer = registration.transcriptImport
   if (!importer) {
     throw new Error('This chat cannot be opened in the CLI.')
@@ -170,10 +192,13 @@ export async function prepareStructuredChatCliFork(
     filePath,
     codexHome,
     executionHostId: LOCAL_EXECUTION_HOST_ID,
-    fork: true
+    ...(fork ? { fork: true } : {})
   })
   const preparedHome = result.useRealCodexHome ? null : (result.substituteCodexHome ?? codexHome)
   if (codexHome && (result.useRealCodexHome || result.substituteCodexHome)) {
+    if (!fork) {
+      throw new Error('This conversation is saved under a different Codex account here.')
+    }
     // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
     const relativePath = codexDatedRolloutRelativePath(join(codexHome, 'sessions'), filePath)
     if (!relativePath) {

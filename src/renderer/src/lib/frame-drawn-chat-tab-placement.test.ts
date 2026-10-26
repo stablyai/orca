@@ -122,6 +122,25 @@ describe('a chat opened in a frame-drawn server workspace (L270)', () => {
     expect(mocks.noted).toEqual([])
   })
 
+  it.each([true, false, null])(
+    'deferred History preserves normal group/anchor with capability=%s',
+    (supported) => {
+      mocks.supported = supported
+      const normal = withFrameDrawnChatTabPlacement(intent)
+      mocks.state.groupsByWorktree.wt[1].tabOrder = ['editor-1', 'sim-1', 'editor-2']
+      expect(
+        withFrameDrawnChatTabPlacement({
+          ...intent,
+          surfaceAddress: {
+            worktreeId: 'wt',
+            targetGroupId: 'g-2',
+            precedingTabIds: ['editor-1', 'sim-1']
+          }
+        })
+      ).toEqual(normal)
+    }
+  )
+
   it('holds the provisional tab for its server until the server lists it', () => {
     holdFrameDrawnProvisionalChatTab(intent.target, 'wt', TAB)
     expect(mocks.noted).toEqual([['env-1', 'wt', TAB]])

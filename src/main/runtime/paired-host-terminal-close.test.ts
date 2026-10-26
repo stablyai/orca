@@ -13,7 +13,11 @@ const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
 type HostCall = (environmentId: string, method: string, params: unknown) => Promise<unknown>
 
-function pairedHostLeafRuntime(hostCall: HostCall, runtimeStore: typeof store = store) {
+function pairedHostLeafRuntime(
+  hostCall: HostCall,
+  runtimeStore: typeof store = store,
+  ptyId = toRemoteRuntimePtyId('term_on_host', 'env-1')
+) {
   const runtime = new OrcaRuntimeService(runtimeStore)
   const localStops: string[] = []
   runtime.setPtyController({
@@ -51,7 +55,7 @@ function pairedHostLeafRuntime(hostCall: HostCall, runtimeStore: typeof store = 
         tabId: 'tab-1',
         worktreeId: WORKTREE_ID,
         title: 'Shell',
-        activeLeafId: 'pane:1',
+        activeLeafId: '11111111-1111-4111-8111-111111111111',
         layout: null
       }
     ],
@@ -59,9 +63,9 @@ function pairedHostLeafRuntime(hostCall: HostCall, runtimeStore: typeof store = 
       {
         tabId: 'tab-1',
         worktreeId: WORKTREE_ID,
-        leafId: 'pane:1',
+        leafId: '11111111-1111-4111-8111-111111111111',
         paneRuntimeId: 1,
-        ptyId: toRemoteRuntimePtyId('term_on_host', 'env-1')
+        ptyId
       }
     ]
   })
@@ -219,7 +223,7 @@ describe('closing a terminal that a paired runtime runs', () => {
           tabId: 'tab-1',
           worktreeId: WORKTREE_ID,
           title: 'Shell',
-          activeLeafId: 'pane:1',
+          activeLeafId: '11111111-1111-4111-8111-111111111111',
           layout: null
         }
       ],
@@ -227,7 +231,7 @@ describe('closing a terminal that a paired runtime runs', () => {
         {
           tabId: 'tab-1',
           worktreeId: WORKTREE_ID,
-          leafId: 'pane:1',
+          leafId: '11111111-1111-4111-8111-111111111111',
           paneRuntimeId: 1,
           ptyId: toRemoteRuntimePtyId('term_replacement', 'env-1')
         }
@@ -255,3 +259,53 @@ describe('closing a terminal that a paired runtime runs', () => {
     )
   })
 })
+
+it.each(['remote:env-1@@term_on_host', 'remote:term_on_host', 'remote:%@@bad'])(
+  'withholds support and refuses new forced captured %s before downstream effects',
+  async (ptyId) => {
+    const { runtime, call, localStops, closeTerminalTab } = pairedHostLeafRuntime(
+      async () => ({
+        close: { ptyKilled: true }
+      }),
+      store,
+      ptyId
+    )
+    const source = runtime.resolveTerminalPane(
+      'tab-1:11111111-1111-4111-8111-111111111111',
+      WORKTREE_ID
+    )
+    expect(source.presentation).toBeUndefined()
+    expect(source.supportsPinCloseConsent).toBeUndefined()
+    const identity = {
+      worktreeId: WORKTREE_ID,
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      createdAt: 0,
+      generation: 0,
+      hasLeaf: true,
+      ptyId,
+      incarnationId: 'not-owner-evidence'
+    }
+    await expect(
+      runtime.closeTerminal(source.handle, identity.incarnationId, { identity, holders: [] }, true)
+    ).rejects.toThrow('terminal_close_unverifiable')
+    expect(call).not.toHaveBeenCalled()
+    expect(localStops).toEqual([])
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    if (ptyId === 'remote:env-1@@term_on_host') {
+      await expect(
+        runtime.closeTerminal(source.handle, identity.incarnationId, { identity, holders: [] })
+      ).resolves.toMatchObject({ ptyKilled: true })
+      expect(call).toHaveBeenCalledExactlyOnceWith(
+        'env-1',
+        'terminal.close',
+        {
+          terminal: 'term_on_host',
+          expectedIncarnationId: identity.incarnationId,
+          originalPresentation: { identity, holders: [] }
+        },
+        expect.any(Number)
+      )
+    }
+  }
+)

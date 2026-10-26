@@ -1,3 +1,6 @@
+import type { AgentJournalCursor } from './agent-session-journal-cursor'
+export type { AgentJournalCursor } from './agent-session-journal-cursor'
+import type { AgentSessionHoldingTerminal } from './agent-session-holding-terminal'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
@@ -30,12 +33,6 @@ export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): nu
   return bodies.some((body) => body.kind === 'turn')
     ? AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
     : AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION
-}
-
-/** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */
-export type AgentJournalCursor = {
-  epoch: string
-  sequence: number
 }
 
 /** Persisted/wire handles must retain their shape; attach omits opaque. Derived via agentSessionJournalProviderHandle; opaque covers other transports or pending proof. */
@@ -304,6 +301,7 @@ export type AgentJournalThreadGoalState =
 
 type AgentJournalStatusItemFields = {
   kind: 'status'
+  heldByTerminal?: AgentSessionHoldingTerminal
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   contextClear?: AgentSessionProviderContextBoundary

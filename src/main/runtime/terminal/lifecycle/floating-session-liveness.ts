@@ -133,7 +133,12 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.terminalRunFacts.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
-    this.invalidatePtyIncarnationHandle(ptyId)
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    const retainedLeaf = retained ? this.leaves.get(retained.leafKey) : null
+    // A certified exit may lose its PTY record while its readable pane still owns the handle.
+    if (this.getPtyLivenessVerdict(ptyId)?.status !== 'exited' || !retainedLeaf) {
+      this.invalidatePtyIncarnationHandle(ptyId)
+    }
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)

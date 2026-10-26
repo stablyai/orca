@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import { MobileHeldTerminalContext } from './mobile-held-terminal-context'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -90,6 +92,14 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const heldTerminalView = useMemo(
+    () => ({
+      tabs: controller.sessionTabs,
+      worktreeId,
+      agent: nativeChatController.nativeChatAgent ?? ''
+    }),
+    [controller.sessionTabs, worktreeId, nativeChatController.nativeChatAgent]
+  )
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -237,25 +247,27 @@ export function MobileSessionActiveContent({
           onOpenUrl={handleTerminalOpenUrl}
         />
       ))}
-      <MobileNativeChatOverlay
-        controller={nativeChatController}
-        activeSessionTabId={controller.activeSessionTab?.id}
-        onOpenFile={handleNativeChatFileTap}
-        images={nativeChatImages}
-        structuredComposer={nativeChatStructuredComposer}
-        onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-        micActive={dictation.isRecording}
-        dictationMode={dictationMode}
-        onMicPressIn={handleDictationPressIn}
-        onMicPressOut={handleDictationPressOut}
-        inputLockReason={nativeChatOverlayInputLockReason}
-        sendErrorMessage={nativeChatSendError.message}
-        onClearSendError={nativeChatSendError.clear}
-        sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-        sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-        getSendCompletionGeneration={controller.getSendCompletionGeneration}
-        keyboardInset={keyboardLift}
-      />
+      <MobileHeldTerminalContext.Provider value={heldTerminalView}>
+        <MobileNativeChatOverlay
+          controller={nativeChatController}
+          activeSessionTabId={controller.activeSessionTab?.id}
+          onOpenFile={handleNativeChatFileTap}
+          images={nativeChatImages}
+          structuredComposer={nativeChatStructuredComposer}
+          onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+          micActive={dictation.isRecording}
+          dictationMode={dictationMode}
+          onMicPressIn={handleDictationPressIn}
+          onMicPressOut={handleDictationPressOut}
+          inputLockReason={nativeChatOverlayInputLockReason}
+          sendErrorMessage={nativeChatSendError.message}
+          onClearSendError={nativeChatSendError.clear}
+          sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+          sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+          getSendCompletionGeneration={controller.getSendCompletionGeneration}
+          keyboardInset={keyboardLift}
+        />
+      </MobileHeldTerminalContext.Provider>
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
           <Text style={styles.toastText}>{toastMessage}</Text>

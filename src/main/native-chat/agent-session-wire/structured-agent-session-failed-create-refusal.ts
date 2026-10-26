@@ -33,6 +33,8 @@ import { providerExecutableMissing } from '../../provider-process/provider-execu
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 export type FailedAcquisitionWording = {
@@ -123,7 +125,12 @@ function failedAcquisitionDetails(
     return { reason: typed.reason, ...(typed.account ? { account: typed.account } : {}) }
   }
   if (isAgentSessionPreSpawnError(error) && error.reason) {
-    return { reason: error.reason }
+    const terminal = findInErrorChain(error, (inner) =>
+      isAgentSessionRefusalError(inner) && inner.refusal.code === 'agent_session_conflict'
+        ? inner.refusal.details?.terminal
+        : undefined
+    )
+    return { reason: error.reason, ...(terminal ? { terminal } : {}) }
   }
   if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
     return { reason: 'cliMissing' }

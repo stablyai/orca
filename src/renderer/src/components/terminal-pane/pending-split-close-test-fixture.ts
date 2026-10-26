@@ -9,17 +9,25 @@ import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
+const effectOwner = vi.hoisted((): { effect?: () => (() => void) | void } => ({}))
+export const mountPendingCloseOwner = () => effectOwner.effect?.()
+
 const store = vi.hoisted((): { current: AppState | null } => ({ current: null }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => store.current } }))
 vi.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
-  useEffect: () => {},
+  useEffect: (effect: () => (() => void) | void) => {
+    effectOwner.effect = effect
+  },
   useImperativeHandle: () => {},
   useRef: (current: unknown) => ({ current })
 }))
 vi.mock('../../runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal/terminal-close-copy-kind', () => ({ resolveLeafCloseCopyKind: vi.fn() }))
-vi.mock('../terminal/running-terminal-close-guard', () => ({ RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100 }))
+vi.mock('../terminal/running-terminal-close-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100
+}))
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: vi.fn() }))
 vi.mock('./terminal-pane-tab-detach', () => ({
   detachTerminalPaneToTab: vi.fn(),
@@ -66,14 +74,14 @@ export function makeCloseTestTab(
 
 export async function preparePendingSplitClose(
   requestedPtyId = 'pty-restored',
-  worktreeId = 'workspace'
+  worktreeId = 'workspace',
+  tabId = 'tab-parent'
 ) {
   const { createIpcPtyTransport } = await import('./pty-transport')
   const { useTerminalPaneLayoutBindings } = await import('./use-terminal-pane-layout-bindings')
   const { useTerminalPaneCloseActions } = await import('./use-terminal-pane-close-actions')
   const { createTerminalPaneClosedHandler } = await import('./terminal-pane-pane-closed')
   const { useTerminalPaneLifecycleRefs } = await import('./use-terminal-pane-lifecycle-refs')
-  const tabId = 'tab-parent'
   const leafId = '11111111-1111-4111-8111-111111111111'
   const siblingLeafId = '22222222-2222-4222-8222-222222222222'
   const state: TerminalTabRetirementState = {

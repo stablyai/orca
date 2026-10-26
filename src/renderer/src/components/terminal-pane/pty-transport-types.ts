@@ -184,7 +184,7 @@ export type PtyTransport = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
-    resumeOrigin?: 'saved'
+    resumeOrigin?: 'saved' | 'switch'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -281,7 +281,7 @@ export type IpcPtyTransportOptions = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
-  resumeOrigin?: 'saved'
+  resumeOrigin?: 'saved' | 'switch'
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   agentArgsOverride?: string | null

@@ -1,3 +1,4 @@
+import { readAgentSessionHoldingTerminal } from './agent-session-holding-terminal'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalStatusItem, AgentJournalTurnScope } from './agent-session-journal-types'
 import { readAgentSessionOrcaStop } from './agent-session-orca-stop'
@@ -13,6 +14,7 @@ export function structuredAgentSessionStatusBlock(
   turnScope?: AgentJournalTurnScope,
   itemId?: string
 ): NativeChatTextBlock {
+  const heldByTerminal = readAgentSessionHoldingTerminal(body.heldByTerminal)
   const failure = readWholeAgentSessionFailureFact(body.failure)
   const orcaStop = readAgentSessionOrcaStop(body.orcaStop)
   const presentation =
@@ -22,6 +24,7 @@ export function structuredAgentSessionStatusBlock(
       : undefined)
   return {
     type: 'text',
+    ...(heldByTerminal ? { heldByTerminal } : {}),
     text: body.text,
     ...(presentation !== undefined ? { presentation } : {}),
     ...(body.contextClear !== undefined ? { contextClear: body.contextClear } : {}),

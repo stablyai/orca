@@ -1,3 +1,7 @@
+import {
+  readAgentSessionRefusalHoldingTerminal,
+  type AgentSessionHoldingTerminal
+} from './agent-session-holding-terminal'
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
 import type { AgentSessionAccountKind } from './agent-session-availability'
@@ -175,6 +179,7 @@ type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner }
 /** The facts a code carries beside its reason. */
 type AgentSessionRefusalFactsByCode = {
   agent_session_operation_invalid: RewindFacts & {
+    terminal?: AgentSessionHoldingTerminal
     account?: AgentSessionAccountKind
     argumentProblem?: AgentSessionArgumentProblem
     /** The chat's agent a `stopFailed` Stop could not stop. */
@@ -191,7 +196,7 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_item_revision_stale: PromptFacts
   agent_session_already_resolved: PromptFacts
   agent_session_ownership_unknown: ConversationOwnerFacts
-  agent_session_conflict: ConversationOwnerFacts
+  agent_session_conflict: ConversationOwnerFacts & { terminal?: AgentSessionHoldingTerminal }
   execution_owner_reconciling: NoFacts
   agent_session_identity_required: NoFacts
   agent_session_operation_conflict: NoFacts
@@ -320,7 +325,9 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     value.owner.workspaceId.trim().length > 0
       ? { sessionId: value.owner.sessionId, workspaceId: value.owner.workspaceId }
       : undefined
+  const terminal = readAgentSessionRefusalHoldingTerminal(code, value)
   const read = {
+    ...(terminal ? { terminal } : {}),
     ...(isAgentSessionRefusalReason(code, value.reason) ? { reason: value.reason } : {}),
     ...facts,
     ...(owner ? { owner } : {}),

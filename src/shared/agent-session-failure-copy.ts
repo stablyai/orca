@@ -8,6 +8,11 @@ import type { AgentSessionRefusalReference } from './agent-session-wire-refusals
 import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'
 import { tuiAgentDisplayName } from './tui-agent-display-names'
 
+export const HELD_TERMINAL_CONTINUE_SENTENCE =
+  '{{agent}} may still be running this conversation in <terminal>{{terminal}}</terminal>. Close that terminal to continue here.'
+export const HELD_TERMINAL_OPEN_SENTENCE =
+  '{{agent}} may still be running this conversation in <terminal>{{terminal}}</terminal>. Close that terminal to open it in chat.'
+
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
 export const QUIT_TERMINAL_AGENT = 'Quit that agent to continue the chat here.'

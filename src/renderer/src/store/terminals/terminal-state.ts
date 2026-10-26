@@ -64,7 +64,7 @@ export type TerminalState = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
-      resumeOrigin?: 'saved'
+      resumeOrigin?: 'saved' | 'switch'
       resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent

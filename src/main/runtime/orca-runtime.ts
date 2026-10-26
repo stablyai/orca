@@ -7,7 +7,6 @@ import {
 } from './sidebar-inputs/orca-runtime-sidebar-temporal'
 import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -34,8 +33,7 @@ import { createReferenceAgentIndex, referenceConnectionHosts } from './runtime-r
 import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
-import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
-import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import type { WindowLayoutCommand, LayoutCommandRunOptions } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   installStructuredAgentAvailability,
@@ -246,26 +244,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.workspaceLayoutStream
   }
 
-  /** Apply a window command to the partitions that hold its tab. */
-  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
-    // Wait for live terminal placement before creating the first workspace surface.
-    const placing = this.livePlacementSettledFor(command)
-    const apply = (): Promise<LayoutApplyReply> =>
-      applyWindowLayoutCommand(
-        this.requireStore(),
-        (worktreeId, tabId) =>
-          tabId !== null
-            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
-        command,
-        (move) => rekeyMovedPaneOwners(this, move),
-        this.layoutCommandRun(command)
-      )
-    // Order sleep/wake after previously accepted hook statuses.
-    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
-      ? this.inResumeRecordOrder(apply)
-      : (placing?.then(apply) ?? apply()))
-    // The frame precedes the reply so the window can wait for its visible change.
+  /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
+  async applyLayoutCommand(
+    command: WindowLayoutCommand,
+    options?: LayoutCommandRunOptions
+  ): Promise<LayoutApplyReply> {
+    const reply = await this.applyOwnedWindowLayoutCommand(command, options)
+    // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }
 

@@ -30,7 +30,7 @@ export type ResumeSpawnArgs = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: unknown
   resumeProviderSession?: AgentProviderSessionMetadata
-  /** `saved`: the resume was built from a pane's saved facts, not asked for by the user. */
+  /** Saved pane restore or explicit same-id switch from a native chat. */
   resumeOrigin?: unknown
   env?: Record<string, string>
 }
@@ -66,7 +66,7 @@ export async function admitResumeSpawn(
   const agent = args.launchAgent
   // Native chats run only natively, so a remote or WSL conversation is never a chat's.
   if (
-    args.resumeOrigin !== 'saved' ||
+    (args.resumeOrigin !== 'saved' && args.resumeOrigin !== 'switch') ||
     !providerSession ||
     !agent ||
     args.connectionId ||
@@ -77,7 +77,7 @@ export async function admitResumeSpawn(
   if (!runtime) {
     return { verdict: 'unverifiable', refused: { agent, providerSession } }
   }
-  return judgeResumes(runtime, [{ agent, providerSession }])
+  return judgeResumes(runtime, [{ agent, providerSession }], args.resumeOrigin === 'switch')
 }
 
 /** A reattach that found its session gone returns a fresh shell its window then resumes from the
@@ -117,16 +117,13 @@ export async function admitColdRestoreReattach(
 
 async function judgeResumes(
   runtime: AdmissionRuntime,
-  resumes: readonly [RefusedPaneResume, ...RefusedPaneResume[]]
+  resumes: readonly [RefusedPaneResume, ...RefusedPaneResume[]],
+  switchStart = false
 ): Promise<ResumeSpawnAdmission> {
   const keysOf = ({ agent, providerSession }: RefusedPaneResume) =>
     [providerSession.id, providerSession.transcriptPath].flatMap((id) =>
       id?.trim() ? [terminalConversationKey(agent, id)] : []
     )
-  const admitted = (): ResumeSpawnAdmission => ({
-    verdict: 'admitted',
-    refused: resumes[0]
-  })
   let store: AgentSessionRecordStore
   try {
     store = await runtime.openAgentSessionRecordStore()
@@ -148,6 +145,9 @@ async function judgeResumes(
     if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.lease))) {
       return { verdict: 'chat-writing', refused }
     }
+    if (switchStart) {
+      continue
+    }
     if (holders.length > 0 && (!tabs || !tabs.present)) {
       return { verdict: 'unverifiable', refused }
     }
@@ -155,7 +155,7 @@ async function judgeResumes(
       return { verdict: 'chat-home', refused }
     }
   }
-  return admitted()
+  return { verdict: 'admitted', refused: resumes[0] }
 }
 
 /** A refused resume becomes the pane's plain shell: nothing of the agent launch is left to run,
