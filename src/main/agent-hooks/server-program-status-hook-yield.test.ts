@@ -7,6 +7,7 @@ import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
 import { resolveProgramStatusPresentation } from '../../shared/program-status/presentation'
+import { createProgramStatusProjector } from '../../shared/program-status/agent-status-projector'
 
 let dir: string
 let server: AgentHookServer
@@ -136,6 +137,76 @@ describe('OSC 7501 status beside hooks', () => {
     await antigravityHook('PreInvocation', parent)
     await antigravityHook('Stop', { ...parent, fullyIdle: true })
     expect(paneRow()?.state).toBe('done')
+  })
+
+  it('keeps a completed Antigravity transcript settled after a delayed busy Stop', async () => {
+    const parent = {
+      conversationId: 'parent',
+      lastUserInput: 'translate',
+      transcriptPath: join(dir, 'parent.jsonl')
+    }
+    const hook = async (hookEventName: string, payload: Record<string, unknown> = parent) => {
+      const body = Object.assign(buildBody(payload), { hook_event_name: hookEventName })
+      expect((await postHookEvent(server, body, '/hook/antigravity')).status).toBe(204)
+    }
+    await hook('PreInvocation')
+    await hook('Stop', { ...parent, fullyIdle: true })
+    expect(paneRow()?.state).toBe('done')
+    await hook('Stop', { ...parent, fullyIdle: false })
+    expect(paneRow()?.state).toBe('done')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    programStatus({
+      state: 'done',
+      agentType: 'antigravity',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: Date.now() }
+    })
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(paneRow()?.state).toBe('done')
+    vi.useRealTimers()
+    await hook('PreInvocation')
+    await hook('Stop', { ...parent, fullyIdle: false })
+    expect(paneRow()?.state).toBe('working')
+    await hook('PreInvocation')
+    expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    programStatus({ state: 'done', agentType: 'antigravity' })
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(paneRow()?.state).toBe('done')
+  })
+
+  it('takes an explicit OSC child question after the hooks fall silent on child work', async () => {
+    for (const payload of [
+      { hook_event_name: 'UserPromptSubmit', session_id: 'parent', prompt: 'delegate' },
+      {
+        hook_event_name: 'PostToolUse',
+        session_id: 'parent',
+        tool_name: 'Agent',
+        tool_response: { isAsync: true, agentId: 'child' }
+      },
+      {
+        hook_event_name: 'Stop',
+        session_id: 'parent',
+        background_tasks: [{ id: 'child', type: 'subagent', status: 'running' }]
+      }
+    ]) {
+      expect((await postHookEvent(server, buildBody(payload))).status).toBe(204)
+    }
+    expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const { payloads } = createProgramStatusProjector().process(
+      '\x1b]7501;state=done:app=claude-code\x1b\\' +
+        '\x1b]7501;state=blocked:kind=question:id=child\x1b\\'
+    )
+    expect(payloads.at(-1)?.payload).toMatchObject({
+      state: 'waiting',
+      mainAgent: { state: 'done' },
+      subagents: [{ id: 'child', state: 'waiting' }]
+    })
+    for (const { payload } of payloads) {
+      programStatus(payload)
+    }
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(paneRow()).toMatchObject({ state: 'waiting', subagents: [{ state: 'waiting' }] })
   })
 
   it('never settles a later hook turn with a report that yielded to an earlier one', async () => {

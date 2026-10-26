@@ -92,6 +92,18 @@ describe('programStatusHookYieldEndsAt', () => {
     expect(programStatusHookYieldEndsAt(hook, { ...done, agentType: 'claude' })).toBe(NOW + SILENCE)
   })
 
+  it('lets an explicit program child question take over silent hooks holding child work', () => {
+    const leadDone = { state: 'done' as const, outcome: 'success' as const, stateStartedAt: NOW }
+    const hook = row({ state: 'working', agentType: 'claude', mainAgent: leadDone })
+    const question = report({
+      state: 'waiting',
+      agentType: 'claude',
+      mainAgent: leadDone,
+      subagents: [{ id: 'child', state: 'waiting', startedAt: NOW }]
+    })
+    expect(programStatusHookYieldEndsAt(hook, question)).toBe(NOW + SILENCE)
+  })
+
   it('keeps a question the hooks raised only from a working report that began before it', () => {
     for (const state of ['waiting', 'blocked'] as const) {
       const hook = row({ state, agentType: 'pi' })

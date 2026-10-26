@@ -27,7 +27,7 @@ export function programStatusHookYieldEndsAt(
     (previous.payload.state === 'done' && isAgentStatusHeldOpenByChildWork(payload)) ||
     (sameAgent &&
       isAgentStatusHeldOpenByChildWork(previous.payload) &&
-      (payload.mainAgent?.state ?? payload.state) === 'done' &&
+      payload.state === 'done' &&
       payload.sessionBoundary !== true)
   ) {
     return Infinity

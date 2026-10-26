@@ -48,10 +48,9 @@ export function normalizeAntigravityEvent(
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
     transcriptPath &&
-    eventName !== 'Stop' &&
     state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
   ) {
-    // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
+    // Completed turns ignore delayed hooks until the next PreInvocation opens a turn.
     return null
   }
 
