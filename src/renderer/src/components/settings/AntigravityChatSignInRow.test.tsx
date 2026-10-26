@@ -11,6 +11,7 @@ import { callAntigravityChatSignIn } from '@/runtime/runtime-antigravity-account
 import { AntigravityChatSignInRow } from './AntigravityChatSignInRow'
 import { AntigravityProviderSignInArea } from './AntigravityProviderSignInArea'
 import { TooltipProvider } from '../ui/tooltip'
+import { SYSTEM_DEFAULT_BROWSER_ID } from '../../../../shared/external-browser-types'
 
 const url = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
 type FakeHost = {
@@ -107,7 +108,7 @@ it('opens the link once across status answers and shows signed in', async () => 
   await act(async () => publish(owner, { flowId: 'f', phase: 'signedIn' }, 'signedIn'))
   await screen.findByText('Signed in on this computer.')
   expect(screen.getByRole('button', { name: 'Change account' })).toBeTruthy()
-  expect(openUrl).toHaveBeenCalledExactlyOnceWith(url)
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(url, SYSTEM_DEFAULT_BROWSER_ID)
   view.unmount()
 })
 

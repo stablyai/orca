@@ -125,6 +125,14 @@ export function findHttpLinkAtTerminalMouseEvent(
   if ((event.button !== 0 && event.button !== 1) || !isTerminalOwnedLinkGesture(event)) {
     return null
   }
+  return findHttpLinkAtTerminalPointer(terminal, event)
+}
+
+/** The plain-text URL under the pointer regardless of button or modifiers (e.g. a right-click). */
+export function findHttpLinkAtTerminalPointer(
+  terminal: Terminal,
+  event: MouseEvent
+): string | null {
   const position = getTerminalBufferPositionForMouseEvent(terminal, event)
   return position
     ? findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)

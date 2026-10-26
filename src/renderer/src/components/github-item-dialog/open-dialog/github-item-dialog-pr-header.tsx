@@ -150,6 +150,7 @@ export function GitHubItemDialogPRHeader({
               <Button
                 variant="ghost"
                 size="icon-sm"
+                data-orca-external-url={workItem.url}
                 onClick={() => window.api.shell.openUrl(workItem.url)}
                 aria-label={translate(
                   'auto.components.GitHubItemDialog.3fdf777817',

@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   buildEditableContextMenuTemplate,
   matchingRichMarkdownContextMenuTableTarget,
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
 import { richMarkdownContextMenuCommandChannel } from '../../shared/rich-markdown-context-menu'
+import { ensureMainI18n } from '../i18n/main-i18n'
 
 function contextParams(
   overrides: Partial<Electron.ContextMenuParams> = {}
@@ -271,6 +272,96 @@ describe('buildEditableContextMenuTemplate', () => {
     template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
+  })
+
+  describe('rich editor links', () => {
+    // Menus open after startup initializes i18n, which interpolates the browser name.
+    beforeAll(async () => {
+      await ensureMainI18n()
+    })
+
+    const url = 'https://github.com/o/r/pull/1'
+    const webContents = (send = vi.fn()) => ({
+      replaceMisspelling: vi.fn(),
+      send,
+      session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+    })
+    const linkActions = (overrides: Record<string, unknown> = {}) => ({
+      canOpenInOrca: true,
+      browsers: [
+        { id: 'com.google.Chrome', name: 'Google Chrome' },
+        { id: 'com.apple.Safari', name: 'Safari' }
+      ],
+      externalDefaultName: null,
+      openUrl: vi.fn(),
+      copyText: vi.fn(),
+      ...overrides
+    })
+    // Link actions ignore Electron's click arguments.
+    const click = (item: { click?: (...args: never[]) => void }): void => item.click?.()
+    const submenu = (item: Electron.MenuItemConstructorOptions) =>
+      Array.isArray(item.submenu) ? item.submenu : []
+    const labels = (template: Electron.MenuItemConstructorOptions[]) =>
+      template.map((item) => item.label ?? item.role ?? item.type)
+
+    it('puts the link section above the formatting items for an http(s) link', () => {
+      const send = vi.fn()
+      const link = linkActions()
+      const params = contextParams({
+        x: 12,
+        y: 34,
+        linkURL: url,
+        misspelledWord: '',
+        dictionarySuggestions: []
+      })
+      const template = buildEditableContextMenuTemplate(params, webContents(send), { link })
+
+      expect(labels(template)).toEqual([
+        'Open in Orca Browser',
+        'Open in System Browser',
+        'Open in',
+        'Copy Link',
+        'separator',
+        ...labels(buildEditableContextMenuTemplate(params, webContents()))
+      ])
+
+      click(template[0])
+      expect(send).toHaveBeenCalledWith(richMarkdownContextMenuCommandChannel, {
+        command: 'open-link-in-orca-browser',
+        x: 12,
+        y: 34
+      })
+      click(template[1])
+      expect(link.openUrl).toHaveBeenLastCalledWith(url)
+      const openIn = submenu(template[2])
+      expect(labels(openIn)).toEqual(['Google Chrome', 'Safari'])
+      click(openIn[1])
+      expect(link.openUrl).toHaveBeenLastCalledWith(url, 'com.apple.Safari')
+      click(template[3])
+      expect(link.copyText).toHaveBeenCalledWith(url)
+    })
+
+    it('names the configured browser and omits Orca Browser when the source cannot reach it', () => {
+      const template = buildEditableContextMenuTemplate(
+        contextParams({ linkURL: url, misspelledWord: '', dictionarySuggestions: [] }),
+        webContents(),
+        { link: linkActions({ canOpenInOrca: false, externalDefaultName: 'Microsoft Edge' }) }
+      )
+
+      expect(labels(template).slice(0, 3)).toEqual([
+        'Open in Microsoft Edge',
+        'Open in',
+        'Copy Link'
+      ])
+    })
+
+    it('keeps the formatting menu unchanged off a link', () => {
+      const params = contextParams({ misspelledWord: '', dictionarySuggestions: [] })
+
+      expect(
+        labels(buildEditableContextMenuTemplate(params, webContents(), { link: linkActions() }))
+      ).toEqual(labels(buildEditableContextMenuTemplate(params, webContents())))
+    })
   })
 })
 

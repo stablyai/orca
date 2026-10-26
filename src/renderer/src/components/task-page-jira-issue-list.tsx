@@ -247,6 +247,7 @@ function JiraIssueRow({
               <Button
                 variant="ghost"
                 size="icon-xs"
+                data-orca-external-url={issue.url}
                 onClick={(event) => {
                   event.stopPropagation()
                   window.api.shell.openUrl(issue.url)

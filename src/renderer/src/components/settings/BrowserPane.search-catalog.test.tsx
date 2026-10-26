@@ -11,6 +11,7 @@ const fake = vi.hoisted(() => ({
   locale: { language: 'en' },
   translate: vi.fn((_key: string, fallback: string) => fallback),
   setHost: vi.fn(),
+  loadInstalledBrowsers: vi.fn(async () => {}),
   profiles: [],
   repos: [],
   map: new Map(),
@@ -34,7 +35,9 @@ vi.mock('@/store', () => ({
       runtimeEnvironments: fake.environments,
       runtimeStatusByEnvironmentId: fake.map,
       browserSessionHostIdOverride: null,
-      setBrowserSessionHostId: fake.setHost
+      setBrowserSessionHostId: fake.setHost,
+      installedBrowsers: [],
+      loadInstalledBrowsers: fake.loadInstalledBrowsers
     })
 }))
 vi.mock('@/components/terminal-pane/pane-helpers', () => ({ isMacUserAgent: () => false }))

@@ -58,6 +58,7 @@ export function TaskPageLinearIssueTable({
             key={issue.id}
             role="button"
             tabIndex={0}
+            data-orca-external-url={issue.url}
             aria-current={selected ? 'true' : undefined}
             data-current={selected ? 'true' : undefined}
             onClick={() => {

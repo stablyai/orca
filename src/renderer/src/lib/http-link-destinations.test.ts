@@ -1,5 +1,24 @@
-import { describe, expect, it } from 'vitest'
-import { buildHttpLinkActions, httpLinkActionDestinationsFor } from './http-link-destinations'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { InstalledBrowser } from '../../../shared/external-browser-types'
+
+type StoreState = {
+  settings: { externalBrowserId?: string | null } | null
+  installedBrowsers: InstalledBrowser[] | null
+}
+const storeState = vi.hoisted((): StoreState => ({ settings: null, installedBrowsers: null }))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
+
+import {
+  buildHttpLinkActions,
+  httpLinkActionDestinationsFor,
+  httpLinkDestinationLabel,
+  httpLinkDirectClickDestination
+} from './http-link-destinations'
+
+beforeEach(() => {
+  storeState.settings = null
+  storeState.installedBrowsers = null
+})
 
 describe('httpLinkActionDestinationsFor', () => {
   it.each([
@@ -65,5 +84,39 @@ describe('buildHttpLinkActions', () => {
     expect(actions.alternate).toBeUndefined()
     void actions.primary.run()
     expect(opened).toEqual([undefined])
+  })
+})
+
+describe('external destination label', () => {
+  beforeEach(() => {
+    storeState.installedBrowsers = [
+      { id: 'com.google.Chrome', name: 'Google Chrome' },
+      { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' }
+    ]
+  })
+
+  it('names the configured browser instead of System Browser', () => {
+    storeState.settings = { externalBrowserId: 'com.microsoft.edgemac' }
+
+    expect(httpLinkDestinationLabel('system')).toBe('Microsoft Edge')
+    expect(httpLinkDestinationLabel('orca')).toBe('Orca Browser')
+  })
+
+  it('falls back to System Browser when the configured browser is not installed', () => {
+    storeState.settings = { externalBrowserId: 'org.mozilla.firefox' }
+
+    expect(httpLinkDestinationLabel('system')).toBe('System Browser')
+  })
+
+  it('keeps Shift swapping Orca and the configured browser', () => {
+    const settings = { openLinksInApp: false, externalBrowserId: 'com.microsoft.edgemac' }
+    storeState.settings = settings
+    const destinations = httpLinkActionDestinationsFor(settings, { kind: 'local' }, false)
+
+    expect(httpLinkDirectClickDestination(destinations, false)).toBe('system')
+    expect(httpLinkDirectClickDestination(destinations, true)).toBe('orca')
+    const actions = buildHttpLinkActions(destinations, () => {})
+    expect(actions.primary.label).toBe('Microsoft Edge')
+    expect(actions.alternate?.label).toBe('Orca Browser')
   })
 })

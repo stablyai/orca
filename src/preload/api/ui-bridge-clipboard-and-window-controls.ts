@@ -3,8 +3,10 @@ import { ipcRenderer, webFrame } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
+  richMarkdownContextMenuLinkTargetChannel,
   plainTextContextMenuTargetChannel,
   type RichMarkdownContextMenuCommandPayload,
+  type RichMarkdownContextMenuLinkTarget,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
@@ -143,6 +145,11 @@ export const uiClipboardAndWindowControlsApi = {
   },
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null): void => {
     ipcRenderer.send(richMarkdownContextMenuTargetChannel, target)
+  },
+  setRichMarkdownContextMenuLinkTarget: (
+    target: RichMarkdownContextMenuLinkTarget | null
+  ): void => {
+    ipcRenderer.send(richMarkdownContextMenuLinkTargetChannel, target)
   },
   markPlainTextContextMenuTarget: (): void => {
     ipcRenderer.send(plainTextContextMenuTargetChannel)

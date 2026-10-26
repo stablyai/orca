@@ -49,6 +49,8 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  // The mounted PaneManager publishes its owner check so menus outside the mount effect can use it.
+  const canOpenOwnedBrowserForPaneRef = useRef<(paneId: number) => boolean>(() => false)
   const paneCwdRef = useRef<PaneCwdMap>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
@@ -174,6 +176,7 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     pendingPaneSizeRefreshFrameIdsRef,
     activityIsolationSnapshotRef,
     paneTransportsRef,
+    canOpenOwnedBrowserForPaneRef,
     paneCwdRef,
     paneMode2031Ref,
     paneKittyKeyboardModesRef,

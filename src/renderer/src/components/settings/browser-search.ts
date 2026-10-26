@@ -5,8 +5,8 @@ import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
 import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
-  getBrowserLinkRoutingDescription,
   getLinkRoutingBackgroundSearchEntry,
+  getLinkRoutingSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -140,25 +140,7 @@ export function getBrowserPaneSearchEntries(
         )
       ]
     },
-    {
-      title: translate('auto.components.settings.browser.search.5cb082b3e3', 'Link Routing'),
-      description: getBrowserLinkRoutingDescription(platform),
-      keywords: [
-        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.44d14df30d', 'preview'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
-        ...translateSearchKeyword(
-          'auto.components.settings.browser.search.82ba1c80ea',
-          'localhost'
-        ),
-        ...translateSearchKeyword('auto.components.settings.browser.search.72c58f7792', 'webview'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.90425d313c', 'shift'),
-        platform.isMac ? 'cmd' : 'ctrl',
-        ...translateSearchKeyword('auto.components.settings.browser.search.68d1db8929', 'markdown'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.8dd4805991', 'file'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.a7a07d5415', 'editor')
-      ]
-    },
+    getLinkRoutingSearchEntry(platform),
     {
       title: getLinkRoutingModifierTitle(false),
       description: getLinkRoutingModifierDescription({

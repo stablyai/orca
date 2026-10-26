@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { InstalledBrowser } from '../../shared/external-browser-types'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -21,7 +22,10 @@ export type ShellApi = {
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>
-  openUrl: (url: string) => Promise<void>
+  /** Without browserId, main opens the configured default browser. */
+  openUrl: (url: string, browserId?: string) => Promise<void>
+  /** Empty on clients that cannot choose the browser a link opens in. */
+  listBrowsers: (options?: { forceRefresh?: boolean }) => Promise<InstalledBrowser[]>
   openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
   openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
   pathsExist?: (paths: string[]) => Promise<boolean[]>

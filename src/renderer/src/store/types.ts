@@ -48,6 +48,7 @@ import type { RemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import type { StructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
 import type { StructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
+import type { InstalledBrowsersSlice } from './slices/installed-browsers'
 import type { WorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-contract'
 
 export type AppState = RepoSlice &
@@ -98,4 +99,5 @@ export type AppState = RepoSlice &
   TerminalQuickCommandHostsSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &
+  InstalledBrowsersSlice &
   WorkspaceAttentionSlice

@@ -237,6 +237,7 @@ export function GitLabItemDialogView({
                 <Button
                   variant="outline"
                   size="sm"
+                  data-orca-external-url={item.url}
                   onClick={() => void window.api.shell.openUrl(item.url)}
                   className="gap-1.5"
                 >

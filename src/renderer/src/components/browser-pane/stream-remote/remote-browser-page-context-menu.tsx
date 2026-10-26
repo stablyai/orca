@@ -17,6 +17,8 @@ import {
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { buildExternalBrowserLinkRows } from '../assemble-chrome/browser-page-context-menu-items'
+import { useLinkMenuInstalledBrowsers } from '@/components/link-actions/ExternalLinkMenuItems'
 
 export function useRemoteBrowserPageContextMenu({
   busy,
@@ -147,6 +149,7 @@ export function RemoteBrowserPageContextMenu({
   onNavigate: (method: 'browser.back' | 'browser.forward' | 'browser.reload') => void
 }): React.JSX.Element {
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const installedBrowsers = useLinkMenuInstalledBrowsers()
 
   useLayoutEffect(() => {
     const el = contextMenuRef.current
@@ -192,22 +195,19 @@ export function RemoteBrowserPageContextMenu({
                 'Open Link In Orca Browser'
               )}
             </button>
-            <button
-              role="menuitem"
-              className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
-              onClick={() => {
-                const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
-                if (targetUrl) {
-                  void window.api.shell.openUrl(targetUrl)
-                }
-                onDismiss()
-              }}
-            >
-              {translate(
-                'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
-                'Open Link In Default Browser'
-              )}
-            </button>
+            {buildExternalBrowserLinkRows(contextMenu.linkUrl, installedBrowsers).map((row) => (
+              <button
+                key={row.id}
+                role="menuitem"
+                className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                onClick={() => {
+                  row.open()
+                  onDismiss()
+                }}
+              >
+                {row.label}
+              </button>
+            ))}
             <button
               role="menuitem"
               className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"

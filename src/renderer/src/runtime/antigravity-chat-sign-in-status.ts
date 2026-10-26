@@ -4,6 +4,7 @@ import type {
   AntigravityChatSignInStatus
 } from '../../../shared/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { SYSTEM_DEFAULT_BROWSER_ID } from '../../../shared/external-browser-types'
 import {
   createRevisionedHostStateStore,
   type RevisionedHostSnapshot
@@ -90,7 +91,8 @@ function openStartedLinks(): void {
     if (local.opens && flow?.flowId === local.opens && flow.phase === 'waiting' && flow.url) {
       const { flowId } = flow
       local.opens = null
-      void window.api.shell.openUrl(flow.url).catch(() => {
+      // Sign-in stays in the OS default browser, where the user's account session lives.
+      void window.api.shell.openUrl(flow.url, SYSTEM_DEFAULT_BROWSER_ID).catch(() => {
         if (flowOf(local.owner)?.flowId === flowId) {
           note(local, { openFailed: true })
         }

@@ -102,6 +102,7 @@ export function LinearIssueWorkspaceHeader({
               type="button"
               variant="ghost"
               size="icon-sm"
+              data-orca-external-url={issue.url}
               onClick={() => void window.api.shell.openUrl(issue.url)}
               aria-label={translate(
                 'auto.components.LinearIssueWorkspace.openOnLinear',

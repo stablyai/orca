@@ -30,7 +30,9 @@ export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
+    // A web page cannot choose the browser that opens a link.
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
+    listBrowsers: () => Promise.resolve([]),
     openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),

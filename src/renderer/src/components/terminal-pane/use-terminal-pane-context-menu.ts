@@ -22,7 +22,10 @@ import {
   forkAgentSessionFromMenuPane
 } from './terminal-pane-menu-agent-session-actions'
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
-import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
+import {
+  useTerminalContextMenuTrigger,
+  type TerminalContextMenuTrigger
+} from './use-terminal-context-menu-trigger'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
@@ -32,6 +35,7 @@ import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  canOpenOwnedBrowserForPaneRef: React.RefObject<(paneId: number) => boolean>
   paneCwdRef: React.RefObject<PaneCwdMap>
   containerRef: React.RefObject<HTMLDivElement | null>
   tabId: string
@@ -50,16 +54,9 @@ type UseTerminalPaneContextMenuDeps = {
   rightClickToPaste: boolean
 }
 
-type TerminalMenuState = {
-  open: boolean
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>
-  point: { x: number; y: number }
-  menuOpenedAtRef: React.RefObject<number>
+type TerminalMenuState = TerminalContextMenuTrigger & {
   paneCount: number
   menuPaneId: number | null
-  onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
-  onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
-  onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
   onSelectAll: () => void
   onCopyTerminalId: () => Promise<void>
@@ -85,6 +82,7 @@ type TerminalMenuState = {
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
+  canOpenOwnedBrowserForPaneRef,
   paneCwdRef,
   containerRef,
   tabId,
@@ -133,18 +131,13 @@ export function useTerminalPaneContextMenu({
       source
     )
 
-  const {
-    open,
-    setOpen,
-    point,
-    menuOpenedAtRef,
-    onContextMenuCapture,
-    onMouseDownCapture,
-    onPaneTitleContextMenu
-  } = useTerminalContextMenuTrigger({
+  const trigger = useTerminalContextMenuTrigger({
     managerRef,
     containerRef,
     contextPaneIdRef,
+    paneTransportsRef,
+    canOpenOwnedBrowserForPaneRef,
+    worktreeId,
     rightClickToPaste,
     pasteResolvedPane
   })
@@ -292,19 +285,13 @@ export function useTerminalPaneContextMenu({
   }
 
   // Closed menus need neither pane counts nor target identity; avoid wrapper allocation on every retained-tab render.
-  const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
-  const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
+  const paneCount = trigger.open ? (managerRef.current?.getPanes().length ?? 1) : 1
+  const menuPaneId = trigger.open ? (resolveMenuPane()?.id ?? null) : null
 
   return {
-    open,
-    setOpen,
-    point,
-    menuOpenedAtRef,
+    ...trigger,
     paneCount,
     menuPaneId,
-    onContextMenuCapture,
-    onMouseDownCapture,
-    onPaneTitleContextMenu,
     onCopy,
     onSelectAll,
     onCopyTerminalId,

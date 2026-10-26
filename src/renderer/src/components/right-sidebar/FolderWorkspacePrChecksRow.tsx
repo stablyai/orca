@@ -106,6 +106,8 @@ export function FolderWorkspacePrChecksRow({
                 type="button"
                 className="rounded p-1 text-muted-foreground opacity-80 hover:bg-accent hover:text-foreground group-hover:opacity-100"
                 aria-label={openExternalLabel}
+                data-orca-external-url={row.reviewUrl}
+                data-orca-link-worktree-id={row.worktree.id}
                 onClick={(event) => {
                   event.stopPropagation()
                   void openHttpLink(row.reviewUrl!)

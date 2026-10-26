@@ -52,6 +52,8 @@ export type UseTerminalPaneLifecycleDeps = {
   >
   paneFontSizesRef: React.RefObject<Map<number, number>>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  /** Set on mount to whether a pane's runtime or SSH owner can reach Orca's managed browser. */
+  canOpenOwnedBrowserForPaneRef: React.RefObject<(paneId: number) => boolean>
   /** Per-pane live cwd (from the OSC 7 handler). */
   paneCwdRef: React.RefObject<PaneCwdMap>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>

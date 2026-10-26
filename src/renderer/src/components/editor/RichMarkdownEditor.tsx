@@ -11,6 +11,7 @@ import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
+import { useRichMarkdownLinkContextMenu } from './use-rich-markdown-link-context-menu'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
@@ -289,12 +290,15 @@ export default function RichMarkdownEditor({
     htmlSuperscriptLinkContext
   })
 
+  useRichMarkdownLinkContextMenu(editor, htmlSuperscriptLinkContext)
+
   useEffect(() => {
     return window.api.ui.onRichMarkdownContextCommand((payload) => {
       const ed = editorRef.current
       if (
         !ed ||
         isRichMarkdownTableContextCommand(payload.command) ||
+        payload.command === 'open-link-in-orca-browser' ||
         !isRichMarkdownContextCommandTarget(payload, rootRef.current)
       ) {
         return

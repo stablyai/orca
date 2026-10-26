@@ -5,6 +5,11 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { ContextMenuSpelling } from '../../shared/browser-guest-events'
+import {
+  buildEditableContextMenuLinkSection,
+  type EditableContextMenuLinkActions
+} from './editable-context-menu-link-section'
+import { parseHttpUrl } from '../../shared/external-browser-types'
 import { translateMain } from '../i18n/main-i18n'
 
 type EditableContextMenuWebContents = Pick<
@@ -207,7 +212,11 @@ export function readContextMenuSpelling(
 export function buildEditableContextMenuTemplate(
   params: Electron.ContextMenuParams,
   webContents: EditableContextMenuWebContents,
-  options?: { tableTarget?: RichMarkdownContextMenuTableTarget | null; plainText?: boolean }
+  options?: {
+    tableTarget?: RichMarkdownContextMenuTableTarget | null
+    plainText?: boolean
+    link?: EditableContextMenuLinkActions
+  }
 ): Electron.MenuItemConstructorOptions[] {
   if (!params.isEditable) {
     return []
@@ -215,6 +224,14 @@ export function buildEditableContextMenuTemplate(
 
   const { suggestions, misspelledWord } = readContextMenuSpelling(params)
   const isRichMarkdownSurface = params.formControlType === 'none' && options?.plainText !== true
+  const linkUrl = isRichMarkdownSurface && options?.link ? parseHttpUrl(params.linkURL) : null
+  const linkTemplate =
+    linkUrl && options?.link
+      ? buildEditableContextMenuLinkSection(linkUrl, options.link, webContents, {
+          x: params.x,
+          y: params.y
+        })
+      : []
   const template: Electron.MenuItemConstructorOptions[] = suggestions.map((suggestion) => ({
     label: suggestion,
     click: () => webContents.replaceMisspelling(suggestion)
@@ -245,7 +262,7 @@ export function buildEditableContextMenuTemplate(
       : buildNativeEditMenuTemplate(params, webContents))
   )
 
-  return template
+  return [...linkTemplate, ...template]
 }
 
 export function parseRichMarkdownContextMenuTableTarget(

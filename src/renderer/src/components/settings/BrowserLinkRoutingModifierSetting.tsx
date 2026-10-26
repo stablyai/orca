@@ -8,18 +8,25 @@ import {
 
 type BrowserLinkRoutingModifierSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInApp' | 'openLinksInAppModifierInverts'>
+  /** Installed browser that external opens use; null means the OS default. */
+  externalBrowserName: string | null
   isMac: boolean
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
 export function BrowserLinkRoutingModifierSetting({
   settings,
+  externalBrowserName,
   isMac,
   updateSettings
 }: BrowserLinkRoutingModifierSettingProps): React.JSX.Element {
   const openLinksInApp = settings.openLinksInApp === true
-  const title = getLinkRoutingModifierTitle(openLinksInApp)
-  const description = getLinkRoutingModifierDescription({ openLinksInApp, isMac })
+  const title = getLinkRoutingModifierTitle(openLinksInApp, externalBrowserName)
+  const description = getLinkRoutingModifierDescription({
+    openLinksInApp,
+    isMac,
+    externalBrowserName
+  })
 
   return (
     <SearchableSetting

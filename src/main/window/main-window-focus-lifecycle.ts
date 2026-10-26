@@ -16,6 +16,7 @@ import {
   matchingRichMarkdownContextMenuTableTarget,
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
+import { installRichMarkdownLinkContextMenu } from './rich-markdown-link-context-menu'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
 import {
@@ -104,6 +105,7 @@ export function installMainWindowFocusLifecycle(args: {
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
   }
   ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
+  const richMarkdownLinkContextMenu = installRichMarkdownLinkContextMenu(mainWindow)
   // Renderer sends this on the same frame pipe immediately before the next Chromium context menu.
   let pendingPlainTextContextMenuTarget = false
   const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent): void => {
@@ -120,15 +122,18 @@ export function installMainWindowFocusLifecycle(args: {
     const plainText = pendingPlainTextContextMenuTarget
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
-      tableTarget,
-      plainText
+    richMarkdownLinkContextMenu.withLinkActions(params, (link) => {
+      const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+        tableTarget,
+        plainText,
+        link
+      })
+      if (template.length === 0 || mainWindow.isDestroyed()) {
+        return
+      }
+      // Context menu may precede focus mirroring; trust Electron's editable params.
+      Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
     })
-    if (template.length === 0 || mainWindow.isDestroyed()) {
-      return
-    }
-    // Context menu may precede focus mirroring; trust Electron's editable params.
-    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
   mainWindow.webContents.on('context-menu', onMainContextMenu)
 
@@ -137,6 +142,7 @@ export function installMainWindowFocusLifecycle(args: {
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
+    richMarkdownLinkContextMenu.reset()
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -303,6 +309,7 @@ export function installMainWindowFocusLifecycle(args: {
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     ipcMain.removeListener(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
+    richMarkdownLinkContextMenu.dispose()
   }
   return {
     dispose,

@@ -5,9 +5,13 @@ import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
+import { buildExternalLinkMenuModel } from '@/components/link-actions/external-link-menu-model'
+import { ExternalLinkOpenInSubmenu } from '@/components/link-actions/ExternalLinkMenuItems'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
+import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import { resolveNativeChatHttpLinkSourceOwner } from './native-chat-http-link-source-owner'
 import { formatNativeChatQuote } from './native-chat-quote-selection'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 
@@ -20,11 +24,13 @@ function copyText(text: string): void {
 export function NativeChatContextMenuTargetItems({
   target,
   composerRef,
-  rewind
+  rewind,
+  linkContext
 }: {
   target: NativeChatContextMenuTarget
   composerRef: RefObject<NativeChatComposerHandle | null>
   rewind: NativeChatRewindSurface | undefined
+  linkContext: NativeChatFileLinkContext | null
 }): React.JSX.Element {
   const { quoteText, link, codeText, messageText, rewindItemId } = target
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
@@ -46,6 +52,9 @@ export function NativeChatContextMenuTargetItems({
           </DropdownMenuItem>
         ) : null
       )}
+      {link?.kind === 'url' && linkContext ? (
+        <NativeChatLinkOpenInSubmenu url={link.destination} worktreeId={linkContext.worktreeId} />
+      ) : null}
       {link ? (
         <DropdownMenuItem onSelect={() => copyText(link.destination)}>
           <Copy />
@@ -74,6 +83,27 @@ export function NativeChatContextMenuTargetItems({
       ) : null}
     </>
   )
+}
+
+function NativeChatLinkOpenInSubmenu({
+  url,
+  worktreeId
+}: {
+  url: string
+  worktreeId: string
+}): React.JSX.Element | null {
+  const installedBrowsers = useAppStore((state) => state.installedBrowsers)
+  const sourceOwner = resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), worktreeId)
+  // Routing refuses an unknown owner, so its browser rows would do nothing.
+  if (sourceOwner.kind === 'unknown') {
+    return null
+  }
+  // Orca's row comes from the click popover's actions, so whether it could open is moot here.
+  const model = buildExternalLinkMenuModel(
+    { url, worktreeId, sourceOwner, canOpenOwnedBrowser: false },
+    installedBrowsers
+  )
+  return <ExternalLinkOpenInSubmenu browsers={model.installedBrowsers} />
 }
 
 export function NativeChatFindMenuItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {

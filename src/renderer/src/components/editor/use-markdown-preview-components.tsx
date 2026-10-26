@@ -23,6 +23,7 @@ import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
+import { encodeLinkSourceOwner } from '@/components/link-actions/link-source-attributes'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
 
 export function useMarkdownPreviewComponents({
@@ -119,6 +120,9 @@ export function useMarkdownPreviewComponents({
             {...props}
             href={href}
             className={className}
+            // Right-click menus route by the document's owner, as left-click does.
+            data-orca-link-owner={encodeLinkSourceOwner(sourceOwner)}
+            data-orca-link-worktree-id={sourceRoutingWorktreeId ?? undefined}
             onClick={(event) =>
               void handleMarkdownPreviewLinkClick({ event, href, filePath, context: linkContext })
             }

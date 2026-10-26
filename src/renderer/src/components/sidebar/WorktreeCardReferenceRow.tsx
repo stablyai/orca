@@ -83,6 +83,7 @@ export function WorktreeCardReferenceRow({
           <FilePathCursorTooltip path={url}>
             <a
               href={url}
+              data-orca-external-url={url}
               target="_blank"
               rel="noreferrer"
               className="workspace-reference-title block w-full rounded-sm text-xs font-medium leading-snug underline decoration-muted-foreground/50 underline-offset-2 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"

@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
@@ -18,6 +18,14 @@ export function AppBackgroundServices(): React.JSX.Element {
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true
   )
+  const loadInstalledBrowsers = useAppStore((s) => s.loadInstalledBrowsers)
+
+  // Detect browsers after startup settles; link labels and menus read the cached list.
+  useEffect(() => {
+    if (workspaceSessionReady) {
+      void loadInstalledBrowsers()
+    }
+  }, [workspaceSessionReady, loadInstalledBrowsers])
 
   return (
     <>

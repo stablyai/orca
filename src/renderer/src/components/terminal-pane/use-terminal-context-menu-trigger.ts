@@ -7,21 +7,31 @@ import {
   claimTerminalRightClickPasteMouseDown,
   isTerminalRightClickPasteGesture
 } from './terminal-right-click-paste-gesture'
+import { findHttpLinkAtTerminalPointer } from './terminal-url-link-hit-testing'
+import { readHoveredTerminalOscHttpLink } from './terminal-osc-link-hover'
+import type { PtyTransport } from './pty-transport-types'
+import type { ExternalLinkMenuTarget } from '@/components/link-actions/external-link-menu-model'
+import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   contextPaneIdRef: React.RefObject<number | null>
+  paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  canOpenOwnedBrowserForPaneRef: React.RefObject<(paneId: number) => boolean>
+  worktreeId: string
   rightClickToPaste: boolean
   pasteResolvedPane: (
     source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
   ) => Promise<void>
 }
 
-type TerminalContextMenuTrigger = {
+export type TerminalContextMenuTrigger = {
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
   point: { x: number; y: number }
+  /** The URL under the pointer of the right-click that opened the menu; null off a link. */
+  linkTarget: ExternalLinkMenuTarget | null
   menuOpenedAtRef: React.RefObject<number>
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
@@ -32,12 +42,16 @@ export function useTerminalContextMenuTrigger({
   managerRef,
   containerRef,
   contextPaneIdRef,
+  paneTransportsRef,
+  canOpenOwnedBrowserForPaneRef,
+  worktreeId,
   rightClickToPaste,
   pasteResolvedPane
 }: UseTerminalContextMenuTriggerDeps): TerminalContextMenuTrigger {
   const menuOpenedAtRef = useRef(0)
   const [open, setOpen] = useState(false)
   const [point, setPoint] = useState({ x: 0, y: 0 })
+  const [linkTarget, setLinkTarget] = useState<ExternalLinkMenuTarget | null>(null)
 
   useEffect(() => {
     const closeMenu = (): void => {
@@ -90,6 +104,23 @@ export function useTerminalContextMenuTrigger({
 
     menuOpenedAtRef.current = Date.now()
     const bounds = boundsElement.getBoundingClientRect()
+    const linkUrl = clickedPane
+      ? (findHttpLinkAtTerminalPointer(clickedPane.terminal, event.nativeEvent) ??
+        readHoveredTerminalOscHttpLink(clickedPane.terminal, event.nativeEvent))
+      : null
+    // The pane's owner, so remote panes only offer reachable browsers.
+    setLinkTarget(
+      clickedPane && linkUrl
+        ? {
+            url: linkUrl,
+            worktreeId,
+            sourceOwner: resolveTerminalHttpLinkSourceOwner(
+              paneTransportsRef.current.get(clickedPane.id)
+            ),
+            canOpenOwnedBrowser: canOpenOwnedBrowserForPaneRef.current(clickedPane.id)
+          }
+        : null
+    )
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
     setOpen(true)
   }
@@ -135,6 +166,7 @@ export function useTerminalContextMenuTrigger({
     open,
     setOpen,
     point,
+    linkTarget,
     menuOpenedAtRef,
     onContextMenuCapture,
     onMouseDownCapture,

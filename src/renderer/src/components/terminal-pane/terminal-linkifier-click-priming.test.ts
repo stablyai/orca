@@ -37,12 +37,13 @@ function createTerminal(linkifier: FakeLinkifier | null | undefined): {
 }
 
 function modifierMouseDown(options: {
+  button?: number
   ctrlKey?: boolean
   metaKey?: boolean
   shiftKey?: boolean
 }): MouseEvent {
   return {
-    button: 0,
+    button: options.button ?? 0,
     ctrlKey: options.ctrlKey ?? false,
     metaKey: options.metaKey ?? false,
     shiftKey: options.shiftKey ?? false
@@ -101,6 +102,17 @@ describe('installTerminalLinkifierClickPriming', () => {
 
     expect(handleMouseMove).toHaveBeenCalledOnce()
     expect(handleMouseMove.mock.calls[0][0].shiftKey).toBe(true)
+  })
+
+  it('primes a right-click so the context menu sees a link the pointer never moved over', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    const handleMouseMove = vi.fn()
+    const { terminal, registrations } = createTerminal({ _handleMouseMove: handleMouseMove })
+    installTerminalLinkifierClickPriming(terminal)
+
+    getMouseDownHandler(registrations)(modifierMouseDown({ button: 2 }))
+
+    expect(handleMouseMove).toHaveBeenCalledOnce()
   })
 
   it('does not clear established hover state before refreshing the click position', () => {

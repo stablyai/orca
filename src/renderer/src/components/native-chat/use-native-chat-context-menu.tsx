@@ -280,6 +280,7 @@ export function useNativeChatContextMenu({
             target={target}
             composerRef={composerRef}
             rewind={rewind}
+            linkContext={fileLinkContext}
           />
           {state.canPaste ? (
             <DropdownMenuItem onSelect={() => actions.onPaste()}>

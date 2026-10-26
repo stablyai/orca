@@ -72,6 +72,7 @@ export function TaskPageGitLabItemList({
               role="button"
               tabIndex={0}
               key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
+              data-orca-external-url={item.url}
               onClick={() => {
                 useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                 openGitLabDetailPage(item)

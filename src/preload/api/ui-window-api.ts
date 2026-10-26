@@ -3,6 +3,7 @@ import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
+  RichMarkdownContextMenuLinkTarget,
   RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 
@@ -53,6 +54,7 @@ export type UiWindowApi = {
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
+  setRichMarkdownContextMenuLinkTarget: (target: RichMarkdownContextMenuLinkTarget | null) => void
   markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void

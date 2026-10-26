@@ -24,6 +24,7 @@ export type RichMarkdownContextMenuCommand =
   | 'insert-column-right'
   | 'delete-column'
   | 'delete-table'
+  | 'open-link-in-orca-browser'
 
 export type RichMarkdownContextMenuCommandPayload = {
   command: RichMarkdownContextMenuCommand
@@ -39,7 +40,14 @@ export type RichMarkdownContextMenuTableTarget = {
   y: number
 }
 
+/** Sent before the native menu when the right-clicked rich-editor link can open in Orca Browser. */
+export type RichMarkdownContextMenuLinkTarget = {
+  x: number
+  y: number
+}
+
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
 export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'
+export const richMarkdownContextMenuLinkTargetChannel = 'rich-markdown:context-link-target'
 // A contenteditable that is not a rich Markdown editor, such as the chat composer.
 export const plainTextContextMenuTargetChannel = 'editable-context-menu:plain-text-target'

@@ -17,6 +17,7 @@ import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagA
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
+import { GlobalExternalLinkContextMenu } from '../components/link-actions/use-global-external-link-context-menu'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -330,6 +331,7 @@ export function AppRootSurfaces(props: {
           </ModalBoundary>
         </Suspense>
       ) : null}
+      <GlobalExternalLinkContextMenu />
       <ModalBoundary boundaryId="modal.markdown-template-picker" resetKey={activeModal}>
         <MarkdownTemplatePicker />
       </ModalBoundary>

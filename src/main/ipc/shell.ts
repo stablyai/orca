@@ -9,6 +9,9 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import type { InstalledBrowser } from '../../shared/external-browser-types'
+import { listInstalledBrowsers } from '../external-browsers/installed-browser-catalog'
+import { openExternalUrl } from '../external-browsers/open-external-url'
 import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
@@ -147,20 +150,15 @@ export function registerShellHandlers(
       openInExternalEditor(store, request, listRuntimeEnvironments)
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
-    let parsed: URL
-    try {
-      parsed = new URL(rawUrl)
-    } catch {
-      return
-    }
+  ipcMain.handle('shell:openUrl', (_event, rawUrl: string, browserId?: unknown) =>
+    openExternalUrl(rawUrl, typeof browserId === 'string' ? { browserId } : {})
+  )
 
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return
-    }
-
-    return shell.openExternal(parsed.toString())
-  })
+  ipcMain.handle(
+    'shell:listBrowsers',
+    (_event, options?: { forceRefresh?: boolean }): Promise<InstalledBrowser[]> =>
+      listInstalledBrowsers({ forceRefresh: options?.forceRefresh === true })
+  )
 
   ipcMain.handle(
     'shell:openFilePath',

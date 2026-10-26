@@ -109,6 +109,7 @@ export function TaskPageGitHubRows({
               key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               role="button"
               tabIndex={0}
+              data-orca-external-url={item.url}
               onClick={() => openGitHubDetailPage(item)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {

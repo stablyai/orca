@@ -220,6 +220,7 @@ function ActivityThreadHoverCardContent({
       align="start"
       sideOffset={8}
       className="w-80 max-h-[30rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+      data-orca-link-worktree-id={worktree.id}
       {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}

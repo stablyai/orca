@@ -3,12 +3,13 @@ import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { httpLinkActionDestinationsFor, openRoutedHttpLink } from '@/lib/http-link-destinations'
-import { useAppStore } from '@/store'
 import {
-  canOpenWorkspaceBrowserTabOnRuntime,
-  canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
+  canSourceOwnerOpenInOrca,
+  httpLinkActionDestinationsFor,
+  openRoutedHttpLink
+} from '@/lib/http-link-destinations'
+import { useAppStore } from '@/store'
+import { canNativeChatOpenOwnedBrowser } from '../native-chat/native-chat-http-link-source-owner'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import {
@@ -25,7 +26,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import {
   classifyHtmlSuperscriptLinkAction,
-  type RichMarkdownHtmlSuperscriptLinkContext
+  type RichMarkdownHtmlSuperscriptLinkContext,
+  type RichMarkdownHtmlSuperscriptLinkContextSnapshot
 } from './rich-markdown-html-superscript-link-context'
 
 export type ActivateMarkdownLink = (
@@ -211,15 +213,10 @@ function openShiftModifiedMarkdownLink({
   }
   if (classified.kind === 'external') {
     const state = useAppStore.getState()
-    const canOpenOwnedBrowser =
-      sourceOwner.kind === 'runtime'
-        ? canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, sourceOwner.runtimeEnvironmentId)
-        : sourceOwner.kind === 'ssh' &&
-          canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)
     const destinations = httpLinkActionDestinationsFor(
       state.settings,
       sourceOwner,
-      canOpenOwnedBrowser
+      canNativeChatOpenOwnedBrowser(state, worktreeId, sourceOwner)
     )
     openRoutedHttpLink(classified.url, {
       worktreeId,
@@ -262,4 +259,33 @@ function openShiftModifiedMarkdownLink({
     return
   }
   void window.api.shell.openFileUri(classified.uri, LOCAL_EXECUTION_HOST_ID)
+}
+
+export type RichMarkdownOrcaLinkTarget = {
+  url: string
+  x: number
+  y: number
+  worktreeId: string
+  sourceOwner: HttpLinkSourceOwner
+}
+
+/** The right-clicked http(s) link when its source can open it in Orca Browser; null otherwise. */
+export function resolveRichMarkdownOrcaLinkTarget(
+  url: string | null,
+  point: Pick<MouseEvent, 'clientX' | 'clientY'>,
+  {
+    worktreeId,
+    sourceOwner
+  }: Pick<RichMarkdownHtmlSuperscriptLinkContextSnapshot, 'worktreeId' | 'sourceOwner'>
+): RichMarkdownOrcaLinkTarget | null {
+  if (
+    url === null ||
+    !canSourceOwnerOpenInOrca(
+      sourceOwner,
+      canNativeChatOpenOwnedBrowser(useAppStore.getState(), worktreeId, sourceOwner)
+    )
+  ) {
+    return null
+  }
+  return { url, x: point.clientX, y: point.clientY, worktreeId, sourceOwner }
 }

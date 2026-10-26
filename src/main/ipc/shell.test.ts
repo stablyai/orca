@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
+  openExternalUrlMock,
   openPathMock,
   resolveCliCommandMock,
   showItemInFolderMock,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  openExternalUrlMock: vi.fn(),
   openPathMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
@@ -44,6 +46,10 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('node:child_process', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../external-browsers/open-external-url', () => ({
+  openExternalUrl: openExternalUrlMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -109,6 +115,7 @@ describe('registerShellHandlers', () => {
 
   beforeEach(() => {
     handleMock.mockReset()
+    openExternalUrlMock.mockReset()
     getSpawnArgsForWindowsMock.mockReset()
     openPathMock.mockReset()
     resolveCliCommandMock.mockReset()
@@ -136,6 +143,18 @@ describe('registerShellHandlers', () => {
     }
     return call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>
   }
+
+  it('opens a URL in the picked browser, or the configured default without a pick', async () => {
+    const handler = getHandler('shell:openUrl')
+
+    await handler({}, 'https://example.com/', 'com.google.Chrome')
+    await handler({}, 'https://example.com/')
+
+    expect(openExternalUrlMock).toHaveBeenNthCalledWith(1, 'https://example.com/', {
+      browserId: 'com.google.Chrome'
+    })
+    expect(openExternalUrlMock).toHaveBeenNthCalledWith(2, 'https://example.com/', {})
+  })
 
   it('picks audio files with a constrained native dialog filter', async () => {
     showOpenDialogMock.mockResolvedValue({

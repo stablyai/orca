@@ -5,6 +5,7 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { InstalledBrowser } from '../../shared/external-browser-types'
 import type { PreloadApi } from '../api-types'
 
 export const shellApi = {
@@ -22,7 +23,11 @@ export const shellApi = {
   ): Promise<ShellOpenExternalEditorResult> =>
     ipcRenderer.invoke('shell:openInExternalEditor', request),
 
-  openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
+  openUrl: (url: string, browserId?: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openUrl', url, browserId),
+
+  listBrowsers: (options?: { forceRefresh?: boolean }): Promise<InstalledBrowser[]> =>
+    ipcRenderer.invoke('shell:listBrowsers', options),
 
   openFilePath: (path: string, ownerHostId: ExecutionHostId): Promise<boolean> =>
     ipcRenderer.invoke('shell:openFilePath', path, ownerHostId),

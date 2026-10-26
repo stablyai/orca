@@ -72,6 +72,7 @@ export function useTerminalPaneMountLifecycle(
     }
     const manager = new PaneManager(container, createTerminalPaneManagerOptions(managerContext))
     deps.managerRef.current = manager
+    deps.canOpenOwnedBrowserForPaneRef.current = preparation.canOpenOwnedBrowserForPane
     if (e2eConfig.exposeStore) {
       window.__paneManagers = window.__paneManagers ?? new Map()
       window.__paneManagers.set(deps.tabId, manager)

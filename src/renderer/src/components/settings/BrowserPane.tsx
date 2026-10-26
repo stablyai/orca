@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
+import { resolveInstalledBrowserName } from '../../../../shared/external-browser-types'
 import { matchesSettingsSearch } from './settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'
@@ -73,6 +74,8 @@ export function BrowserPane({
   const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
   const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
+  const installedBrowsers = useAppStore((s) => s.installedBrowsers)
+  const loadInstalledBrowsers = useAppStore((s) => s.loadInstalledBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
@@ -123,10 +126,19 @@ export function BrowserPane({
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
+  const externalBrowserName = resolveInstalledBrowserName(
+    settings.externalBrowserId,
+    installedBrowsers
+  )
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
     { isMac },
-    settings.openLinksInAppModifierInverts === true
+    settings.openLinksInAppModifierInverts === true,
+    externalBrowserName
   )
+  // Re-read so browsers installed or removed since startup show up in the picker.
+  useEffect(() => {
+    void loadInstalledBrowsers({ forceRefresh: true })
+  }, [loadInstalledBrowsers])
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
@@ -259,6 +271,7 @@ export function BrowserPane({
       {showLinkRouting ? (
         <BrowserLinkRoutingSetting
           settings={settings}
+          installedBrowsers={installedBrowsers}
           linkRoutingDescription={linkRoutingDescription}
           isMac={isMac}
           updateSettings={updateSettings}
@@ -268,6 +281,7 @@ export function BrowserPane({
       {showLinkRoutingModifier ? (
         <BrowserLinkRoutingModifierSetting
           settings={settings}
+          externalBrowserName={externalBrowserName}
           isMac={isMac}
           updateSettings={updateSettings}
         />

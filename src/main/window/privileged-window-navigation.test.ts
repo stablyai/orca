@@ -1,24 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const openExternal = vi.fn()
+const { openExternal, openUrlInInstalledBrowser } = vi.hoisted(() => ({
+  openExternal: vi.fn(),
+  openUrlInInstalledBrowser: vi.fn()
+}))
 vi.mock('electron', () => ({
   shell: { openExternal: (url: string) => openExternal(url) }
 }))
+vi.mock('../external-browsers/external-browser-launch', () => ({ openUrlInInstalledBrowser }))
 
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { setExternalBrowserSettingsReader } from '../external-browsers/open-external-url'
 
 describe('privileged window navigation policy', () => {
   function createFixture(currentUrl: string) {
     const handlers = new Map<string, (...args: unknown[]) => void>()
+    let windowOpenHandler: ((details: { url: string }) => unknown) | undefined
     const contents = {
       getURL: () => currentUrl,
-      setWindowOpenHandler: vi.fn(),
+      setWindowOpenHandler: vi.fn((handler: (details: { url: string }) => unknown) => {
+        windowOpenHandler = handler
+      }),
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         handlers.set(event, handler)
       })
     }
     installPrivilegedWindowNavigationPolicy(contents as never)
     return {
+      windowOpen(url: string) {
+        if (!windowOpenHandler) {
+          throw new Error('no window open handler was registered')
+        }
+        return windowOpenHandler({ url })
+      },
       willNavigate(url: string) {
         const event = { preventDefault: vi.fn() }
         const handler = handlers.get('will-navigate')
@@ -34,6 +48,21 @@ describe('privileged window navigation policy', () => {
 
   beforeEach(() => {
     openExternal.mockClear()
+    openUrlInInstalledBrowser.mockReset()
+    setExternalBrowserSettingsReader(null)
+  })
+
+  it('opens window-open targets in the configured browser and denies the window', async () => {
+    setExternalBrowserSettingsReader(() => ({ externalBrowserId: 'edge' }))
+    openUrlInInstalledBrowser.mockResolvedValue(true)
+
+    const result = createFixture('http://localhost:5173/').windowOpen('https://example.com/pr/1')
+
+    expect(result).toEqual({ action: 'deny' })
+    await vi.waitFor(() =>
+      expect(openUrlInInstalledBrowser).toHaveBeenCalledWith('edge', 'https://example.com/pr/1')
+    )
+    expect(openExternal).not.toHaveBeenCalled()
   })
 
   it('lets the packaged renderer document reload itself', () => {

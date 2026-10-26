@@ -86,6 +86,50 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+function seedScannedAnalyticsPort(): void {
+  storeState.repos = [
+    {
+      id: 'repo-1',
+      displayName: 'snapstudio',
+      repoIcon: null,
+      badgeColor: '#f97316'
+    }
+  ]
+  storeState.worktreesByRepo = {
+    'repo-1': [
+      {
+        id: 'wt-analytics',
+        repoId: 'repo-1',
+        projectId: 'repo-1',
+        displayName: 'analytics'
+      }
+    ]
+  }
+  storeState.workspacePortScan = {
+    result: {
+      platform: 'darwin',
+      scannedAt: 1,
+      ports: [
+        {
+          id: 'tcp:5180',
+          kind: 'workspace',
+          port: 5180,
+          protocol: 'http',
+          bindHost: '127.0.0.1',
+          connectHost: 'localhost',
+          owner: {
+            repoId: 'repo-1',
+            worktreeId: 'wt-analytics',
+            displayName: 'analytics',
+            path: '/repo/analytics',
+            confidence: 'cwd'
+          }
+        }
+      ]
+    }
+  }
+}
+
 describe('openHttpLink', () => {
   it('keeps the selected host of the active workspace a link opens in', () => {
     registerWorkspaceHttpLinkBrowserOpener(null)
@@ -438,49 +482,41 @@ describe('openHttpLink', () => {
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
+  it('opens a picked browser even when links open in Orca', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      forceSystemBrowser: true,
+      browserId: 'com.google.Chrome'
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/', 'com.google.Chrome')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the worktree-labeled localhost URL in a picked browser', async () => {
+    storeState.settings = { openLinksInApp: false, localhostWorktreeLabelsEnabled: true }
+    seedScannedAnalyticsPort()
+    registerLocalhostLabelMock.mockResolvedValue({
+      url: 'http://analytics.orca.localhost:60016/episodes'
+    })
+
+    openHttpLink('http://localhost:5180/episodes', {
+      forceSystemBrowser: true,
+      browserId: 'com.google.Chrome'
+    })
+    await Promise.resolve()
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'http://analytics.orca.localhost:60016/episodes',
+      'com.google.Chrome'
+    )
+  })
+
   it('labels localhost links from terminal output before opening the system browser', async () => {
     storeState.settings = { openLinksInApp: false, localhostWorktreeLabelsEnabled: true }
-    storeState.repos = [
-      {
-        id: 'repo-1',
-        displayName: 'snapstudio',
-        repoIcon: null,
-        badgeColor: '#f97316'
-      }
-    ]
-    storeState.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-analytics',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          displayName: 'analytics'
-        }
-      ]
-    }
-    storeState.workspacePortScan = {
-      result: {
-        platform: 'darwin',
-        scannedAt: 1,
-        ports: [
-          {
-            id: 'tcp:5180',
-            kind: 'workspace',
-            port: 5180,
-            protocol: 'http',
-            bindHost: '127.0.0.1',
-            connectHost: 'localhost',
-            owner: {
-              repoId: 'repo-1',
-              worktreeId: 'wt-analytics',
-              displayName: 'analytics',
-              path: '/repo/analytics',
-              confidence: 'cwd'
-            }
-          }
-        ]
-      }
-    }
+    seedScannedAnalyticsPort()
     registerLocalhostLabelMock.mockResolvedValue({
       url: 'http://analytics.orca.localhost:60016/episodes'
     })

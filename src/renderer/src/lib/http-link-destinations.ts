@@ -7,6 +7,8 @@ import {
   canHttpLinkOpenInSourceGroup,
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
+import { useAppStore } from '@/store'
+import { resolveInstalledBrowserName } from '../../../shared/external-browser-types'
 
 // Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 
@@ -55,16 +57,26 @@ export function httpLinkDirectClickDestination(
   return shiftKey ? (destinations.alternate ?? destinations.primary) : destinations.primary
 }
 
+/** The configured external browser's name, or null when links use the OS default. */
+function configuredExternalBrowserName(): string | null {
+  const state = useAppStore.getState()
+  return resolveInstalledBrowserName(state.settings?.externalBrowserId, state.installedBrowsers)
+}
+
 export function httpLinkDestinationLabel(destination: HttpLinkDestination): string {
-  return destination === 'orca'
-    ? translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
-        'Orca Browser'
-      )
-    : translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
-        'System Browser'
-      )
+  if (destination === 'orca') {
+    return translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
+      'Orca Browser'
+    )
+  }
+  return (
+    configuredExternalBrowserName() ??
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
+      'System Browser'
+    )
+  )
 }
 
 export function buildHttpLinkActions(
@@ -125,22 +137,23 @@ export type HttpLinkRoutingPreferenceRequester = (
 ) => boolean | Promise<boolean> | null | undefined
 
 export type RoutedHttpLinkOptions = {
-  worktreeId: string
+  /** Null when no workspace browser can open the link, so only external destinations apply. */
+  worktreeId: string | null
   sourceTabId?: string | null
   openInSourceGroup?: boolean
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
+  /** Installed browser for a forced system open; absent uses the configured external default. */
+  browserId?: string
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
 }
 
 export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): void {
   const isCurrentRequest = beginLinkOpenRequest()
-  const linkIntent = captureHttpLinkIntent(
-    deps.worktreeId,
-    deps.sourceTabId,
-    deps.openInSourceGroup
-  )
+  const linkIntent = deps.worktreeId
+    ? captureHttpLinkIntent(deps.worktreeId, deps.sourceTabId, deps.openInSourceGroup)
+    : null
   if (deps.openInSourceGroup && !linkIntent) {
     showOpenInGroupRefusedToast(url)
     return
@@ -155,6 +168,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
+      browserId: deps.browserId,
       sourceOwner
     })
     return

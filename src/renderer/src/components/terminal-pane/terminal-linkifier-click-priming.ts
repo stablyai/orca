@@ -39,7 +39,8 @@ function primeTerminalLinkifier(terminal: Terminal, event: MouseEvent): void {
 export function installTerminalLinkifierClickPriming(terminal: Terminal): IDisposable {
   const terminalElement = terminal.element
   const handleMouseDown = (event: MouseEvent): void => {
-    if (!isTerminalOwnedLinkGesture(event)) {
+    // Right-clicks prime too so the context menu sees an OSC 8 link the pointer never moved over.
+    if (!isTerminalOwnedLinkGesture(event) && event.button !== 2) {
       return
     }
     // Prime on mousedown: xterm normally resolves on mousemove, missing first clicks on output painted under a still pointer.

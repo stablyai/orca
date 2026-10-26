@@ -1,4 +1,3 @@
-import { shell } from 'electron'
 import { normalizeExternalBrowserUrl, redactKagiSessionToken } from '../../shared/browser-url'
 import { trackBrowserGuestInputGesture } from './browser-guest-input-gesture'
 import {
@@ -16,6 +15,7 @@ import {
 } from './browser-popup-native-window'
 import { isBrowserRouteGuestPopup } from './browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
+import { openExternalUrl } from '../external-browsers/open-external-url'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
@@ -105,8 +105,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             })
         }
       } else if (externalUrl && !postBody) {
-        // Redact the Kagi bearer token before opening the OS browser.
-        void shell.openExternal(redactKagiSessionToken(externalUrl))
+        // Redact the Kagi bearer token before opening an external browser.
+        void openExternalUrl(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
           action: 'opened-external'

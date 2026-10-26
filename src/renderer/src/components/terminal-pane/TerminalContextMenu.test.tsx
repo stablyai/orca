@@ -40,7 +40,24 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     }
   }
 })
-vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: vi.fn((_key: string, fallback: string, options?: Record<string, string>) =>
+    fallback.replace(/\{\{browser\}\}/g, options?.browser ?? '{{browser}}')
+  )
+}))
+const storeState = vi.hoisted(() => ({
+  settings: null,
+  installedBrowsers: [
+    { id: 'com.google.Chrome', name: 'Google Chrome' },
+    { id: 'com.apple.Safari', name: 'Safari' }
+  ]
+}))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeState) => unknown) => selector(storeState),
+    { getState: () => storeState }
+  )
+}))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
@@ -57,6 +74,14 @@ function childrenText(children: React.ReactNode): string {
         : ''
     })
     .join('')
+}
+
+function itemLabelsWithoutShortcuts(): string[] {
+  return items.list.map((item) => {
+    const label = childrenText(item.children)
+    const shortcut = shortcuts.list.find((entry) => entry && label.endsWith(entry))
+    return shortcut ? label.slice(0, -shortcut.length) : label
+  })
 }
 
 function renderMenu(overrides: Record<string, unknown> = {}): string {
@@ -102,6 +127,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onCopyPaneId: vi.fn(),
     canCopyAgentSessionId: false,
     onCopyAgentSessionId: vi.fn(),
+    linkTarget: null,
     ...overrides
   }
   return renderToStaticMarkup(React.createElement(TerminalContextMenu, props))
@@ -127,6 +153,38 @@ describe('TerminalContextMenu', () => {
     renderMenu()
     expect(translate).toHaveBeenCalled()
     expect(items.list.length).toBeGreaterThan(0)
+  })
+
+  it('puts the link section above the terminal items when a URL was right-clicked', () => {
+    renderMenu({
+      linkTarget: {
+        url: 'https://github.com/stablyai/orca/pull/1',
+        worktreeId: 'wt-1',
+        sourceOwner: { kind: 'local' },
+        canOpenOwnedBrowser: false
+      }
+    })
+
+    const labels = itemLabelsWithoutShortcuts()
+    expect(labels.slice(0, 5)).toEqual([
+      'Open in Orca Browser',
+      'Open in System Browser',
+      'Google Chrome',
+      'Safari',
+      'Copy Link'
+    ])
+    const terminalItems = ['Copy', 'Paste', 'Split Terminal Right', 'Split Terminal Down']
+    const indexes = terminalItems.map((label) => labels.indexOf(label))
+    expect(indexes.every((index) => index > 4)).toBe(true)
+    expect(indexes).toEqual([...indexes].sort((a, b) => a - b))
+  })
+
+  it('keeps the terminal menu unchanged off a link', () => {
+    renderMenu()
+
+    const labels = itemLabelsWithoutShortcuts()
+    expect(labels[0]).toBe('Copy')
+    expect(labels.some((label) => label.startsWith('Open in') || label === 'Copy Link')).toBe(false)
   })
 
   // Why: revealing a terminal file link lives in its click popover, not the right-click menu.

@@ -36,6 +36,8 @@ import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuIt
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
+import { ExternalLinkMenuItems } from '@/components/link-actions/ExternalLinkMenuItems'
+import type { ExternalLinkMenuTarget } from '@/components/link-actions/external-link-menu-model'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -79,6 +81,8 @@ type TerminalContextMenuProps = {
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
+  /** The URL under the pointer when the menu opened; null off a link. */
+  linkTarget: ExternalLinkMenuTarget | null
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
@@ -168,7 +172,8 @@ function TerminalContextMenuItems({
   onCopyTerminalId,
   onCopyPaneId,
   canCopyAgentSessionId,
-  onCopyAgentSessionId
+  onCopyAgentSessionId,
+  linkTarget
 }: TerminalContextMenuProps): React.JSX.Element {
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
   const shortcuts = useMemo(
@@ -192,6 +197,12 @@ function TerminalContextMenuItems({
   const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
   return (
     <>
+      {linkTarget ? (
+        <>
+          <ExternalLinkMenuItems target={linkTarget} />
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuItem onSelect={onCopy}>
         <Copy />
         {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}

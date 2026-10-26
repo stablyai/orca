@@ -121,6 +121,7 @@ export function buildDefaultSettings(args: {
     nodeDistMirrorUrl: '',
     electronHttp1CompatibilityMode: false,
     openLinksInApp: false,
+    externalBrowserId: null,
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,

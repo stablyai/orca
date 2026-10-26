@@ -200,6 +200,7 @@ export function WorktreeCardDetailsHover({
         align="start"
         sideOffset={8}
         variant="workspace-details"
+        data-orca-link-worktree-id={workspace?.id}
         {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
