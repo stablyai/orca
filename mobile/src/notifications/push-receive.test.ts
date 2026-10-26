@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState } from 'react-native'
 import {
+  getNotificationViewingWorkspace,
   setInPageNotificationViewingWorkspace,
   setNotificationViewingWorkspace
 } from './notification-viewing-policy'
@@ -10,7 +11,11 @@ import {
   noteInPageBackClaim,
   noteInPageStorageWrite
 } from './in-page-notification-navigation'
-import { TABS_STREAM_CLEAR_GRACE_MS } from './bridge-session-viewing-tracker'
+import {
+  TABS_STREAM_CLEAR_GRACE_MS,
+  activeInPageHostKeys,
+  bridgeSessionByHostKey
+} from './bridge-session-viewing-tracker'
 import { withLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
 import { sessionTabPaneKey } from '../session/notification-pane-tab'
@@ -839,4 +844,49 @@ it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, 
       notificationSeq: 5
     })
   ).resolves.toBe(false)
+})
+
+it('does not mark an unviewed workspace as viewed from a one-shot session.tabs.list', async () => {
+  AppState.currentState = 'active'
+  bridgeSessionByHostKey.delete('host-1')
+  activeInPageHostKeys.delete('host-1')
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'oneshot-tabs-list',
+      method: 'session.tabs.list',
+      params: { worktree: 'id:repo::/unviewed' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'oneshot-tabs-list', {
+    worktree: 'repo::/unviewed',
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        type: 'terminal',
+        title: 'Shell',
+        isActive: true,
+        terminal: 'term-1'
+      }
+    ]
+  })
+
+  expect(bridgeSessionByHostKey.get('host-1')?.worktreeId).toBeUndefined()
+  expect(getNotificationViewingWorkspace()).toBeNull()
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/unviewed',
+      paneKey: 'tab-a:11111111-1111-4111-8111-111111111111',
+      notificationId: 'oneshot-list-does-not-view',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(true)
 })

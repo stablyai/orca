@@ -266,7 +266,9 @@ describe('the page pane hook', () => {
         paneKey: `tab-b:${LEAF}`
       })
     )
-    expect(replaced).toEqual(['/h/host-1/session/wt-2'])
+    expect(replaced).toEqual([
+      `/h/host-1/session/wt-2?paneKey=${encodeURIComponent(`tab-b:${LEAF}`)}`
+    ])
     expect(switched).toEqual([])
 
     // Route switches to wt-2; startup clears sessionTabs before hydrating wt-2's tabs.

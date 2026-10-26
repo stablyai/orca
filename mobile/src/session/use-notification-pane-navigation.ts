@@ -101,11 +101,14 @@ export function useNotificationPaneNavigation({
               sawTargetWorktreeReset: false
             }
           : null
+        const href = workspaceRouteHref(
+          `/h/${encodeURIComponent(current.hostId)}/session/${encodeURIComponent(decoded.worktreeId)}`,
+          routeExecutionHostOf(decoded.executionHost)
+        )
         current.router.replace(
-          workspaceRouteHref(
-            `/h/${encodeURIComponent(current.hostId)}/session/${encodeURIComponent(decoded.worktreeId)}`,
-            routeExecutionHostOf(decoded.executionHost)
-          )
+          decoded.paneKey
+            ? `${href}${href.includes('?') ? '&' : '?'}paneKey=${encodeURIComponent(decoded.paneKey)}`
+            : href
         )
         if (decoded.paneKey) {
           setAsked((count) => count + 1)

@@ -146,9 +146,7 @@ export function noteBridgeHostClientMessage(hostId: string, message: BridgeClien
       state.tabsStreamsById.set(message.id, { worktreeId, ...(executionHost ? { executionHost } : {}), decoder: createSessionTabsTabDeltaDecoder() })
     } else {
       state.tabsRequestsById.set(message.id, { worktreeId, ...(executionHost ? { executionHost } : {}) })
-      if (state.worktreeId && state.worktreeId !== worktreeId) {
-        return
-      }
+      return
     }
     const worktreeChanged = state.worktreeId !== worktreeId
     state.worktreeId = worktreeId
@@ -268,7 +266,10 @@ export function noteBridgeHostServerPayload(hostId: string, id: string, payload:
       ...(explicitMatch && existing?.explicit ? { explicit: true } : {})
     })
   }
-  if (!state.worktreeId || state.worktreeId === meta.worktreeId) {
+  const mayUpdateViewingState = streamMeta
+    ? !state.worktreeId || state.worktreeId === meta.worktreeId
+    : state.worktreeId === meta.worktreeId
+  if (mayUpdateViewingState) {
     state.worktreeId = meta.worktreeId
     state.executionHost = meta.executionHost ?? state.executionHost
     state.paneKey = paneKey
