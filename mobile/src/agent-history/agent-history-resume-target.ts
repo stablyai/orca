@@ -10,6 +10,9 @@ import type {
   FolderHostRepo
 } from '../../../src/shared/folder-workspace-execution-host'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspace-worktree'
+import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   canJumpToAiVaultSessionWorktree,
@@ -64,7 +67,9 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   const sessionWorktree = resolveAiVaultSessionWorktreeInfo({
     session: args.session,
     repos: args.catalog.repos,
-    worktrees: args.worktrees.map(toAiVaultSessionOwnerWorkspace),
+    worktrees: args.worktrees.map((worktree) =>
+      toAiVaultSessionOwnerWorkspace(worktree, args.catalog)
+    ),
     activeWorktreeId: args.activeWorktreeId
   })
   const sessionWorktreeId = canJumpToAiVaultSessionWorktree(sessionWorktree)
@@ -123,13 +128,29 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   }
 }
 
-function toAiVaultSessionOwnerWorkspace(worktree: Worktree): AiVaultSessionOwnerWorkspace {
+/** Folder rows carry no hostId on worktree.ps; desktop's folder row takes it from the folder record. */
+function toAiVaultSessionOwnerWorkspace(
+  worktree: Worktree,
+  catalog: MobileAiVaultResumeCatalog
+): AiVaultSessionOwnerWorkspace {
+  const workspaceKey = parseWorkspaceKey(worktree.worktreeId)
+  const folder =
+    workspaceKey?.type === 'folder'
+      ? catalog.folderWorkspaces.find((entry) => entry.id === workspaceKey.folderWorkspaceId)
+      : undefined
   return {
     id: worktree.worktreeId,
     path: worktree.path,
     repoId: worktree.repoId,
     displayName: worktree.displayName,
-    hostId: worktree.hostId,
+    hostId:
+      worktree.hostId ??
+      (folder
+        ? getFolderWorkspaceWorktreeHostId({
+            executionHostId: normalizeExecutionHostId(folder.executionHostId),
+            connectionId: folder.connectionId
+          })
+        : undefined),
     isArchived: worktree.isArchived,
     priorWorktreeIds: worktree.priorWorktreeIds
   }

@@ -375,4 +375,24 @@ describe('mobile AI Vault resume target guards', () => {
     })
     expect(target.status === 'ready' ? target.worktreeId : target.message).toBe('ssh-app')
   })
+
+  it('attaches an SSH folder session to its folder, whose worktree.ps row has no hostId', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:folder-builder', cwd: '/home/ada/folder/src' }),
+      activeWorktreeId: 'route-wt',
+      worktrees: [
+        worktree({ worktreeId: 'route-wt', path: '/Users/ada/repo/main' }),
+        worktree({
+          worktreeId: 'folder:folder-ssh',
+          repoId: 'folder-workspace:group-local',
+          workspaceKind: 'folder-workspace',
+          path: '/home/ada/folder'
+        })
+      ],
+      repos,
+      folderWorkspaces,
+      projectGroups
+    })
+    expect(target.status === 'ready' ? target.worktreeId : target.message).toBe('folder:folder-ssh')
+  })
 })
