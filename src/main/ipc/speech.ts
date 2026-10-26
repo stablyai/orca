@@ -12,8 +12,20 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import { registerElevenLabsSpeechHandlers } from './elevenlabs-speech'
+import { StsTurnModelDownload } from '../speech/sts-turn-model-download'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 export function registerSpeechHandlers(store: Store): void {
+  let turnModels: StsTurnModelDownload | undefined
+  ipcMain.handle('speech:loadTurnModels', () => {
+    turnModels ??= new StsTurnModelDownload(
+      join(getSpeechModelManager(store).getModelsDir(), 'sts-turn-v1'),
+      openElectronSpeechDownloadRequest
+    )
+    return turnModels.load()
+  })
+  registerElevenLabsSpeechHandlers(store)
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })

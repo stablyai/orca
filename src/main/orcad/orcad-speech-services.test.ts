@@ -43,7 +43,7 @@ describe('speech on orcad (#31174)', () => {
   it('answers speech.models.list instead of speech_unavailable, with only models it can run', async () => {
     const store = orcadHost({})
     const setup = await new RuntimeMobileSpeechCatalog(() => store).list()
-    const cloudIds = SPEECH_MODEL_CATALOG.filter((m) => !isLocalSpeechModel(m)).map((m) => m.id)
+    const cloudIds = SPEECH_MODEL_CATALOG.filter((m) => m.provider === 'openai').map((m) => m.id)
     expect(setup.models.map((m) => m.id)).toEqual(cloudIds)
   })
 

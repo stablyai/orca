@@ -63,6 +63,9 @@ allowBuilds:
   esbuild: true
   msw: false
   node-pty: true
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
   ssh2: false
   '@orca/windows-registry': false
   '@orca/windows-security': false
@@ -73,6 +76,9 @@ addMissingPeerTypes: true
 # Published declarations import undeclared deps; hoisting hid missing types/jest-dom augmentation,
 # but the global virtual store requires explicit package dependencies.
 packageExtensions:
+  '@huggingface/transformers@3.8.1':
+    dependencies:
+      onnxruntime-common: 1.22.0-dev.20250409-89f8206ba4
   '@testing-library/jest-dom':
     dependencies:
       '@types/aria-query': ^5.0.1
@@ -132,3 +138,4 @@ patchedDependencies:
   sprintf-js@1.1.3: config/patches/sprintf-js@1.1.3.patch
   '@tiptap/extension-list@3.31.3': config/patches/@tiptap__extension-list@3.31.3.patch
   vitest@5.0.5: config/patches/vitest@5.0.5.patch
+  onnxruntime-web@1.22.0-dev.20250409-89f8206ba4: config/patches/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4.patch

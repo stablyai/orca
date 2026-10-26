@@ -143,6 +143,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'elevenlabs-scribe-v2-realtime',
+    label: 'ElevenLabs Scribe v2 Realtime',
+    description:
+      'Live cloud transcription. Audio is sent to ElevenLabs; account usage charges apply.',
+    type: 'elevenlabs',
+    provider: 'elevenlabs',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: true
   }
 ]
 

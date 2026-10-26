@@ -31,9 +31,10 @@ export class RuntimeMobileSpeechCatalog {
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
     // Omit unsupported status variants; older phones could treat them as pickable models.
+    const catalog = SPEECH_MODEL_CATALOG.filter((manifest) => manifest.provider !== 'elevenlabs')
     const runnable = hasLocalSpeechRecognizer()
-      ? SPEECH_MODEL_CATALOG
-      : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
+      ? catalog
+      : catalog.filter((manifest) => !isLocalSpeechModel(manifest))
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
@@ -48,7 +49,7 @@ export class RuntimeMobileSpeechCatalog {
     })
     return {
       enabled: voice.enabled === true,
-      selectedModelId: voice.sttModel ?? '',
+      selectedModelId: catalog.some((model) => model.id === voice.sttModel) ? voice.sttModel : '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       models
     }
@@ -94,6 +95,9 @@ export class RuntimeMobileSpeechCatalog {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
     if (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId)) {
+      throw new Error('voice_model_unknown')
+    }
+    if (params.modelId && getCatalogModel(params.modelId)?.provider === 'elevenlabs') {
       throw new Error('voice_model_unknown')
     }
     const nextVoice: VoiceSettings = {

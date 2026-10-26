@@ -8,11 +8,8 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
-import {
-  getSpeechModelCacheDirCandidates,
-  migrateSpeechModelCacheIfNeeded,
-  type SpeechModelCacheDir
-} from './model-cache-path'
+import { hasElevenLabsSpeechApiKey } from './elevenlabs-api-key-store'
+import { prepareSpeechModelCacheDir, migrateSpeechModelCacheIfNeeded } from './model-cache-path'
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -38,12 +35,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
   constructor(
     customModelsDir: string | undefined,
     openRequest: OpenSpeechDownloadRequest,
-    private readonly hasOpenAiKey: () => boolean = hasOpenAiSpeechApiKey
+    private readonly hasOpenAiKey: () => boolean = hasOpenAiSpeechApiKey,
+    private readonly hasElevenLabsKey: () => boolean = hasElevenLabsSpeechApiKey
   ) {
     super(openRequest)
     const requestedModelsDir =
       customModelsDir || join(getAppEnvironment().getPath('userData'), 'speech-models')
-    const prepared = this.prepareModelsDir(requestedModelsDir)
+    const prepared = prepareSpeechModelCacheDir(requestedModelsDir)
     this.modelsDir = prepared.modelsDir
     this.migrationSourceDir = prepared.migrationSourceDir
     // Gate reads on asynchronous migration so large copies do not block the UI.
@@ -63,23 +61,6 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   getModelsDir(): string {
     return this.modelsDir
-  }
-
-  private prepareModelsDir(requestedModelsDir: string): SpeechModelCacheDir {
-    let lastError: unknown = null
-    for (const candidate of getSpeechModelCacheDirCandidates(requestedModelsDir)) {
-      try {
-        mkdirSync(candidate.modelsDir, { recursive: true })
-        return candidate
-      } catch (error) {
-        lastError = error
-        if (candidate.migrationSourceDir) {
-          console.warn('[speech] Failed to prepare ASCII speech model cache:', error)
-        }
-      }
-    }
-
-    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
   async getModelStates(): Promise<SpeechModelState[]> {
@@ -103,8 +84,10 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return { id: modelId, status: this.hasOpenAiKey() ? 'ready' : 'not-downloaded' }
+    if (manifest.provider === 'openai' || manifest.provider === 'elevenlabs') {
+      const configured =
+        manifest.provider === 'openai' ? this.hasOpenAiKey() : this.hasElevenLabsKey()
+      return { id: modelId, status: configured ? 'ready' : 'not-downloaded' }
     }
 
     const modelDir = this.getModelDir(modelId)

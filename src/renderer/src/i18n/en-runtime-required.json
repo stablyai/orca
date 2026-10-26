@@ -3144,6 +3144,8 @@
         "compactionFailed": "Compaction failed.",
         "compactionFailedQuoted": "Compaction failed: {{detail}}.",
         "compactionUnconfirmed": "Compaction completion is unconfirmed.",
+        "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
+        "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "couldNotRestart": "{{agent}} couldn't restart.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotStop": "Couldn't stop {{agent}}.",
@@ -3181,8 +3183,6 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
-        "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
-        "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -3486,18 +3486,13 @@
     "agents": {
       "loadingHost": "Loading agent settings…",
       "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
-      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
-      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
-      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
-      "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
-      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
-      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
-      "permissionOverrideFollows": "{{agent}} now follows {{mode}}",
-      "permissionOverrideMore": "and {{count}} more",
+      "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
-      "permissionOverridesUse": "Use {{mode}}",
-      "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config"
+      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
+      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:"
     },
     "browser": {
       "clientHostedRemote": {
@@ -3518,6 +3513,34 @@
     "findPath": "Find a folder…",
     "finishEditing": "Save or cancel the preset to continue creating your workspace.",
     "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
+  },
+  "stsLive": {
+    "effortHint": "Voice starts with Luna / low, or Sol / low when Luna is unavailable. MAS prefers Astra for difficult work.",
+    "inSidebar": "This conversation is open in the voice sidebar. Close the sidebar to view its full chat here.",
+    "localStt": "Local Korean recognition",
+    "newConversation": "New voice conversation",
+    "presetFailed": "Could not apply the fast voice model. Choose a model and low reasoning above.",
+    "presetPending": "Preparing the fast voice model…",
+    "reconnecting": "Listening again shortly…",
+    "sessionClosed": "The voice chat is unavailable. Open a new conversation to continue.",
+    "specialists": "Specialist model settings (MAS)",
+    "waiting": "Waiting for the chat to be ready"
+  },
+  "stsVoice": {
+    "automatic": "Send after a pause and listen again after the reply",
+    "close": "Close voice conversation",
+    "finish": "Finish speaking",
+    "noVoice": "Set up the selected voice in Settings → Voice. Captions remain available.",
+    "pause": "Pause conversation",
+    "processing": "Finishing recognition…",
+    "read": "Read replies aloud",
+    "send": "Send text",
+    "setup": "Choose a streaming speech model for your language or ElevenLabs Scribe in Voice settings. For local playback, install a system voice matching your Orca language.",
+    "speaking": "Reading response",
+    "speechError": "Audio playback failed. Turn Read replies aloud off and on to retry.",
+    "start": "Start speaking",
+    "stopAgent": "Stop Codex",
+    "working": "Codex is working"
   },
   "terminal": {
     "newerDaemonBanner": {

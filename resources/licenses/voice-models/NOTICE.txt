@@ -1,0 +1,25 @@
+Orca-STS local voice turn detection
+
+Smart Turn v3.2 CPU model, unmodified:
+https://huggingface.co/pipecat-ai/smart-turn-v3
+Revision f766f81d3cfdf7737ac64aad813d91bbfd56bf93
+Copyright (c) 2024-2025, Daily. BSD-2-Clause; see Smart-Turn-BSD-2-Clause.txt.
+
+Quantized multilingual MiniLM L6 encoder and tokenizer, unmodified:
+https://huggingface.co/onnx-community/minilm-student-L6_uniform_distilled-ONNX
+Revision 6aa4deb590ea89b4b9ae217015042618defff20d
+Derived from gomyk/minilm-student-L6_uniform_distilled and multilingual MiniLM L12.
+Apache License 2.0; see Apache-2.0.txt.
+Orca-STS adds separately fitted intent/context heads; original encoder weights
+are not modified. The heads and authored examples use the repository license.
+
+Transformers.js 3.8.1, Hugging Face:
+https://github.com/huggingface/transformers.js
+Apache License 2.0; see Apache-2.0.txt.
+
+ONNX Runtime Web, Microsoft Corporation:
+https://github.com/microsoft/onnxruntime
+MIT License; see ONNX-Runtime-MIT.txt.
+
+Model weights are downloaded on first use, checked against pinned SHA-256 hashes,
+and cached locally. Inference uses the bundled runtime without a cloud service.

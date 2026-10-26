@@ -2,6 +2,8 @@ import { Worker } from 'node:worker_threads'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { readElevenLabsSpeechApiKey } from './elevenlabs-api-key-store'
+import { ElevenLabsTranscriptionSession } from './elevenlabs-transcription-session'
 import type { SttEventSink } from './stt-service'
 import type { SttSessionState } from './stt-session-state'
 import {
@@ -30,6 +32,9 @@ export async function startSttDictation(
   hotwordsFilePath?: string,
   owner = 'desktop'
 ): Promise<void> {
+  if (state.cloudStopInFlight) {
+    throw new Error('dictation_stopping')
+  }
   if (state.starting) {
     if (state.startingOwner !== owner) {
       throw new Error('dictation_already_active')
@@ -71,7 +76,10 @@ async function startSttSession(
     throw new Error(`Unknown model: ${modelId}`)
   }
 
-  if (manifest.provider === 'openai') {
+  if (manifest.provider !== 'local') {
+    if (state.cloudSession) {
+      await stopSttDictation(state, owner, { cancelStarting: false })
+    }
     if (state.worker) {
       const existingWorker = state.worker
       await stopSttDictation(state, owner, { cancelStarting: false })
@@ -81,7 +89,28 @@ async function startSttSession(
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    if (state.canceledOwners.has(owner)) {
+      throw new Error('dictation_canceled')
+    }
+    if (manifest.provider === 'elevenlabs') {
+      const apiKey = readElevenLabsSpeechApiKey()
+      const session = new ElevenLabsTranscriptionSession(sink)
+      state.cloudSession = session
+      try {
+        await session.start(apiKey)
+        if (state.cloudSession !== session || state.canceledOwners.has(owner)) {
+          await session.finish()
+          throw new Error('dictation_canceled')
+        }
+      } catch (error) {
+        if (state.cloudSession === session) {
+          state.cloudSession = null
+        }
+        throw error
+      }
+    } else {
+      state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    }
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink

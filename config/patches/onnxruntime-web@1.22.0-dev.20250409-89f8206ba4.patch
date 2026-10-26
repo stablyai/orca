@@ -1,0 +1,12 @@
+diff --git a/package.json b/package.json
+index 6eb3de7d91e3ff33a402832cd2a1da60501d6ae6..72f49d32c7ded32ac71fee3602a46dd376bc3af0 100644
+--- a/package.json
++++ b/package.json
+@@ -68,6 +68,7 @@
+   "browser": "dist/ort.min.js",
+   "exports": {
+     ".": {
++      "types": "./types.d.ts",
+       "node": {
+         "import": "./dist/ort.node.min.mjs",
+         "require": "./dist/ort.node.min.js"

@@ -39,6 +39,9 @@ export class RuntimeMobileDictationController {
       throw new Error('voice_model_not_selected')
     }
     const manifest = getCatalogModel(modelId)
+    if (manifest?.provider === 'elevenlabs') {
+      throw new Error('voice_model_not_ready:unavailable')
+    }
     if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer()) {
       throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
     }

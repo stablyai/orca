@@ -169,6 +169,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
+  'src/main/speech/elevenlabs-transcription-session.test.ts',
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime-client.test.ts',
   'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',

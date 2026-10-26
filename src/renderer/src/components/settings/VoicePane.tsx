@@ -12,6 +12,9 @@ import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
+import { ElevenLabsVoiceSettings } from './ElevenLabsVoiceSettings'
+import { VoiceConversationPreferences } from './VoiceConversationPreferences'
+import { resolveRendererUiLocale } from '../../../../shared/ui-locale'
 import { matchesSettingsSearch } from './settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
@@ -33,6 +36,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
   const [permissionPending, setPermissionPending] = useState(false)
+  const [elevenLabsConfigureRequest, setElevenLabsConfigureRequest] = useState(0)
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
@@ -53,12 +57,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
-      updateSettings({
-        voice: {
-          ...voiceSettingsRef.current,
-          ...updates
-        }
-      })
+      const next = { ...voiceSettingsRef.current, ...updates }
+      voiceSettingsRef.current = next
+      updateSettings({ voice: next })
     },
     [updateSettings]
   )
@@ -223,12 +224,22 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
       />
 
+      <VoiceConversationPreferences
+        settings={voiceSettings}
+        uiLanguage={settings.uiLanguage ?? 'system'}
+        onUpdate={updateVoiceSettings}
+      />
       <VoiceSpeechModelSection
         voiceSettings={voiceSettings}
         catalog={catalog}
         modelStates={modelStates}
+        conversationLanguage={
+          voiceSettings.conversationLanguage ??
+          resolveRendererUiLocale(settings.uiLanguage ?? 'system')
+        }
         onUpdateVoiceSettings={updateVoiceSettings}
         onOpenOpenAiDialog={openOpenAiDialog}
+        onConfigureElevenLabs={() => setElevenLabsConfigureRequest((value) => value + 1)}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -250,6 +261,14 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           />
         </>
       )}
+
+      <Separator />
+      <ElevenLabsVoiceSettings
+        settings={voiceSettings}
+        onUpdate={updateVoiceSettings}
+        refreshModelStates={refreshModelStates}
+        configureRequest={elevenLabsConfigureRequest}
+      />
 
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}

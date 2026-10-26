@@ -16,6 +16,7 @@ type BufferedAudioChunk = {
 }
 
 type StartAudioCaptureOptions = {
+  onAudio?: (samples: Float32Array, sampleRate: number) => void
   bufferAudio?: boolean
   sessionId?: string
   /** null/undefined = system default input device */
@@ -191,6 +192,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
             return
           }
           const samples = new Float32Array(e.inputBuffer.getChannelData(0))
+          options.onAudio?.(samples, actualRate)
           const now = performance.now()
           meterAnalyzerRef.current = analyzeDictationAudioChunk(
             samples,

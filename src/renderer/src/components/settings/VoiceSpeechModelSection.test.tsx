@@ -115,6 +115,39 @@ function renderSection(args: {
 }
 
 describe('VoiceSpeechModelSection', () => {
+  it('filters live models by language while leaving batch dictation models available', () => {
+    const { container, root } = renderSection({
+      deleteModel: async () => {},
+      catalog: [
+        { ...localModel, id: 'zipformer-streaming-en-20m', label: 'English streaming' },
+        {
+          ...localModel,
+          id: 'zipformer-streaming-korean',
+          label: 'Korean streaming',
+          language: 'ko'
+        },
+        { ...localModel, id: 'whisper-tiny', label: 'Whisper dictation', streaming: false },
+        {
+          ...localModel,
+          id: 'elevenlabs-scribe-v2-realtime',
+          label: 'Scribe realtime',
+          provider: 'elevenlabs',
+          language: 'multilingual'
+        }
+      ]
+    })
+    const filter = container.querySelector<HTMLButtonElement>('button[role="checkbox"]')!
+    act(() => filter.click())
+    const names = () =>
+      [...container.querySelectorAll('[role="option"]')].map((row) => row.textContent)
+    expect(names()).toHaveLength(2)
+    expect(names().join(' ')).toContain('English streaming')
+    expect(names().join(' ')).toContain('Scribe realtime')
+    act(() => filter.click())
+    expect(names()).toHaveLength(4)
+    act(() => root.unmount())
+  })
+
   beforeEach(() => {
     toastErrorMock.mockReset()
     menuDismissMock.mockReset()

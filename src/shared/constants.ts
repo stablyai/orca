@@ -125,6 +125,10 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
+    elevenLabsApiKeyConfigured: false,
+    ttsProvider: 'local',
+    elevenLabsVoiceId: '',
+    elevenLabsTtsModel: 'eleven_flash_v2_5',
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
   }

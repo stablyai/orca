@@ -5,8 +5,13 @@ export const DICTATION_FOCUS_INPUT_EVENT = 'dictation:focusInput'
 
 export type DictationControlAction = 'toggle' | 'start' | 'stop'
 
-export function dispatchDictationControl(action: DictationControlAction): void {
+export function dispatchDictationControl(
+  action: DictationControlAction,
+  conversationTarget?: Element
+): void {
   document.dispatchEvent(
-    new CustomEvent<DictationControlAction>(DICTATION_CONTROL_EVENT, { detail: action })
+    new CustomEvent(DICTATION_CONTROL_EVENT, {
+      detail: conversationTarget ? { action, conversationTarget } : action
+    })
   )
 }

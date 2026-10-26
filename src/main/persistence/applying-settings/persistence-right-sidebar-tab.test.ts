@@ -15,12 +15,18 @@ vi.mock('electron', () => ({
 import { normalizeRightSidebarTab } from './ui-selection-normalization'
 
 describe('normalizeRightSidebarTab', () => {
-  it.each(['explorer', 'search', 'vault', 'workspaces', 'source-control', 'checks', 'ports'])(
-    'preserves the built-in %s tab',
-    (tab) => {
-      expect(normalizeRightSidebarTab(tab)).toBe(tab)
-    }
-  )
+  it.each([
+    'explorer',
+    'voice',
+    'search',
+    'vault',
+    'workspaces',
+    'source-control',
+    'checks',
+    'ports'
+  ])('preserves the built-in %s tab', (tab) => {
+    expect(normalizeRightSidebarTab(tab)).toBe(tab)
+  })
 
   it('preserves the folder-only pr-checks tab', () => {
     expect(normalizeRightSidebarTab('pr-checks')).toBe('pr-checks')

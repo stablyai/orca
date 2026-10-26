@@ -158,7 +158,8 @@ async function minifyWebOutput() {
           minifyIdentifiers: !outputPath.startsWith('assets/'),
           minifySyntax: true,
           minifyWhitespace: true,
-          target: 'es2020'
+          // Vendored ESM loaders such as ONNX WASM use top-level await.
+          target: outputPath.endsWith('.mjs') ? 'es2022' : 'es2020'
         })
         writeFileSync(targetPath, result.code)
       })

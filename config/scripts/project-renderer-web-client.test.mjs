@@ -74,6 +74,27 @@ afterEach(() => {
 })
 
 describe('renderer web client projection', () => {
+  it('preserves top-level initialization in referenced ESM runtime assets', async () => {
+    const root = createRendererFixture()
+    writeFixtureFile(
+      root,
+      'out/renderer/assets/editor.worker-fixture.js',
+      'const runtime = new URL("./runtime.mjs", import.meta.url);'
+    )
+    writeFixtureFile(
+      root,
+      'out/renderer/assets/runtime.mjs',
+      'export const initialized = await Promise.resolve(42);'
+    )
+    const result = await projectFixture(root)
+    expect(result.code, result.stderr).toBe(0)
+    const code = readFileSync(join(root, 'out/web/assets/runtime.mjs'), 'utf8')
+    const output = await import(
+      `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    )
+    expect(output.initialized).toBe(42)
+  })
+
   it('preserves existing minified bindings while producing runnable compact code', async () => {
     const root = createRendererFixture()
     writeFixtureFile(

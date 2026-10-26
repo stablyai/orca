@@ -1,5 +1,8 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  ElevenLabsAudioChunk,
+  ElevenLabsSpeechRequest,
+  ElevenLabsVoice,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -7,7 +10,10 @@ import type {
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 
+import type { StsTurnModelAsset } from '../../shared/sts-turn-models'
+
 export type SpeechApi = {
+  loadTurnModels?: () => Promise<StsTurnModelAsset[]>
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
   getOpenAiApiKeyStatus: () => Promise<{
@@ -16,6 +22,14 @@ export type SpeechApi = {
   }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+  getElevenLabsApiKeyStatus: () => Promise<{ configured: boolean }>
+  saveElevenLabsApiKey: (key: string) => Promise<{ configured: boolean }>
+  clearElevenLabsApiKey: () => Promise<{ configured: boolean }>
+  listElevenLabsVoices: () => Promise<ElevenLabsVoice[]>
+  synthesizeElevenLabs: (request: ElevenLabsSpeechRequest) => Promise<Uint8Array>
+  streamElevenLabs?: (request: ElevenLabsSpeechRequest) => Promise<void>
+  onElevenLabsAudio?: (callback: (data: ElevenLabsAudioChunk) => void) => () => void
+  cancelElevenLabs: (requestId: string) => Promise<void>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>
