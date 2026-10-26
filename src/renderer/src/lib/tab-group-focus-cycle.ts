@@ -55,7 +55,9 @@ function focusEditorInGroupBody(worktreeId: string, groupId: string): void {
 
 function focusGroupActiveTab(worktreeId: string, groupId: string, tab: Tab | undefined): void {
   if (tab?.contentType === 'terminal') {
-    focusTerminalTabSurface(tab.entityId)
+    // Why: without a leaf the helper picks the first pane in DOM order, not the one last used.
+    const leafId = useAppStore.getState().terminalLayoutsByTabId[tab.entityId]?.activeLeafId
+    focusTerminalTabSurface(tab.entityId, leafId)
     return
   }
   if (tab?.contentType === 'agent-session') {
