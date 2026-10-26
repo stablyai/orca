@@ -161,21 +161,18 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
 // Uncapped tsrs runs ~40 threads on 24 cores; 8 checkers matched its wall time with 16% less CPU under load.
 export const TSRS_DEFAULT_CHECKERS = 8
 
-function withCheckers(command, checkers) {
-  return checkers
-    ? { ...command, args: [...command.args, '--checkers', String(checkers)] }
-    : command
-}
+const checkerArgs = (checkers) => (checkers ? ['--checkers', String(checkers)] : [])
 
 export function resolveTypecheckCommand(
   config,
   { compiler, bunExecutable, bunThreads, checkers = null, root }
 ) {
   if (compiler === 'tsrs') {
-    return withCheckers(
-      resolveTsrsTypecheckCommand(config, root),
-      checkers ?? TSRS_DEFAULT_CHECKERS
-    )
+    const command = resolveTsrsTypecheckCommand(config, root)
+    return {
+      ...command,
+      args: [...command.args, ...checkerArgs(checkers ?? TSRS_DEFAULT_CHECKERS)]
+    }
   }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
@@ -190,14 +187,11 @@ export function resolveTypecheckCommand(
       cwd: root
     }
   }
-  return withCheckers(
-    {
-      program: process.execPath,
-      args: [installedCompiler.program, '--noEmit', '-p', config],
-      cwd: root
-    },
-    checkers
-  )
+  return {
+    program: process.execPath,
+    args: [installedCompiler.program, '--noEmit', '-p', config, ...checkerArgs(checkers)],
+    cwd: root
+  }
 }
 
 function checkProject(
