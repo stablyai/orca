@@ -50,6 +50,9 @@ import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
+import { TaskPromptTemplateSetting } from '../TaskPromptTemplateSetting'
+
+export { getRepositoryPaneSearchEntries } from './repository-search'
 
 const EMPTY_WSL_DISTROS: string[] = []
 const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
@@ -292,6 +295,21 @@ export function RepositoryPane({
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
         />
+
+        {project && updateProject ? (
+          <TaskPromptTemplateSetting
+            key={`task-prompt:${project.id}`}
+            scope="project"
+            value={project.linkedWorkItemPromptTemplate ?? ''}
+            globalTemplate={settings?.linkedWorkItemPromptTemplate}
+            commit={async (value) =>
+              (await updateProject(project.id, {
+                linkedWorkItemPromptTemplate: value.trim() ? value : null
+              })) === true
+            }
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        ) : null}
 
         <RepositoryAgentTrustSection
           repo={repo}

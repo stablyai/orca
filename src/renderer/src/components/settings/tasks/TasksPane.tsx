@@ -31,6 +31,8 @@ import { useTaskSourceProviderReadiness } from './use-task-source-provider-readi
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { TaskPromptTemplateSetting } from '../TaskPromptTemplateSetting'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../../../shared/linked-work-item-prompt-settings'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -99,6 +101,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const t = useTranslate()
   const visibleProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -151,6 +154,18 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
         'Finish connect + visibility for each provider in one place. Linear also needs the agent skill so coding agents can read and update tickets. At least one provider must stay visible.'
       )}
     >
+      <TaskPromptTemplateSetting
+        scope="global"
+        value={settings.linkedWorkItemPromptTemplate ?? ''}
+        commit={async (value) => {
+          await updateSettingsOrThrow({ linkedWorkItemPromptTemplate: value })
+          return (
+            normalizeLinkedWorkItemPromptTemplate(
+              useAppStore.getState().settings?.linkedWorkItemPromptTemplate
+            ) === normalizeLinkedWorkItemPromptTemplate(value)
+          )
+        }}
+      />
       {stalledVisible.length > 0 ? (
         <div className="my-4 rounded-xl border border-status-warning-border bg-status-warning-background px-3.5 py-3 text-xs text-muted-foreground">
           <p className="font-medium text-amber-800 dark:text-amber-200">

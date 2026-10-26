@@ -123,6 +123,7 @@ export type RuntimeStore = {
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
     browserClientHostedRemoteEnabled?: GlobalSettings['browserClientHostedRemoteEnabled']
+    linkedWorkItemPromptTemplate?: GlobalSettings['linkedWorkItemPromptTemplate']
     autoRenameBranchFromWork?: GlobalSettings['autoRenameBranchFromWork']
     nativeChatAutoName?: GlobalSettings['nativeChatAutoName']
     nativeChatResumeWorkOnRestart?: GlobalSettings['nativeChatResumeWorkOnRestart']

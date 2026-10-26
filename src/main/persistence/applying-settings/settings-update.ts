@@ -3,6 +3,7 @@ import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../shared/linked-work-item-prompt-settings'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeAgentDefaultSurface,
@@ -61,6 +62,12 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  const template = updates.linkedWorkItemPromptTemplate
+  if (template !== undefined && typeof template !== 'string') {
+    delete sanitizedUpdates.linkedWorkItemPromptTemplate
+  } else if ('linkedWorkItemPromptTemplate' in updates) {
+    sanitizedUpdates.linkedWorkItemPromptTemplate = normalizeLinkedWorkItemPromptTemplate(template)
+  }
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

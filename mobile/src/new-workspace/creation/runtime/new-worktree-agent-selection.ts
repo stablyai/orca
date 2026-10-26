@@ -8,6 +8,7 @@ import {
 } from '../workspace-agent-selection'
 
 export type NewWorktreeRuntimeSettings = {
+  linkedWorkItemPromptTemplate?: string
   defaultTuiAgent?: TuiAgent | 'blank' | null
   disabledTuiAgents?: TuiAgent[]
 }
