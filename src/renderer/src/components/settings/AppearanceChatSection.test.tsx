@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { i18n } from '@/i18n/i18n'
 import { TooltipProvider } from '../ui/tooltip'
 import { AppearanceChatSection } from './AppearanceChatSection'
 import {
@@ -35,11 +36,12 @@ vi.mock('../../store', () => ({
     { getState: () => mocks.state }
   )
 }))
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   mocks.state.keybindings = undefined
   mocks.state.settings = null
   mocks.platform = 'linux'
+  await i18n.changeLanguage('en')
 })
 
 function persistInMock(settings: GlobalSettings) {
@@ -174,6 +176,28 @@ describe('chat appearance settings controls', () => {
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(2))
     expect(mocks.state.settings?.nativeChatAppearance).toEqual({ futureSetting: 'keep' })
   })
+  it('keeps font search aliases and adds localized synonyms after changing language', async () => {
+    getChatAppearanceEntriesByKey()
+    await i18n.changeLanguage('ko')
+    const entry = getChatAppearanceEntriesByKey().fontFamily
+    for (const query of [
+      'chat',
+      'font',
+      'family',
+      'typeface',
+      'typography',
+      '채팅',
+      '폰트',
+      '서체',
+      '타이포그래피'
+    ]) {
+      expect(matchesSettingsSearch(query, entry)).toBe(true)
+    }
+    render(<AppearanceChatSection settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
+    expect(screen.getByRole('combobox', { name: '글꼴' })).toBeTruthy()
+    expect(screen.getByText('fontFamily')).toBeTruthy()
+  })
+
   it('indexes each row and width choice in Chat settings search', () => {
     const entries = getChatAppearanceSearchEntries()
     for (const query of [

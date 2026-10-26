@@ -1,5 +1,12 @@
 [
   {
+    "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
+    "kind": "jsx-text",
+    "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Idioma",

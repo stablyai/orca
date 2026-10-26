@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translateSearchKeyword } from './settings-search-keywords'
 import type { SettingsSearchEntry } from './settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 
@@ -53,7 +54,22 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           'settings.appearance.chat.fontFamilyDescription',
           'Font used for messages, activity, and the message box.'
         ),
-        keywords: ['chat', 'font', 'family', 'typeface', 'typography']
+        keywords: [
+          ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+          ...translateSearchKeyword(
+            'auto.components.settings.appearance.search.24094af355',
+            'font'
+          ),
+          ...translateSearchKeyword('settings.appearance.chat.fontFamily', 'Font family'),
+          ...translateSearchKeyword(
+            'auto.components.settings.appearance.search.a0e09aed9c',
+            'typeface'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.appearance.search.8b36fb3f64',
+            'typography'
+          )
+        ]
       },
       textSize: {
         targetSectionId: 'chat-text-size',
