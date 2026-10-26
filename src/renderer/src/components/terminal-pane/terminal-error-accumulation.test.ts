@@ -51,8 +51,8 @@ describe('pane terminal errors', () => {
 
     const cleared = clearPaneTerminalError(errors, 1, 'Remote terminal was closed.')
 
-    expect(terminalErrorForPane(null, cleared, 1)).toBe('Paste failed.')
-    expect(terminalErrorForPane(null, cleared, 2)).toBe('Remote terminal was closed.')
+    expect(terminalErrorForPane(null, cleared, 1)?.error).toBe('Paste failed.')
+    expect(terminalErrorForPane(null, cleared, 2)?.error).toBe('Remote terminal was closed.')
   })
 
   it('maps reconnect-owned lines without changing unrelated pane messages', () => {
@@ -62,8 +62,8 @@ describe('pane terminal errors', () => {
 
     const mapped = mapPaneTerminalErrors(errors, stripSshReconnectOwnedErrorLines)
 
-    expect(terminalErrorForPane(null, mapped, 1)).toBe(MULTILINE_ERROR)
-    expect(terminalErrorForPane(null, mapped, 2)).toBe('Paste failed.')
+    expect(terminalErrorForPane(null, mapped, 1)?.error).toBe(MULTILINE_ERROR)
+    expect(terminalErrorForPane(null, mapped, 2)?.error).toBe('Paste failed.')
   })
 
   it('bounds individual pane errors and their joined display', () => {
@@ -74,7 +74,7 @@ describe('pane terminal errors', () => {
     )
     errors = appendPaneTerminalError(errors, 1, 'y'.repeat(MAX_TERMINAL_ERROR_CHARS + 500))
 
-    const visible = terminalErrorForPane(null, errors, 1)
+    const visible = terminalErrorForPane(null, errors, 1)?.error
 
     expect(visible?.split('\n').length).toBeLessThanOrEqual(MAX_TERMINAL_ERROR_LINES)
     expect(visible?.length).toBeLessThanOrEqual(MAX_TERMINAL_ERROR_CHARS)

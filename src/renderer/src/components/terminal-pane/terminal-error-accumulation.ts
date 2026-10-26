@@ -1,4 +1,5 @@
 import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
+import { isTerminalResourceLimitError } from '../../../../shared/terminal-spawn-resource-error'
 
 // Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.
 function containsWholeLineRun(accumulated: string, message: string): boolean {
@@ -11,6 +12,10 @@ function containsWholeLineRun(accumulated: string, message: string): boolean {
 }
 
 export type TerminalErrorsByPaneId = Record<number, readonly string[]>
+type TerminalErrorSurface = {
+  error: string
+  resourceLimit: boolean
+}
 const MAX_TERMINAL_ERRORS_PER_PANE = 8
 export const MAX_TERMINAL_ERROR_LINES = 24
 export const MAX_TERMINAL_ERROR_CHARS = 4_000
@@ -107,12 +112,21 @@ export function terminalErrorForPane(
   tabError: string | null,
   errorsByPaneId: TerminalErrorsByPaneId,
   paneId: number | null
-): string | null {
-  const paneError = paneId === null ? null : errorsByPaneId[paneId]?.join('\n') || null
-  if (!tabError) {
-    return paneError ? boundTerminalErrorSurface(paneError) : null
-  }
-  return paneError ? appendTerminalErrorMessage(tabError, paneError) : tabError
+): TerminalErrorSurface | null {
+  const messages = paneId === null ? undefined : errorsByPaneId[paneId]
+  // Legacy tab errors have already lost their event boundaries.
+  const resourceLimit =
+    !tabError &&
+    messages !== undefined &&
+    messages.length > 0 &&
+    messages.every(isTerminalResourceLimitError)
+  const paneError = messages?.join('\n') || null
+  const error = paneError
+    ? tabError
+      ? appendTerminalErrorMessage(tabError, paneError)
+      : boundTerminalErrorSurface(paneError)
+    : tabError
+  return error ? { error, resourceLimit } : null
 }
 
 export function appendTerminalErrorMessage(accumulated: string | null, message: string): string {
