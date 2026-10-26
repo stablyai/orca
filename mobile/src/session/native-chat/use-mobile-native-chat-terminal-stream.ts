@@ -18,7 +18,8 @@ export function useMobileNativeChatTerminalStream(args: {
   subscribingRef: MutableRefObject<Set<string>>
   leaseOnlyRef: MutableRefObject<Set<string>>
   webReadyRef: MutableRefObject<Set<string>>
-  subscribe: (handle: string) => void
+  // False when a local gate skipped the subscribe.
+  subscribe: (handle: string) => boolean
   unsubscribe: (handle: string) => void
 }): {
   notifyWebReady: (handle: string, wasAlreadyReady: boolean) => void
@@ -137,9 +138,8 @@ export function useMobileNativeChatTerminalStream(args: {
       if (attempts >= MAX_REARM_ATTEMPTS) {
         return
       }
-      args.subscribe(handle)
-      // A locally gated subscribe never reached the host and spends no attempt.
-      if (args.subscribingRef.current.has(handle) || args.subscriptionsRef.current.has(handle)) {
+      // A subscribe its own gates turned away spends no attempt; one the bridge refused at once does.
+      if (args.subscribe(handle)) {
         rearmAttemptsRef.current.set(handle, attempts + 1)
       }
       return

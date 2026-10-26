@@ -11,13 +11,14 @@ describe('useMobileNativeChatTerminalStream', () => {
   const leaseOnlyRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
   let subscribeOpensLeaseOnly = false
-  const registerSubscription = (handle: string): void => {
+  const registerSubscription = (handle: string): boolean => {
     subscriptionsRef.current.set(handle, () => {})
     if (subscribeOpensLeaseOnly) {
       leaseOnlyRef.current.add(handle)
     } else {
       leaseOnlyRef.current.delete(handle)
     }
+    return true
   }
   const subscribe = vi.fn(registerSubscription)
   const unsubscribe = vi.fn((handle: string) => {
@@ -261,7 +262,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       })
       subscribe.mockClear()
       // Locally rejected subscribes never reached the host and must not spend real attempts.
-      subscribe.mockImplementation(() => {})
+      subscribe.mockImplementation(() => false)
       for (let revision = 1; revision <= 5; revision += 1) {
         subscriptionsRef.current.delete('terminal-1')
         await act(async () => {
@@ -276,6 +277,33 @@ describe('useMobileNativeChatTerminalStream', () => {
       }
 
       expect(subscribe).toHaveBeenCalledTimes(5)
+    } finally {
+      subscribe.mockImplementation(registerSubscription)
+    }
+  })
+
+  it('charges the rearm budget for a subscribe the bridge refused before returning', async () => {
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { showNativeChat: false }))
+      })
+      subscribe.mockClear()
+      // A synchronous refusal ends the stream inside subscribe, so no ref ever shows it was sent.
+      subscribe.mockImplementation(() => true)
+      for (let revision = 1; revision <= 5; revision += 1) {
+        subscriptionsRef.current.delete('terminal-1')
+        await act(async () => {
+          renderer?.update(
+            createElement(Harness, {
+              showNativeChat: false,
+              leaseReady: false,
+              streamRevision: revision
+            })
+          )
+        })
+      }
+
+      expect(subscribe).toHaveBeenCalledTimes(3)
     } finally {
       subscribe.mockImplementation(registerSubscription)
     }
