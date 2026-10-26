@@ -8,12 +8,11 @@ import { pathToFileURL } from 'node:url'
 
 // package.json script names, slowest first so short steps fill in around them.
 export const LINT_STEPS = [
-  'check:process-host-imports',
+  'check:import-boundaries',
   'verify:localization-extraction',
   'audit:anti-slop',
   'audit:code-quality:type-aware',
   'check:test-file-runners',
-  'check:compat-boundary-imports',
   'verify:localization-catalogs',
   'verify:localization-coverage',
   'check:flaky-test-pattern-ratchet',
@@ -48,7 +47,11 @@ export const LINT_STEPS = [
 ]
 
 // Steps with no package script of their own run as the bare command.
-const BARE_COMMANDS = { oxlint: 'oxlint' }
+const BARE_COMMANDS = {
+  oxlint: 'oxlint',
+  // process-host and compat-boundary imports from one TypeScript parse, as CI runs them.
+  'check:import-boundaries': 'bun config/scripts/check-import-boundaries.mjs'
+}
 
 function parseMaxWorkers(argv) {
   const argument = argv.find((value) => /^--max-?workers=\d+$/i.test(value))
