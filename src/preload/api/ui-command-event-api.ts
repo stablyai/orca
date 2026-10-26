@@ -157,6 +157,7 @@ export type UiCommandEventApi = {
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
+  onFocusTabGroup: (callback: (direction: 1 | -1, sourcePageId?: string) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void

@@ -1,3 +1,5 @@
+import { getWindowShortcutActionId, type WindowShortcutAction } from './window-shortcut-actions'
+export { getWindowShortcutActionId, type WindowShortcutAction } from './window-shortcut-actions'
 import {
   getKeybindingDefinition,
   isKeybindingAllowedInTerminal,
@@ -25,27 +27,6 @@ export type WindowShortcutInput = {
   // Carry detector-generated double taps through main’s allowlisted action resolver.
   doubleTapModifier?: PhysicalModifierToken
 }
-
-export type WindowShortcutAction =
-  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
-  | { type: 'openSettings' }
-  | { type: 'forceReload' }
-  | { type: 'toggleWorktreePalette' }
-  | { type: 'toggleFloatingTerminal' }
-  | { type: 'toggleLeftSidebar' }
-  | { type: 'toggleRightSidebar' }
-  | { type: 'openQuickOpen' }
-  | { type: 'toggleQuickCommandsMenu' }
-  | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
-  | { type: 'openWorkspaceBoard' }
-  | { type: 'openTasks' }
-  | { type: 'toggleAgentDashboard' }
-  | { type: 'switchRecentTab' }
-  | { type: 'jumpToWorktreeIndex'; index: number }
-  | { type: 'jumpToTabIndex'; index: number }
-  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
-  | { type: 'dictationKeyDown' }
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -252,6 +233,13 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
+  if (actionMatches('tab.focusNextGroup', input, platform, keybindings, options)) {
+    return { type: 'focusTabGroup', direction: 1 }
+  }
+  if (actionMatches('tab.focusPreviousGroup', input, platform, keybindings, options)) {
+    return { type: 'focusTabGroup', direction: -1 }
+  }
+
   // Ranges have separate conflict scopes and may share a chord; workspace-first preserves deterministic historical precedence.
   const worktreeIndex = matchKeybindingDigitIndex(
     'workspace.selectByIndex',
@@ -281,53 +269,6 @@ export function resolveWindowShortcutAction(
 
   // Only explicitly allowlisted actions may intercept; leave readline/terminal chords such as Ctrl+R/U/E to the renderer/PTTY.
   return null
-}
-
-export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
-  switch (action.type) {
-    case 'zoom':
-      return action.direction === 'in'
-        ? 'zoom.in'
-        : action.direction === 'out'
-          ? 'zoom.out'
-          : 'zoom.reset'
-    case 'openSettings':
-      return 'app.settings'
-    case 'forceReload':
-      return 'app.forceReload'
-    case 'toggleWorktreePalette':
-      return 'worktree.palette'
-    case 'toggleFloatingTerminal':
-      return 'floatingTerminal.toggle'
-    case 'toggleLeftSidebar':
-      return 'sidebar.left.toggle'
-    case 'toggleRightSidebar':
-      return 'sidebar.right.toggle'
-    case 'openQuickOpen':
-      return 'worktree.quickOpen'
-    case 'toggleQuickCommandsMenu':
-      return 'tab.openQuickCommandsMenu'
-    case 'openNewWorkspace':
-      return 'workspace.create'
-    case 'deleteCurrentWorkspace':
-      return 'workspace.delete'
-    case 'openWorkspaceBoard':
-      return 'workspace.openBoard'
-    case 'openTasks':
-      return 'view.tasks'
-    case 'toggleAgentDashboard':
-      return 'dashboard.toggle'
-    case 'switchRecentTab':
-      return 'tab.previousRecent'
-    case 'worktreeHistoryNavigate':
-      return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
-    case 'dictationKeyDown':
-      return 'voice.dictation'
-    case 'jumpToWorktreeIndex':
-      return 'workspace.selectByIndex'
-    case 'jumpToTabIndex':
-      return 'tab.selectByIndex'
-  }
 }
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {

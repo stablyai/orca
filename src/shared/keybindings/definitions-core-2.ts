@@ -1,3 +1,4 @@
+import { TAB_GROUP_FOCUS_DEFINITIONS } from './definitions-tab-group-focus'
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 
@@ -221,6 +222,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Ctrl+PageUp']),
     allowInTerminal: true
   },
+  ...TAB_GROUP_FOCUS_DEFINITIONS,
   {
     id: 'tab.selectByIndex',
     title: 'Select Tab 1–9',

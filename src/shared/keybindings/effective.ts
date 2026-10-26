@@ -118,6 +118,8 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'view.tasks': 'afterBrowserChords',
   'dashboard.toggle': 'afterBrowserChords',
   'tab.previousRecent': 'beforeBrowserChords',
+  'tab.focusNextGroup': 'beforeBrowserChords',
+  'tab.focusPreviousGroup': 'beforeBrowserChords',
   'workspace.selectByIndex': 'afterBrowserChords',
   'tab.selectByIndex': 'afterBrowserChords',
   'tab.openQuickCommandsMenu': 'afterBrowserChords'

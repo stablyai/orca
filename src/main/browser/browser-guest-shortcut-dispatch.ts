@@ -50,6 +50,7 @@ export function forwardGuestShortcutInput(
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace' ||
+      action?.type === 'focusTabGroup' ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -75,6 +76,12 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:toggleFloatingTerminal')
+    return true
+  }
+
+  if (action?.type === 'focusTabGroup') {
+    event.preventDefault()
+    resolveRenderer(browserTabId)?.send('ui:focusTabGroup', action.direction, browserTabId)
     return true
   }
 

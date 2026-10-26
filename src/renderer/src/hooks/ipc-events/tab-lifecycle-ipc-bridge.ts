@@ -65,4 +65,13 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
     })
   )
+  unsubs.push(
+    window.api.ui.onFocusTabGroup?.((direction, sourcePageId) => {
+      dispatchWorkspaceTabCommand({
+        type: 'focus-group',
+        direction,
+        ...(sourcePageId ? { sourcePageId } : {})
+      })
+    }) ?? (() => {})
+  )
 }
