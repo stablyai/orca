@@ -3,8 +3,10 @@ import {
   CONNECTOR_LIMITS,
   ConnectorDeliverySchema,
   type ConnectorAcksRequest,
+  type ConnectorConversation,
   type ConnectorDelivery
 } from '@orca-cloud/connector-contract'
+import { conversationKey, conversationOf } from './connector-threads.js'
 
 // NOTIFY channel; the payload is the host id whose inbox changed.
 export const INBOX_CHANNEL = 'connector_inbox'
@@ -17,12 +19,23 @@ export type DeliveryBody = ConnectorDelivery extends infer D
     : never
   : never
 
+export type ExpiredThread = { hostId: string; conversation: ConnectorConversation }
 export type EnqueueResult = 'queued' | 'duplicate' | 'dropped'
-export type Unsettled = { deliveryId: string; conversation: { source: 'slack'; externalId: string } }
+export type Unsettled = { deliveryId: string; conversation: ConnectorConversation }
 
-const conversation = (externalId: string) => ({ source: 'slack' as const, externalId })
+// The row's own start expired or was dropped without ever being leased: a send never outlives it.
+const behindDeadStart = (row: string) => `${row}.kind <> 'start' AND EXISTS (SELECT 1
+  FROM connector_inbox s
+  WHERE s.host_id = ${row}.host_id AND s.source = ${row}.source
+    AND s.external_id = ${row}.external_id AND s.kind = 'start'
+    AND s.seq < ${row}.seq AND s.state IN ('expired', 'dropped') AND s.lease_until IS NULL
+    AND NOT EXISTS (SELECT 1 FROM connector_inbox n WHERE n.host_id = s.host_id
+      AND n.source = s.source AND n.external_id = s.external_id AND n.kind = 'start' AND n.seq > s.seq
+      AND n.seq < ${row}.seq))`
 
-// States: pending -> leased -> received -> done, or expired / dropped. Text leaves with settlement.
+// States: pending -> leased -> received -> done, or expired / dropped. A start can enter as held,
+// unleasable until attach() finishes its prompt; it blocks and expires like pending. Text leaves
+// with settlement.
 export class ConnectorInbox {
   constructor(
     private readonly database: CloudDatabase,
@@ -33,23 +46,34 @@ export class ConnectorInbox {
   // Under the host lock, after the caller found the host and bound the thread (queueDelivery).
   async enqueue(
     transaction: CloudDatabase,
-    input: { hostId: string; externalId: string; deliveryId: string; body: DeliveryBody }
+    input: {
+      hostId: string
+      conversation: ConnectorConversation
+      deliveryId: string
+      // The source message it carries, which a held start reads its thread up to.
+      messageId?: string
+      body: DeliveryBody
+      held?: boolean
+    }
   ): Promise<EnqueueResult> {
-    const { hostId, externalId, deliveryId, body } = input
+    const { hostId, conversation, deliveryId, body } = input
     const now = this.now()
     const { kind, ...payload } = body
     const [inserted] = await transaction.query(
       `INSERT INTO connector_inbox
-       (host_id, delivery_id, external_id, seq, kind, payload, state, expires_at, created_at)
-       SELECT ?, ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, 'pending', ?, ?
+       (host_id, delivery_id, source, external_id, message_id, seq, kind, payload, state,
+        expires_at, created_at)
+       SELECT ?, ?, ?, ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ?
        FROM connector_inbox WHERE host_id = ?
        ON CONFLICT (host_id, delivery_id) DO NOTHING`,
       [
         hostId,
         deliveryId,
-        externalId,
+        ...conversationKey(conversation),
+        input.messageId ?? null,
         kind,
         JSON.stringify(payload),
+        input.held ? 'held' : 'pending',
         now + CONNECTOR_LIMITS.deliveryTtlMs,
         now,
         hostId
@@ -63,11 +87,11 @@ export class ConnectorInbox {
       // cancel included, so a retried cancel reads as a duplicate.
       const [dropped] = await transaction.query(
         `UPDATE connector_inbox SET state = 'dropped', payload = NULL, settled_at = ?
-         WHERE host_id = ? AND external_id = ? AND state = 'pending'
+         WHERE host_id = ? AND source = ? AND external_id = ? AND state IN ('pending', 'held')
            AND EXISTS (SELECT 1 FROM connector_inbox s WHERE s.host_id = connector_inbox.host_id
-             AND s.external_id = connector_inbox.external_id AND s.kind = 'start'
-             AND s.state = 'pending')`,
-        [now, hostId, externalId]
+             AND s.source = connector_inbox.source AND s.external_id = connector_inbox.external_id
+             AND s.kind = 'start' AND s.state IN ('pending', 'held'))`,
+        [now, hostId, ...conversationKey(conversation)]
       )
       if (Number(dropped?.changes ?? 0) > 0) {
         return 'dropped'
@@ -85,17 +109,18 @@ export class ConnectorInbox {
   ): Promise<{ deliveries: ConnectorDelivery[]; nextLeaseDueAt: number | null }> {
     const now = this.now()
     const rows = await transaction.query(
-      `SELECT delivery_id, external_id, seq, kind, payload, expires_at FROM connector_inbox i
+      `SELECT delivery_id, source, external_id, seq, kind, payload, expires_at FROM connector_inbox i
        WHERE i.host_id = ? AND i.expires_at > ?
          AND (i.state = 'pending' OR (i.state = 'leased' AND i.lease_until <= ?))
          AND (
            NOT EXISTS (SELECT 1 FROM connector_inbox e WHERE e.host_id = i.host_id
-             AND e.external_id = i.external_id AND e.seq < i.seq
-             AND e.state IN ('pending', 'leased'))
+             AND e.source = i.source AND e.external_id = i.external_id AND e.seq < i.seq
+             AND e.state IN ('pending', 'held', 'leased'))
            OR (i.kind = 'cancel' AND NOT EXISTS (SELECT 1 FROM connector_inbox s
-             WHERE s.host_id = i.host_id AND s.external_id = i.external_id
-               AND s.kind = 'start' AND s.state IN ('pending', 'leased')))
+             WHERE s.host_id = i.host_id AND s.source = i.source AND s.external_id = i.external_id
+               AND s.kind = 'start' AND s.state IN ('pending', 'held', 'leased')))
          )
+         AND NOT (${behindDeadStart('i')})
        ORDER BY i.seq LIMIT ?`,
       [hostId, now, now, CONNECTOR_LIMITS.maxDeliveriesPerPoll]
     )
@@ -118,7 +143,7 @@ export class ConnectorInbox {
           deliveryId: row.delivery_id,
           seq: Number(row.seq),
           expiresAt: Number(row.expires_at),
-          conversation: conversation(String(row.external_id))
+          conversation: conversationOf(row)
         })
       )
     }
@@ -130,16 +155,45 @@ export class ConnectorInbox {
     return { deliveries, nextLeaseDueAt: next?.due === null ? null : Number(next?.due) }
   }
 
+  // Finishes a held start's prompt and lets it go out; false once it expired or was dropped.
+  async attach(
+    transaction: CloudDatabase,
+    hostId: string,
+    deliveryId: string,
+    prompt: string
+  ): Promise<boolean> {
+    const now = this.now()
+    const [row] = await transaction.query(
+      `SELECT payload FROM connector_inbox
+       WHERE host_id = ? AND delivery_id = ? AND state = 'held' AND expires_at > ?`,
+      [hostId, deliveryId, now]
+    )
+    if (!row) {
+      return false
+    }
+    // The expiry sweep doesn't take the host lock; the state guard keeps its verdict.
+    const [attached] = await transaction.query(
+      `UPDATE connector_inbox SET state = 'pending', payload = ?
+       WHERE host_id = ? AND delivery_id = ? AND state = 'held' AND expires_at > ?`,
+      [JSON.stringify({ ...JSON.parse(String(row.payload)), prompt }), hostId, deliveryId, now]
+    )
+    if (Number(attached?.changes ?? 0) === 0) {
+      return false
+    }
+    await this.wake(transaction, hostId)
+    return true
+  }
+
   // What an earlier process received but never settled; the first poll after each hello lists it.
   async listUnsettled(transaction: CloudDatabase, hostId: string): Promise<Unsettled[]> {
     const rows = await transaction.query(
-      `SELECT delivery_id, external_id FROM connector_inbox
+      `SELECT delivery_id, source, external_id FROM connector_inbox
        WHERE host_id = ? AND state = 'received' ORDER BY seq`,
       [hostId]
     )
     return rows.map((row) => ({
       deliveryId: String(row.delivery_id),
-      conversation: conversation(String(row.external_id))
+      conversation: conversationOf(row)
     }))
   }
 
@@ -176,24 +230,39 @@ export class ConnectorInbox {
     }
   }
 
-  // Pending past its deadline, or leased and never received 30 s after it. Returns the threads hit.
-  async expireDue(): Promise<{ hostId: string; externalId: string }[]> {
+  // Pending or held past its deadline, or leased and never received 30 s after it, then what is
+  // queued behind a start that never left. Returns the threads hit.
+  // `effects` runs in the same transaction, so what the expiry owes the threads commits with it.
+  async expireDue(
+    effects?: (transaction: CloudDatabase, threads: ExpiredThread[]) => Promise<void>
+  ): Promise<ExpiredThread[]> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
-      const rows = await transaction.query(
+      const due = await transaction.query(
         `UPDATE connector_inbox SET state = 'expired', payload = NULL, settled_at = ?
-         WHERE (state = 'pending' AND expires_at <= ?) OR (state = 'leased' AND expires_at <= ?)
-         RETURNING host_id, external_id`,
+         WHERE (state IN ('pending', 'held') AND expires_at <= ?)
+           OR (state = 'leased' AND expires_at <= ?)
+         RETURNING host_id, source, external_id`,
         [now, now, now - CONNECTOR_LIMITS.leasedExpiryGraceMs]
       )
-      const threads = new Map<string, { hostId: string; externalId: string }>()
+      // By state, not by this pass's verdicts, so a send that committed behind a start an earlier
+      // pass expired goes too. A start that was leased may yet be received; what is behind it stays.
+      const behind = await transaction.query(
+        `UPDATE connector_inbox SET state = 'expired', payload = NULL, settled_at = ?
+         WHERE state = 'pending' AND ${behindDeadStart('connector_inbox')}
+         RETURNING host_id, source, external_id`,
+        [now]
+      )
+      const rows = [...due, ...behind]
+      const threads = new Map<string, ExpiredThread>()
       for (const row of rows) {
-        const thread = { hostId: String(row.host_id), externalId: String(row.external_id) }
-        threads.set(`${thread.hostId}\0${thread.externalId}`, thread)
+        const thread = { hostId: String(row.host_id), conversation: conversationOf(row) }
+        threads.set([thread.hostId, ...conversationKey(thread.conversation)].join('\0'), thread)
       }
       for (const hostId of new Set([...threads.values()].map((thread) => thread.hostId))) {
         await this.wake(transaction, hostId)
       }
+      await effects?.(transaction, [...threads.values()])
       return [...threads.values()]
     })
   }

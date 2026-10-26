@@ -1,10 +1,6 @@
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
-import {
-  getProcessOutputFields,
-  iterateProcessOutputLines
-} from '../../shared/process-output-field-scanner'
 import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type {
   AppMemory,
@@ -18,6 +14,15 @@ import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
+import { readDarwinProcessFootprints } from './darwin-process-footprint'
+import { getLocalDaemonPid } from './local-daemon-pid'
+import {
+  buildProcessIndex,
+  collectSubtree,
+  parsePsOutput,
+  type ProcIndex,
+  type ProcRow
+} from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
@@ -37,6 +42,7 @@ import {
 } from './memory-snapshot-values'
 
 export type { MemorySnapshotStore } from './memory-snapshot-buckets'
+export { collectSubtree, parsePsOutput } from './process-index'
 
 let inflight: Promise<MemorySnapshot> | null = null
 
@@ -60,43 +66,13 @@ const execAsync = promisify(exec)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
-type ProcRow = {
-  pid: number
-  ppid: number
-  /** Percent of one core; may exceed 100 across cores. */
-  cpu: number
-  /** Resident memory in bytes. */
-  memory: number
-  /** Committed bytes, including paged-out memory; absent when unavailable. */
-  privateMemory?: number
-}
-
-type ProcIndex = {
-  byPid: Map<number, ProcRow>
-  childrenOf: Map<number, number[]>
-  /** Missing commit counters must not look like measured zero. */
-  hasPrivateMemory: boolean
-}
-
 async function enumerateProcesses(): Promise<ProcIndex> {
-  const rows = os.platform() === 'win32' ? await enumerateWindows() : await enumerateUnix()
-
-  const byPid = new Map<number, ProcRow>()
-  const childrenOf = new Map<number, number[]>()
-  let hasPrivateMemory = false
-
-  for (const row of rows) {
-    byPid.set(row.pid, row)
-    hasPrivateMemory ||= row.privateMemory !== undefined
-    const siblings = childrenOf.get(row.ppid)
-    if (siblings) {
-      siblings.push(row.pid)
-    } else {
-      childrenOf.set(row.ppid, [row.pid])
-    }
-  }
-
-  return { byPid, childrenOf, hasPrivateMemory }
+  const platform = os.platform()
+  const [rows, footprints] = await Promise.all([
+    platform === 'win32' ? enumerateWindows() : enumerateUnix(),
+    platform === 'darwin' ? readDarwinProcessFootprints() : Promise.resolve(null)
+  ])
+  return buildProcessIndex(rows, footprints, getProcessMemoryMetric(platform))
 }
 
 async function enumerateUnix(): Promise<ProcRow[]> {
@@ -114,62 +90,8 @@ async function enumerateUnix(): Promise<ProcRow[]> {
   }
 }
 
-export function parsePsOutput(stdout: string): ProcRow[] {
-  const rows: ProcRow[] = []
-  for (const line of iterateProcessOutputLines(stdout)) {
-    const fields = getProcessOutputFields(line, 4)
-    if (fields.length < 4) {
-      continue
-    }
-    const pid = Number.parseInt(fields[0], 10)
-    const ppid = Number.parseInt(fields[1], 10)
-    const cpu = Number.parseFloat(fields[2])
-    const rssKb = Number.parseInt(fields[3], 10)
-    if (Number.isNaN(pid) || Number.isNaN(ppid)) {
-      continue
-    }
-    rows.push({
-      pid,
-      ppid,
-      cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
-      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
-    })
-  }
-  return rows
-}
-
 async function enumerateWindows(): Promise<ProcRow[]> {
   return enumerateWindowsProcessResources()
-}
-export function collectSubtree(
-  index: ProcIndex,
-  root: number,
-  excludedPids?: ReadonlySet<number>
-): number[] {
-  const result: number[] = []
-  const seen = new Set<number>()
-  const queue = [root]
-  while (queue.length > 0) {
-    const pid = queue.pop()
-    if (pid === undefined) {
-      break
-    }
-    // Earlier PTYs already claimed excluded subtrees; skip their descendants to avoid repeated walks.
-    if (seen.has(pid) || excludedPids?.has(pid)) {
-      continue
-    }
-    seen.add(pid)
-    if (index.byPid.has(pid)) {
-      result.push(pid)
-    }
-    const kids = index.childrenOf.get(pid)
-    if (kids) {
-      for (const kid of kids) {
-        queue.push(kid)
-      }
-    }
-  }
-  return result
 }
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
@@ -191,7 +113,9 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   const renderer = { cpu: 0, memory: 0, privateMemory: 0 }
   const other = { cpu: 0, memory: 0, privateMemory: 0 }
 
+  const electronPids = new Set<number>()
   for (const proc of getAppEnvironment().getAppMetrics()) {
+    electronPids.add(proc.pid)
     const cpu = clampMemoryMetric(proc.cpu?.percentCPUUsage)
     const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
     // Electron does not report helper-process commit; reuse the host sweep.
@@ -208,6 +132,15 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
     target.cpu += cpu
     target.memory += memoryBytes
     target.privateMemory += privateBytes
+  }
+
+  // The terminal daemon is detached from Electron, so getAppMetrics omits it; its PTY children stay with their worktrees.
+  const daemonPid = getLocalDaemonPid()
+  const daemon = daemonPid === null ? undefined : processIndex.byPid.get(daemonPid)
+  if (daemon && !electronPids.has(daemon.pid)) {
+    other.cpu += daemon.cpu
+    other.memory += daemon.memory
+    other.privateMemory += clampMemoryMetric(daemon.privateMemory)
   }
 
   const usage = (bucket: typeof main): UsageValues => ({
@@ -331,7 +264,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
     host,
-    processMemoryMetric: getProcessMemoryMetric(),
+    processMemoryMetric: processIndex.memoryMetric,
     ...snapshotCommitFields(
       processIndex.hasPrivateMemory,
       clampMemoryMetric(appBuckets.privateMemory) + sessionPrivateTotal

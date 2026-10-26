@@ -73,7 +73,9 @@ describe('the idle sweep', () => {
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
     rig.clock.now += IDLE_MS + 1
 
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
     await vi.waitFor(() => expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released'))
     await vi.waitFor(() => expect(rig.adapter.acknowledgeSessionRelease).toHaveBeenCalledOnce())
     expect(rig.adapter.acknowledgeSessionRelease).toHaveBeenCalledWith(SESSION)
@@ -130,7 +132,9 @@ describe('the idle sweep', () => {
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     reportChildren(childEdge('subagent-1', 'agent', 'done'))
     rig.clock.now += IDLE_MS + 1
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   // Leave time for the lead’s wake-up turn after child completion, before its first journal row.
@@ -144,7 +148,9 @@ describe('the idle sweep', () => {
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     rig.clock.now += IDLE_MS + 1
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   // Recheck each tick so late-finishing work still gets a full idle window.
@@ -161,7 +167,9 @@ describe('the idle sweep', () => {
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     rig.clock.now += IDLE_MS
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   it('stops an agent whose child records hold only children that went idle or finished', async () => {
@@ -174,7 +182,9 @@ describe('the idle sweep', () => {
     )
     rig.clock.now += IDLE_MS + 1
 
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   it('never stops an agent while its lead turn runs, however quiet (P2-10)', async () => {
@@ -197,7 +207,9 @@ describe('the idle sweep', () => {
     await rig.host.subscribe({ id: 'on-screen', sessionId: SESSION, emit: reader.emit })
     rig.clock.now += IDLE_MS + 1
 
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
     expect(reader.events.some((event) => event.type === 'end')).toBe(false)
   })
 
@@ -215,7 +227,9 @@ describe('the idle sweep', () => {
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     rig.clock.now += IDLE_MS
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   it('never stops the retry whose orchestration dispatch is open, and stops it once it settles (P2-19 i)', async () => {
@@ -231,7 +245,9 @@ describe('the idle sweep', () => {
     expect(hasOpenDispatch).toHaveBeenCalledWith(expect.objectContaining({ sessionId: SESSION }))
     open = false
     rig.clock.now += IDLE_MS + 1
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   // Rate-limited CLIs can hold unacknowledged sends before any turn row; trust provider evidence.
@@ -247,7 +263,9 @@ describe('the idle sweep', () => {
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     rig.clock.now += IDLE_MS + 1
-    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
   })
 
   it('keeps a child an unanswered prompt waits on (P2-22 i)', async () => {
@@ -329,7 +347,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       now: () => IDLE_MS + 1,
       isDisposed: () => false,
       deliveryActive: () => false,
-      store: { getRecord: () => null, replacedRuntime: () => undefined },
+      store: { getConversation: () => null, replacedRuntime: () => undefined },
       childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,

@@ -151,7 +151,8 @@ export function patchPackagedProcessPath(): void {
         join(home, '.nix-profile/bin'),
         // GUI PATH omits agent-specific install directories (#829).
         join(home, '.opencode/bin'),
-        join(home, '.vite-plus/bin')
+        join(home, '.vite-plus/bin'),
+        join(home, '.grok/bin')
       )
     }
   }

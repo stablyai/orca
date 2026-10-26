@@ -187,6 +187,8 @@ export type OrcadManagedConversionResult =
       migrationId: string
       /** Projects the server already held, so this desktop's own state for them did not move. */
       linkedProjects?: SshManagedServerLinkedProject[]
+      /** Moved automations the server would not re-enable; they stay off there. */
+      automationsLeftDisabled?: number
     }
   | OrcadManagedDeferral
   | OrcadManagedRefusal

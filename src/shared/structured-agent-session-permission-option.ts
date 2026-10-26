@@ -3,8 +3,11 @@
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes,
+  chatModelSupportsAutoMode,
+  offeredChatPermissionModes,
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from './native-chat-session-options'
 
@@ -26,14 +29,14 @@ const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; descr
     }
   }
 
-const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
-  ask: 'Edits files and runs commands in this workspace; asks before anything else',
-  'full-access': 'Never asks; can edit any file and use the network'
-}
-
 // Claude's copy names the person's own settings; other agents decide what they already allow.
 const OTHER_AGENT_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
   ask: "Asks before edits or commands it isn't already allowed to make"
+}
+
+const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
+  ...OTHER_AGENT_DESCRIPTIONS,
+  'full-access': 'Never asks; can edit any file and use the network'
 }
 
 const ANTIGRAVITY_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
@@ -51,9 +54,22 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
+function currentModelSupportsAutoMode(
+  catalog: AgentSessionOptionCatalog | null,
+  record: StructuredAgentSessionOptionRecord
+): boolean {
+  const model = record.values.model?.value
+  return (
+    catalog !== null &&
+    chatModelSupportsAutoMode(catalog.models, typeof model === 'string' ? model : undefined)
+  )
+}
+
 export function structuredAgentSessionPermissionDescriptor(state: {
+  catalog: AgentSessionOptionCatalog | null
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
+  pendingId?: string | null
   permissionOwnSupported?: boolean | null
   reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
@@ -66,6 +82,12 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     state.reportedPermissionMode === undefined && !own && state.permissionOwnSupported !== true
       ? (state.permissionMode ?? undefined)
       : (state.reportedPermissionMode ?? undefined)
+  const offered = offeredChatPermissionModes(
+    support,
+    state.permissionMode === 'auto' ||
+      current === 'auto' ||
+      (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
+  )
   const reported = support.modes.find((mode) => mode === current)
   const label = reported
     ? MODE_COPY[reported].label
@@ -82,7 +104,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     kind: {
       type: 'select',
       currentValue: current,
-      choices: support.modes.map((value) => ({
+      choices: offered.map((value) => ({
         value,
         label: MODE_COPY[value].label,
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description

@@ -20,8 +20,16 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from './tui-agent-launch-defaults'
-import { applyAllAgentsPermission, resolveAgentPermission } from './tui-agent-permission-choice'
-import { agentArgsSetPermission, migrateAgentPermissionChoice } from './tui-agent-permission-lift'
+import {
+  agentPermissionArgs,
+  applyAllAgentsPermission,
+  resolveAgentPermission
+} from './tui-agent-permission-choice'
+import {
+  agentArgsSetPermission,
+  liftAgentPermissionArgs,
+  migrateAgentPermissionChoice
+} from './tui-agent-permission-lift'
 
 const legacy = (
   args: Record<string, string>,
@@ -32,6 +40,16 @@ const legacy = (
 })
 
 describe('one-time move of permission flags out of Arguments', () => {
+  it('lifts the canonical read-only Codex Ask and uses it for stored Ask choices', () => {
+    const recipe = '-a on-request -s read-only -c approvals_reviewer=user'
+    expect(agentPermissionArgs('codex', 'ask')).toBe(recipe)
+    expect(liftAgentPermissionArgs('codex', `${recipe} --search`)).toEqual({
+      choice: 'ask',
+      args: '--search'
+    })
+    expect(resolveTuiAgentLaunchArgs('codex', { agentPermissionDefault: 'ask' })).toBe(recipe)
+  })
+
   it('imports Grok modes from recorded 1.0.62 help without taking ownership of other modes', () => {
     // Installed 1.0.62 (1474f9cbdd91) --help, permission-mode excerpt; not captured argv.
     const recordedHelp = `      --permission-mode <MODE>
@@ -715,7 +733,8 @@ it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
         providerSession: { key: 'session_id', id: 's' }
       })
     )
-    expect(plan?.launchConfig.agentCommand).toBe(`claude ${raw}`)
+    // Restart records surviving raw pins; the provider restores the generated model seed.
+    expect(plan?.launchConfig.agentCommand).toBe(resume ? 'claude' : `claude ${raw}`)
     expect(plan?.launchCommand).toBe(`claude ${resume ? "'--model' 'opus' '--resume' 's'" : raw}`)
     expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
     expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])

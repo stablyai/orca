@@ -38,7 +38,9 @@ export function carriedStoppedHistory(
   return selectStoppedHistory(
     agentSessionStoppedHistoryOwed({
       submissions: ctx.journal.submissions(),
-      carried: ctx.journal.stoppedHistoryCarried(),
+      carried: new Map(
+        [...ctx.journal.stoppedHistoryCarried()].filter(([id]) => id !== submission.clientMessageId)
+      ),
       clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
       body: (id) => ctx.journal.itemBody(agentJournalSubmissionKey(id))
     }),

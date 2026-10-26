@@ -53,6 +53,9 @@ export type SourceControlAgentActionDialogProps = {
     commandInput: string
     /** Omitted when CLI arguments do not apply to this launch, so it resolves the global setting. */
     agentArgs?: string
+    /** The action's saved choice, on either route. */
+    sessionOptions?: Readonly<Record<string, string>>
+    sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>
 }
 
@@ -81,6 +84,7 @@ export function SourceControlAgentActionDialog(
     statusCopy,
     agentArgs,
     agentArgsApply,
+    recipe,
     commandTemplate,
     saveLaunchRecipe,
     saveTargetValue,
@@ -118,6 +122,7 @@ export function SourceControlAgentActionDialog(
             statusCopy={statusCopy}
             agentArgs={agentArgs}
             agentArgsApply={agentArgsApply}
+            recipe={recipe}
             commandTemplate={commandTemplate}
             savedCommandInputTemplate={savedCommandInputTemplate}
             saveLaunchRecipe={saveLaunchRecipe}

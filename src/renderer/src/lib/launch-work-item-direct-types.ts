@@ -30,6 +30,12 @@ export type LaunchWorkItemDirectArgs = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  /** The saved choice for `agentOverride`; a chat seeds it and a terminal applies it as flags. */
+  sessionOptions?: Readonly<Record<string, string>>
+  /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
+  sessionOptionsYieldToAgentArgs?: true
+  resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
+  resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   promptDelivery?: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
 }

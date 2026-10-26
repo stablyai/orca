@@ -46,6 +46,7 @@ export function RepositorySourceControlAiSection({
     updateHostedReviewDefault,
     updateActionMode,
     updateActionAgent,
+    updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,
     appendVariable,
@@ -97,6 +98,7 @@ export function RepositorySourceControlAiSection({
         actionDirtyById={actionDirtyById}
         onActionModeChange={updateActionMode}
         onActionAgentChange={updateActionAgent}
+        onActionLaunchPreferencesChange={updateActionLaunchPreferences}
         onActionTemplateChange={updateActionTemplate}
         onActionAgentArgsChange={updateActionAgentArgs}
         onAppendVariable={appendVariable}

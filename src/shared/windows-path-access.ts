@@ -70,7 +70,7 @@ export function classifyRejectedWindowsPath(windowsPath: string): WindowsPathRej
   return parsed ? { kind: 'other-distro', distro: parsed.distro } : { kind: 'not-wsl' }
 }
 
-function stripWin32LongPathPrefix(path: string): string {
+export function stripWin32LongPathPrefix(path: string): string {
   if (/^\\\\\?\\UNC\\/i.test(path)) {
     return `\\\\${path.slice('\\\\?\\UNC\\'.length)}`
   }

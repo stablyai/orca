@@ -90,3 +90,10 @@ export const AiVaultSessionTitlesParams = z.object({
     )
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
 })
+
+// The host revalidates the path against its own roots; no host id travels because the host deletes only its own files.
+export const AiVaultDeleteSessionParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512).optional(),
+  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
+})

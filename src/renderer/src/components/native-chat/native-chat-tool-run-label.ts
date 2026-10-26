@@ -191,7 +191,7 @@ const LOCALIZED_WORDS: NativeChatToolRunSentenceWords = {
     }),
   list: (leading, last) =>
     translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
-      value0: leading,
+      value0: leading.join(translate('components.native-chat.tool.runListSeparator', ', ')),
       value1: last
     })
 }

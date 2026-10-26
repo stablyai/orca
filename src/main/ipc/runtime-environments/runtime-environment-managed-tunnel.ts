@@ -143,8 +143,16 @@ export function installManagedOrcadStartStatus(): void {
   })
 }
 
-export function publishResolvedChangedHostStatus(target: SshTarget, environmentId: string): void {
-  setSshHostServerStatus(target.id, { kind: 'managed', environmentId })
+export function publishResolvedChangedHostStatus(
+  target: SshTarget,
+  environmentId: string,
+  automationsLeftDisabled = 0
+): void {
+  setSshHostServerStatus(target.id, {
+    kind: 'managed',
+    environmentId,
+    ...(automationsLeftDisabled > 0 ? { automationsLeftDisabled } : {})
+  })
   // Moves release the relay session; publish even when its stale status line is disconnected.
   broadcastSshState(
     getCurrentMainWindow,

@@ -19,19 +19,12 @@ export function SourceControlAgentCliArgsField({
   return (
     <div className="space-y-2">
       <Label htmlFor="source-control-agent-cli-args" className="text-xs">
-        {translate(
-          'auto.components.right.sidebar.SourceControlAgentActionDialogForm.bc8dc39f4b',
-          'CLI arguments'
-        )}
+        {translate('settings.sourceControl.actionModel.extraArgs', 'Extra CLI arguments')}
       </Label>
       <Input
         id="source-control-agent-cli-args"
         value={value}
         spellCheck={false}
-        placeholder={translate(
-          'auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb',
-          '--model sonnet'
-        )}
         onChange={(event) => onChange(event.target.value)}
         className="h-8 font-mono text-xs"
       />

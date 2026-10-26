@@ -5,6 +5,17 @@ import {
   type OpenCloudDatabaseInput
 } from '@orca-cloud/cloud-database'
 import { connectorSchemaStatements } from './connector-schema.js'
+import { discordSchemaStatements } from './discord-schema.js'
+import { slackSchemaStatements } from './slack-schema.js'
+
+// Production has run these CREATE TABLEs, so editing one never reaches it. Change the schema by
+// appending idempotent statements (ADD COLUMN IF NOT EXISTS, nullable or defaulted) after them;
+// connector-schema-upgrade.test.ts boots the shipped baseline, then this list.
+export const connectorBootStatements = () => [
+  ...connectorSchemaStatements(),
+  ...slackSchemaStatements(),
+  ...discordSchemaStatements()
+]
 
 export async function openConnectorDatabase(
   input: Omit<OpenCloudDatabaseInput, 'service' | 'schemaStatements'>
@@ -12,10 +23,10 @@ export async function openConnectorDatabase(
   return await openCloudDatabase({
     ...input,
     service: 'connector',
-    schemaStatements: connectorSchemaStatements()
+    schemaStatements: connectorBootStatements()
   })
 }
 
 export async function openInMemoryConnectorDatabase(): Promise<CloudDatabase> {
-  return await openInMemoryCloudDatabase(connectorSchemaStatements())
+  return await openInMemoryCloudDatabase(connectorBootStatements())
 }

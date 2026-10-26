@@ -46,6 +46,7 @@ describe('per-launch structured feasibility', () => {
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
     ['a custom start directory', { startsOutsideWorkspaceRoot: true }, 'custom-start-directory'],
+    ['a host-nested SSH project', { projectExecutionKind: 'ssh' }, 'remote-execution-host'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
     ['an unanswered host', { hostCapabilities: null }, 'runtime-capability-unknown']

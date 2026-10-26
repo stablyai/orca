@@ -1,5 +1,6 @@
 import type * as pty from 'node-pty'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
+import * as foreground from '../../providers/pty-foreground-confirmation'
 import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
 import {
@@ -11,7 +12,6 @@ import {
   readWindowsPtyJobProcessIds
 } from '../../providers/windows-pty-job-membership'
 
-import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -43,7 +43,7 @@ export type PtyForegroundProcessTracker = {
   markDead(): void
   /** rawFallback bypasses cached identity and process-table refreshes for cheap polling. */
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
-  confirmForegroundProcess(): Promise<string | null>
+  confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
 }
 
@@ -266,45 +266,44 @@ export function createPtyForegroundProcessTracker(args: {
         return null
       }
     },
-    confirmForegroundProcess: async () => {
+    confirmForegroundProcess: async (context) => {
       if (args.isDead() || !proc.pid) {
         return null
       }
+      const decision = process.platform === 'win32' && context?.decision === true
+      const anchor = cachedAgentForeground
       try {
         const fallbackProcess = getFallbackProcess()
-        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
-        if (
-          !fallbackProcess ||
-          (fallbackRecognition !== null &&
-            process.platform !== 'win32' &&
-            !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-          (process.platform !== 'win32' && !shouldInspectFallback(fallbackProcess))
-        ) {
+        if (!foreground.shouldConfirmPtyForeground(fallbackProcess, decision)) {
           return fallbackProcess
         }
-        const resolution = await resolveForeground(proc.pid, fallbackProcess, {
+        const { resolution, processName: name } = await foreground.confirmFreshPtyForeground({
+          process: proc,
+          fallbackProcess,
           contextPaths,
-          fresh: true,
-          ...(process.platform === 'win32'
-            ? {
-                forceProcessScan: true,
-                readWindowsConsoleAttachedProcessIds: () =>
-                  readWindowsConsoleAttachedProcessIds(proc.pid)
-              }
-            : {})
+          decision,
+          anchor,
+          anchorAt: anchor?.refreshedAt
         })
-        if (args.isDead() || !resolution.available) {
+        if (args.isDead()) {
           return null
         }
-        const processName =
-          recognizeAgentProcess(resolution.processName)?.processName ?? resolution.processName
-        if (shouldCachePtyForeground(processName, staticName)) {
-          cacheAgentForeground(processName, resolution.processId ?? null)
-          return processName
+        if (!resolution.available && !decision) {
+          return null
         }
-        cachedAgentForeground = null
-        startupAgentForeground = null
-        return resolution.processName
+        const recognized = recognizeAgentProcess(resolution.processName)
+        const processName = decision ? name : (recognized?.processName ?? resolution.processName)
+        const cacheName = decision ? (recognized?.processName ?? null) : processName
+        if (
+          resolution.available &&
+          shouldCachePtyForeground(cacheName, decision ? false : staticName)
+        ) {
+          cacheAgentForeground(cacheName, resolution.processId ?? null)
+        } else if (!decision || processName !== anchor?.processName) {
+          cachedAgentForeground = null
+          startupAgentForeground = null
+        }
+        return processName
       } catch {
         return null
       }

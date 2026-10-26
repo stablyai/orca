@@ -109,7 +109,7 @@ class SqliteDatabase extends SqliteTransaction {
 class PostgresTransaction implements CloudDatabase {
   readonly dialect = 'postgres' as const
 
-  constructor(private readonly client: pg.PoolClient) {}
+  constructor(private readonly client: pg.ClientBase) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const result = await this.client.query(postgresSql(sql), params)
@@ -142,6 +142,22 @@ class PostgresTransaction implements CloudDatabase {
   }
 
   async close(): Promise<void> {}
+}
+
+// One transaction on a caller's own connection, such as the one holding a session lock.
+export async function runClientTransaction<T>(
+  client: pg.ClientBase,
+  operation: (transaction: CloudDatabase) => Promise<T>
+): Promise<T> {
+  try {
+    await client.query('BEGIN')
+    const result = await operation(new PostgresTransaction(client))
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined)
+    throw error
+  }
 }
 
 function retryablePostgresTransactionError(error: unknown): boolean {
@@ -177,12 +193,8 @@ class PostgresDatabase implements CloudDatabase {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pool.connect()
       try {
-        await client.query('BEGIN')
-        const result = await operation(new PostgresTransaction(client))
-        await client.query('COMMIT')
-        return result
+        return await runClientTransaction(client, operation)
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined)
         if (
           !retryablePostgresTransactionError(error) ||
           attempt === POSTGRES_TRANSACTION_ATTEMPTS

@@ -10,14 +10,16 @@ import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
+  getPowerShellOsc133Bootstrap,
+  getPowerShellOsc133StartupCommandMark
 } from '../powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 
 /** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */
 export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
-const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
+// Includes ~400 encoded chars for the startup command mark so real commands keep the prior budget.
+const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_400
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 export const ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV = 'ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE'
 const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}%%ORCA_CODEX_LAUNCH_PREFLIGHT%%${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}% agent hooks prepare-codex > nul 2>&1`
@@ -88,7 +90,7 @@ function getPowerShellEncodedCommand(
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
 
-  const command = `${bootstrap}\n${startupCommand}`
+  const command = `${bootstrap}\n${getPowerShellOsc133StartupCommandMark()}\n${startupCommand}`
   const encodedCommand = encodePowerShellCommand(command)
   // UTF-16/base64 expands payloads; leave margin under CreateProcess 32,767-character limit.
   if (encodedCommand.length > POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {

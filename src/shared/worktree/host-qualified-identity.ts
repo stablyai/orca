@@ -93,3 +93,14 @@ export function isWorktreeHostIdentity(identity: string): boolean {
     (separator > 0 && parseExecutionHostId(identity.slice(0, separator)) !== null)
   )
 }
+
+/**
+ * The copy a lookup names, or undefined when its matches span more than one host. Ids repeat
+ * across hosts, so a first-wins pick on an unqualified id can act on the other host's copy.
+ */
+export function findSoleHostCopy<T>(
+  matches: readonly T[],
+  hostKey: (row: T) => string | undefined
+): T | undefined {
+  return new Set(matches.map(hostKey)).size === 1 ? matches[0] : undefined
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveTaskPagePRCheckSummary } from './task-page-pr-check-summary'
+import { deriveTaskPagePRCheckSummary } from './task-page/task-page-pr-check-summary'
 import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
 import { derivePipelineStatus } from '../../../main/gitlab/mappers'
 import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'

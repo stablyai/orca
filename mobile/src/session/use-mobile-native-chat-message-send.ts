@@ -15,9 +15,9 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './native-chat/mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import { UNCONFIRMED_SEND_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
-import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import type { MobileNativeChatLaunchDraftSeed } from './native-chat/composer/use-mobile-native-chat-launch-draft-seed'
 import {
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText

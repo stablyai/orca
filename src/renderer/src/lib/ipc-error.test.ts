@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '../i18n/i18n'
+import es from '../i18n/locales/es.json'
+import {
+  OPENCODE_MODEL_CONFIG_REFUSAL,
+  OPENCODE_MODEL_TRANSPORT_REFUSAL,
+  OPENCODE_MODEL_VERSION_REFUSAL
+} from '../../../shared/agent-launch-model-preferences'
 import {
   compactIpcErrorMessage,
   extractIpcErrorMessage,
@@ -7,6 +14,30 @@ import {
 } from './ipc-error'
 
 describe('readIpcErrorMessage', () => {
+  it('localizes version, configuration and transport refusals without changing other errors', async () => {
+    const language = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      for (const [message, expected] of [
+        [OPENCODE_MODEL_VERSION_REFUSAL, es.agentLaunch.opencode.updateRequired],
+        [OPENCODE_MODEL_CONFIG_REFUSAL, es.agentLaunch.opencode.invalidConfig],
+        [OPENCODE_MODEL_TRANSPORT_REFUSAL, es.agentLaunch.opencode.unsupportedLaunch]
+      ]) {
+        expect(
+          readIpcErrorMessage(
+            new Error(`Error invoking remote method 'pty:create': OrchestrationError: ${message}`)
+          )
+        ).toBe(expected)
+      }
+      expect(readIpcErrorMessage(new Error('OpenCode: another failure'))).toBe(
+        'OpenCode: another failure'
+      )
+    } finally {
+      await i18n.changeLanguage(language)
+    }
+  })
+
   it('strips the Electron invoke wrapper Electron adds to a rejected handler', () => {
     expect(
       readIpcErrorMessage(

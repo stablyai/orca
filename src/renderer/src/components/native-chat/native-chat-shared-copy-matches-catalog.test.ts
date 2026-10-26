@@ -71,7 +71,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runToolOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.other.one],
     ['runToolMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.other.many],
     ['runPair', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.pair],
-    ['runList', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list]
+    ['runList', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list],
+    ['runListSeparator', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.separator]
   ])('tool.%s matches the shared run sentence copy', (key, value) => {
     expect(catalog.components['native-chat'].tool[key]).toBe(value)
   })

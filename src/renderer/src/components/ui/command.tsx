@@ -9,6 +9,7 @@ import * as DialogPrimitive from 'radix-ui/dialog'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
+import { DialogOverlay } from '@/components/ui/dialog'
 
 const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md', {
   variants: {
@@ -49,6 +50,7 @@ function CommandDialog({
   onCloseAutoFocus,
   contentClassName,
   overlayClassName,
+  surface = 'default',
   commandProps,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root> & {
@@ -59,6 +61,8 @@ function CommandDialog({
   onCloseAutoFocus?: (e: Event) => void
   contentClassName?: string
   overlayClassName?: string
+  /** `palette` is the larger full-search surface (worktree jump palette). */
+  surface?: 'default' | 'palette'
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
@@ -66,17 +70,14 @@ function CommandDialog({
   return (
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay
-          // Match DialogOverlay’s scrim/blur so it remains visible over the dark canvas.
-          className={cn(
-            'fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            overlayClassName
-          )}
-        />
+        <DialogOverlay className={overlayClassName} />
         <DialogPrimitive.Content
+          data-slot="command-dialog-content"
           // Match DialogContent’s surface/border/shadow recipe so the palette remains distinct in dark mode.
           className={cn(
-            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+            surface === 'palette' &&
+              'rounded-xl border-border/70 shadow-[0_26px_84px_rgba(0,0,0,0.32)]',
             contentClassName
           )}
           onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}

@@ -1,3 +1,7 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
 /** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -98,11 +102,14 @@ function place(
 }
 
 function installHost() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 }

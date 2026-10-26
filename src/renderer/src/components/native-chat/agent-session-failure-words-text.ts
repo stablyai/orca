@@ -149,6 +149,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
     conversationOpenElsewhere: () =>
       translate(
         'components.native-chat.failureWords.conversationOpenElsewhere',
@@ -235,8 +241,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
     agentStillWorking: () =>
       translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
-    waitForTurn: () =>
-      translate('components.native-chat.writeNotice.waitForTurn', COPY.waitForTurn),
     runCommandWhenDone: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandWhenDone',

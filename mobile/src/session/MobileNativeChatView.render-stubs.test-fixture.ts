@@ -65,7 +65,8 @@ export function gestureHandlerStub() {
 
 export async function composerStub() {
   const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
+  const { MobileNativeChatStopButton } =
+    await import('./native-chat/input/MobileNativeChatStopButton')
   return {
     MobileNativeChatComposer: (props: {
       onSend: (text: string) => Promise<boolean>

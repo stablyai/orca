@@ -171,7 +171,8 @@ async function doConnect(
       server.environmentId,
       server.update,
       server.serving,
-      server.linked
+      server.linked,
+      server.automationsLeftDisabled
     )
     // Publish first; the macOS-only check adds remote round trips.
     void import('./ssh-host-launch-session-note')

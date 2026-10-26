@@ -85,10 +85,7 @@ export function buildAgentStartupPlan(args: {
     : baseCommand
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Picker flags apply once; resumed providers restore their own state and keep only explicit user args.
-    agentCommand: recordedCommand.ok
-      ? recordedCommand.commandWithoutSessionOptions
-      : baseCommand.commandWithoutSessionOptions
+    ...(recordedCommand.ok ? recordedCommand.resumeLaunch : baseCommand.resumeLaunch)
   })
 
   if (!trimmedPrompt) {
@@ -250,8 +247,7 @@ export function buildAgentDraftLaunchPlan(args: {
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Resume must not replay one-time picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag && shell === 'cmd' && /[\r\n]/.test(trimmed)) {

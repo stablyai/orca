@@ -8,6 +8,7 @@ import {
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionComposerOptions } from '../../../src/shared/structured-agent-session-composer'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
@@ -53,6 +54,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
   >
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter
   // Older hosts accept neither per-chat model nor effort.
   sendOptions?: () => Readonly<Record<string, string>> | undefined
@@ -74,6 +76,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     onSendError,
     queueCapable,
     sendOptions,
+    sessionCommands,
     sessionId,
     stateRef,
     stopping
@@ -107,7 +110,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         sessionId,
         fence: currentFence,
         pending: commandPending,
-        controller: { agent: agent ?? undefined, ...controller },
+        controller: { agent: agent ?? undefined, ...controller, sessionCommands },
         busy: () =>
           actionableStructuredApproval(stateRef.current) ||
           actionableStructuredQuestion(stateRef.current)
@@ -180,6 +183,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       onSendError,
       queueCapable,
       sendOptions,
+      sessionCommands,
       sessionId,
       stateRef,
       stopping

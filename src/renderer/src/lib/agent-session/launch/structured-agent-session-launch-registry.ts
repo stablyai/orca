@@ -82,10 +82,12 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  resumeFrom?: StructuredAgentSessionResumeSource
+  scope: { resumeFrom?: StructuredAgentSessionResumeSource; executionHostId?: string } = {}
 ): string {
+  const { resumeFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom
-    ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
+    ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}`
     : `${agent}:${worktreeId}`
 }
 

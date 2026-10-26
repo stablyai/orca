@@ -19,6 +19,8 @@ import {
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
+import { worktreeCopyOwnerKey } from './slices/worktrees/metadata/worktree-copy-review-clear'
+import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -116,14 +118,20 @@ export function getWorktreeMapFromState(
   return getCachedWorktreeMap(selectWorktreesByRepo(state))
 }
 
-/** Use host-scoped rows for known owners (STA-4343); ID-only maps cannot represent same-ID twins. */
+/**
+ * The one copy of `worktreeId` on `hostId` (STA-4343). Ids repeat across hosts, so a lookup that
+ * still matches two copies answers undefined instead of first-wins; callers refuse rather than guess.
+ */
 export function getWorktreeOnHostFromState(
   state: Pick<AppState, 'worktreesByRepo'>,
   worktreeId: string,
   hostId: ExecutionHostId | undefined
 ): Worktree | undefined {
   const rows = getCachedWorktreesById(selectWorktreesByRepo(state), worktreeId)
-  return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
+  return findSoleHostCopy(
+    hostId ? rows.filter((row) => row.hostId === hostId) : rows,
+    worktreeCopyOwnerKey
+  )
 }
 
 export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {

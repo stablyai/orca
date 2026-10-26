@@ -202,19 +202,31 @@ export function resolveSourceControlActionRecipe(input: {
     source.actions,
     input.actionId
   )
-  return repoRecipe
-    ? {
-        ...globalRecipe,
-        commandInputTemplate,
-        ...(repoRecipe.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
-        ...(typeof repoRecipe.commandInputTemplate === 'string'
-          ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
-          : {}),
-        ...(typeof repoRecipe.agentArgs === 'string'
-          ? { agentArgs: repoRecipe.agentArgs.trim() }
-          : repoRecipe.agentArgs === null
-            ? { agentArgs: '' }
-            : {})
-      }
-    : { ...globalRecipe, commandInputTemplate }
+  if (!repoRecipe) {
+    return { ...globalRecipe, commandInputTemplate }
+  }
+  // A model belongs to its agent, so a repo on another agent never inherits the global model.
+  const { launchPreferences: globalLaunchPreferences, ...globalWithoutModel } = globalRecipe
+  const repoKeepsGlobalAgent = repoRecipe.agentId === undefined
+  const launchPreferences =
+    repoRecipe.launchPreferences ?? (repoKeepsGlobalAgent ? globalLaunchPreferences : undefined)
+  const inheritsChoiceUnderOwnArgs =
+    launchPreferences !== undefined &&
+    repoRecipe.launchPreferences === undefined &&
+    repoRecipe.agentArgs !== undefined
+  return {
+    ...globalWithoutModel,
+    commandInputTemplate,
+    ...(launchPreferences ? { launchPreferences } : {}),
+    ...(inheritsChoiceUnderOwnArgs ? { launchPreferencesYieldToAgentArgs: true as const } : {}),
+    ...(repoRecipe.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
+    ...(typeof repoRecipe.commandInputTemplate === 'string'
+      ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
+      : {}),
+    ...(typeof repoRecipe.agentArgs === 'string'
+      ? { agentArgs: repoRecipe.agentArgs.trim() }
+      : repoRecipe.agentArgs === null
+        ? { agentArgs: '' }
+        : {})
+  }
 }

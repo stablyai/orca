@@ -80,6 +80,8 @@ export type TerminalActions = {
       split?: TabSplitTarget
       recordInteraction?: boolean
       id?: string
+      /** `id` is a mirrored host tab's `web-terminal-` id, minted here and never taken from IPC. */
+      mirroredHostTab?: boolean
       launchAgent?: TuiAgent
       /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
       agentLaunchPane?: TerminalTab['agentLaunchPane']

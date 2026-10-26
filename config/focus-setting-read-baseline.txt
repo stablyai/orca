@@ -187,8 +187,8 @@
 4 src/renderer/src/components/use-task-page-jira-creation-metadata.ts
 4 src/renderer/src/components/use-task-page-jira-issue-creation.ts
 1 src/renderer/src/components/use-task-page-jira-list-effects.ts
-2 src/renderer/src/components/use-task-page-provider-metadata.ts
-2 src/renderer/src/components/use-task-page-store-bindings.ts
+2 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
+2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
 5 src/renderer/src/components/use-terminal-create-actions.ts
 2 src/renderer/src/components/use-worktree-jump-palette-controller.ts
 1 src/renderer/src/components/use-worktree-jump-palette-create-action.ts

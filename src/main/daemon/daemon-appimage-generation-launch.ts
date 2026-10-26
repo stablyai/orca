@@ -8,7 +8,7 @@ import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
 } from '../cli/appimage-extracted-root'
-import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
 
 export type AppImageGenerationDaemonLaunch = {
@@ -96,14 +96,8 @@ export function buildAppImageGenerationDaemonCommand(
   scriptArgs: string[],
   env: NodeJS.ProcessEnv
 ): DurableDaemonScopeCommand {
-  const childEnv: Record<string, string> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) {
-      childEnv[key] = value
-    }
-  }
   // Do not let the daemon or its terminals inherit paths into the window's FUSE mount.
-  removeAppImageRuntimeEnv(childEnv)
+  const childEnv = envWithoutAppImageRuntime(env)
   delete childEnv.ELECTRON_RUN_AS_NODE
   return { command: launch.nodePath, args: [launch.entryPath, ...scriptArgs], env: childEnv }
 }

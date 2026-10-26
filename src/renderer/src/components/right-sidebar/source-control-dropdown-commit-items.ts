@@ -73,28 +73,52 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
 
   const commitSyncTitle = ((): string => {
     if (upstreamLoading) {
-      return 'Checking branch status…'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.checkingBranchStatus',
+        'Checking branch status…'
+      )
     }
     if (publishBlockedByPRLoading) {
-      return 'Checking PR status…'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCheckingPrStatus',
+        'Checking PR status…'
+      )
     }
     if (publishBlockedByMergedPR) {
-      return 'PR is already merged'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titlePrAlreadyMerged',
+        'PR is already merged'
+      )
     }
     if (publishBlockedByDetachedHead) {
-      return 'Check out a branch before syncing commits'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToSync',
+        'Check out a branch before syncing commits'
+      )
     }
     if (!hasUpstream) {
       // Point to the existing Publish Branch primary instead of naming a nonexistent compound action.
-      return 'Publish the branch first to sync commits'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titlePublishBranchFirst',
+        'Publish the branch first to sync commits'
+      )
     }
     if (shouldForcePushWithLease) {
       return (
         commitDisabledReason ??
-        'Use Commit & Force Push — remote only has older copies of local commits'
+        translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.titleUseForcePush',
+          'Use Commit & Force Push — remote only has older copies of local commits'
+        )
       )
     }
-    return commitDisabledReason ?? 'Commit, then pull and push'
+    return (
+      commitDisabledReason ??
+      translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
+        'Commit, then pull and push'
+      )
+    )
   })()
   const commitSync: DropdownItem = {
     kind: 'commit_sync',

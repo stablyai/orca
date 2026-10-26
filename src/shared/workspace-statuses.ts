@@ -4,6 +4,7 @@ import {
   isKnownBadPRReorderedDefaultStatusPayload,
   isLegacyDefaultWorkflowStatusPayload
 } from './workspace-status-default-migration'
+import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 
 export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
@@ -64,7 +65,7 @@ function sanitizeWorkspaceStatusLabel(value: unknown, fallback: string): string 
     return fallback
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed ? trimmed.slice(0, MAX_STATUS_LABEL_LENGTH) : fallback
+  return trimmed ? sliceAtCodeUnitLimit(trimmed, MAX_STATUS_LABEL_LENGTH) : fallback
 }
 
 function slugWorkspaceStatusLabel(label: string): string {

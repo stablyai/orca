@@ -78,6 +78,7 @@ export type RuntimeStore = {
   withdrawTerminalPane?: Store['withdrawTerminalPane']
   applyLayoutCommand?: Store['applyLayoutCommand']
   applyTabRenames?: Store['applyTabRenames']
+  moveTerminalLeafToNewTab?: Store['moveTerminalLeafToNewTab']
   moveTabToWorkspaceAcrossPartitions?: Store['moveTabToWorkspaceAcrossPartitions']
   applyEditorFileRenamesAcrossPartitions?: Store['applyEditorFileRenamesAcrossPartitions']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
@@ -112,6 +113,7 @@ export type RuntimeStore = {
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationChatErrorEscalationEnabled?: GlobalSettings['orchestrationChatErrorEscalationEnabled']
+    orchestrationHeartbeatsEnabled?: GlobalSettings['orchestrationHeartbeatsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']

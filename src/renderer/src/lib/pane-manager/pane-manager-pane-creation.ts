@@ -81,11 +81,17 @@ function handleManagedPaneMouseEnter(
   paneId: number,
   event: MouseEvent
 ): void {
+  const pane = host.panes.get(paneId)
+  if (!pane) {
+    return
+  }
+  const focusedPane = document.activeElement?.closest('.pane[data-pane-id]')
   if (
     shouldFollowMouseFocus({
       featureEnabled: host.getStyleOptions().focusFollowsMouse ?? false,
       activePaneId: host.getActivePaneId(),
       hoveredPaneId: paneId,
+      focusInOtherPane: focusedPane != null && focusedPane !== pane.container,
       mouseButtons: event.buttons,
       windowHasFocus: document.hasFocus(),
       managerDestroyed: host.isDestroyed()

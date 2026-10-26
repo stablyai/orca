@@ -64,7 +64,7 @@ export function registeredModelCatalogDiscovery(
 
 /** Hydrate once and build catalog service only with a known selected account; otherwise answer unknown rather than guess its key. */
 export async function modelCatalogHostDeps(input: {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'getConversation' | 'listConversations'>
   agents: Pick<StructuredAgentRegistry, 'definition'>
   registrations: readonly CatalogRegistration[]
   deps: StructuredAgentModelCatalogContext['deps']
@@ -77,6 +77,7 @@ export async function modelCatalogHostDeps(input: {
   }
   const modelCatalog = createAgentModelCatalogService({
     store: agentModelCatalogStore,
+    getConversation: (id) => input.store.getConversation(id) ?? undefined,
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
@@ -86,7 +87,7 @@ export async function modelCatalogHostDeps(input: {
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,
     hasChatRecords: (agent) =>
-      input.store.listRecords().some((record) => record.provider === agent),
+      input.store.listConversations().some((record) => record.provider === agent),
     ...registeredModelCatalogDiscovery(input.registrations, {
       deps,
       environment: input.environment

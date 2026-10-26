@@ -30,11 +30,17 @@ import {
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
 import {
+  AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../shared/rpc-contract/ai-vault-params'
-export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
+export {
+  AiVaultDeleteSessionParams,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams,
+  AiVaultSessionTitlesParams
+}
 
 export const AI_VAULT_METHODS = [
   defineMethod({
@@ -156,5 +162,11 @@ export const AI_VAULT_METHODS = [
         (await copyStructuredChatConversation(args)) ?? runtime.prepareAiVaultSessionResume(args)
       )
     }
+  }),
+  defineMethod({
+    name: 'aiVault.deleteSession',
+    permission: 'workspace',
+    params: AiVaultDeleteSessionParams,
+    handler: (params, { runtime }) => runtime.deleteAiVaultSession(params)
   })
 ]

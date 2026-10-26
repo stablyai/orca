@@ -13,6 +13,9 @@ import {
 } from '../wsl/wsl-host-e2e-fake-connector'
 import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
 import { WslHostService } from '../wsl/wsl-host-service'
+import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
+import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
+import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
@@ -36,6 +39,7 @@ export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:connect',
   'wslHosts:getStatuses',
   'wslHosts:setVisibleWork',
+  'wslHosts:focusHost',
   'wslHosts:getCapability'
 ] as const
 
@@ -109,6 +113,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   if (process.platform !== 'win32' && !fake) {
     return null
   }
+  let automationWake: WslHostAutomationWake | null = null
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
@@ -123,14 +128,17 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       if (distro) {
         pushHostAccounts(args.getUserDataPath, environmentId, distro)
       }
+      void automationWake?.learn(environmentId)
     },
-    removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(
+    removed: (environmentId) => {
+      automationWake?.forget(environmentId)
+      return retireRemovedRuntimeEnvironment(
         environmentId,
         args.invalidateTransport,
         args.store,
         args.getUserDataPath()
       )
+    }
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)
@@ -146,6 +154,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
           runtime
         })
   )
+  automationWake = createWslHostAutomationWake(args.getUserDataPath, created)
   return created
 }
 
@@ -210,7 +219,19 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
     serverFiles: wsl.hasServerFiles()
   }))
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
-  ipcMain.handle('wslHosts:setVisibleWork', (_event, request: { environmentIds: string[] }) => {
-    wsl.setVisibleWork(Array.isArray(request.environmentIds) ? request.environmentIds : [])
+  const visibleWork = new WslHostVisibleWorkByWindow()
+  ipcMain.handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {
+    const sender = event.sender
+    const windowId = sender.id
+    const ids = Array.isArray(request.environmentIds) ? request.environmentIds : []
+    if (!visibleWork.has(windowId)) {
+      sender.once('destroyed', () => wsl.setVisibleWork(visibleWork.forget(windowId)))
+    }
+    wsl.setVisibleWork(visibleWork.report(windowId, ids))
+  })
+  // The user switched to a workspace on this host: the focus entry that may boot its distro.
+  ipcMain.handle('wslHosts:focusHost', (_event, request: { environmentId: string | null }) => {
+    // null: the user is on a workspace that isn't on a WSL host.
+    wsl.focusHost(typeof request?.environmentId === 'string' ? request.environmentId : null)
   })
 }

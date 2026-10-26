@@ -191,7 +191,7 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
-  it('says the host has no workspace for a path outside all of them and this computer', async () => {
+  it('reports a path missing from the host and this computer as not found', async () => {
     statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
     hostAnswers({
       worktree: 'wt-feat',
@@ -207,8 +207,8 @@ describe('a paired-server link outside its own workspace', () => {
 
     expect(openFileMock).not.toHaveBeenCalled()
     expect(onOpenFailure).toHaveBeenCalledWith({
-      verdict: 'unverifiable',
-      error: new Error('/etc/hosts is outside every workspace on its host')
+      verdict: 'missing',
+      error: new Error('File not found on its host: /etc/hosts')
     })
   })
 

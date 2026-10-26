@@ -226,10 +226,7 @@ describe('a permission pick on this device', () => {
     )
     const modelWrite = Promise.withResolvers<{ options: Record<string, string> }>()
     const modeWrite = Promise.withResolvers<{ options: Record<string, string> }>()
-    vi.mocked(mutate)
-      .mockReturnValueOnce(modelWrite.promise)
-      .mockReturnValueOnce(modeWrite.promise)
-      .mockResolvedValue({ options: { permissionMode: 'auto' } })
+    vi.mocked(mutate).mockReturnValueOnce(modelWrite.promise).mockReturnValueOnce(modeWrite.promise)
     const claude = renderReopened(1, 'claude')
     await waitFor(() => expect(permission(claude.result.current.optionSnapshot)).toBe('ask'))
     const choices = (snapshot: readonly SessionOptionDescriptor[]) => {
@@ -245,15 +242,11 @@ describe('a permission pick on this device', () => {
       void captured('permissionMode', 'full-access')
     })
     expect(permission(claude.result.current.optionSnapshot)).toBe('full-access')
-    expect(choices(claude.result.current.optionSnapshot)).toContain('auto')
-    await act(async () => {
-      expect(await captured('permissionMode', 'auto')).toBe(true)
-    })
-    await act(async () => {
-      const returned = await claude.result.current.optionSurface.setOption('permissionMode', 'auto')
-      expect(choices(returned.snapshot)).toContain('auto')
-    })
-    expect(vi.mocked(mutate)).toHaveBeenCalledTimes(6)
+    expect(choices(claude.result.current.optionSnapshot)).not.toContain('auto')
+    expect(await captured('permissionMode', 'auto')).toBe(false)
+    const returned = await claude.result.current.optionSurface.setOption('permissionMode', 'auto')
+    expect(choices(returned.snapshot)).not.toContain('auto')
+    expect(vi.mocked(mutate)).toHaveBeenCalledTimes(4)
     model = 'model-b'
     await act(async () => modeWrite.resolve({ options: { permissionMode: 'full-access' } }))
     await act(async () => modelWrite.resolve({ options: { model } }))

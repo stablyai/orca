@@ -97,7 +97,7 @@ export function claudeTurnLifecycleItem(
         : { turnId, state: 'running', startedAt, ...requested, userItemId }
     ),
     // Use the turn start timestamp so append latency does not inflate timing.
-    options: { criticalRoot: true, ...(end ? {} : { observedAt: startedAt }) },
+    options: end ? {} : { observedAt: startedAt },
     publishCoalescingKey: end ? 'publish' : `turn-start:${sessionId}:${turnId}`
   }
 }

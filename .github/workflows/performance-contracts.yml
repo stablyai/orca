@@ -16,6 +16,7 @@ on:
       - '!config/scripts/renderer-scrollbar-style-plugin.test.mjs'
       # Keep in sync with the contract list in config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
+      - 'src/main/ipc/pty-spawn-scaling.performance.test.ts'
       - 'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts'
       - 'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts'
       - 'src/main/runtime/hook-status-resume-sleep-ordering.test.ts'

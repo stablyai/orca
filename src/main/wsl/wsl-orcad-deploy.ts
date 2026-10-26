@@ -26,6 +26,8 @@ import type { OrcadActivationRecord } from '../managed-server/activation/orcad-a
 import { errorMessage } from '../../shared/error-message'
 import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
+import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
+import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../ssh/orcad-remote-deploy'
 import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
@@ -85,6 +87,8 @@ export type WslOrcadDeployOptions = {
   pairedOffer?: PairingOffer | null
   /** The orcad template to deploy from; defaults to the packaged one (the C10 lane swaps it). */
   templateDir?: string
+  /** A no-boot connect's running check (E9), re-read before any further wake. */
+  requireRunning?: () => Promise<boolean>
 }
 
 /** Until the persisted deployment record (C7) assigns one, the environment is keyed per distro. */
@@ -243,16 +247,28 @@ async function launchOverTransport(
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
+  const probe = () =>
+    probeManagedOrcadReadiness(context, localOrcadDir, deployed.fullVersion, signal)
+  let readiness: ServeReadiness
   if (deployed.outcome === 'already-active') {
     // A stopped distro ended the active slot with it.
     await wakeAlreadyActiveOrcad(slot)
+    // Why once more: on a distro still booting, the orcad the wake saw serving can exit before
+    // the probe; that is a stopped slot to start, not a failed connect.
+    readiness = await probe().catch(async (error: unknown) => {
+      if (!(error instanceof OrcadActiveReadinessError) || error.verdict !== 'exited') {
+        throw error
+      }
+      // A `wsl --shutdown` during a no-boot connect must not be undone by this second wake.
+      if (options.requireRunning && !(await options.requireRunning())) {
+        throw new WslDistroNotRunningError(name)
+      }
+      await wakeAlreadyActiveOrcad(slot)
+      return probe()
+    })
+  } else {
+    readiness = await probe()
   }
-  const readiness = await probeManagedOrcadReadiness(
-    context,
-    localOrcadDir,
-    deployed.fullVersion,
-    signal
-  )
   await pruneManagedOrcadVersions({
     slot,
     serverTarget: context.serverTarget,

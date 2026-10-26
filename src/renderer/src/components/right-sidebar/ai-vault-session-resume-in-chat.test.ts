@@ -71,11 +71,34 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
-  it('refuses a row recorded on a remote host', () => {
-    expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
-      available: false,
-      reason: 'remote'
-    })
+  it.each(['ssh:build-box', 'runtime:unresolved-owner'] as const)(
+    'refuses a row recorded on %s',
+    (executionHostId) => {
+      expect(eligibility({ session: session({ executionHostId }) })).toEqual({
+        available: false,
+        reason: 'remote'
+      })
+    }
+  )
+
+  it.each<AiVaultSession['agent']>(['claude', 'codex'])(
+    'offers a paired-runtime %s conversation when its route is admitted',
+    (agent) => {
+      expect(
+        eligibility({ session: session({ agent, executionHostId: 'runtime:server-1' }) })
+      ).toMatchObject({ available: true })
+    }
+  )
+
+  it('rejects WSL transcripts on a paired runtime too', () => {
+    expect(
+      eligibility({
+        session: session({
+          executionHostId: 'runtime:server-1',
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.claude/projects/p/session.jsonl'
+        })
+      })
+    ).toEqual({ available: false, reason: 'remote' })
   })
 
   it('refuses a row whose transcript is stored inside WSL', () => {

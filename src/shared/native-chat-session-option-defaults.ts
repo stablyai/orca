@@ -6,7 +6,11 @@ import {
   type NewChatPermissionSettings
 } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
-import { sessionOptionValueIsValid } from './agent-session-option-catalog'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog,
+  sessionOptionValueIsValid
+} from './agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
@@ -202,4 +206,54 @@ export function updateNativeChatSessionOptionDefaults(args: {
       valuesByModel
     }
   }
+}
+
+/** A different model drops the prior model’s options, keeping the chat’s permission choice. Without
+ *  a requested `model` the result only overlays the shown selection. */
+export function structuredLaunchRequestedOptions(selection: {
+  explicit?: Readonly<Record<string, string>>
+  held: Readonly<Record<string, string>>
+  seed?: Readonly<Record<string, string>>
+}): Readonly<Record<string, string>> | undefined {
+  const { explicit, held, seed } = selection
+  if (!explicit) {
+    return undefined
+  }
+  const changed = held.model !== undefined && held.model !== explicit.model
+  const permissionMode =
+    explicit[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  return {
+    ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {}),
+    ...(changed ? {} : explicit),
+    ...held
+  }
+}
+
+/** A create without model replacement overlays the remembered effort onto a named Claude/Codex
+ *  model; the catalog default approximates omission there. */
+export function structuredLaunchCompatibleOptions(
+  agent: AgentType,
+  requested: Readonly<Record<string, string>>
+): Readonly<Record<string, string>> {
+  if (
+    (agent !== 'claude' && agent !== 'codex') ||
+    !requested.model ||
+    requested.effort !== undefined
+  ) {
+    return requested
+  }
+  const catalog = getAgentSessionOptionCatalog(agent)
+  const options =
+    catalog && (findCatalogModel(catalog, requested.model)?.options ?? catalog.unknownModelOptions)
+  const effort = options?.find((option) => option.id === 'effort')
+  return effort?.kind.type === 'select' && effort.kind.defaultValue
+    ? { ...requested, effort: effort.kind.defaultValue }
+    : requested
+}
+
+export function seededPermissionMode(
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const mode = options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  return mode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: mode } : {}
 }

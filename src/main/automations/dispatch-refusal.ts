@@ -9,6 +9,7 @@ import type {
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
 import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isOrcadFencedAutomation } from './orcad-fenced-automation'
 
 export const NO_DISPATCH_HOST = 'No Orca window was available to launch the automation.'
 
@@ -45,6 +46,9 @@ export async function recordRefusedAutomationRun(input: {
   automation: Automation
   allowRemoteHostScheduling: boolean
 }): Promise<void> {
+  if (isOrcadFencedAutomation(input.store, input.automation)) {
+    return
+  }
   const target = resolveAutomationRunTarget(input.store, input.automation, {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling
   })

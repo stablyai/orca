@@ -92,6 +92,49 @@ describe('Windows snapshot ops', () => {
     expect(existsSync(join(root, 'daemon', 'daemon.sock.token'))).toBe(true)
   })
 
+  it.each(['snapshot-clear', 'snapshot-restore'] as const)(
+    '%s bounds permanent/transient locks and leaves a recoverable snapshot',
+    async (name) => {
+      expect(await op('snapshot-capture', root, snapshot)).toBe('CAPTURED')
+      const preload = join(dir, 'fail-rm.cjs')
+      const attempts = join(dir, 'rm-attempts.json')
+      const target = join(root, 'profiles')
+      for (const failures of [6, 1]) {
+        writeFileSync(
+          preload,
+          `const fs = require('fs'); const rm = fs.promises.rm; const calls = [];
+fs.promises.rm = async (p, options) => {
+  if (p === ${JSON.stringify(target)}) {
+    calls.push({ options, lockHeld: fs.existsSync(${JSON.stringify(join(dir, 'orcad-state-mutation.lock', 'owner.json'))}) });
+    fs.writeFileSync(${JSON.stringify(attempts)}, JSON.stringify(calls));
+    if (calls.length <= ${failures}) throw Object.assign(new Error('held open'), { code: 'EPERM' });
+  }
+  return rm(p, options);
+};`
+        )
+        const result = await runProcess({
+          program: process.execPath,
+          args: ['--require', preload, script, name, root, snapshot]
+        })
+        expect(result.code, result.stderr).toBe(0)
+        expect(result.stdout.trim()).toBe(failures === 6 ? 'FAILED' : 'RESTORED')
+        expect(JSON.parse(readFileSync(attempts, 'utf8'))).toEqual(
+          Array.from({ length: failures === 6 ? 6 : 2 }, () => ({
+            options: { recursive: true, force: true },
+            lockHeld: true
+          }))
+        )
+        expect(existsSync(join(dir, 'orcad-state-mutation.lock'))).toBe(false)
+        expect(readFileSync(join(root, 'daemon', 'daemon.sock.token'), 'utf8')).toBe(
+          'live-daemon-token'
+        )
+        expect(await op('snapshot-probe', snapshot)).toBe('PRESENT')
+        expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
+        expect(await op('snapshot-compare', root, snapshot)).toBe('UNCHANGED')
+      }
+    }
+  )
+
   it('reports the newest member write in epoch seconds, or UNKNOWN', async () => {
     const at = new Date('2026-09-30T12:00:00.000Z')
     utimesSync(join(root, 'orca-profile-index.json'), at, at)

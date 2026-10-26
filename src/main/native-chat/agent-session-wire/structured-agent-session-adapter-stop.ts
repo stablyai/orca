@@ -11,9 +11,26 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
 
+export type AgentSessionCloseEvidence = {
+  root: 'live' | 'unverifiable' | 'exited'
+  workload: 'live' | 'unverifiable' | 'exited'
+}
+export type AgentSessionCloseObserver = (evidence: AgentSessionCloseEvidence | undefined) => void
+
+/** In-process completion evidence is separate from durable command acceptance. */
+export type AgentSessionStopOutcome = {
+  /** Read/pause acknowledgement, not universal durable-write quiescence. */
+  pause: 'acknowledged' | 'not-needed' | 'unconfirmed'
+  interrupt: 'accepted' | 'not-needed' | 'unconfirmed'
+  root: 'exited' | 'unproven'
+  workload: 'exited' | 'unproven'
+  errors: unknown[]
+}
+
 /** Distinguish refused interrupts, absent turns with possible pending openers, and the journal turn actually stopped. */
 export type AgentSessionCancelOutcome = {
   cancelled: boolean
+  stop?: AgentSessionStopOutcome
   refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true; turnMayOpen?: true }
   turnId?: string
 }

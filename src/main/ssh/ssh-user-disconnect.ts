@@ -1,3 +1,4 @@
+import { formatSshUserDisconnectedMessage } from '../../shared/ssh-user-disconnect-message'
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -35,7 +36,7 @@ export function resetSshUserDisconnectsForTests(): void {
 
 /** Not an auth or transient failure: callers neither ask for a sign-in nor retry it. */
 export function createSshUserDisconnectedError(label: string): Error {
-  return Object.assign(new Error(`${label} was disconnected. Connect to use it again.`), {
+  return Object.assign(new Error(formatSshUserDisconnectedMessage(label)), {
     code: 'ssh_user_disconnected'
   })
 }

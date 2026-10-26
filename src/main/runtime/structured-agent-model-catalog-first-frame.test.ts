@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -64,8 +66,7 @@ const GROK_LISTING = grokModelCatalogFromState({
 })
 
 function grokRecord(): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service reads only provider, accountHome and location.
-  return {
+  return agentSessionRecordFixture({
     sessionId: 'grok-session',
     provider: 'grok',
     accountHome: HOMES.grok,
@@ -75,7 +76,7 @@ function grokRecord(): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
 function service(
@@ -93,6 +94,10 @@ function service(
   }
   return createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = records.find((record) => record.sessionId === sessionId)
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => records.find((record) => record.sessionId === sessionId),
     drivesRecord: () => true,
     resolveAccountHome: async (agent) => HOMES[agent]!,

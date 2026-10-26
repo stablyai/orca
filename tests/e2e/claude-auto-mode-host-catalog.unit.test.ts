@@ -26,6 +26,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
+import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
 import type { SessionOptionDescriptor } from '../../src/shared/native-chat-session-options'
 import { createClaudeModelCatalogProbe } from '../../src/main/claude/claude-model-catalog-probe'
@@ -112,6 +113,7 @@ async function hostCatalog(listingLands: Promise<void>) {
   const modelCatalog = createAgentModelCatalogService({
     store,
     getRecord: () => record,
+    getConversation: () => agentSessionConversationView(record),
     drivesRecord: () => true,
     resolveAccountHome: async () => record.accountHome,
     recordWorkspacePath: async () => join(dir, 'project'),
@@ -148,7 +150,10 @@ async function hostCatalog(listingLands: Promise<void>) {
     deps: {
       adapter: {},
       agents: claudeAndCodexDeclared(),
-      store: { getRecord: () => record },
+      store: {
+        getRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
+      },
       modelCatalog
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -199,30 +204,17 @@ const optionReads = () =>
   mocks.rpc.mock.calls.filter(([, method]) => method === 'agentSession.options').length
 
 describe('Approve for me on a new Claude chat', () => {
-  it('is offered before and after the background listing lands', async () => {
+  it('is offered once the background listing lands after the chat opened', async () => {
     const lands = new Promise<void>((resolve) => (release = resolve))
     await hostCatalog(lands)
     const { result, unmount } = openNewChat()
     // The chat opened before its account was ever listed: the first answers come without a list.
     await waitFor(() => expect(optionReads()).toBe(1))
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('ask'))
-    expect(offered(result.current.optionSnapshot)).toEqual([
-      'ask',
-      'accept-edits',
-      'auto',
-      'full-access'
-    ])
+    expect(offered(result.current.optionSnapshot)).not.toContain('auto')
 
     release()
-    await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
-    await waitFor(() =>
-      expect(offered(result.current.optionSnapshot)).toEqual([
-        'ask',
-        'accept-edits',
-        'auto',
-        'full-access'
-      ])
-    )
+    await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
     unmount()
   })
 

@@ -21,12 +21,14 @@ export type WslRunningDistrosRead =
   | { status: 'confirmed'; distros: string[] }
   | { status: 'unavailable' }
 
-/** Preserve probe failure separately from a confirmed stopped distro. */
-export async function readConfirmedRunningWslDistros(): Promise<WslRunningDistrosRead> {
+/** Preserve probe failure separately from a confirmed stopped distro. `startedAfter`: see resolveRunningWslDistros. */
+export async function readConfirmedRunningWslDistros(
+  options: { startedAfter?: number } = {}
+): Promise<WslRunningDistrosRead> {
   try {
     return {
       status: 'confirmed',
-      distros: await listRunningWslDistrosAsync({ requireConfirmed: true })
+      distros: await listRunningWslDistrosAsync({ requireConfirmed: true, ...options })
     }
   } catch {
     return { status: 'unavailable' }

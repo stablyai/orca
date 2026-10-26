@@ -31,6 +31,7 @@ import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-lo
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
 import { findAppSpeechRecognizerDir } from './serve-speech-recognizer'
+import { stageAppAgentBrowserDriver } from './serve-agent-browser-driver'
 import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { waitForRecipeJson } from './serve-recipe-json'
 import {
@@ -192,7 +193,8 @@ async function serveWithSelectedRuntime(
       userDataPath,
       stripElectronRunAsNode(process.env),
       findBundledWebClientRoot(resolveAppRoot()),
-      findAppSpeechRecognizerDir(resolveAppRoot())
+      findAppSpeechRecognizerDir(resolveAppRoot()),
+      await stageAppAgentBrowserDriver(resolveAppRoot(), userDataPath)
     )
   }
   if (selection.reason) {

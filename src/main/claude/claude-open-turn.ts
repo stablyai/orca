@@ -207,6 +207,6 @@ export class ClaudeOpenTurn {
       options: { ...item.options, lifecycle: true }
     })
     // Separate keys preserve a queued start publication when the end arrives.
-    this.deps.sink.publish({ criticalRoot: true, coalescingKey: item.publishCoalescingKey })
+    this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }
 }

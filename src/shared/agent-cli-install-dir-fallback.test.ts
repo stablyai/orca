@@ -134,7 +134,8 @@ describe('agent CLI install-dir fallback', () => {
       '/nix/var/nix/profiles/default/bin',
       join(home, '.nix-profile', 'bin'),
       join(home, '.opencode', 'bin'),
-      join(home, '.vite-plus', 'bin')
+      join(home, '.vite-plus', 'bin'),
+      join(home, '.grok', 'bin')
     ]
     stage(...dirs.map((dir) => join(dir, 'opencode')))
     for (const expected of dirs) {
@@ -193,7 +194,8 @@ describe('agent CLI install-dir fallback', () => {
         '/nix/var/nix/profiles/default/bin',
         join(home, '.nix-profile', 'bin'),
         join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin')
+        join(home, '.vite-plus', 'bin'),
+        join(home, '.grok', 'bin')
       ]) {
         expect(seeded).not.toContain(directory)
       }
@@ -208,12 +210,14 @@ describe('agent CLI install-dir fallback', () => {
         join('/usr/local/bin', 'codex'),
         join(MOCK_HOME, '.opencode', 'bin', 'opencode'),
         // Pi defaults to ~/.vite-plus/bin and is probed on every runtime (#829).
-        join(MOCK_HOME, '.vite-plus', 'bin', 'pi')
+        join(MOCK_HOME, '.vite-plus', 'bin', 'pi'),
+        // Grok's installer defaults to ~/.grok/bin (#17590).
+        join(MOCK_HOME, '.grok', 'bin', 'grok')
       )
-      // All three come from the fallback: the stubbed PATH holds no system dir.
-      expect(detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'cursor-agent'])).toEqual(
-        new Set(['codex', 'opencode', 'pi'])
-      )
+      // All come from the fallback: the stubbed PATH holds no system dir.
+      expect(
+        detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'grok', 'cursor-agent'])
+      ).toEqual(new Set(['codex', 'opencode', 'pi', 'grok']))
     }
   )
 
@@ -239,7 +243,8 @@ describe('agent CLI install-dir fallback', () => {
         login,
         join(home, '.nvm', 'versions', 'node', 'v24.0.0', 'bin'),
         join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin')
+        join(home, '.vite-plus', 'bin'),
+        join(home, '.grok', 'bin')
       ]
       const command = 'orca-fallback-fixture'
       try {

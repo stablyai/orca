@@ -32,6 +32,8 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
         'auto.components.settings.SourceControlActionRepoOverrideNote.commandTemplate',
         'Command template'
       )
+    case 'launchPreferences':
+      return translate('settings.sourceControl.actionModel.launchOptions', 'Model and permissions')
   }
   const _exhaustive: never = field
   return _exhaustive

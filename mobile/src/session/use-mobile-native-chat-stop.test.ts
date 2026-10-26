@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
+
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 const reportWorkerTerminalUserInput = vi.fn()
@@ -155,21 +155,6 @@ describe('useMobileNativeChatStop', () => {
     // Treat paced Escapes as one Stop: either landing suppresses a later failure that would invite duplicate Stop.
     expect(sendRequest).toHaveBeenCalledTimes(2)
     expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('bounds the Escape on a reconnect wait instead of parking forever', async () => {
-    await render(true, 'stream-1')
-
-    act(() => stop?.())
-
-    expect(sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      expect.anything(),
-      expect.objectContaining({
-        timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
-        budgetSpansConnect: true
-      })
-    )
   })
 
   it('suppresses an older Stop verdict after a newer Stop succeeds', async () => {

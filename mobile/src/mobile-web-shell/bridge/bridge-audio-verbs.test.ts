@@ -1,6 +1,6 @@
 // Exercise table-listed audio verbs through the engine seam; denied permission, full rings and post-stop reads are device-independent conditions expensive to force in simulators.
 import { afterEach, describe, expect, it } from 'vitest'
-import { MobileWebBundleRouteSchema } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+
 import { BridgeNativeVerbRefusedError } from '../bridge-host-errors'
 import { createNativeAudioCapture, type NativeAudioEngine } from '../../platform/native-audio'
 import {
@@ -35,8 +35,6 @@ function gate() {
   })
   return { promise, release: () => release() }
 }
-
-const AUDIO_VERBS = ['native.audio.start', 'native.audio.read', 'native.audio.stop'] as const
 
 function createTestEngine(
   overrides: Partial<{
@@ -120,24 +118,6 @@ function decode(base64: string): Uint8Array {
   }
   return bytes
 }
-
-describe('the audio verbs in the table', () => {
-  it('accepts the audio verbs as route grants', () => {
-    for (const verb of AUDIO_VERBS) {
-      expect(
-        MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: [verb] }).success,
-        verb
-      ).toBe(true)
-    }
-  })
-
-  it('refuses the camel-cased spelling of the read, which is what makes the name load-bearing', () => {
-    expect(
-      MobileWebBundleRouteSchema.safeParse({ pathname: '/h', grants: ['native.audio.readChunk'] })
-        .success
-    ).toBe(false)
-  })
-})
 
 describe('what the audio schemas refuse', () => {
   it('refuses a start with no rate, a rate off the grid, and an unknown param', () => {

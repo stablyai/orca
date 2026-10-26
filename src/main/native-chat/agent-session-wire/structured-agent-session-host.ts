@@ -168,7 +168,7 @@ export class StructuredAgentSessionHost {
   loadedSessionIds = (): string[] =>
     [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
-  sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
+  sessionAgent = (sessionId: string) => this.deps.store.getConversation(sessionId)?.provider ?? null
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)

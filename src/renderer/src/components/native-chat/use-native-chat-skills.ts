@@ -58,6 +58,7 @@ const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
   errorKind: 'unknown',
   contextKey: null
 }
+const selectNoSkillStateInputs = (): null => null
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function isNativeChatSkillForAgent(
@@ -88,13 +89,19 @@ export function useNativeChatSkills(
   terminalTabId: string,
   enabled = false
 ): NativeChatSkillDiscovery {
-  const inputs = useAppStore(useShallow(selectNativeChatSkillStateInputs))
+  // Closed is the common state, so the tab-map subscription only runs while the picker is open.
+  const inputs = useAppStore(
+    useShallow(enabled ? selectNativeChatSkillStateInputs : selectNoSkillStateInputs)
+  )
   const context = useMemo(
-    () => resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId),
+    () => (inputs ? resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId) : null),
     [inputs, terminalTabId]
   )
   const awaitingContext = useMemo(
-    () => !context && isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
+    () =>
+      inputs !== null &&
+      !context &&
+      isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
     [context, inputs, terminalTabId]
   )
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)

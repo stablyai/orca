@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SshManagedServerUpdateNote } from '../../../shared/ssh-types'
 import { sshConnectFailureText, sshHostServerStatusLine } from './ssh-host-server-status-copy'
 
@@ -337,6 +337,42 @@ describe('SSH host server status line', () => {
     expect(line?.text).toContain('This SSH host cannot move yet')
     // The terminal pane and toast keep the way out, which comes last.
     expect(sshConnectFailureText(state, 'raw')).toContain('then connect again.')
+  })
+
+  it('says what stays on this computer when Move anyway clears the refusal (#29083)', () => {
+    const state = {
+      managedServer: {
+        kind: 'relay' as const,
+        reason: 'refused' as const,
+        canLeaveBehind: true as const,
+        detail: 'This SSH host cannot move yet: automations (1), automation runs (4).'
+      }
+    }
+    const line = sshHostServerStatusLine(plain, state)
+    expect(line).toMatchObject({ tone: 'warning' })
+    expect(line?.text).toBe(
+      'Some saved items for this host can’t move to its Orca server: automations (1), automation runs (4). Move anyway connects the host and keeps them on this computer.'
+    )
+    expect(sshConnectFailureText(state, 'raw')).toBe(line?.text)
+  })
+
+  it('keeps main’s reason on a web client, which can’t move the host', () => {
+    vi.stubGlobal('window', { __ORCA_WEB_CLIENT__: true })
+    try {
+      const line = sshHostServerStatusLine(plain, {
+        managedServer: {
+          kind: 'relay',
+          reason: 'refused',
+          canLeaveBehind: true,
+          detail: 'This SSH host cannot move yet: automations (1).'
+        }
+      })
+      expect(line?.text).toBe(
+        'Orca isn’t set up on this host yet. This SSH host cannot move yet: automations (1).'
+      )
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('keeps the plain refusal line when main named no reason', () => {

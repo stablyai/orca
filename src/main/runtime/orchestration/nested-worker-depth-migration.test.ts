@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { OrchestrationDb } from './db'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
@@ -30,6 +31,7 @@ describe('nested worker depth migration (v30)', () => {
 
     const oldDb = new Database(dbPath)
     dropDerivedDeliverySchema(oldDb)
+    oldDb.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     oldDb.exec('ALTER TABLE dispatch_contexts DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
