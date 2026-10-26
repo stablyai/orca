@@ -2,11 +2,16 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import nacl from 'tweetnacl'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import type { HostProofDomains } from '../host-challenge-proof'
 import type { PushHostChallenge, PushHostProofContext } from './push-host-proof'
 
 const encoder = new TextEncoder()
 export const PUSH_PROOF_DOMAIN = 'orca-push-host-proof/v1'
 export const PUSH_CHALLENGE_DOMAIN = 'orca-push-host-challenge/v1'
+const PUSH_DOMAINS: HostProofDomains = {
+  transcript: PUSH_PROOF_DOMAIN,
+  challengePlaintext: PUSH_CHALLENGE_DOMAIN
+}
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))
@@ -50,9 +55,12 @@ export type PushTranscriptInput = {
   hostKey: Uint8Array
 }
 
-export function buildPushTranscript(input: PushTranscriptInput): Uint8Array {
+export function buildPushTranscript(
+  input: PushTranscriptInput,
+  proofDomain = PUSH_PROOF_DOMAIN
+): Uint8Array {
   return concat([
-    field('protocol', text(PUSH_PROOF_DOMAIN)),
+    field('protocol', text(proofDomain)),
     field('version', new Uint8Array([1])),
     field('gatewayOrigin', text(input.gatewayOrigin)),
     field('gatewayEphemeralPublicKey', input.gatewayKey),
@@ -65,9 +73,13 @@ export function buildPushTranscript(input: PushTranscriptInput): Uint8Array {
   ])
 }
 
-export function pushAckProof(secret: Uint8Array, transcript: Uint8Array): string {
+export function pushAckProof(
+  secret: Uint8Array,
+  transcript: Uint8Array,
+  proofDomain = PUSH_PROOF_DOMAIN
+): string {
   return createHmac('sha256', secret)
-    .update(text(`${PUSH_PROOF_DOMAIN}\0ack\0`))
+    .update(text(`${proofDomain}\0ack\0`))
     .update(transcript)
     .digest('base64')
 }
@@ -81,7 +93,7 @@ export function createPushHostKeypair(): E2EEKeypair {
   }
 }
 
-/** Seals a challenge for `hostPublicKey`; overrides let a suite corrupt one field at a time. */
+/** Seals a challenge for `hostPublicKey`; overrides let a suite corrupt one field at a time, `domains` serve another service. */
 export function buildPushChallengeFixture(input: {
   hostKeypair: E2EEKeypair
   gatewayOrigin: string
@@ -90,25 +102,30 @@ export function buildPushChallengeFixture(input: {
   challengeId?: string
   transcript?: Partial<PushTranscriptInput>
   challenge?: Partial<PushHostChallenge>
+  domains?: HostProofDomains
 }): { challenge: PushHostChallenge; context: Omit<PushHostProofContext, 'now'>; proof: string } {
   const gatewayKeys = nacl.box.keyPair()
   const nonce = randomBytes(24)
   const secret = randomBytes(32)
   const expiresAt = input.issuedAt + 10_000
   const challengeId = input.challengeId ?? 'challenge-1'
-  const transcript = buildPushTranscript({
-    gatewayOrigin: input.gatewayOrigin,
-    gatewayKey: gatewayKeys.publicKey,
-    nonce,
-    challengeId,
-    issuedAt: input.issuedAt,
-    expiresAt,
-    hostFingerprint: input.hostFingerprint,
-    hostKey: input.hostKeypair.publicKey,
-    ...input.transcript
-  })
+  const domains = input.domains ?? PUSH_DOMAINS
+  const transcript = buildPushTranscript(
+    {
+      gatewayOrigin: input.gatewayOrigin,
+      gatewayKey: gatewayKeys.publicKey,
+      nonce,
+      challengeId,
+      issuedAt: input.issuedAt,
+      expiresAt,
+      hostFingerprint: input.hostFingerprint,
+      hostKey: input.hostKeypair.publicKey,
+      ...input.transcript
+    },
+    domains.transcript
+  )
   const plaintext = concat([
-    text(`${PUSH_CHALLENGE_DOMAIN}\0`),
+    text(`${domains.challengePlaintext}\0`),
     uint32(transcript.byteLength),
     transcript,
     secret
@@ -130,6 +147,6 @@ export function buildPushChallengeFixture(input: {
       hostPublicKey: input.hostKeypair.publicKey,
       hostSecretKey: input.hostKeypair.secretKey
     },
-    proof: pushAckProof(secret, transcript)
+    proof: pushAckProof(secret, transcript, domains.transcript)
   }
 }

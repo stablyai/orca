@@ -315,6 +315,17 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(undefined, undefined)
   })
 
+  it('keeps `cloud status` on this host when ORCA_ENVIRONMENT is set ambiently', async () => {
+    process.env.ORCA_ENVIRONMENT = 'm4air'
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['cloud', 'status', '--json'], '/tmp/repo')
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
+    expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(undefined, 'env-m4air')
+  })
+
   it('still treats --environment as the selector argument on `environment show` and `rm`', async () => {
     const environment = {
       id: 'env-m4air',

@@ -1,4 +1,5 @@
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
+import { z } from 'zod'
 
 export const CONNECTOR_CONTRACT_VERSION = 1
 
@@ -26,3 +27,44 @@ export const CONNECTOR_CLIENT_LIMITS = {
   minDeadlineLeftMs: 10_000,
   maxLastAssistantMessageBytes: 8 * 1024
 } as const
+
+// Machine-side readers: they keep what this Orca uses and ignore fields a newer cloud adds.
+export const ConnectorErrorResponse = z.object({ error: z.string().min(1) })
+
+export const ConnectorSignInStartResponse = z.object({
+  deviceCode: z.string().min(1),
+  userCode: z.string().min(1),
+  verificationUri: z.url(),
+  expiresAt: z.number().int().positive(),
+  interval: z.number().int().positive()
+})
+
+export const ConnectorSignInPollResponse = z.discriminatedUnion('status', [
+  z.object({
+    status: z.enum(['pending', 'slow_down', 'denied', 'expired']),
+    interval: z.number().int().positive()
+  }),
+  z.object({
+    status: z.literal('authorized'),
+    interval: z.number().int().positive(),
+    hostId: z.string().min(1),
+    account: z.object({ email: z.string().min(1) })
+  })
+])
+
+export const ConnectorHostChallengeResponse = z.object({
+  challengeId: z.string().min(1).max(512),
+  gatewayEphemeralPublicKeyB64: z.string().min(1).max(128),
+  nonceB64: z.string().min(1).max(128),
+  ciphertextB64: z
+    .string()
+    .min(1)
+    .max(8 * 1024),
+  expiresAt: z.number().int().positive()
+})
+
+export const ConnectorHostSessionResponse = z.object({
+  sessionToken: z.string().min(1).max(1024),
+  expiresAt: z.number().int().positive(),
+  hostId: z.string().min(1)
+})

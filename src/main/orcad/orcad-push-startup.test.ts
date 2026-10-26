@@ -139,6 +139,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
     rehydrateClientHostedBrowserPages() {}
     restoreHostAccountLaunchEnv() {}
+    setConnectorCloud() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
     async installPendingOrcadMigrationShellHistory() {}

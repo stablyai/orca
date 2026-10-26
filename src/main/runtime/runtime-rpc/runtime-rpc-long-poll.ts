@@ -55,6 +55,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'terminal.wait') {
     return 'wait'
   }
+  // Device-code sign-in waits minutes for a browser approval; closing the CLI must cancel it.
+  if (request.method === 'cloud.finishSignIn') {
+    return 'wait'
+  }
   // Prompt submission waits for lifecycle verification; keep the socket alive.
   if (
     request.method === 'terminal.send' &&

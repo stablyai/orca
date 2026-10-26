@@ -40,6 +40,7 @@ import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extract
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
+import { installConnectorCloud } from '../connector-cloud/connector-cloud-install'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
@@ -101,6 +102,8 @@ function installRuntimeRpc(
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  // Before any transport starts, so the first `orca cloud` call finds it.
+  installConnectorCloud(runtime, getCanonicalUserDataPath(), serveOptions ? 'serve' : 'desktop')
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
