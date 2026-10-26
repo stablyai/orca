@@ -155,7 +155,7 @@ describe('attachMobileImageToTerminal', () => {
     const client = clientWithResponses([
       ok('start', { uploadId: 'upload-file-1' }),
       ok('append', { received: 4 }),
-      ok('commit', '/tmp/orca-paste-柴静-看见.txt'),
+      ok('commit', '/tmp/orca-paste-1/柴静-看见.txt'),
       ok('send', { send: { accepted: true } })
     ])
 

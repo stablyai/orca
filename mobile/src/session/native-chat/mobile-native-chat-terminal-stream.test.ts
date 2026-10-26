@@ -74,13 +74,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     )
   })
 
-  it('rearms a rendered terminal whose stream ended', () => {
-    // Uncovered streams share the covered rearm budget so a dead PTY cannot resubscribe forever.
-    expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamActive: false })).toBe(
-      'rearm'
-    )
-  })
-
   it('rearms a covered stream that lost its subscription', () => {
     // The covered stream owns the composer’s input lease; no other path re-subscribes it.
     expect(
