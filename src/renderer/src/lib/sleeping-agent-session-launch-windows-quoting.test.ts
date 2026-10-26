@@ -1,3 +1,6 @@
+import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-resume-startup'
+import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
+import { prepareLegacyAgentTerminalResume } from './legacy-agent-terminal-resume'
 // Resume lines enter the selected Windows shell; cmd.exe must never receive PowerShell single quoting (#12320).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -83,10 +86,14 @@ const record: SleepingAgentSessionRecord = {
 async function launch(sessionRecord = record): Promise<string | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
   launchSleepingAgentSession(sessionRecord)
-  const options = mockCreateTab.mock.calls.at(-1)?.[3] as
-    | { pendingStartup?: { command: string } }
-    | undefined
-  return options?.pendingStartup?.command
+  const startup = mockCreateTab.mock.calls.at(-1)?.[3]?.pendingStartup
+  expect(startup?.command).toBeUndefined()
+  return prepareLegacyAgentTerminalResume({
+    worktreeId: sessionRecord.worktreeId,
+    agent: startup.launchAgent,
+    providerSession: startup.resumeProviderSession,
+    resume: startup.resume
+  }).command
 }
 
 describe('launchSleepingAgentSession Windows shell quoting', () => {
@@ -112,6 +119,34 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     }
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
+
+  it.each([
+    undefined,
+    { agentArgs: '', agentEnv: {} },
+    { agentArgs: '--dangerously-bypass-approvals-and-sandbox --model recorded', agentEnv: {} }
+  ])(
+    'preserves the generic-sleep generated override only for recorded config (%j)',
+    async (launchConfig) => {
+      store.settings.terminalWindowsShell = 'cmd.exe'
+      await launch({ ...record, ...(launchConfig ? { launchConfig } : {}) })
+      const startup = mockCreateTab.mock.calls.at(-1)?.[3]?.pendingStartup
+      if (!launchConfig) {
+        expect(startup).not.toHaveProperty('agentArgsOverride')
+        return
+      }
+      const oldPlan = buildAgentResumeStartupPlan({
+        agent: record.agent,
+        providerSession: record.providerSession,
+        cmdOverrides: {},
+        ...resolveResumeLaunchRecipe(launchConfig),
+        platform: 'win32',
+        shell: 'cmd'
+      })
+      expect(oldPlan).not.toBeNull()
+      expect(startup.agentArgsOverride).toBe(oldPlan?.launchConfig.agentArgs)
+      expect(startup.agentArgsOverride).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+    }
+  )
 
   it('quotes the resume argv for a cmd.exe tab', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'

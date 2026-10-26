@@ -41,7 +41,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         ctx.replacedPaneOwner
       )
       ctx.earlyWorktreeId = ctx.args.worktreeId
-      if (ctx.args.agentLaunch !== undefined) {
+      if (ctx.args.agentLaunch !== undefined || ctx.args.resume !== undefined) {
         await planPaneAgentLaunch(ctx)
       }
       await preparePtyIpcSpawnPreflight(ctx)

@@ -67,6 +67,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
+    useAppStore.setState({ settings: getDefaultSettings('/home/dev') })
   })
 
   it('names the session so the relaunch continues the conversation', () => {
@@ -78,8 +79,8 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
     const startup = build()
 
-    expect(startup.command).toContain('resume')
-    expect(startup.command).toContain(SESSION_ID)
+    expect(startup.command).toBeUndefined()
+    expect(startup.resume?.recipe.source).toBe('current-inputs')
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
   })
 
@@ -96,11 +97,20 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.startupCommandDelivery).toBe('shell-ready')
   })
 
-  it('falls back to a bare relaunch when the pane has no Codex session to name', () => {
-    const startup = build()
-
-    expect(startup.command).toBe('codex')
-    expect(startup.resumeProviderSession).toBeUndefined()
+  it('uses the configured command without args or env before a session is recorded', () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: 'configured-codex' },
+        agentDefaultArgs: { codex: '--search' },
+        agentDefaultEnv: { codex: { SHOULD_NOT_APPLY: '1' } }
+      }
+    })
+    expect(build()).toEqual({
+      command: 'configured-codex',
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
+    })
   })
 
   it('uses the persisted record when the live status entry is gone', () => {
@@ -122,7 +132,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
     const startup = build()
 
-    expect(startup.command).toContain(SESSION_ID)
+    expect(startup.resume?.recipe.source).toBe('current-inputs')
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
   })
 
@@ -185,6 +195,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
+    useAppStore.setState({ settings: getDefaultSettings('/home/dev') })
   })
 
   it('resumes the pane’s Claude session with the launch marks the spawn needs', () => {
@@ -196,9 +207,8 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
     const startup = buildPaneAccountRestartStartup('claude', pane)
 
-    expect(startup?.command).toMatch(/^claude\b/)
-    expect(startup?.command).toContain('--resume')
-    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup?.command).toBeUndefined()
+    expect(startup?.resume?.recipe).toEqual({ source: 'saved' })
     expect(startup?.launchAgent).toBe('claude')
     expect(startup?.startupCommandDelivery).toBe('shell-ready')
     expect(startup?.resumeProviderSession?.id).toBe(SESSION_ID)
@@ -219,8 +229,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     })
 
     const startup = buildPaneAccountRestartStartup('claude', pane)
-    expect(startup?.command).toContain(SESSION_ID)
-    expect(startup?.command).not.toContain('--dangerously-skip-permissions')
+    expect(startup?.resume?.recipe).toEqual({ source: 'saved' })
     expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
   })
 
@@ -234,7 +243,10 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       settings: { ...getDefaultSettings('/home/dev'), agentDefaultArgs: { codex: '--search' } }
     })
 
-    expect(buildPaneAccountRestartStartup('codex', pane)?.command).toContain('--search')
+    expect(buildPaneAccountRestartStartup('codex', pane)?.resume?.recipe).toMatchObject({
+      source: 'current-inputs',
+      settings: { agentDefaultArgs: { codex: '--search' } }
+    })
   })
 
   it('keeps a recorded Claude launch config on resume', () => {
@@ -248,7 +260,10 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       agentEnv: {}
     })
 
-    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
+    expect(buildPaneAccountRestartStartup('claude', pane)?.resume?.recipe).toMatchObject({
+      source: 'saved',
+      launchConfig: { agentArgs: '--model opus' }
+    })
   })
 
   // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
@@ -266,8 +281,8 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       }
     })
 
-    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
-      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+    expect(buildPaneAccountRestartStartup('claude', pane)?.resumeProviderSession?.cwd).toBe(
+      '/repo/pkg'
     )
   })
 
@@ -322,9 +337,10 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
       const startup = buildPaneAccountRestartStartup('claude', pane)
 
-      expect(startup?.command).toBe(
-        `claude '--dangerously-skip-permissions' '--tools' 'Read' '--resume' '${SESSION_ID}'`
-      )
+      expect(startup?.resume?.recipe).toMatchObject({
+        source: 'saved',
+        launchConfig: { agentArgs: '--dangerously-skip-permissions --tools Read' }
+      })
       expect(startup?.resumeProviderSession).toEqual({ key: 'session_id', id: SESSION_ID })
     }
   )

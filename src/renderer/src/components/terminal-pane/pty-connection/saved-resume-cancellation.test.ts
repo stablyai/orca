@@ -394,3 +394,55 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
     }
   }
 })
+
+it('clears a typed saved startup only while its host-generated registration is still installed', () => {
+  const source = { cancelled: false }
+  const startup = {
+    resume: { recipe: { source: 'saved' } },
+    resumeSource: source,
+    launchToken: 'typed-token'
+  } as const
+  const config = { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+  const registry: Record<string, AgentLaunchConfigRegistryEntry> = {}
+  const registerAgentLaunchConfig = (
+    key: string,
+    launchConfig: typeof config,
+    identity: AgentLaunchConfigRegistrationMetadata
+  ) => {
+    registry[key] = { launchConfig, identity }
+  }
+  fixture.state = {
+    agentLaunchConfigByPaneKey: registry,
+    sleepingAgentSessionsByPaneKey: {},
+    automaticAgentResumeClaimsByTabId: {},
+    registerAgentLaunchConfig,
+    clearAgentLaunchConfig: (key: string) => {
+      delete registry[key]
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer only reads the supplied pane fields before these registration operations.
+  const session = {
+    cacheKey: 'tab:leaf',
+    paneStartup: startup,
+    pane: { id: 1, leafId: 'leaf' },
+    deps: { tabId: 'tab', worktreeId: 'wt' },
+    transport: {},
+    launchToken: 'typed-token'
+  } as unknown as ConnectPanePtySession
+  installSleepingRecordAccess(session)
+  session.registerEffectiveLaunchConfig(config, {
+    launchToken: 'typed-token',
+    resumeSource: source
+  })
+  expect(session.savedStartupLaunchRegistration.entry).toBe(registry['tab:leaf'])
+  session.clearRegisteredStartupLaunchConfig(startup)
+  expect(registry['tab:leaf']).toBeUndefined()
+  session.registerEffectiveLaunchConfig(config, {
+    launchToken: 'typed-token',
+    resumeSource: source
+  })
+  const successor = { ...registry['tab:leaf'] }
+  registry['tab:leaf'] = successor
+  session.clearRegisteredStartupLaunchConfig(startup)
+  expect(registry['tab:leaf']).toBe(successor)
+})

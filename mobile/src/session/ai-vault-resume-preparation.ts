@@ -1,3 +1,6 @@
+import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { createAgentTerminalResumeAttemptRegistry } from '../../../src/shared/agent-terminal-resume-attempt'
+import type { MobileAiVaultResumeLaunch } from './ai-vault-resume-launch'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   isAiVaultPrepareSessionResumeUnavailableError,
@@ -55,4 +58,48 @@ export async function prepareMobileAiVaultSessionResume(
     return { ...session, codexHome: result.substituteCodexHome }
   }
   return session
+}
+
+type MobileResumeAttempt = {
+  worktreeId: string
+  launch: MobileAiVaultResumeLaunch & { hostCapabilities?: readonly string[] }
+}
+
+export type MobileAiVaultResumeMutationRegistry = {
+  freeze(
+    sessionId: string,
+    attempt: MobileResumeAttempt
+  ): MobileResumeAttempt & { clientMutationId: string }
+  claim(sessionId: string): string
+  releaseOnSuccess(sessionId: string): void
+}
+
+// Reuse mutation ids after failed/interrupted resumes for deduplication; mint fresh only after success so deliberate forks remain possible.
+export function createMobileAiVaultResumeMutationRegistry(
+  mintId: (sessionId: string) => string
+): MobileAiVaultResumeMutationRegistry {
+  const registry = createAgentTerminalResumeAttemptRegistry<MobileResumeAttempt>(mintId)
+  return {
+    claim: registry.claim,
+    freeze(sessionId, attempt) {
+      const frozen = registry.freeze(sessionId, attempt)
+      return { ...frozen.attempt, clientMutationId: frozen.clientMutationId }
+    },
+    releaseOnSuccess: registry.releaseOnSuccess
+  }
+}
+
+export function normalizeMobileAiVaultResumeCommandOverrides(
+  overrides: Partial<Record<TuiAgent, string | null>> | null | undefined
+): Partial<Record<TuiAgent, string>> {
+  const normalized: Partial<Record<TuiAgent, string>> = {}
+  if (!overrides) {
+    return normalized
+  }
+  for (const [agent, command] of Object.entries(overrides) as [TuiAgent, string | null][]) {
+    if (typeof command === 'string' && command.trim()) {
+      normalized[agent] = command
+    }
+  }
+  return normalized
 }

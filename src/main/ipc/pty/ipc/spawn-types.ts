@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -33,6 +34,7 @@ export type PtySpawnIpcArgs = {
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
+  resume?: AgentTerminalResume
   resumeProviderSession?: AgentProviderSessionMetadata
   // Untyped on purpose: only `'saved'` marks a resume built from saved facts.
   resumeOrigin?: unknown

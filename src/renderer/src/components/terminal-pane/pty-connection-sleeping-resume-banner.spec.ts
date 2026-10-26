@@ -63,7 +63,12 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const spawn = createDeferred<string>()
+      const spawn = createDeferred<{
+        id: string
+        launchConfig: { agentCommand: string; agentArgs: string; agentEnv: Record<string, string> }
+        launchToken: string | undefined
+        launchAgent: 'codex'
+      }>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
       transportFactoryQueue.push(transport)
@@ -137,7 +142,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           // The record holds no launch recipe, so the resume adds no permission bypass.
-          command: "codex 'resume' 'codex-session-1'",
+          resume: { recipe: { source: 'saved' } },
+          resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
+          resumeOrigin: 'saved',
+
           launchAgent: 'codex',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
@@ -151,6 +159,28 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.not.objectContaining({ sessionId: expect.any(String) })
       )
+      expect(transport.connect.mock.calls[0]?.[0]?.resume).toEqual({ recipe: { source: 'saved' } })
+      expect(transport.connect.mock.calls[0]?.[0]?.command).toBeUndefined()
+      expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-pty')
+      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
+      expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+
+      spawn.resolve({
+        id: 'fresh-pty',
+        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+        launchToken: transport.connect.mock.calls[0]?.[0]?.launchToken,
+        launchAgent: 'codex'
+      })
+      await flushAsyncTicks(10)
+
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
         paneKey,
         {
@@ -165,19 +195,6 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
           leafId: LEAF_2
         }
       )
-      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-
-      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-        | ((ptyId: string) => void)
-        | undefined
-      onPtySpawn?.('fresh-pty')
-      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
-      expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
-      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
-
-      spawn.resolve('fresh-pty')
-      await flushAsyncTicks(10)
 
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')

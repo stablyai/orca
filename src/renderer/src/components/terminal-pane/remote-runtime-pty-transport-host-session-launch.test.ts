@@ -1,3 +1,6 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
+import { buildAgentTerminalResumePlan } from '../../../../shared/agent-terminal-resume-plan'
+import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-resume-startup'
 import { ExplicitEnsure } from '../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
@@ -139,7 +142,8 @@ describe('createRemoteRuntimePtyTransport', () => {
             minCompatibleRuntimeClientVersion: 2,
             capabilities: [
               'agent-session.host-authority.v1',
-              'agent-session.saved-resume-origin.v1'
+              'agent-session.saved-resume-origin.v1',
+              'agent-resume.host-plan.v1'
             ]
           }
         }
@@ -147,6 +151,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(args.method).toBe('terminal.ensureAgentSession')
       expect(ExplicitEnsure.parse(args.params)).toMatchObject({
         resumeOrigin: 'saved',
+        resume: { recipe: { source: 'saved' } },
         providerSession
       })
       return {
@@ -169,6 +174,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       worktreeId: 'repo1::/remote/wt',
       launchAgent: 'codex',
       resumeOrigin: 'saved',
+      resume: { recipe: { source: 'saved' } },
       resumeProviderSession: providerSession,
       tabId: 'tab-1',
       leafId: '11111111-1111-4111-8111-111111111111'
@@ -183,6 +189,76 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(result).not.toHaveProperty('launchAgent')
     transport.disconnect()
   })
+
+  it.each([
+    { recipe: { source: 'saved' }, override: undefined },
+    {
+      recipe: { source: 'saved', launchConfig: { agentArgs: '--model recorded', agentEnv: {} } },
+      override: undefined
+    },
+    {
+      recipe: {
+        source: 'current-inputs',
+        settings: { agentDefaultArgs: { claude: '--model selected' } }
+      },
+      override: undefined
+    },
+    { recipe: { source: 'saved' }, override: '' },
+    { recipe: { source: 'saved' }, override: null }
+  ] satisfies { recipe: AgentTerminalResume['recipe']; override: string | null | undefined }[])(
+    'preserves mounted old-ensure override presence ($recipe.source/$override)',
+    async ({ recipe, override }) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        launchAgent: 'claude',
+        resume: { recipe },
+        resumeProviderSession: { key: 'session_id', id: 'mounted-legacy' },
+        ...(override !== undefined ? { agentArgsOverride: override } : {}),
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      })
+      try {
+        await transport.connect({ url: '', callbacks: {} })
+        const request = runtimeCall.mock.calls.find(
+          ([request]) => request.method === 'terminal.ensureAgentSession'
+        )?.[0]
+        const decoded = ExplicitEnsure.parse(request?.params)
+        expect(decoded).not.toHaveProperty('resume')
+        if (override === undefined) {
+          expect(decoded).not.toHaveProperty('agentArgs')
+        } else {
+          expect(decoded.agentArgs).toBe(override)
+        }
+        if (recipe.source === 'saved' && !recipe.launchConfig && override === undefined) {
+          const hostSettings = { agentDefaultArgs: { claude: '--model host-model' } }
+          const oldPlan = buildAgentResumeStartupPlan({
+            agent: 'claude',
+            providerSession: decoded.providerSession,
+            cmdOverrides: {},
+            agentArgs:
+              decoded.agentArgs === undefined
+                ? hostSettings.agentDefaultArgs.claude
+                : decoded.agentArgs,
+            platform: 'linux'
+          })
+          const typedPlan = buildAgentTerminalResumePlan({
+            agent: 'claude',
+            providerSession: decoded.providerSession,
+            resume: { recipe },
+            settings: hostSettings,
+            isRemote: false,
+            runtime: { platform: 'linux', pty: { terminalWindowsWslDistro: null } }
+          })
+          expect(oldPlan?.launchCommand).toContain('host-model')
+          expect(typedPlan?.launchConfig.agentArgs).toBe('')
+          expect(typedPlan?.launchCommand).not.toContain('host-model')
+        }
+      } finally {
+        transport.disconnect()
+      }
+    }
+  )
 
   it('creates and subscribes to a terminal on the active remote runtime', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

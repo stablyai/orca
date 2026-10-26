@@ -5,6 +5,12 @@ import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+import {
+  getAgentResumeArgv,
+  isResumableTuiAgent,
+  type AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import {
@@ -158,10 +164,19 @@ export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResu
 }
 
 export async function assertLegacyAiVaultResumeCommandAllowed(
-  command: string,
+  command:
+    | string
+    | {
+        agent: TuiAgent
+        providerSession: AgentProviderSessionMetadata
+        ompResumeFilePath?: string
+      },
   ensureHost: () => Promise<void>
 ): Promise<void> {
-  const invocations = parseResumeInvocations(command)
+  const invocations =
+    typeof command === 'string'
+      ? parseResumeInvocations(command)
+      : resumeIdentityInvocations(command)
   if (invocations.length === 0) {
     return
   }
@@ -227,6 +242,25 @@ function sameIdInAnyCase(target: string, rowSessionId: string): boolean {
 type ResumeInvocation = StructuredAgentResumeInvocation & {
   provider: StructuredAgentId
   history: StructuredAgentSessionHistory
+}
+
+function resumeIdentityInvocations(resume: {
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+  ompResumeFilePath?: string
+}): ResumeInvocation[] {
+  const argv = isResumableTuiAgent(resume.agent)
+    ? getAgentResumeArgv(resume.agent, resume.providerSession, resume.ompResumeFilePath)
+    : null
+  return argv
+    ? STRUCTURED_AGENT_RUNTIME_METADATA.flatMap(({ definition, sessionHistory: history }) => {
+        if (!history.rowAgents.some((agent) => agent === resume.agent)) {
+          return []
+        }
+        const invocation = history.parseResumeArgs(argv.slice(1))
+        return invocation ? [{ ...invocation, provider: definition.agent, history }] : []
+      })
+    : []
 }
 
 function parseResumeInvocations(command: string): ResumeInvocation[] {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import type { AgentTerminalResume } from '../../../../../shared/agent-terminal-resume'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 vi.mock('../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
@@ -13,7 +14,7 @@ vi.mock('./pty-connect-limits', () => ({
 
 function createSession() {
   let startup: {
-    command: string
+    resume: AgentTerminalResume
     agent: string
     resumeProviderSession: { key: string; id: string }
   } | null = null
@@ -43,7 +44,9 @@ function createSession() {
     transport,
     replay: () => {
       startup = {
-        command: "cursor-agent '--resume' 'conversation-742'",
+        resume: {
+          recipe: { source: 'saved', launchConfig: { agentArgs: '--model selected', agentEnv: {} } }
+        },
         agent: 'cursor',
         resumeProviderSession: { key: 'conversation_id', id: 'conversation-742' }
       }
@@ -93,14 +96,16 @@ describe('cold reattach waits for host identity replay', () => {
         })
       )
       expect(transport.connect).toHaveBeenCalledWith(
-        expect.not.objectContaining({ command: expect.anything() })
+        expect.not.objectContaining({ resume: expect.anything() })
       )
       bridge.dispose()
       return
     }
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "cursor-agent '--resume' 'conversation-742'",
+        resume: {
+          recipe: { source: 'saved', launchConfig: { agentArgs: '--model selected', agentEnv: {} } }
+        },
         resumeProviderSession: { key: 'conversation_id', id: 'conversation-742' },
         initiallyHidden: true
       })

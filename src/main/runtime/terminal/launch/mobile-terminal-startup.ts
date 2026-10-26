@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -9,19 +10,46 @@ import {
   type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import {
-  buildAgentResumeStartupPlan,
-  buildAgentStartupPlan
-} from '../../../../shared/tui-agent-startup'
-import { resolveResumeLaunchRecipe } from '../../../../shared/tui-agent-launch-defaults'
+import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime
 } from '../../../../shared/agent-launch-runtime'
 
-export type MobileTerminalCommandOptions = {
+export type MobileTerminalCreateOptions = {
+  terminalImageViewerSupported?: boolean
+  afterTabId?: string
+  sourceChatFork?: { sessionId: string }
+  targetGroupId?: string
+  resume?: AgentTerminalResume
+  startupAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
   command?: string
+  shellOverride?: string
+  cwd?: string
+  accountEnv?: Record<string, string>
+  env?: Record<string, string>
+  envToDelete?: string[]
+  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  agent?: TuiAgent
+  agentPrompt?: string
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  viewMode?: 'terminal' | 'chat'
+  activate?: boolean
+  clientNavigationId?: string
+  clientMutationId?: string
+  supportsSplitGroupPlacement?: boolean
+  signal?: AbortSignal
+}
+
+export type MobileTerminalCommandOptions = {
+  resume?: AgentTerminalResume
+  startupAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
+  command?: string
+  accountEnv?: Record<string, string>
   env?: Record<string, string>
   envToDelete?: string[]
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -41,7 +69,11 @@ export type ResumableAgentSessionSource = {
 }
 
 export type MobileTerminalCommand = {
+  resume?: AgentTerminalResume
+  startupAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
   command?: string
+  accountEnv?: Record<string, string>
   env?: Record<string, string>
   envToDelete?: string[]
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -52,7 +84,8 @@ export type MobileTerminalCommand = {
 }
 
 export type MobileTerminalResumeCommand = MobileTerminalCommand & {
-  command: string
+  startupAgent: TuiAgent
+  resume: AgentTerminalResume
   resumeProviderSession: AgentProviderSessionMetadata
 }
 
@@ -82,28 +115,15 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     if (!isTuiAgentEnabled(record.agent, settings.disabledTuiAgents)) {
       return null
     }
-    const launchRuntime = this.resolveAgentLaunchRuntime(workspace, record.agent)
-    const { launchConfig } = record
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent: record.agent,
-      providerSession,
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
-      platform: launchRuntime.platform,
-      shell: agentLaunchQuotingShell(launchRuntime),
-      isRemote: Boolean(workspace.connectionId),
-      launchCwd: workspace.path
-    })
-    if (!startupPlan) {
-      return null
-    }
     return {
-      command: startupPlan.launchCommand,
-      env: startupPlan.env,
-      launchConfig: startupPlan.launchConfig,
+      startupAgent: record.agent,
       launchAgent: record.agent,
-      startupCommandDelivery: startupPlan.startupCommandDelivery,
-      launchRuntime,
+      resume: {
+        recipe: {
+          source: 'saved',
+          ...(record.launchConfig ? { launchConfig: record.launchConfig } : {})
+        }
+      },
       resumeProviderSession: providerSession
     }
   }
@@ -112,6 +132,9 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     workspace: TerminalWorkspaceLaunchScope,
     opts: MobileTerminalCommandOptions
   ): Promise<MobileTerminalCommand> {
+    if (opts.resume) {
+      return { ...opts, startupAgent: opts.startupAgent ?? opts.launchAgent }
+    }
     if (opts.command || !opts.agent) {
       return {
         command: opts.command,

@@ -32,11 +32,18 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       return false
     }
     const state = useAppStore.getState()
-    if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
+    if (
+      !session.pendingStartupCommand &&
+      startup.command !== undefined &&
+      session.shouldDeliverStartupViaTerminalPaste
+    ) {
       session.pendingStartupCommand = {
         command: startup.command,
         resumeSource: startup.resumeSource
       }
+    }
+    if (!startup.launchConfig) {
+      return true
     }
     state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
       agentType: startup.agent,
@@ -147,7 +154,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
-    if (!startup || startup.resumeSource?.cancelled) {
+    if (!startup || !startup.command || startup.resumeSource?.cancelled) {
       return
     }
     if (session.startupInjectTimer !== null) {

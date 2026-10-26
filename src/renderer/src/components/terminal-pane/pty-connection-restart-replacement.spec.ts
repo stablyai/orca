@@ -105,12 +105,17 @@ export function registerPtyConnectionRestartReplacementTests(): void {
         await flushAsyncTicks()
       }
       const connects = (): number => transport.connect.mock.calls.length
-      const lastCommand = (): string | undefined =>
-        transport.connect.mock.calls.at(-1)?.[0]?.command
       /** The replacement resumed the agent: the window's own spawn, or, switch on, main's start. */
       const expectResumed = async (): Promise<void> => {
         if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-          expect(lastCommand()).toContain('sess-1')
+          const options = transport.connect.mock.calls.at(-1)?.[0]
+          expect(options?.resume).toEqual({ recipe: { source: 'saved' } })
+          expect(options?.command).toBeUndefined()
+          expect(options).toMatchObject({
+            resumeProviderSession: { key: 'session_id', id: 'sess-1' },
+            launchAgent: 'claude',
+            resumeOrigin: 'saved'
+          })
           return
         }
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
@@ -119,7 +124,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
         )
         expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
       }
-      return { binding, exit, connects, lastCommand, expectResumed }
+      return { binding, exit, connects, expectResumed }
     }
 
     it('resumes a restart-replaced hidden pane once, when it is next shown', async () => {

@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
@@ -20,9 +21,12 @@ import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
 
 export type OwnedMobileTerminalCreateOptions = {
+  resume?: AgentTerminalResume
+  startupAgent?: TuiAgent
   command?: string
   shellOverride?: string
   cwd?: string
+  accountEnv?: Record<string, string>
   env?: Record<string, string>
   envToDelete?: string[]
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -71,9 +75,12 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       afterTabId?: string
       sourceChatFork?: { sessionId: string }
       targetGroupId?: string
+      resume?: AgentTerminalResume
+      startupAgent?: TuiAgent
       command?: string
       shellOverride?: string
       cwd?: string
+      accountEnv?: Record<string, string>
       env?: Record<string, string>
       envToDelete?: string[]
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']

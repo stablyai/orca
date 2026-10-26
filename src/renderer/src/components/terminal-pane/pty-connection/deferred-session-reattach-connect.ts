@@ -128,6 +128,7 @@ function connectDeferredSessionReattach(
     cols: session.cols,
     rows: session.rows,
     sessionId: deferredReattachSessionId,
+    ...(coldRestoreStartup?.resume ? { resume: coldRestoreStartup.resume } : {}),
     ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
     ...(coldRestoreStartup?.env
       ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }

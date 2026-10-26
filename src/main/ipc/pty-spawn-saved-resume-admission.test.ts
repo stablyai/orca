@@ -6,6 +6,8 @@ import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-comm
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { partialRuntimeStore } from '../runtime/runtime-store-partial-fixture'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -69,8 +71,18 @@ describe('a pane restore of a conversation a native chat continues', () => {
   const C = 'provider-session-alpha-1'
   const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-  function register(openTabs: string[] | 'unreadable') {
-    const runtime = new OrcaRuntimeService()
+  function register(openTabs: string[] | 'unreadable', disabledTuiAgents: TuiAgent[] = []) {
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({ getSettings: () => ({ disabledTuiAgents }) })
+    )
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: 'wt-1',
+      path: '/tmp',
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
+    vi.spyOn(runtime, 'planAgentPaneLaunch')
     vi.spyOn(runtime, 'openAgentSessionRecordStore').mockImplementation(async () => {
       if (openTabs === 'unreadable') {
         throw new Error('records unavailable')
@@ -84,7 +96,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
     return runtime
   }
 
-  async function spawnResume(resumeOrigin?: 'saved', leafId = LEAF_ID) {
+  async function spawnResume(resumeOrigin?: 'saved', leafId = LEAF_ID, typed = false) {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     vi.useFakeTimers()
@@ -96,7 +108,9 @@ describe('a pane restore of a conversation a native chat continues', () => {
         worktreeId: 'wt-1',
         tabId: 'tab-floating',
         leafId,
-        command: `claude --resume '${C}'`,
+        ...(typed
+          ? { resume: { recipe: { source: 'saved' } } }
+          : { command: `claude --resume '${C}'` }),
         launchAgent: 'claude',
         resumeProviderSession: { key: 'session_id', id: C },
         ...(resumeOrigin ? { resumeOrigin } : {})
@@ -106,12 +120,12 @@ describe('a pane restore of a conversation a native chat continues', () => {
         vi.runAllTimers()
       }
       const env: Record<string, string> = spawnMock.mock.calls.at(-1)![2].env
-      const typed = mockProc.proc.write.mock.calls.map((call) => String(call[0]))
+      const inputWrites = mockProc.proc.write.mock.calls.map((call) => String(call[0]))
       const reported = typeof result === 'object' && result !== null ? result : {}
       return {
         refused: 'agentResumeRefused' in reported ? reported.agentResumeRefused : undefined,
         notice: 'agentResumeUnavailable' in reported,
-        input: [env[POSIX_SHELL_STARTUP_COMMAND_ENV] ?? '', ...typed].join('\n')
+        input: [env[POSIX_SHELL_STARTUP_COMMAND_ENV] ?? '', ...inputWrites].join('\n')
       }
     } finally {
       vi.useRealTimers()
@@ -129,6 +143,50 @@ describe('a pane restore of a conversation a native chat continues', () => {
         agent: 'claude',
         providerSession: { key: 'session_id', id: C }
       })
+    }
+  )
+
+  posixOnlyIt('runs real typed planning then strips the resume at saved admission', async () => {
+    const runtime = register([chat.sessionId])
+    const restored = await spawnResume('saved', LEAF_ID, true)
+    const planned = await vi.mocked(runtime.planAgentPaneLaunch).mock.results[0]!.value
+    expect(planned.command).toContain(C)
+    expect(restored).toMatchObject({ refused: 'chat-home', notice: true })
+    expect(restored.input).not.toContain(C)
+    expect(restored.input).not.toContain('--resume')
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(forgetRefusedPaneResumeMock).toHaveBeenCalledWith(`tab-floating:${LEAF_ID}`, {
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: C }
+    })
+  })
+
+  posixOnlyIt(
+    'recovers a disabled saved desktop agent while ensure and saved mobile still refuse',
+    async () => {
+      const runtime = register([], ['claude'])
+      const restored = await spawnResume('saved', LEAF_ID, true)
+      expect(restored.refused).toBeUndefined()
+      expect(restored.input.split(C)).toHaveLength(2)
+      await expect(runtime.planAgentPaneLaunch('wt-1', { startupAgent: 'claude' })).rejects.toThrow(
+        'Agent claude is disabled'
+      )
+      Object.assign(runtime, { executionOwnerSupportsAgentSessionOperation: async () => true })
+      await expect(
+        runtime.ensureAgentSession({
+          kind: 'explicit',
+          worktree: 'id:wt-1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: C },
+          resume: { recipe: { source: 'saved' } }
+        })
+      ).rejects.toThrow('Selected agent is disabled')
+      expect(
+        runtime['resolveMobileSessionResumeCommand'](
+          { id: 'wt-1', path: '/tmp', connectionId: null, repo: null, folderWorkspace: null },
+          { agent: 'claude', providerSession: { key: 'session_id', id: C } }
+        )
+      ).toBeNull()
     }
   )
 

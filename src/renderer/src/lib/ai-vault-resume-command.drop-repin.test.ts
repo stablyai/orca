@@ -62,8 +62,7 @@ describe('buildAiVaultDropRepinStartup', () => {
     })
 
     expect(startup).not.toBeNull()
-    expect(startup?.command).toContain(`CODEX_HOME='${SELECTED_HOME}'`)
-    expect(startup?.command).not.toContain(RECORDED_HOME)
+    expect(startup?.resume?.codexHome).toBe(SELECTED_HOME)
     expect(startup).toMatchObject({ cwd: '/Users/ada/repo' })
   })
 
@@ -76,9 +75,8 @@ describe('buildAiVaultDropRepinStartup', () => {
     })
 
     expect(startup).not.toBeNull()
-    expect(startup?.command).toContain(`CODEX_HOME='${SELECTED_HOME}'`)
-    expect(startup?.command).not.toContain(RECORDED_HOME)
-    expect(startup?.command).not.toContain('cd ')
+    expect(startup?.resume?.codexHome).toBe(SELECTED_HOME)
+    expect(startup?.cwd).toBeUndefined()
   })
 
   it('declines a payload from an older serializer that never carried sessionCwd', () => {

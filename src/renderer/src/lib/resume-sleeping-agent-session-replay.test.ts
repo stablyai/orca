@@ -42,7 +42,7 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 }
 
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
-  it('publishes the resume command and ownership claim with the first visible tab state', () => {
+  it('publishes the resume inputs and ownership claim with the first visible tab state', () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
@@ -50,7 +50,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     } as never)
     let firstVisible:
       | {
-          command: string | undefined
+          startup: ReturnType<typeof useAppStore.getState>['pendingStartupByTabId'][string]
           claim: unknown
           layout: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId'][string]
         }
@@ -59,7 +59,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
       const tab = state.tabsByWorktree['wt-1']?.[0]
       if (tab && !firstVisible) {
         firstVisible = {
-          command: state.pendingStartupByTabId[tab.id]?.command,
+          startup: state.pendingStartupByTabId[tab.id],
           claim: state.automaticAgentResumeClaimsByTabId[tab.id],
           layout: state.terminalLayoutsByTabId[tab.id]
         }
@@ -69,8 +69,10 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     unsubscribe()
 
-    expect(firstVisible?.command).toContain('resume')
-    expect(firstVisible?.command).toContain(record.providerSession.id)
+    expect(firstVisible?.startup).toMatchObject({
+      resume: { recipe: { source: 'saved' } },
+      resumeProviderSession: record.providerSession
+    })
     expect(firstVisible?.claim).toEqual({
       worktreeId: record.worktreeId,
       launchAgent: record.agent,

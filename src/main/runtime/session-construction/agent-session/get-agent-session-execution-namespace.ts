@@ -13,14 +13,8 @@ import {
   type ProviderExecutionNamespace
 } from '../../agent-session/ownership/agent-session-claim-identity'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startup'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
+import { normalizeAiVaultResumeFilePath } from '../../../../shared/ai-vault-resume-path'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { withAgentSessionAccountEnv } from '../../agent-session-account-env'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
 
 export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntimeWithResolveWorktreeRemovalTarget {
   protected getAgentSessionExecutionNamespace(
@@ -115,7 +109,18 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       throw new Error('agent_session_legacy_required')
     }
     // Choose SSH compatibility before canonicalizing paths that belong to the execution owner.
-    const identity = canonicalizeAgentSessionIdentity(request.agent, request.providerSession)
+    const identity = canonicalizeAgentSessionIdentity(
+      request.agent,
+      request.resume && request.providerSession.transcriptPath
+        ? {
+            ...request.providerSession,
+            transcriptPath: normalizeAiVaultResumeFilePath(
+              request.providerSession.transcriptPath,
+              process.platform
+            )
+          }
+        : request.providerSession
+    )
     const claim = this.agentSessionClaimSigner.createClaim({
       namespace,
       identity,
@@ -125,44 +130,24 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
-    const launchRuntime = this.resolveAgentLaunchRuntime(workspace, request.agent)
-    const { platform } = launchRuntime
-    const shell = agentLaunchQuotingShell(launchRuntime)
-    // Use the resolved PTY route, not display repo metadata that may belong to another host.
-    const isRemote = Boolean(workspace.connectionId)
-    const startup = buildAgentResumeStartupPlan({
-      agent: request.agent,
-      providerSession: identity.providerSession,
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs:
-        request.agentArgs !== undefined
-          ? request.agentArgs
-          : resolveTuiAgentLaunchArgs(request.agent, settings),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
-      ompResumeFilePath: request.ompResumeFilePath,
-      sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
-      sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
-      platform,
-      shell,
-      isRemote
-    })
-    if (!startup) {
-      throw new Error('agent_session_identity_required')
-    }
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
-      command: startup.launchCommand,
-      env: withAgentSessionAccountEnv(startup.env, request.accountEnv),
-      launchConfig: startup.launchConfig,
-      startupCommandDelivery: startup.startupCommandDelivery,
-      launchAgent: request.agent,
-      // Host-built resumes must name their session so readers can address it.
+      startupAgent: request.agent,
+      resume: request.resume ?? {
+        recipe: { source: 'host-defaults' },
+        ...(request.ompResumeFilePath ? { ompResumeFilePath: request.ompResumeFilePath } : {})
+      },
       resumeProviderSession: identity.providerSession,
+      env: request.env,
+      accountEnv: request.accountEnv,
+      agentArgs: request.agentArgs,
+      launchPreferences: request.launchPreferences,
+      ...(request.cwd ? { cwd: request.cwd } : {}),
+      ...(request.envToDelete ? { envToDelete: request.envToDelete } : {}),
       ...(request.resumeOrigin ? { resumeOrigin: request.resumeOrigin } : {}),
       terminalImageViewerSupported: _caller.terminalImageViewerSupported,
-      launchRuntime,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,

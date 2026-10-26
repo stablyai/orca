@@ -61,17 +61,20 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             { tabId: params.tabId, leafId: params.leafId },
             {
               command: params.command,
+              ...(params.resume ? { resume: params.resume, startupAgent: params.launchAgent } : {}),
+              ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
               ...(params.cwd ? { cwd: params.cwd } : {}),
               ...(params.shell ? { shellOverride: params.shell } : {}),
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
+              accountEnv: params.accountEnv,
               envToDelete: params.envToDelete,
               ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
               ...(params.resumeProviderSession
                 ? { resumeProviderSession: params.resumeProviderSession }
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-              ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.launchAgent && !params.resume ? { launchAgent: params.launchAgent } : {}),
               terminalImageViewerSupported: terminalImageViewerSupported(context)
             }
           )
@@ -85,10 +88,13 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         (canonicalWorktreeSelector, preAllocatedHandle) =>
           runtime.createTerminal(canonicalWorktreeSelector, {
             command: params.command,
+            ...(params.cwd ? { cwd: params.cwd } : {}),
+            ...(params.resume ? { resume: params.resume, startupAgent: params.launchAgent } : {}),
             terminalImageViewerSupported: terminalImageViewerSupported(context),
             ...(params.shell ? { shellOverride: params.shell } : {}),
             startupCommandDelivery: params.startupCommandDelivery,
             env: params.env,
+            accountEnv: params.accountEnv,
             envToDelete: params.envToDelete,
             ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
             ...(params.resumeProviderSession
@@ -96,7 +102,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               : {}),
             ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.launchAgent && !params.resume ? { launchAgent: params.launchAgent } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),

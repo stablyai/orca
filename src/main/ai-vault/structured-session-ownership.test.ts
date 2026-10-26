@@ -186,6 +186,55 @@ describe('structured AI Vault ownership', () => {
     ).rejects.toThrow('agent_session_conflict')
   })
 
+  it.each([
+    {
+      agent: 'opencode2',
+      owner: 'opencode',
+      nativeId: PROVIDER_SESSION,
+      command: `opencode2 --session ${PROVIDER_SESSION}`,
+      transcriptPath: undefined,
+      ompResumeFilePath: undefined
+    },
+    {
+      agent: 'pi',
+      owner: 'pi',
+      nativeId: `/sessions/2026-10-26T12-00-00-000Z_${PROVIDER_SESSION}.jsonl`,
+      command: `pi --session /sessions/2026-10-26T12-00-00-000Z_${PROVIDER_SESSION}.jsonl`,
+      transcriptPath: `/sessions/2026-10-26T12-00-00-000Z_${PROVIDER_SESSION}.jsonl`,
+      ompResumeFilePath: undefined
+    },
+    {
+      agent: 'omp',
+      owner: 'omp',
+      nativeId: PROVIDER_SESSION,
+      command: `omp --resume /sessions/2026-10-26T12-00-00-000Z_${PROVIDER_SESSION}.jsonl`,
+      transcriptPath: '/sessions/other.jsonl',
+      ompResumeFilePath: `/sessions/2026-10-26T12-00-00-000Z_${PROVIDER_SESSION}.jsonl`
+    }
+  ] as const)(
+    'shares command matching for typed $agent file and alias targets',
+    async ({ agent, owner, nativeId, command, transcriptPath, ompResumeFilePath }) => {
+      installOwnership({ handle: { agent: owner, transport: 'fixture', nativeId } })
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+      ).rejects.toThrow('agent_session_conflict')
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(
+          {
+            agent,
+            providerSession: {
+              key: 'session_id',
+              id: agent === 'opencode2' ? PROVIDER_SESSION : 'different-raw-id',
+              ...(transcriptPath ? { transcriptPath } : {})
+            },
+            ...(ompResumeFilePath ? { ompResumeFilePath } : {})
+          },
+          async () => undefined
+        )
+      ).rejects.toThrow('agent_session_conflict')
+    }
+  )
+
   it('allows a resume command that names a different provider session', async () => {
     installOwnership()
 

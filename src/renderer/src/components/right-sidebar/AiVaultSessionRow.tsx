@@ -132,7 +132,7 @@ export function VaultSessionRow({
         sessionId: session.sessionId,
         ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
         title,
-        command: resumeStartup.command,
+        ...resumeStartup,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         codexHome: session.codexHome,

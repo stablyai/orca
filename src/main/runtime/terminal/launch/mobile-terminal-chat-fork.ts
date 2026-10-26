@@ -1,3 +1,7 @@
+import { agentResumeCurrentInputs } from '../../../../shared/agent-terminal-resume'
+import { isResumableTuiAgent } from '../../../../shared/agent-session-resume'
+import { realHomeCodexResumeEnvDeletion } from '../../../../shared/ai-vault-resume-command'
+import { managedDataAccountResumeEnv } from '../../../../shared/managed-data-account-resume'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 import type { AiVaultResumeLaunchSettings } from '../../../../shared/ai-vault-resume-startup'
@@ -10,7 +14,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  buildAiVaultLocalResumeStartup,
+  getAiVaultAgentProviderSession,
   getAiVaultResumeCodexHome,
   resolveAiVaultCopiedSessionAgentArgs
 } from '../../../../shared/ai-vault-resume-startup'
@@ -21,7 +25,6 @@ export function buildMobileTerminalChatFork(args: {
   settings: AiVaultResumeLaunchSettings
   runtime: AgentLaunchRuntime
 }): MobileTerminalCommand & {
-  command: string
   cwd?: string
   resumeProviderSession?: AgentProviderSessionMetadata
 } {
@@ -52,16 +55,35 @@ export function buildMobileTerminalChatFork(args: {
   if (prepared.forkedSession) {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
   }
-  const startup = prepared.forkedSession
-    ? buildAiVaultLocalResumeStartup({
-        ...startupArgs,
-        agentArgs: resolveAiVaultCopiedSessionAgentArgs({
-          ...startupArgs,
-          sourceAgent: source.sourceAgent
-        }),
-        embedCwd: false
-      })
-    : buildAiVaultForkStartup(startupArgs)
+  if (prepared.forkedSession && isResumableTuiAgent(source.agent)) {
+    const providerSession = getAiVaultAgentProviderSession(source)
+    if (!providerSession) {
+      throw new Error('chat_fork_source_unavailable')
+    }
+    return {
+      resume: {
+        recipe: {
+          source: 'current-inputs',
+          settings: agentResumeCurrentInputs(source.agent, settings),
+          agentArgs: resolveAiVaultCopiedSessionAgentArgs({
+            ...startupArgs,
+            sourceAgent: source.sourceAgent
+          })
+        },
+        resumeInLaunchCwd: true,
+        ...(source.agent === 'codex' ? { codexHome: source.codexHome } : {}),
+        ...(source.agent === 'omp' ? { ompResumeFilePath: source.filePath } : {})
+      },
+      ...(source.cwd ? { cwd: source.cwd } : {}),
+      env: managedDataAccountResumeEnv(source),
+      ...realHomeCodexResumeEnvDeletion(source),
+      startupAgent: source.agent,
+      launchAgent: source.agent,
+      resumeProviderSession: providerSession,
+      launchRuntime: runtime
+    }
+  }
+  const startup = buildAiVaultForkStartup(startupArgs)
   if (!startup) {
     throw new Error('chat_fork_source_unavailable')
   }

@@ -537,12 +537,10 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
-    expect(startup?.command).toBe(
-      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
-    )
-    expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
-    expect(startup?.command).not.toContain('changed')
-    expect(startup?.launchConfig).toEqual(record.launchConfig)
+    expect(startup?.command).toBeUndefined()
+    expect(startup?.resume).toEqual({
+      recipe: { source: 'saved', launchConfig: record.launchConfig }
+    })
     expect(startup?.resumeProviderSession).toEqual(record.providerSession)
   })
 
@@ -573,8 +571,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.launchConfig).toMatchObject({
-      agentArgs: '--newer'
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.resume).toMatchObject({
+      recipe: { source: 'saved', launchConfig: { agentArgs: '--newer' } }
     })
     expect(state.sleepingAgentSessionsByPaneKey[first.paneKey]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[duplicate.paneKey]).toBeUndefined()
@@ -683,8 +681,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     expect(resumedTab?.launchAgent).toBe('claude')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.launchConfig).toMatchObject({
-      agentArgs: '--active'
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.resume).toMatchObject({
+      recipe: { source: 'saved', launchConfig: { agentArgs: '--active' } }
     })
     expect(state.sleepingAgentSessionsByPaneKey[completed.paneKey]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[active.paneKey]).toBeUndefined()
@@ -882,8 +880,11 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     expect(resumedTab?.launchAgent).toBe('claude')
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.command).toContain(
-      `'--resume' 'sess-1'"'"'s'`
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.resumeProviderSession).toEqual(
+      record.providerSession
     )
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.resume).toMatchObject({
+      recipe: { source: 'saved' }
+    })
   })
 })

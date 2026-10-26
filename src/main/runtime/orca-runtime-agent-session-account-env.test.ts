@@ -119,9 +119,84 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
     expect(planned[0]?.env).toMatchObject({ KEEP: '1', CODEX_HOME: ACCOUNT_ENV.CODEX_HOME })
   })
 
+  it.each(['host-defaults', 'current-inputs', 'saved'] as const)(
+    'uses the selected host account over %s env on resume without desktop accountEnv',
+    async (source) => {
+      const runtime = createRuntime()
+      runtime.setHostAccountLaunchEnv(
+        HostAccountLaunchEnvParams.parse({
+          wslDistro: 'Ubuntu',
+          claude: {},
+          terminal: { CODEX_HOME: ACCOUNT_ENV.CODEX_HOME }
+        })
+      )
+      const { planned } = planCreates(runtime)
+      await runtime.createAgentSession({
+        clientOperationId: operationId(),
+        worktree: 'id:worktree-1',
+        agent: 'codex'
+      })
+      const recipe =
+        source === 'saved'
+          ? {
+              source,
+              launchConfig: { agentArgs: '', agentEnv: { KEEP: '1', CODEX_HOME: '/saved' } }
+            }
+          : source === 'current-inputs'
+            ? {
+                source,
+                settings: { agentDefaultEnv: { codex: { KEEP: '1', CODEX_HOME: '/selected' } } }
+              }
+            : { source }
+      await runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        resume: { recipe }
+      })
+      expect(planned[1]?.env).toMatchObject({ KEEP: '1', CODEX_HOME: planned[0]?.env?.CODEX_HOME })
+      expect(planned[1]?.env?.CODEX_HOME).toBe(ACCOUNT_ENV.CODEX_HOME)
+    }
+  )
+
+  it('carries cold-restore identity and a History Windows account home through the host plan', async () => {
+    const runtime = createRuntime()
+    runtime.setHostAccountLaunchEnv(
+      HostAccountLaunchEnvParams.parse({
+        wslDistro: 'Ubuntu',
+        claude: {},
+        terminal: { CODEX_HOME: ACCOUNT_ENV.CODEX_HOME }
+      })
+    )
+    const { planned } = planCreates(runtime)
+    const env = {
+      ORCA_PANE_KEY: 'restored-tab:restored-leaf',
+      ORCA_AGENT_LAUNCH_TOKEN: 'restore-token',
+      CODEX_HOME: 'C:\\Users\\qa\\codex-accounts\\history'
+    }
+    await runtime.ensureAgentSession(
+      EnsureAgentSessionParams.parse({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'history-session' },
+        resume: {
+          recipe: {
+            source: 'saved',
+            launchConfig: { agentArgs: '', agentEnv: { CODEX_HOME: '/saved' } }
+          }
+        },
+        env
+      })
+    )
+    expect(planned[0]?.env).toMatchObject(env)
+    expect(planned[0]?.command).toContain('history-session')
+  })
+
   it('carries it through a resumed (restored or sleeping) agent', async () => {
     const runtime = createRuntime()
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const { planned } = planCreates(runtime)
     await runtime.ensureAgentSession(
       EnsureAgentSessionParams.parse({
         kind: 'explicit',
@@ -132,6 +207,6 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
         accountEnv: ACCOUNT_ENV
       })
     )
-    expect(createTerminal.mock.calls[0][1]?.env).toMatchObject({ KEEP: '1', ...ACCOUNT_ENV })
+    expect(planned[0]?.env).toMatchObject({ KEEP: '1', ...ACCOUNT_ENV })
   })
 })

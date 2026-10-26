@@ -56,6 +56,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
     env: session.paneEnv,
+    ...(session.paneStartup?.resume ? { resume: session.paneStartup.resume } : {}),
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste
       ? undefined

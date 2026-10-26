@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -151,7 +152,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         expect(transport.connect).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            command: "codex 'resume' 'codex-session-1'",
+            resume: { recipe: { source: 'saved' } },
+            resumeProviderSession: expect.objectContaining({ id: 'codex-session-1' }),
             env: expect.objectContaining({
               ORCA_PANE_KEY: paneKey,
               ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
@@ -169,15 +171,10 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       }
     })
 
-    // Main-owned resume must type no window-generated command.
-    const windowResumeCommand = (command: string): string | undefined =>
-      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : command
-
-    // Cold restore must quote for the recorded shell; PowerShell quotes break cmd.exe resume argv (#12320).
     async function runWindowsColdRestoreResume(args: {
       terminalWindowsShell: string
       tabShellOverride?: string
-    }): Promise<string | undefined> {
+    }): Promise<AgentTerminalResume | undefined> {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
@@ -262,34 +259,30 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         }
         await flushAsyncTicks(10)
 
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The transport connect spy records the command string supplied by the cold-restore path.
-        return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)
-          ?.command
+        const options = transport.connect.mock.calls.at(-1)?.[0]
+        expect(options?.command).toBeUndefined()
+        if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+          expect(options).toMatchObject({
+            resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
+            launchAgent: 'codex',
+            resumeOrigin: 'saved'
+          })
+        }
+        return options?.resume
       } finally {
         globalThis.setTimeout = originalSetTimeout
         restoreNavigator()
       }
     }
 
-    it('quotes a cold-restore resume command for a cmd.exe Windows tab', async () => {
-      await expect(runWindowsColdRestoreResume({ terminalWindowsShell: 'cmd.exe' })).resolves.toBe(
-        windowResumeCommand('codex "resume" "codex-session-1"')
+    it.each([
+      { terminalWindowsShell: 'cmd.exe' },
+      { terminalWindowsShell: 'powershell.exe', tabShellOverride: 'cmd.exe' },
+      { terminalWindowsShell: 'powershell.exe' }
+    ])('hands the saved recipe to the host for $terminalWindowsShell', async (options) => {
+      await expect(runWindowsColdRestoreResume(options)).resolves.toEqual(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : { recipe: { source: 'saved' } }
       )
-    })
-
-    it('prefers the tab shell override over the global Windows shell on cold restore', async () => {
-      await expect(
-        runWindowsColdRestoreResume({
-          terminalWindowsShell: 'powershell.exe',
-          tabShellOverride: 'cmd.exe'
-        })
-      ).resolves.toBe(windowResumeCommand('codex "resume" "codex-session-1"'))
-    })
-
-    it('keeps PowerShell quoting for a cold-restore resume on a PowerShell Windows tab', async () => {
-      await expect(
-        runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
-      ).resolves.toBe(windowResumeCommand("codex 'resume' 'codex-session-1'"))
     })
 
     async function expectLiveNoteKeepsContentlessReattach(

@@ -1,3 +1,4 @@
+import type { TerminalStartupInput } from '../../../../../shared/agent-terminal-resume'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
@@ -7,11 +8,10 @@ import type {
 import type { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 
 export type PendingStartupCommand = {
-  command: string
   resumeSource?: SavedResumeStartupSource
   isCurrent?: () => boolean
   env?: Record<string, string>
-}
+} & TerminalStartupInput
 
 export type FreshSpawnOptions = {
   forceBlankRestoredViewport?: boolean
@@ -24,7 +24,7 @@ export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   resumeProviderSession: AgentProviderSessionMetadata
   /** Built from the pane's saved facts, so the host refuses it for a chat's conversation. */
   resumeOrigin: 'saved'
-  launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
+  launchConfig?: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
   hasSleepingRecord: boolean

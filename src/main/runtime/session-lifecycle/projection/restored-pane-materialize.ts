@@ -217,6 +217,8 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...('resumeProviderSession' in agentStartup
             ? {
                 resumeProviderSession: agentStartup.resumeProviderSession,
+                resume: agentStartup.resume,
+                startupAgent: agentStartup.startupAgent,
                 resumeOrigin: 'saved' as const,
                 spawnIntent: automatic ? 'automatic-restore' : 'user-resume'
               }

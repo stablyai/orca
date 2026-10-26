@@ -1,3 +1,5 @@
+import { TerminalEnvParam } from './rpc-param-primitives'
+import { AgentTerminalResumeParam } from './agent-terminal-resume-params'
 import { z } from 'zod'
 import { isValidTerminalTabId } from '../terminal-tab-id'
 import {
@@ -112,6 +114,7 @@ export const ProviderSession = z
         'Invalid transcript path'
       )
       .optional(),
+    cwd: z.string().max(32768).optional(),
     effort: z.string().regex(AGENT_EFFORT_LEVEL, 'Invalid effort level').optional()
   })
   .strict()
@@ -131,6 +134,10 @@ export const AutomaticEnsure = z
 export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
+    resume: AgentTerminalResumeParam.optional(),
+    cwd: z.string().optional(),
+    env: TerminalEnvParam.optional(),
+    envToDelete: z.array(z.string()).optional(),
     resumeOrigin: z.literal('saved').optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),

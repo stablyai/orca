@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -20,34 +21,35 @@ import type { SessionOptionValue } from '../../../../shared/native-chat-session-
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
 
-export type PtyPaneStartup = {
-  command: string
-  /** Renderer-delivered startup input for callers that need xterm paste
-   *  semantics before the submit Enter. */
-  delivery?: 'terminal-paste'
-  startupCommandDelivery?: StartupCommandDelivery
-  env?: Record<string, string>
-  envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
-  /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
-  resumeOrigin?: 'saved'
-  resumeSource?: SavedResumeStartupSource
-  launchToken?: string
-  launchAgent?: TuiAgent
-  /** The agent launch the pane's own spawn starts, instead of `command`. */
-  agentLaunch?: AgentPaneLaunchRequest
-  /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
-  agentArgsOverride?: string | null
-  draftPrompt?: string
-  sessionOptions?: Record<string, SessionOptionValue>
-  /** Main emits agent_started only after successful spawn. */
-  telemetry?: EventProps<'agent_started'>
-  /** Initial prompt-start status for agents that lack native prompt hooks. */
-  initialAgentStatus?: { agent: TuiAgent; prompt: string }
-  /** Show the restored-session banner when this startup command mounts. */
-  showSessionRestoredBanner?: boolean
-} | null
+export type PtyPaneStartup =
+  | ({
+      /** Renderer-delivered startup input for callers that need xterm paste
+       *  semantics before the submit Enter. */
+      delivery?: 'terminal-paste'
+      startupCommandDelivery?: StartupCommandDelivery
+      env?: Record<string, string>
+      envToDelete?: string[]
+      launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
+      /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
+      resumeOrigin?: 'saved'
+      resumeSource?: SavedResumeStartupSource
+      launchToken?: string
+      launchAgent?: TuiAgent
+      /** The agent launch the pane's own spawn starts, instead of `command`. */
+      agentLaunch?: AgentPaneLaunchRequest
+      /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+      agentArgsOverride?: string | null
+      draftPrompt?: string
+      sessionOptions?: Record<string, SessionOptionValue>
+      /** Main emits agent_started only after successful spawn. */
+      telemetry?: EventProps<'agent_started'>
+      /** Initial prompt-start status for agents that lack native prompt hooks. */
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      /** Show the restored-session banner when this startup command mounts. */
+      showSessionRestoredBanner?: boolean
+    } & ({ command: string; resume?: never } | { command?: never; resume: AgentTerminalResume }))
+  | null
 
 export type PaneProcessExit = {
   paneId: number

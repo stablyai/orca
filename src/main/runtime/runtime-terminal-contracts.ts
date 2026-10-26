@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../shared/agent-terminal-resume'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -39,6 +40,7 @@ export type TerminalCreateOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
+  resume?: AgentTerminalResume
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'

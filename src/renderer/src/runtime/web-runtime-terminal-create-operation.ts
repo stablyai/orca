@@ -1,16 +1,16 @@
+import { createWebRuntimeAgentTerminalAuthority } from './web-runtime-agent-terminal-authority'
+import { createAgentTerminalResumeAttemptRegistry } from '../../../shared/agent-terminal-resume-attempt'
+import { createAgentSessionOperationId } from './agent-session-operation-id'
+import { AGENT_RESUME_HOST_PLAN_CAPABILITY } from '../../../shared/agent-terminal-resume'
+import { prepareLegacyAgentTerminalResume } from '@/lib/legacy-agent-terminal-resume'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
-import {
-  createAgentSessionCreateOperation,
-  withAgentSessionCreateOperationId
-} from './agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -40,18 +40,27 @@ import {
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
 } from './web-runtime-session-workspace-selection'
-import {
-  createdTerminalLeafId,
-  readCreatedAgentTerminalIdentity
-} from './web-runtime-terminal-identity'
+import { createdTerminalLeafId } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
 
-export async function createWebRuntimeSessionTerminalResult(
+type WebAgentTerminalResult = {
+  terminal: CreatedAgentTerminalIdentity
+  placedInGroup?: true
+}
+type WebResumeAttempt = {
   args: CreateWebRuntimeSessionTerminalArgs
+  run?: () => Promise<WebAgentTerminalResult>
+}
+const resumeAttempts = createAgentTerminalResumeAttemptRegistry<WebResumeAttempt>(
+  createAgentSessionOperationId
+)
+
+export async function createWebRuntimeSessionTerminalResult(
+  requested: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
   const environmentId = resolveWebRuntimeSessionEnvironmentId(
-    args.environmentId,
+    requested.environmentId,
     useAppStore.getState().settings?.activeRuntimeEnvironmentId
   )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
@@ -65,6 +74,20 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
+  const attemptKey =
+    requested.resume && requested.providerSession
+      ? JSON.stringify([
+          environmentId,
+          requested.worktreeId,
+          requested.launchAgent ?? requested.agent,
+          requested.providerSession.key,
+          requested.providerSession.id,
+          requested.providerSession.transcriptPath
+        ])
+      : undefined
+  const frozen = attemptKey ? resumeAttempts.freeze(attemptKey, { args: requested }) : undefined
+  const resumeAttempt = frozen?.attempt
+  const args = resumeAttempt?.args ?? requested
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
@@ -91,121 +114,104 @@ export async function createWebRuntimeSessionTerminalResult(
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
-      let legacyAlreadyPlacedInGroup = false
-      // Keep legacy placement until structured creation supports afterTabId.
-      // Focus belongs to this client; headless hosts have no renderer.
-      // Rebuilding prepared commands under host authority can discard prompts/delivery flags.
-      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
-      const hostAuthority = mustUseLegacyAgentCreate
-        ? undefined
-        : args.agentSessionKind === 'resume'
-          ? args.providerSession
-            ? async () =>
-                readCreatedAgentTerminalIdentity(
-                  unwrapRuntimeRpcResult(
-                    await callEnvironment({
-                      method: 'terminal.ensureAgentSession',
-                      params: {
-                        ...(await keyboardOptions(environmentId)),
-                        kind: 'explicit',
-                        worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                        agent,
-                        providerSession: await agentProviderSessionForHostEnsure(
-                          environmentId,
-                          args.providerSession!
-                        ),
-                        ...(args.launchConfig?.ompResumeFilePath
-                          ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
-                          : {}),
-                        ...(agentArgsOverride !== undefined
-                          ? { agentArgs: agentArgsOverride }
-                          : {}),
-                        ...(args.launchPreferences
-                          ? { launchPreferences: args.launchPreferences }
-                          : {}),
-                        presentation: 'background'
-                      },
-                      timeoutMs: 15_000
-                    })
-                  )
-                )
-            : undefined
-          : async () =>
-              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
-                readCreatedAgentTerminalIdentity(
-                  unwrapRuntimeRpcResult(
-                    await callEnvironment({
-                      method: 'terminal.createAgentSession',
-                      params: withAgentSessionCreateOperationId(
-                        {
-                          ...(await keyboardOptions(environmentId)),
-                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                          agent,
-                          ...(args.prompt ? { prompt: args.prompt } : {}),
-                          ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
-                          ...(agentArgsOverride !== undefined
-                            ? { agentArgs: agentArgsOverride }
-                            : {}),
-                          ...(args.launchPreferences
-                            ? { launchPreferences: args.launchPreferences }
-                            : {}),
-                          ...(args.cwd ? { startupCwd: args.cwd } : {}),
-                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-                          presentation: 'background'
-                        },
-                        clientOperationId
-                      ),
-                      timeoutMs: 15_000
-                    })
-                  )
-                )
-              )
-      const resumeHostAuthorityCapability =
-        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
-      const created = await runRemoteAgentSessionLaunch<{
-        terminal: CreatedAgentTerminalIdentity
-      }>({
-        environmentId,
-        ...(hostAuthority ? { hostAuthority } : {}),
-        ...(resumeHostAuthorityCapability
-          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-          : {}),
-        legacy: async () => {
-          const response = await callEnvironment({
-            method: 'session.tabs.createTerminal',
-            params: {
-              worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
-              targetGroupId: args.targetGroupId,
-              command: args.command,
-              cwd: args.cwd,
-              ...(args.env ? { env: args.env } : {}),
-              ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-              startupCommandDelivery: args.startupCommandDelivery,
-              ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
-              ...(args.launchToken ? { launchToken: args.launchToken } : {}),
-              ...(args.agent ? { agent: args.agent } : {}),
-              ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-              ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-              // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
-              activate: false,
-              select: args.activate !== false,
-              navigation: 'caller'
-            },
-            timeoutMs: 15_000
-          })
-          const legacyCreated = unwrapRuntimeRpcResult(
-            response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
-          )
-          legacyAlreadyPlacedInGroup = true
-          return {
-            terminal: {
-              tabId: legacyCreated.tab.id,
-              leafId: legacyCreated.tab.leafId
-            }
+      let legacyResume: ReturnType<typeof prepareLegacyAgentTerminalResume> | undefined
+      const prepareLegacy = () =>
+        args.resume
+          ? (legacyResume ??= prepareLegacyAgentTerminalResume({
+              worktreeId: args.worktreeId,
+              agent,
+              providerSession: args.providerSession,
+              resume: args.resume,
+              cwd: args.cwd
+            }))
+          : args
+      const createHostAuthority = createWebRuntimeAgentTerminalAuthority(
+        {
+          args,
+          agent,
+          agentArgsOverride,
+          environmentId,
+          callEnvironment,
+          keyboardOptions
+        },
+        () => prepareLegacy().launchConfig
+      )
+      const hostAuthority = createHostAuthority(args.resume)
+      const legacyCreate = async () => {
+        if (resumeAttempt) {
+          resumeAttempt.run = legacyCreate
+        }
+        const legacy = prepareLegacy()
+        const response = await callEnvironment({
+          method: 'session.tabs.createTerminal',
+          params: {
+            worktree: toRuntimeWorktreeSelector(args.worktreeId),
+            ...(frozen ? { clientMutationId: frozen.clientMutationId } : {}),
+            afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
+            targetGroupId: args.targetGroupId,
+            command: legacy.command,
+            cwd: args.cwd,
+            ...(legacy.env || args.env ? { env: { ...legacy.env, ...args.env } } : {}),
+            ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+            startupCommandDelivery: legacy.startupCommandDelivery,
+            ...(legacy.launchConfig ? { launchConfig: legacy.launchConfig } : {}),
+            ...(args.launchToken ? { launchToken: args.launchToken } : {}),
+            ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+            ...(args.agent ? { agent: args.agent } : {}),
+            ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+            ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+            // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
+            activate: false,
+            select: args.activate !== false,
+            navigation: 'caller'
+          },
+          timeoutMs: 15_000
+        })
+        const legacyCreated = unwrapRuntimeRpcResult(
+          response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
+        )
+        return {
+          placedInGroup: true as const,
+          terminal: {
+            tabId: legacyCreated.tab.id,
+            leafId: legacyCreated.tab.leafId
           }
         }
-      })
+      }
+      const selectHostAuthority = (run: ReturnType<typeof createHostAuthority>) =>
+        run
+          ? () => {
+              if (resumeAttempt) {
+                resumeAttempt.run = run
+              }
+              return run()
+            }
+          : undefined
+      const legacyLaunch = () =>
+        runRemoteAgentSessionLaunch<WebAgentTerminalResult>({
+          environmentId,
+          ...(args.preparedAgentCommand || args.afterTabId
+            ? {}
+            : { hostAuthority: selectHostAuthority(createHostAuthority(null)) }),
+          ...(args.agentSessionKind === 'resume'
+            ? { hostAuthorityCapability: agentResumeHostAuthorityCapability(agent) }
+            : {}),
+          legacy: legacyCreate
+        })
+      const created = resumeAttempt?.run
+        ? await resumeAttempt.run()
+        : args.resume
+          ? await runRemoteAgentSessionLaunch<WebAgentTerminalResult>({
+              environmentId,
+              ...(hostAuthority ? { hostAuthority: selectHostAuthority(hostAuthority) } : {}),
+              hostAuthorityCapability: AGENT_RESUME_HOST_PLAN_CAPABILITY,
+              legacy: legacyLaunch
+            })
+          : await legacyLaunch()
+      if (attemptKey) {
+        resumeAttempts.releaseOnSuccess(attemptKey)
+      }
+      const legacyAlreadyPlacedInGroup = created.placedInGroup === true
       hostCreated = true
       createdTabId = created.terminal.tabId
       createdLeafId = legacyAlreadyPlacedInGroup

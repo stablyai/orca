@@ -1,11 +1,12 @@
 import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
-import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
+import type {
+  MobileTerminalCommandOptions,
+  MobileTerminalCommand,
+  MobileTerminalCreateOptions
+} from './mobile-terminal-startup'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
@@ -20,28 +21,7 @@ import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolu
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 
-export type MobileTerminalCreateOptions = {
-  terminalImageViewerSupported?: boolean
-  afterTabId?: string
-  sourceChatFork?: { sessionId: string }
-  targetGroupId?: string
-  command?: string
-  shellOverride?: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-  agent?: TuiAgent
-  agentPrompt?: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
-  activate?: boolean
-  clientNavigationId?: string
-  clientMutationId?: string
-  supportsSplitGroupPlacement?: boolean
-  signal?: AbortSignal
-}
+export type { MobileTerminalCreateOptions } from './mobile-terminal-startup'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -139,6 +119,24 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           createMutation: { clientIdentity, id: opts.clientMutationId },
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
+          supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
+          signal: opts.signal
+        }
+      )
+    }
+    if (opts.resume) {
+      return this.createRuntimeOwnedMobileSessionTerminal(
+        worktreeId,
+        opts.activate !== false,
+        afterTabId,
+        {
+          ...startupCommand,
+          cwd,
+          createMutation: opts.clientMutationId
+            ? { clientIdentity: opts.clientNavigationId ?? 'local', id: opts.clientMutationId }
+            : undefined,
+          targetGroupId: opts.targetGroupId,
+          viewMode: opts.viewMode,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           signal: opts.signal
         }

@@ -1,3 +1,4 @@
+import type { AiVaultResumeStartup } from '../../../shared/ai-vault-resume-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
 import {
   canResumeAiVaultSessionOnTarget,
@@ -14,10 +15,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type {
-  AiVaultResumeStartup,
-  buildAiVaultResumeStartupForWorktree
-} from './ai-vault-resume-command'
+import type { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 
 /** References are fresh launches, so preserve normal model arguments and environment. */
 export function buildAntigravityReferenceStartup(args: {

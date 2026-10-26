@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../shared/agent-terminal-resume'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -19,6 +20,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   environmentId?: string | null
   afterTabId?: string
   targetGroupId?: string
+  resume?: AgentTerminalResume
   command?: string
   /** The Windows shell the terminal runs as, never typed into the host default shell. */
   shell?: string

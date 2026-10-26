@@ -1,15 +1,9 @@
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import {
-  resolveSshHostReportedPlatform,
-  resolveAgentResumeLaunchTarget
-} from '@/lib/agent-resume-launch-target'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/sleeping-record-execution-host-scope'
-import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -75,42 +69,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
-    // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
-    const resumeTarget = resolveAgentResumeLaunchTarget({
-      projectRuntime: session.projectRuntime,
-      connectionId: null,
-      executionHostId: session.executionHostId,
-      worktreePath: session.worktree?.path,
-      terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride,
-      // Why the transport's runtime: the pane's own connection names the SSH target's owner.
-      remotePlatform: resolveSshHostReportedPlatform(
-        state,
-        session.executionHostId,
-        session.transport.getRuntimeEnvironmentId?.() ?? null
-      )
-    })
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent,
-      providerSession,
-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
-      platform: resumeTarget.platform,
-      shell: resumeTarget.shell,
-      launchCwd: session.worktree?.path
-    })
-    if (!startupPlan) {
-      return null
-    }
     const coldRestoreLaunchToken = createBrowserUuid()
     return {
       agent,
-      command: startupPlan.launchCommand,
-      env: {
-        ...startupPlan.env,
-        ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
-      },
-      launchConfig: startupPlan.launchConfig,
+      resume: { recipe: { source: 'saved', ...(launchConfig ? { launchConfig } : {}) } },
+      env: { ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken },
       resumeProviderSession: providerSession,
       resumeOrigin: 'saved',
       resumeSource: {

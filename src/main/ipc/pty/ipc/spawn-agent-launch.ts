@@ -1,3 +1,8 @@
+import { AgentTerminalResumeParam } from '../../../../shared/rpc-contract/agent-terminal-resume-params'
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession
+} from '../../../../shared/agent-session-resume'
 import { randomUUID } from 'node:crypto'
 import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
@@ -30,6 +35,7 @@ function withPlannedLaunch(
 ): PtySpawnIpcArgs {
   const {
     agentLaunch: _launch,
+    resume: _resume,
     command: _command,
     launchConfig: _config,
     launchAgent: _agent,
@@ -47,6 +53,7 @@ function withPlannedLaunch(
   return {
     ...pane,
     command: planned.command,
+    ...(planned.envToDelete ? { envToDelete: planned.envToDelete } : {}),
     ...(planned.env || launchToken
       ? {
           env: {
@@ -69,7 +76,7 @@ function withPlannedLaunch(
 export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> {
   const { args, deps } = ctx
   // Adopting a live pane owner also adopts its already-running agent.
-  if (args.agentLaunch === undefined || ctx.earlyStablePaneOwner) {
+  if ((args.agentLaunch === undefined && args.resume === undefined) || ctx.earlyStablePaneOwner) {
     return
   }
   const runtime = deps.runtime
@@ -80,6 +87,10 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     request && 'launch' in request && typeof request.launch === 'object'
       ? request.launch
       : undefined
+  const resume = args.resume === undefined ? undefined : AgentTerminalResumeParam.parse(args.resume)
+  const providerSession = normalizeAgentProviderSession(args.resumeProviderSession)
+  const resumeAgent =
+    args.launchAgent && isResumableTuiAgent(args.launchAgent) ? args.launchAgent : null
   const params = AgentLaunch.safeParse({ ...launch, paneKey })
   const suppressStartupUpdatePrompt =
     request !== null &&
@@ -90,9 +101,13 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     !paneKey ||
     !pane ||
     !args.worktreeId ||
-    !params.success ||
-    params.data.reuseTerminal ||
-    params.data.prompt
+    (resume
+      ? !providerSession ||
+        !resumeAgent ||
+        args.command !== undefined ||
+        args.launchConfig !== undefined ||
+        args.agentLaunch !== undefined
+      : !params.success || params.data.reuseTerminal || params.data.prompt)
   ) {
     throw new Error('agent_launch_request_invalid')
   }
@@ -108,6 +123,29 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
         throw new AgentLaunchTabClosedError()
       }
     }
+  }
+  if (resume && providerSession && resumeAgent) {
+    const planned = await runtime.planAgentPaneLaunch(args.worktreeId, {
+      startupAgent: resumeAgent,
+      resume,
+      resumeProviderSession: providerSession,
+      startupCommandDelivery: args.startupCommandDelivery,
+      ...(typeof args.telemetry?.launch_source === 'string'
+        ? { launchSource: args.telemetry.launch_source }
+        : {}),
+      cwd: args.cwd,
+      shellOverride: args.shellOverride,
+      env: args.env,
+      envToDelete: args.envToDelete,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    })
+    ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
+    ctx.args = withPlannedLaunch(args, planned)
+    return
+  }
+  if (!params.success) {
+    throw new Error('agent_launch_request_invalid')
   }
   const intent = await resolveUnlaunchedIntent(params.data, runtime, null)
   if (intent.target.kind !== 'existing') {

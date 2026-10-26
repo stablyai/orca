@@ -46,6 +46,17 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     removeDeferredSshSessionId: vi.fn(),
     consumePendingColdRestore: vi.fn(() => null),
     consumePendingSnapshot: vi.fn(() => null),
+    pendingStartupByTabId: {},
+    automaticAgentResumeClaimsByTabId: {},
+    consumeTabStartupCommand: vi.fn((tabId: string, expected?: unknown) => {
+      const pending = getState().pendingStartupByTabId
+      const startup = pending?.[tabId]
+      if (!pending || !startup || (expected && startup !== expected)) {
+        return null
+      }
+      delete pending[tabId]
+      return startup
+    }),
     runtimePaneTitlesByTabId: {},
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
@@ -58,6 +69,9 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     clearSleepingAgentSession: vi.fn((paneKey: string) => {
       delete getState().sleepingAgentSessionsByPaneKey[paneKey]
+    }),
+    rememberSleepingAgentSession: vi.fn((record: { paneKey: string }) => {
+      getState().sleepingAgentSessionsByPaneKey[record.paneKey] = record
     }),
     registerAgentLaunchConfig: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),

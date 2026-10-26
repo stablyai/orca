@@ -1,3 +1,4 @@
+import { buildAgentTerminalResumePlan } from '../../../../shared/agent-terminal-resume-plan'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeNotifier } from '../../runtime-notifier-contract'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
@@ -68,8 +69,21 @@ describe('native chat fork launch recipe', () => {
       settings: { agentDefaultArgs: { opencode: '' } },
       runtime
     })
-    expect(startup.command).toContain('copy')
-    expect(startup.command).not.toContain('original-chat')
+    expect(startup.resume).toMatchObject({ recipe: { source: 'current-inputs' } })
+    if (!startup.resume || !startup.resumeProviderSession) {
+      throw new Error('Missing typed copied resume')
+    }
+    const effective = buildAgentTerminalResumePlan({
+      agent: 'opencode',
+      providerSession: startup.resumeProviderSession,
+      resume: startup.resume,
+      settings: {},
+      runtime,
+      isRemote: false,
+      launchCwd: cwd
+    })
+    expect(effective?.launchCommand).toContain('copy')
+    expect(effective?.launchCommand).not.toContain('original-chat')
     expect(startup.resumeProviderSession?.id).toBe('copy')
   })
 })

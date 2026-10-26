@@ -1,3 +1,5 @@
+import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
+import { AgentTerminalResumeParam } from './agent-terminal-resume-params'
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../tab-activation-intent'
@@ -165,6 +167,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
   // Record the resumed conversation before hook reports; drop malformed hints, never the create (#10923).
+  resume: AgentTerminalResumeParam.optional(),
+  accountEnv: AgentLaunchAccountEnv.optional(),
   resumeProviderSession: ResumeProviderSessionParam.optional().catch(undefined),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
@@ -208,6 +212,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       'cwd',
       'launchConfig',
       'launchToken',
+      'resume',
+      'accountEnv',
       'resumeProviderSession',
       'launchAgent',
       'startupCommandDelivery',

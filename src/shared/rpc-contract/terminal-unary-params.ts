@@ -1,6 +1,12 @@
+import { AgentTerminalResumeParam } from './agent-terminal-resume-params'
 import { z } from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import {
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString,
+  TerminalEnvParam
+} from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
 import {
@@ -193,7 +199,9 @@ export const TerminalSetViewerColors = z.object({
 export const ResumeProviderSessionParam = z.object({
   key: z.enum(['session_id', 'conversation_id']),
   id: z.string().min(1).max(512),
-  transcriptPath: z.string().min(1).max(32_768).optional()
+  transcriptPath: z.string().min(1).max(32_768).optional(),
+  cwd: z.string().max(32768).optional(),
+  effort: z.string().optional()
 })
 
 export const TerminalCreateParams = z.object({
@@ -202,7 +210,7 @@ export const TerminalCreateParams = z.object({
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
-  env: z.record(z.string(), z.string()).optional(),
+  env: TerminalEnvParam.optional(),
   envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   launchConfig: z
     .object({
@@ -216,6 +224,8 @@ export const TerminalCreateParams = z.object({
         .optional()
     })
     .optional(),
+  resume: AgentTerminalResumeParam.optional(),
+  accountEnv: z.record(z.string(), z.string()).optional(),
   resumeProviderSession: ResumeProviderSessionParam.optional(),
   // Older hosts drop it and resume as before.
   resumeOrigin: z.literal('saved').optional(),

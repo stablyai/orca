@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../../../shared/agent-terminal-resume'
 import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
@@ -183,6 +184,7 @@ export type PtyTransport = {
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resume?: AgentTerminalResume
     resumeProviderSession?: AgentProviderSessionMetadata
     resumeOrigin?: 'saved'
     launchToken?: string
@@ -280,6 +282,7 @@ export type IpcPtyTransportOptions = {
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
+  resume?: AgentTerminalResume
   resumeProviderSession?: AgentProviderSessionMetadata
   resumeOrigin?: 'saved'
   agentPrompt?: string

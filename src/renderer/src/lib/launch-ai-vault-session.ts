@@ -1,3 +1,4 @@
+import type { TerminalStartupInput } from '../../../shared/agent-terminal-resume'
 import { useAppStore } from '@/store'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -16,18 +17,19 @@ export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string }
   | { tabId: null; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
 
-export function launchAiVaultSessionInNewTab(args: {
-  agent: AiVaultAgent
-  worktreeId: string
-  command: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  providerSession?: AgentProviderSessionMetadata
-  targetGroupId?: string
-  splitDirection?: TabSplitDirection
-}): LaunchAiVaultSessionInNewTabResult {
+export function launchAiVaultSessionInNewTab(
+  args: {
+    agent: AiVaultAgent
+    worktreeId: string
+    cwd?: string
+    env?: Record<string, string>
+    envToDelete?: string[]
+    launchConfig?: SleepingAgentLaunchConfig
+    providerSession?: AgentProviderSessionMetadata
+    targetGroupId?: string
+    splitDirection?: TabSplitDirection
+  } & TerminalStartupInput
+): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
   // Why both paths split: the runtime path used to return first and drop the split (#22791).
   const split =
@@ -48,7 +50,7 @@ export function launchAiVaultSessionInNewTab(args: {
         ...(targetGroupId ? { targetGroupId } : {}),
         agentSessionKind: 'resume',
         launchAgent: args.agent,
-        command: args.command,
+        ...(args.resume ? { resume: args.resume } : { command: args.command }),
         ...(args.cwd ? { cwd: args.cwd } : {}),
         ...(args.env ? { env: args.env } : {}),
         ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
@@ -75,10 +77,11 @@ export function launchAiVaultSessionInNewTab(args: {
     ...(split ? { split } : {}),
     ...(args.cwd ? { startupCwd: args.cwd } : {}),
     pendingStartup: {
-      command: args.command,
+      ...(args.resume ? { resume: args.resume } : { command: args.command }),
       ...(args.env ? { env: args.env } : {}),
       ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-      ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+      ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+      ...(args.launchConfig || args.resume ? { launchAgent: args.agent } : {}),
       ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
       telemetry: {
         agent_kind: tuiAgentToAgentKind(args.agent),

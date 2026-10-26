@@ -101,6 +101,63 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(result).toEqual({ tabId: 'tab-1' })
   })
 
+  it.each([false, true])(
+    'preserves typed resume inputs and split placement (paired %s)',
+    async (paired) => {
+      runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(paired ? 'env-1' : null)
+      runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(paired)
+      const resume = { recipe: { source: 'saved' as const }, codexHome: null }
+      const providerSession = { key: 'session_id' as const, id: 'typed-history' }
+      const result = launchAiVaultSessionInNewTab({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        targetGroupId: 'group-1',
+        splitDirection: 'right',
+        cwd: '/selected',
+        env: { ORCA_PANE_KEY: 'tab:leaf' },
+        envToDelete: ['CODEX_HOME'],
+        resume,
+        providerSession
+      })
+      if (paired) {
+        expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resume,
+            providerSession,
+            cwd: '/selected',
+            targetGroupId: 'group-new',
+            env: { ORCA_PANE_KEY: 'tab:leaf' },
+            envToDelete: ['CODEX_HOME']
+          }),
+          { notifyFailure: false }
+        )
+        expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
+        if (result.tabId === null) {
+          await result.runtimeLaunch
+        }
+      } else {
+        expect(mockCreateTab).toHaveBeenCalledWith(
+          'wt-1',
+          'group-1',
+          undefined,
+          expect.objectContaining({
+            startupCwd: '/selected',
+            split: { sourceGroupId: 'group-1', splitDirection: 'right' }
+          })
+        )
+        expect(queuedStartups()).toContainEqual(
+          expect.objectContaining({
+            resume,
+            resumeProviderSession: providerSession,
+            launchAgent: 'codex',
+            env: { ORCA_PANE_KEY: 'tab:leaf' },
+            envToDelete: ['CODEX_HOME']
+          })
+        )
+      }
+    }
+  )
+
   it('queues configured resume startup details for agent history resumes', () => {
     launchAiVaultSessionInNewTab({
       agent: 'claude',

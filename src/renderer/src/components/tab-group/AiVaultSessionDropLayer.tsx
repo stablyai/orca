@@ -265,7 +265,9 @@ export default function AiVaultSessionDropLayer({
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
             worktreeId,
-            command: startup.command,
+            ...('resume' in startup && startup.resume
+              ? { resume: startup.resume }
+              : { command: startup.command }),
             ...(payload.sessionCwd ? { cwd: payload.sessionCwd } : {}),
             ...(startup.env ? { env: startup.env } : {}),
             ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),

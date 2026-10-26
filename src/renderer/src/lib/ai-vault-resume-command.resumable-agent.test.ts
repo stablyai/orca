@@ -69,9 +69,8 @@ describe('AI Vault resume for Kimi', () => {
         session: KIMI_SESSION
       })
     ).toMatchObject({
-      command: "kimi '--yolo' '--session' 'session_431324d7-2165-42f0-9ecd-9f93437b3201'",
+      resume: { recipe: { source: 'current-inputs' } },
       cwd: '/Users/ada/repo/packages/api',
-      launchConfig: { agentCommand: "kimi '--yolo'" },
       providerSession: {
         key: 'session_id',
         id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'

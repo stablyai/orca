@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TerminalCreateParams } from './terminal-unary-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 
 const ACCOUNT_ENV = {
@@ -54,5 +55,19 @@ describe('agent-session.account-env.v1', () => {
     expect(
       EnsureAgentSessionParams.safeParse({ ...automatic, accountEnv: ACCOUNT_ENV }).success
     ).toBe(false)
+  })
+})
+
+describe('host-planned ensure terminal env', () => {
+  it.each([
+    { CODEX_HOME: 'C:\\Users\\qa\\managed', ORCA_PANE_KEY: 'tab:leaf' },
+    { PATH: '/usr/bin', ORCA_AGENT_LAUNCH_TOKEN: 'token' },
+    { ORCA_PANE_KEY: 1 },
+    { invalid: null },
+    ['not-a-record']
+  ])('uses the terminal.create env parser for %j', (env) => {
+    expect(EnsureAgentSessionParams.safeParse({ ...ENSURE, env }).success).toBe(
+      TerminalCreateParams.safeParse({ worktree: ENSURE.worktree, env }).success
+    )
   })
 })

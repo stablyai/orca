@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
-import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
+import {
+  withHostAccountLaunchEnv,
+  resolveAgentTerminalCreateOptions
+} from './runtime-agent-terminal-startup'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -97,5 +100,106 @@ describe('host agent planner', () => {
     const planHost = { ...host, store: store as never }
     const launch = await resolveAgentTerminalCreateOptions(share, opts, planHost)
     expect(launch.launchRuntime?.pty.shellOverride).toBe('wsl.exe')
+  })
+})
+
+describe('host-planned resumes', () => {
+  it.each([
+    { settingsShell: 'cmd.exe', shellOverride: undefined, expected: `codex "resume" "session's"` },
+    {
+      settingsShell: 'powershell.exe',
+      shellOverride: 'cmd.exe',
+      expected: `codex "resume" "session's"`
+    },
+    {
+      settingsShell: 'powershell.exe',
+      shellOverride: undefined,
+      expected: "codex 'resume' 'session''s'"
+    }
+  ])(
+    'quotes saved identity for $settingsShell with override $shellOverride',
+    async ({ settingsShell, shellOverride, expected }) => {
+      const launch = await resolveAgentTerminalCreateOptions(
+        workspace,
+        {
+          startupAgent: 'codex',
+          resume: { recipe: { source: 'saved' } },
+          resumeProviderSession: { key: 'session_id', id: "session's" },
+          shellOverride
+        },
+        {
+          ...host,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this folder workspace reads only getSettings.
+          store: { getSettings: () => ({ terminalWindowsShell: settingsShell }) } as never
+        }
+      )
+      expect(launch.command).toBe(expected)
+      expect(launch.startupCommandDelivery).toBe('shell-ready')
+    }
+  )
+
+  it('quotes a raw saved identity for the WSL runtime selected by the host', async () => {
+    const launch = await resolveAgentTerminalCreateOptions(
+      workspace,
+      {
+        startupAgent: 'codex',
+        resume: { recipe: { source: 'saved' } },
+        resumeProviderSession: { key: 'session_id', id: "session's" },
+        launchRuntime: {
+          platform: 'linux',
+          pty: { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' }
+        }
+      },
+      host
+    )
+    expect(launch.command).toBe(`codex 'resume' 'session'"'"'s'`)
+    expect(launch.launchRuntime?.platform).toBe('linux')
+    expect(launch.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('uses one env order for recipe, managed account and explicit caller inputs', async () => {
+    const request = {
+      startupAgent: 'codex',
+      resume: {
+        recipe: {
+          source: 'current-inputs',
+          settings: {
+            agentDefaultArgs: { codex: '' },
+            agentDefaultEnv: { codex: { CODEX_HOME: '/settings', RECIPE: 'kept' } }
+          }
+        }
+      },
+      resumeProviderSession: { key: 'session_id', id: 'codex-session' },
+      env: { EXPLICIT: 'kept' },
+      accountEnv: { ACCOUNT: 'explicit' }
+    } as const
+    const launch = await resolveAgentTerminalCreateOptions(workspace, request, host)
+    const composed = withHostAccountLaunchEnv(request, launch, {
+      CODEX_HOME: '/managed',
+      ACCOUNT: 'managed'
+    })
+    expect(composed.env).toMatchObject({
+      CODEX_HOME: '/managed',
+      ACCOUNT: 'explicit',
+      RECIPE: 'kept',
+      EXPLICIT: 'kept'
+    })
+    expect(composed.telemetry?.request_kind).toBe('resume')
+    expect(composed.launchRuntime?.pty.shellOverride).toBe('cmd.exe')
+    expect(composed.command).toContain('resume')
+  })
+
+  it('does not let selected Settings override an explicit home deletion', async () => {
+    const launch = await resolveAgentTerminalCreateOptions(
+      workspace,
+      {
+        startupAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'codex-session' },
+        resume: { recipe: { source: 'saved' }, codexHome: null },
+        envToDelete: ['EXPLICIT_DELETE']
+      },
+      host
+    )
+    expect(launch.envToDelete).toEqual(['EXPLICIT_DELETE', 'CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
 })

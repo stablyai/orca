@@ -128,10 +128,17 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         expect.any(Function)
       )
       expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.resume).toEqual({
+        recipe: { source: 'saved' }
+      })
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.command).toBeUndefined()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          resume: { recipe: { source: 'saved' } },
+          resumeOrigin: 'saved',
+          launchAgent: 'codex',
+
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -148,7 +155,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       )
     })
 
-    it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {
+    it('forwards the raw cold-restored provider identity for Windows-path WSL projects', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('fresh-pty')
@@ -225,10 +232,18 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         expect.any(Function)
       )
       expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.resume).toEqual({
+        recipe: { source: 'saved' }
+      })
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.command).toBeUndefined()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: `codex 'resume' 'codex-session-1'"'"'s'`,
+          resume: { recipe: { source: 'saved' } },
+          resumeOrigin: 'saved',
+          launchAgent: 'codex',
+
+          resumeProviderSession: { key: 'session_id', id: "codex-session-1's" },
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
@@ -317,10 +332,17 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
       expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.resume).toEqual({
+        recipe: { source: 'saved' }
+      })
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.command).toBeUndefined()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          resume: { recipe: { source: 'saved' } },
+          resumeOrigin: 'saved',
+          launchAgent: 'codex',
+
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -487,10 +509,18 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       )
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
       expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.resume).toEqual({
+        recipe: { source: 'saved' }
+      })
+      expect(transport.connect.mock.calls.at(-1)?.[0]?.command).toBeUndefined()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'"
+          resume: { recipe: { source: 'saved' } },
+          resumeOrigin: 'saved',
+          launchAgent: 'codex',
+
+          resumeProviderSession: { key: 'session_id', id: 'codex-session-1' }
         })
       )
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
@@ -569,6 +599,9 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(transport.connect).not.toHaveBeenCalledWith(
         expect.objectContaining({ command: expect.stringContaining('resume') })
+      )
+      expect(transport.connect).not.toHaveBeenCalledWith(
+        expect.objectContaining({ resume: expect.anything() })
       )
       expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
     })

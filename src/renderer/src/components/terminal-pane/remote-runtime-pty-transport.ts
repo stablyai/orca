@@ -1,3 +1,6 @@
+import { AGENT_RESUME_HOST_PLAN_CAPABILITY } from '../../../../shared/agent-terminal-resume'
+import { prepareLegacyAgentTerminalResume } from '@/lib/legacy-agent-terminal-resume'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
@@ -3439,6 +3442,7 @@ export function createRemoteRuntimePtyTransport(
         }
       }
 
+      const resumeToSend = options.resume ?? opts.resume
       const commandToSend = options.command ?? command
       const startupCommandDeliveryToSend = options.startupCommandDelivery ?? startupCommandDelivery
       const envToSend = options.env ?? env
@@ -3498,8 +3502,26 @@ export function createRemoteRuntimePtyTransport(
         presentation: 'background' as const,
         ...(activate === true ? { activate: true } : {})
       }
-      const legacyCreate = (epoch = connectLifecycleEpoch) =>
-        createWithUnknownOutcomeRecovery(
+      let legacyResume: ReturnType<typeof prepareLegacyAgentTerminalResume> | undefined
+      const prepareLegacy = () =>
+        (legacyResume ??= resumeToSend
+          ? prepareLegacyAgentTerminalResume({
+              worktreeId,
+              agent: launchAgentToSend,
+              providerSession: resumeProviderSessionToSend,
+              resume: resumeToSend,
+              cwd: opts.cwd,
+              shellOverride: opts.shellOverride
+            })
+          : undefined)
+      const legacyCreate = (epoch = connectLifecycleEpoch) => {
+        const prepared = prepareLegacy()
+        if (prepared) {
+          Object.assign(legacyCreateParams, prepared, {
+            env: { ...prepared.env, ...envToSend }
+          })
+        }
+        return createWithUnknownOutcomeRecovery(
           'terminal',
           (timeoutMs, reconcileExisting) =>
             callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
@@ -3514,88 +3536,132 @@ export function createRemoteRuntimePtyTransport(
           createEnvironmentId,
           epoch
         )
-      const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
-        const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
-        const ensureProviderSession = resumeProviderSessionToSend
-          ? await agentProviderSessionForHostEnsure(
-              createEnvironmentId,
-              resumeProviderSessionToSend
-            )
-          : undefined
-        return createWithUnknownOutcomeRecovery(
-          'agent-session',
-          (timeoutMs) =>
-            ensureProviderSession
-              ? callRuntimeForEnvironment<RuntimeEnsureAgentSessionResult>(
-                  createEnvironmentId,
-                  'terminal.ensureAgentSession',
-                  {
-                    kind: 'explicit',
-                    ...keyboardOptions,
-                    ...originOptions,
-                    worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-                    agent: launchAgentToSend!,
-                    providerSession: ensureProviderSession,
-                    ...(launchConfigToSend?.ompResumeFilePath
-                      ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
-                      : {}),
-                    ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
-                    ...(agentLaunchPreferences
-                      ? { launchPreferences: agentLaunchPreferences }
-                      : {}),
-                    placement: { tabId, leafId },
-                    presentation: 'background',
-                    ...spawnIntentParams
-                  },
-                  timeoutMs
-                )
-              : callRuntimeForEnvironment<RuntimeCreateAgentSessionResult>(
-                  createEnvironmentId,
-                  'terminal.createAgentSession',
-                  withAgentSessionCreateOperationId(
+      }
+      const createHostAuthority = (typedResume: typeof resumeToSend) => {
+        let hostResumeInputs:
+          | Promise<{
+              keyboardOptions: Awaited<ReturnType<typeof agentKeyboardOptions>>
+              providerSession:
+                | Awaited<ReturnType<typeof agentProviderSessionForHostEnsure>>
+                | undefined
+            }>
+          | undefined
+        const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
+          const ensureArgs = agentArgsOverride
+          const ompResumeFilePath =
+            resumeToSend?.ompResumeFilePath ?? launchConfigToSend?.ompResumeFilePath
+          const { keyboardOptions, providerSession: ensureProviderSession } =
+            await (hostResumeInputs ??= (async () => ({
+              keyboardOptions: await agentKeyboardOptions(createEnvironmentId),
+              providerSession: resumeProviderSessionToSend
+                ? typedResume
+                  ? structuredClone(resumeProviderSessionToSend)
+                  : await agentProviderSessionForHostEnsure(
+                      createEnvironmentId,
+                      resumeProviderSessionToSend
+                    )
+                : undefined
+            }))())
+          return createWithUnknownOutcomeRecovery(
+            'agent-session',
+            (timeoutMs) =>
+              ensureProviderSession
+                ? callRuntimeForEnvironment<RuntimeEnsureAgentSessionResult>(
+                    createEnvironmentId,
+                    'terminal.ensureAgentSession',
                     {
+                      kind: 'explicit',
+                      ...(typedResume
+                        ? {
+                            resume: typedResume,
+                            ...(envToSend ? { env: envToSend } : {}),
+                            ...(envToDeleteToSend ? { envToDelete: envToDeleteToSend } : {}),
+                            ...(opts.cwd ? { cwd: opts.cwd } : {})
+                          }
+                        : {}),
                       ...keyboardOptions,
+                      ...originOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
-                      ...(agentPrompt ? { prompt: agentPrompt } : {}),
-                      ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
-                      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+                      providerSession: ensureProviderSession,
+                      ...(ompResumeFilePath ? { ompResumeFilePath } : {}),
+                      ...(ensureArgs !== undefined ? { agentArgs: ensureArgs } : {}),
                       ...(agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
                       placement: { tabId, leafId },
-                      presentation: 'background'
+                      presentation: 'background',
+                      ...spawnIntentParams
                     },
-                    agentCreateOperation.clientOperationId
+                    timeoutMs
+                  )
+                : callRuntimeForEnvironment<RuntimeCreateAgentSessionResult>(
+                    createEnvironmentId,
+                    'terminal.createAgentSession',
+                    withAgentSessionCreateOperationId(
+                      {
+                        ...keyboardOptions,
+                        worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+                        agent: launchAgentToSend!,
+                        ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                        ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
+                        ...(agentArgsOverride !== undefined
+                          ? { agentArgs: agentArgsOverride }
+                          : {}),
+                        ...(agentLaunchPreferences
+                          ? { launchPreferences: agentLaunchPreferences }
+                          : {}),
+                        placement: { tabId, leafId },
+                        presentation: 'background'
+                      },
+                      agentCreateOperation.clientOperationId
+                    ),
+                    timeoutMs
                   ),
-                  timeoutMs
-                ),
-          createEnvironmentId,
-          epoch
-        )
+            createEnvironmentId,
+            epoch
+          )
+        }
+        return hostAuthorityCreate
       }
-      const resumeHostAuthorityCapability = resumeProviderSessionToSend
-        ? agentResumeHostAuthorityCapability(launchAgentToSend)
-        : undefined
+      const hostAuthorityCreate = createHostAuthority(resumeToSend)
+      const legacyHostAuthorityCreate = createHostAuthority(undefined)
+      const legacyLaunch = () =>
+        runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+          environmentId: createEnvironmentId,
+          hostAuthority: () => {
+            replayLaunch = legacyHostAuthorityCreate
+            return legacyHostAuthorityCreate()
+          },
+          ...(resumeProviderSessionToSend
+            ? { hostAuthorityCapability: agentResumeHostAuthorityCapability(launchAgentToSend) }
+            : {}),
+          legacy: () => {
+            replayLaunch = legacyCreate
+            return legacyCreate()
+          }
+        })
+      const typedResumeSupported =
+        resumeToSend &&
+        ((options.resumeOrigin ?? resumeOrigin) !== 'saved' ||
+          originOptions.resumeOrigin === 'saved') &&
+        parseExecutionHostId(executionHostId ?? null)?.kind !== 'ssh'
       const created = replayLaunch
         ? await replayLaunch(connectLifecycleEpoch)
         : launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
+          ? agentSessionRequiresHostAuthorityReplay && !resumeToSend
             ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: () => {
-                  replayLaunch = hostAuthorityCreate
-                  return hostAuthorityCreate()
-                },
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-                  : {}),
-                legacy: () => {
-                  replayLaunch = legacyCreate
-                  return legacyCreate()
-                }
-              })
+            : typedResumeSupported
+              ? await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                  environmentId: createEnvironmentId,
+                  hostAuthorityCapability: AGENT_RESUME_HOST_PLAN_CAPABILITY,
+                  hostAuthority: () => {
+                    replayLaunch = hostAuthorityCreate
+                    return hostAuthorityCreate()
+                  },
+                  legacy: legacyLaunch
+                })
+              : await legacyLaunch()
           : await (replayLaunch = legacyCreate)()
       if (!created) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {

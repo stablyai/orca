@@ -154,6 +154,13 @@ function envPatchPlan(method: string, params: Record<string, unknown>): EnvPatch
     return null
   }
   const launchAgent = tuiAgentOf(params.launchAgent)
+  if (params.resume !== undefined) {
+    return {
+      field: 'accountEnv',
+      agent: launchAgent,
+      capability: AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY
+    }
+  }
   const callerBuiltLaunch =
     params.env !== undefined || params.launchConfig !== undefined || launchAgent !== null
   const plainShell = params.command === undefined && params.agent === undefined

@@ -1,3 +1,4 @@
+import { materializeAiVaultResumeForTest } from './ai-vault-resume-startup.test-fixture'
 import { buildAiVaultCopiedSessionStartupForWorktree } from './ai-vault-session-fork-startup'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
@@ -34,9 +35,16 @@ describe('AI Vault OMP cold resume', () => {
       },
       'opencode2'
     )
-    expect(startup.command).toContain("'--standalone'")
-    expect(startup.command).toContain("'--model' 'synthetic-model'")
-    expect(startup.env).toMatchObject({
+    const effective = materializeAiVaultResumeForTest(
+      {
+        state,
+        session: { agent: 'opencode', sessionId: 'copy-session', cwd: '/repo', codexHome: null }
+      },
+      startup
+    )
+    expect(effective.command).toContain("'--standalone'")
+    expect(effective.command).toContain("'--model' 'synthetic-model'")
+    expect(effective.env).toMatchObject({
       OPENCODE_AUTH_CONTENT: 'synthetic-local-auth',
       HOME: '/host-home',
       OPENCODE_CONFIG_DIR: '/host-config'
@@ -64,20 +72,28 @@ describe('AI Vault OMP cold resume', () => {
       }
     } as unknown as Partial<AppState>)
 
-    const startup = buildAiVaultResumeStartupForWorktree({
+    const args = {
       state: store.getState(),
       worktreeId: 'wt-1',
       session: {
-        agent: 'omp',
+        agent: 'omp' as const,
         sessionId: 'omp-session-1',
         filePath: '/custom/omp-sessions/project/session.jsonl',
         cwd: '/repo',
         codexHome: null
       }
+    }
+    const selected = buildAiVaultResumeStartupForWorktree(args)
+    expect(selected).toMatchObject({
+      resume: {
+        recipe: { source: 'current-inputs' },
+        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+      }
     })
+    const startup = materializeAiVaultResumeForTest(args, selected)
 
     expect(startup).toMatchObject({
-      command: "omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      command: "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
       cwd: '/repo',
       env: { OMP_PROFILE: 'custom' },
       launchConfig: {

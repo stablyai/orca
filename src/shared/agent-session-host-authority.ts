@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from './agent-terminal-resume'
 import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
@@ -105,6 +106,10 @@ export type RuntimeEnsureAgentSessionRequest =
     }
   | {
       kind: 'explicit'
+      resume?: AgentTerminalResume
+      cwd?: string
+      env?: Record<string, string>
+      envToDelete?: string[]
       resumeOrigin?: 'saved'
       worktree: string
       agent: ResumableTuiAgent

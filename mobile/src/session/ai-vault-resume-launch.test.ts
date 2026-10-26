@@ -514,3 +514,71 @@ it('reads the execution platform and advertised safe-create capability together'
     })
   ).toEqual({ platform: 'win32', capabilities: ['session.tabs.qoderOwnedCreate.v1'] })
 })
+
+describe('host-planned phone resumes', () => {
+  const capability = 'agent-resume.host-plan.v1'
+  it('submits one typed create with the host-selected profile and no later terminal input', async () => {
+    const settings = {
+      agentDefaultArgs: { claude: '--model selected' },
+      agentPermissionDefault: 'own' as const
+    }
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session(),
+      hostPlatform: 'win32',
+      settings,
+      hostCapabilities: [capability]
+    })
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' }
+      }
+    })
+    await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+      ...launch,
+      clientMutationId: 'resume-1',
+      hostCapabilities: [capability]
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    const params = sendRequest.mock.calls[0]?.[1]
+    expect(params).toMatchObject({
+      resume: { recipe: { source: 'current-inputs', settings } },
+      launchAgent: 'claude',
+      cwd: '/Users/ada/repo'
+    })
+    expect(params.command).toBeUndefined()
+    expect(params.launchConfig).toBeUndefined()
+  })
+
+  it('freezes the route, profile and mutation across an uncertain retry', () => {
+    const registry = createMobileAiVaultResumeMutationRegistry(() => 'same-attempt')
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session(),
+      hostPlatform: 'linux',
+      settings: { agentDefaultEnv: { claude: { SELECTED: 'original' } } },
+      hostCapabilities: [capability]
+    })
+    const first = registry.freeze('session-1', {
+      worktreeId: 'original-worktree',
+      launch: { ...launch, hostCapabilities: [capability] }
+    })
+    const retry = registry.freeze('session-1', {
+      worktreeId: 'changed-worktree',
+      launch: { command: 'new command', hostCapabilities: [] }
+    })
+    expect(retry).toEqual(first)
+    expect(retry.launch.resume?.recipe).toMatchObject({
+      source: 'current-inputs',
+      settings: {
+        agentDefaultEnv: { claude: { SELECTED: 'original' } }
+      }
+    })
+    registry.releaseOnSuccess('session-1')
+    expect(
+      registry.freeze('session-1', {
+        worktreeId: 'changed-worktree',
+        launch: { command: 'new command' }
+      }).worktreeId
+    ).toBe('changed-worktree')
+  })
+})

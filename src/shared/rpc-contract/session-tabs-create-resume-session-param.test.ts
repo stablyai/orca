@@ -21,6 +21,23 @@ describe('session.tabs.createTerminal resumeProviderSession', () => {
     expect(parsed.resumeProviderSession).toBeUndefined()
   })
 
+  it('carries a typed saved recipe and refuses it on a fork', () => {
+    const request = {
+      worktree: 'id:wt',
+      launchAgent: 'codex',
+      resume: { recipe: { source: 'saved' }, codexHome: null },
+      resumeProviderSession: SESSION
+    }
+    expect(CreateTerminalTab.parse(request)).toEqual(request)
+    expect(
+      CreateTerminalTab.safeParse({
+        ...request,
+        sourceChatFork: { sessionId: 'chat-1' },
+        clientMutationId: 'fork-typed'
+      }).success
+    ).toBe(false)
+  })
+
   it('refuses it on a fork, which uses the host launch settings', () => {
     const parsed = CreateTerminalTab.safeParse({
       worktree: 'id:wt',

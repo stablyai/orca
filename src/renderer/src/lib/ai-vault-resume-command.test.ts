@@ -1,9 +1,10 @@
+import { materializeAiVaultResumeForTest } from './ai-vault-resume-startup.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree
+  buildAiVaultResumeStartupForWorktree as buildTypedResumeStartup
 } from './ai-vault-resume-command'
 import { dropDeletedSshResumeCwd } from './ai-vault-session-resume-preparation'
 
@@ -230,7 +231,9 @@ describe('ai vault resume command runtime', () => {
       }
     })
 
-    expect(command).toBe("omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'")
+    expect(command).toBe(
+      "omp '--resume' 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
     expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
   })
 
@@ -252,7 +255,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
+    ).toBe('omp "--resume" "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
   })
 
   it('copies syntax that matches the configured cmd shell', () => {
@@ -448,7 +451,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
+    ).toBe("omp '--resume' '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
   })
 
   // #24408: Pi resumes by transcript path, and the shell it runs in is inside WSL.
@@ -473,7 +476,9 @@ describe('ai vault resume command runtime', () => {
 
       expect(startup.command).toContain(linuxPath)
       expect(startup.command).not.toContain('wsl.localhost')
-      expect(startup.providerSession).toMatchObject({ transcriptPath: linuxPath })
+      expect(startup.providerSession).toMatchObject({
+        transcriptPath: `\\\\wsl.localhost\\Ubuntu${linuxPath.replaceAll('/', '\\')}`
+      })
     }
   )
 
@@ -705,3 +710,7 @@ describe('ai vault resume command runtime', () => {
     ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 })
+
+function buildAiVaultResumeStartupForWorktree(args: Parameters<typeof buildTypedResumeStartup>[0]) {
+  return materializeAiVaultResumeForTest(args, buildTypedResumeStartup(args))
+}

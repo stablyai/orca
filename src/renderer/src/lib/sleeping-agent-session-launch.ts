@@ -1,6 +1,4 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import {
@@ -11,9 +9,9 @@ import {
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
+import { dropRecordedAgentPermissionArgs } from '../../../shared/tui-agent-permission-lift'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
@@ -51,32 +49,26 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
-  const resumeTarget = getResumeLaunchTarget(record.worktreeId)
-  const startupPlan = buildAgentResumeStartupPlan({
-    agent: record.agent,
-    providerSession: record.providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    ...resolveResumeLaunchRecipe(launchConfig),
-    platform: resumeTarget.platform,
-    shell: resumeTarget.shell,
-    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
-  })
-  if (!startupPlan) {
-    toast.error(
-      translate(
-        'auto.lib.resume.sleeping.agent.session.f235f604fd',
-        'This agent session cannot be resumed.'
-      )
-    )
-    return false
-  }
-
+  const recorded =
+    launchConfig && record.agent === 'codex'
+      ? (() => {
+          const target = getResumeLaunchTarget(record.worktreeId)
+          return dropRecordedAgentPermissionArgs(
+            record.agent,
+            launchConfig,
+            resolveStartupShell(target.platform, target.shell)
+          )
+        })()
+      : launchConfig
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
     pendingStartup: {
-      command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
+      resume: {
+        recipe: {
+          source: 'saved',
+          ...(record.launchConfig ? { launchConfig: record.launchConfig } : {})
+        }
+      },
       resumeProviderSession: record.providerSession,
       resumeOrigin: 'saved',
       resumeSource: {
@@ -93,10 +85,7 @@ export function launchSleepingAgentSession(
           : {})
       },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
-      ...(startupPlan.startupCommandDelivery
-        ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-        : {}),
+      ...(recorded ? { agentArgsOverride: recorded.agentArgs ?? '' } : {}),
       showSessionRestoredBanner: true,
       telemetry: {
         agent_kind: tuiAgentToAgentKind(record.agent),

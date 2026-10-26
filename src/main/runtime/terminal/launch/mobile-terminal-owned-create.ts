@@ -89,9 +89,13 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         },
         ...(preAllocatedHandle ? { preAllocatedHandle } : {}),
         command: opts.command,
+        ...(opts.resume
+          ? { resume: opts.resume, startupAgent: opts.startupAgent ?? opts.launchAgent }
+          : {}),
         ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
         cwd,
         env: opts.env,
+        accountEnv: opts.accountEnv,
         envToDelete: opts.envToDelete,
         ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
         ...(opts.resumeProviderSession
@@ -99,7 +103,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           : {}),
         ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {}),
         ...(opts.resumeOrigin ? { resumeOrigin: opts.resumeOrigin } : {}),
-        ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+        ...(opts.launchAgent && !opts.resume ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),

@@ -24,6 +24,7 @@ export function startupNeedsWindowSpawn(startup: TabStartup | undefined): boolea
   }
   return (
     // Start inputs that move into main's create.
+    startup.resume !== undefined ||
     startup.delivery === 'terminal-paste' ||
     startup.agentLaunch !== undefined ||
     startup.agentArgsOverride !== undefined ||

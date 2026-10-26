@@ -7,12 +7,13 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 
 export function agentStartedTelemetry(
   agent: TuiAgent,
-  launchSource: string | undefined
+  launchSource: string | undefined,
+  requestKind: 'new' | 'resume' = 'new'
 ): NonNullable<WorktreeStartupLaunch['telemetry']> {
   const parsed = launchSourceSchema.safeParse(launchSource)
   return {
     agent_kind: tuiAgentToAgentKind(agent),
     launch_source: parsed.success ? parsed.data : 'unknown',
-    request_kind: 'new'
+    request_kind: requestKind
   }
 }

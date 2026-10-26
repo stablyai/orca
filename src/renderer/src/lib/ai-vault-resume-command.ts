@@ -1,4 +1,9 @@
 import {
+  agentResumeCurrentInputs,
+  type TerminalStartupInput
+} from '../../../shared/agent-terminal-resume'
+import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import {
   assertAntigravityReferenceTarget,
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
@@ -18,14 +23,13 @@ import {
   getAiVaultResumeCodexHome,
   type AiVaultResumeCommandSession,
   type AiVaultResumeHostShell,
-  type AiVaultResumeStartup
+  type AiVaultResumeStartup as PreparedAiVaultResumeStartup
 } from '../../../shared/ai-vault-resume-startup'
 
-export type {
-  AiVaultResumeCommandSession,
-  AiVaultResumeStartup
-} from '../../../shared/ai-vault-resume-startup'
+export type { AiVaultResumeCommandSession } from '../../../shared/ai-vault-resume-startup'
 export { getAiVaultAgentProviderSession }
+export type AiVaultResumeStartup = Omit<PreparedAiVaultResumeStartup, 'command'> &
+  TerminalStartupInput
 
 export type AiVaultResumeWorktreeArgs = {
   state: Pick<
@@ -57,6 +61,46 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
+  const providerSession = getAiVaultAgentProviderSession(args.session)
+  const opaque =
+    args.session.executionHostId &&
+    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+    args.session.resumeCommand &&
+    args.session.agent !== 'omp' &&
+    !(args.session.agent === 'codex' && args.session.codexHome === null) &&
+    !args.commandOverride?.trim()
+  if (
+    providerSession &&
+    isResumableTuiAgent(args.session.agent) &&
+    !opaque &&
+    !isAntigravityReferenceSession(args.session)
+  ) {
+    const settings = agentResumeCurrentInputs(args.session.agent, args.state.settings)
+    if (args.commandOverride?.trim()) {
+      settings.agentCmdOverrides = {
+        ...settings.agentCmdOverrides,
+        [args.session.agent]: args.commandOverride
+      }
+    }
+    return {
+      resume: {
+        recipe: {
+          source: 'current-inputs',
+          settings,
+          ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {})
+        },
+        ...(args.session.agent === 'omp' && args.session.filePath
+          ? { ompResumeFilePath: args.session.filePath }
+          : {}),
+        resumeInLaunchCwd: true,
+        ...(args.session.agent === 'codex' ? { codexHome: args.session.codexHome } : {})
+      },
+      providerSession,
+      ...(args.session.cwd ? { cwd: args.session.cwd } : {}),
+      env: managedDataAccountResumeEnv(args.session),
+      ...realHomeCodexResumeEnvDeletion(args.session)
+    }
+  }
   return buildAiVaultResumeForWorktree(args, false)
 }
 
@@ -93,7 +137,7 @@ function buildAiVaultResumeForWorktree(
   embedCwd: boolean,
   /** Copied lines strip env from the agent command; spawned startups use envToDelete. */
   clearEnvNames?: readonly string[]
-): AiVaultResumeStartup {
+): PreparedAiVaultResumeStartup {
   assertAntigravityReferenceTarget(args)
   const providerSession = getAiVaultAgentProviderSession(args.session)
   if (

@@ -1,3 +1,4 @@
+import type { AgentTerminalResume } from '../../shared/agent-terminal-resume'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
@@ -50,6 +51,7 @@ export type PtyApi = {
     command?: string
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
+    resume?: AgentTerminalResume
     resumeProviderSession?: AgentProviderSessionMetadata
     resumeOrigin?: 'saved'
     launchToken?: string

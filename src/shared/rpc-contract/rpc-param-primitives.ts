@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export const TerminalEnvParam = z.record(z.string(), z.string())
+
 // Preserve legacy nonnumeric/nonfinite limits as absent. Zod v4 needs outer optional(): one hidden by pipe
 // still makes object keys required.
 export const OptionalFiniteNumber = z

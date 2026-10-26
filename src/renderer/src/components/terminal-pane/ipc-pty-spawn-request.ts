@@ -1,3 +1,4 @@
+import { prepareLegacyAgentTerminalResume } from '@/lib/legacy-agent-terminal-resume'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session-host-authority'
 import {
@@ -74,6 +75,7 @@ export async function spawnIpcPty(
     command,
     commandDelivery,
     launchConfig,
+    resume,
     resumeProviderSession,
     resumeOrigin,
     launchToken,
@@ -91,12 +93,37 @@ export async function spawnIpcPty(
     telemetry,
     agentLaunch
   } = transportOptions
+  const typedResume = connectOptions.resume ?? resume
+  if (typedResume && connectionId && !admittedSessionId) {
+    if (!worktreeId) {
+      throw new Error('agent_launch_request_invalid')
+    }
+    const legacy = prepareLegacyAgentTerminalResume({
+      worktreeId,
+      agent: connectOptions.launchAgent ?? launchAgent,
+      providerSession: connectOptions.resumeProviderSession ?? resumeProviderSession,
+      resume: typedResume,
+      cwd,
+      shellOverride
+    })
+    return spawnIpcPty(
+      { ...transportOptions, resume: undefined, ...legacy, env: { ...legacy.env, ...env } },
+      {
+        ...connectOptions,
+        resume: undefined,
+        ...legacy,
+        env: { ...legacy.env, ...(connectOptions.env ?? env) }
+      },
+      admittedSessionId
+    )
+  }
   const resumesAgent = Boolean(connectOptions.resumeProviderSession ?? resumeProviderSession)
   const spawnIntent =
     resumesAgent && !admittedSessionId ? connectOptions.resumeSpawnIntent : undefined
   // Why: a reattach under an admitted session id must never stop the PTY it is reattaching.
   const replacesPtyId = admittedSessionId ? null : (connectOptions.claimReplacedPtyId?.() ?? null)
   return window.api.pty.spawn({
+    ...(typedResume && !admittedSessionId ? { resume: typedResume } : {}),
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,

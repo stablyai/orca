@@ -5,15 +5,7 @@ import type { ColdRestoreAgentResumeStartup, PendingStartupCommand } from './fre
 export function toProcessExitStartup(
   startup: PendingStartupCommand | ColdRestoreAgentResumeStartup | null
 ): PtyPaneStartup {
-  return startup && 'launchConfig' in startup && 'agent' in startup
-    ? {
-        command: startup.command,
-        env: startup.env,
-        launchConfig: startup.launchConfig,
-        resumeProviderSession: startup.resumeProviderSession,
-        launchToken: startup.launchToken,
-        launchAgent: startup.agent,
-        showSessionRestoredBanner: true
-      }
+  return startup && 'agent' in startup
+    ? { ...startup, launchAgent: startup.agent, showSessionRestoredBanner: true }
     : startup
 }

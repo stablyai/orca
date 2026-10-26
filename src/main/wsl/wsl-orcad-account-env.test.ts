@@ -146,6 +146,33 @@ describe('withWslOrcadAccountEnv', () => {
     })
   })
 
+  it.each(['terminal.create', 'session.tabs.createTerminal', 'terminal.ensureAgentSession'])(
+    'keeps typed recipe env below the WSL account on %s',
+    async (method) => {
+      const params = {
+        kind: 'explicit',
+        worktree: 'id:wt',
+        launchAgent: 'claude',
+        agent: 'claude',
+        resume: {
+          recipe: {
+            source: 'saved',
+            launchConfig: {
+              agentArgs: '',
+              agentEnv: { CLAUDE_CONFIG_DIR: '/recipe' }
+            }
+          }
+        },
+        env: { ORCA_PANE_KEY: 'tab:leaf' },
+        envToDelete: ['EXPLICIT_DELETE']
+      }
+      await expect(run(method, params)).resolves.toMatchObject({
+        ok: true,
+        params: { ...params, accountEnv: { CLAUDE_CONFIG_DIR: CLAUDE_HOME } }
+      })
+    }
+  )
+
   it('sets agent.launch accountEnv, except for a reused terminal', async () => {
     const launch = { agent: 'claude', target: { kind: 'existing', worktree: 'id:wt' } }
     await expect(run('agent.launch', launch)).resolves.toMatchObject({
