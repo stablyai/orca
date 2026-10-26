@@ -3,7 +3,11 @@
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mediaPlaybackPositionCache, mediaVolumePreference } from '@/lib/scroll-cache'
+import {
+  mediaPlaybackPositionCache,
+  mediaPlaybackRateCache,
+  mediaVolumePreference
+} from '@/lib/scroll-cache'
 import MediaViewer from './MediaViewer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -12,6 +16,7 @@ describe('MediaViewer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     mediaPlaybackPositionCache.clear()
+    mediaPlaybackRateCache.clear()
     Object.assign(mediaVolumePreference, { volume: 1, muted: false })
   })
 
@@ -151,6 +156,31 @@ describe('MediaViewer', () => {
       muted: true
     })
     await act(async () => other.root.unmount())
+  })
+
+  it('restores each clip at its own speed, even after it finished', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const fast = await renderPlaybackViewer('fast.mp4:pdf')
+    fast.video.playbackRate = 2
+    Object.defineProperty(fast.video, 'ended', { configurable: true, value: true })
+    await act(async () => fast.root.unmount())
+
+    const slow = await renderPlaybackViewer('slow.mp4:pdf')
+    slow.video.playbackRate = 0.5
+    await act(async () => slow.root.unmount())
+
+    const fastAgain = await renderPlaybackViewer('fast.mp4:pdf')
+    fastAgain.video.playbackRate = 1
+    await act(async () => fastAgain.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(fastAgain.video.playbackRate).toBe(2)
+    await act(async () => fastAgain.root.unmount())
+
+    const slowAgain = await renderPlaybackViewer('slow.mp4:pdf')
+    slowAgain.video.playbackRate = 1
+    await act(async () => slowAgain.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(slowAgain.video.playbackRate).toBe(0.5)
+    await act(async () => slowAgain.root.unmount())
   })
 
   it('shows a persistent playback error and only offers the default app for local files', async () => {

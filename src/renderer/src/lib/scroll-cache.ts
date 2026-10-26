@@ -34,6 +34,9 @@ export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 // Persist playback seconds across media-tab unmounts so return does not restart the clip.
 export const mediaPlaybackPositionCache = new Map<string, number>()
 
+// Speed is a per-clip choice, so it follows the same per-pane, per-path key as position.
+export const mediaPlaybackRateCache = new Map<string, number>()
+
 // One volume/mute choice carries to every media preview, as browser players remember it.
 export const mediaVolumePreference = { volume: 1, muted: false }
 
