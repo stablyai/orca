@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { mediaPlaybackPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import { mediaPlaybackPositionCache, mediaVolumePreference, setWithLRU } from '@/lib/scroll-cache'
 
 export default function MediaViewer({
   src,
@@ -31,11 +31,19 @@ export default function MediaViewer({
         media.currentTime = Math.min(saved, media.duration)
       }
     }
+    const rememberVolume = (): void => {
+      mediaVolumePreference.volume = media.volume
+      mediaVolumePreference.muted = media.muted
+    }
+    media.volume = mediaVolumePreference.volume
+    media.muted = mediaVolumePreference.muted
     media.addEventListener('loadedmetadata', restorePosition, { once: true })
+    media.addEventListener('volumechange', rememberVolume)
     // Strict Mode replays cleanup while retaining the DOM element.
     media.src = src
     return () => {
       media.removeEventListener('loadedmetadata', restorePosition)
+      media.removeEventListener('volumechange', rememberVolume)
       // Unloaded metadata leaves currentTime at zero, which must not replace saved progress.
       if (playbackCacheKey && Number.isFinite(media.duration)) {
         if (media.ended) {

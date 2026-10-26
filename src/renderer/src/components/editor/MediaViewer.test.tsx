@@ -3,7 +3,7 @@
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mediaPlaybackPositionCache } from '@/lib/scroll-cache'
+import { mediaPlaybackPositionCache, mediaVolumePreference } from '@/lib/scroll-cache'
 import MediaViewer from './MediaViewer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -12,6 +12,7 @@ describe('MediaViewer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     mediaPlaybackPositionCache.clear()
+    Object.assign(mediaVolumePreference, { volume: 1, muted: false })
   })
 
   const renderPlaybackViewer = async (
@@ -129,6 +130,27 @@ describe('MediaViewer', () => {
     await act(async () => otherRestored.video.dispatchEvent(new Event('loadedmetadata')))
     expect(otherRestored.video.currentTime).toBe(27)
     await act(async () => otherRestored.root.unmount())
+  })
+
+  it('carries the volume and mute choice to every later media preview', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const first = await renderPlaybackViewer('clip.mp4:pdf')
+    expect({ volume: first.video.volume, muted: first.video.muted }).toEqual({
+      volume: 1,
+      muted: false
+    })
+    first.video.volume = 0.25
+    first.video.muted = true
+    await act(async () => first.video.dispatchEvent(new Event('volumechange')))
+    await act(async () => first.root.unmount())
+
+    const other = await renderPlaybackViewer('other.mp4:pdf')
+    expect({ volume: other.video.volume, muted: other.video.muted }).toEqual({
+      volume: 0.25,
+      muted: true
+    })
+    await act(async () => other.root.unmount())
   })
 
   it('shows a persistent playback error and only offers the default app for local files', async () => {
