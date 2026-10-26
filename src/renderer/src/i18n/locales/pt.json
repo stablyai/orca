@@ -8950,6 +8950,16 @@
           "searchLabel": "Buscar builds",
           "searchPlaceholder": "Buscar builds…",
           "noMatches": "Nenhuma build encontrada."
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "O macOS não exibiu a notificação",
+              "macFailureDescription": "Ative Permitir notificações para o Orca nas Configurações do Sistema.",
+              "windowsFailureTitle": "O Windows não exibiu a notificação",
+              "windowsFailureDescription": "Ative as notificações para o Orca nas Configurações do Windows."
+            }
+          }
         }
       },
       "right": {
@@ -14554,6 +14564,9 @@
           },
           "KeepAwakeCard": {
             "209713d3c7": "Opcional"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Reabra quando quiser em Ajuda > Explorar o Orca."
           }
         },
         "tips": {
@@ -14580,7 +14593,8 @@
             "53905bd076": "Pré-visualização de desenvolvimento: abrindo o terminal de configuração de skills.",
             "1da82af45b": "A CLI do Orca precisa de atenção",
             "ce13a742d0": "`orca` registrado no PATH.",
-            "d1a86c7eb5": "Abra as Configurações para concluir a configuração da CLI."
+            "d1a86c7eb5": "Abra as Configurações para concluir a configuração da CLI.",
+            "cliInstallFailed": "Não foi possível instalar a CLI do Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Criar worktree \"{{value0}}\"",
@@ -18323,6 +18337,17 @@
           },
           "copy": {
             "copyFailed": "Não foi possível copiar os detalhes do relatório de falha."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Relatar uma falha",
+            "uiErrorTitle": "O Orca encontrou um erro de UI recuperável",
+            "closedTitle": "O Orca foi fechado inesperadamente",
+            "reportDescription": "Envie um relatório de falha que preserva sua privacidade. Logs de diagnóstico recentes com dados sensíveis removidos são incluídos quando disponíveis.",
+            "uiErrorDescription": "Envie um relatório de diagnóstico que preserva sua privacidade para nos ajudar a entender a parte da UI que falhou.",
+            "closedDescription": "Envie um relatório de diagnóstico que preserva sua privacidade para nos ajudar a entender o que aconteceu.",
+            "reportNotesPlaceholder": "Opcional: o que aconteceu?",
+            "uiErrorNotesPlaceholder": "Opcional: o que você estava fazendo antes deste erro de UI?",
+            "closedNotesPlaceholder": "Opcional: o que você estava fazendo antes de o Orca fechar?"
           }
         }
       },
