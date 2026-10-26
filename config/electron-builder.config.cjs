@@ -112,6 +112,11 @@ const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+// The bundled agent-browser binary finds its version-matched catalog via the nearest skills/ above it (Resources/).
+const agentBrowserSkillResources = [
+  { from: 'node_modules/agent-browser/skills/agent-browser', to: 'skills/agent-browser' },
+  { from: 'node_modules/agent-browser/skill-data', to: 'skill-data' }
+]
 // Native agents load plugins by path and cannot read inside app.asar.
 const nativeChatVisualsResource = {
   from: 'resources/native-chat-visuals',
@@ -140,6 +145,7 @@ const commonExtraResources = [
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
+  ...agentBrowserSkillResources,
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
