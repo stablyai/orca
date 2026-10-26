@@ -473,7 +473,6 @@
     },
     "agents": {
       "permissionsTitle": "Permissions",
-      "permissionsResetExplanation": "Picking a mode here resets agents you set separately.",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
       "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",
@@ -536,7 +535,17 @@
       "permissionSameAsAll": "Same as all agents",
       "permissionChipRemove": "Remove {{flag}} and use {{agent}}'s own settings",
       "permissionChipTooltip": "Added by Permissions. Remove it to use {{agent}}’s own settings.",
-      "permissionResetsOwnChoices": "Choosing a mode here resets the agents marked as set separately."
+      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
+      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
+      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
+      "permissionOverrideFollows": "{{agent}} now follows {{mode}}",
+      "permissionOverrideMore": "and {{count}} more",
+      "permissionOverrideMore_one": "and {{count}} more",
+      "permissionOverrideMore_other": "and {{count}} more",
+      "permissionOverridesUse": "Use {{mode}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -13120,7 +13129,9 @@
           "nodeDownloadBlockedNoMirror": "Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.",
           "nodeDownloadBlockedMirrorTried": "Neither this computer nor this host could download Node.js, including from the Node.js download mirror. Check the mirror setting, then connect again.",
           "reassurance": "Runs on {{host}}, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to {{host}}.",
-          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}"
+          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}",
+          "windowsBuildUnsupported": "This host runs a version of Windows older than Windows 10 and Windows Server 2016, so it can’t run Orca’s server. Use a host with a newer version of Windows, or a Linux or macOS host.",
+          "windowsNoExtractor": "This Windows host has neither tar.exe nor PowerShell’s Expand-Archive, so Orca can’t unpack its server there. Install Windows PowerShell 5.1 on the host, then connect again."
         },
         "ZcodeCliSetupSection": {
           "title": "Use GLM with ZCode",

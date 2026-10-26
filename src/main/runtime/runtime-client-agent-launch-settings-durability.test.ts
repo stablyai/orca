@@ -31,7 +31,7 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 describe('durable execution-host launch settings', () => {
-  it('maps an old dropdown through the all-agents reset, persists it and publishes typed precedence', async () => {
+  it('maps an old dropdown without clearing agent choices, persists it and publishes typed precedence', async () => {
     const { store, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)
     await controller.mutateAgentLaunch({
@@ -43,13 +43,13 @@ describe('durable execution-host launch settings', () => {
     await store.flushPendingOrThrowAsync()
     expect(readState().settings).toMatchObject({
       agentPermissionDefault: 'ask',
-      agentPermissionOverrides: {}
+      agentPermissionOverrides: { claude: 'full-access' }
     })
     expect(controller.get().nativeChatPermissionMode).toBe('ask')
     expect(resolveTuiAgentLaunchArgs('claude', store.getSettings())).toBe(
-      '--permission-mode default'
+      '--dangerously-skip-permissions'
     )
-    expect(newChatPermissionModeForSettings('claude', store.getSettings())).toBe('ask')
+    expect(newChatPermissionModeForSettings('claude', store.getSettings())).toBe('full-access')
     store.updateSettings({ nativeChatPermissionMode: 'full-access', agentPermissionDefault: 'own' })
     await store.flushPendingOrThrowAsync()
     const saved = readState()
@@ -62,7 +62,7 @@ describe('durable execution-host launch settings', () => {
       expect(new RuntimeClientSettingsController(reloaded).get().nativeChatPermissionMode).toBe(
         'ask'
       )
-      expect(newChatPermissionModeForSettings('claude', reloaded.getSettings())).toBe('own')
+      expect(newChatPermissionModeForSettings('claude', reloaded.getSettings())).toBe('full-access')
     } finally {
       await reloaded.freezeWritesAsync()
     }

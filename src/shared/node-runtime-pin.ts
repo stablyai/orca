@@ -147,6 +147,9 @@ export const NODE_RUNTIME_COMPAT_ASSETS: Record<CompatServerTarget, NodeRuntimeA
 /** Pinned darwin Node LC_BUILD_VERSION minos sets terminal-host floor. Packaging catches pin drift; older macOS uses desktop-forked daemons. */
 export const NODE_RUNTIME_DARWIN_MINIMUM_OS = '13.5'
 
+/** Pinned Node supports Windows 10 / Server 2016 and later; 10240 is the first Windows 10 build. */
+export const NODE_RUNTIME_WINDOWS_MINIMUM_BUILD = 10240
+
 export function isCompatServerTarget(target: string): target is CompatServerTarget {
   return COMPAT_SERVER_TARGETS.some((known) => known === target)
 }

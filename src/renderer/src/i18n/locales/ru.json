@@ -323,13 +323,28 @@
       "permissionSameAsAll": "Как у всех агентов",
       "permissionChipRemove": "Удалить {{flag}} и использовать собственные настройки {{agent}}",
       "permissionChipTooltip": "Добавлено настройкой разрешений. Удалите, чтобы использовать собственные настройки {{agent}}.",
-      "permissionResetsOwnChoices": "Выбор режима здесь сбросит настройки агентов, отмеченных как настроенные отдельно.",
       "permissionsTitle": "Разрешения",
-      "permissionsResetExplanation": "Выбор режима здесь сбрасывает отдельные настройки агентов.",
       "permissionsChoiceExplanation": "Что каждый агент может делать без запроса. Ниже можно изменить настройки отдельного агента.",
       "permissionEachOwn": "Собственные настройки каждого агента",
       "permissionEachOwnDescription": "Orca ничего не добавляет; каждый CLI использует собственную конфигурацию",
-      "permissionOwnLegacyDescription": "Orca не добавляет флаг разрешений в терминалах; чаты используют раздел «Настройки → Чат»."
+      "permissionOwnLegacyDescription": "Orca не добавляет флаг разрешений в терминалах; чаты используют раздел «Настройки → Чат».",
+      "permissionOverridesKept": "{{count}} агентов по-прежнему используют свои настройки разрешений:",
+      "permissionOverridesKept_one": "{{count}} агент по-прежнему использует свои настройки разрешений:",
+      "permissionOverridesKept_few": "{{count}} агента по-прежнему используют свои настройки разрешений:",
+      "permissionOverridesKept_many": "{{count}} агентов по-прежнему используют свои настройки разрешений:",
+      "permissionOverridesKept_other": "{{count}} агента по-прежнему используют свои настройки разрешений:",
+      "permissionOverridesFollow": "{{count}} агентов теперь используют настройки «{{mode}}»",
+      "permissionOverridesFollow_one": "{{count}} агент теперь использует настройки «{{mode}}»",
+      "permissionOverridesFollow_few": "{{count}} агента теперь используют настройки «{{mode}}»",
+      "permissionOverridesFollow_many": "{{count}} агентов теперь используют настройки «{{mode}}»",
+      "permissionOverridesFollow_other": "{{count}} агента теперь используют настройки «{{mode}}»",
+      "permissionOverrideMore": "и ещё {{count}}",
+      "permissionOverrideMore_one": "и ещё {{count}}",
+      "permissionOverrideMore_few": "и ещё {{count}}",
+      "permissionOverrideMore_many": "и ещё {{count}}",
+      "permissionOverrideMore_other": "и ещё {{count}}",
+      "permissionOverrideFollows": "{{agent}} теперь использует настройки «{{mode}}»",
+      "permissionOverridesUse": "Использовать настройки «{{mode}}»"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
@@ -4356,7 +4371,9 @@
           "nodeDownloadBlockedNoMirror": "Ни этот компьютер, ни сервер не смогли скачать Node.js, необходимый серверу Orca. Проверьте сеть или прокси на обоих компьютерах и подключитесь снова.",
           "nodeDownloadBlockedMirrorTried": "Ни этот компьютер, ни сервер не смогли скачать Node.js, в том числе с зеркала загрузки. Проверьте настройку зеркала и подключитесь снова.",
           "reassurance": "Работает на {{host}} через ваше SSH-соединение. Код и файлы остаются на месте. На {{host}} переносится только список проектов, вкладок и терминалов Orca.",
-          "refusedBlockedReason": "Orca ещё не установлена на этом сервере. {{reason}}"
+          "refusedBlockedReason": "Orca ещё не установлена на этом сервере. {{reason}}",
+          "windowsBuildUnsupported": "На этом сервере установлена версия Windows старше Windows 10 и Windows Server 2016, поэтому сервер Orca на нём работать не сможет. Используйте компьютер с более новой версией Windows либо с Linux или macOS.",
+          "windowsNoExtractor": "На этом сервере Windows нет ни tar.exe, ни команды Expand-Archive в PowerShell, поэтому Orca не может распаковать свой сервер. Установите на нём Windows PowerShell 5.1 и подключитесь снова."
         },
         "AccountsPane": {
           "dbb9626ed1": "Отмена",

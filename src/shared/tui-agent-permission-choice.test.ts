@@ -1,4 +1,6 @@
 import * as permissionArgs from './agent-permission-args'
+import { getDefaultSettings } from './constants'
+import { legacyChatPermissionWrite } from '../main/persistence/applying-settings/legacy-chat-permission-write'
 import { measureSettingsWork, expectSettingsWorkScale } from './global-settings-test-fixture'
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
 import {
@@ -137,6 +139,45 @@ describe('terminal launch composes the stored choice', () => {
     expect(resolveAgentPermission('gemini', next).choice).toBe('full-access')
   })
 })
+
+it.each(['typed', 'legacy', 'chat'] as const)(
+  'keeps migration-owned and hand-set choices across global writes (%s)',
+  (path) => {
+    const settings = {
+      ...getDefaultSettings('/synthetic'),
+      ...migrateAgentPermissionChoice(legacy({ gemini: '', grok: '' }))
+    }
+    settings.agentPermissionOverrides.codex = 'ask'
+    const original = { ...settings.agentPermissionOverrides }
+    expect(Object.values(original).filter((value) => value === 'own').length).toBeGreaterThan(1)
+    for (const choice of ['ask', 'auto', 'auto', 'full-access'] as const) {
+      const mode = choice === 'ask' ? 'manual' : choice === 'auto' ? 'auto' : 'yolo'
+      const before = { ...settings.agentPermissionOverrides }
+      Object.assign(
+        settings,
+        path === 'chat'
+          ? legacyChatPermissionWrite(settings, { nativeChatPermissionMode: choice })
+          : agentLaunchSettingsMutationUpdates(
+              settings,
+              path === 'legacy' ? { type: 'permissions', mode } : { type: 'permission', choice },
+              'linux'
+            )
+      )
+      expect(settings.agentPermissionOverrides).toMatchObject(original)
+      expect(settings.agentPermissionOverrides).toMatchObject(before)
+    }
+    expect(
+      applyAllAgentsPermission({ agentPermissionDefault: 'auto' }, 'auto').agentPermissionOverrides
+    ).toEqual({})
+    expect(() =>
+      agentLaunchSettingsMutationUpdates(
+        settings,
+        { type: 'permission', agent: 'gemini', choice: 'ask' },
+        'linux'
+      )
+    ).toThrow('This agent does not offer that permission')
+  }
+)
 
 describe('older clients against a host with the stored choice', () => {
   const host = {
@@ -611,8 +652,9 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     }
     const ask = { ...upgraded, ...applyAllAgentsPermission(upgraded, 'ask') }
     for (const agent of agents) {
+      const expected = agent === 'antigravity' ? 'ask' : 'own'
       expect(resolveTuiAgentLaunchArgs(agent, ask)).toBe('')
-      expect(newChatPermissionModeForSettings(agent, ask)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, ask)).toBe(expected)
       const edited = {
         ...ask,
         ...agentLaunchSettingsMutationUpdates(
@@ -621,7 +663,7 @@ describe('permission carrier ownership across save, reload and consumers', () =>
           'linux'
         )
       }
-      expect(newChatPermissionModeForSettings(agent, edited)).toBe('ask')
+      expect(newChatPermissionModeForSettings(agent, edited)).toBe(expected)
     }
     const own = { ...ask, agentPermissionOverrides: { omp: 'own' as const } }
     const auto = { ...own, ...applyAllAgentsPermission(own, 'auto') }

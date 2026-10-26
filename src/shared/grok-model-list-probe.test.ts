@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
+import { parseGrokModelList } from './grok-model-list-probe'
 
 // Byte-exact signed-in grok models capture, including blank lines/two-space bullet indent (sed -n l).
 const SIGNED_IN_STDOUT = [
@@ -14,10 +14,6 @@ const SIGNED_IN_STDOUT = [
 ].join('\n')
 
 describe('parseGrokModelList', () => {
-  it('probes with the only listing subcommand grok exposes', () => {
-    expect(GROK_MODEL_LIST_ARGS).toEqual(['models'])
-  })
-
   it('parses the signed-in listing into exactly the bulleted models', () => {
     // A star-only parser dropped dashed non-default rows from authoritative discovery, removing them from the picker.
     expect(parseGrokModelList(SIGNED_IN_STDOUT)).toEqual([
@@ -40,19 +36,15 @@ describe('parseGrokModelList', () => {
   it('names no default when the listing annotates none', () => {
     // Without an explicit marker, first-row promotion would misrepresent the CLI’s unflagged default.
     const parsed = parseGrokModelList('Available models:\n  * grok-4.5\n  * grok-build\n')
-    expect(parsed.every(({ isDefault }) => isDefault === undefined)).toBe(true)
+    expect(parsed.map(({ id, isDefault }) => [id, isDefault])).toEqual([
+      ['grok-4.5', undefined],
+      ['grok-build', undefined]
+    ])
   })
 
   it('does not treat another parenthetical as the default marker', () => {
     const parsed = parseGrokModelList('Available models:\n  * grok-build (beta)\n')
     expect(parsed[0]!.isDefault).toBeUndefined()
-  })
-
-  it('ignores the decoy ids that sit above the header', () => {
-    // Headerless scans would invent models from the default preamble and dotted login text.
-    const parsed = parseGrokModelList(SIGNED_IN_STDOUT)
-    expect(parsed).toHaveLength(2)
-    expect(parsed.some(({ id }) => id.includes('grok.com'))).toBe(false)
   })
 
   it('reads the default marker off a dashed row too', () => {

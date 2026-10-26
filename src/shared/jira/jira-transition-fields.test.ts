@@ -133,7 +133,7 @@ describe('jira-transition-fields', () => {
     })
   })
 
-  it('falls back to Jira when required resolution choices are missing', () => {
+  it('marks required resolution without choices as unsupported', () => {
     const resolution = { key: 'resolution', name: 'Resolution', required: true }
     expect(classifyTransitionRequirements(transition([resolution]))).toEqual({
       kind: 'unsupported',

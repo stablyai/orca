@@ -18,7 +18,7 @@ import {
   persist,
   settingsModel,
   type SettingsPersistenceModel
-} from './settings-persistence-test-fixture'
+} from './__fixtures__/settings-persistence-test-fixture'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { TooltipProvider } from '../ui/tooltip'
 
