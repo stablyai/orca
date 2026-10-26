@@ -21,7 +21,6 @@ import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-un
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
 import { useClientHostedBrowserGuestTools } from './annotate/use-client-hosted-browser-guest-tools'
-import { BrowserGuestAnnotateOverlays } from './annotate/browser-guest-annotate-overlays'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { ClientHostedBrowserPageToolbar } from './assemble-chrome/client-hosted-browser-page-toolbar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
@@ -80,19 +79,18 @@ export function ClientHostedBrowserPagePane({
     placementPending: placement === null
   })
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
-  const { grab, markup, annotationSend, grabAnnotations, browserOverlayViewport, ...tools } =
-    useClientHostedBrowserGuestTools({
-      browserPageId: browserTab.id,
-      worktreeId,
-      webviewRef,
-      viewportRef,
-      runtimeEnvironmentId,
-      placement,
-      isActive,
-      unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
-      showFailureOverlay,
-      documentUrl: browserTab.url
-    })
+  const tools = useClientHostedBrowserGuestTools({
+    browserPageId: browserTab.id,
+    worktreeId,
+    webviewRef,
+    viewportRef,
+    runtimeEnvironmentId,
+    placement,
+    isActive,
+    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    showFailureOverlay,
+    documentUrl: browserTab.url
+  })
   const bindAnnotationDocument = useEffectEvent(tools.bindAnnotationDocument)
   // Main owns this guest; guest loss requires reopening on the server rather than local recreation.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
@@ -136,13 +134,10 @@ export function ClientHostedBrowserPagePane({
   useBrowserPageKeyboardShortcuts({
     ...shortcutOwner,
     isActiveRef,
-    markupIsActive: markup.isActive,
     webviewRef,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
-    startGrabIntent: grabAnnotations.startGrabIntent,
-    handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
-    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error'
+    ...tools.shortcutBindings
   })
 
   const navigateToUrl = useClientHostedPageUrlSubmission({
@@ -345,16 +340,7 @@ export function ClientHostedBrowserPagePane({
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
         >
-          <BrowserGuestAnnotateOverlays
-            markup={markup}
-            grab={grab}
-            annotationSend={annotationSend}
-            grabAnnotations={grabAnnotations}
-            containerRef={viewportRef}
-            webviewRef={webviewRef}
-            browserOverlayViewport={browserOverlayViewport}
-            worktreeId={worktreeId}
-          />
+          {tools.overlay}
           <BrowserPageZoomIndicator
             state={browserZoomIndicatorState}
             percent={zoom.browserZoomPercent}

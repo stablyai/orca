@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { useAppStore } from '@/store'
 import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
 import type { BrowserChromeMarkupTool } from '../assemble-chrome/browser-chrome-toolbar'
+import { BrowserGuestAnnotateOverlays } from './browser-guest-annotate-overlays'
+import type { useBrowserPageKeyboardShortcuts } from '../host-guest/use-browser-page-keyboard-shortcuts'
 import { useBrowserGuestElementTools } from './use-browser-guest-element-tools'
 
 const NO_MARKER_IDS: readonly string[] = []
 
-/**
- * The browser tool cluster for a client-hosted page. Its `<webview>` is local, and main registers
- * it under the page id, so the picker and markup run exactly as on a local tab.
- */
+/** Main registers the client-hosted guest under its page id, so the tools run as on a local tab. */
 export function useClientHostedBrowserGuestTools({
   browserPageId,
   worktreeId,
@@ -34,6 +33,11 @@ export function useClientHostedBrowserGuestTools({
   documentUrl: string
 }): ReturnType<typeof useBrowserGuestElementTools> & {
   markupTool: BrowserChromeMarkupTool
+  overlay: React.JSX.Element
+  shortcutBindings: Pick<
+    Parameters<typeof useBrowserPageKeyboardShortcuts>[0],
+    'markupIsActive' | 'startGrabIntent' | 'handleGrabActionShortcut' | 'grabIsInteractive'
+  >
   /** Binds the guest's document-boundary and viewport events; returns the unbind. */
   bindAnnotationDocument: (webview: Electron.WebviewTag) => () => void
 } {
@@ -65,8 +69,7 @@ export function useClientHostedBrowserGuestTools({
   const pageHostGeneration = placement?.pageHostGeneration
 
   useEffect(() => {
-    // Invalidate pending captures and an unsaved comment card on deactivation, guest replacement,
-    // failure, or unmount — the card's element rects belong to the document it was picked on.
+    // A pending capture or unsaved card belongs to the document it was picked on.
     return () => {
       cancelMarkup()
       setPendingAnnotationPayload(null)
@@ -85,8 +88,7 @@ export function useClientHostedBrowserGuestTools({
   const grabActive = grab.state !== 'idle'
   const cancelGrab = grab.cancel
   useEffect(() => {
-    // Why: an armed or confirming grab keeps its window-level C/S listener, so it must not outlive
-    // an unusable pane.
+    // An armed grab keeps a window-level C/S listener that must not outlive a usable pane.
     if (disabled && grabActive) {
       cancelGrab()
     }
@@ -97,8 +99,7 @@ export function useClientHostedBrowserGuestTools({
     if (!webview) {
       return
     }
-    // Why: the guest lives in a body-level fixed host that paints over the pane, so hide it only
-    // after capture, or it would cover the drawing surface.
+    // The guest's body-level host paints over the pane, so hide it only after capture.
     webview.style.display = showFailureOverlay || unavailable || showOverlay ? 'none' : 'flex'
     return () => {
       webview.style.display = 'flex'
@@ -116,8 +117,7 @@ export function useClientHostedBrowserGuestTools({
   ])
 
   const invalidateAnnotationDocument = useCallback(() => {
-    // Why: a load replaces the document, so saved notes are kept (as on a local tab) but their
-    // badges retire, and a half-made pick — awaiting or confirming — is dropped with its rects.
+    // As on a local tab: saved notes stay, their badges retire, and a half-made pick is dropped.
     useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserPageId)
     cancelPendingBrowserCapture()
     resetBrowserOverlayViewport()
@@ -139,14 +139,29 @@ export function useClientHostedBrowserGuestTools({
       onToggle: () => (markup.isActive ? markup.cancel() : void markup.start()),
       canShowDiscoveryHint: isActive
     },
+    overlay: (
+      <BrowserGuestAnnotateOverlays
+        markup={markup}
+        grab={grab}
+        annotationSend={tools.annotationSend}
+        grabAnnotations={grabAnnotations}
+        containerRef={viewportRef}
+        webviewRef={webviewRef}
+        browserOverlayViewport={tools.browserOverlayViewport}
+        worktreeId={worktreeId}
+      />
+    ),
+    shortcutBindings: {
+      markupIsActive: markup.isActive,
+      startGrabIntent: grabAnnotations.startGrabIntent,
+      handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
+      grabIsInteractive: grabActive && grab.state !== 'error'
+    },
     bindAnnotationDocument
   }
 }
 
-/**
- * The guest events that end an annotation document, plus the viewport reports the comment card
- * follows. Main-frame starts include in-place (SPA) navigations, which move elements just the same.
- */
+/** In-place (SPA) main-frame navigations end an annotation document too: they move elements. */
 function bindClientHostedAnnotationDocument(
   webview: Electron.WebviewTag,
   {

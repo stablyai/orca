@@ -23,10 +23,7 @@ import { RemoteRuntimeEgressIndicator } from './browser-egress-indicator'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 
-/**
- * Folded tools plus reload. Profile and cookie rows are left out: a client-hosted page's session
- * profile is chosen by the host, not by this desktop's profile list.
- */
+/** No profile or cookie rows: the host chooses a client-hosted page's session profile. */
 function ClientHostedBrowserOverflowMenu({
   overflow,
   onReload,
@@ -77,6 +74,7 @@ export function ClientHostedBrowserPageToolbar({
   canGoBack,
   canGoForward,
   loading,
+  loadFailed,
   webviewRef,
   reload,
   navigate,
@@ -92,8 +90,13 @@ export function ClientHostedBrowserPageToolbar({
   canGoBack: boolean
   canGoForward: boolean
   loading: boolean
+  loadFailed: boolean
   webviewRef: React.RefObject<Electron.WebviewTag | null>
-  reload: { runReloadTrigger: (trigger: BrowserReloadTrigger) => void; reloadButtonLabel: string }
+  reload: {
+    runReloadTrigger: (trigger: BrowserReloadTrigger) => void
+    reloadButtonLabel: string
+    reloadButtonLabelKind: 'stop' | 'retry' | 'reload'
+  }
   navigate: (url: string) => void
   addressBarValue: string
   onAddressBarChange: (value: string) => void
@@ -118,7 +121,6 @@ export function ClientHostedBrowserPageToolbar({
       controls={{
         canGoBack,
         canGoForward,
-        loading,
         goBack: () => webviewRef.current?.goBack(),
         goForward: () => webviewRef.current?.goForward(),
         reload: () => reload.runReloadTrigger('button'),
@@ -126,6 +128,7 @@ export function ClientHostedBrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={browserPageId}
           value={addressBarValue}
           onChange={onAddressBarChange}
           onSubmit={() => navigate(addressBarValue)}
@@ -141,13 +144,15 @@ export function ClientHostedBrowserPageToolbar({
               presentation="client-hosted"
             />
           }
+          loading={loading}
+          loadFailed={loadFailed}
         />
       }
       reloadLabel={reload.reloadButtonLabel}
+      reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
       elementTools={elementTools}
       markup={markup}
-      // Why null: a page URL may only resolve through the remote host's network (loopback names the
-      // host), so a local default browser could open the wrong machine.
+      // The URL may resolve only through the host's network, so a local browser could open the wrong machine.
       viewSource={null}
       openExternal={null}
       overflowMenu={renderOverflowMenu}

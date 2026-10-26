@@ -10,11 +10,7 @@ import { useGrabMode } from '@/components/browser-pane/annotate/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
 import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 
-/**
- * The browser tool cluster — in-guest element picker, annotation store, markup canvas — for a
- * surface whose `<webview>` lives outside the browsing pane's viewport machinery: workspace
- * document previews and client-hosted remote pages.
- */
+/** Element picker, annotations and markup for webviews outside the browsing pane: doc previews and client-hosted pages. */
 export function useBrowserGuestElementTools({
   browserPageId,
   toolTargetId,
@@ -24,7 +20,6 @@ export function useBrowserGuestElementTools({
   toolsReady,
   currentDocument
 }: {
-  /** Scopes the stored annotations. Stable for the life of the surface. */
   browserPageId: string
   /** The id main resolves to a guest, or '' while no guest has committed to this page. */
   toolTargetId: string
@@ -32,10 +27,7 @@ export function useBrowserGuestElementTools({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
-  /**
-   * Set by a surface that navigates: badges then show only notes captured on the live document,
-   * as on a local tab. A single-document preview leaves it unset.
-   */
+  /** Set by a surface that navigates, so badges show only notes from the live document. */
   currentDocument?: { markerIds: readonly string[]; url: string }
 }): {
   grab: ReturnType<typeof useGrabMode>
