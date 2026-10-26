@@ -203,8 +203,44 @@ describe('TerminalWebView engine errors', () => {
     expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
 
     postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id })
-    expect(postedCommands().map((command) => command.type)).toEqual(['ping', 'set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'ping',
+      'set-theme',
+      'set-font',
+      'write'
+    ])
     expect(onWebReady).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends a font reset made while the foreground ping was pending', () => {
+    const terminalRef = createRef<TerminalWebViewHandle>()
+    const imported = { source: 'data:font/ttf;base64,AAAA' }
+    const { renderer } = createTerminalWebViewRenderer(vi.fn(), {
+      ref: terminalRef,
+      terminalFont: imported
+    })
+    postWebViewMessage(renderer, { type: 'web-ready' })
+    act(() => {
+      terminalRef.current?.prepareForForegroundRecovery()
+    })
+    act(() => {
+      renderer.update(
+        createElement(TerminalWebView, {
+          onEngineError: vi.fn(),
+          ref: terminalRef,
+          terminalFont: null
+        })
+      )
+    })
+    const ping = postedCommands().find((command) => command.type === 'ping')
+    nativeWebViewMethods.postMessage.mockClear()
+
+    postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id })
+    expect(
+      postedCommands()
+        .filter((command) => command.type === 'set-font')
+        .map((command) => command.font)
+    ).toEqual([null])
   })
 
   it('keeps Android foreground traffic on the existing ready document', () => {
@@ -248,6 +284,10 @@ describe('TerminalWebView engine errors', () => {
     expect(onEngineError).not.toHaveBeenCalled()
 
     postWebViewMessage(renderer, { type: 'web-ready' })
-    expect(postedCommands().map((command) => command.type)).toEqual(['set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'set-theme',
+      'set-font',
+      'write'
+    ])
   })
 })

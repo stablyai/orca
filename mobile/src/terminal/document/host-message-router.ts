@@ -10,6 +10,7 @@ import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
+import { applyTerminalFont, type TerminalCustomFont } from './terminal-font'
 import { applyTextScale } from './text-scaling'
 import { resetWriteQueue } from './write-queue'
 
@@ -25,6 +26,7 @@ export type TerminalHostMessage = {
   oscLinks?: unknown
   data?: string
   frame?: { width: number; height: number } | null
+  font?: TerminalCustomFont
 }
 
 function hostFrameOf(msg: TerminalHostMessage) {
@@ -75,6 +77,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       scope.panY = 0
       applyTextScale(scope, msg.fontScale)
     }
+  } else if (msg.type === 'set-font') {
+    applyTerminalFont(scope, msg.font ?? null)
   } else if (msg.type === 'resize') {
     holdHostFrame(scope, msg)
     resize(scope, msg.cols!, msg.rows!)

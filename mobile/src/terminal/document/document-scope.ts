@@ -63,6 +63,9 @@ export type TerminalDocumentState = {
   handledMessageIds: number[]
   currentTextScale: number
   terminalFontFamily: string
+  // The imported font this document renders with; a bumped request drops a slower, older load.
+  customFontSource: string | null
+  customFontRequest: number
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
   activeAltScreenSnapshot: boolean
@@ -179,6 +182,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
+    customFontSource: null,
+    customFontRequest: 0,
     firstDataPending: false,
     reportedCellBox: null,
     activeAltScreenSnapshot: false,

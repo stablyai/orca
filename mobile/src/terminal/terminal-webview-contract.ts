@@ -3,6 +3,7 @@ import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from './terminal-grid-fit'
 import type { TerminalFrame } from './terminal-webview-messages'
+import type { TerminalCustomFont } from './document/terminal-font'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -86,6 +87,8 @@ export type TerminalWebViewProps = {
   terminalTheme?: MobileTerminalTheme
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
+  // The user's imported font; null keeps the default stack.
+  terminalFont?: TerminalCustomFont
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   onWebReady?: () => void
