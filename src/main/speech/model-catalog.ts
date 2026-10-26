@@ -101,6 +101,18 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'gigaam-v3-rnnt-ru',
+    label: 'GigaAM v3 RNNT (RU)',
+    description: 'Russian only. RNN-T, state-of-the-art RU accuracy. No punctuation.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ru',
+    ...getSpeechModelDownloadMetadata('gigaam-v3-rnnt-ru'),
+    sampleRate: 16000,
+    streaming: false,
+    featureDim: 64
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',

@@ -29,6 +29,8 @@ export type SpeechModelManifest = {
   sampleRate: number
   streaming: boolean
   modelingUnit?: ModelingUnit
+  // Mel bins the model was trained on; sherpa defaults to 80 (GigaAM needs 64).
+  featureDim?: number
   recommended?: boolean
 }
 
