@@ -2,6 +2,7 @@
 import { StrictMode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings
@@ -19,13 +20,15 @@ const transport = vi.hoisted(() => ({
   mutate: vi.fn(),
   detection: vi.fn(),
   auto: vi.fn(),
-  native: vi.fn()
+  native: vi.fn(),
+  own: vi.fn()
 }))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
   hostSupportsAutoPermissions: transport.auto,
-  hostSupportsNativeChatPermissions: transport.native
+  hostSupportsNativeChatPermissions: transport.native,
+  hostSupportsOwnChatPermissions: transport.own
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -65,9 +68,40 @@ beforeEach(() => {
   transport.detection.mockClear()
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
+  transport.own.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
+  it.each([false, true])(
+    'describes Own for the selected host capability: %s',
+    async (supported) => {
+      transport.own.mockResolvedValue(supported)
+      transport.read.mockResolvedValue(
+        projectAgentLaunchSettings({ agentPermissionDefault: 'own' })
+      )
+      render(pane(17))
+      await screen.findByText("Each agent's own settings")
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Permissions' }))
+      await screen.findByText(
+        supported
+          ? 'Terminals and chats follow the agent’s own permission settings.'
+          : 'Orca adds no permission flag in terminals; chats use Settings → Chat.'
+      )
+      expect(transport.own).toHaveBeenCalledWith({ environmentId: 'ssh-host', pairingRevision: 17 })
+    }
+  )
+
+  it('shows resolved launch defaults in a collapsed legacy host row', async () => {
+    transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
+    render(pane(17))
+    const installed = (await screen.findByText('Installed')).closest('section')
+    if (!installed) {
+      throw new Error('missing installed agents section')
+    }
+    expect(within(installed).getByText('--dangerously-skip-permissions')).toBeTruthy()
+    expect(transport.mutate).not.toHaveBeenCalled()
+  })
+
   it.each([true, false])(
     'offers automatic permissions only when supported: %s',
     async (supported) => {
@@ -404,6 +438,38 @@ describe('host launch settings form', () => {
       syncNativeChat: true
     })
   })
+
+  it.each([false, true])(
+    'retains failed Arguments and follows acknowledged host text (typed=%s)',
+    async (typed) => {
+      const settings = (value: string) =>
+        projectAgentLaunchSettings({
+          ...(typed ? { agentPermissionDefault: 'ask' as const } : {}),
+          agentDefaultArgs: { claude: value }
+        })
+      transport.read.mockResolvedValue(settings('--host-marker'))
+      transport.mutate
+        .mockRejectedValueOnce(new Error('unknown acknowledgement'))
+        .mockResolvedValue(settings('--host-normalized'))
+      const view = render(pane(17))
+      const args = await screen.findByDisplayValue('--host-marker')
+      fireEvent.change(args, { target: { value: '--next-marker' } })
+      fireEvent.blur(args)
+      await screen.findByRole('alert')
+      expect(args).toHaveProperty('value', '--next-marker')
+      fireEvent.blur(args)
+      await screen.findByDisplayValue('--host-normalized')
+      expect(transport.mutate.mock.calls[1]?.[1]).toEqual({
+        type: typed ? 'user-arguments' : 'arguments',
+        agent: 'claude',
+        value: '--next-marker'
+      })
+      fireEvent.change(args, { target: { value: '--unsubmitted' } })
+      view.rerender(pane(18))
+      await screen.findByDisplayValue('--host-marker')
+      expect(screen.queryByDisplayValue('--unsubmitted')).toBeNull()
+    }
+  )
 
   it('does not display launch controls or local defaults for an old server', async () => {
     transport.read.mockResolvedValue(null)

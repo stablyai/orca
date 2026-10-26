@@ -4,34 +4,24 @@ import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
 
-// Pure state machine for the mobile PR sidebar. Kept free of React/native imports
-// so the transitions are unit-testable under the node Vitest config (KTD5).
-
 export type PrSidebarData = {
   pr: PRInfo
   details: GitHubWorkItemDetails | null
   checks: PRCheckDetail[]
-  // Non-null when the checks read failed; the checks section shows it and the rest
-  // of the PR still renders. Checks alone never take the sidebar to `error`.
+  // Contain check failures so the remaining PR controls still render.
   checksError: string | null
 }
 
-// `blocked` is a permanent failure (no GitHub account / permission denied) that the
-// user cannot retry away; `error` is transient (network/timeout). Keeping them
-// distinct (R9/KTD7) stops a permission denial from looping through revert+retry.
+// Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
 export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
   | { kind: 'ready'; data: PrSidebarData }
-  // The branch has no open PR — distinct from `hidden` so the opened sidebar can
-  // explain it (the dedicated icon is always available on a GitHub repo).
   | { kind: 'none' }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 
-// Why: host mutations/reads return permission and network failures in the same
-// `{ ok:false, error:string }` shape; classify by message so a permanent failure
-// routes to `blocked` instead of an endlessly-retryable `error`.
+// The wire shares an error-string shape; classify permanent failures before offering retry.
 const PERMANENT_FAILURE_PATTERN =
   /\b(not connected|no github|unauthenticated|not authenticated|gh auth|login|permission|forbidden|insufficient|401|403|404)\b/i
 
@@ -54,8 +44,7 @@ export type PrSidebarLoadDeps = {
   ) => Promise<
     GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
   >
-  // The worktree's persisted linkedPR (fallback resolver for closed/merged PRs).
-  // Fetched in parallel with forBranch to keep it off the critical path.
+  // Resolve persisted links in parallel so closed/merged PRs add no serial read.
   fetchWorktreeLinkedPR: (worktreeId: string) => Promise<number | null>
   fetchPRForBranch: (
     worktreeId: string,
@@ -71,11 +60,7 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
 }
 
-// Phase 1: load the PR + checks fast and show the sidebar. The heavy comments/body
-// payload (workItemDetails) is deferred to loadPrSidebarDetails so it never blocks the
-// actionable PR UI — `data.details` starts null and is filled in by the second phase.
-// forBranch + the worktree linkedPR read run in parallel (independent), then combine
-// via resolveLinkedPrNumber so a closed/merged linked PR still resolves (KTD4).
+// Show PR/checks before heavy body/comments; parallel link resolution also retains closed/merged reviews.
 export async function loadPrSidebarData(
   deps: PrSidebarLoadDeps,
   args: {
@@ -102,23 +87,17 @@ export async function loadPrSidebarData(
       return failureState(prOutcome.error)
     }
     if (!prOutcome.result) {
-      // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
       return { kind: 'none' }
     }
     const pr = prOutcome.result
     const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
-      // Why: mobile create can commit before opening the review; the fetched PR
-      // head is fresher than the route's cached git.status head.
+      // Creating a PR may first commit, making its fetched head fresher than cached git status.
       headSha: pr.headSha ?? args.headSha ?? null,
-      // Prefer the fetched PR's own repo identity so fork PRs key their cached
-      // checks correctly; fall back to an explicit override then null.
+      // Fork checks must use the fetched PR’s repo identity.
       prRepo: pr.prRepo ?? args.prRepo ?? null
     })
-    // details: null = comments still loading (phase 2). The header/reviewers degrade to
-    // the PRInfo fields until it arrives.
-    // Checks are contained the way phase 2 is: a failed read costs the checks row, not
-    // the title/body/comments/merge controls the user opened the sidebar for.
+    // A check failure must not hide title, comments or merge controls.
     if (!checksOutcome.ok) {
       return {
         kind: 'ready',
@@ -130,14 +109,11 @@ export async function loadPrSidebarData(
       data: { pr, details: null, checks: checksOutcome.result, checksError: null }
     }
   } catch (err) {
-    // Why: a dep that rejects (instead of returning `{ ok:false }`) must still
-    // resolve to an error state, not escape as an unhandled rejection.
+    // Rejected dependencies must settle as UI errors rather than unhandled rejections.
     return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
   }
 }
 
-// Phase 2: fetch the work-item details (body + comments + participants). Non-fatal —
-// a failure leaves the PR shown with an empty comments section rather than erroring out.
 export async function loadPrSidebarDetails(
   deps: PrSidebarLoadDeps,
   worktreeId: string,
@@ -147,14 +123,12 @@ export async function loadPrSidebarDetails(
     const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
     return outcome.ok ? outcome.result : null
   } catch {
-    // Why: phase 2 is non-fatal — a rejection leaves the PR shown without comments
-    // rather than escaping as an unhandled rejection.
+    // Details failure leaves the PR usable without comments.
     return null
   }
 }
 
-// UI treats details===null as "still loading". After phase 2 finishes (success or
-// non-fatal failure), never leave null — use prior comments if any, else empty body.
+// Null means loading; finish failed loads with prior details or a placeholder so spinners stop.
 export function resolvePrSidebarDetailsAfterPhase2(args: {
   fetched: GitHubWorkItemDetails | null
   prior: GitHubWorkItemDetails | null
@@ -169,8 +143,6 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
   return emptyPrSidebarDetails(args.pr)
 }
 
-// Placeholder details so Description/Comments leave the spinner after a failed phase 2.
-// The synthetic id is the only id shape we mint — real GitHub node ids never match.
 export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
   return {
     item: {
@@ -189,28 +161,22 @@ export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
   }
 }
 
-// True when phase 2 failed and we synthesized a stand-in (no body/comments/reviews).
 export function isPrSidebarDetailsPlaceholder(details: GitHubWorkItemDetails): boolean {
   return details.item.id === `pr-${details.item.number}`
 }
 
-// Phase-2 still needs a real payload: null (in flight / not started) or a
-// synthetic placeholder from a failed fetch. Real details (including empty body)
-// do not qualify — ensure/retry must not re-pull those.
+// Retry synthetic failed-fetch placeholders, but never refetch a real empty body as though it were missing.
 export function prSidebarDetailsNeedFetch(
   details: GitHubWorkItemDetails | null | undefined
 ): boolean {
   return details == null || isPrSidebarDetailsPlaceholder(details)
 }
 
-// Soft head refresh may restart an in-flight phase-1 load; only skip when there is
-// no visible/in-flight sidebar work (hidden or terminal error states).
+// Head changes refresh visible/in-flight sidebar work only.
 export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kind']): boolean {
   return kind === 'ready' || kind === 'none' || kind === 'loading'
 }
 
-// Stale-response guard (KTD6): a load tagged with an older sequence must not
-// overwrite a newer one. The hook bumps a monotonic counter per load.
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
   return resultSeq === latestSeq
 }

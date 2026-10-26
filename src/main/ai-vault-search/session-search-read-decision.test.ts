@@ -54,8 +54,6 @@ function decide(args: {
 }
 
 it('reads a path the index holds nothing for, and lets the reader continue where it can', () => {
-  // Not `whole`: there is no span this index has to reach past, and the first
-  // enablement inside a running app has a warm list cursor to make use of.
   expect(decide({ row: undefined })).toBe('any')
 })
 
@@ -65,13 +63,11 @@ it('skips a file the index already covers at this stat', () => {
 
 it('reads a file whose stat moved, however it moved', () => {
   expect(decide({ file: { mtimeMs: MTIME + 1 } })).toBe('any')
-  // Grown without its mtime moving: a same-second append, or a restored stamp.
   expect(decide({ file: { sizeBytes: 200 } })).toBe('any')
 })
 
 it('reads a file outside the retention window not at all', () => {
   expect(decide({ row: undefined, cutoffMs: MTIME + 1 })).toBe('skip')
-  // And retention wins over everything else that would have asked for a read.
   expect(decide({ row: row({ state: 'due' }), cutoffMs: MTIME + 1 })).toBe('skip')
 })
 
@@ -80,11 +76,10 @@ it('reads a row owed a whole read from the start', () => {
 })
 
 it('reads whole rather than appending onto a cursor that continues nothing', () => {
-  // A different file at the same name: the identity check hands back no cursor.
+  // A replaced file fails the cursor’s identity check.
   expect(decide({ cursor: null })).toBe('whole')
-  // A chunked read that committed a prefix and no offset any append continues.
+  // A committed prefix has no resumable offset.
   expect(decide({ cursor: { byteOffset: null, mtimeMs: MTIME, sizeBytes: 100 } })).toBe('whole')
-  // Shorter than the index read to, so this is not that file any more.
   expect(decide({ file: { sizeBytes: 40 }, cursor })).toBe('whole')
 })
 
@@ -106,8 +101,6 @@ it('retries a failed read until it has failed enough times at one stat', () => {
 })
 
 it('starts trying again the moment a held-out file changes', () => {
-  // The stat is the whole release condition, so nothing has to remember when
-  // the failures happened or schedule a retry.
   expect(
     decide({
       file: { mtimeMs: MTIME + 1 },

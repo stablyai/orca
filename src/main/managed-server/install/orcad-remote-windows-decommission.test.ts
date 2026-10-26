@@ -1,8 +1,3 @@
-/**
- * Decommission and GC against a Windows host whose host ops are answered by a fake: the stop is
- * a staged managed request run by the slot's node.exe, and GC screens every candidate in one
- * node.exe instead of one per version dir.
- */
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RecordFile from './orcad-remote-record-file'
@@ -144,7 +139,6 @@ describe('Windows orcad GC', () => {
       if (String(command).includes(' record-read ')) {
         return '__ORCAD_RECORD_ABSENT__\r\n'
       }
-      // The activation fence probe is the relay's shared lock check.
       if (String(command).startsWith('powershell.exe ')) {
         return 'OPEN'
       }

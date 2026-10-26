@@ -66,11 +66,7 @@ function absentPaneReplacement(
   }
 }
 
-/**
- * The owning host answered that the pane's process is gone. The pane outlives it: a fresh spawn
- * replaces the process, so only the dead id's binding is cleared. False when another owner took
- * the pane meanwhile.
- */
+/** Clear only the proven-dead binding, preserving the pane; refuse when another owner won meanwhile. */
 export async function releaseAbsentPaneOwner(
   context: AbsentPaneContext,
   owner: AbsentPaneOwner
@@ -90,10 +86,7 @@ export async function releaseAbsentPaneOwner(
   return retireReplacedPaneBinding(store, absentPaneReplacement(worktreeId, connectionId, owner))
 }
 
-/**
- * As releaseAbsentPaneOwner, but the dead binding stays for the fresh spawn's bind to swap in one
- * write. Null when that swap cannot happen here, so the caller retires as before.
- */
+/** Keep the dead binding for one-write replacement; null means the caller must retire it normally. */
 export function keepAbsentPaneBindingForSwap(
   context: AbsentPaneContext,
   owner: AbsentPaneOwner

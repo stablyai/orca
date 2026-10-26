@@ -259,7 +259,7 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenLastCalledWith('Ubuntu', {
       intent: 'force'
     })
-    // A user's Connect is asking again, so a standing pairing-repair failure must not answer it.
+    // Explicit Connect must clear standing pairing-repair failures.
     expect(connector.forgetPairingFailures).toHaveBeenLastCalledWith('wsl:ubuntu')
   })
 
@@ -272,7 +272,7 @@ describe('WslHostService', () => {
     connector.isReachable.mockResolvedValue(false)
     expect(connector.get('Ubuntu')).not.toBeNull()
 
-    // Not a network server: the call learns why, and nothing is booted for it.
+    // Return the WSL-specific disconnected verdict without booting a distro for background calls.
     await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
       'The WSL host Ubuntu isn’t connected.'
     )
@@ -283,7 +283,7 @@ describe('WslHostService', () => {
     expect(service.hasUserVisibleWork('ubuntu')).toBe(true)
     await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
 
-    // Demand did not change, but a later call must still repair another lost server.
+    // Unchanged visible demand must still repair another later server loss.
     await service.ensureForRuntimeCall('wsl:ubuntu')
     expect(connector.connect).toHaveBeenCalledTimes(2)
 
@@ -398,7 +398,7 @@ describe('WslHostService', () => {
     expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
     expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
     expect(published.at(-1)).toMatchObject({ environmentId: 'wsl:ubuntu', state: 'closed' })
-    // Liveness must not relaunch for visible work while off.
+    // Disabled experiments cannot relaunch for visible work.
     expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
     service.setVisibleWork(['wsl:ubuntu'])
     expect(connector.connect).not.toHaveBeenCalled()
@@ -547,7 +547,7 @@ describe('WslHostService', () => {
       const service = makeService(connector)
       await expect(service.add({ distro: 'Ubuntu' })).resolves.toEqual({ ok: false, kind, message })
       expect(listEnvironments(userDataPath)).toEqual([])
-      // Nothing persisted could find this connection or holder later, so the add releases both.
+      // Unpersisted Adds own cleanup; later service operations cannot find their connection/holder.
       expect(connector.disconnect).toHaveBeenCalledExactlyOnceWith('Ubuntu')
       expect(connector.releaseHolder).toHaveBeenCalledExactlyOnceWith('Ubuntu')
       expect(ready).not.toHaveBeenCalled()
@@ -596,7 +596,6 @@ describe('WslHostService', () => {
     await expect(first).resolves.toEqual({ ok: true, environmentId: 'wsl:ubuntu' })
     expect(connector.listDistros).toHaveBeenCalledTimes(1)
     expect(connector.connect).toHaveBeenCalledTimes(1)
-    // Settled: the next add runs again and finds the host already added.
     await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({ ok: false })
     expect(connector.listDistros).toHaveBeenCalledTimes(2)
   })
@@ -612,7 +611,7 @@ describe('WslHostService', () => {
       order.push(`key:${distro}`)
       return null
     })
-    // A deferral on the new connection proves the published status was built from it.
+    // A new-connection deferral proves status was republished from that connection.
     const deferredUpdate = {
       candidateVersion: '2.0.0+ff',
       code: 'orcad_update_terminals_running',

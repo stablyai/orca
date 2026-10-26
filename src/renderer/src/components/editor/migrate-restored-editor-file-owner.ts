@@ -50,7 +50,7 @@ export async function migrateRestoredEditorFileOwner(
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(fileId, false)
     throw error
   }
-  // Switch point: main moves only the tabs it drew; one it has yet to draw would keep the old id.
+  // Wait for pending opens so main rekeys every tab instead of leaving undrawn tabs on the old ID.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await pendingTabsOfFileAnswered(source.worktreeId, fileId)
   }
@@ -80,7 +80,7 @@ export async function migrateRestoredEditorFileOwner(
     targetRuntimeEnvironmentId: runtimeEnvironmentId,
     targetOperationProvenance
   })
-  // Switch point: the move is main's; its frame moves the file, or main refused it.
+  // A successful main-owned move must arrive in its frame before callers use the rekeyed file.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && result.ok && !(await contentRekeyOutcome([result.fileId]))) {
     return { ok: false, reason: 'owner-changed' }
   }

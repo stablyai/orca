@@ -20,8 +20,7 @@ export function useTroubleshootDiagnostics() {
     if (node !== null) {
       return
     }
-    // Why: diagnostics can outlive the screen; cancel the active run when the
-    // route detaches without a passive cleanup-only Effect.
+    // Cancel diagnostics when the route detaches; a run can outlive the screen.
     abortRef.current = true
     diagnosticRunRef.current += 1
     activeInternetCheckRef.current?.dispose()

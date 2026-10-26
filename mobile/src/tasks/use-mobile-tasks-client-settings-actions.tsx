@@ -62,8 +62,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     taskUiReady,
     trustedOrcaHooks
   } = model
-  // Why: task-loading effects use this as a stale-client guard, so the ref
-  // must be current before those passive effects can run after commit.
+  // Commit stale-client guards before task-loading passive effects run.
   const resetGitHubItemsState = useCallback(() => {
     setGithubRepoSources({})
     setGithubPages([])
@@ -73,9 +72,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setGithubSourceFallbacks([])
   }, [])
 
-  // Why: Expo reuses this screen for the next host, so an effect reset runs a
-  // render too late and the previous host's rows show under the new one. The
-  // repo list resets itself; these are the other client-scoped caches.
+  // Reset reused-screen caches during render; passive resets expose the previous host’s rows for a frame.
   const [boundClient, setBoundClient] = useState(client)
   if (boundClient !== client) {
     setBoundClient(client)
@@ -98,7 +95,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       const next = { ...taskResumeRef.current, ...updates }
       taskResumeRef.current = next
       void taskUiStateWrite.request(client, { taskResumeState: next }).catch(() => {
-        // Best-effort: desktop treats task resume as a convenience preference.
+        // Task resume persistence is best-effort; keep the current session usable.
       })
     },
     [client, taskUiReady]
@@ -135,7 +132,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
         return
       }
       void taskSettingsWrite.request(client, { defaultTaskSource: nextProvider }).catch(() => {
-        // Best-effort: a failed settings write should not block switching views.
+        // Failed preference persistence must not block a view switch.
       })
     },
     [client, taskUiReady]
@@ -149,7 +146,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
       void taskSettingsWrite.request(client, { defaultRepoSelection: nextSelection }).catch(() => {
-        // Best-effort: the in-memory repo picker already reflects the change.
+        // The local repo picker already reflects the choice.
       })
     },
     [client, taskUiReady]
@@ -162,7 +159,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
         return
       }
       void taskSettingsWrite.request(client, { defaultTaskViewPreset: preset }).catch(() => {
-        // Best-effort: the current session still uses the selected preset.
+        // The selected preset remains usable in this session.
       })
     },
     [client, taskUiReady]
@@ -175,7 +172,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
         return
       }
       void taskSettingsWrite.request(client, { githubProjects: nextSettings }).catch(() => {
-        // Best-effort: project selection can still work for the current session.
+        // Project selection remains usable in this session.
       })
     },
     [client, taskUiReady]

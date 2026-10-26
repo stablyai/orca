@@ -12,7 +12,6 @@ export type NativeChatReadSessionResult =
     }
   | { error: string; notFound?: true }
 
-/** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
 export type NativeChatSubscriptionFrame =
@@ -22,8 +21,7 @@ export type NativeChatSubscriptionFrame =
       hasMore: boolean
       error?: string
       lifecycle?: NativeChatTurnLifecycle
-      /** No transcript exists behind this window yet — render it, but do not
-       *  treat it as a settled read of the session's history. */
+      /** No transcript yet; do not treat this frame as settled session history. */
       pending?: boolean
     }
   | {
@@ -38,15 +36,13 @@ export type NativeChatSubscriptionFrame =
       lifecycle?: NativeChatTurnLifecycle
     }
 
-/** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {
   subscriptionId: string
   frame: NativeChatSubscriptionFrame
 }
 
 export type NativeChatSubscribeArgs = {
-  /** Unique per-caller id, echoed on every append so multiple live panes in
-   *  one renderer don't cross-talk. */
+  /** Unique per caller to isolate live panes sharing a renderer. */
   subscriptionId: string
   agent: AgentType
   sessionId: string
@@ -57,16 +53,14 @@ export type NativeChatSubscribeArgs = {
 }
 
 export type NativeChatApi = {
-  /** Read the on-disk transcript for an agent + session id, windowed to the most recent `limit`
-   *  turns. `transcriptPath` is the hook-reported authoritative path, preferred over the id glob. */
+  /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */
   readSession: (
     agent: AgentType,
     sessionId: string,
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
-  /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
-   *  later frames contain only newly appended messages. */
+  /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,
     onFrame: (frame: NativeChatSubscriptionFrame) => void

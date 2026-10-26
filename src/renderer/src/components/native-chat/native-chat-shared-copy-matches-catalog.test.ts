@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en.json'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat-tool-activity'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import {
   NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   NATIVE_CHAT_TURN_STATUS_COPY
@@ -9,16 +9,12 @@ import {
   NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY,
   NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY,
   NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS
-} from '../../../../shared/native-chat-tool-run-sentence'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat-tool-line-label'
-import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat-edit-cards'
+} from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
+import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
+import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat-task-list'
 
-// The shared copy is desktop's i18n fallback and mobile's actual rendered string.
-// If the two drift, desktop keeps showing en.json while mobile shows the constant —
-// silently, since neither side errors. These are the exact keys that made these
-// strings runtime-required (i18next can no longer rebuild them from a literal
-// call-site default), so they must stay byte-identical to the catalog.
+// Shared mobile copy and desktop catalog fallbacks must match byte-for-byte to prevent silent platform drift.
 const catalog = en as unknown as {
   components: {
     'native-chat': {
@@ -50,9 +46,7 @@ describe('native-chat shared copy matches the English catalog', () => {
     }
   )
 
-  // The run sentence is spelled out as literals at its call sites so the
-  // extractor can see them, and mobile renders the record instead. These are the
-  // pairs that would drift silently.
+  // Desktop extraction needs literal call-site sentences; mobile renders this record, so check parity.
   it.each([
     ['runReadOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.read.one],
     ['runReadMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.read.many],
@@ -66,6 +60,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runFileChangeMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.fileChange.many],
     ['runWebSearchOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.webSearch.one],
     ['runWebSearchMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.webSearch.many],
+    ['runBrowserOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.browser.one],
+    ['runBrowserMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.browser.many],
     ['runIntegrationOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.mcpToolCall.one],
     ['runIntegrationMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.mcpToolCall.many],
     ['runAgentOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.subAgentActivity.one],
@@ -93,6 +89,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runLiveFileChangeMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.fileChange.many],
     ['runLiveWebSearchOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.webSearch.one],
     ['runLiveWebSearchMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.webSearch.many],
+    ['runLiveBrowserOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.browser.one],
+    ['runLiveBrowserMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.browser.many],
     ['runLiveIntegrationOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.mcpToolCall.one],
     ['runLiveIntegrationMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.mcpToolCall.many],
     ['runLiveAgentOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.subAgentActivity.one],

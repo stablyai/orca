@@ -128,7 +128,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     expect(json(done).result).not.toHaveProperty('lifecycle.action', 'rejected')
     expect(done.exitCode).toBe(0)
     expect(db.getTask(ids.taskId)?.status).toBe('completed')
-    // The verified identity lives only as long as the call.
     expect(runtime.getTerminalProcessIncarnation(WORKER)).toBeNull()
     expect(runtime.getTerminalPaneKey(WORKER)).toBeNull()
   })

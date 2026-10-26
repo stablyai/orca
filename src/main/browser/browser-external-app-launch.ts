@@ -7,8 +7,7 @@ import {
   type BrowserPagePromptTarget
 } from './browser-page-prompts'
 
-// Web and browser-internal schemes, plus Chrome's denied list (kDeniedSchemes): handlers that run
-// scripts, open shell folders or mount shares. Every other scheme belongs to an app on the computer.
+// Deny web/internal schemes and Chrome's kDeniedSchemes (scripts, shell folders, shares).
 const NEVER_EXTERNAL_APP_PROTOCOLS: ReadonlySet<string> = new Set([
   'about:',
   'afp:',
@@ -48,7 +47,7 @@ export function toBrowserExternalAppUrl(rawUrl: string | undefined): URL | null 
 }
 
 function externalAppName(url: string): string | null {
-  // Why: Linux reports a .desktop file id, not a name people recognise.
+  // Linux returns a .desktop file ID rather than a display name.
   if (process.platform === 'linux') {
     return null
   }
@@ -59,12 +58,10 @@ function externalAppName(url: string): string | null {
   }
 }
 
-/** URL of the frame that started a navigation, or null when Electron cannot say. */
 export function initiatingFrameUrl(frame: Electron.WebFrameMain | null | undefined): string | null {
   try {
     return frame && !frame.isDestroyed() ? frame.url : null
   } catch {
-    // A disposed frame throws on access.
     return null
   }
 }
@@ -79,17 +76,12 @@ async function launchExternalApp(url: string): Promise<'failed' | undefined> {
   }
 }
 
-/**
- * Asks the window showing the page whether to open the link in its app; Orca launches it only on
- * a yes. Returns false when refused without asking: a web scheme, or no window on this machine (a
- * page streamed from a server must never launch apps on that server).
- */
+/** Require a local window prompt so remote pages cannot launch apps on the server. */
 export function requestBrowserExternalAppLaunch(args: {
-  /** The page or popup contents that asked. */
   requester: Electron.WebContents
   target: BrowserPagePromptTarget | null
   rawUrl: string | undefined
-  /** URL of the frame that asked; null shows the prompt without naming a site. */
+  /** Null omits the site from the prompt. */
   requestingUrl: () => string | null
 }): boolean {
   const url = toBrowserExternalAppUrl(args.rawUrl)
@@ -108,6 +100,6 @@ export function requestBrowserExternalAppLaunch(args: {
     parseAnswer: (value) => (value === true ? true : undefined),
     settle: (open) => (open ? launchExternalApp(url.href) : undefined)
   })
-  // Why: a quiet or busy page still must not reach the link, so the caller keeps blocking it.
+  // Keep blocking the link even when a quiet or busy page suppresses the prompt.
   return opening !== 'no-window'
 }

@@ -147,7 +147,6 @@ describe('workspace cleanup execution-host routing', () => {
     expect(listRepoWorktreesMock).not.toHaveBeenCalled()
     expect(getStatusMock).not.toHaveBeenCalled()
     expect(result.candidates).toEqual([])
-    // Broad scans omit hosts they cannot inspect rather than bannering them.
     expect(result.errors).toEqual([])
   })
 
@@ -159,7 +158,7 @@ describe('workspace cleanup execution-host routing', () => {
 
     const result = await scanWorkspaceCleanup(store)
 
-    // The runtime row's nested target lives in env-a's namespace, never this client's.
+    // Nested runtime targets belong to the environment namespace, not this client's SSH registry.
     expect(listRepoWorktreesMock).not.toHaveBeenCalled()
     expect(result.candidates).toEqual([])
   })
@@ -190,8 +189,7 @@ describe('workspace cleanup execution-host routing', () => {
   })
 
   it('refuses git evidence when the workspace names a different host than the listing', async () => {
-    // One local row owns the id, but its persisted metadata claims an SSH host. Reading this
-    // machine's checkout and labelling the row `ssh:alpha` is the cross-host leak.
+    // Metadata ownership can disagree with the listing; local reads must not be labeled as SSH evidence.
     const store = makeStore([makeRepo({ path: '/local/repo' })], {
       [`${REPO_ID}::${WORKTREE_PATH}`]: makeMeta({ hostId: 'ssh:alpha' })
     })

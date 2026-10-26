@@ -179,7 +179,6 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     callbacks.current!.onResponse(readyResponse({ pageReconciliationProtocolVersion: 1 }))
     await starting
 
-    // Why: a host that negotiated reconciliation must never issue a command that omits it.
     callbacks.current!.onResponse({
       id: 'browser-host',
       ok: true,

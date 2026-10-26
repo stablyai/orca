@@ -1,9 +1,3 @@
-// The session's open turn, and the lifecycle row that publishes it.
-//
-// Sole owner of turn identity: the row this writes carries the same id it holds,
-// and that row's id is what a client's Stop names. Readers ask here rather than
-// keeping a copy, so there is nothing to disagree with.
-
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
@@ -31,23 +25,16 @@ export type ClaudeOpenTurnDeps = {
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
   endOpenWork: (completedAt: number) => void
-  /** A turn opening moves the conversation on. */
   onOpen?: () => void
 }
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
   usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
-  /** Provider output may not reopen a turn after the session ended or a turn
-   *  failed: nothing would ever close the turn it opened, and the row would read
-   *  working for the life of the session. Only an accepted send lifts it. */
+  /** Block late output from reopening ended or failed turns until an accepted send arrives. */
   private reopenSuppressed = false
-  /** Whether the provider's current request cycle has done root work — a send
-   *  echo or model output — since its init. Output can open a turn ahead of its
-   *  cycle's init (a background task finishing), so membership is read from the
-   *  cycle's work, not from when the turn opened. */
+  /** Track root work since cycle init; background output may open a turn before that init. */
   private cycleWorkObserved = false
-  /** The frame being journaled says which send the CLI is running, if any. */
   private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
@@ -73,18 +60,15 @@ export class ClaudeOpenTurn {
     return this.current?.turnId ?? null
   }
 
-  /** The open turn's row, where a fact about the running turn lands. */
   get identity(): AgentJournalItemIdentity | null {
     return this.current ? claudeCurrentTurnIdentity(this.current) : null
   }
 
-  /** The conversation command the open turn is, if it is one. */
   get command(): ClaudeCommandTurn | null {
     return this.current?.command ?? null
   }
 
-  /** Which turn a row written now belongs to: the open one, or none. A subagent's rows too —
-   *  its work is its parent turn's. */
+  /** Child rows share their parent turn's scope. */
   get turnScope(): AgentJournalTurnScope {
     const identity = this.identity
     return identity
@@ -92,7 +76,6 @@ export class ClaudeOpenTurn {
       : AGENT_JOURNAL_THREAD_SCOPE
   }
 
-  /** When the open turn started, or null when none is open. */
   get startedAt(): number | null {
     return this.current?.startedAt ?? null
   }
@@ -101,32 +84,25 @@ export class ClaudeOpenTurn {
     return this.current !== null
   }
 
-  /** Whether a turn is open inside a provider request cycle that has already
-   *  done work — the state in which the CLI folds an arriving send into it. A
-   *  cycle's first send is its opener, never a fold. */
+  /** An open cycle with prior root work can fold a send; its first send remains the opener. */
   get openedInLiveProviderCycle(): boolean {
     return this.current !== null && this.cycleWorkObserved
   }
 
-  /** Set per provider frame, so it never outlives the frame that carried it. */
+  /** Reset per frame so send ownership cannot leak into later frames. */
   observeStartedSend(send: ClaudeStartedSend | null): void {
     this.startedSend = send
   }
 
-  /** A root init frame: the CLI is starting a new request cycle. */
   observeProviderCycleStart(): void {
     this.cycleWorkObserved = false
   }
 
-  /** A root send echo or model output inside the current request cycle. */
   observeProviderCycleWork(): void {
     this.cycleWorkObserved = true
   }
 
-  /** Open a turn, ending whichever one was still open. A new turn starting is the
-   *  only end the previous one gets when its result never arrives; settling it
-   *  later would sweep THIS turn. The replaced turn is recorded superseded: a newer
-   *  request ended it, whoever sent that request. */
+  /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
@@ -144,8 +120,7 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
   }
 
-  /** A conversation command the host opened a turn for. Its row is the host's, already written,
-   *  so only an end is published; the command's result is what ends it. */
+  /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
@@ -162,7 +137,6 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
   }
 
-  /** Orca asked the provider to stop the command `turnId` names. */
   commandInterruptRequested(turnId: string): void {
     if (this.current?.command && this.current.turnId === turnId) {
       this.current.command.interruptRequested = true
@@ -177,9 +151,7 @@ export class ClaudeOpenTurn {
     }
   }
 
-  /** The provider produced, so a turn is running. Idempotent: every frame of one
-   *  reply stays inside the turn its first frame opened. A subagent's output is
-   *  its parent turn's work and never a turn of its own. */
+  /** Open once for root output; child work stays inside its parent turn. */
   ensureOpen(
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -188,18 +160,16 @@ export class ClaudeOpenTurn {
     this.opener(frame, source, observedAt)
   }
 
-  /** End the open turn, if one is open, and clear the live activity line. The
-   *  context facts the end brings ride the same revision. */
+  /** Settle activity and context facts in the same turn revision. */
   settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
     const quotaEnd =
       this.current !== null &&
       end.outcome === undefined &&
       this.usageLimitEvidence?.cause === 'quota'
     this.suppressReopenOnFailure(quotaEnd)
-    // Every settle is a provider cycle ending (result, idle, child exit).
     this.cycleWorkObserved = false
     this.usageLimitEvidence = null
-    // Even with no turn open: work a suppressed turn produced still ends here.
+    // End suppressed work even when no turn is open.
     this.deps.endOpenWork(end.completedAt)
     if (this.current) {
       this.publish(this.current, end, contextUsage, quotaEnd)
@@ -208,7 +178,6 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
   }
 
-  /** An accepted send is the only thing that lifts the latch. */
   allowReopen(): void {
     this.reopenSuppressed = false
   }
@@ -217,14 +186,11 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed = true
   }
 
-  /** A turn that failed is not resumed by whatever the provider says next; the
-   *  next send is what resumes it. The latch only ever sets here. */
+  /** Keep failure suppression latched until a new accepted send. */
   suppressReopenOnFailure(failed: boolean): void {
     this.reopenSuppressed ||= failed
   }
 
-  /** Deliberately root: a turn is the SESSION'S unit of work, and this lane only
-   *  ever opens turns for the session's own agent. A child runs inside one. */
   private publish(
     turn: ClaudeCurrentTurn,
     end?: ClaudeTurnEnd,
@@ -238,9 +204,9 @@ export class ClaudeOpenTurn {
     }
     writeAgentJournalTurnRow(this.deps.sink, { identity: item.identity }, write, {
       publish: false,
-      options: item.options
+      options: { ...item.options, lifecycle: true }
     })
-    // Keyed apart, so this never replaces the start's publication while it still waits to run.
-    this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
+    // Separate keys preserve a queued start publication when the end arrives.
+    this.deps.sink.publish({ criticalRoot: true, coalescingKey: item.publishCoalescingKey })
   }
 }

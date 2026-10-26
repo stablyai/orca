@@ -13,7 +13,7 @@ import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-
 import { translate } from '@/i18n/i18n'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
-// Both set: an SSH host the paired server owns, listed by that server.
+// Both IDs select an SSH host owned and listed by the paired server.
 type RemoteFileBrowserProps = (
   | { targetId: string; runtimeEnvironmentId?: string }
   | { runtimeEnvironmentId: string; targetId?: never }
@@ -81,7 +81,7 @@ export function RemoteFileBrowser({
       if (node !== null) {
         return
       }
-      // Why: browse generations and timers are scoped to this picker owner; clear them when it detaches.
+      // Cancel owner-scoped browse generations/timers when this picker detaches.
       invalidateBrowseRequests()
       cancelPreviewWork()
       for (const timerRef of [fileHintTimerRef, clickTimerRef]) {
@@ -107,7 +107,7 @@ export function RemoteFileBrowser({
         setResolvedPath(result.resolvedPath)
         setEntries(result.entries)
         setPathFlavor(result.pathFlavor)
-        // Only bare `~` yields the home dir itself; `~/sub` resolves elsewhere and must not overwrite the home anchor.
+        // Only bare ~ resolves the home anchor; ~/sub must not replace it.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
         }
@@ -126,7 +126,7 @@ export function RemoteFileBrowser({
     [fetchListing, homePathRef]
   )
 
-  // Central nav clears filter/preview/hint and bumps previewGenRef so a stale in-flight preview won't clobber committed state.
+  // Invalidate preview generations on navigation so stale reads cannot overwrite committed state.
   const navigate = useCallback(
     (dirPath: string) => {
       setFilter('')
@@ -168,17 +168,16 @@ export function RemoteFileBrowser({
     }, FILE_HINT_MS)
   }, [])
 
-  // Select always returns the committed directory; disabled during a path preview to avoid a mismatched selection.
   const handleSelect = useCallback(() => {
     onSelect(resolvedPath)
   }, [resolvedPath, onSelect])
 
-  // When a preview is active, row clicks resolve relative to the preview path, not the committed resolvedPath.
+  // Preview rows resolve against their preview path rather than the committed directory.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
 
   const handleRowClick = useCallback(
     (entry: DirEntry) => {
-      // Stale rows from the prior listing may still show while a preview resolves; clicking them would navigate a mismatched path.
+      // Old rows can remain during preview resolution; ignore clicks until their parent path is known.
       if (preview?.loading) {
         return
       }
@@ -199,7 +198,6 @@ export function RemoteFileBrowser({
 
   const handleRowDoubleClick = useCallback(
     (entry: DirEntry) => {
-      // Same as handleRowClick: don't act on stale rows while the preview listing re-resolves.
       if (!entry.isDirectory || preview?.loading) {
         return
       }
@@ -231,7 +229,7 @@ export function RemoteFileBrowser({
   const isPreviewActive = preview !== null
   const showPreviewLoading = isPreviewActive && preview!.loading
 
-  // Disable Select during a non-empty path preview so the committed dir isn't silently selected under a different-looking list.
+  // Disable Select while previewing another path so visible and selected directories cannot disagree.
   const selectDisabled = loading || (isPreviewActive && filter !== '')
 
   return (
@@ -244,7 +242,6 @@ export function RemoteFileBrowser({
         navigateUp={navigateUp}
       />
 
-      {/* Filter input */}
       <div className="relative">
         <Search className="size-3.5 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         <ImeInput
@@ -295,7 +292,6 @@ export function RemoteFileBrowser({
         handleRowDoubleClick={handleRowDoubleClick}
       />
 
-      {/* Footer */}
       <p
         className="block text-[10px] text-muted-foreground truncate w-full"
         title={fileHint ? undefined : resolvedPath}

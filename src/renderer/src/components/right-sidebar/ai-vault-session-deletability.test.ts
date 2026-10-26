@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
 
-// translate() with no loaded catalog returns the English fallback, so these
-// assertions pin the English copy as well as the gate order.
+// Without a loaded catalog, translate() returns English; pin copy and gate ordering together.
 const NON_LOCAL = 'Only sessions on this device can be deleted.'
 const SYNTHETIC = "This session can't be deleted from Orca."
 

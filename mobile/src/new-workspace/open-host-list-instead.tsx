@@ -1,10 +1,7 @@
 import { useEffect } from 'react'
 import { useRouteHandoff } from '../navigation/route-handoff'
 
-/**
- * An overlay whose page cannot show (a blocked or older desktop, a failed load, no connection):
- * the host list opens full screen in its place, where that host's state is shown.
- */
+// Replace unavailable overlay pages with the full host list so its status/failure remains visible.
 export function OpenHostListInstead({ hostId }: { hostId: string }) {
   const router = useRouteHandoff()
   useEffect(() => {

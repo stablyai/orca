@@ -18,10 +18,9 @@ type StatusRow = {
   sessionBoundary?: boolean
 }
 
-/** A pane where idle is idle whatever painted it: a ready shell prompt satisfies tui-idle too. */
 function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boolean }) {
   let idle = initial.idle
-  // The real runtime may settle tui-idle once per idle edge: an already-idle shell only times out.
+  // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
   let tail = initial.tail
   let rows: StatusRow[] = []
@@ -168,7 +167,6 @@ describe('observing a run with agent evidence', () => {
 
   it('does not take the done of a run that finished while this one waited in its precheck', async () => {
     const startedAt = Date.now()
-    // Another run of the automation prompted the pane and finished after this run started.
     await vi.advanceTimersByTimeAsync(60_000)
     const pane = createPane({ idle: true, tail: ['other run summary', '❯'] })
     pane.report()
@@ -208,7 +206,6 @@ describe('observing a run with agent evidence', () => {
     await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS * 3)
     expect(run.settled).not.toHaveBeenCalled()
 
-    // Waited out only by the observation deadline, never read as completed.
     await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(
@@ -248,7 +245,6 @@ describe('observing a run with agent evidence', () => {
   })
 
   it('completes an agent that exited before the window once the window passes, not at a wait timeout', async () => {
-    // The stub ran, exited 0 and left an idle shell; no agent status, no new idle edge.
     const pane = createPane({ idle: true, tail: ['stub done', '$'], idleEdgeOnly: true })
     const run = observe(pane)
     await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS - 1_000)

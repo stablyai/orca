@@ -1,7 +1,15 @@
+import {
+  suppressSavedResumeLaunch,
+  captureSavedResumeCleanup,
+  chooseSavedResumeFreshLaunch,
+  type ResumeSpawnAdmission,
+  resumeSpawnRefusal,
+  SavedResumeFreshRefusal
+} from '../host-env/saved-resume-admission'
+import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ptyIncarnationById } from '../provider/ownership-state'
-import { tryGetProviderForPty } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import { noteWslDistrosRunning } from '../../../wsl-background-distro-gate'
 import {
@@ -15,13 +23,46 @@ import {
   excludeAbsentOwnerReplay,
   PaneOwnerContentionError
 } from '../pane/pane-spawn-operation'
-import { isProviderAgentSessionOwnerLive } from '../provider/liveness'
+import { isRegisteredAgentSessionOwnerLive } from '../provider/liveness'
 import { failPtySpawnExecute } from '../spawn-execute-failure'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
+  const captured: ResumeSpawnAdmission | null =
+    args.launchAgent && args.resumeProviderSession
+      ? {
+          verdict: 'admitted',
+          refused: { agent: args.launchAgent, providerSession: args.resumeProviderSession }
+        }
+      : null
+  if (args.resumeOrigin === 'saved') {
+    await captureSavedResumeCleanup(
+      ctx.deps.runtime,
+      ctx.deps.store,
+      ctx.spawnIdentityPaneKey,
+      captured,
+      args.worktreeId
+    )
+  }
+  const chooseFresh = async (): Promise<void> => {
+    ctx.spawnOptions.env = { ...ctx.spawnOptions.env }
+    ctx.resumeAdmission = await chooseSavedResumeFreshLaunch(
+      ctx.deps.runtime,
+      args,
+      ctx.expectedWslDistro,
+      ctx.spawnOptions
+    )
+    if (captured && ctx.resumeAdmission) {
+      ctx.resumeAdmission.refused = captured.refused
+      ctx.resumeAdmission.sourceRecord = captured.sourceRecord
+    }
+    if (resumeSpawnRefusal(ctx.resumeAdmission)) {
+      ctx.launchCommand = undefined
+      ctx.env = ctx.spawnOptions.env
+    }
+  }
   const runtime = ctx.deps.runtime
   const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
@@ -93,8 +134,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       }
     }
     if (args.agentSessionEnsure && !ctx.preAdoptedStablePane) {
-      // Why: daemon-backed claims can outlive this controller; import all
-      // proven owners before deciding that an identity is absent.
+      // Claims can outlive this controller; import authoritative owner listings before deciding absence.
       await reconcileAgentSessionOwnerListings()
       const recoveredOwner = agentSessionOwners.find(args.agentSessionEnsure.claim)
       if (recoveredOwner && ctx.pendingRegistrationPtyId !== recoveredOwner.ptyId) {
@@ -112,63 +152,97 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         ctx.pendingRegistrationPtyId = recoveredOwner.ptyId
       }
       let providerResult: PtySpawnResult | null = null
-      const ensured = await agentSessionOwners.ensure({
-        claim: args.agentSessionEnsure.claim,
-        surface: args.agentSessionEnsure.surface,
-        spawn: async () => {
-          assertClientStillConnected()
-          providerResult = await ctx.provider.spawn(ctx.spawnOptions)
-          ctx.rejectedRegistrationCandidate = providerResult
-          // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
-          ctx.reportPtySpawnCommitted()
-          assertSpawnReplyWasLive(providerResult)
-          ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
-            providerResult.id,
-            providerResult.incarnationId
-          )
-          if (providerResult.incarnationId) {
-            // Why: local providers cannot serialize controller claims, so liveness proof
-            // needs the exact incarnation before the registry promotes the new owner.
-            ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
+      let ensured: AgentSessionClaimedSpawnResult | undefined
+      try {
+        ensured = await agentSessionOwners.ensure({
+          claim: args.agentSessionEnsure.claim,
+          surface: args.agentSessionEnsure.surface,
+          spawn: async () => {
+            assertClientStillConnected()
+            await chooseFresh()
+            const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
+            if (refusal) {
+              throw new SavedResumeFreshRefusal(refusal)
+            }
+            providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+            ctx.rejectedRegistrationCandidate = providerResult
+            // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
+            ctx.reportPtySpawnCommitted()
+            assertSpawnReplyWasLive(providerResult)
+            ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
+              providerResult.id,
+              providerResult.incarnationId
+            )
+            if (providerResult.incarnationId) {
+              // Why: local providers cannot serialize controller claims, so liveness proof
+              // needs the exact incarnation before the registry promotes the new owner.
+              ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
+            }
+            const providerEnsure = providerResult.agentSessionEnsure
+            return {
+              ptyId: providerResult.id,
+              ...(providerEnsure
+                ? {
+                    owner: providerEnsure.owner,
+                    disposition: providerEnsure.disposition
+                  }
+                : {})
+            }
+          },
+          isLive: isRegisteredAgentSessionOwnerLive,
+          onJoin: () => {
+            awaitingAnotherStart = true
           }
-          const providerEnsure = providerResult.agentSessionEnsure
-          return {
-            ptyId: providerResult.id,
-            ...(providerEnsure
-              ? {
-                  owner: providerEnsure.owner,
-                  disposition: providerEnsure.disposition
-                }
-              : {})
-          }
-        },
-        isLive: async (owner) => {
-          const ownerProvider = tryGetProviderForPty(owner.ptyId)
-          if (!ownerProvider) {
-            // Why: an owner on a host this process cannot reach is unknown, never absent.
-            throw new Error('execution_owner_unavailable')
-          }
-          return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
-        },
-        onJoin: () => {
-          awaitingAnotherStart = true
+        })
+      } catch (error) {
+        if (!(error instanceof SavedResumeFreshRefusal)) {
+          throw error
         }
-      })
-      awaitingAnotherStart = false
-      ctx.result = providerResult ?? {
-        id: ensured.owner.ptyId,
-        isReattach: true,
-        // Why: adoption from an authoritative listing must preserve the
-        // incarnation proof used to reject a delayed exit from an older process.
-        incarnationId: ptyIncarnationById.get(ensured.owner.ptyId)
+        // The claim reservation rejected before spawn; this shell must never become its owner.
+        ctx.resumeAdmission = {
+          ...error.admission,
+          refused: captured?.refused ?? error.admission.refused,
+          sourceRecord: captured?.sourceRecord
+        }
+        suppressSavedResumeLaunch(args, ctx.spawnOptions)
+        ctx.launchCommand = undefined
+        ctx.env = ctx.spawnOptions.env
+        delete args.agentSessionEnsure
+        ctx.spawnOptions.agentSessionEnsure = undefined
+        providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+        ctx.reportPtySpawnCommitted()
+        ctx.stablePaneOwner = null
       }
-      ctx.result.agentSessionEnsure = ensured
+      awaitingAnotherStart = false
+      if (providerResult) {
+        ctx.result = providerResult
+      } else if (ensured) {
+        ctx.result = {
+          id: ensured.owner.ptyId,
+          isReattach: true,
+          // A listing's incarnation rejects delayed exits from an older process.
+          incarnationId: ptyIncarnationById.get(ensured.owner.ptyId)
+        }
+      } else {
+        throw new Error('agent_session_owner_missing')
+      }
+      if (ensured) {
+        ctx.result.agentSessionEnsure = ensured
+      }
     } else {
       assertClientStillConnected()
+      await chooseFresh()
       ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
       ctx.reportPtySpawnCommitted()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result
+    }
+    if (ctx.result.isReattach || ctx.result.agentSessionEnsure?.disposition === 'adopted') {
+      ctx.result.isReattach = true
+      ctx.resumeAdmission = null
+    }
+    if (ctx.result.isReattach) {
+      Object.assign(ctx.result, ctx.deps.runtime?.getTerminalLaunchResult?.(ctx.result.id))
     }
     ctx.rejectedRegistrationCandidate ??= ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
@@ -186,7 +260,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
     assertSpawnReplyWasLive(ctx.result)
-    // Why: admission precedes sequence/context state and every durable publication below.
+    // Admit registration before mutating sequence/context or publishing durable state.
     if (
       ctx.pendingRegistrationClaim &&
       !ctx.deps.runtime?.narrowPtyRegistration(
@@ -201,9 +275,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
-      // Why kept: this is the reattach boundary in the RENDERER's sequence
-      // domain, and the daemon snapshot's kitty flags mean nothing without
-      // the boundary they were proven at.
+      // Preserve the renderer-domain boundary needed to reconcile daemon snapshot kitty flags.
       ctx.reconciledSnapshotSeq =
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,

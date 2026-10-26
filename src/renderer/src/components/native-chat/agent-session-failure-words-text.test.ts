@@ -42,7 +42,8 @@ const NOTICE_PIECES: readonly AgentSessionFailureCopyId[] = [
   'waitForBackgroundTasks',
   'agentStarting',
   'waitForStart',
-  'agentStillWorking'
+  'agentStillWorking',
+  'waitForTurn'
 ]
 // Kana, and kanji whose simplified Chinese form differs (続 is 续, 読 is 读, ...).
 const JAPANESE_ONLY = /[\u3040-\u30ff続読変済図気帰戻検択転権単圧応対発処実証覧関専]/u
@@ -89,6 +90,34 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it.each(['Claude', 'Codex'])(
+    'names %s in terminal refusals on every failure surface',
+    (agentName) => {
+      for (const surface of ['row', 'rejection', 'answer'] as const) {
+        expect(
+          agentSessionFailureSentence(
+            { kind: 'conversationOpenInTerminal' },
+            surface,
+            { agentName },
+            sayAgentSessionFailureTranslated
+          )
+        ).toBe(
+          `${agentName} is already running this conversation in another terminal. Quit ${agentName} there or close that terminal to continue here.`
+        )
+      }
+      expect(
+        agentSessionFailureSentence(
+          { kind: 'conversationOpenElsewhere' },
+          'row',
+          { agentName: 'Codex' },
+          sayAgentSessionFailureTranslated
+        )
+      ).toBe(
+        'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.'
+      )
+    }
+  )
+
   it.each([
     ['en', 'Then send your message again.'],
     ['es', 'Después, envía tu mensaje de nuevo.'],

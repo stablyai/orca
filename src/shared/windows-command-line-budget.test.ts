@@ -25,8 +25,7 @@ describe('windows command line budget', () => {
     }
   })
 
-  // Why: `arg.length` and the scan are both UTF-16 code units, so an astral char must
-  // not shift the index of an escape that follows it.
+  // Keep UTF-16 indexing aligned around astral characters and lone surrogates.
   it('counts escapes adjacent to astral characters and lone surrogates', () => {
     for (const args of [
       ['🦀\\'],
@@ -50,8 +49,7 @@ describe('windows command line budget', () => {
     }
   })
 
-  // Why: the estimator seeks escapes until they look dense, then hands the rest to a
-  // plain scan. Both sides of that switch, and the handover index, must agree.
+  // The sparse/dense escape-count handover must preserve totals and its continuation index.
   it('counts the same on either side of the dense-escape switch', () => {
     for (const args of [
       [`\\"${'x'.repeat(30000)}`],

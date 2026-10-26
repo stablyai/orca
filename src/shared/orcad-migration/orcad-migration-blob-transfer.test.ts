@@ -126,7 +126,7 @@ describe('orcad migration blob contract', () => {
       'orcad.migration-blob.terminal-restore-hints.v1',
       'orcad.migration-blob.shell-history.v1'
     ])
-    // A kind with no installer stays unadvertised, so no desktop sends it here.
+    // Uninstalled kinds stay unadvertised so clients never send them.
     expect(advertisedOrcadMigrationBlobCapabilities()).not.toContain(
       'orcad.migration-blob.agent-session-records.v1'
     )

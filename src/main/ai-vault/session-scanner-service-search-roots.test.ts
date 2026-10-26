@@ -47,7 +47,6 @@ function init(roots: SessionSearchScanRoots): AiVaultSessionSearchInit {
   }
 }
 
-/** OpenClaw reads `<stateDir>/agents/**` and keeps only paths through `sessions`. */
 function openclawTranscript(stateDir: string, name: string): string {
   return join(stateDir, 'agents', 'main', 'sessions', `${name}.jsonl`)
 }

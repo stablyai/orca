@@ -82,6 +82,7 @@ function attachClickedGuest(): WindowOpenHandler {
     id: 2200,
     session: guestSession,
     isDestroyed: vi.fn(() => false),
+    isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: vi.fn(),
     setWindowOpenHandler: guestSetWindowOpenHandlerMock,

@@ -53,9 +53,7 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('keeps the cross-host project header label when another project section renders', () => {
-    // Why: the project header must read the project's own display name, not the
-    // anchor checkout's repo name, however many sections are visible — toggling
-    // "Hide sleeping workspaces" must not rename a project (#16127).
+    // Filtering other sections must not replace a project’s display name with its anchor checkout’s name.
     const otherRepo: Repo = {
       ...repo,
       id: 'repo-other',
@@ -640,9 +638,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-runtime-b-feature',
       displayName: 'feature-runtime-b'
     }
-    // Why: a `provisioned` (recipe-created ephemeral) copy shares the project's
-    // remote identity but must not split the user's real checkout into two
-    // headers; it nests under the project. See #6320 / #5374.
+    // Provisioned copies share project identity and nest rather than split real checkouts into extra headers.
     const runtimeSetupB: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: runtimeRepoB.id,
@@ -691,10 +687,7 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('splits duplicate user checkouts while a provisioned copy nests, on one host', () => {
-    // Why: guards the intersection of #5374 (real same-host checkouts split) and
-    // #6320 (provisioned copies nest). Two legacy checkouts must each get their own
-    // header while a provisioned copy of the same project stays under the plain
-    // project header — all on one host surface, simultaneously.
+    // Exercise real-checkout splitting and provisioned-copy nesting together on one host.
     const localRepoB: Repo = {
       ...repo,
       id: 'repo-local-b',
@@ -774,9 +767,7 @@ describe('buildRows with pinned worktrees', () => {
       'project:github:stablyai/orca::setup:repo-1',
       'project:github:stablyai/orca::setup:repo-local-b'
     ])
-    // The provisioned copy nests under the plain project key with only its own
-    // worktree; it never gets a path-scoped `::setup:` header like the real
-    // checkouts do, and that header keeps the project's own display name.
+    // Only real checkouts receive setup-scoped headers; provisioned copies retain the project label.
     expect(
       headers.some((row) => row.key === 'project:github:stablyai/orca::setup:repo-runtime-b')
     ).toBe(false)

@@ -16,7 +16,6 @@ import { BrowserNewTabRow } from './browser-new-tab-row'
 import { BrowserNewTabServerRow } from './browser-new-tab-server-row'
 import type { BrowserNewTabServers } from './use-browser-new-tab-servers'
 
-/** This workspace's running servers and linked reviews and tasks, then servers elsewhere on its host. */
 export function BrowserNewTabWorkspaceCard({
   servers,
   linkedItems,
@@ -48,10 +47,10 @@ export function BrowserNewTabWorkspaceCard({
   return (
     <div className="flex flex-col gap-1.5">
       {own.length > 0 || linkedItems.length > 0 ? (
-        <div className="flex flex-col gap-px rounded-xl border border-border bg-card p-1">
+        <div className="flex flex-col gap-0.5 rounded-2xl border border-border bg-card p-1.5">
           {own.map((server) => serverRow(server, false))}
           {own.length > 0 && linkedItems.length > 0 ? (
-            <div className="mx-2 my-1 h-px bg-border" />
+            <div className="mx-3 my-1 h-px bg-border" />
           ) : null}
           {linkedItems.map((row) => (
             <LinkedItemRow key={row.key} row={row} onOpenUrl={onOpenUrl} />
@@ -135,26 +134,26 @@ function LinkedItemRow({
 function LinkedItemIcon({ row }: { row: WorkspaceLinkedItemRow }): React.JSX.Element {
   const { item, live } = row
   if (live) {
-    return <ReviewIcon review={live} className="size-4" />
+    return <ReviewIcon review={live} className="size-5" />
   }
   if (item.provider === 'linear') {
-    return <LinearIcon className="size-4 text-muted-foreground" />
+    return <LinearIcon className="size-5 text-muted-foreground" />
   }
   if (item.provider === 'jira') {
-    return <JiraIcon className="size-4 text-muted-foreground" />
+    return <JiraIcon className="size-5 text-muted-foreground" />
   }
   if (item.type === 'mr') {
-    return <GitMerge className="size-4 text-muted-foreground" />
+    return <GitMerge className="size-5 text-muted-foreground" />
   }
   if (item.type === 'pr') {
-    return <GitPullRequest className="size-4 text-muted-foreground" />
+    return <GitPullRequest className="size-5 text-muted-foreground" />
   }
   return (
     <CircleDot
       className={
         linkedIssueState(row) === 'open'
-          ? 'size-4 text-workspace-status-review/80'
-          : 'size-4 text-muted-foreground'
+          ? 'size-5 text-workspace-status-review/80'
+          : 'size-5 text-muted-foreground'
       }
     />
   )

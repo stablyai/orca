@@ -123,14 +123,16 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
     })
 
     const pending = ensureOrcaCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 700 })
-    await vi.waitFor(() => {
-      expect(toast.message).toHaveBeenCalledWith(CLI_PREREQUISITE_REGISTRATION_TOAST, {
-        description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION
-      })
+    await Promise.resolve()
+    expect(toast.message).toHaveBeenCalledWith(CLI_PREREQUISITE_REGISTRATION_TOAST, {
+      description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION
     })
     expect(install).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(700)
+    await vi.advanceTimersByTimeAsync(699)
+    expect(install).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
     await expect(pending).resolves.toBe(installed)
     expect(install).toHaveBeenCalledTimes(1)
   })

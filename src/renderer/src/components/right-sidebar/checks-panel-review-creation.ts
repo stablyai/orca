@@ -6,8 +6,7 @@ import type {
 import type { PRRefreshErrorType } from '../../../../shared/github/pull-request-refresh-types'
 import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
-// Single source of truth for the hard-refresh error set, shared with the
-// review-state model so the composer gate and empty-state selector cannot drift.
+// Share hard-error definitions so composer gating and empty-state copy cannot drift.
 import { HARD_REFRESH_ERROR_TYPES } from './checks-panel-review-state-model'
 
 export function resolveChecksPanelHostedReviewBaseRef(input: {
@@ -23,15 +22,7 @@ function normalizeChecksPanelHostedReviewBaseRef(ref: string | null | undefined)
   return normalizedRef || null
 }
 
-/**
- * Shared create-eligibility floor for the desktop confirmed gate and the
- * mobile-shared composer gate. Create / Push & Create is impossible when review
- * existence cannot be proven no-review: positive unresolved evidence, a current
- * hard refresh error, `existing_review`, or an `unavailable` existing-review
- * lookup all fail closed. Otherwise it allows the `canCreate` / `needs_push`
- * paths. Both callers route through this so their hard-block semantics cannot
- * drift; the desktop confirmed gate layers freshness/context checks on top.
- */
+/** Share desktop/mobile create blockers; unproven review absence fails closed, with desktop freshness checks layered on top. */
 export function isChecksPanelCreateEligibilityConfirmable(input: {
   eligibility: Pick<
     HostedReviewCreationEligibility,
@@ -47,21 +38,14 @@ export function isChecksPanelCreateEligibilityConfirmable(input: {
   if (input.reviewLookup === 'positive_unresolved' || input.hasHardRefreshError) {
     return false
   }
-  // An `unavailable` existing-review lookup could be hiding a real PR. Block even
-  // the Push & Create (needs_push) path, which would otherwise slip through the
-  // canCreate check below with review existence unproven.
+  // Unavailable lookup may hide a real review; block needs_push as well as plain Create.
   if (eligibility.reviewLookupOutcome === 'unavailable') {
     return false
   }
   return eligibility.canCreate === true || eligibility.blockedReason === 'needs_push'
 }
 
-/**
- * Confirmed-only composer gate shared with mobile. Delegates the hard-block
- * decision to {@link isChecksPanelCreateEligibilityConfirmable} so the desktop
- * confirmed gate and this mobile-shared gate cannot drift. Phase 1 adds no
- * provisional or draft-preserve path.
- */
+/** Open only a confirmed composer through the shared desktop/mobile hard-block gate. */
 export function shouldOpenChecksPanelCreateComposer(input: {
   activeReview: unknown
   isFolder: boolean
@@ -104,31 +88,16 @@ export type ChecksPanelConfirmedReadinessInput = {
   /** Wall-clock time the eligibility request that produced the result started. */
   eligibilityRequestStartedAt?: number
   reviewLookup: ChecksPanelReviewLookup
-  /**
-   * Observation time of the most recent hard refresh error for this context, or
-   * undefined when no hard error is current.
-   */
+  /** Latest hard-error observation for this context, if any. */
   hardErrorObservedAt?: number
-  /**
-   * Whether the Git snapshot used for the eligibility still matches current HEAD,
-   * branch, upstream/ahead/behind/dirty, base, and execution-host fields.
-   */
+  /** Whether HEAD/branch/upstream/ahead/behind/dirty/base/host still match the eligibility snapshot. */
   gitSnapshotMatches: boolean
   now: number
 }
 
 const NOT_CONFIRMED: ChecksPanelConfirmedReadiness = { confirmed: false, needsPush: false }
 
-/**
- * A hard error is cleared only by an eligibility request that started strictly
- * after the error was observed, completed for the same exact context with a
- * `found` / `not_found` lookup outcome, with no newer hard error since. A late
- * `unavailable` fallback or an already-in-flight request cannot clear it.
- *
- * Exported so the panel can keep the hard-error block sticky across
- * `queued` / `in-flight` auto-retries (which drop `status: 'error'` and would
- * otherwise let Create flap back) until this predicate says it is cleared.
- */
+/** Clear sticky errors only after a newer same-context request accepts found/not_found; in-flight retries cannot reenable Create. */
 export function isChecksPanelHardErrorCleared(input: ChecksPanelConfirmedReadinessInput): boolean {
   if (input.hardErrorObservedAt === undefined) {
     return true
@@ -144,11 +113,7 @@ export function isChecksPanelHardErrorCleared(input: ChecksPanelConfirmedReadine
   return outcome === 'found' || outcome === 'not_found'
 }
 
-/**
- * Confirmed readiness for the exact context. Any failed check drops confirmed
- * immediately; transient refresh failures never appear here (the caller only
- * passes a hard error observation, never a transient one).
- */
+/** Drop confirmation on any failed context/freshness check; callers pass only hard-error observations. */
 export function computeChecksPanelConfirmedReadiness(
   input: ChecksPanelConfirmedReadinessInput
 ): ChecksPanelConfirmedReadiness {
@@ -156,8 +121,7 @@ export function computeChecksPanelConfirmedReadiness(
   if (!input.contextKeyMatches) {
     return NOT_CONFIRMED
   }
-  // Share the hard-block floor with the mobile-shared gate; an uncleared hard
-  // error is folded in as the `hasHardRefreshError` input so the two cannot drift.
+  // Fold sticky errors into the shared mobile/desktop hard-block floor.
   if (
     !isChecksPanelCreateEligibilityConfirmable({
       eligibility,
@@ -167,7 +131,6 @@ export function computeChecksPanelConfirmedReadiness(
   ) {
     return NOT_CONFIRMED
   }
-  // Freshness: eligibility must be recent and its Git snapshot must still match.
   if (
     input.eligibilityCompletedAt === undefined ||
     input.now - input.eligibilityCompletedAt > CONFIRMED_ELIGIBILITY_MAX_AGE_MS ||
@@ -178,5 +141,4 @@ export function computeChecksPanelConfirmedReadiness(
   return { confirmed: true, needsPush: eligibility?.blockedReason === 'needs_push' }
 }
 
-// Re-exported for callers that need the blocker type alongside the gate.
 export type { HostedReviewCreationBlockedReason }

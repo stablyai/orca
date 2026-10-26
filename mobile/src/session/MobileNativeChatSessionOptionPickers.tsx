@@ -55,31 +55,23 @@ export type MobileNativeChatPickerPresentation = { page: string | null; refocus:
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
-  /** Pickers lock while the agent works — a mid-turn `/model` interleaves with
-   *  the agent's own output (desktop parity). */
+  // Mid-turn model commands would interleave with agent output.
   isWorking: boolean
-  /** A composer send owns the TUI input line until it settles. The host spaces a
-   *  send's body and its Enter ~500ms apart, so an apply dispatched inside that
-   *  window would be submitted as part of the user's prompt. The composer blocks
-   *  the reverse direction on `pendingId`; this is the same guard mirrored. */
+  // Block applies during composer send: the host’s body/Enter delay could submit the setting as prompt text.
   sendInFlight?: boolean
 }
 
 type PresentationProps = {
   presentation: MobileNativeChatPickerPresentation | null
   onNavigate: (page: string | null) => void
-  /** The pill opened the drawer; fires before the keyboard is dismissed. */
   onDrawerOpen: (page: string) => void
-  /** The drawer's sheet has fully left the screen, however it closed. */
   onDrawerAfterClose?: () => void
 }
 
-/** Full access reads in the warning colour wherever it is shown. */
 function permissionChoiceColor(value: string | undefined): string | undefined {
   return value === 'full-access' ? colors.statusAmber : undefined
 }
 
-/** Undefined for a mode a newer host states that this build has no icon for. */
 function permissionModeIcon(value: string): LucideIcon | undefined {
   if (!isAgentChatPermissionMode(value)) {
     return undefined
@@ -102,7 +94,6 @@ function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
     : undefined
 }
 
-/** One pill for the session's model and options; its sheet also holds the permission mode. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
@@ -150,35 +141,38 @@ export function MobileNativeChatSessionOptionPickers({
   const home = model ?? permission!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
-  // The permission mode applies from the next send, so a running turn never locks it.
+  // Permission mode affects the next send, so a working turn must not lock it.
   const locked = isWorking || busy
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
   const permissionChoice = selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
-  const fullAccess = permissionColor !== undefined
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
-  const primary = model ? mobileModelPillLabel(model) : (permissionChoice?.label ?? 'Permissions')
+  const primary = model
+    ? mobileModelPillLabel(model)
+    : permission
+      ? mobileSessionOptionSummaryValue(permission)
+      : 'Permissions'
   const secondary = model && options.length > 0 ? mobileOptionsPillLabel(options) : null
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
-    // Re-picking the tracked value is a no-op — never re-dispatch it.
+    // A permission report can match a new explicit pick while the saved intent is Own.
     if (
+      descriptor !== permission &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
     ) {
       return
     }
-    // A permission pick shows at once; its write may wait behind a starting agent.
+    // Close permission selection immediately because its write may wait behind agent startup.
     if (descriptor === permission) {
       onNavigate(descriptor === home ? null : home.id)
     }
     void controller.setOption(descriptor.id, value).then((applied) => {
-      // The sheet stays on its home page so the next setting is one tap away; a sub page returns.
       if (applied && descriptor !== home && descriptor !== permission) {
         onNavigate(home.id)
       }
@@ -197,14 +191,14 @@ export function MobileNativeChatSessionOptionPickers({
       <ModelPill
         primary={primary}
         secondary={secondary}
-        warning={fullAccess}
+        warning={permissionColor !== undefined}
         icon={permissionIcon}
         accessibleName={
           model
-            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${fullAccess ? ', full access' : ''}`
+            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${permissionColor ? ', full access' : ''}`
             : `Permissions, ${primary}`
         }
-        disabled={busy}
+        disabled={busy || (!model && permission?.settable === false)}
         onPress={() => {
           onDrawerOpen(home.id)
           Keyboard.dismiss()
@@ -291,7 +285,6 @@ export function MobileNativeChatSessionOptionPickers({
   )
 }
 
-/** The model page's other settings: a switch where one value flips, else a row to its page. */
 function OptionRows({
   descriptors,
   permission,
@@ -316,7 +309,7 @@ function OptionRows({
     <View style={[styles.group, styles.groupSpaced]}>
       {descriptors.map((descriptor, index) => {
         const isPermission = descriptor === permission
-        const disabled = isPermission ? busy : locked
+        const disabled = isPermission ? busy || !descriptor.settable : locked
         if (descriptor.kind.type === 'boolean' && !descriptor.action) {
           return (
             <View key={descriptor.id} style={index < descriptors.length - 1 && styles.divided}>

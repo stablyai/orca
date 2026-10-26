@@ -1,6 +1,3 @@
-// How a `dispatch` row settles its submission. Field by field, so a key the row gains must be
-// copied here to reach any reader.
-
 import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
@@ -22,14 +19,14 @@ export function applyJournalDispatchRow(
   row: Extract<JournalRow, { kind: 'dispatch' }>
 ): void {
   const submission = state.submissions.get(row.clientMessageId)
-  // Shared with the queued-draft returned hook: a row ignored here must not alter a draft.
+  // Ignored dispatch rows must not change queue cards either.
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }
   submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
-  // Rows written before the write-side bound (#20654) carry the full text; bound them on read too.
+  // Bound legacy reasons written before the write-side limit (#20654).
   submission.reason =
     row.reason === null ? null : boundInlineText(row.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
   const rejection = row.state === 'rejected' ? readStoredRejectionFact(row.rejection) : undefined
@@ -78,8 +75,6 @@ export function applyJournalDispatchRow(
   })
 }
 
-/** A send is handed over once, so its one pending row names what it carries; a malformed id is
- *  dropped. */
 function foldStoppedHistoryCarried(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'dispatch' }>
@@ -92,8 +87,7 @@ function foldStoppedHistoryCarried(
   }
 }
 
-/** A stored answered turn. One malformed, or naming a way of joining this build does not know, is
- *  read as no turn: it was written knowing the field, so it is not an older row. */
+/** Malformed/unknown joins mean no answered turn, distinct from legacy rows lacking the field. */
 function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
   if (typeof value !== 'object' || value === null) {
     return null
@@ -105,9 +99,7 @@ function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
     : null
 }
 
-/** A stored rejection fact, read where it can be placed; a kind it cannot place is kept as
- *  written, so the classifier still knows a fact was there without this build claiming what it
- *  says. Shared with the queued-draft table, whose returned card mirrors its submission. */
+/** Preserve unknown rejection facts so newer typed evidence cannot be replaced by a guessed reason. */
 export function readStoredRejectionFact(value: unknown): UnreadAgentSessionFailureFact | undefined {
   return readAgentSessionFailureFact(value) ?? unreadFailureFact(value)
 }

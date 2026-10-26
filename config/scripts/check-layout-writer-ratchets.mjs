@@ -13,14 +13,8 @@ import {
   totalCount
 } from './ratchet-baseline.mjs'
 
-// Two ratchets for writers of workspace tab layout, which is moving to one owner in the runtime.
-// Per-file counts may only go down. Deleted symbols are left to the compiler.
-// - Main: callers of the Store's layout setters, plus writes that edit saved session partitions
-//   directly (the Store-internal session writers included).
-// - Renderer: writes of the window's layout and per-view selection fields, including computed
-//   keys (counted at the string key) and spreads (counted where the spread object is built).
-//   Content updates of existing editor and browser entries are not membership and are not counted.
-//   Shorthand keys count only in an object handed to `set`/`setState` or a Store writer.
+// Ratchet layout writers downward: main Store/session-partition writes and renderer layout/selection keys/spreads.
+// Exclude existing-entry content updates; shorthand counts only in store writes, and deleted symbols stay compiler-owned.
 
 // Partition fields of the saved workspace session (census class 1).
 const SESSION_PARTITION_FIELDS = [
@@ -83,8 +77,7 @@ export const RATCHETS = [
     label: 'main-process layout writer(s)',
     scanRoot: 'src/main',
     baselinePath: 'config/main-layout-writer-baseline.txt',
-    // Store layout setters and the Store-internal helpers that edit partitions (census class 1
-    // entry points). Every call, and every method value (`store.setWorkspaceSession.bind`), counts.
+    // Count Store layout setter calls and method values, including internal partition writers.
     writerNames: new Set([
       'setWorkspaceSession',
       'patchWorkspaceSession',
@@ -140,8 +133,7 @@ export const RATCHETS = [
     writerNames: new Set(),
     assignedFields: RENDERER_LAYOUT_FIELDS,
     keyedFields: RENDERER_LAYOUT_FIELDS,
-    // Entries here also carry content (drafts, git status, URL). A `.map(…)` over the existing
-    // list keeps membership and order, so it is a content update and is not counted.
+    // Mapping existing entries preserves membership/order; treat draft/status/URL edits as content only.
     entryContentFields: new Set(['openFiles', 'browserTabsByWorktree']),
     // The three writers the plan allows: applyFromRuntime, the frozen mirror's store patch and
     // the frozen setters for remote-server workspaces.

@@ -4,16 +4,12 @@ import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type { AgentModelCatalogConfiguredChoice } from './agent-model-catalog-entry'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
-/** What a workspace changes about a catalog read: its folder's own catalog, and its default. */
 export type AgentModelCatalogWorkspaceDeps = {
   store: AgentModelCatalogStore
-  /** Agents that list in the asking chat's folder, whose project config can change their models:
-   *  each folder keeps its own catalog, and a prewarm, which names none, skips them. */
+  /** Project-scoped catalogs require a folder and cannot be prewarmed. */
   listsInChatFolder?: ReadonlySet<string>
-  /** Where a session's provider runs, for deciding whether its own config scope is the account's. */
   recordWorkspacePath?: (record: AgentSessionRecord) => Promise<string | null>
-  /** Whether the workspace's own config could pick a model other than the listed default;
-   *  `accountHomePath` is the agent's own home folder, which is account config, not a layer. */
+  /** Account-home config is already covered by discovery; only workspace layers can override it. */
   workspaceMayOverrideDefaultModel?: (input: {
     agent: string
     workspacePath: string
@@ -21,7 +17,6 @@ export type AgentModelCatalogWorkspaceDeps = {
   }) => Promise<boolean>
 }
 
-/** A named workspace keeps the listed default only when none of its own config can replace it. */
 export async function workspaceKeepsListedDefault(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
@@ -41,8 +36,7 @@ export async function workspaceKeepsListedDefault(
   }
 }
 
-/** The local folder a session's agent runs in; null where this host cannot look into it, as a new
- *  chat's own read answers. */
+/** null means the host cannot inspect this session's workspace. */
 export async function sessionWorkspacePath(
   deps: AgentModelCatalogWorkspaceDeps,
   record: AgentSessionRecord
@@ -53,8 +47,7 @@ export async function sessionWorkspacePath(
   return deps.recordWorkspacePath(record).catch(() => null)
 }
 
-/** The folder whose catalog a read of `agent` answers from, for an agent whose models differ by
- *  folder: the workspace the read names, else its session's. Undefined keys the account's. */
+/** Prefer the named workspace, then the session folder; undefined uses account scope. */
 export async function catalogFolder(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
@@ -71,9 +64,7 @@ export async function catalogFolder(
   return folder ?? undefined
 }
 
-/** A session launched with no model pick resolved its config scope's default model and effort;
- *  when that scope is the account's (a native workspace with no config of its own), they are the
- *  account's default, and a resolution naming no listed model retires the saved one. */
+/** Learn account defaults only without workspace overrides; null resolution retires stale facts. */
 export async function recordConfiguredDefault(
   deps: AgentModelCatalogWorkspaceDeps,
   record: AgentSessionRecord,

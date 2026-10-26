@@ -25,7 +25,7 @@ import {
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalGitOptionsForRepo,
@@ -72,8 +72,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       try {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        // Why: one registered-worktree lookup feeds both — status polls this
-        // handler, and the scan walks every repo's worktree meta.
+        // Reuse one registered-worktree lookup for frequent status polls and repo metadata reads.
         const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
         const gitOptions = getLocalGitOptionsForRepo(store, repo)
         const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
@@ -98,7 +97,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       applyGitStatusUpstreamRefWatchRequest(store, args)
   )
 
-  // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
+  // Parent status exposes only gitlinks; read inner changes from each submodule worktree.
   ipcMain.handle(
     'git:submoduleStatus',
     async (
@@ -142,7 +141,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  // Why: backs the SCM "ignore the flooding folder" flow; local-only since huge untracked folders are a local-dev pathology.
   ipcMain.handle(
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> => {
@@ -182,7 +180,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  // Why: fs-only conflict-state check so non-active worktrees can clear their Rebasing/Merging badges without a full git status.
+  // Filesystem probes clear inactive-worktree conflict badges without a full Git status.
   ipcMain.handle(
     'git:conflictOperation',
     async (

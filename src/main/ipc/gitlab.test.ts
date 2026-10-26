@@ -233,8 +233,7 @@ describe('GitLab IPC handlers', () => {
       query: 'fix login'
     })
 
-    // Why (#6263): the trimmed query must land in the 6th positional arg —
-    // previously the slot was hardcoded to `undefined`, so search never worked.
+    // Preserve the query's sixth argument slot; omitting it silently disables search (#6263).
     expect(listMergeRequestsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
@@ -696,8 +695,7 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
-  // Regression for #7732: raw CI traces routinely exceed the 1 MB runtime transport
-  // frame cap, so the Checks panel opts into a main-side excerpt.
+  // Bound raw CI traces before they exceed the runtime frame cap (#7732).
   it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
     const noisyTrace = [
       'section_start:1699000000:build\r\u001b[0K$ pnpm build',

@@ -6,15 +6,12 @@ import type { WorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 
-// PR chip color by state, resolved through the shared prStateToken so it always
-// matches the PR sidebar's state badge: merged = purple, open = green, closed =
-// red, draft/unknown = muted.
+// Use shared prStateToken to match sidebar badge: merged purple, open green, closed red, draft/unknown muted.
 export function prStateColor(state: string): string {
   return statusColor(prStateToken(state))
 }
 
-// Presence glyphs in the desktop WorktreeCardMetaBadges order. Mobile shows presence only; the
-// full detail (title/state/labels) is a follow-up detail sheet.
+// Match desktop metadata order; mobile glyphs show presence, with full details reserved for sheet.
 export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
   if (!Object.values(presence).some(Boolean)) {
     return null

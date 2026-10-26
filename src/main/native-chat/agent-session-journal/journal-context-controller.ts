@@ -23,12 +23,8 @@ export class JournalContextController {
     return sequence > 0 ? { epoch: state.epoch, sequence } : null
   }
 
-  clear(
-    boundary: AgentSessionProviderContextBoundary,
-    receipt: JournalOperationReceipt,
-    settledByOp: string
-  ) {
-    return appendJournalContextClear({ ...this.deps, boundary, receipt, settledByOp })
+  clear(boundary: AgentSessionProviderContextBoundary, receipt: JournalOperationReceipt) {
+    return appendJournalContextClear({ ...this.deps, boundary, receipt })
   }
 
   rewind(

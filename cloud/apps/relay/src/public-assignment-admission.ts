@@ -47,9 +47,7 @@ export class RelayPublicAssignmentAdmission {
       waitMs?: number
       maxReservedConcurrent?: number
       reservedWaitMs?: number
-      // Drain returns borrow placement permits: their re-placement is placement
-      // work, serialized on the same store mutex, so it fits the pool budget the
-      // placement lane already has. Placement and reserved waiters go first.
+      // Drain-return placement shares the store mutex/pool budget, borrowing permits only after placement and reserved waiters.
       maxDrainReturnConcurrent?: number
       maxDrainReturnQueued?: number
       drainReturnWaitMs?: number

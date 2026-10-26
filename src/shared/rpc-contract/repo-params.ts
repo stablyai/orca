@@ -83,8 +83,7 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
-    // Why: blank group names fall back to the scanned folder basename; separate
-    // imports do not create a group but share the same renderer payload shape.
+    // Blank group names use the scanned folder basename; separate imports share the payload but create no group.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('separate')

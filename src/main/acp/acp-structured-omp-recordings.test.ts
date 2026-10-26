@@ -1,6 +1,3 @@
-// The adapter against OMP's recorded `omp acp` traffic (17.0.5): each recording plays back as the
-// agent, and the assertions read the journal a client would see.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -151,7 +148,7 @@ describe('OMP recordings through the adapter', () => {
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
     )
-    // OMP reports an exit code only when it is not zero; a completed foreground command exited 0.
+    // OMP omits zero exit codes for completed foreground commands.
     expect(await toolRow(rig)).toMatchObject({
       state: 'completed',
       exitCode: 0,
@@ -170,7 +167,7 @@ describe('OMP recordings through the adapter', () => {
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
     )
-    // OMP sends nothing more for the stopped command; Orca settles its row with the turn.
+    // OMP sends no final tool update after cancellation; settle it with the turn.
     const tool = await toolRow(rig)
     expect(tool).toMatchObject({
       endedAs: 'interrupted',

@@ -1,6 +1,3 @@
-/** `executeAgentLaunch`'s opt-in `signal`: an abort stops the launch at its next boundary, and the
- *  prompt keeps the outcome its bytes really had. */
-
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
@@ -10,14 +7,10 @@ const PROMPT = { text: 'fix the flaky test', delivery: 'submit' as const }
 
 function harness(options: {
   structured?: boolean
-  /** Runs while the workspace is being created. */
   duringCreate?: () => void
   duringModeSettle?: () => void
-  /** Runs during the structured create, which then refuses definitively. */
   duringStructuredRefusal?: () => void
-  /** Whether a terminal agent's typed line carried the prompt. */
   lineCarriesPrompt?: boolean
-  /** The create's startup terminal failed to spawn, so it returns none. */
   startupSpawnFails?: boolean
 }) {
   const calls: string[] = []
@@ -121,7 +114,6 @@ describe('agent launch cancellation', () => {
     const h = harness({ structured: true, duringCreate: () => controller.abort() })
 
     await expect(h.run(CREATE, controller.signal)).rejects.toThrow('request_aborted')
-    // The created workspace gets the recovery any failure before a surface gets.
     expect(h.calls).toEqual(['createWorktree', 'createRecoveryShell'])
   })
 
@@ -164,7 +156,6 @@ describe('agent launch cancellation', () => {
         h.run({ agent: 'claude', target, prompt: PROMPT }, controller.signal)
       ).rejects.toThrow('request_aborted')
       expect(h.createTerminalAgent).not.toHaveBeenCalled()
-      // A workspace this launch created still gets its recovery.
       expect(h.calls.includes('createRecoveryShell')).toBe(target.kind !== 'existing')
     }
   )

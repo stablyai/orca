@@ -15,8 +15,7 @@ const STREAMING_FIXTURE_PATH = path.join(
   process.cwd(),
   'tests/e2e/fixtures/streaming-scrollback-fixture.cjs'
 )
-// Past the scroll-intent settle window (80ms) so a phantom pin has had every
-// chance to latch before phase-2 output arrives.
+// Outlast the 80ms intent settle window so phantom pins can latch before phase-2 output.
 const INTENT_SETTLE_WAIT_MS = 250
 
 type ViewportProbe = {
@@ -156,8 +155,7 @@ async function dispatchPlainHomeKeydown(page: Page): Promise<void> {
       key: 'Home',
       code: 'Home'
     })
-    // Why: xterm's key evaluator reads the legacy keyCode, which KeyboardEvent
-    // constructors do not populate; without it no escape bytes reach the PTY.
+    // Set legacy keyCode explicitly: KeyboardEvent constructors omit the field xterm uses to emit escape bytes.
     Object.defineProperty(event, 'keyCode', { configurable: true, value: 36 })
     Object.defineProperty(event, 'which', { configurable: true, value: 36 })
     textarea.dispatchEvent(event)
@@ -242,8 +240,7 @@ test.describe('terminal scroll intent keeps following output', () => {
   }) => {
     const ptyId = await startStreamingFixturePhase1(orcaPage)
 
-    // A -2px delta is far below one cell height: xterm scrolls zero rows, but
-    // the intent listener still observes the trackpad-jitter-shaped wheel.
+    // Use -2px trackpad jitter: zero xterm rows, but still an observed intent event.
     await dispatchSubRowWheelUp(orcaPage)
     await orcaPage.waitForTimeout(INTENT_SETTLE_WAIT_MS)
 
@@ -303,8 +300,7 @@ test.describe('terminal scroll intent keeps following output', () => {
       })
       .toBeGreaterThan(2)
 
-    // Hold the xterm write call so typing deterministically lands between the
-    // old per-write intent capture and its completion-time enforcement from #8625.
+    // Hold write completion so typing falls between #8625’s old intent capture and completion-time enforcement.
     await injectQueuedWriteThenType(orcaPage, paneKey)
     await expect
       .poll(

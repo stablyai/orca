@@ -44,8 +44,7 @@ export class JsonlRpcResponseError extends Error {
   }
 }
 export type JsonlRpcPeerHandlers = {
-  /** Includes deferred prompt acknowledgements without an id. */
-  /** A dialect failure is fatal: continuing would discard session or tool lifecycle evidence. */
+  /** Includes id-less deferred prompt acknowledgements; dialect failures are fatal to preserve lifecycle evidence. */
   onRecord?: (record: JsonlRpcRecord) => void
   onClose?: (error: Error) => void
   onDiagnostic?: (message: string) => void

@@ -31,8 +31,7 @@ export function ManageSessionKillDialog({
         if (open) {
           return
         }
-        // Why: destructive terminal mutations should keep their progress
-        // dialog open until the daemon responds, matching other confirm flows.
+        // Keep destructive-operation progress open until the daemon responds.
         if (isBusy) {
           return
         }

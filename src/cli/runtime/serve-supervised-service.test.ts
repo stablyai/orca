@@ -19,6 +19,8 @@ import {
   type ServeSupervisorBrake
 } from './serve-supervisor-brake'
 import type { ServeInstallEvidence } from './serve-install-hold'
+import { resolveOrcadExitCode } from '../../main/orcad/orcad-exit-code'
+import { OrcadInstanceLockError } from '../../main/orcad/orcad-data-root-privacy'
 
 /** Virtual clock: timers fire in order as soon as the loop awaits them. */
 function harness(overrides: Partial<SupervisedServeOptions> & { userDataPath: string }) {
@@ -86,7 +88,6 @@ describe('superviseServeService', () => {
     const record = readServeSupervisorBrake(userDataPath)
     expect(record?.gaveUp?.reason).toContain('exited with code 1')
 
-    // A restart by the service manager must not start the loop again.
     let rerun = 0
     const again = harness({
       userDataPath,
@@ -214,6 +215,27 @@ describe('superviseServeService', () => {
     expect(runs).toBe(20)
     expect(readServeSupervisorBrake(userDataPath)).toBeNull()
     expect(Math.max(...h.sleeps)).toBe(60_000)
+  })
+
+  // #32177: a lock this machine cannot judge (a shared home) is a peer, not a fault to give up on.
+  it('waits on a lock holder it cannot judge, without giving up', async () => {
+    const holderUnverifiable = resolveOrcadExitCode(
+      new OrcadInstanceLockError('orcad_instance_lock_holder_unverifiable', 'shared home')
+    )
+    let runs = 0
+    const h = harness({
+      userDataPath,
+      runOnce: async () => {
+        runs++
+        if (runs === 10) {
+          h.stop()
+        }
+        return holderUnverifiable
+      }
+    })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(runs).toBe(10)
+    expect(readServeSupervisorBrake(userDataPath)).toBeNull()
   })
 
   it('counts a thrown child failure and keeps supervising', async () => {

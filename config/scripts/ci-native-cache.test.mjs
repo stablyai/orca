@@ -71,6 +71,7 @@ function resolveIdentity({
 
 describe('CI native cache ownership', () => {
   it('routes every configured native cache input to native preparation', () => {
+    expect(inputs.length).toBeGreaterThan(0)
     for (const file of inputs) {
       expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
     }
@@ -270,6 +271,11 @@ describe('CI native cache ownership', () => {
       try {
         const log = join(directory, 'commands')
         writeFileSync(log, '')
+        mkdirSync(join(directory, '.github/scripts'), { recursive: true })
+        writeFileSync(
+          join(directory, '.github/scripts/prepare-ubuntu-apt.sh'),
+          readFileSync('.github/scripts/prepare-ubuntu-apt.sh')
+        )
         const step = e2e.jobs.build.steps.find(
           (candidate) => candidate.name === 'Install native build tools'
         )
@@ -283,12 +289,14 @@ describe('CI native cache ownership', () => {
             `
             command() { [ "$TOOLS_PRESENT" = true ]; }
             sudo() { printf 'sudo %s\\n' "$*" >> "$COMMAND_LOG"; cat >/dev/null; }
+            export -f sudo
             timeout() {
               printf 'timeout %s\\n' "$*" >> "$COMMAND_LOG"
               if [ "$4" = "$FAIL_OPERATION" ]; then return 7; fi
             }
             ${step.run}`
           ],
+          cwd: directory,
           env: {
             ...process.env,
             TOOLS_PRESENT: present,

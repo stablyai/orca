@@ -1,5 +1,4 @@
-// A view's painted-restore ack releases the terminal service's in-memory copy. Layout-owner builds
-// release it only for the terminal main binds the named pane to now; no view, no ack.
+// Painted-restore ACK releases only the terminal currently bound to the named pane in main-owned layout.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
 

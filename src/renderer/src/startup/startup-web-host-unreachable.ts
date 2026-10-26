@@ -4,7 +4,7 @@ import { isWebClient } from '../components/sidebar/worktree-card-model'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 
 // Web transport messages the shared classifier doesn't list: the connection waiter's deadline and
@@ -27,11 +27,7 @@ function hasReadyTransport(snapshots: readonly RuntimeHostStatusSnapshot[]): boo
   return snapshots.some((snapshot) => snapshot.transport === 'ready' && !snapshot.retired)
 }
 
-/**
- * On the paired web client the host *is* the catalog, so a host that isn't answering at boot fails
- * hydration even though nothing was half-applied. Only a connection failure while the transport is
- * still down counts; a failure on a ready socket is a genuine hydration fault.
- */
+/** Web host supplies catalog, so down transport can fail otherwise untouched hydration. Ready-socket failures remain real hydration faults. */
 export async function isWebHostUnreachableAtStartup(error: unknown): Promise<boolean> {
   if (!isWebClient() || !isConnectionFailure(error)) {
     return false
@@ -44,10 +40,7 @@ export async function isWebHostUnreachableAtStartup(error: unknown): Promise<boo
   }
 }
 
-/**
- * Says the host could not be reached (not that the session failed) and reloads into a clean
- * hydration once the transport, which keeps reconnecting on its own, is ready again.
- */
+/** Report unreachable host and reload cleanly when its independently reconnecting transport becomes ready. */
 export function announceWebHostUnreachableAtStartup(signal: AbortSignal): void {
   const reload = (): void => {
     void window.api.app.relaunch()

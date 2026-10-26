@@ -78,12 +78,7 @@ async function readStdinWithinLimit(maxBytes: number): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-/**
- * Publishing is off by default, so denial is the common outcome. A tiny `settings.get` read
- * answers it before we load (or pipe in) up to the full RPC byte budget the host would reject.
- * Only an explicit `false` denies: a host predating the capability omits the field entirely,
- * and an unreachable host stays the publish RPC's problem, not the preflight's.
- */
+// Check before reading a large body; only explicit false denies, preserving older-host compatibility.
 async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
   let enabled: unknown
   try {

@@ -30,7 +30,6 @@ import type {
   HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
 
-/** Main's answer for a sleep it ran: every PTY stopped, or only `stoppedPtyIds` before it failed. */
 /** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
 export type HostTerminalStop =
   | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
@@ -209,6 +208,7 @@ export type TerminalActions = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -235,6 +235,7 @@ export type TerminalActions = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null

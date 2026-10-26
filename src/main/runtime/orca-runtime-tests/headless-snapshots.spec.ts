@@ -112,9 +112,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps pre-TUI shell scrollback when hydrating from a renderer on the alternate screen (#6106)', async () => {
-    // The real renderer serializer emits the normal buffer first and the `?1049h`
-    // alt frame after it; asking it to zero the scrollback while a TUI is up drops
-    // the shell history, not the TUI bytes. Model that contract here.
+    // Renderer serialization emits normal scrollback before alt-screen bytes; zeroing scrollback loses shell history.
     const serializeBuffer = vi.fn(async (_ptyId: string, opts?: { scrollbackRows?: number }) => {
       const suppressesScrollback =
         (opts as Record<string, unknown> | undefined)?.altScreenForcesZeroRows === true
@@ -212,7 +210,6 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
 
-    // No mobile connect ever happened; the query itself must activate+backfill.
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       true
     )
@@ -224,14 +221,11 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/backfilled-artifact.json'
 
-    // Path arrives while tracking is inactive (desktop-only phase).
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    // First mobile connect: backfill from the retained raw window.
     runtime.activateRecentPtyPathCandidateTracking()
-    // Scroll the raw 64KB window past the path with pathless output.
+    // Evict raw bytes so only backfilled candidates can authorize the path.
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
-    // Only the backfilled candidate tier can answer now.
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       true
     )
@@ -243,12 +237,10 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/a.json'
 
-    // Two chunks whose join would parse as one different candidate
-    // (/tmp/a.jsonsuffix.txt). The eager per-chunk extractor kept /tmp/a.json.
+    // Concatenation changes the candidate to /tmp/a.jsonsuffix.txt; eager per-chunk extraction kept /tmp/a.json.
     runtime.onPtyData('pty-1', `wrote ${artifactPath}`, 100)
     runtime.onPtyData('pty-1', 'suffix.txt', 150)
     runtime.activateRecentPtyPathCandidateTracking()
-    // Scroll the raw 64KB window so only the backfilled candidates can answer.
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
@@ -263,7 +255,6 @@ describe('OrcaRuntimeService', () => {
     const artifactPath = '/tmp/post-activation-artifact.json'
 
     runtime.activateRecentPtyPathCandidateTracking()
-    // Idempotent: a second activation must not disturb live tracking.
     runtime.activateRecentPtyPathCandidateTracking()
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
@@ -282,8 +273,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
-    // Documented accepted loss: output that scrolled past the raw window
-    // before the first-ever mobile connect yields no candidates.
+    // Accepted loss: bytes evicted before first tracking activation cannot yield candidates.
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       false
     )
@@ -295,18 +285,13 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/result.json'
 
-    // One chunk with a >4KiB line whose tail is the path: the eager
-    // extractor skipped it under the line-length guard.
+    // Eager extraction rejects over-4KiB lines.
     runtime.onPtyData('pty-1', `${'a'.repeat(5000)} ${artifactPath}\n`, 100)
-    // Newline-free filler trims the window to ~1KiB before the path, so a
-    // trimmed-head replay would see an under-limit line ending in the path.
+    // Trim into that line; replaying only its shorter tail would wrongly authorize the path.
     runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
     runtime.activateRecentPtyPathCandidateTracking()
-    // Scroll the raw window so only backfilled candidates can answer.
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
-    // Parity with eager extraction: the over-limit line never yielded a
-    // candidate, so the grant must stay denied after the raw window scrolls.
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       false
     )
@@ -318,15 +303,13 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/trimmed-prefix-artifact.json'
 
-    // Path sits in the head chunk's prefix, which the window trim drops from
-    // read() but the eager extractor saw at append time.
+    // read() trims this prefix; append-time extraction saw its original path.
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n${'b'.repeat(3000)}\n`, 100)
     runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
     runtime.activateRecentPtyPathCandidateTracking()
     runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
 
-    // Parity with eager extraction: the append-time candidate outlived the
-    // raw window, so backfill must recover it from the intact head chunk.
+    // Recover from the intact head chunk to match eager authorization after raw-byte eviction.
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       true
     )
@@ -339,12 +322,7 @@ describe('OrcaRuntimeService', () => {
     const cutLinePath = '/tmp/cut-line.json'
     const keptPath = '/tmp/kept-after-cut.json'
 
-    // Single >64KiB append is stored pre-sliced, so its original text is
-    // unrecoverable at activation time. Extraction runs eagerly at append
-    // instead: cutLinePath sat on an over-4KiB line the extractor's line
-    // guard rejects (and the slice leaves an under-4KiB tail of it that must
-    // NOT mint a candidate later), while keptPath sat on a short line and
-    // must survive the raw window scrolling.
+    // Oversized chunks are pre-sliced; eager extraction must retain valid short-line paths and reject long-line tails.
     const keptLine = `wrote ${keptPath}\n`
     const afterFirstLine = `${keptLine}${'z'.repeat(62 * 1024 - keptLine.length)}`
     const oversized = `${'a'.repeat(5 * 1024)} ${cutLinePath}\n${afterFirstLine}`
@@ -364,11 +342,7 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/result.json'
 
-    // A short first line of a >64KiB chunk loses only its `wrote ` prefix to
-    // the pre-slice; the path itself stays in the retained window. The old
-    // eager extractor recorded it from the intact original chunk, so it must
-    // stay authorized after the raw window scrolls — parity requires the
-    // append-time extraction for oversized chunks, not backfill replay.
+    // Pre-slicing drops only the short line's prefix; preserve its original eager grant after raw-byte eviction.
     const firstLine = `wrote ${artifactPath}\n`
     runtime.onPtyData('pty-1', `${firstLine}${'f'.repeat(64 * 1024 + 6 - firstLine.length)}`, 100)
     runtime.activateRecentPtyPathCandidateTracking()
@@ -381,7 +355,6 @@ describe('OrcaRuntimeService', () => {
 
   it('replaces suffix-only headless state with the recovered renderer snapshot', async () => {
     const runtime = createRuntime()
-    // A hidden desktop pane answers at its own size after a phone fit resized the PTY.
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -482,10 +455,7 @@ describe('OrcaRuntimeService', () => {
 
     resolveConfirmation?.(true)
     const shellSnapshot = await shellSnapshotPromise
-    // Why alternateScreen stays true here: the mirror never rewrites its own
-    // model — without a daemon barrier injecting the reset in-stream (direct
-    // provider path), the snapshot publishes the poisoned mode alongside the
-    // proof and the renderer's dead-TUI branch grounds the pane.
+    // Direct providers cannot inject a daemon reset barrier; retain poisoned alt mode with proof for renderer grounding.
     expect(shellSnapshot).toMatchObject({
       alternateScreen: true,
       terminalOwner: 'shell',
@@ -547,7 +517,7 @@ describe('OrcaRuntimeService', () => {
       rows: 30,
       seq: 17,
       source: 'headless',
-      // Non-alt-screen reports alternateScreen=false so the renderer keeps its destructive scrollback clear on restore.
+      // Non-alt restore retains destructive scrollback clearing.
       alternateScreen: false
     })
     expect(serializeBuffer).not.toHaveBeenCalled()
@@ -606,7 +576,6 @@ describe('OrcaRuntimeService', () => {
         tabId: 'tab-1',
         worktreeId: TEST_WORKTREE_ID,
         connectionId: null,
-        // The pane's handle rides the event so the store's row can rejoin its terminal.
         terminalHandle: expect.stringMatching(/^term_/),
         payload: {
           state: 'working',

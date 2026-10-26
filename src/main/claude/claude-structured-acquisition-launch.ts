@@ -25,21 +25,25 @@ import {
   closeClaudePublishedSessionForDeps
 } from './claude-structured-session-close'
 
-/** The launch with the chat's saved options in its spawn options. */
 export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
   savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>
 }
 
-export async function resolveClaudeAcquisitionLaunch(args: {
+export type ClaudeAcquisitionContext = {
   input: StructuredAgentSessionAcquireInput
   deps: ClaudeStructuredSessionAdapterDeps
   sessions: Map<string, ClaudeSession>
   acquisitions: ClaudeAcquisitionRegistry
   exits: Map<string, ClaudeSessionExit>
   callbacks: ClaudeAcquireCallbacks
-  previous: ClaudeAcquisitionAttempt | undefined
-  attempt: ClaudeAcquisitionAttempt
-}): Promise<ClaudeAcquisitionLaunch> {
+}
+
+export async function resolveClaudeAcquisitionLaunch(
+  args: ClaudeAcquisitionContext & {
+    previous: ClaudeAcquisitionAttempt | undefined
+    attempt: ClaudeAcquisitionAttempt
+  }
+): Promise<ClaudeAcquisitionLaunch> {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
@@ -68,13 +72,12 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           retainedExit.connection,
           retainedExit.error
         )
-        // A proven root exit is what released the lease, so it cannot also refuse the next root;
-        // only an exit this host cannot vouch for still blocks the start.
+        // A proven root exit releases the lease even when descendant cleanup remains unverified.
         if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
           throw cleanupError
         }
       }
-      // The superseded child must settle before its durable resume identity is reused.
+      // Settle the old child before reusing its durable resume identity.
       await callbacks.settleExit(sessionId, retainedExit)
       resumeSession ??= retainedExit.session
     }

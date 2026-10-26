@@ -17,7 +17,7 @@ import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
 } from '../../shared/browser-client-host-placement'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../shared/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -72,8 +72,7 @@ export type RuntimeApi = {
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
-    // Why optional: matches onNativeChatLaunchDraftResolved — a renderer running against an older
-    // preload keeps working without the retention signal instead of throwing on every mount.
+    // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (
       callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
     ) => () => void
@@ -83,6 +82,7 @@ export type RuntimeApi = {
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
+    desktopCreatedChatIds?: () => Promise<string[]>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
@@ -114,7 +114,6 @@ export type RuntimeApi = {
       timeoutMs?: number
       observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
-    retryControlConnection?: (args: { selector: string }) => Promise<void>
     onSharedControlDiagnostics?: (
       callback: (event: {
         environmentId: string
@@ -129,7 +128,7 @@ export type RuntimeApi = {
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>
-    // Why: system resume / browser online advance pending shared-control reconnect timers only.
+    // Resume/online events advance only pending shared-control reconnect timers.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {
       selector: string
@@ -157,9 +156,9 @@ export type RuntimeApi = {
         onClose?: () => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
-    // Why optional: only the desktop preload deploys servers over SSH.
+    // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
-    // Why optional: only a Windows desktop (or the e2e fake) has WSL distros to host.
+    // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
   wsl: {

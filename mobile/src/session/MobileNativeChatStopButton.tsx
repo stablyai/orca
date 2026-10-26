@@ -4,7 +4,7 @@ import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../src/shared/native-chat-tu
 import { colors } from '../theme/mobile-theme'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
-/** The composer's Stop, in Send's slot. `held`: this phone's own Stop request is still in flight. */
+// held tracks this phone’s in-flight Stop request, not the host’s stopping status.
 export function MobileNativeChatStopButton({
   onStop,
   held

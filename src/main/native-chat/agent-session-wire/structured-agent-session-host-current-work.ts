@@ -1,6 +1,4 @@
-// The host's current-work projection (`structured-agent-session-current-work.ts`) for a chat it
-// holds, read from its sessions and lease store. Apart from the projection itself, which stays free
-// of host types so shared and client code can import it.
+// Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
@@ -10,7 +8,6 @@ import {
 } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
-/** The host's sessions and lease store, as the projection reads them. */
 export type StructuredAgentSessionCurrentWorkHost = {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
   sessions: {
@@ -25,7 +22,6 @@ export type StructuredAgentSessionCurrentWorkHost = {
   }
 }
 
-/** A held chat's current work; null when this host holds no conversation for it. */
 export function hostStructuredAgentSessionCurrentWork(
   host: StructuredAgentSessionCurrentWorkHost,
   sessionId: string
@@ -36,8 +32,7 @@ export function hostStructuredAgentSessionCurrentWork(
     : null
 }
 
-/** The one current work every host reader decides and displays by: this host's child is always
- *  evidence (none held reads as none), so an action never reads work the display does not show. */
+/** Use identical child evidence for actions and display; explicitly absent children mean none held. */
 export function heldStructuredAgentSessionCurrentWork(
   store: StructuredAgentSessionCurrentWorkHost['store'],
   sessionId: string,

@@ -1,7 +1,4 @@
-// ─── Wire shapes carried from the hook receivers to the renderer over IPC ────
-// Why: split out of agent-status-types so that module stays the status vocabulary
-// (states, entries, normalization) and the transport envelopes live next to each
-// other. Re-exported from agent-status-types, so existing import sites are unchanged.
+// Keep transport envelopes separate from status vocabulary; re-export through agent-status-types for existing consumers.
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { ProgramStatusFacet } from './program-status/facet'
@@ -14,6 +11,7 @@ import type {
 } from './agent-status-run'
 import type {
   AgentStatusOrchestrationContext,
+  AgentType,
   ParsedAgentStatusPayload,
   TurnEndDisposition
 } from './agent-status-types'
@@ -45,24 +43,17 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
-  /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Only the remote-ingest path (`ingestRemote`) can stamp it from mux identity; the HTTP path has no mux and always sets null. */
+  /** Remote ingest alone stamps mux connection identity; null for local/HTTP paths without a mux. */
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
-  /** When the reported evidence was first observed, as distinct from `receivedAt` (delivery
-   *  order). A relay reconnect replays cached rows, and `receivedAt` must restamp to stay
-   *  monotonic past the transient-clear watermark — so only this clock can measure staleness.
-   *  Optional: absent from old hosts, where consumers fall back to `receivedAt`. */
+  /** Original evidence clock for freshness; receivedAt restamps reconnect replays past clear watermarks. Older hosts omit it and readers fall back to receivedAt. */
   evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
-  /** When the main agent's current turn began, stamped by the hook server from the main agent's
-   *  own turn-opening event. Optional: old hosts and turns opened unseen omit it, and readers fall
-   *  back to `stateStartedAt`. */
+  /** Host-stamped lead turn opening; older hosts/unseen openings fall back to stateStartedAt. */
   turnStartedAt?: number
-  /** When the main agent's latest turn ended, stamped by the execution host from the agent's own
-   *  turn-end event and kept through restatements. Absent from old hosts and unclassified agents. */
+  /** Host-stamped lead turn end, retained across restatements; omitted by old hosts/unclassified agents. */
   turnEndedAt?: number
   /** How the host identified that end; absent from old hosts (legacy). */
   turnEndDisposition?: TurnEndDisposition
@@ -78,6 +69,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   programStatusOnly?: true
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** The pane's owning agent session on its execution host; absent from older hosts. */
+  paneOwner?: { agent: AgentType; session: string }
   /** A re-send of a cached row (reconnect or listener replay), not a new transition. */
   isReplay?: boolean
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the
@@ -85,14 +78,19 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   structuredHost?: StructuredHostStatus
 } & WithAgentStatusObservation
 
-/** Identity used by UI-only cleanup to evict exactly the status it cleared.
- *  Deliberately minimal — receivedAt + stateStartedAt pin the exact event instance
- *  (the same baseline the interrupt-inference guard uses). Renderer-enriched fields
- *  (connectionId, worktreeId) diverge from main's cache and must not participate. */
+/** Match exact UI-cleared events by receivedAt/stateStartedAt. Exclude renderer-enriched connection/worktree attribution that differs from main's cache. */
 export type AgentStatusCacheIdentity = {
   paneKey: string
   receivedAt: number
   stateStartedAt: number
+}
+
+/** A pane's saved resume the host refused because a native chat is that conversation's home. */
+export type RefusedPaneResume = {
+  expectedStatus?: AgentStatusCacheIdentity
+  expectedSavedRecord?: { paneKey: string; capturedAt: number; updatedAt: number }
+  agent: string
+  providerSession: AgentProviderSessionMetadata
 }
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
@@ -102,6 +100,8 @@ export type AgentStatusClearIpcPayload =
       statusUnavailable?: true
       /** An OSC 7501 program took back its own row, so even a `done` row goes. */
       programStatusRemoved?: true
+      /** Forget that conversation as this pane's resume target too, not only its status. */
+      refusedResume?: RefusedPaneResume
     }
   | {
       transient: true

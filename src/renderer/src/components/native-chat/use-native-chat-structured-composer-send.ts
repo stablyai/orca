@@ -57,8 +57,7 @@ export type NativeChatStructuredComposerSend = (
   attachments?: readonly NativeChatComposerImageAttachment[]
 ) => Promise<void>
 
-/** Send through the structured journal transport, clearing the composer only
- *  once the transport accepts (the PTY path has its own sibling hook). */
+/** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
   agent,
   draftScopeKey,
@@ -71,7 +70,7 @@ export function useNativeChatStructuredComposerSend({
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments): Promise<void> => {
-      // A picked command is held like Send: it would carry attachments still uploading, pathless.
+      // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
@@ -80,8 +79,7 @@ export function useNativeChatStructuredComposerSend({
       }
       text = resolveNativeChatPastedText(draftScopeKey, text)
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
-      // A held host takes no turn, and its notice says why; an option command only changes what
-      // the next turn runs with.
+      // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
         (!hostCommand || structuredAgentSessionCommandChangesConversation(text))
@@ -107,6 +105,7 @@ export function useNativeChatStructuredComposerSend({
       if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
         structuredTransport.onSubmitted?.()
       }
+      const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
@@ -115,18 +114,31 @@ export function useNativeChatStructuredComposerSend({
         promptSkillRefs(submitted.document)
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
-          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          if (!hostCommand || isCurrent()) {
+            structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          }
           if (!accepted) {
             return
           }
-          completeNativeChatStructuredUserAction(agent, structuredTransport, revealsTranscript)
-          // Why: the send settles after a round trip, while this or another composer of the same
-          // conversation may have changed the draft; only what was sent leaves it.
+          completeNativeChatStructuredUserAction(
+            agent,
+            structuredTransport,
+            revealsTranscript && (!hostCommand || isCurrent())
+          )
+          // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
           const left = nativeChatComposerDraftLeftAfterSend(
             readNativeChatComposerDraft(draftScopeKey),
             submitted
           )
           if (!left) {
+            return
+          }
+          if (hostCommand && !isCurrent()) {
+            updateNativeChatComposerDraft(
+              draftScopeKey,
+              { text: left.text, document: undefined, images: left.images },
+              'immediate'
+            )
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -137,6 +149,9 @@ export function useNativeChatStructuredComposerSend({
           clearSkillOrigin()
         })
         .catch((error) => {
+          if (hostCommand && !isCurrent()) {
+            return
+          }
           const notice = nativeChatNoticeFromError(
             error,
             error instanceof SkillRefLimitError

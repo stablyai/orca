@@ -35,11 +35,19 @@ vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgentsForRuntime: mocks.catalog,
   hostStructuredAgentsReadFailed: mocks.failed,
   loadHostStructuredAgents: mocks.load,
+  relearnHostStructuredAgents: mocks.load,
   hostStructuredAgentsVersion: () => 0,
   subscribeHostStructuredAgents: () => () => {}
 }))
 vi.mock('@/lib/agent-launch-route-input', () => ({
   workspaceKindForWorktreeId: () => 'git-worktree',
+  resolveAgentLaunchHost: () => ({
+    executionHostId: 'local',
+    hostCapabilities:
+      readLocalRuntimeCapabilitiesOrUnknown() === null
+        ? null
+        : [CHAT, CLIENT, CATALOG, ...(mocks.publishing ? [AVAILABILITY] : [])]
+  }),
   buildAgentLaunchRouteInput: (_state: unknown, { agent }: { agent: string }) => ({
     agent,
     executionHostId: 'local',
@@ -51,7 +59,7 @@ vi.mock('@/lib/agent-launch-route-input', () => ({
     hostStructuredAgents: ['claude', 'codex', 'opencode']
   })
 }))
-import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 const initial = useAppStore.getState()
 beforeEach(() => {
   mocks.support.mockReset()
@@ -183,4 +191,23 @@ it('holds initial capability acquisition, then exposes truthful failure and know
     executionHostId: 'local'
   })
   expect(getStatus).toHaveBeenCalledTimes(1)
+})
+
+// Last: the host's published snapshot is module state that later cases would read.
+it('picks a host-run chat without its CLI, but never its terminal', () => {
+  mocks.publishing = true
+  mocks.detection.mockReturnValue({ detectedIds: ['claude'] })
+  const hook = renderHook(() => useAgentMenuObservation('one', true, { kind: 'local' }))
+  act(() =>
+    mocks.subscribe.mock.calls[0][3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'codex', state: 'available', chatProgram: 'installable' }]
+    })
+  )
+  const { model, selectionFor } = hook.result.current
+  const rows = model.state === 'settled' ? model.rows : []
+  expect(rows).toContainEqual({ kind: 'chat', agent: 'codex', executionHostId: 'local' })
+  const chat = selectionFor('codex', 'chat')
+  expect(chat.ready && chat.choice?.route).toBe('structured-native-chat')
+  expect(selectionFor('codex', 'terminal').ready).toBe(false)
 })

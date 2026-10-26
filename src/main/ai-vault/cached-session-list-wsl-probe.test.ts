@@ -43,8 +43,7 @@ function wslSpawns(): string[][] {
     .map(([spec]) => spec.args.map(String))
 }
 
-// Why the real wsl module: the point is the wsl.exe spawn count across the WHOLE
-// listing Promise.all, which a per-function mock cannot observe.
+// Keep real WSL code to measure shared probe calls across the entire listing.
 describe('AI Vault listing wsl.exe probes', () => {
   beforeEach(() => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
@@ -110,8 +109,7 @@ describe('AI Vault listing wsl.exe probes', () => {
     ])
   })
 
-  // Why: a rejected `--list --quiet` yields [] without caching. Treating that as "no distro
-  // installed" would narrow the allowed roots delete/subagent validation trusts.
+  // A failed distro probe cannot narrow the roots trusted by deletion or subagent validation.
   it('still discovers WSL homes after the installed-distro probe was rejected', async () => {
     runProcessMock.mockImplementation(
       ({ args }: { args: string[] }) =>

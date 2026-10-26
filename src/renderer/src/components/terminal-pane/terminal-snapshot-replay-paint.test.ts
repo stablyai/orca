@@ -27,8 +27,7 @@ function writeTerminal(terminal: Terminal, data: string): Promise<void> {
 const NORMAL_BUFFER_PROLOGUE_FROM_ALT = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: false, paneOnAlternateScreen: true })}`
 const NORMAL_BUFFER_PROLOGUE = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: false, paneOnAlternateScreen: false })}`
 const ALT_BUFFER_PROLOGUE = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false })}`
-// A pane already in alt screen is the production case for an alt snapshot, and
-// it is NOT the same bytes: no switch, so none of `?1049h`'s side effects run.
+// Already-alt snapshots must work without incidental ?1049h side effects.
 const ALT_BUFFER_PROLOGUE_FROM_ALT = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: true })}`
 
 function readRows(terminal: Terminal, count: number): (string | undefined)[] {
@@ -38,8 +37,7 @@ function readRows(terminal: Terminal, count: number): (string | undefined)[] {
 }
 
 describe('RESET_AFTER_BYTE_GAP', () => {
-  // Real emulator rather than a mock: the guarantee is that a cell written after
-  // the gap reset carries none of the pen the gap stranded (STA-4042).
+  // Use the real emulator to prove post-gap cells cannot inherit a stranded pen (STA-4042).
   it('grounds the SGR pen so post-gap cells are not bold', async () => {
     const terminal = new Terminal({ cols: 40, rows: 2, allowProposedApi: true })
     try {
@@ -58,10 +56,7 @@ describe('RESET_AFTER_BYTE_GAP', () => {
     }
   })
 
-  // xterm dispatches OSC/DCS/APC with `success = code !== 0x18 && code !== 0x1a`,
-  // so a bare ESC would COMMIT whatever the gap truncated. Without the CAN this
-  // retitles the pane from a half-read OSC 0 (and writes the clipboard from a
-  // half-read OSC 52).
+  // CAN aborts truncated OSC/DCS/APC; bare ESC would commit a partial title or clipboard write instead.
   it('discards a control string the gap truncated instead of committing it', async () => {
     const terminal = new Terminal({ cols: 40, rows: 2, allowProposedApi: true })
     let title = ''
@@ -81,12 +76,7 @@ describe('RESET_AFTER_BYTE_GAP', () => {
   })
 })
 
-// The end-to-end invariant, built through the SAME composer production uses
-// (buildParityMainBufferSnapshot mirrors HeadlessEmulator.getSnapshot: absolute
-// cursor + DECSC epilogue, the alt frame split from normal scrollback, and the
-// rehydrate prefix owning the single `?1049h`). Whatever the gap stranded, a
-// dirty renderer must land on exactly the frame a clean one produces. The
-// per-element tests below pin *why*; this pins what a user would notice.
+// Use production-shaped snapshot composition so dirty and clean renderers converge, including split history/alt payloads and absolute-cursor epilogues.
 describe('replay convergence with a production-composed snapshot', () => {
   const strandedByTheGap: Record<string, string> = {
     'bold pen': '\x1b[1m',
@@ -118,17 +108,14 @@ describe('replay convergence with a production-composed snapshot', () => {
       const model = createRendererParityTerminal({ cols: 20, rows: 5 })
       try {
         const enterAlt = alternateScreen ? '\x1b[?1049h' : ''
-        // The DECSC makes readSavedCursorRegister return a real register, so the
-        // snapshot carries the absolute-cursor epilogue (`\x1b[r`, `?6l`, CUP,
-        // `\x1b7`) — without it that whole branch of the payload never fires.
+        // Seed saved cursor so snapshot generation actually exercises its absolute-cursor epilogue.
         await writeToTerminal(
           model.terminal,
           `${enterAlt}\x1b[2;5H\x1b7\x1b[33mONE\r\nplain two\r\n\x1b[1mbold three`
         )
         const snapshot = buildParityMainBufferSnapshot(model, 1)
         expect(snapshot.alternateScreen).toBe(alternateScreen)
-        // Pin that this is the production shape: the alt case must take the
-        // split branch, and the payload must carry the cursor epilogue.
+        // Require production split-alt shape and cursor epilogue to avoid vacuous branch coverage.
         expect(snapshot.scrollbackAnsi === undefined).toBe(!alternateScreen)
         expect(snapshot.data).toContain('\x1b7')
 
@@ -168,9 +155,7 @@ describe('replay convergence with a production-composed snapshot', () => {
   }
 })
 
-// Each case strands one piece of carried state, then replays a payload through
-// the real prologue. SerializeAddon diffs against the default cell and emits no
-// charset at all, so anything the gap left set silently rewrites the frame.
+// SerializeAddon assumes default cells and emits no charset; stranded state would silently rewrite replayed content.
 describe('replay baseline grounding', () => {
   const strandedState: Record<string, string> = {
     'bold pen': '\x1b[1m',
@@ -194,9 +179,7 @@ describe('replay baseline grounding', () => {
     })
   }
 
-  // The field path, driven through the REAL builder output rather than a
-  // hand-written prologue: an alt-screen agent whose snapshot splits normal
-  // scrollback from the alt frame. This is the branch STA-4042 was reported on.
+  // Exercise production split-alt snapshot output, the reported STA-4042 branch.
   it('replays a split alt-screen snapshot clean when the TUI entered alt with a pen set', async () => {
     const terminal = new Terminal({ cols: 24, rows: 4, allowProposedApi: true })
     try {
@@ -221,12 +204,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Ordering regression. xterm answers `?1049l` with restoreCursor(), which
-  // reloads the pen, every G-set designation, GL, origin mode and wraparound
-  // from the register `?1049h` saved. A TUI that was bold and line-drawing when
-  // it entered the alt screen therefore gets all of that RESTORED on the way
-  // out — so grounding emitted ahead of the buffer switch is silently undone,
-  // and the exact bold-bleed this whole path exists to prevent comes back.
+  // ?1049l restores saved pen/charsets/modes; grounding before the switch alone would be undone and restore bold bleed.
   it('grounds after the buffer switch, not before, so ?1049l cannot restore the stale pen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
     try {
@@ -243,10 +221,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // `?1049l` runs restoreCursor() unconditionally, which rewrites the pen, all
-  // four G-sets, GL, origin, wraparound and the cursor from the register saved
-  // at `?1049h`. Poison every one of those at once and prove the prologue after
-  // the switch neutralises the lot — this is the guard on adding `?1049l` at all.
+  // Poison the saved register’s pen, G-sets, GL, origin, wrap and cursor; post-switch grounding must neutralize all restored state.
   it('neutralises every field ?1049l restores, even with the saved register poisoned', async () => {
     const terminal = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
     try {
@@ -272,11 +247,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Panes run with vtExtensions.kittyKeyboard on, and xterm swaps the kitty
-  // flag registers on the ?1049 transition. Without the ?1049l the renderer
-  // keeps the agent's negotiated flags after the agent exited, so the pane
-  // sends CSI-u key encodings to a plain shell that never asked for them.
-  // Replaying the snapshot must land on the same state the model already has.
+  // Replay must adopt model buffer state or missed alt exit leaves Kitty flags leaking into an unnegotiated shell.
   it('converges on the model kitty keyboard state when the gap ate the alt-screen exit', async () => {
     const options = {
       cols: 20,
@@ -316,10 +287,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Delayed arm of the same defect. `?1049h` banks the CURRENT pen and charsets
-  // into the register the TUI's eventual `?1049l` restores from, so grounding
-  // only after the switch leaves the gap's state saved for later: the repaint
-  // looks clean and the shell prompt comes back bold whenever the agent exits.
+  // Ground before ?1049h too: otherwise it banks stale pen/charsets that only reappear when the TUI later exits.
   it('grounds before the switch too, so the alt-exit later cannot restore the gap state', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
     try {
@@ -337,11 +305,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // `?1049` is NOT a no-op when the pane is already on the target buffer: xterm
-  // skips only the buffer swap and still swaps the kitty flag registers. An
-  // agent that negotiated kitty on the normal screen and never entered alt
-  // would lose its flags (1 -> 0, Option chords dead) on every normal-buffer
-  // restore, so the prologue must not switch when there is nothing to switch.
+  // Avoid same-buffer ?1049: xterm still swaps Kitty registers even without a buffer swap, confiscating a live agent’s flags.
   it('leaves kitty flags alone when the pane is already on the target buffer', async () => {
     const options = {
       cols: 20,
@@ -379,10 +343,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Reverse wraparound is the same shape as insert and autowrap: the model
-  // re-emits `?45h` only when IT has the mode on, so a stranded ON survives the
-  // repaint and the live app's next backspace at column 0 eats into the row
-  // above instead of staying put.
+  // Snapshot only re-emits enabled reverse wrap; explicitly clear stranded on state before later backspace crosses a soft wrap.
   it('leaves reverse wraparound off so a later backspace cannot chew the row above', async () => {
     const terminal = new Terminal({ cols: 8, rows: 3, allowProposedApi: true })
     try {
@@ -398,12 +359,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // The alt branch cannot make the same promise, and the earlier version of this
-  // test only appeared to because it used synthetic payload data. Production alt
-  // payloads carry their OWN `\x1b[0m\x1b[?1049h` (buildRehydrateSequences /
-  // frameRestoreAnsi), so the flags of an agent that negotiated kitty on the alt
-  // screen are still pushed into the main register by the payload. The prologue's
-  // contribution is what is testable here: it adds no switch of its own.
+  // Production alt payloads contain their own ?1049h and can bank Kitty flags; this checks only that the prologue adds no unnecessary switch.
   it('adds no buffer switch of its own when the pane is already on the alt screen', async () => {
     const options = {
       cols: 20,
@@ -439,9 +395,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Margins are per buffer and the switch does not carry them across, so an
-  // alt-target replay from a normal pane must ground the buffer it leaves too —
-  // otherwise the stale region resurfaces the moment the TUI exits to normal.
+  // Ground outgoing normal-buffer margins too; buffer-local stale regions otherwise return when the TUI exits alt.
   it('grounds the source buffer margins when switching to the alt screen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
     try {
@@ -461,12 +415,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // The inverse of what an earlier revision asserted. Grounding G1-G3 looked
-  // right against a stranded designation, but the payload never leaves G0 so it
-  // cannot affect the frame, and `enacs=\E(B\E)0` (screen/tmux/vt100 terminfo)
-  // designates G1 once at init and then uses bare SO/SI — grounding it renders a
-  // live app's box drawing as letters. The model never re-asserts charsets, so
-  // there is nothing to complete the reset. Leave the app's G-sets alone.
+  // Preserve G1–G3: SO/SI terminfo designates G1 once at initialization and snapshot replay never redeclares it, so resetting breaks live box drawing.
   it('leaves an app-designated G1 intact so its later shift-out still draws boxes', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
     try {
@@ -482,9 +431,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // The baseline is reachable around if the saved-cursor register still holds
-  // the gap's state: the live TUI's next `ESC 8` restores that pen and charset
-  // straight over the repaint. The prologue's trailing DECSC closes that door.
+  // Trailing DECSC overwrites a stale saved cursor register before a live TUI’s later ESC 8 can restore gap state.
   it('grounds the saved-cursor register so a later ESC 8 cannot restore the stale pen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
     try {
@@ -502,9 +449,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // A serialized row exactly `cols` wide relies on autowrap to continue onto the
-  // next row. With DECAWM stranded off, every character past the margin
-  // overwrites the last cell and the restored history silently loses text.
+  // Serialized exact-width rows need autowrap; stranded-off mode overwrites the margin and loses history.
   it('replays a row wider than the grid instead of dropping it at the margin', async () => {
     const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
     try {
@@ -517,15 +462,11 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Origin mode is invisible during the replay itself (the baseline resets the
-  // margins, so margin-relative and absolute addressing coincide), but nothing
-  // in the snapshot re-emits `ESC[?6l`. Left stranded, the first scroll region
-  // the live TUI sets makes all of its cursor addressing margin-relative.
+  // Origin mode can look correct during replay with reset margins yet break later TUI cursor addressing; explicitly clear it.
   it('leaves origin mode off so later cursor addressing stays absolute', async () => {
     const terminal = new Terminal({ cols: 10, rows: 6, allowProposedApi: true })
     try {
-      // Alt branch: `?1049h` on an already-alt pane is a no-op, so unlike the
-      // normal branch's `?1049l` it restores nothing on its own.
+      // Already-alt replay has no buffer restore to repair state incidentally; only baseline reset can do it.
       await writeTerminal(terminal, '\x1b[?1049h')
       await writeTerminal(terminal, '\x1b[2;3r\x1b[?6h')
       await writeTerminal(terminal, `${ALT_BUFFER_PROLOGUE_FROM_ALT}restored`)
@@ -538,10 +479,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // Insert mode survives the replay itself (the frame is painted onto a cleared
-  // screen), but the model only re-emits `ESC[4h` when IT has insert mode on —
-  // so a stranded-on renderer keeps it, and every later repaint by the live TUI
-  // shifts existing cells right instead of overwriting them.
+  // Cleared frames hide stranded insert mode; later in-place repaint exposes shifts unless explicitly grounded.
   it('leaves insert mode off so later repaints overwrite rather than shift', async () => {
     const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
     try {
@@ -556,10 +494,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // The alt branch needs its own coverage: leaving the alt screen restores
-  // saved modes, so `?1049l` on the normal branch happens to clear autowrap and
-  // origin mode for free. `?1049h` does not, and on a pane already in alt screen
-  // it is a no-op — nothing but the explicit baseline grounds these.
+  // Cover already-alt separately: no normal-buffer restore incidentally clears saved origin/autowrap state.
   for (const [label, stranded, replayed, expected] of [
     ['autowrap off', '\x1b[?7l', 'ABCDEFGHIJKLMNO', ['ABCDEFGHIJ', 'KLMNO']],
     ['origin mode', '\x1b[2;3r\x1b[?6h', 'A\r\nB\r\nC', ['A', 'B', 'C']],
@@ -579,8 +514,7 @@ describe('replay baseline grounding', () => {
     })
   }
 
-  // Margins are per buffer and `?1049h` only clears them when it actually
-  // switches, so a pane already in alt screen keeps the stale region.
+  // Already-alt ?1049h keeps buffer-local margins; explicit reset must clear them.
   it('grounds the alt buffer margins even when already on the alt screen', async () => {
     const terminal = new Terminal({ cols: 10, rows: 6, allowProposedApi: true })
     try {
@@ -594,10 +528,7 @@ describe('replay baseline grounding', () => {
     }
   })
 
-  // The gap can eat the TUI's own `?1049l`, leaving the renderer on the alt
-  // screen while the model already moved back to normal. Painting the restored
-  // history into the alt buffer looks right but leaves scrollback empty and the
-  // content vanishes on the next buffer switch.
+  // A missed TUI exit leaves renderer on alt; restore onto normal so history stays scrollable and survives later switches.
   it('returns to the normal buffer before replaying a normal-buffer snapshot', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
     try {
@@ -618,8 +549,7 @@ describe('hasPositiveTerminalDimensions', () => {
     expect(hasPositiveTerminalDimensions(1, 1)).toBe(true)
   })
 
-  // Why: Infinity passes `> 0` — the exact drift that let a malformed SSH
-  // model snapshot reach terminal.resize(Infinity, …).
+  // Infinity passes a simple > 0 check; malformed dimensions must never reach terminal.resize.
   it('rejects non-finite, non-positive, and non-numeric values', () => {
     expect(hasPositiveTerminalDimensions(Infinity, 24)).toBe(false)
     expect(hasPositiveTerminalDimensions(80, Infinity)).toBe(false)
@@ -647,10 +577,7 @@ describe('buildMainModelSnapshotReplayWrites', () => {
     ).toEqual([NORMAL_BUFFER_PROLOGUE, 'shell-output'])
   })
 
-  // Why: main strips the ?1049h marker when splitting scrollbackAnsi from an
-  // alt frame, so the restorer must own the ?1049l rebuild + ?1049h return —
-  // painting the composed bytes after a plain clear leaves the TUI frame on
-  // the normal buffer.
+  // Main strips alt entry from split payloads; the restorer must rebuild normal history then return to alt before painting the frame.
   it('rebuilds normal buffer then paints a clean alt frame for alt-screen snapshots', () => {
     expect(
       buildMainModelSnapshotReplayWrites(
@@ -769,8 +696,7 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
   })
 
   it('still enters a cleared alt screen when skipping without split scrollback', () => {
-    // Why the clear still runs: the caller's SIGWINCH must land on a clean
-    // screen the application repaints, not the stale pre-park frame.
+    // Still clear before SIGWINCH so application repaint cannot inherit the pre-park frame.
     expect(
       buildMainModelSnapshotReplayWrites(
         {
@@ -801,14 +727,9 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
     ).toEqual([NORMAL_BUFFER_PROLOGUE, 'shell-output'])
   })
 
-  // STA-4042: a replay only runs because renderer-bound bytes were dropped, so
-  // the pen that the drop interrupted is unknown. Every branch must clear it
-  // BEFORE replaying content, or the whole restored buffer inherits it — the
-  // "regular text renders bold" field report.
+  // Unknown gap state must be grounded before any replay branch paints content (STA-4042).
   it('clears the SGR pen before any replayed content in every branch', () => {
-    // Each built for a pane that genuinely has to switch, so there is a switch
-    // to bracket; when the pane is already on target no switch is emitted and
-    // there is nothing for restoreCursor to undo.
+    // Use genuine buffer transitions so baseline ordering around switch/restore is exercised.
     const branches = [
       buildMainModelSnapshotReplayWrites(
         { data: 'normal-buffer' },
@@ -824,19 +745,15 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
       )
     ]
     for (const writes of branches) {
-      // CAN leads, so a truncated control string is aborted rather than
-      // committed by the first ESC that follows.
+      // Leading CAN aborts a truncated control string instead of committing it on the next ESC.
       expect(writes[0].startsWith('\x18')).toBe(true)
-      // Literal bytes, not the imported constant: asserting the constant against
-      // itself would pass for any value it happened to hold.
+      // Assert literal protocol bytes so a broken imported constant cannot satisfy its own test.
       const prologue = writes[0]
       expect(prologue).toContain('\x1b[0m') // SGR
       expect(prologue).toContain('\x0f\x1b(B') // GL -> G0, G0 -> ASCII
       expect(prologue).toContain('\x1b[r') // margins
       expect(prologue.endsWith('\x1b7')).toBe(true) // saved-cursor floor, last
-      // The baseline brackets the buffer switch: once before, so `?1049h` banks
-      // grounded state rather than the gap's, and once after, so `?1049l`'s
-      // restore cannot reapply the old register over it.
+      // Ground before switching to save clean state and after switching to override restored stale state.
       const switchAt = prologue.indexOf('\x1b[?1049')
       expect(switchAt).toBeGreaterThanOrEqual(0)
       expect(prologue.indexOf('\x1b[0m')).toBeLessThan(switchAt)

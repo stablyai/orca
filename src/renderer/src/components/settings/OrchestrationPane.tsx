@@ -27,6 +27,7 @@ import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
+import { OrchestrationChatErrorSetting } from './OrchestrationChatErrorSetting'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -51,9 +52,9 @@ export function OrchestrationPane({
 }: OrchestrationPaneProps): React.JSX.Element {
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showNestedWorkerDepth = !isPairedWebClientWindow()
+  const showLocalRuntimeSettings = !isPairedWebClientWindow()
   const searchEntries = getOrchestrationPaneSearchEntries({
-    includeNestedWorkerDepth: showNestedWorkerDepth
+    includeLocalRuntimeSettings: showLocalRuntimeSettings
   })
   const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
@@ -147,7 +148,7 @@ export function OrchestrationPane({
         }
       />
 
-      {showNestedWorkerDepth ? (
+      {showLocalRuntimeSettings ? (
         <NumberField
           label={getNestedWorkerDepthTitle()}
           description={getNestedWorkerDepthDescription()}
@@ -158,6 +159,9 @@ export function OrchestrationPane({
             void updateSettings({ nestedWorkerMaxDepth })
           }}
         />
+      ) : null}
+      {showLocalRuntimeSettings ? (
+        <OrchestrationChatErrorSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}

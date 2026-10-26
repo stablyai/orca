@@ -31,11 +31,7 @@ export function decodeBase64Bytes(value: string): Uint8Array {
 
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
-/**
- * Null for anything `btoa` would not have produced, which `atob` forgives: missing padding,
- * whitespace and stray bits in the last character. Checked in O(1) after the decode instead of
- * re-encoding, which costs ~20 ms per 200 KB frame on Hermes.
- */
+// Reject forgiving atob forms (missing padding, whitespace, stray bits) in O(1); re-encoding large frames is costly on Hermes.
 export function decodeCanonicalBase64Bytes(value: string): Uint8Array | null {
   let bytes: Uint8Array
   try {

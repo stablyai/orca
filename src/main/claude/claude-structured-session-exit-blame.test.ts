@@ -1,6 +1,3 @@
-// After a Claude start lands, only the child's own exit says Claude stopped; a fault on Orca's
-// side that makes Orca close the child is Orca's.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'

@@ -38,13 +38,14 @@ function harness(options: {
   caret?: number
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
   imageAttachments?: NativeChatComposerImageAttachment[]
-  /** The PTY lane has no structured transport at all. */
   lane?: 'pty'
+  capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal, onError and onSubmitted.
   const structuredTransport = {
+    capturePresentation: options.capturePresentation ?? (() => () => true),
     onError,
     onSubmitted,
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
@@ -69,7 +70,6 @@ function harness(options: {
       }),
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
   )
-  /** The user's typing: the draft store and the rendered draft move together. */
   const type = (draft: string, caret: number): void => {
     writeNativeChatDraftCache(SCOPE, draft)
     hook.rerender({ draft, caret })
@@ -153,7 +153,6 @@ describe('composer goal mode', () => {
     await act(async () => hook.result.current.send())
 
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
-    // The pane brings the latest into view for a goal it set, as for a sent message.
     expect(onSubmitted).toHaveBeenCalledOnce()
     expect(calls.sendStructured).not.toHaveBeenCalled()
     expect(readNativeChatDraftCache(SCOPE)).toBe('')
@@ -253,6 +252,26 @@ describe('composer goal mode', () => {
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
     expect(readNativeChatDraftCache(SCOPE)).toBe('Ship the parser and its tests')
     expect(hook.result.current.goalMode.active).toBe(true)
+  })
+
+  it('consumes an accepted captured goal after closure without touching local controls', async () => {
+    const reply = Promise.withResolvers<boolean>()
+    let current = true
+    const { hook, calls, type, onError } = harness({
+      draft: '/go',
+      threadGoal: { setObjective: () => reply.promise },
+      capturePresentation: () => () => current
+    })
+    act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
+    type('Ship it', 0)
+    act(() => hook.result.current.send())
+    calls.setCaret.mockClear()
+    hook.unmount()
+    current = false
+    await act(async () => reply.resolve(true))
+    expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    expect(calls.setCaret).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
   })
 
   it('does not send while an image waits to be attached again', () => {

@@ -1,15 +1,4 @@
-// What a restart owes a persisted session, and what it does NOT.
-//
-// It owes reconciliation — every lease loaded from disk names an owner from a process generation
-// that no longer exists, and adjudicating that is startup's job. It owes an exit from any recovery
-// stage the evidence now permits. And it owes a READABLE session: the journal open, history
-// answerable, the tab restorable.
-//
-// It does not owe a provider child. This used to resume every record whose lease was `released`,
-// which is the normal end state of a chat the user closed cleanly — so a
-// healthy profile started an app-server per session it had ever used, in parallel, at every launch,
-// with no client attached and nothing on screen. A child now exists because work asked for it — a
-// send, through the delivery loop — not because a record survived on disk.
+// Reconcile ownership and restore readable journals without spawning providers for every saved chat.
 
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -27,16 +16,14 @@ export type StructuredAgentSessionReadRestoreDeps = {
   openDeps: StructuredAgentSessionConversationOpenDeps & {
     store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
   }
-  // Lease bookkeeping. Neither throws: a read grants no writer, so bookkeeping must not block it.
-  /** Whether every lease on this host is settled. */
+  // Reader bookkeeping cannot grant a writer and must not block reads.
   reconcileAll: () => Promise<boolean>
-  /** Whether this chat's lease is settled. */
   reconcile: (sessionId: string) => Promise<boolean>
-  /** False when its store write failed; the next attach or send resolves it again. */
+  /** Failed writes retry strictly on the next attach/send. */
   resolveRecovery: (sessionId: string) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
-  /** A chat whose open failed: it still has its record, so it keeps its tab. */
+  /** Failed opens retain tabs for readable failure/retry. */
   onUnopened?: (sessionId: string) => void
   onReadable: (
     sessionId: string,
@@ -44,7 +31,6 @@ export type StructuredAgentSessionReadRestoreDeps = {
   ) => Promise<void> | void
 }
 
-/** One session's share of the restart restore. Startup maps this over every supported record. */
 async function restoreOneStructuredAgentSessionRead(
   input: StructuredAgentSessionReadRestoreDeps,
   sessionId: string,
@@ -56,20 +42,17 @@ async function restoreOneStructuredAgentSessionRead(
   )
 }
 
-/** The serialized half of the restore. */
 async function restoreOneStructuredAgentSessionReadUnderSerialize(
   input: Pick<StructuredAgentSessionReadRestoreDeps, 'openDeps' | 'hasSession' | 'onReadable'>,
   sessionId: string
 ): Promise<void> {
   if (input.hasSession(sessionId)) {
-    // A read or a send mid-restore already opened this one.
     return
   }
   const opened = await restoreStructuredAgentSessionRead(input.openDeps, sessionId)
   if (!opened) {
     return
   }
-  // The open settled what a gone generation left running, so no reader sees it run.
   await input.onReadable(sessionId, opened)
 }
 
@@ -79,11 +62,9 @@ export async function restoreStructuredAgentSessionsOnRestart(
   if (input.records.length === 0) {
     return
   }
-  // One whole-host check for the pass, which also retries a startup pass that failed. After a
-  // failure, per-chat retries only hit the same store again; each chat's own action reconciles it.
+  // Avoid per-chat store retries after a failed host-wide pass; explicit actions retry later.
   let settled = await input.reconcileAll()
   const settleLeases = async (sessionId: string): Promise<void> => {
-    // A session latched in recovery exits here at startup, without waiting for a client.
     if (
       settled &&
       !((await input.reconcile(sessionId)) && (await input.resolveRecovery(sessionId)))
@@ -92,9 +73,9 @@ export async function restoreStructuredAgentSessionsOnRestart(
     }
   }
   await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
-    // A journal open is synchronous SQLite: without a macrotask per chat the restore is one long task.
+    // Synchronous SQLite opens need a macrotask per chat to keep startup responsive.
     await yieldToEventLoop()
-    // One chat that cannot open must not keep the rest from restoring; a read of it still refuses.
+    // Isolate failed opens so other chats still restore.
     await restoreOneStructuredAgentSessionRead(input, sessionId, settleLeases).catch(
       (error: unknown) => {
         input.openDeps.logger.warn('restoring a chat at startup failed', {

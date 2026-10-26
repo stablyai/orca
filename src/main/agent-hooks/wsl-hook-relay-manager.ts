@@ -61,7 +61,6 @@ export class WslHookRelayManager {
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
     this.deps.managedHookSettings = resolve
   }
-  /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
   async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
@@ -78,7 +77,6 @@ export class WslHookRelayManager {
   private stateFor(distro: string | null): WslRelayDistroState | undefined {
     return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
   }
-  /** Guest endpoint path once install completes. */
   getGuestEndpointFilePath(distro: string | null): string | null {
     return this.stateFor(distro)?.connectedAt
       ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
@@ -97,8 +95,7 @@ export class WslHookRelayManager {
     const state = this.stateFor(distro)
     return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
   }
-  /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
-   *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
+  /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
     this.disposed ||= permanent
     for (const state of this.states.values()) {
@@ -111,8 +108,7 @@ export class WslHookRelayManager {
     }
     this.states.clear()
   }
-  /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
-   *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
+  /** Resume only running distros: wsl -d would boot one the user shut down. */
   resumeStoppedRelays(): void {
     resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) =>
       this.ensureForDistro(distro, home)
@@ -277,9 +273,7 @@ export class WslHookRelayManager {
     })
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch(() => {})
   }
-  /** Records + breadcrumbs the failure and always arms the restart timer —
-   *  one failed relaunch must not end self-recovery; the timer's
-   *  distro-running probe keeps this from booting stopped distros. */
+  /** Keep retrying failed relaunches while distro-running checks prevent unwanted VM starts. */
   private markFailed(
     state: WslRelayDistroState,
     message: string,

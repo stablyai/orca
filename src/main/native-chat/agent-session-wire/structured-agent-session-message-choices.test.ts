@@ -71,7 +71,7 @@ it('keeps the model and effort a chat with none saved first ran, after its confi
 })
 
 it('records what a later readback reports when the start named only a filled-in default', async () => {
-  // As Claude's start: no model yet, then its settings readback names the one the turn runs.
+  // Model Claude’s delayed settings readback after startup without a model.
   const first = rig.send('first')
   expect(await first.result).toMatchObject({ ok: true })
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))

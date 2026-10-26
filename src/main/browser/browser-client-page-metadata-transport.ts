@@ -6,31 +6,13 @@ export type BrowserClientPageMetadataSender = {
   sendPageMetadataRequest(params: unknown, timeoutMs: number): Promise<RuntimeRpcResponse<unknown>>
 }
 
-/**
- * Not a latency budget — a liveness one. A request that times out on the lease's subscription tears
- * the whole subscription down, fencing every page the host is running. Metadata is the most
- * frequent traffic on that socket and the least important, so it must never be the message that
- * declares a working lease dead: it waits at least as long as anything else sharing the connection.
- */
+// Match longer lease request budgets: an early metadata timeout would tear down the shared lease.
 export const BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS = 30_000
 
-/**
- * Carries a page's url/title back to the runtime over the browser-host lease.
- *
- * Why the lease and not an ordinary runtime call: the runtime only accepts page traffic on the
- * connection the lease attached on (`browser-host-client-page-connection.ts`), and every other
- * transport — shared control, one-shot sockets — has a different connection id. A publish sent any
- * other way is rejected as a stale lease, every time, which leaves the runtime's copy of the page
- * frozen at the URL it was created with. The file channel rides this same seam for the same reason.
- */
+/** Page metadata must use the lease’s own connection ID to pass runtime admission. */
 export class BrowserClientPageMetadataTransport {
   private sender: BrowserClientPageMetadataSender | null = null
 
-  /**
-   * Why the transport and not the navigate command: a guest the user drives -- a link, a form, a
-   * redirect -- never issues one, so the page inventory would keep naming the URL the page was
-   * created at. This is the only seam that sees every navigation.
-   */
   constructor(private readonly observeCurrentUrl?: (params: unknown) => void) {}
 
   bind(sender: BrowserClientPageMetadataSender): void {
@@ -44,6 +26,7 @@ export class BrowserClientPageMetadataTransport {
   }
 
   async publish(params: unknown): Promise<{ accepted: boolean }> {
+    // Record user navigation even when the lease cannot publish it.
     this.observeCurrentUrl?.(params)
     const sender = this.sender
     if (!sender) {
@@ -67,11 +50,7 @@ export class BrowserClientPageMetadataTransport {
   }
 }
 
-/**
- * One transport per client-host composition, keyed by environment: a page belongs to the lease of
- * the environment that owns it, and publishing through whichever composition composed last would
- * address another runtime's lease.
- */
+// Each environment must publish through its own lease.
 const transportsByEnvironmentId = new Map<string, BrowserClientPageMetadataTransport>()
 
 export function registerBrowserClientPageMetadataTransport(

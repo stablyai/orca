@@ -28,8 +28,7 @@ export function RepositorySourceControlAiCustomCommand({
   onChange,
   onCommit
 }: RepositorySourceControlAiCustomCommandProps): React.JSX.Element {
-  // Why: selecting "Repository command" with an empty global/repo value would otherwise snap the
-  // Select back to inherit (empty is not a repo command). Keep a local intent so the user can type.
+  // Retain empty Repository command intent so selecting that mode cannot snap back before typing.
   const [forceRepoMode, setForceRepoMode] = useState(false)
   const hasRepoCommand = isRepoCommand(value)
   const mode =
@@ -55,8 +54,7 @@ export function RepositorySourceControlAiCustomCommand({
           value={mode}
           onValueChange={(nextMode) => {
             if (nextMode === CUSTOM_COMMAND_MODE_REPO) {
-              // Why: pre-populate from the current draft or the global command when available; when
-              // both are empty, stay in local REPO mode so the Select does not snap back to inherit.
+              // Seed from draft/global command; when both are empty, retain local repo-mode intent.
               const nextValue = value ?? source.customAgentCommand
               if (isRepoCommand(nextValue)) {
                 setForceRepoMode(false)
@@ -96,14 +94,12 @@ export function RepositorySourceControlAiCustomCommand({
         value={value ?? ''}
         onChange={(event) => {
           const nextValue = event.target.value
-          // Why: an empty field while typing keeps local REPO intent so the Select doesn't snap to
-          // inherit mid-edit; blur is what commits the clear. A non-empty value exits the intent.
+          // Keep repo mode while typing an empty field; blur commits the clear to inheritance.
           setForceRepoMode(!isRepoCommand(nextValue))
           onChange(nextValue === '' ? undefined : nextValue)
         }}
         onBlur={(event) => {
           const nextValue = event.target.value
-          // Why: blur with an empty field exits local REPO intent and commits inherit (clear).
           if (!isRepoCommand(nextValue)) {
             setForceRepoMode(false)
           }

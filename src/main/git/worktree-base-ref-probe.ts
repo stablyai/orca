@@ -10,12 +10,7 @@ type GitExecOptions = {
   admissionTier?: GitAdmissionTier
 }
 
-/**
- * Returns the probed commit oid, or null when the ref does not resolve.
- *
- * Why expose the oid: the probe already prints it, and callers that then need the
- * same ref's oid were re-spawning `rev-parse` for a value this call threw away.
- */
+/** Return the probe's commit OID so callers need not resolve it again. */
 export async function resolveWorktreeBaseCommitOid(
   repoPath: string,
   qualifiedRef: string,
@@ -44,11 +39,7 @@ export async function hasWorktreeBaseCommitRef(
   return (await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)) !== null
 }
 
-/**
- * The qualified ref a worktree base names in this repo, or the base unchanged when nothing
- * matches. Callers that key on a base must compare this, not the raw string, or `main` and
- * `refs/heads/main` look like different bases.
- */
+/** Compare resolved qualified refs so aliases such as main and refs/heads/main share one base. */
 export function resolveLocalWorktreeBaseRef(
   repoPath: string,
   baseRef: string,
@@ -59,14 +50,7 @@ export function resolveLocalWorktreeBaseRef(
   )
 }
 
-/**
- * Whether a worktree base — a qualified ref, a short branch or remote name, or a
- * full commit id — already resolves in this repo's own object/ref store.
- *
- * Single copy on purpose: the create path, the speculative create prefetch and
- * the remote-repo create path must agree on what counts as a local base, or the
- * warm-up prepares a checkout create then rejects.
- */
+/** Creation and prefetch share this presence check so they agree on reusable local bases. */
 export async function hasLocalWorktreeBaseRef(
   repoPath: string,
   baseRef: string,
@@ -89,20 +73,11 @@ export async function hasLocalWorktreeBaseRef(
 
 export type WorktreeBaseRefPresence = 'present' | 'absent' | 'unknown'
 
-/**
- * Distinguish "the ref does not exist" from "the probe itself failed".
- *
- * `show-ref --verify` is an exact lookup: exit 1 means a valid ref is absent,
- * while other failures (for example a broken repo or dead SSH transport) stay
- * inconclusive so callers can preserve their warning/error behavior.
- *
- * Executor-injected so the SSH path can route the same argv through the relay.
- */
+/** Exact ref probes preserve unknown on execution failure; inject the runner to support relay hosts too. */
 export async function probeWorktreeBaseRefPresence(
   runGit: (args: string[]) => Promise<{ stdout: string }>,
   qualifiedRef: string
 ): Promise<WorktreeBaseRefPresence> {
-  // Reject malformed persisted metadata before passing it to Git.
   if (!isSafeGitRefName(qualifiedRef)) {
     return 'unknown'
   }

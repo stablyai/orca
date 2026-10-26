@@ -6,20 +6,7 @@ import {
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
-/**
- * `fallbackMs: null` waits indefinitely. A newline arriving late still arrives, so a timer is
- * right for it; a cursor chord arriving mid-preedit reproduces the corruption the wait exists to
- * prevent, and a conversion can hold its candidate window open for seconds. Dropping the chord
- * costs one keypress, firing early costs a mangled line.
- *
- * Returns a disposer that stops waiting without sending. An indefinite wait has no other exit, so
- * a caller that can outlive the composition must hold it — otherwise the listeners stay on the
- * terminal element and a later composition flushes the stale send.
- *
- * The wait is scoped to the compositions already open when it starts. A composition the user
- * begins afterwards is behind this input, not in front of it, so letting it hold the wait would
- * reorder the two — `한` Enter `글` reaching the terminal as `한글\n`.
- */
+/** Wait only for already-open compositions; later ones must not overtake this input. Newlines allow a fallback; indefinite cursor-chord waits need disposal because early send corrupts preedit and missing compositionend otherwise leaks a stale send. */
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
   send: () => void,

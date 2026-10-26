@@ -1,5 +1,3 @@
-/* ── Rich Markdown Editor ─────────────────────────────── */
-
 .rich-markdown-editor-shell {
   position: relative;
   display: flex;
@@ -363,8 +361,7 @@
 }
 
 .rich-markdown-search {
-  /* Why: overlay the editor like Monaco's find widget instead of occupying
-     layout space — otherwise opening cmd+f shifts the document content down. */
+  /* Overlay find controls like Monaco so Cmd/Ctrl+F cannot shift document content. */
   position: absolute;
   top: 8px;
   right: 12px;
@@ -381,8 +378,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
-/* Why: the expand toggle spans both rows on the left like the source editor's
-   find widget, so it stays vertically centered across the find/replace stack. */
+/* Span both find/replace rows to center the toggle like the source editor. */
 .rich-markdown-search-toggle {
   width: 16px;
   min-width: 16px;
@@ -566,9 +562,7 @@
   margin: 0.75em 0;
 }
 
-/* Why: document markdown files treat source newlines inside a paragraph as
-   soft breaks, so prose must collapse them instead of inheriting Tiptap's
-   editable-root `break-spaces` behavior. */
+/* Collapse markdown soft newlines instead of inheriting Tiptap’s editable-root break-spaces. */
 .rich-markdown-editor-shell .rich-markdown-editor p {
   white-space: normal;
 }
@@ -606,9 +600,7 @@
   list-style: decimal;
 }
 
-/* Tiptap wraps each list item's content in a <p>, which inherits the global
-   paragraph margin and bloats inter-item spacing. Suppress it so lists render
-   tight, matching the preview surface. */
+/* Suppress global paragraph margins on Tiptap list-item wrappers to match preview spacing. */
 .rich-markdown-editor li > p {
   margin: 0;
 }
@@ -647,8 +639,7 @@
   appearance: none;
   width: 16px;
   height: 16px;
-  /* Why: bumped from 35% to 55% so the unchecked border stays legible in
-     dark mode where low-alpha foreground nearly disappears on --background. */
+  /* Raise unchecked border opacity from 35% to 55% for dark-background contrast. */
   border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: 4px;
   background: transparent;
@@ -669,9 +660,7 @@
   top: 1px;
   width: 5px;
   height: 9px;
-  /* Why: --primary flips between dark and light per theme, so a hardcoded
-     white tick is invisible in dark mode (light-on-light). Use the paired
-     token so the tick always contrasts against the filled box. */
+  /* Use primary-foreground: primary flips per theme, making a fixed white tick invisible in dark mode. */
   border: solid var(--primary-foreground);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -831,10 +820,7 @@
   background: color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 
-/* Why: Tiptap tables render as <tbody> only with the first <tr> containing
-   <th> cells. Striping odd rows (1, 3, 5) skips the header row — which has
-   no <td> — and starts alternation from the second data row, avoiding a
-   shaded band directly adjacent to the header. */
+/* Tiptap emits tbody with a th-only first row; stripe odd rows to start after the header. */
 .rich-markdown-editor tr:nth-child(odd) td {
   background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
 }
@@ -842,9 +828,7 @@
 .rich-markdown-table-controls {
   position: absolute;
   inset: 0;
-  /* Why: the slash (30), emoji (31) and doc-link (30) menus share this stacking
-     context, so hover affordances must stay under them — above editor content
-     chrome such as the code-block language selector (1). */
+  /* Keep hover affordances below slash/doc-link (30) and emoji (31), above code language controls (1). */
   z-index: 10;
   pointer-events: none;
 }
@@ -973,8 +957,6 @@
   cursor: pointer;
 }
 
-/* Copy button inside rich-mode code blocks — sits to the left of the
-   language selector, appears on hover. */
 .rich-markdown-code-block-wrapper .code-block-copy-btn {
   position: absolute;
   top: 6px;
@@ -1000,7 +982,6 @@
   color: var(--foreground);
 }
 
-/* Live mermaid diagram preview rendered below the editable source */
 .mermaid-preview {
   padding: 12px 18px;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
@@ -1019,9 +1000,7 @@
   background: transparent;
 }
 
-/* Why: CodeBlockLowlight's decoration plugin adds hljs class spans directly
-   inside the <pre> contentDOM — there is no <code> wrapper when using a
-   React NodeView, so selectors must target pre > .hljs-* directly. */
+/* React NodeView has no code wrapper; Lowlight decorates pre directly, requiring pre > .hljs-* selectors. */
 .rich-markdown-code-block-wrapper .hljs-keyword {
   color: #cf222e;
 }
@@ -1154,11 +1133,7 @@
   text-underline-offset: 2px;
 }
 
-/* Why: plain click places the caret inside the contenteditable region, so the
-   link only activates on Cmd/Ctrl-click. Surface the pointer affordance only
-   while that modifier is held so users can discover it without being misled
-   into expecting a plain click to open. Class is toggled by RichMarkdownEditor
-   in response to keydown/keyup of the platform modifier. */
+/* Plain clicks place the caret; RichMarkdownEditor exposes link pointers only while Cmd/Ctrl is held. */
 .rich-markdown-mod-held .rich-markdown-editor a,
 .rich-markdown-mod-held .rich-markdown-editor .ProseMirror a {
   cursor: pointer;
@@ -1198,8 +1173,6 @@
   outline: 2px solid color-mix(in srgb, var(--ring) 78%, transparent);
   outline-offset: 2px;
 }
-
-/* ── Linear Issue Markdown Editor ────────────────────── */
 
 .linear-issue-markdown-editor {
   position: relative;
@@ -1495,8 +1468,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Doc Links ───────────────────────────────────────── */
-
 .rich-markdown-editor .rich-markdown-doc-link {
   color: #0969da;
   text-decoration: underline;
@@ -1523,8 +1494,7 @@
   cursor: default;
 }
 
-/* In-progress [[target]] text while cursor is inside. Matches the committed
-   doc-link styling so the visual doesn't jump when the atom node takes over. */
+/* Match committed doc-link styling while [[target]] is still being typed to avoid a visual jump. */
 .rich-markdown-editor .rich-markdown-doc-link-preview {
   color: #0969da;
   text-decoration: underline;
@@ -1540,8 +1510,6 @@
   color: var(--muted-foreground);
   text-decoration-style: dashed;
 }
-
-/* ── Link Bubble ──────────────────────────────────────── */
 
 .rich-markdown-link-bubble {
   position: fixed;

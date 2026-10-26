@@ -1,6 +1,4 @@
-// Pending operations belong to draft scopes and outlive their composers. They are not persisted;
-// a finished image is, at once, in the draft.
-// Completion, failure, explicit removal, draft/workspace deletion or renderer exit ends ownership.
+// Pending chips outlive composers in memory; completed images persist immediately in their draft.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
@@ -20,18 +18,17 @@ import {
 
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
-// Why: a chip can outlive its tab, which is what names the draft's owner, so it is named at once.
+// Capture ownership before tab removal can erase it.
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
 
-/** The scope's pending chips; the same array until they change, so a reader can subscribe to it. */
+/** Keep snapshot identity stable until pending chips change. */
 export function nativeChatPendingAttachmentSnapshot(
   scopeKey: string
 ): readonly NativeChatComposerImageAttachment[] {
   return pendingCache.get(scopeKey) ?? EMPTY
 }
 
-/** Pending chips are user content before their file paths settle into the draft. */
 export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
   const draft = readNativeChatComposerDraft(scopeKey)
   return (
@@ -66,7 +63,6 @@ export function subscribeToNativeChatPendingAttachments(
   }
 }
 
-/** The scope's pending chips, re-rendering when they change. */
 export function useNativeChatPendingAttachments(
   scopeKey: string
 ): readonly NativeChatComposerImageAttachment[] {
@@ -77,7 +73,7 @@ export function useNativeChatPendingAttachments(
   return useSyncExternalStore(subscribe, () => nativeChatPendingAttachmentSnapshot(scopeKey))
 }
 
-/** Adds a chip still on its way. Preview URLs stay with the composer that minted them. */
+/** Keep preview URLs with the composer that minted them. */
 export function addNativeChatPendingAttachment(
   scopeKey: string,
   chip: NativeChatComposerImageAttachment
@@ -90,7 +86,6 @@ export function addNativeChatPendingAttachment(
   writePending(scopeKey, [...nativeChatPendingAttachmentSnapshot(scopeKey), pending])
 }
 
-/** Removes a chip still on its way and returns it; undefined when the user already removed it. */
 export function takeNativeChatPendingAttachment(
   scopeKey: string,
   id: string
@@ -111,7 +106,6 @@ function trimSettled(
   return waiting === -1 ? [] : queue.slice(waiting)
 }
 
-/** The first image attached after `queue[index]` that the draft holds. */
 function heldAfter(
   scopeKey: string,
   queue: readonly NativeChatComposerImageAttachment[],
@@ -121,8 +115,7 @@ function heldAfter(
   return queue.slice(index + 1).find(({ id }) => held.has(id))?.id
 }
 
-/** The thumbnail row: the draft's images, each chip still on its way in front of the first image
- *  attached after it, so thumbnails and chip numbers don't jump as uploads end. */
+/** Interleave pending chips by attachment order so completion cannot reorder thumbnails or numbers. */
 export function nativeChatImageRow<T extends { id: string }>(
   images: readonly T[],
   queue: readonly NativeChatComposerImageAttachment[]
@@ -141,8 +134,7 @@ export function nativeChatImageRow<T extends { id: string }>(
   return [...images.flatMap((image) => [...(ahead.get(image.id) ?? []), image]), ...waiting]
 }
 
-/** Saves a finished chip into the scope's draft at once, as an image the user attached, in front of
- *  any image attached after it. False when the user already removed it. */
+/** Persist completed images in attachment order; return false if already removed. */
 export function settleNativeChatPendingAttachment(
   scopeKey: string,
   id: string,
@@ -165,8 +157,7 @@ export function settleNativeChatPendingAttachment(
   return true
 }
 
-/** Attaches images at once, and behind any chip still on its way, so they keep the order they were
- *  attached in: pasted or dropped alike. */
+/** Append behind pending chips to preserve paste/drop attachment order. */
 export function appendNativeChatAttachmentsAfterPending(
   scopeKey: string,
   images: readonly NativeChatComposerImageAttachment[],
@@ -182,7 +173,6 @@ export function appendNativeChatAttachmentsAfterPending(
   }
 }
 
-/** File results settle only while their operation still belongs to this draft. */
 export function settleNativeChatPendingAttachmentReferences(
   scopeKey: string,
   references: { id: string; path: string }[],
@@ -219,7 +209,7 @@ function dropPendingWhere(
   }
 }
 
-/** The chips of every pane in a closed tab, matched as its drafts are; never a conversation's. */
+/** Drop only closed-tab pane chips; conversation scopes survive tab closure. */
 export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
   dropPendingWhere(
     (scopeKey) =>
@@ -228,7 +218,6 @@ export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
   )
 }
 
-/** The chips begun in a removed workspace, open and closed chats alike. */
 export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
   dropPendingWhere(
     (_scopeKey, pendingOwner) =>

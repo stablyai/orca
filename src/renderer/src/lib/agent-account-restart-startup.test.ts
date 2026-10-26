@@ -3,12 +3,14 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultSettings } from '../../../shared/constants'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
+import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   buildPaneAccountRestartStartup,
   resolveAgentAccountRestartResumeStartup,
@@ -249,6 +251,26 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
   })
 
+  // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
+  it('resumes a Claude started in another folder from that folder', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/repo/pkg' }
+    })
+    useAppStore.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID, startupCwd: '/repo' })
+        ]
+      }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+    )
+  })
+
   it('reports no resume when the Claude pane has no session id', () => {
     seedAgentStatus({ agentType: 'claude', state: 'done' })
 
@@ -265,7 +287,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(resolveAgentAccountRestartResumeStartup('claude', pane)).toBeNull()
   })
 
-  // Why both: a WSL worktree's UNC path and a WSL Windows runtime default each resolve a WSL runtime.
+  // Both WSL UNC paths and a WSL default runtime must resolve to the guest runtime.
   it.each([
     [
       'a WSL worktree path',
@@ -290,11 +312,20 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
         availableWslDistros: ['Ubuntu-24.04']
       })
       expect(projectRuntimeContext).toMatchObject({ status: 'resolved', runtime: { kind: 'wsl' } })
+      useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+        agentArgs: resolveTuiAgentLaunchArgs('claude', {
+          agentPermissionDefault: 'full-access',
+          agentDefaultArgs: { claude: '--tools Read' }
+        }),
+        agentEnv: {}
+      })
 
       const startup = buildPaneAccountRestartStartup('claude', pane)
 
-      expect(startup?.command).toBe(`claude '--resume' '${SESSION_ID}'`)
-      expect(startup?.resumeProviderSession?.id).toBe(SESSION_ID)
+      expect(startup?.command).toBe(
+        `claude '--dangerously-skip-permissions' '--tools' 'Read' '--resume' '${SESSION_ID}'`
+      )
+      expect(startup?.resumeProviderSession).toEqual({ key: 'session_id', id: SESSION_ID })
     }
   )
 })

@@ -28,6 +28,11 @@ ORCA orchestration ask --from <worker_handle> --question "<question>" --options 
 ORCA orchestration ask --from <worker_handle> --resume <message_id> --timeout-ms 600000
 ```
 
+Each wait defaults to 600000 ms (10 minutes). `--timeout-ms` accepts a positive
+integer up to 1800000 ms (30 minutes); larger values are rejected before creating
+or resuming a question. For decisions that take longer, resume the same question
+after each timeout.
+
 A timeout or disconnect leaves the original question pending. Resume its
 message ID; do not create a duplicate question.
 

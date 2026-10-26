@@ -76,7 +76,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const base = 'https://ado-sticky.example.com/tfs/MyCollection'
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
-    // First request learns the suffix; the second must not repeat the 400 round trip.
     expect(versions).toEqual(['7.1', '7.1-preview', '7.1-preview'])
   })
 
@@ -104,7 +103,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     }) as never
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
-    // Collection-level env base must not strip the project segment Git endpoints need.
     expect(paths).toEqual(['/tfs/MyCollection/MyProject/_apis/git/repositories/my-repo'])
   })
 

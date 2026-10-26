@@ -20,8 +20,7 @@ vi.mock('@/lib/desktop-notification-sound', async () => {
 
 let mockState: NotificationDispatchMockState
 
-// The hook lane hands main the row's verdict, read through the one accessor, so a terminal
-// agent's StopFailure is worded "failed" rather than "finished".
+// Use the event row’s shared verdict so StopFailure says failed instead of finished.
 describe('dispatchTerminalNotification verdict', () => {
   beforeEach(() => {
     mockState = resetNotificationDispatchMockState()

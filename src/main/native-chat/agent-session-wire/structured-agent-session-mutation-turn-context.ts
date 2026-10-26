@@ -1,5 +1,3 @@
-// The context an admitted mutation's plan runs in, built from the request that admitted it.
-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'

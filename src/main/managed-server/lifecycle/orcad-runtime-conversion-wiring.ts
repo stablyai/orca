@@ -1,4 +1,3 @@
-/** The live collaborators a host conversion needs: the census, the direct session and the server. */
 import { encodePairingOffer } from '../../../shared/pairing'
 import {
   getPreferredPairingOffer,
@@ -16,6 +15,7 @@ import {
 } from '../../ssh/orcad-migration-catalog-client'
 import { abortRemoteOrcadMigrationCatalogByReference } from '../../ssh/orcad-migration-catalog-reference-client'
 import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
+import { isBridgeableLease } from '../../ssh/legacy-relay/legacy-relay-bridge-leases'
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
 import type { OrcadServerRepository } from '../../ssh/orcad-migration-repository-link'
 import {
@@ -23,7 +23,6 @@ import {
   type OrcadServerFolderCatalog
 } from '../../ssh/orcad-server-folder-workspaces'
 
-/** The T6-9 client against this server, pinned to the runtime it paired with. */
 export function orcadMigrationDestinationFor(
   environment: KnownRuntimeEnvironment
 ): OrcadMigrationDestinationCatalog {
@@ -40,7 +39,6 @@ export function orcadMigrationDestinationFor(
   }
 }
 
-/** The projects this server already holds, read through the same pinned pairing. */
 export function orcadServerRepositoriesFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerRepository[]> {
@@ -51,7 +49,6 @@ export function orcadServerRepositoriesFor(
   )
 }
 
-/** The folder workspaces this server already holds, read through the same pinned pairing. */
 export function orcadServerFolderCatalogFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerFolderCatalog> {
@@ -68,6 +65,7 @@ export function conversionCollaborators(): Pick<
   | 'serverRepositoriesFor'
   | 'serverFolderCatalogFor'
   | 'censusHost'
+  | 'isBridgedPaneLease'
   | 'releaseDirectSession'
 > {
   return {
@@ -75,6 +73,7 @@ export function conversionCollaborators(): Pick<
     serverRepositoriesFor: orcadServerRepositoriesFor,
     serverFolderCatalogFor: orcadServerFolderCatalogFor,
     censusHost: (target) => censusHostRelayTerminalsFor(target)(),
+    isBridgedPaneLease: isBridgeableLease,
     releaseDirectSession: disconnectRegisteredSshTarget
   }
 }

@@ -102,7 +102,7 @@ describe('native popup admission', () => {
       })
     admit(onScripted)
     await Promise.resolve()
-    // An OpenURL child admitted during its own turn must not consume the pending script admission.
+    // OpenURL admission must leave the pending script admission intact.
     const onLinked = vi.fn(() => linked.browserWindow.webContents)
     allowNativeBrowserPopup({
       opener: opener.browserWindow.webContents,

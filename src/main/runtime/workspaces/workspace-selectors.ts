@@ -18,6 +18,7 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
+import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -41,9 +42,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    // Why only `id:`: every other selector kind is matched across the whole fleet, and their
-    // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
-    // winner where today they correctly refuse. An `id:` selector already names its repo.
+    // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
       const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
       if (scoped) {
@@ -142,6 +141,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this._orchestrationDb
   }
 
+  isChatWorkerErrorEscalationEnabled(): boolean {
+    return chatWorkerErrorEscalationEnabled(this.store?.getSettings?.())
+  }
+
   getNestedWorkerMaxDepth(): number {
     return resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: this.store?.getSettings?.()?.nestedWorkerMaxDepth
@@ -160,8 +163,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this.worktreeLineage.listWorkspaceLineage()
   }
 
-  // Why: one selector grammar, so connection-scoped resolution can narrow the same
-  // candidate set instead of reimplementing (and diverging from) the matching rules.
+  // Reuse the selector grammar when narrowing connection scope so matching cannot diverge.
   protected selectReposBySelector(selector: string): Repo[] {
     const repos = this.store?.getRepos() ?? []
     if (selector.startsWith('id:')) {

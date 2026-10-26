@@ -55,8 +55,6 @@ describe('LinearAgentSkillGuide', () => {
     expect(markup).not.toContain('2 of 3 ready')
   })
 
-  // The reported bug: a scan that could not vouch for "not installed" was counted
-  // as a step the user had left undone.
   it('reports an unverifiable skill scan as unknown instead of an unfinished step', () => {
     const markup = renderGuide({ skillUnverifiable: true })
 
@@ -81,8 +79,6 @@ describe('LinearAgentSkillGuide', () => {
     expect(markup).not.toContain('Cannot verify')
   })
 
-  // The unknown-skill label is only the headline when the skill is the sole open
-  // question; a plainly unfinished step must still read as the count.
   it('keeps the confirmed count when the unfinished step is the connection', () => {
     const markup = renderGuide({ connected: false, skillUnverifiable: true })
 

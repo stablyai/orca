@@ -40,8 +40,7 @@ export function revealElementInScrollContainer(
   container: HTMLElement,
   element: Element,
   behavior: ScrollBehavior,
-  // Why: any other scrollTop write cancels the scroll issued here mid-animation;
-  // callers use this to stand their scroll-position guards down until it lands.
+  // Notify guards to defer competing scrollTop writes until this smooth reveal finishes.
   onScrollIssued?: (targetTop: number) => void
 ): boolean {
   if (!container.contains(element)) {

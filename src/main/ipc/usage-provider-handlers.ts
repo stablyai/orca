@@ -34,7 +34,7 @@ function registerProviderHandlers<Scope, Range, BreakdownKind>(
   prefix: UsageProviderChannelPrefix,
   usage: UsageProviderHandlerStore<Scope, Range, BreakdownKind>
 ): void {
-  // Why: persisted state can still be loading on the worker; the sync getters must not see defaults.
+  // Wait for worker hydration so getters cannot return persisted-state defaults.
   ipcMain.handle(`${prefix}:getScanState`, async () => {
     await usage.whenLoaded()
     return usage.getScanState()

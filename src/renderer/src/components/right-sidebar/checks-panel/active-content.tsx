@@ -37,6 +37,7 @@ export function ChecksPanelActiveContent({
     activeWorktreeId,
     agentComposerState,
     aiActionDisabledReason,
+    fixChecksDisabledReason,
     canTargetPRComments,
     checks,
     checksError,
@@ -107,7 +108,7 @@ export function ChecksPanelActiveContent({
   )
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
-      {/* Why: surface a background-refresh failure over stale cached PR data so a GitHub outage doesn't look like a normal panel. GitHub-only. */}
+      {/* Show background GitHub failures above cached PR data so outages cannot look like a healthy panel. */}
       {activeReview?.provider === 'github' && prRefreshState?.status === 'error' ? (
         <div
           role="alert"
@@ -116,9 +117,7 @@ export function ChecksPanelActiveContent({
           {getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)}
         </div>
       ) : null}
-      {/* Hosted review header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
-        {/* Review number + state badge + refresh + open link */}
         <ChecksPanelReviewHeader
           review={activeReview}
           isRefreshing={isRefreshing}
@@ -140,7 +139,6 @@ export function ChecksPanelActiveContent({
           />
         ) : null}
 
-        {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
             <ImeInput
@@ -184,14 +182,12 @@ export function ChecksPanelActiveContent({
           </div>
         )}
 
-        {/* Updated at */}
         {activeReview.updatedAt && (
           <ChecksPanelUpdatedAtMetadata
             reviewShortLabel={reviewShortLabel}
             updatedAt={activeReview.updatedAt}
           />
         )}
-        {/* Merge / Delete Workspace actions */}
         {activeReview && activeWorktree && repo && (
           <HostedReviewActions
             review={activeReview}
@@ -214,13 +210,13 @@ export function ChecksPanelActiveContent({
           resolveConflictsDisabledReason={aiActionDisabledReason}
           isFixingChecksWithAI={isFixingChecksWithAI}
           onFixChecksWithAI={() => void handleFixChecksWithAI()}
-          fixChecksDisabled={Boolean(aiActionDisabledReason)}
-          fixChecksDisabledReason={aiActionDisabledReason}
+          fixChecksDisabled={Boolean(fixChecksDisabledReason)}
+          fixChecksDisabledReason={fixChecksDisabledReason}
         />
       )}
       {activeConflictReview && (
         <>
-          {/* Why: the triage strip owns the single Resolve action; the file list and fallback notice are informational. */}
+          {/* The triage strip owns Resolve; these sections only provide conflict information. */}
           <ConflictingFilesSection pr={activeConflictReview} />
           <MergeConflictNotice
             pr={activeConflictReview}
@@ -228,7 +224,7 @@ export function ChecksPanelActiveContent({
           />
         </>
       )}
-      {/* Why: with merge conflicts and no checks fetched, "No checks configured" is misleading — checks can't run until conflicts resolve. */}
+      {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
@@ -277,9 +273,7 @@ export function ChecksPanelActiveContent({
         onOpenChange={(open) => {
           if (!open) {
             setAgentComposerState(null)
-            // Why: a launch in flight owns the payload (claimed ref). Any other close —
-            // cancel, or closing after a failed launch — must drop it so the next action
-            // (e.g. fix checks) does not post stale fixing replies.
+            // Keep accepted-launch payloads; other closes must drop them so later actions cannot post stale replies.
             if (!commentResolutionLaunchAcceptedRef.current) {
               pendingCommentResolutionRef.current = null
               claimedCommentResolutionRef.current = null
@@ -331,11 +325,11 @@ export function ChecksPanelActiveContent({
             : null
         }
         onSaveAgentDefault={saveLaunchActionDefault}
-        // Why: claims the ack payload when the tab exists; the host writes still wait for delivery.
+        // Claim the ack payload when the tab exists; host writes still wait for prompt delivery.
         onLaunchAccepted={handleLaunchAccepted}
         onLaunchAborted={handleLaunchAborted}
         onLaunched={() => {
-          // Why: prompt delivery succeeded — the only point at which host replies/resolves may run.
+          // Successful prompt delivery is required before host replies or resolves.
           consumeClaimedCommentResolutionAfterDeliveryRef.current()
           if (agentComposerState?.actionId === 'resolveConflicts') {
             toast.success(
@@ -347,7 +341,7 @@ export function ChecksPanelActiveContent({
             return
           }
           if (agentComposerState?.actionId === 'resolveComments') {
-            // Why: resolve/reply toast is emitted by resolveSelectedThreadsAfterLaunch.
+            // resolveSelectedThreadsAfterLaunch emits the resolve/reply toast.
             return
           }
           toast.success(

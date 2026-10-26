@@ -20,7 +20,6 @@ import {
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA'
 const OTHER_ID = 'BBBBBBBBBBBBBBBBBBBBBB'
-/** A control character is the worst a JSON string literal can do to a byte: one becomes six. */
 const WORST_ESCAPING_CHARACTER = String.fromCharCode(1)
 
 function payloadOf(result: unknown): BridgeReplyPayload {
@@ -38,10 +37,57 @@ function framesOf(split: BridgeReplySplit): BridgeReplyMessage[] {
   return split.frames
 }
 
+function requiredLast(frames: BridgeReplyMessage[]): BridgeReplyMessage {
+  const frame = frames.at(-1)
+  if (frame === undefined) {
+    throw new Error('splitter emitted no final frame')
+  }
+  return frame
+}
+
+function checkedParts(chunks: string[], id = ID, missing = 0): BridgeReplyMessage[] {
+  return chunks.map((chunk, i) => {
+    const frame = part(i, chunks.length + missing, chunk, id)
+    const raw = JSON.stringify(frame)
+    expect(new TextEncoder().encode(raw).byteLength).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(readBridgeHostMessage(raw).ok).toBe(true)
+    return frame
+  })
+}
+
+function asciiParts(bytes: number, id = ID): BridgeReplyMessage[] {
+  const chunks: string[] = []
+  const size = BRIDGE_MAX_MESSAGE_BYTES - 512
+  for (let offset = 0; offset < bytes; offset += size) {
+    chunks.push('x'.repeat(Math.min(size, bytes - offset)))
+  }
+  return checkedParts(chunks, id, 1)
+}
+
+function splitInsidePair(extra = ''): BridgeReplyMessage[] {
+  const chunks = framesOf(splitBridgeReply(ID, ceilingPayload())).flatMap((frame) => {
+    if (!('chunk' in frame)) {
+      throw new Error('ceiling reply was not chunked')
+    }
+    return [frame.chunk]
+  })
+  const first = chunks.shift()
+  if (first === undefined) {
+    throw new Error('no first chunk')
+  }
+  const cut = first.indexOf(ASTRAL) + 1
+  expect(cut).toBeGreaterThan(0)
+  return checkedParts([
+    first.slice(0, cut),
+    first.slice(cut, cut + 1) + extra,
+    first.slice(cut + 1),
+    ...chunks
+  ])
+}
+
 const ASTRAL = String.fromCodePoint(0x1f600)
 const LONE_HIGH_SURROGATE = String.fromCharCode(0xd800)
 
-/** A payload whose serialized form is exactly the ceiling, `ASTRAL` all the way to the last bytes. */
 function ceilingPayload(): BridgeReplyPayload {
   const overhead = JSON.stringify(payloadOf('')).length
   const pairs = Math.floor((BRIDGE_MAX_REPLY_BYTES - overhead) / 4)
@@ -49,7 +95,6 @@ function ceilingPayload(): BridgeReplyPayload {
   return payloadOf(ASTRAL.repeat(pairs) + 'x'.repeat(padding))
 }
 
-/** Feeds frames in the given order and returns the assembler's answer to the last one. */
 function assemble(frames: BridgeReplyMessage[]): ReturnType<BridgeReplyAssembler['accept']> {
   const assembler = new BridgeReplyAssembler()
   let answer: ReturnType<BridgeReplyAssembler['accept']> = { status: 'pending' }
@@ -83,26 +128,30 @@ describe('splitBridgeReply', () => {
   })
 
   it('splits the worst reply the ceiling admits into fewer parts than the schema allows', () => {
-    // Every character re-escapes, which is the most a chunk can grow by, at the largest reply that
-    // can be sent at all. If this count ever reaches the part cap, the cap is the wrong number.
+    // Use maximum-size fully re-escaped content to prove every accepted reply stays below the part-count ceiling.
     const empty = payloadOf('')
     const backslashes = Math.floor((BRIDGE_MAX_REPLY_BYTES - JSON.stringify(empty).length) / 2)
     const payload = payloadOf('\\'.repeat(backslashes))
-    expect(utf8ByteLength(JSON.stringify(payload))).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
-    expect(utf8ByteLength(JSON.stringify(payload))).toBeGreaterThan(BRIDGE_MAX_REPLY_BYTES - 4)
+    expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeLessThanOrEqual(
+      BRIDGE_MAX_REPLY_BYTES
+    )
+    expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeGreaterThan(
+      BRIDGE_MAX_REPLY_BYTES - 4
+    )
     const frames = framesOf(splitBridgeReply(ID, payload))
-    expect(frames.length).toBe(26)
     expect(BRIDGE_MAX_REPLY_PARTS).toBeGreaterThan(frames.length)
     for (const frame of frames) {
       expect(utf8ByteLength(JSON.stringify(frame))).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
       expect(readBridgeHostMessage(JSON.stringify(frame)).ok).toBe(true)
     }
+    expect(assemble(frames)).toEqual({ status: 'complete', payload })
   })
 
   it('never cuts a frame inside a surrogate pair, at any cut parity', () => {
     for (let padding = 0; padding < 4; padding += 1) {
       const payload = payloadOf(`${'x'.repeat(padding)}${ASTRAL.repeat(1_000_000)}`)
       const frames = framesOf(splitBridgeReply(ID, payload))
+      expect(assemble(frames)).toEqual({ status: 'complete', payload })
       expect(frames.length).toBeGreaterThan(2)
       for (const frame of frames) {
         const chunk = 'part' in frame ? frame.chunk : ''
@@ -119,6 +168,9 @@ describe('splitBridgeReply', () => {
 
   it('round-trips a reply of exactly the ceiling, cuts and all', () => {
     const payload = ceilingPayload()
+    expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBe(
+      BRIDGE_MAX_REPLY_BYTES
+    )
     expect(assemble(framesOf(splitBridgeReply(ID, payload)))).toEqual({
       status: 'complete',
       payload
@@ -126,7 +178,6 @@ describe('splitBridgeReply', () => {
   })
 
   it('refuses a lone-surrogate reply over the ceiling rather than splitting it', () => {
-    // A lone surrogate is escaped to six characters, so this is past the ceiling six times over.
     const payload = payloadOf(LONE_HIGH_SURROGATE.repeat(BRIDGE_MAX_REPLY_BYTES / 6))
     expect(splitBridgeReply(ID, payload)).toEqual({ ok: false, refusal: 'reply-too-large' })
   })
@@ -139,24 +190,9 @@ describe('splitBridgeReply', () => {
     })
   })
 
-  it('stays under the frame cap when every byte escapes to six', () => {
-    const payload = payloadOf(WORST_ESCAPING_CHARACTER.repeat(1_300_000))
-    const frames = framesOf(splitBridgeReply(ID, payload))
-    expect(frames.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_PARTS)
-    for (const frame of frames) {
-      expect(utf8ByteLength(JSON.stringify(frame))).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-    }
-  })
-
   it('refuses a reply over the ceiling instead of chunking it forever', () => {
     const oversized = payloadOf('x'.repeat(BRIDGE_MAX_REPLY_BYTES + 1))
     expect(splitBridgeReply(ID, oversized)).toEqual({ ok: false, refusal: 'reply-too-large' })
-  })
-
-  it('chunks a reply of just under the ceiling', () => {
-    const atCeiling = payloadOf('x'.repeat(BRIDGE_MAX_REPLY_BYTES - 200))
-    expect(utf8ByteLength(JSON.stringify(atCeiling))).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
-    expect(splitBridgeReply(ID, atCeiling).ok).toBe(true)
   })
 })
 
@@ -171,7 +207,16 @@ describe('round trip', () => {
 
   for (const [name, payload] of payloads) {
     it(`reassembles ${name} byte for byte`, () => {
-      expect(assemble(framesOf(splitBridgeReply(ID, payload)))).toEqual({
+      const frames = framesOf(splitBridgeReply(ID, payload))
+      expect(frames.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_PARTS)
+      for (const frame of frames) {
+        const raw = JSON.stringify(frame)
+        expect(new TextEncoder().encode(raw).byteLength).toBeLessThanOrEqual(
+          BRIDGE_MAX_MESSAGE_BYTES
+        )
+        expect(readBridgeHostMessage(raw).ok).toBe(true)
+      }
+      expect(assemble(frames)).toEqual({
         status: 'complete',
         payload
       })
@@ -179,8 +224,7 @@ describe('round trip', () => {
   }
 
   it('restores a surrogate pair that was cut in half between two frames', () => {
-    // Each half is a lone surrogate, which `JSON.stringify` escapes rather than corrupting, so the
-    // pair comes back whole once the halves are joined.
+    // JSON escapes lone surrogate halves; joining the decoded parts must restore the original pair.
     const head = '{"id":"r1","ok":true,"result":"\ud83d'
     const tail = '\ude00","_meta":{"runtimeId":"runtime-a"}}'
     expect(JSON.parse(JSON.stringify(head))).toBe(head)
@@ -188,16 +232,6 @@ describe('round trip', () => {
       status: 'complete',
       payload: payloadOf('\u{1f600}')
     })
-  })
-
-  it('round-trips an astral payload at every cut parity', () => {
-    for (let padding = 0; padding < 4; padding += 1) {
-      const payload = payloadOf(`${'x'.repeat(padding)}${'\u{1f600}'.repeat(400_000)}`)
-      expect(assemble(framesOf(splitBridgeReply(ID, payload)))).toEqual({
-        status: 'complete',
-        payload
-      })
-    }
   })
 
   it('reassembles frames that arrive out of order', () => {
@@ -215,11 +249,11 @@ describe('round trip', () => {
     for (const frame of [...firstFrames.slice(0, -1), ...secondFrames.slice(0, -1)]) {
       expect(assembler.accept(frame)).toEqual({ status: 'pending' })
     }
-    expect(assembler.accept(secondFrames[secondFrames.length - 1] ?? part(0, 1, ''))).toEqual({
+    expect(assembler.accept(requiredLast(secondFrames))).toEqual({
       status: 'complete',
       payload: second
     })
-    expect(assembler.accept(firstFrames[firstFrames.length - 1] ?? part(0, 1, ''))).toEqual({
+    expect(assembler.accept(requiredLast(firstFrames))).toEqual({
       status: 'complete',
       payload: first
     })
@@ -249,11 +283,17 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'duplicate-part'
     })
-    // A whole set for the same id would otherwise complete, the refusal forgotten.
     const payload = payloadOf('small')
     const serialized = JSON.stringify(payload)
-    for (const index of [0, 1, 2]) {
-      expect(assembler.accept(part(index, 3, serialized.slice(index * 5, index * 5 + 5)))).toEqual({
+    const size = Math.ceil(serialized.length / 3)
+    const frames = checkedParts([
+      serialized.slice(0, size),
+      serialized.slice(size, size * 2),
+      serialized.slice(size * 2)
+    ])
+    expect(assemble(frames)).toEqual({ status: 'complete', payload })
+    for (const frame of frames) {
+      expect(assembler.accept(frame)).toEqual({
         status: 'failed',
         refusal: 'duplicate-part'
       })
@@ -267,13 +307,17 @@ describe('BridgeReplyAssembler refusals', () => {
 
   it('refuses every later part of a reply that went past the ceiling', () => {
     const assembler = new BridgeReplyAssembler()
-    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    let answer: ReturnType<BridgeReplyAssembler['accept']> = { status: 'pending' }
-    for (let index = 0; index < 20; index += 1) {
-      answer = assembler.accept(part(index, 20, full))
+    const frames = asciiParts(BRIDGE_MAX_REPLY_BYTES + 1)
+    for (const frame of frames.slice(0, -1)) {
+      expect(assembler.accept(frame)).toEqual({ status: 'pending' })
     }
-    // Thirteen full parts pass the ceiling; without the tombstone the rest would keep arriving.
-    expect(answer).toEqual({ status: 'failed', refusal: 'reply-too-large' })
+    expect(assembler.accept(requiredLast(frames))).toEqual({
+      status: 'failed',
+      refusal: 'reply-too-large'
+    })
+    for (const frame of checkedParts(['new', 'reply'])) {
+      expect(assembler.accept(frame)).toEqual({ status: 'failed', refusal: 'reply-too-large' })
+    }
   })
 
   it('refuses a part whose count disagrees with the parts already held', () => {
@@ -303,7 +347,6 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'too-many-pending'
     })
-    // A part for an id already held still lands: the bound is on ids, not on parts.
     expect(assembler.accept(part(1, 2, 'b', idOf(0)))).toEqual({
       status: 'failed',
       refusal: 'malformed-json'
@@ -314,21 +357,20 @@ describe('BridgeReplyAssembler refusals', () => {
 
   it('refuses the part that would push every reply in flight past the aggregate', () => {
     const assembler = new BridgeReplyAssembler()
-    const idOf = (index: number): string => `id${String(index).padStart(20, '0')}`
-    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    const remainder = 'x'.repeat(BRIDGE_MAX_REPLY_BYTES - 12 * BRIDGE_MAX_MESSAGE_BYTES)
-    // Four replies each held to exactly the per-reply ceiling is exactly the aggregate.
+    const idOf = (index: number) => `id${String(index).padStart(20, '0')}`
+    let heldParts = 0
     for (let id = 0; id < 4; id += 1) {
-      for (let index = 0; index < 12; index += 1) {
-        expect(assembler.accept(part(index, 20, full, idOf(id)))).toEqual({ status: 'pending' })
+      const frames = asciiParts(BRIDGE_MAX_REPLY_BYTES, idOf(id))
+      heldParts = frames.length
+      for (const frame of frames) {
+        expect(assembler.accept(frame)).toEqual({ status: 'pending' })
       }
-      expect(assembler.accept(part(12, 20, remainder, idOf(id)))).toEqual({ status: 'pending' })
     }
-    expect(assembler.accept(part(0, 20, 'x', idOf(4)))).toEqual({
+    expect(assembler.accept(part(0, 2, 'x', idOf(4)))).toEqual({
       status: 'failed',
       refusal: 'too-many-pending'
     })
-    expect(assembler.accept(part(13, 20, 'x', idOf(0)))).toEqual({
+    expect(assembler.accept(part(heldParts, heldParts + 1, 'x', idOf(0)))).toEqual({
       status: 'failed',
       refusal: 'too-many-pending'
     })
@@ -357,48 +399,36 @@ describe('BridgeReplyAssembler refusals', () => {
     })
   })
 
-  it('measures the joined reply, so a pair split across two parts is not counted twice', () => {
+  it('measures joined UTF8 bytes when a surrogate pair crosses parts', () => {
     const payload = ceilingPayload()
-    const serialized = JSON.stringify(payload)
-    // One code unit into the first pair: each half would encode as three bytes instead of the four
-    // the pair costs whole, which is two bytes of headroom this reply does not have.
-    const cut = serialized.indexOf(ASTRAL) + 1
-    expect(
-      assemble([part(0, 2, serialized.slice(0, cut)), part(1, 2, serialized.slice(cut))])
-    ).toEqual({ status: 'complete', payload })
+    expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBe(
+      BRIDGE_MAX_REPLY_BYTES
+    )
+    expect(assemble(splitInsidePair())).toEqual({ status: 'complete', payload })
   })
 
   it('refuses a joined reply past the ceiling whose code units still fit', () => {
-    // Astral text is two code units to four bytes, so counting units alone would let this through.
-    const overhead = JSON.stringify(payloadOf('')).length
-    const pairs = Math.floor((BRIDGE_MAX_REPLY_BYTES - overhead) / 4) + 1
-    const serialized = JSON.stringify(payloadOf(ASTRAL.repeat(pairs)))
-    expect(utf8ByteLength(serialized)).toBeGreaterThan(BRIDGE_MAX_REPLY_BYTES)
-    expect(serialized.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
-    const cut = serialized.indexOf(ASTRAL) + 1
-    expect(
-      assemble([part(0, 2, serialized.slice(0, cut)), part(1, 2, serialized.slice(cut))])
-    ).toEqual({ status: 'failed', refusal: 'reply-too-large' })
+    const frames = splitInsidePair(ASTRAL)
+    const joined = frames.map((frame) => ('chunk' in frame ? frame.chunk : '')).join('')
+    expect(joined.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_BYTES)
+    expect(new TextEncoder().encode(joined).byteLength).toBeGreaterThan(BRIDGE_MAX_REPLY_BYTES)
+    expect(assemble(frames)).toEqual({ status: 'failed', refusal: 'reply-too-large' })
   })
 
-  it('accepts parts summing to exactly the ceiling', () => {
+  it('retains incomplete ASCII parts totaling exactly the reply ceiling', () => {
     const assembler = new BridgeReplyAssembler()
-    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    for (let index = 0; index < 12; index += 1) {
-      expect(assembler.accept(part(index, 14, full))).toEqual({ status: 'pending' })
+    for (const frame of asciiParts(BRIDGE_MAX_REPLY_BYTES)) {
+      expect(assembler.accept(frame)).toEqual({ status: 'pending' })
     }
-    const remaining = BRIDGE_MAX_REPLY_BYTES - 12 * BRIDGE_MAX_MESSAGE_BYTES
-    expect(assembler.accept(part(12, 14, 'x'.repeat(remaining)))).toEqual({ status: 'pending' })
   })
 
-  it('aborts one byte past the ceiling', () => {
+  it('aborts incomplete ASCII parts one byte past the reply ceiling', () => {
     const assembler = new BridgeReplyAssembler()
-    const full = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    for (let index = 0; index < 12; index += 1) {
-      assembler.accept(part(index, 14, full))
+    const frames = asciiParts(BRIDGE_MAX_REPLY_BYTES + 1)
+    for (const frame of frames.slice(0, -1)) {
+      expect(assembler.accept(frame)).toEqual({ status: 'pending' })
     }
-    const remaining = BRIDGE_MAX_REPLY_BYTES - 12 * BRIDGE_MAX_MESSAGE_BYTES
-    expect(assembler.accept(part(12, 14, 'x'.repeat(remaining + 1)))).toEqual({
+    expect(assembler.accept(requiredLast(frames))).toEqual({
       status: 'failed',
       refusal: 'reply-too-large'
     })

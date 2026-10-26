@@ -27,14 +27,12 @@ export const DictationStart = z.object({
 export const DictationChunk = z.object({
   dictationId: requiredString('Missing dictation ID'),
   audioBase64: requiredString('Missing audio chunk')
-    // Why: feedMobileDictation decodes into Buffer + Float32Array; reject
-    // oversized chunks before allocation. This mirrors the mobile pending-audio budget.
+    // Bound before Buffer/Float32Array allocation, matching the mobile pending-audio budget.
     .refine(
       (value) => value.length <= MAX_DICTATION_AUDIO_CHUNK_BASE64_LENGTH,
       'Audio chunk is too large'
     )
-    // Why: Buffer.from(..., 'base64') silently drops malformed bytes; reject
-    // bad mobile audio chunks instead of feeding empty/corrupt PCM.
+    // Buffer.from silently discards malformed base64; refuse corrupt PCM instead.
     .refine(isValidAudioBase64, 'Audio chunk must be base64'),
   sampleRate: z.number().finite().positive()
 })

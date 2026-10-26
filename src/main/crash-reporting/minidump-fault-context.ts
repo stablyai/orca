@@ -1,10 +1,4 @@
-// What a native fault touched and which bytes were executing.
-//
-// Why: the faulting RVA alone cannot separate an engine bug from a corrupted
-// code page or unstable CPU. Two Windows renderer AVs mapped to official
-// symbols as writes into memory the preceding instructions had just written;
-// the code bytes Crashpad captured at the instruction pointer settle that by
-// comparison with the shipped binary.
+// Captured instruction bytes permit comparison with the shipped binary during fault triage.
 
 import { findStream, type MinidumpView } from './minidump-stream-reader'
 
@@ -25,7 +19,7 @@ const AMD64_RSP_OFFSET = 0x98
 const MEMORY_DESCRIPTOR_SIZE = 16
 const MAX_MEMORY_RANGES = 16_384
 const CODE_BYTES = 16
-// Beyond this the fault is not a slot in the faulting frame, so the delta adds nothing.
+// Larger deltas add no useful evidence about the faulting stack frame.
 const MAX_STACK_POINTER_DELTA = 1024 * 1024
 
 const ACCESS_KINDS: Readonly<Record<number, MinidumpFaultContext['access']>> = {

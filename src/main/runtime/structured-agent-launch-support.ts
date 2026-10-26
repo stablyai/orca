@@ -38,9 +38,7 @@ type LaunchSupportRuntime = LaunchSettingsRuntime & {
   resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
 }
 
-/** The agent's own check of the release installed on this host, with the environment and Command
- *  setting its launch starts from, run in `cwd`; null for an agent whose location alone decides.
- *  Throws the launch's pre-spawn refusal for an unrunnable Command setting. */
+/** Check the installed release with launch env/Command settings in cwd; null means location-only admission. Unrunnable Command settings throw launch refusal. */
 export async function observeStructuredAgentLaunch(
   agent: string,
   cwd: () => Promise<string>,
@@ -97,7 +95,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   return {
     ...(await resolveHostAgentBaseEnvironment(settings)),
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
+    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
   }
 }
 
@@ -123,9 +121,7 @@ export async function structuredAgentHostLaunchSources(
   }
 }
 
-/** `agentSession.createSupport` on this host: every refusal it can know before spawning. The
- *  agent's location rule and installed-agent check from its registration, without installing the
- *  host. A refusal logs which check said no. */
+/** Report pre-spawn refusals from registered location/release checks without installing the host; log the refusing check. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
   worktreeSelector: string

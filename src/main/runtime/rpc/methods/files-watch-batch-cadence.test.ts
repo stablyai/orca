@@ -68,8 +68,16 @@ describe('files.watch batch cadence negotiation', () => {
   it('treats an unknown cadence from a newer client as legacy instead of rejecting', async () => {
     vi.useFakeTimers()
     try {
-      const { replies } = await startWatch({ worktree: 'id:wt-1', batchCadence: 'future' })
+      const { replies, emitChange } = await startWatch({
+        worktree: 'id:wt-1',
+        batchCadence: 'future'
+      })
       expect(replies[1]?.result?.type).toBe('ready')
+      emitChange([{ kind: 'update', absolutePath: '/repo/a.ts' }])
+      await vi.advanceTimersByTimeAsync(149)
+      expect(changedCount(replies)).toBe(0)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(changedCount(replies)).toBe(1)
     } finally {
       vi.useRealTimers()
     }

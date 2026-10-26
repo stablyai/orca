@@ -134,8 +134,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...setup,
     setup: {
       ...setup.setup,
-      // Why: the sandbox reports its own checkout as "local"; the desktop app
-      // must route follow-up worktree operations back through this runtime.
+      // The sandbox calls its checkout local; desktop follow-up operations must still route through this runtime.
       hostId
     }
   }

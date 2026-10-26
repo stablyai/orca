@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import {
   renderJiraPromptTemplate,
   getJiraPromptTemplates,

@@ -192,8 +192,7 @@ describe('client-placed browser.upload routing', () => {
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
 
-    // Why: DOM.setFileInputFiles only records the path — Chromium reads it at submit time, so the
-    // bytes must still be on disk once browser.upload has already reported success.
+    // Chromium reads file-input paths lazily, after upload success.
     const staged = (automationCalls[0].params.files as string[])[0]
     expect(await readFile(staged, 'utf8')).toBe('remote-bytes')
 
@@ -228,8 +227,7 @@ describe('client-placed browser.upload routing', () => {
     const { executor, retireRendererPage, releaseRouteSession, releaseNetworkRoute } =
       createHarness({
         fileChannel: transport,
-        // Why: Chromium still holding a staged file open is EBUSY on Windows, and the partition is
-        // only reclaimed once the guest and its route session are gone.
+        // Windows may keep staged files busy until the guest and route session close.
         uploadStaging: new BrowserClientUploadStaging(stagingRoot, {
           mkdir: async () => {},
           writeFile: async () => {},
@@ -278,10 +276,8 @@ describe('client-placed browser.upload routing', () => {
     })
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
-    // The busy directory fails the close command, so the copies are still staged at shutdown.
     await executor.handle(closePageCommand(), new AbortController().signal)
 
-    // Why: leaving staged bytes behind silently is how a fenced host keeps another user's files.
     await expect(executor.close()).rejects.toMatchObject({
       message: 'Browser client page executor cleanup failed',
       errors: expect.arrayContaining([

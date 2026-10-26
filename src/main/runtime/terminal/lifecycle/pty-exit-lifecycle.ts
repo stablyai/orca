@@ -61,9 +61,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     options: {
       hostExitConfirmed?: boolean
       cause?: TerminalExitCause
-      /** The provider's own physical-exit callback fired. Separate from `hostExitConfirmed`, which
-       * also drives the SSH surface decision and the liveness verdict: node-pty reports real exits
-       * as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
+      /** Physical provider exit differs from hostExitConfirmed: node-pty can report a real exit as -1, indistinguishable numerically from failed stops. */
       providerExitObserved?: boolean
       /** A window's view of the pane was showing when it ended (layout-owner build). */
       viewShown?: boolean
@@ -164,7 +162,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
         0
       advertisedUrlWatcher.unbindPty(ptyId)
-      // Clean up new mobile state for this PTY
       this.mobileSubscribers.delete(ptyId)
       this.terminalViewSubscribers.clearSubscribers(ptyId)
       this.mobileDisplayModes.delete(ptyId)
@@ -194,28 +191,19 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.terminalCwdByPtyId.delete(ptyId)
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
       this.wslDistroByPtyId.delete(ptyId)
-      // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
-      // process died, renderer reload) must release its team + nested panes map.
-      // Previously only explicit closeTerminal evicted it, so natural exits leaked
-      // one team per never-reused teamId for the runtime's lifetime.
+      // Natural exits must release Claude leader teams too; explicit-close-only cleanup leaked teams for the runtime lifetime.
       const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
       if (exitedTeamLeaderHandle) {
         this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
       }
-      // Layout state machine: clear `layouts` and `layoutQueues`. Any
-      // already-queued applyLayout work for this ptyId will run, but every
-      // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
-      // short-circuits with `pty-exited`.
+      // Queued layout work rechecks missing layout and refuses pty-exited after cleanup.
       this.layouts.delete(ptyId)
       this.layoutQueues.delete(ptyId)
       this.freshSubscribeGuard.delete(ptyId)
       this.cancelPendingDriverMutations(ptyId)
-      // Why: a cold restore can respawn under the same session id within the
-      // delayed-Enter window; the armed Enter would inject \r into the
-      // replacement and stamp rows it never received.
+      // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
       this.orchestrationMailboxNotifications.retirePty(ptyId)
-      // Why: the dead pty's terminal handle and any run bound to its panes still carry mailbox
-      // pointers; schedule a debounced repoint so they do not stay aimed at a retired session.
+      // Repoint retained handle/pane mailbox pointers away from the retired session.
       for (const leaf of this.getLeavesForPty(ptyId)) {
         const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
         if (mailboxHandle) {
@@ -234,10 +222,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
         this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
       }
-      // Why: clear driver state and notify the renderer so any lock banner on
-      // this dead pane unmounts. Without this, the pane shows a stuck banner
-      // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
-      // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
+      // Clear and notify driver state so dead panes cannot retain mobile lock banners.
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
       this.disposeHeadlessTerminal(ptyId)
@@ -252,10 +237,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         pty.disconnectedAt = Date.now()
         pty.lastExitCode = exitCode
         pty.lastExitCause = exitCause
-        // Why: the exited process's live frames say nothing about a replacement.
-        // A same-id respawn makes the leaf writable again before any new title,
-        // so leaving this true would let push delivery type into the new process
-        // on the dead one's idle. lastAgentStatus itself stays for `ps` display.
+        // Same-id replacements must earn live idle evidence before delivery; retain status only for display.
         pty.lastAgentStatusObservedLive = false
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
@@ -301,10 +283,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })
       }
     }
-    // Why: an explicit whole-tab close drops the leaf from the graph *before*
-    // this exit lands, so a leaf-only walk found nothing and left the dispatch
-    // reading 'dispatched' forever. The PTY's own handle and pane key survive
-    // that teardown, so settle from them too (STA-4603).
+    // Tab close can remove graph leaves before exit; settle dispatches through surviving PTY handle/pane identity too (STA-4603).
     const ptyHandle = this.handleByPtyId.get(ptyId)
     if (ptyHandle && !exitedSurfaces.some((surface) => surface.handle === ptyHandle)) {
       exitedSurfaces.push({

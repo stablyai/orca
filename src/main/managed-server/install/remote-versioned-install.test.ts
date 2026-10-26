@@ -196,7 +196,6 @@ describe('acquireInstallLock', () => {
       })
 
       const promise = acquireInstallLock(conn, '/r')
-      // Drive the polling loop: each iteration awaits a 1s timer.
       for (let i = 0; i < 5; i++) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
@@ -461,7 +460,7 @@ describe('relay GC claim', () => {
 })
 
 describe('gcOldRemoteInstallVersions', () => {
-  // Stands in for orcad's liveness probe: only DEAD frees a dir, and an unanswered probe keeps it.
+  // Only proven DEAD permits removal; unanswered liveness retains the directory.
   const collectOldVersions = (
     remoteHome = '/home/u',
     currentDir = '/home/u/.orca-remote/orcad-0.1.0+bbb',
@@ -485,9 +484,7 @@ describe('gcOldRemoteInstallVersions', () => {
   })
 
   it('removes a sibling that is complete, unlocked, and has no live socket', async () => {
-    // ls listing
     mockExec.mockResolvedValueOnce('orcad-0.1.0+aaa\norcad-0.1.0+bbb\n')
-    // For sibling "aaa": safety probes pass, then GC claims the install lock before removal.
     mockExec
       .mockResolvedValueOnce('OPEN')
       .mockResolvedValueOnce('COMPLETE')
@@ -596,9 +593,7 @@ describe('gcOldRemoteInstallVersions', () => {
 
   it('skips siblings that are missing .install-complete (mid-install or partial)', async () => {
     mockExec.mockResolvedValueOnce('orcad-0.1.0+aaa\n')
-    mockExec
-      .mockResolvedValueOnce('OPEN') // not locked
-      .mockResolvedValueOnce('PARTIAL') // missing .install-complete
+    mockExec.mockResolvedValueOnce('OPEN').mockResolvedValueOnce('PARTIAL')
     await collectOldVersions()
     const cmds = mockExec.mock.calls.map(([, c]) => c)
     expect(cmds.some((c) => c.includes('rm -rf'))).toBe(false)
@@ -607,7 +602,6 @@ describe('gcOldRemoteInstallVersions', () => {
   it('skips siblings whose .install-lock is held and fresh', async () => {
     mockExec.mockResolvedValueOnce('orcad-0.1.0+aaa\n')
     mockExec.mockResolvedValueOnce('LOCKED')
-    // isLockStale: age ~now → not stale.
     mockExec.mockResolvedValueOnce('0\n')
     await collectOldVersions()
     const cmds = mockExec.mock.calls.map(([, c]) => c)
@@ -617,20 +611,19 @@ describe('gcOldRemoteInstallVersions', () => {
   it('removes a sibling with a stale lock + .install-complete (rm-lock failed mid-finalize)', async () => {
     mockExec.mockResolvedValueOnce('orcad-0.1.0+aaa\n')
     mockExec.mockResolvedValueOnce('LOCKED')
-    // isLockStale: age well above the stale window → stale.
     mockExec.mockResolvedValueOnce(`${21 * 60}\n`)
-    mockExec.mockResolvedValueOnce('COMPLETE') // .install-complete present
-    mockExec.mockResolvedValueOnce('DEAD') // liveness probe
-    mockExec.mockResolvedValueOnce('OK') // stable sibling GC claim
-    mockExec.mockResolvedValueOnce('') // write claim ownership token
+    mockExec.mockResolvedValueOnce('COMPLETE')
+    mockExec.mockResolvedValueOnce('DEAD')
+    mockExec.mockResolvedValueOnce('OK')
+    mockExec.mockResolvedValueOnce('')
     mockExec.mockResolvedValueOnce('LOCKED')
     mockExec.mockResolvedValueOnce(`${21 * 60}\n`)
     mockExec.mockResolvedValueOnce('COMPLETE')
     mockExec.mockResolvedValueOnce('DEAD')
     mockExec.mockResolvedValueOnce('OWNED')
     mockExec.mockResolvedValueOnce('MOVED')
-    mockExec.mockResolvedValueOnce('RELEASED') // release sibling claim
-    mockExec.mockResolvedValueOnce('') // remove tombstone
+    mockExec.mockResolvedValueOnce('RELEASED')
+    mockExec.mockResolvedValueOnce('')
     await collectOldVersions()
     const lastCmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(lastCmd).toContain('rm -rf')
@@ -677,7 +670,7 @@ describe('gcOldRemoteInstallVersions', () => {
   it('does not consider the current dir as a GC candidate', async () => {
     mockExec.mockResolvedValueOnce('orcad-0.1.0+aaa\n')
     await collectOldVersions('/home/u', '/home/u/.orca-remote/orcad-0.1.0+aaa')
-    expect(mockExec.mock.calls.length).toBe(1) // only the listing
+    expect(mockExec.mock.calls.length).toBe(1)
   })
 
   it('ignores entries that do not match the model version dir regex (allowlist)', async () => {
@@ -709,12 +702,12 @@ describe('gcOldRemoteInstallVersions', () => {
       .mockResolvedValueOnce('orcad-0.1.0+aaa\n')
       .mockResolvedValueOnce('OPEN')
       .mockResolvedValueOnce('COMPLETE')
-      .mockResolvedValueOnce('DEAD') // liveness probe
-      .mockResolvedValueOnce('OK') // GC sibling claim
-      .mockResolvedValueOnce('') // write claim ownership token
+      .mockResolvedValueOnce('DEAD')
+      .mockResolvedValueOnce('OK')
+      .mockResolvedValueOnce('')
       .mockResolvedValueOnce('LOCKED') // repair won before the safety recheck
       .mockResolvedValueOnce('0')
-      .mockResolvedValueOnce('RELEASED') // release GC sibling claim
+      .mockResolvedValueOnce('RELEASED')
 
     await collectOldVersions()
 

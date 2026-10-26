@@ -208,8 +208,7 @@ export function registerReposCatalogMergeIdentityTests(): void {
     })
   })
 
-  // The sidebar burst that refills this cache only runs when these arrays change reference, so a
-  // no-op fetch must not wipe it — otherwise stale-folder rows silently fail open forever.
+  // No-op arrays must preserve sidebar refill cache or stale-folder checks silently fail open.
   describe('folder path status cache retention across catalog fetches', () => {
     it('keeps cached path statuses when a project-group refetch changes nothing', async () => {
       const store = createTestStore()

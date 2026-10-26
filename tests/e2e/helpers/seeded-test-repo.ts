@@ -1,8 +1,3 @@
-/**
- * Seeded git repo for Orca E2E fixtures: creation and validity checks for the
- * disposable test repo (plus its secondary worktree) that specs operate on.
- */
-
 import {
   existsSync,
   mkdirSync,
@@ -55,9 +50,7 @@ export function isValidGitRepo(repoPath: string): boolean {
 }
 
 export function createSeededTestRepo(options: { publishPath?: boolean } = {}): string {
-  // Why: realpathSync so the seeded path matches the store's repo.path on
-  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
-  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  // Canonicalize macOS /var symlinks to match Git’s repo.path after add.
   const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
@@ -81,8 +74,7 @@ export function createSeededTestRepo(options: { publishPath?: boolean } = {}): s
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  // Why: worker-scoped fixture fallbacks can run in parallel; UUIDs avoid
-  // colliding on the same temp repo/worktree when workers start together.
+  // Worker-scoped fallbacks can run together; UUIDs prevent temp worktree collisions.
   const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
   execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,

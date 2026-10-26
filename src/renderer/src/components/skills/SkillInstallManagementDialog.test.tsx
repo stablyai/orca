@@ -113,7 +113,6 @@ function skillsApi(
       }
     }),
     revokeShare: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
-    deletePackageVersion: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
     deletePackage: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
     cancelInstall: vi.fn().mockResolvedValue({ cancelled: true }),
     onInstallProgress: vi.fn((listener) => {
@@ -291,8 +290,7 @@ describe('SkillInstallManagementDialog', () => {
       status: 'ok',
       value: packageDetails([version('local_version', '2026-08-12T00:00:00.000Z')])
     })
-    // Why: the stale local details would repaint the version picker with the
-    // local build's date.
+    // Reject stale local details so their version date cannot repaint the remote picker.
     await waitFor(() =>
       expect(screen.queryByText(dateLabel('2026-08-12T00:00:00.000Z'))).toBeNull()
     )

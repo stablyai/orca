@@ -173,10 +173,12 @@ describe('TerminalContextMenu', () => {
     expect(onContinueAgentSessionInNewSession).toHaveBeenCalledTimes(1)
   })
 
-  it('does not expose a native/terminal view switch in the terminal menu', () => {
+  it('hides chat continuation when the pane cannot switch views', () => {
     renderMenu()
 
-    expect(items.list.some((item) => childrenText(item.children).includes('Switch to'))).toBe(false)
+    const labels = items.list.map((item) => childrenText(item.children))
+    expect(labels.some((label) => label.includes('Continue in Chat UI'))).toBe(false)
+    expect(labels.some((label) => label.includes('Continue with Terminal Agent'))).toBe(false)
   })
 
   it('shows Copy Session ID only for panes with provider identity', () => {

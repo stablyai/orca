@@ -117,7 +117,6 @@ describe('account RPC methods', () => {
       const started = await call('accounts.hostSignInStart', { provider: 'claude' })
       const waiting = await call('accounts.hostSignInWait', { flowId: started.flowId })
       expect(waiting).toMatchObject({ phase: 'waiting', prompt: { needsCode: true } })
-      // Another paired device cannot answer it.
       await expect(
         call(
           'accounts.hostSignInSubmitCode',
@@ -161,7 +160,7 @@ describe('account RPC methods', () => {
       throw new Error('accounts.list must be a request method')
     }
 
-    // Why: clients that send no params (mobile, web) must keep the forced lane.
+    // Omitted params from mobile/web must retain forced refresh.
     await expect(list.handler(list.params?.parse({}), { runtime })).resolves.toBe(snapshot)
     expect(runtime.refreshAccountsForMobile).toHaveBeenCalledOnce()
   })

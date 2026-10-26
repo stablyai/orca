@@ -33,7 +33,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         rendererLaunchAuthority: null
       },
       preAllocatedHandle: args.preAllocatedHandle,
-      // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; hook titles and cache cleanup need this reverse lookup.
+      // Runtime spawns bypass renderer IPC; publish reverse pane lookup for hooks and cleanup.
       paneKey: normalizeValidPaneKey(ctx.env?.ORCA_PANE_KEY),
       memorySessionId: ctx.sessionId ?? null,
       resumeArgvDropped: ctx.codexResumeArgvDropped,

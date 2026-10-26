@@ -30,9 +30,7 @@ export async function loadJiraClientModule(
       }
     }
   }))
-  // Why here and not in beforeEach: vi.resetModules() above gives the http-client module
-  // a fresh singleton, so the port must be installed on that instance. The electron net
-  // mock alone is inert now that Jira fetches through the port.
+  // Install the HTTP port after resetModules so the fixture uses the fresh singleton.
   const { setMainHttpClient } = await import('../../network/http-client')
   setMainHttpClient({
     fetch: (url, init) => netFetchMock(url, init),
@@ -51,8 +49,7 @@ export async function loadJiraClientModule(
     return { ...actual, homedir: () => tempHome }
   })
 
-  // One import call per reset so the split modules share a single graph (and
-  // thus one copy of the request queue / credential caches) per test.
+  // Split modules must share one graph, request queue and credential cache per reset.
   const [client, queue, api] = await Promise.all([
     import('../client'),
     import('../request-queue'),

@@ -19,10 +19,7 @@ type Props = {
   variant?: 'document' | 'comment'
 }
 
-// Themed, dependency-free markdown for PR bodies + comments — the RN analogue of
-// the desktop CommentMarkdown. The previous third-party renderer hung the JS thread
-// on mount; this renders a small block model and falls back to plain text on any
-// parse error, so it can never crash the comment list.
+// Use small themed block parser with plain-text fallback: prior third-party renderer hung JS thread on mount; parse failure must not crash comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
   const base = variant === 'document' ? typography.bodySize : 13
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
@@ -159,8 +156,7 @@ function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'f
   return 'flex-start'
 }
 
-// GFM table rendered with Views. A horizontal ScrollView keeps wide tables from
-// breaking the sidebar layout; fixed-width columns give cells room to sit side by side.
+// Keep wide GFM tables in horizontal ScrollView with fixed-width columns so sidebar layout stays intact.
 function TableBlock({
   block,
   base

@@ -8,17 +8,12 @@ import {
 } from './bridge/bridge-envelope'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
-import {
-  BRIDGE_HAPTICS_GRANT,
-  BRIDGE_HAPTICS_KINDS,
-  BRIDGE_HAPTICS_NOTIFY
-} from './bridge/bridge-haptics-notify'
-import { BRIDGE_NATIVE_GRANTS } from './bridge/bridge-init-frame'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 
 describe('notifications, refusals and the fence', () => {
   it('forwards foreground with the arity the page used, and the viewport whole', () => {
-    const bridge = harness()
+    const bridge = harness({ routeGrants: [] })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground', reason: 'app-resume' }))
@@ -39,6 +34,10 @@ describe('notifications, refusals and the fence', () => {
         error: { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
       })
     )
+    expect(bridge.frames()[0]).toMatchObject({
+      type: 'init',
+      grants: { native: expect.arrayContaining(['fault']) }
+    })
     expect(bridge.pageFaults).toEqual([
       { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
     ])
@@ -57,30 +56,17 @@ describe('notifications, refusals and the fence', () => {
       })
     )
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 })
+    )
+    expect(bridge.client.viewports).toEqual([])
     expect(bridge.pageFaults).toEqual([])
     expect(bridge.client.foregroundCalls).toEqual([])
     expect(bridge.diagnostics).toEqual([
       { kind: 'notify-refused', name: BRIDGE_FAULT_GRANT, why: 'before-ready' },
-      { kind: 'notify-refused', name: 'foreground', why: 'before-ready' }
+      { kind: 'notify-refused', name: 'foreground', why: 'before-ready' },
+      { kind: 'notify-refused', name: 'terminalViewport', why: 'before-ready' }
     ])
-  })
-
-  it('serves the grant it issued once the page has asked for a session', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    // The list on the wire is the list the check above reads; a host that offered one and enforced
-    // another would pass every other test in this file.
-    expect(init.type === 'init' && init.grants.native).toEqual(BRIDGE_NATIVE_GRANTS)
-    bridge.host.receive(
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
-      })
-    )
-    expect(bridge.pageFaults).toHaveLength(1)
-    expect(bridge.diagnostics).toEqual([])
   })
 
   it('drops a page fault that arrives after the document said goodbye', () => {
@@ -110,8 +96,7 @@ describe('notifications, refusals and the fence', () => {
       error: { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
     })
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The page's frame arrives on a native event handler, and a throw that escapes this arm takes
-    // that handler down with it.
+    // Never let a throw escape the native event handler delivering this frame.
     bridge.host.receive(fault)
     bridge.host.receive(fault)
     expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
@@ -145,8 +130,7 @@ describe('notifications, refusals and the fence', () => {
       }
     })
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The page's frame arrives on a native event handler, and a throw that escapes this arm takes
-    // that handler down with it.
+    // Never let a throw escape the native event handler delivering this frame.
     bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
     bridge.host.receive(
       clientFrame({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 })
@@ -165,8 +149,7 @@ describe('notifications, refusals and the fence', () => {
         throw failure
       }
     })
-    // The `state` frame is sent from inside the client's own fan-out, so a throw here would reach
-    // every other listener that client has.
+    // State frames run inside client fan-out; a thrown post must not take down sibling listeners.
     expect(() => client.pushState('reconnecting')).not.toThrow()
     expect(bridge.diagnostics).toEqual([{ kind: 'post-failed', error: failure }])
   })
@@ -202,18 +185,17 @@ describe('notifications, refusals and the fence', () => {
   })
 })
 
-/**
- * The one notify whose sink is the shell's own stack rather than the client or the app store.
- *
- * Nothing crosses back, so the only thing that can tell a pop from a page tapping into a stack that
- * has nothing left is the diagnostic: a dead Back button is exactly what silence here would hide.
- */
+// Back notify has no reply; diagnostics alone distinguish a successful pop from an empty native stack.
 describe('navigate-back', () => {
   const back = clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY })
 
   it('pops the shell stack and asks the client for nothing', () => {
-    const bridge = harness()
+    const bridge = harness({ routeGrants: ['navigate'] })
     bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last()).toMatchObject({
+      type: 'init',
+      grants: { native: ['fault', 'rpcEnvelope', 'navigate'] }
+    })
     bridge.host.receive(back)
     expect(bridge.backPops).toEqual(['popped'])
     expect(bridge.navigations).toEqual([])
@@ -245,14 +227,6 @@ describe('navigate-back', () => {
     ])
   })
 
-  it('is carried by the navigate grant this host already issues, under no name of its own', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.grants.native).toContain('navigate')
-    expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_NAVIGATE_BACK_NOTIFY)
-  })
-
   it('reports a screen that threw on the pop once, and keeps reading', () => {
     const failure = new Error('the stack is gone')
     const bridge = harness({
@@ -261,7 +235,7 @@ describe('navigate-back', () => {
       }
     })
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The frame arrives on a native event handler, and a throw that escapes takes it down.
+    // Never let a throw escape the native event handler delivering this frame.
     bridge.host.receive(back)
     bridge.host.receive(back)
     expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
@@ -270,13 +244,7 @@ describe('navigate-back', () => {
   })
 })
 
-/**
- * The one notify that leaves the app rather than the page.
- *
- * Nothing crosses back, so a refusal is only ever a log. Which is why the scheme is checked at the
- * frame and not only at the page's call site: a page that skipped its own check would otherwise
- * hand the device handler whatever it liked.
- */
+// Validate external-link schemes at the envelope too; a page bypassing its own guard must not reach the device handler with arbitrary URLs.
 describe('externalLink', () => {
   const open = (url: string) =>
     clientFrame({ type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url })
@@ -284,6 +252,10 @@ describe('externalLink', () => {
   it('hands an allowed URL to the caller and asks the client for nothing', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last()).toMatchObject({
+      type: 'init',
+      grants: { native: expect.arrayContaining(['externalLink']) }
+    })
     bridge.host.receive(open('https://github.com/stablyai/orca/pull/1'))
     bridge.host.receive(open('mailto:someone@example.com'))
     expect(bridge.externalLinks).toEqual([
@@ -298,8 +270,7 @@ describe('externalLink', () => {
   it('hands over the URL the parser read, not the string the page sent', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // Each of these passes the scheme check and is not what a device handler should be given: the
-    // WHATWG parser strips tab, LF and CR anywhere and trims leading C0 and space.
+    // The WHATWG parser strips tab/LF/CR and trims leading C0/space; these raw spellings pass a naive scheme check.
     bridge.host.receive(open('ht\ntps://example.com'))
     bridge.host.receive(open('https://example.com/a\r\n'))
     bridge.host.receive(open('  https://example.com/a  '))
@@ -319,9 +290,7 @@ describe('externalLink', () => {
       bridge.host.receive(open(url))
     }
     expect(bridge.externalLinks).toEqual([])
-    // Dropped by the envelope rather than by the grant check, which is what keeps a page that
-    // skipped its own check from reaching the device handler at all. One per frame: the bound to
-    // a line per cause is the reporter's, and this harness reads what the host actually said.
+    // Envelope refusal must precede grants/device dispatch; the reporter, not this host harness, deduplicates repeated diagnostics.
     expect(bridge.diagnostics).toEqual(
       Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
     )
@@ -335,32 +304,22 @@ describe('externalLink', () => {
       { kind: 'notify-refused', name: BRIDGE_EXTERNAL_LINK_GRANT, why: 'before-ready' }
     ])
   })
-
-  it('is advertised under its own grant name, which a route can declare', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_EXTERNAL_LINK_GRANT)
-  })
 })
 
-/**
- * The notify that reaches hardware.
- *
- * Nothing crosses back, which is the reason it is a notify: a reply would spend a slot in the same
- * 64-deep in-flight window a forwarded request does, and the file explorer plays one per row tap.
- * So the oracle is what the shell was asked to play, and the refusals are the only report there is.
- */
+// Haptics use notify so row taps do not consume the 64-slot request window; observe device calls and refusal diagnostics.
 describe('haptics', () => {
   const play = (kind: string) => clientFrame({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind })
 
   it('plays each kind on the device and asks the client for nothing', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    for (const kind of BRIDGE_HAPTICS_KINDS) {
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toContain('haptics')
+    expect(init.type === 'init' && init.grants.native).not.toContain('native.haptics.trigger')
+    for (const kind of ['mediumImpact', 'selection', 'success', 'error', 'edgeBump']) {
       bridge.host.receive(play(kind))
     }
-    expect(bridge.haptics).toEqual([...BRIDGE_HAPTICS_KINDS])
+    expect(bridge.haptics).toEqual(['mediumImpact', 'selection', 'success', 'error', 'edgeBump'])
     expect(bridge.client.requests).toHaveLength(0)
     expect(bridge.client.foregroundCalls).toEqual([])
     expect(bridge.diagnostics).toEqual([])
@@ -376,7 +335,6 @@ describe('haptics', () => {
   })
 
   it('plays nothing for a route that was granted no haptics', () => {
-    // Granted everything else this shell implements, so the refusal is this row and not an empty list.
     const bridge = harness({
       routeGrants: MOBILE_WEB_SHELL_GRANTS.filter((grant) => grant !== BRIDGE_HAPTICS_GRANT)
     })
@@ -402,25 +360,13 @@ describe('haptics', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(play('heavyImpact'))
     expect(bridge.haptics).toEqual([])
-    // Dropped by the envelope rather than by the grant check: the kinds are a closed list, so a
-    // shell older than a kind refuses the whole frame instead of playing something else.
+    // Unknown haptic kinds fail envelope parsing; older shells must not substitute a different effect.
     expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
-  })
-
-  it('is advertised under the token a route can declare, not under the notify name', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_HAPTICS_GRANT)
-    expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_HAPTICS_NOTIFY)
   })
 })
 
 describe('the page erasing a one-shot route param', () => {
-  /**
-   * The reader erasing its own request (ruling 34). One page-to-shell frame, carried up to
-   * whoever holds the param; the comparison is theirs, so the host forwards both values as sent.
-   */
+  // Forward both one-shot key and value to the native route holder; only it can compare before clearing (ruling 34).
   it('carries a page clear up with the param and the value it named', () => {
     const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
@@ -462,10 +408,7 @@ describe('the page erasing a one-shot route param', () => {
   })
 })
 
-/**
- * The page's word about its own document, which is the only thing that says the view is worth
- * uncovering: a document commit is the WebView's, and `ready` is posted before a tree is built.
- */
+// Only first-frame proves a rendered tree; WebView commit and pre-render ready cannot justify uncovering the page.
 describe('the page reporting its first frame', () => {
   it('hands the report to the session and asks the client for nothing', () => {
     const bridge = harness()

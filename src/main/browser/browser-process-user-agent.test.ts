@@ -10,9 +10,6 @@ const LINUX_CLEAN =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
 
 describe('cleanElectronUserAgent', () => {
-  // Why each shape: app.setName decides this token, and dev sets a name containing a space
-  // ("Orca Dev"). A cleaner that only removes a single whitespace-delimited token leaves the
-  // app name on the wire in exactly the builds we test with.
   it.each([
     [
       'a one-word app name',
@@ -47,8 +44,6 @@ describe('cleanElectronUserAgent', () => {
     expect(cleanElectronUserAgent(MAC_CLEAN)).toBe(MAC_CLEAN)
   })
 
-  // Why: over-stripping is worse than under-stripping — without the engine comment the app-token
-  // anchor lands on the OS comment and destroys a real engine token, so these are left alone.
   it.each([
     [
       'an OS comment but no engine comment',

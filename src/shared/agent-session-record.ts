@@ -1,25 +1,19 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import { isAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
   type PersistedAgentSessionLease,
   type PersistedAgentSessionRecord
 } from './agent-session-legacy-handoff-lease'
-/**
- * Durable agent-session record and its single-writer lease.
- *
- * The record is the session's identity — where it runs, which provider it talks to, which account
- * home is pinned to it — and is independent of any terminal tab. The lease is the separate
- * question of which process is currently allowed to write to it.
- */
+/** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
 import type { ExecutionHostId } from './execution-host'
 import {
   isAgentSessionConversationCommandRecord,
   type AgentSessionConversationCommandRecord
-} from './agent-session-conversation-command'
+} from './agent-session/agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
@@ -41,11 +35,7 @@ export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
 
-/**
- * Where the provider process actually runs. WSL is called out separately from the execution host
- * id because a WSL workspace is served by the local host but is a distinct filesystem, account
- * root, and process namespace — two sessions there must never collide with their native twins.
- */
+/** WSL shares the local host id but has a distinct filesystem, account root and process namespace; isolate sessions from native twins. */
 export type AgentSessionExecutionLocation = {
   executionHostId: ExecutionHostId
   /** Distro name when the provider runs inside WSL; null for native and remote hosts. */
@@ -67,10 +57,7 @@ export type AgentSessionOwnerRuntimeKind = 'native'
 /** The acquisition stage. Stages only older builds wrote are mapped away at decode. */
 export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering'
 
-/**
- * PID-reuse-safe process identity. `spawnToken` is the only element available on every platform:
- * process start time costs a CIM query on Windows and is absent in some containers.
- */
+/** Use spawnToken across platforms; start time requires Windows CIM and is unavailable in some containers. */
 export type AgentSessionProcessIdentity = {
   hostId: string
   pid: number
@@ -81,11 +68,7 @@ export type AgentSessionProcessIdentity = {
   runtime?: string
 }
 
-/**
- * `released` means no owner: a durable record that outlives its owner needs a name for that.
- * `conflicted` is how a terminal owner an older build recorded loads: recovery waits it out and
- * never stops it, because it is the user's own agent.
- */
+/** released has no owner; conflicted retains a legacy terminal owner that recovery waits for and never stops because it is the user's agent. */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
 export type AgentSessionDeathEvidence = {
@@ -95,14 +78,9 @@ export type AgentSessionDeathEvidence = {
   /** Fence of the owner (or reservation) this death is about; a fence names exactly one. Absent on
    *  evidence older builds wrote, which then speaks for no turn. */
   ownerFence?: number
-  /** The death interval's lower bound: the last time the runtime holding the owner's transport
-   *  proved it alive. Only a probe's proof records it: absent on a surface-release exit, a failed
-   *  start, and evidence older builds wrote. */
+  /** Last liveness proof by the transport holder; absent for surface release, failed start or older evidence. */
   lastProvenAliveAt?: number
-  /** How the Orca runtime that held the owner ended, when the owner died with it: the quit or
-   *  update it had begun, else 'crash'. Absent when a provider died on its own while Orca ran, and
-   *  whenever that cannot be told. A string, since a newer build may write a cause this one does
-   *  not know; read it with `isAgentSessionOrcaStopCause`. */
+  /** Quit/update/crash when the provider died with its runtime; absent for independent/unknown death. Keep open strings and read with isAgentSessionOrcaStopCause. */
   runtimeEnd?: string
 }
 
@@ -128,13 +106,7 @@ export type AgentSessionLease = {
   claimStatus: AgentSessionClaimStatus
   /** True from load until the host adjudicates it; no writer is granted while set. */
   unreconciled: boolean
-  /**
-   * Lowest fence a future grant may use. Set only by an earlier build's import of its records file,
-   * when the copy came from its backup or sat beside a set-aside copy of the same chat: either may
-   * hide a fence already granted. The CURRENT fence is deliberately left alone: `live` means a
-   * handle proven at exactly that number, so rewriting it would invalidate the record it is trying
-   * to save.
-   */
+  /** Imported backup/set-aside copies may hide a granted fence: floor future grants, preserving the current fence required by proven live handles. */
   minimumNextFence?: number
   /** Null on a released lease when nothing proved its owner gone. */
   deathEvidence: AgentSessionDeathEvidence | null
@@ -149,8 +121,7 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
-  /** The directory the provider first launched in, in the execution host's path syntax. Floating
-   *  sessions resume here; worktree and folder ids still resolve by id to their durable place. */
+  /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
@@ -158,8 +129,13 @@ export type AgentSessionRecord = {
   permissionMode?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
-  /** The name Orca gave this conversation, so a later acquisition need not name it again. */
+  /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
+   *  tabs, sidebars and phones all read this field. */
   conversationName?: string
+  /** `'user'` once the user renamed the conversation; absent means Orca named it. Automatic naming
+   *  never replaces a user's name, and a window's pre-upgrade tab rename only fills a name Orca
+   *  chose. */
+  conversationNameSource?: 'user'
   /** When the user's Sleep stopped this chat; the next admitted send clears it. */
   sleptAt?: number
   launchArgs?: AgentSessionLaunchArgs
@@ -194,10 +170,7 @@ export function isAgentSessionId(value: unknown): value is string {
 /** NUL cannot occur in a host id, distro name, or workspace id, so no component can forge a join. */
 const SCOPE_KEY_SEPARATOR = '\u0000'
 
-/**
- * Scope key for host-and-workspace isolation. Native, WSL, and SSH copies of one workspace id are
- * different sessions; collapsing them would let one host adjudicate another host's lease.
- */
+/** Separate native/WSL/SSH workspace copies so one host cannot adjudicate another's lease. */
 export function agentSessionScopeKey(location: AgentSessionExecutionLocation): string {
   return [location.executionHostId, location.wslDistro ?? '', location.workspaceId].join(
     SCOPE_KEY_SEPARATOR
@@ -356,6 +329,7 @@ export function isPersistedAgentSessionRecord(
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
+    (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&

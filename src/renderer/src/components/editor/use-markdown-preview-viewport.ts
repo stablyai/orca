@@ -40,7 +40,6 @@ export function useMarkdownPreviewViewport({
     inputRef,
     matchesRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     setQuery,
@@ -116,7 +115,6 @@ export function useMarkdownPreviewViewport({
     pendingReviewActionFrameIdsRef.current = []
     const reviewTimeouts = pendingReviewActionTimeoutIdsRef.current
     pendingReviewActionTimeoutIdsRef.current = []
-    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
     clearMarkdownPreviewReviewTimers(attentionReviewCommentTimeoutRef, reviewTimeouts)
     clearReviewNotesCopiedResetTimer()
     clearCopiedReviewNoteResetTimer()
@@ -125,7 +123,6 @@ export function useMarkdownPreviewViewport({
     attentionReviewCommentTimeoutRef,
     clearCopiedReviewNoteResetTimer,
     clearReviewNotesCopiedResetTimer,
-    pendingEditorRevealFrameIdsRef,
     pendingReviewActionFrameIdsRef,
     pendingReviewActionTimeoutIdsRef,
     reviewActionFrameGenerationRef

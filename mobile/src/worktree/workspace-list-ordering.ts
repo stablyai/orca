@@ -21,7 +21,6 @@ function getManualSortRank(worktree: Worktree): number | null {
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
-// The phone's row names the unread flag `unread`.
 function stampRow(worktree: Worktree): StampOrderRow {
   return {
     lastActivityAt: worktree.lastActivityAt,
@@ -57,8 +56,7 @@ export function sortWorktrees(
       })
     )
   }
-  // Why lastOutputAt too: headless serve hosts only stamp lastActivityAt at creation, so live
-  // terminal output must still count as recency for mobile-only pairings.
+  // Headless hosts stamp lastActivityAt only at creation, so terminal output must count toward recency.
   const recentActivity = (w: Worktree): number =>
     recentActivityWithCreateGrace(
       Math.max(finiteOr(w.lastActivityAt, 0), finiteOr(w.lastOutputAt, 0)),
@@ -80,14 +78,12 @@ export function sortWorktrees(
         const aRank = finiteOr(a.sortOrder, 0)
         const bRank = finiteOr(b.sortOrder, 0)
         if (aRank !== bRank) {
-          // Why: desktop persists its computed Agent activity order into sortOrder.
           return bRank - aRank
         }
         if (aRank !== 0) {
           return 0
         }
-        // Why: headless serve hosts never persist desktop smart ranks; unranked rows fall back to
-        // agent attention, then recency, instead of a frozen A-Z list.
+        // Headless hosts lack desktop smart ranks; fall back to attention then recency.
         return (
           AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
             AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareRecent(a, b)
@@ -100,8 +96,7 @@ export function sortWorktrees(
 export function getWorktreeStatus(
   w: Worktree
 ): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
-  // Why: desktop's sidebar activity is the parity source. Runtime status may
-  // still report retained/background PTYs as active after desktop hides them.
+  // Match desktop sidebar activity; retained/background PTYs alone must not imply an active workspace.
   if (w.hasHostSidebarActivity === false) {
     return 'inactive'
   }

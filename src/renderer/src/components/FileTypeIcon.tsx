@@ -7,7 +7,6 @@ type FileTypeIconProps = {
   style?: CSSProperties
 }
 
-/** The icon for a file path; one component so icon sources can change in one place. */
 export function FileTypeIcon({ filePath, className, style }: FileTypeIconProps): React.JSX.Element {
   return createElement(getFileTypeIcon(filePath), { 'aria-hidden': true, className, style })
 }

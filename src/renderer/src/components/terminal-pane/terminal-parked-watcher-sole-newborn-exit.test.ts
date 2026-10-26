@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why this file: the parked sidecar owns a parked PTY's exit, so it must mirror
-// the session observer's sole-newborn guard (pty-exit-hibernate): a sole
-// fresh-spawned pane nobody ever typed into keeps its tab on exit. The fact
-// travels as the plain-value `untouchedFreshSpawn` capture flag — never a
-// session reference.
+// Sidecars preserve untouched sole-newborn tabs on exit using captured plain values, never retained session references.
 
 const WORKTREE_ID = 'repo::/worktree'
 const TAB_ID = 'tab-1'
@@ -126,8 +122,7 @@ describe('sole-newborn parked exits (sole-owner sidecar)', () => {
     expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
     expect(startedWatcherDisposers[0]).toHaveBeenCalled()
     expect(entry.disposersByPtyId.has(PTY_ID)).toBe(false)
-    // The exit is consumed (pre-fix primary parity), never left as a buffered
-    // tombstone — a tombstone would close the tab at reveal via exitedBeforeAttach.
+    // Consume the exit; a buffered tombstone would replay at reveal and close the preserved tab.
     expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     expect(discardPreHandlerPtyState).not.toHaveBeenCalled()
     // The pane-id slot stays, so a watcher sync never re-registers the dead PTY.

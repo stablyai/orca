@@ -15,10 +15,7 @@ function findCodeBlockAtCursor(editor: Editor): { text: string; start: number } 
   return null
 }
 
-/**
- * Shift+Tab inside a code block: strip one indent step from every line the
- * selection touches, mirroring Tab's insert.
- */
+/** Outdent each selected code line by one step, mirroring Tab. */
 export function outdentRichMarkdownCodeBlock(editor: Editor): boolean {
   const codeBlock = findCodeBlockAtCursor(editor)
   if (!codeBlock) {

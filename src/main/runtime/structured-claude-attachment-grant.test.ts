@@ -1,6 +1,4 @@
-// The chat attachment store reaches Claude's launch as an added directory: the runtime hands its
-// root to Claude's part of the launch its registration composes. Drop that hand-off and Claude asks
-// before reading every attached document.
+// Pass the attachment root through composed Claude launch or attached documents trigger repeated read permission prompts.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

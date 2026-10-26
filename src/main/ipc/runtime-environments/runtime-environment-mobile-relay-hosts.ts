@@ -33,17 +33,13 @@ import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-
 
 const retirementListeners = new Set<(environmentId: string) => void>()
 
-/** Called wherever the desktop's own transport to a server is invalidated. */
 export function retireMobileDesktopRelayEnvironment(environmentId: string): void {
   for (const listener of retirementListeners) {
     listener(environmentId)
   }
 }
 
-/**
- * Servers a phone may reach through this desktop. Not WSL hosts: they are this desktop's own
- * distros, connected only for work open here, so a phone must not wake or route to them.
- */
+/** Phones must not wake or route to WSL distros, which connect only for work open on this desktop. */
 function listRelayableEnvironments(userDataPath: string) {
   return listEnvironments(userDataPath).filter(isRelayableToPhones)
 }
@@ -58,9 +54,8 @@ function isRelayableToPhones(environment: KnownRuntimeEnvironment): boolean {
   }
 }
 
-/** The desktop's configured servers, addressed only by exact environment id. */
+/** Relay requests use exact saved environment IDs. */
 export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHosts {
-  // Why userData: configured servers live where the runtime-environment handlers keep them.
   const userDataPath = app.getPath('userData')
   return {
     list: () => {
@@ -68,7 +63,7 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
       const statusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
       for (const snapshot of getRuntimeEnvironmentStatusSnapshots()) {
         const environment = environments.find((entry) => entry.id === snapshot.environmentId)
-        // Why: as in the renderer, a snapshot from an earlier pairing says nothing about this one.
+        // Earlier pairings cannot establish the current server status.
         if (environment && pairingRevision(environment) === snapshot.pairingRevision) {
           statusByEnvironmentId.set(environment.id, runtimeEnvironmentStatusFromSnapshot(snapshot))
         }

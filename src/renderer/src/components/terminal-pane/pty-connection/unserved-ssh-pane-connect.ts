@@ -63,11 +63,7 @@ export function createUnservedSshRowTransport(
   }
 }
 
-/**
- * A pane on a relay-era `ssh:` row never spawns: the reconnect overlay owns it, and the connect
- * converts the host to its managed runtime, whose row remounts the pane. Mounting still dials,
- * as the relay-era pane did, except for passphrase targets, which wait for the user.
- */
+/** Relay-era panes never spawn; overlay-driven conversion remounts them. Dial at mount unless passphrase authentication needs explicit user action. */
 export function connectUnservedSshPaneTarget(
   session: ConnectPanePtySession,
   targetId: string

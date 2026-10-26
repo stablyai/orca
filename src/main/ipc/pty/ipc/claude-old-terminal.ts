@@ -2,14 +2,14 @@ import {
   getClaudeProfileRouter,
   getClaudeWslProfileRouter
 } from '../../../claude-accounts/claude-profile-installed-router'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import {
   CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION
 } from '../../../daemon/daemon-protocol-version'
 import { isTerminalOnLegacyDaemon } from '../../../daemon/daemon-provider-state'
 
-// Why not every older daemon: v42 shipped the same claude function and pointer; only v43, the revert, lacked them.
+// v42 shipped this function; only earlier protocols and the v43 revert lack it.
 function lacksClaudeFunction(protocolVersion: number): boolean {
   return (
     protocolVersion < CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION ||
@@ -19,7 +19,6 @@ function lacksClaudeFunction(protocolVersion: number): boolean {
 
 type Deps = { getLocalPtyProviderStartupPromise: () => Promise<void> | undefined }
 
-/** Whether a pane's daemon predates the claude function, so its claude runs another account. */
 export function installPtyClaudeOldTerminalIpcHandler(deps: Deps): void {
   getPtyIpc().handle(
     'pty:openedBeforeClaudeAccounts',
@@ -28,12 +27,12 @@ export function installPtyClaudeOldTerminalIpcHandler(deps: Deps): void {
       if (typeof args?.id !== 'string' || !target) {
         return false
       }
-      // Why: the pre-swap provider does not own restored daemon ids.
+      // Restored daemon IDs are not owned by the pre-swap provider.
       await deps.getLocalPtyProviderStartupPromise()
       if (!isTerminalOnLegacyDaemon(args.id, lacksClaudeFunction)) {
         return false
       }
-      // Why the pane's own runtime: claude there runs that runtime's System default.
+      // Use the pane's runtime account selection, including its WSL distro.
       const runsAnother =
         target.runtime === 'wsl'
           ? await getClaudeWslProfileRouter()

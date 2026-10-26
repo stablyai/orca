@@ -63,8 +63,7 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   ].join('  ')
 }
 
-// Why omitted rather than zeroed: a host that predates the field, or cannot read
-// commit at all, must not be printed as agents committing nothing.
+// Missing commit fields mean unknown usage, not zero.
 function formatCommitLines(snapshot: MemorySnapshot): string[] {
   if (typeof snapshot.totalPrivateMemory !== 'number') {
     return []

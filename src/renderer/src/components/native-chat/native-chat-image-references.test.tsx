@@ -124,6 +124,7 @@ function fileReferences(document: JSONContent | undefined): string[] {
 
 function transport(send: NativeChatStructuredComposerTransport['send']) {
   const value: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
     send,
     dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
     optionsSurface: {

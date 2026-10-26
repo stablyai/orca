@@ -272,21 +272,6 @@ export class SkillCloudService {
     )
   }
 
-  deleteVersion(
-    packageId: string,
-    versionId: string,
-    options: SkillCloudOptions
-  ): Promise<SkillCloudOperation<void>> {
-    return this.withAuth(options, (token, apiUrl) =>
-      skillCloudRequest<void>({
-        apiUrl,
-        authToken: token,
-        path: `/v1/skill-packages/${id(packageId)}/versions/${id(versionId)}`,
-        method: 'DELETE'
-      })
-    )
-  }
-
   deletePackage(packageId: string, options: SkillCloudOptions): Promise<SkillCloudOperation<void>> {
     return this.withAuth(options, (token, apiUrl) =>
       skillCloudRequest<void>({

@@ -2,10 +2,7 @@ import { toast } from 'sonner'
 import { getActiveMarkdownExportPayload } from './markdown-export-extract'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Export the markdown document for a local editor panel through the existing
- * PDF bridge. Silent no-op when the panel no longer has rendered markdown.
- */
+/** Export the panel’s rendered Markdown through the PDF bridge; stale or source-only panels no-op. */
 export async function exportActiveMarkdownToPdf(options: {
   fileId: string
   root: ParentNode | null
@@ -16,8 +13,7 @@ export async function exportActiveMarkdownToPdf(options: {
   try {
     const payload = await getActiveMarkdownExportPayload(options)
     if (!payload) {
-      // Why: stale panel refs can survive a dropdown click; keep export defensive
-      // even though the local Markdown menu disables unreachable states.
+      // Dropdown clicks can outlive the rendered panel.
       toast.dismiss(toastId)
       return
     }
@@ -38,8 +34,6 @@ export async function exportActiveMarkdownToPdf(options: {
       return
     }
     if (result.cancelled) {
-      // Why: user pressed Cancel in the save dialog — clear the loading toast
-      // without surfacing an error.
       toast.dismiss(toastId)
       return
     }

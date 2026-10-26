@@ -120,7 +120,6 @@ describe('parseOpenCodeSessionFile', () => {
       })
     )
     await writeFile(join(messageDir, 'msg_1.json'), userMessage('First prompt', 1_777_634_000_000))
-    // Partially-written file from a live OpenCode process.
     await writeFile(join(messageDir, 'msg_2.json'), '{"role":"user","content":[{"type":')
     await writeFile(join(messageDir, 'msg_3.json'), userMessage('Third prompt', 1_777_634_002_000))
 

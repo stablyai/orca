@@ -5,7 +5,7 @@ import {
   readJiraQuickFilterState,
   writeJiraQuickFilterState
 } from './runtime-jira-quick-filter-state'
-import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira-quick-filters'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-quick-filters'
 const { assertCapability, rpc } = vi.hoisted(() => ({ assertCapability: vi.fn(), rpc: vi.fn() }))
 vi.mock('./runtime-rpc-client', () => ({
   assertRuntimeEnvironmentCapability: assertCapability,

@@ -10,7 +10,6 @@ import {
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
 import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
@@ -127,8 +126,7 @@ async function prepare(released = true) {
   const append = (input = completed) =>
     journal.context.clear(
       providerContextBoundaryForClear(input),
-      store.conversationReceipts.clear(() => input, operation),
-      agentSessionOperationKey(operation.callerKey, operation.operationId)
+      store.conversationReceipts.clear(() => input, operation)
     )
   return { store, journal, completed, operation, append }
 }
@@ -142,9 +140,7 @@ async function queueClearCards(journal: AgentSessionJournal) {
         role: 'user',
         blocks: [{ type: 'text', text: messageId }],
         ...(messageId === 'command' ? { command: { name: 'compact' } } : {})
-      },
-      fingerprint: messageId,
-      hostInstance: 'host-1'
+      }
     })
   }
 }
@@ -170,10 +166,7 @@ describe('clear transaction', () => {
     expect(reopened.getSessionTabId(SOURCE)).toBe('tab-alpha')
     expect(JSON.stringify(reopened.getRecord(SOURCE))).not.toContain('pre-clear-provider-context')
     expect(journal.cursor().epoch).toBe(epoch)
-    expect(journal.queuedMessages.get('command')).toMatchObject({
-      state: 'withdrawn',
-      settledByOp: agentSessionOperationKey(operation.callerKey, operation.operationId)
-    })
+    expect(journal.queuedMessages.get('command')).toMatchObject({ state: 'withdrawn' })
     expect(journal.queuedMessages.pauses()).toMatchObject([{ messageIds: ['first', 'last'] }])
     expect(
       reopened.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status

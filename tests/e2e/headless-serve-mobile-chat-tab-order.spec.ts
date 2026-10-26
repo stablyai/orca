@@ -1,7 +1,4 @@
-/**
- * #29968: a phone paired straight to a headless `orca serve` keeps a Claude chat tab, in its place
- * in the tab order, while the phone closes and opens terminals around it.
- */
+// Keep a phone-created Claude tab in place while surrounding headless-host terminals close and reopen (#29968).
 import { randomUUID } from 'node:crypto'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

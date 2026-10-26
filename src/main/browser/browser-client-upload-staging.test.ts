@@ -27,7 +27,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 let stagingRoot = ''
 
 beforeEach(async () => {
-  // Why: macOS reports /private/var for a /var mkdtemp path, so compare against the resolved root.
+  // Resolve macOS /var aliases so path assertions use the real root.
   stagingRoot = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-upload-staging-')))
 })
 
@@ -35,7 +35,6 @@ afterEach(async () => {
   await rm(stagingRoot, { recursive: true, force: true })
 })
 
-/** Release reports every failed removal together, so assert on the aggregate's contents. */
 async function releaseFailures(release: Promise<unknown>): Promise<string[]> {
   const failure = await release.catch((error: unknown) => error)
   expect(failure).toBeInstanceOf(AggregateError)
@@ -306,7 +305,7 @@ describe('BrowserClientUploadStaging', () => {
         files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
       })
     ).rejects.toThrow('disk full')
-    // Why: the retained record is the only handle a later release has on the orphaned directory.
+    // A later release needs the retained directory record to retry cleanup.
     expect(staging.activeStagingCount()).toBe(1)
   })
 

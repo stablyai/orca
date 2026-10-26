@@ -7,7 +7,7 @@ import {
 } from './cmd-j-evaluation-fixture'
 import { searchWorktrees, type PaletteSearchResult } from './worktree-palette-search'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
-import { PALETTE_QUERY_MAX_TOKENS, preparePaletteQuery } from './palette-match/palette-query'
+import { preparePaletteQuery } from './palette-match/palette-query'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 
 function documentKey(worktreeId: string): string {
@@ -76,7 +76,10 @@ describe('token coverage', () => {
   })
 
   it('rejects more than the token limit', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+    const query = 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16'
+    expect(preparePaletteQuery('t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15').state).toBe(
+      'ready'
+    )
     expect(preparePaletteQuery(query)).toEqual({ state: 'invalid', reason: 'too-many-tokens' })
     expect(ids(query)).toEqual([])
   })
@@ -169,8 +172,7 @@ describe('document invalidation inputs', () => {
       repoMap: CMD_J_FIXTURE_REPO_MAP,
       workspacePortsByWorktreeId: CMD_J_FIXTURE_PORTS
     })
-    // Documents are keyed by host identity so two same-id workspaces on different hosts
-    // keep separate entries.
+    // Host-qualified documents keep same-ID twins distinct.
     const key = documentKey('wt-main-orca')
     expect(before.get(key)?.evidenceUnits.has('port:3000')).toBe(false)
     expect(after.get(key)?.evidenceUnits.has('port:3000')).toBe(true)

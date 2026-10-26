@@ -26,7 +26,7 @@ export function normalizeOrcadMigrationStagedCatalogs(
         }
       }
     } catch {
-      // Invalid staging cannot be trusted as fencing evidence, so it is dropped fail-closed.
+      // Invalid staging cannot prove fencing; drop it fail-closed.
     }
   }
   // Keep the migration journal runnable in the documented Node 18 rollback slot.

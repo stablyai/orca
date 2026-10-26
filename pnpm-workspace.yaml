@@ -1,92 +1,37 @@
-# The desktop host and internal packages share an install. `mobile/` is a separate workspace
-# with its own pnpm-workspace.yaml and lockfile, so keep it out of the root
-# package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
-# nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
-#
-# native/windows-registry and native/windows-security are listed explicitly rather than reached by a glob: as a `file:`
-# dependency pnpm re-linked it on every install (including --frozen-lockfile), and that
-# virtual-store churn raced node-gyp reading the same tree, which lost @vscode/windows-process-tree's
-# binding.gyp mid-rebuild on Windows CI. A workspace link is resolved once instead.
+# Exclude mobile’s independent workspace/lockfile: recursive discovery causes ERR_PNPM_UNUSED_PATCH.
+# Explicit registry/security workspaces avoid file:-dependency relinks, whose virtual-store churn
+# raced Windows node-gyp and removed @vscode/windows-process-tree’s binding.gyp mid-rebuild.
 packages:
   - native/windows-registry
   - native/windows-security
   - src/packages/*
 
 minimumReleaseAge: 4320
-# Latest requested releases are still within the three-day delay; exempt only these versions.
+# Preserve the existing exception for the explicitly selected Bun 1.4.4 release.
 minimumReleaseAgeExclude:
-  - '@oxc-project/types@0.154.0'
-  - '@rolldown/binding-android-arm-eabi@1.2.14'
-  - '@rolldown/binding-android-arm64@1.2.14'
-  - '@rolldown/binding-darwin-arm64@1.2.14'
-  - '@rolldown/binding-darwin-x64@1.2.14'
-  - '@rolldown/binding-freebsd-x64@1.2.14'
-  - '@rolldown/binding-linux-arm-gnueabihf@1.2.14'
-  - '@rolldown/binding-linux-arm64-gnu@1.2.14'
-  - '@rolldown/binding-linux-arm64-musl@1.2.14'
-  - '@rolldown/binding-linux-ppc64-gnu@1.2.14'
-  - '@rolldown/binding-linux-s390x-gnu@1.2.14'
-  - '@rolldown/binding-linux-x64-gnu@1.2.14'
-  - '@rolldown/binding-linux-x64-musl@1.2.14'
-  - '@rolldown/binding-openharmony-arm64@1.2.14'
-  - '@rolldown/binding-win32-arm64-msvc@1.2.14'
-  - '@rolldown/binding-win32-x64-msvc@1.2.14'
-  - '@vitest/mocker@5.0.5'
-  - '@vitest/spy@5.0.5'
-  - 'electron-vite@6.0.0'
-  - 'rolldown@1.2.14'
-  - 'vitest@5.0.5'
-  - '@oxfmt/binding-android-arm-eabi@0.73.0'
-  - '@oxfmt/binding-android-arm64@0.73.0'
-  - '@oxfmt/binding-darwin-arm64@0.73.0'
-  - '@oxfmt/binding-darwin-x64@0.73.0'
-  - '@oxfmt/binding-freebsd-x64@0.73.0'
-  - '@oxfmt/binding-linux-arm-gnueabihf@0.73.0'
-  - '@oxfmt/binding-linux-arm-musleabihf@0.73.0'
-  - '@oxfmt/binding-linux-arm64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-arm64-musl@0.73.0'
-  - '@oxfmt/binding-linux-ppc64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-riscv64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-riscv64-musl@0.73.0'
-  - '@oxfmt/binding-linux-s390x-gnu@0.73.0'
-  - '@oxfmt/binding-linux-x64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-x64-musl@0.73.0'
-  - '@oxfmt/binding-openharmony-arm64@0.73.0'
-  - '@oxfmt/binding-win32-arm64-msvc@0.73.0'
-  - '@oxfmt/binding-win32-ia32-msvc@0.73.0'
-  - '@oxfmt/binding-win32-x64-msvc@0.73.0'
-  - '@oxlint/binding-android-arm-eabi@1.88.0'
-  - '@oxlint/binding-android-arm64@1.88.0'
-  - '@oxlint/binding-darwin-arm64@1.88.0'
-  - '@oxlint/binding-darwin-x64@1.88.0'
-  - '@oxlint/binding-freebsd-x64@1.88.0'
-  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
-  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
-  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
-  - '@oxlint/binding-linux-arm64-musl@1.88.0'
-  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
-  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-musl@1.88.0'
-  - '@oxlint/binding-openharmony-arm64@1.88.0'
-  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
-  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
-  - '@oxlint/binding-win32-x64-msvc@1.88.0'
-  - '@oxlint/plugins@1.88.0'
-  - oxfmt@0.73.0
-  - oxlint@1.88.0
+  # Security fix for compressed-request crashes (GHSA-27r3-jxmh-p828).
+  - 'body-parser@2.4.0'
+  - 'bun@1.4.4'
+  - '@oven/bun-darwin-aarch64@1.4.4'
+  - '@oven/bun-darwin-x64@1.4.4'
+  - '@oven/bun-freebsd-aarch64@1.4.4'
+  - '@oven/bun-freebsd-x64@1.4.4'
+  - '@oven/bun-linux-aarch64-android@1.4.4'
+  - '@oven/bun-linux-aarch64-musl@1.4.4'
+  - '@oven/bun-linux-aarch64@1.4.4'
+  - '@oven/bun-linux-x64-android@1.4.4'
+  - '@oven/bun-linux-x64-musl@1.4.4'
+  - '@oven/bun-linux-x64@1.4.4'
+  - '@oven/bun-windows-aarch64@1.4.4'
+  - '@oven/bun-windows-x64@1.4.4'
 shamefullyHoist: true
 
 # Enables pnpm's global virtual store outside CI; under config/ because the repo root only admits
 # allowlisted entries.
 pnpmfile: config/pnpmfile.cjs
 
-# Orca always launches the user's own resolved Claude CLI via
-# pathToClaudeCodeExecutable, so the SDK's bundled ~95 MB-per-platform CLI
-# binaries must never be installed. Excluding them is what makes the path
-# override mandatory rather than merely preferred.
+# Orca resolves the user’s Claude CLI via pathToClaudeCodeExecutable; exclude SDK’s ~95 MB/platform
+# bundled CLIs so that override stays mandatory.
 ignoredOptionalDependencies:
   - '@anthropic-ai/claude-agent-sdk-darwin-arm64'
   - '@anthropic-ai/claude-agent-sdk-darwin-x64'
@@ -106,6 +51,8 @@ supportedArchitectures:
     - current
 
 allowBuilds:
+  # Its postinstall only hardlinks the platform binary over the JS launcher.
+  '@ast-grep/cli': true
   '@parcel/watcher': true
   '@swc/core': false
   '@vscode/windows-process-tree': false
@@ -120,13 +67,11 @@ allowBuilds:
   '@orca/windows-registry': false
   '@orca/windows-security': false
 
-# Links the project's @types/<peer> next to every package that peer-depends on <peer> (e.g.
-# @types/react beside lucide-react), so peer types resolve under the global virtual store.
+# Link @types/<peer> beside peer dependents (e.g. React/lucide) for global-virtual-store resolution.
 addMissingPeerTypes: true
 
-# These packages' published .d.ts import modules they never declare. Hoisting hides that,
-# but under the global virtual store each package sees only its declared deps, so the types
-# silently became `any` or (jest-dom) the vitest matcher augmentation vanished.
+# Published declarations import undeclared deps; hoisting hid missing types/jest-dom augmentation,
+# but the global virtual store requires explicit package dependencies.
 packageExtensions:
   '@testing-library/jest-dom':
     dependencies:
@@ -166,7 +111,7 @@ packageExtensions:
 
 overrides:
   hono@>=4.12.4 <4.13.11: 4.13.11
-  monaco-editor>dompurify: 3.4.16
+  dompurify@<3.4.17: 3.4.17
   # Upstream markdown/math packages still require the vulnerable 0.16 line.
   katex@>=0.11.0 <0.18.2: 0.18.10
 
@@ -185,3 +130,5 @@ patchedDependencies:
   oxlint-plugin-anti-slop@0.1.2: config/patches/oxlint-plugin-anti-slop@0.1.2.patch
   monaco-editor@0.55.1: config/patches/monaco-editor@0.55.1.patch
   sprintf-js@1.1.3: config/patches/sprintf-js@1.1.3.patch
+  '@tiptap/extension-list@3.31.3': config/patches/@tiptap__extension-list@3.31.3.patch
+  vitest@5.0.5: config/patches/vitest@5.0.5.patch

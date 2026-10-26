@@ -12,10 +12,7 @@ import type { CreatePrIntentRunSnapshot } from './create-pr-intent-run-snapshot'
 import type { SourceControlCreatePrIntentProbes } from './use-create-pr-intent-probes'
 import type { SourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
 
-/**
- * Reads eligibility on the prepared branch, and when it is still blocked, performs the one remote
- * step that would unblock it before re-reading — nothing here merges or rewrites history unasked.
- */
+/** Prepare only the remote step needed to unblock eligibility; never merge or rewrite history without an explicit request. */
 export async function runCreatePrIntentReviewStep({
   createHostedReviewForCreatePrIntent,
   operationTarget,
@@ -83,7 +80,7 @@ export async function runCreatePrIntentReviewStep({
   if (remoteStep === 'blocked' || remoteStep === 'none') {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'muted',
-      // Why: a diverged branch is deliberately not auto-prepared (would merge without consent), so keep explicit sync-first guidance.
+      // Diverged branches require explicit sync; automatic preparation would merge without consent.
       message:
         eligibility.blockedReason === 'needs_sync'
           ? translate(
@@ -100,7 +97,7 @@ export async function runCreatePrIntentReviewStep({
 
   setCreatePrIntentNoticeForWorktree(token.worktreeId, {
     tone: 'muted',
-    // Why: keep each translate() key a string literal so the localization-catalog verifier can statically detect it.
+    // Keep translation keys literal so catalog verification can find them statically.
     message:
       remoteStep === 'publish'
         ? translate(
@@ -129,7 +126,6 @@ export async function runCreatePrIntentReviewStep({
   if (abortIfStale()) {
     return
   }
-  // Superseded by a newer remote action — drop quietly, same as target drift.
   if (remoteResult.status === 'superseded') {
     return
   }
@@ -165,7 +161,7 @@ export async function runCreatePrIntentReviewStep({
     }
     return
   }
-  // Why: prefer the blocked-reason notice (incl. unavailable lookup) over a generic stop.
+  // Prefer actionable blocked-reason guidance over a generic stop, including unavailable lookups.
   const blockedNotice = resolveBlockedCreateReviewNoticeMessage(eligibility)
   setCreatePrIntentNoticeForWorktree(token.worktreeId, {
     tone: blockedNotice ? 'destructive' : 'muted',

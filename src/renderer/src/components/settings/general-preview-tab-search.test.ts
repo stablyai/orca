@@ -13,7 +13,7 @@ describe('preview tab setting search', () => {
 
       expect(entry).toBeDefined()
       expect(matchesSettingsSearch(query, entry!)).toBe(true)
-      // Why: the Navigation section gate hides the whole section, so the outer catalog must match too.
+      // The outer Navigation gate must match too or it hides the matching control.
       expect(matchesSettingsSearch(query, navigationEntries)).toBe(true)
       expect(matchesSettingsSearch(query, getGeneralPaneSearchEntries())).toBe(true)
     }

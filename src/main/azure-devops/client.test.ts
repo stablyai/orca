@@ -16,7 +16,6 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-/** Serve the remote URL plus the #9171 default-branch resolver probes. */
 function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'remote') {
@@ -184,17 +183,13 @@ describe('Azure DevOps client', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
-      // The pull-request list lookup fails (auth/transport).
       return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
     }) as never
 
-    // The swallowing variant collapses the failure into a false "no PR".
     await expect(
       getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
     ).resolves.toBeNull()
     _resetAzureDevOpsRepoRefCache()
-    // The throwing variant makes the failure visible so eligibility records
-    // `unavailable` rather than a false "No pull request found".
     await expect(
       getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/azure')
     ).rejects.toThrow(/Azure DevOps request failed/)

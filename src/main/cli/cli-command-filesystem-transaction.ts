@@ -159,14 +159,13 @@ export async function capturedExpectedEntry(
   }
 }
 
-/** A symlink the user could not readlink: on macOS a 0700 root-owned link, which only root can open up. */
 export function isUnreadableSymlink<
   T extends Pick<StableCommandInspection, 'rawSymlinkTarget' | 'snapshot'>
 >(inspected: T): inspected is T & { snapshot: EntrySnapshot } {
   return inspected.snapshot?.isSymbolicLink === true && inspected.rawSymlinkTarget === null
 }
 
-/** Makes the inspected link world-readable so the normal ownership check can judge it; changes nothing else. */
+/** Make the inspected link readable for ownership checks, only if its identity still matches. */
 export function buildMacPrivilegedSymlinkReadableCommand(args: {
   commandPath: string
   expected: EntryIdentity
@@ -213,8 +212,7 @@ export function buildMacPrivilegedSymlinkTransaction(
   const rejectCaptured = snapshot
     ? `if [ "$captured" -eq 1 ] && { [ "$(/usr/bin/stat -f '%d:%i' ${quotePosixShellDoubleQuotedApostrophe(heldPath)})" != ${quotePosixShellDoubleQuotedApostrophe(`${snapshot.identity.dev}:${snapshot.identity.ino}`)} ]${fileMismatch}${symlinkMismatch}; }; then ${restoreOrPreserve}; exit 73; fi`
     : `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; exit 73; fi`
-  // Why: macOS applies the umask to symlinks too, so the script publishes under 022 and only the
-  // transaction directories are created private.
+  // macOS applies umask to symlinks; publish under 022 but keep transaction directories private.
   const capture =
     `umask 022; /bin/mkdir -p ${quotePosixShellDoubleQuotedApostrophe(commandDirectory)} || exit $?; ` +
     `/bin/mkdir -m 700 ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)} || exit $?; captured=0; ` +

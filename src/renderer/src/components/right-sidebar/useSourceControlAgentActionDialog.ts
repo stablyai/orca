@@ -5,14 +5,14 @@ import {
 } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
+import { useSourceControlLaunchableAgents } from './use-source-control-launchable-agents'
+import { AgentLaunchChoiceCancelled } from '@/lib/host-chat-program-acquisition'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
@@ -23,6 +23,7 @@ import {
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
+type DiscoveryOutcome = 'pending' | 'success' | 'cancelled' | 'failed'
 
 export function useSourceControlAgentActionDialog({
   open,
@@ -52,9 +53,7 @@ export function useSourceControlAgentActionDialog({
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
   )
-  // Why: when this repo already overrides the global default, default the save
-  // scope to the repo so saving the corrected agent updates that override in
-  // place instead of writing a global default the override would still shadow.
+  // Update existing repo overrides in place; a new global default would remain shadowed.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const [commandTemplate, setCommandTemplate] = useState(
@@ -62,12 +61,11 @@ export function useSourceControlAgentActionDialog({
   )
   const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
-  const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
-  const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
   const wasOpenRef = useRef(false)
   const [openCycle, setOpenCycle] = useState(0)
-  const [detectedOpenCycle, setDetectedOpenCycle] = useState<number | null>(null)
+  // The open cycle's current discovery attempt; only its success may auto-pick or auto-start.
+  const [discovery, setDiscovery] = useState<{ cycle: number; outcome: DiscoveryOutcome }>()
   const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
   const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
   const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
@@ -75,27 +73,14 @@ export function useSourceControlAgentActionDialog({
   const disabledAgents = settings?.disabledTuiAgents
   const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
 
-  const refreshDetectedAgents = useCallback(async (): Promise<TuiAgent[]> => {
-    if (connectionUnavailable) {
-      setDetectedAgents([])
-      setDetecting(false)
-      return []
-    }
-    setDetecting(true)
-    try {
-      const state = useAppStore.getState()
-      // Why: the workspace's own host answers, including a paired server's SSH workspace.
-      const nextAgents = await (worktreeId
-        ? ensureDetectedAgentsForWorktree(state, worktreeId)
-        : typeof connectionId === 'string'
-          ? state.ensureRemoteDetectedAgents(connectionId)
-          : state.ensureDetectedAgents())
-      setDetectedAgents(nextAgents)
-      return nextAgents
-    } finally {
-      setDetecting(false)
-    }
-  }, [connectionId, connectionUnavailable, worktreeId])
+  const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
+  const { detecting, refreshAgents, refreshLaunchableAgents, launchableAgents } =
+    useSourceControlLaunchableAgents({
+      target: { worktreeId, repoId, executionHostId },
+      connectionId,
+      connectionUnavailable,
+      active: open
+    })
 
   useEffect(() => {
     if (!open) {
@@ -108,18 +93,16 @@ export function useSourceControlAgentActionDialog({
       setOpenCycle(cycle)
     }
     wasOpenRef.current = true
-    setDetectedOpenCycle(null)
+    setDiscovery({ cycle, outcome: 'pending' })
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
     setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
-    // Why: whether CLI arguments apply is read synchronously from the local runtime's
-    // capabilities; settling them alongside detection keeps the field from appearing for a
-    // frame on a launch that turns out to be structured.
-    void Promise.all([refreshDetectedAgents(), ensureLocalRuntimeCapabilities()]).then(
-      ([nextAgents]) => {
+    // Settle CLI-argument applicability with discovery so structured launches never flash an inapplicable field.
+    void refreshAgents().then(
+      ({ detected, launchable }) => {
         if (stale || openCycleRef.current !== cycle) {
           return
         }
@@ -129,11 +112,18 @@ export function useSourceControlAgentActionDialog({
             pickSourceControlLaunchAgent({
               savedAgent: savedAgentId,
               defaultAgent: settings?.defaultTuiAgent,
-              detectedAgents: nextAgents,
-              disabledAgents
+              detectedAgents: detected,
+              disabledAgents,
+              chosenOpensAsChat: (agent) => launchable.includes(agent)
             })
         )
-        setDetectedOpenCycle(cycle)
+        setDiscovery({ cycle, outcome: 'success' })
+      },
+      (error: unknown) => {
+        if (!stale && openCycleRef.current === cycle) {
+          const cancelled = error instanceof AgentLaunchChoiceCancelled
+          setDiscovery({ cycle, outcome: cancelled ? 'cancelled' : 'failed' })
+        }
       }
     )
     return () => {
@@ -143,7 +133,7 @@ export function useSourceControlAgentActionDialog({
     defaultSaveTargetValue,
     disabledAgents,
     open,
-    refreshDetectedAgents,
+    refreshAgents,
     savedAgentId,
     savedAgentArgs,
     savedCommandInputTemplate,
@@ -154,17 +144,19 @@ export function useSourceControlAgentActionDialog({
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
   const { agentOptions, selectedAgentUnavailable, hasEnabledAgents } = useMemo(
-    () => buildSourceControlAgentAvailability({ detectedAgents, disabledAgents, selectedAgent }),
-    [detectedAgents, disabledAgents, selectedAgent]
+    () =>
+      buildSourceControlAgentAvailability({
+        detectedAgents: launchableAgents,
+        disabledAgents,
+        selectedAgent
+      }),
+    [launchableAgents, disabledAgents, selectedAgent]
   )
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  // Why: a structured native chat session reads no CLI arguments, so the field is absent on
-  // launches that would take that route and present on the terminal launches that apply them.
-  // Resolved on every render rather than memoised: it reads the live store and the local
-  // runtime's capabilities, neither of which is in a dependency list.
+  // Recompute from live store/runtime capabilities each render; structured chat ignores CLI arguments and these inputs are not dependency-tracked.
   const agentArgsApply = sourceControlLaunchAppliesAgentArgs({
     agent: selectedAgent,
     worktreeId,
@@ -198,13 +190,12 @@ export function useSourceControlAgentActionDialog({
     groupId,
     promptDelivery,
     launchPlatform,
-    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-    // label aligned with the real remote launch (no `orca-ide` rename).
+    // SSH uses plain orca; preview must match instead of applying the local Linux orca-ide rename.
     isRemote: typeof connectionId === 'string',
     launchSource,
     recoveryContext,
     connectionUnavailable,
-    refreshDetectedAgents,
+    refreshDetectedAgents: refreshLaunchableAgents,
     onStart,
     onSaveAgentDefault,
     onLaunchAccepted,
@@ -233,10 +224,12 @@ export function useSourceControlAgentActionDialog({
     [cancelStart, defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
   )
 
+  const discoveryOutcome = discovery?.cycle === openCycle ? discovery.outcome : 'pending'
   const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({
     open,
     openCycle,
-    detectionReady: detectedOpenCycle === openCycle,
+    detectionReady: discoveryOutcome === 'success',
+    detectionFailed: discoveryOutcome === 'cancelled' || discoveryOutcome === 'failed',
     actionId,
     baseCommandInput,
     savedAgentId,
@@ -252,7 +245,7 @@ export function useSourceControlAgentActionDialog({
     connectionUnavailable,
     detecting,
     isStarting,
-    detectedAgents,
+    detectedAgents: launchableAgents,
     disabledAgents,
     onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
       startWithDetectedAgents({

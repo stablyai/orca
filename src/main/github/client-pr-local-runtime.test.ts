@@ -122,8 +122,6 @@ import {
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -135,7 +133,6 @@ describe('GitHub PR local runtime routing', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: host-less prRepo backfill and origin resolution use getOwnerRepoForRemote.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -578,8 +575,7 @@ describe('GitHub PR local runtime routing', () => {
     const prViewCall = ghExecFileAsyncMock.mock.calls.find(
       ([args]) => args[0] === 'pr' && args[1] === 'view'
     )
-    // The runner host-qualifies argv at spawn time from options.host, so the
-    // mocked call sees the unqualified --repo plus the host in exec options.
+    // Host qualification happens inside the real runner, after this mocked boundary.
     expect(prViewCall?.[0]).toEqual(expect.arrayContaining(['--repo', 'team/orca']))
     expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com:8443' })
     const prCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')

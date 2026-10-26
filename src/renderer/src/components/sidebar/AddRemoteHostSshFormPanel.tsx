@@ -60,6 +60,7 @@ export function AddRemoteHostSshFormPanel({
         configIdentityAlias={configIdentityAlias}
         onFormChange={onFormChange}
         onSubmit={onSubmit}
+        offerProxyConnectionReuse={!serverLabel}
       />
 
       <DialogFooter className="sm:justify-between">

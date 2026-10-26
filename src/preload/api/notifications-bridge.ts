@@ -12,7 +12,7 @@ import type {
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { PreloadApi } from '../api-types'
 
-// Why: cache one shared Audio + blob URL per sound path so notifications do not re-read large files.
+// Reuse sound data to avoid reading large files for every notification.
 let cachedNotificationSound: {
   path: string
   blobUrl: string
@@ -73,7 +73,7 @@ export const notificationsApi = {
           disposeCachedNotificationSound()
           return { played: false, reason: sound.reason }
         }
-        // Why: a concurrent playSound may have cached the same path while this load was in flight.
+        // Another playSound may have populated the cache during this load.
         const latestEntry = cachedNotificationSound
         if (latestEntry?.path === sound.path) {
           entry = latestEntry
@@ -89,7 +89,7 @@ export const notificationsApi = {
       }
 
       const audio = entry.audio
-      // Why: restart from zero on each play so bursts replay instead of stacking copies (GNOME canberra / VS Code signal service).
+      // Replay from the start so bursts do not stack copies.
       audio.currentTime = 0
       if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
         audio.volume = Math.min(1, Math.max(0, options.volume / 100))

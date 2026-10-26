@@ -67,8 +67,7 @@ export class RuntimeTerminalWriter {
     payload: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    // Why: direct terminal.send can carry paste-sized text from RPC/mobile
-    // clients; chunk text before PTY/ConPTY while preserving suffix separation.
+    // RPC/mobile text may be paste-sized; chunk for PTY/ConPTY without merging the suffix.
     const text = typeof action.text === 'string' ? action.text : ''
     const hasSuffix = action.enter || action.interrupt
     if (text) {
@@ -80,8 +79,7 @@ export class RuntimeTerminalWriter {
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       if (text) {
-        // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
-        // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
+        // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
         await waitForTerminalWriteDelay(
           resolveAgentPromptSubmitDelayForAgent(
             this.getWriteHostPlatform(ptyId),

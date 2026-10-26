@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
@@ -136,10 +136,11 @@ describe('workspace linked references in hover details', () => {
     }
     const { container } = render(<Fixture onManage={vi.fn()} referenceDetails={details} />)
     expect(screen.getByText('Merged sibling')).toBeTruthy()
-    expect(screen.getByText('State: Merged')).toBeTruthy()
+    expect(screen.getByLabelText('State: Merged')).toBeTruthy()
+    expect(screen.queryByText('State: Merged')).toBeNull()
     expect(screen.getByText('Target: release')).toBeTruthy()
     expect(screen.getByText('State: In Progress')).toBeTruthy()
-    expect(screen.getAllByText('Checks: Passing')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
     expect(screen.queryByText('Used for checks')).toBeNull()
     const siblingRow = Array.from(
       container.querySelectorAll('[data-workspace-hover-reference]')
@@ -153,18 +154,26 @@ describe('workspace linked references in hover details', () => {
     expect(screen.getByText('Reviews · 2')).toBeTruthy()
     expect(screen.getByText('Issues & tasks · 2')).toBeTruthy()
     expect(screen.getAllByText('Active review')).toHaveLength(1)
-    expect(screen.getByText('MR !42 · GitLab · gitlab.example.com/team/orca')).toBeTruthy()
-    expect(screen.getByText('ENG-215 · Linear · acme')).toBeTruthy()
+    expect(screen.getByText('MR !42')).toBeTruthy()
+    expect(screen.getByText('· GitLab · gitlab.example.com/team/orca')).toBeTruthy()
+    expect(screen.getByText('ENG-215')).toBeTruthy()
+    expect(screen.getByText('· Linear · acme')).toBeTruthy()
+    const checks = screen.getByLabelText('Checks: Passing')
+    expect(checks.previousElementSibling?.textContent).toBe('PR #57')
+    expect(checks.previousElementSibling?.previousElementSibling?.getAttribute('aria-label')).toBe(
+      'GitHub'
+    )
+    expect(checks.nextElementSibling?.textContent).not.toContain('GitHub')
     const key = getWorkspaceAttachmentKey(attachments[0])
     expect(
-      Array.from(container.querySelectorAll('[data-workspace-hover-reference]')).find(
-        (node) => node.getAttribute('data-workspace-hover-reference') === key
-      )?.textContent
-    ).toContain('Checks: Passing')
+      Array.from(container.querySelectorAll('[data-workspace-hover-reference]'))
+        .find((node) => node.getAttribute('data-workspace-hover-reference') === key)
+        ?.querySelector('[aria-label="Checks: Passing"]')
+    ).toBeTruthy()
     expect(screen.queryByText('Used for checks')).toBeNull()
-    expect(screen.getAllByText('Checks: Passing')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
   })
-  it('opens a reference without activating the parent and dismisses hover', () => {
+  it('offers Orca link destinations without activating the parent or dismissing hover', () => {
     const openUrl = vi.fn()
     Object.defineProperty(window, 'api', { configurable: true, value: { shell: { openUrl } } })
     const parentClick = vi.fn()
@@ -175,22 +184,49 @@ describe('workspace linked references in hover details', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
     parentClick.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Open MR !42' }))
-    expect(openUrl).toHaveBeenCalledWith('https://gitlab.example.com/team/orca/-/merge_requests/42')
+    fireEvent.click(screen.getByRole('link', { name: 'Open MR !42' }))
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /System Browser/ })).toBeTruthy()
     expect(parentClick).not.toHaveBeenCalled()
     expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
-      'false'
+      'true'
     )
   })
-  it('dismisses hover before managing links and exposes no second picker', () => {
+  it('dismisses the link chooser when an outside click stops propagation', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { shell: { openUrl: vi.fn() } }
+    })
+    render(
+      <>
+        <Fixture onManage={vi.fn()} />
+        <button onClick={(event) => event.stopPropagation()}>Other card</button>
+      </>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Open MR !42' }))
+    // Why: Radix arms its outside-pointerdown listener a tick after opening.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    const otherCard = screen.getByRole('button', { name: 'Other card' })
+    fireEvent.pointerDown(otherCard)
+    fireEvent.click(otherCard)
+    expect(screen.queryByRole('button', { name: /System Browser/ })).toBeNull()
+  })
+  it('opens link management from either section header and dismisses hover', () => {
     const onManage = vi.fn()
     const { container } = render(<Fixture onManage={onManage} />)
     fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Manage links…' }))
-    expect(onManage).toHaveBeenCalledTimes(1)
-    expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
-      'false'
-    )
+    const addButtons = screen.getAllByRole('button', { name: 'Add reference' })
+    expect(addButtons).toHaveLength(2)
+    expect(screen.queryByText('Manage links…')).toBeNull()
+    for (const button of addButtons) {
+      fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
+      fireEvent.click(button)
+      expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
+        'false'
+      )
+    }
+    expect(onManage).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('combobox')).toBeNull()
   })
   it('opens metadata management for a URL-less reference and handles attachment-only folders', () => {

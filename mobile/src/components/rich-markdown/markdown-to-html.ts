@@ -11,13 +11,7 @@ export function isBlockStart(line: string): boolean {
   return /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+|\s*(-{3,}|\*{3,}|_{3,})\s*$)/.test(line)
 }
 
-/**
- * Markdown as the markup the editable surface holds.
- *
- * Block by block rather than by one pass of replacements, because fenced code, tables and lists
- * each consume a run of lines whose length only their own reader knows. An empty source still
- * renders a paragraph, which is what carries the placeholder.
- */
+// Read fenced/table/list blocks by their own consumed line runs, not flat replacements; empty source still needs paragraph for placeholder.
 export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string): string {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const html: string[] = []
@@ -95,8 +89,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
       const list = parseListTree(lines, index)
-      // Why: a marker with nothing after it parses as no item, so the run is empty and the index
-      // has not moved. Falling through rather than continuing makes the line the text it is.
+      // Empty marker produces no list item and no index progress; fall through as text instead of continuing forever.
       if (list.nextIndex > index) {
         html.push(renderListItems(scope, list.items))
         index = list.nextIndex
@@ -118,9 +111,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
     }
     if (paragraph.length === 0) {
-      // Why: a line that opens a block by `isBlockStart` but matches no block reader's own grammar
-      // — `# `, `- `, a fence with a backtick in its language — is gathered by nothing, and the
-      // loop would read it again forever. It is text.
+      // Consume text when isBlockStart admits line no reader accepts (# /- /invalid fence language); otherwise loop never advances.
       paragraph.push(lines[index] ?? '')
       index += 1
     }

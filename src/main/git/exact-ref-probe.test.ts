@@ -68,8 +68,7 @@ describe('probeExactRefs', () => {
     await probeExactRefs(runGit, refs)
 
     expect(runGit).toHaveBeenCalledTimes(20)
-    // Equality, not a ceiling: 20 refs saturate the pool, so a regression to
-    // serial probing has to fail here.
+    // Require saturation so a regression to serial probing fails.
     expect(maxActive).toBe(8)
   })
 })
@@ -92,8 +91,7 @@ describe('probeAnyExactRef', () => {
     expect(runGit.mock.calls.length).toBeLessThanOrEqual(8)
   })
   it('treats exit 1 with stderr as an inconclusive probe, not an absent ref', async () => {
-    // Why: `wsl.exe` exits 1 for its own launch failures. Reading that as
-    // absence would collapse `unverifiable` into `exited`.
+    // WSL launch failure is unknown ref state, never proof of absence.
     const runGit = vi.fn(async () => {
       throw Object.assign(new Error('wsl fail'), {
         code: 1,

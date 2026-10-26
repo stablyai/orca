@@ -53,7 +53,6 @@ function desktopSsh(targetId: string, targetGeneration: number): AutomationOwner
   return { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId, targetGeneration } }
 }
 
-/** Stands in for the Orca automation store: readable, but never markable unavailable from here. */
 function orcaStoreHealth() {
   return { read: vi.fn<() => void>(), markUnavailable: vi.fn<() => void>() }
 }
@@ -126,8 +125,6 @@ describe('scoped external automations', () => {
     expect([...files]).toEqual(before)
   })
 
-  // The probe's own timeout, not the caller's: a provider binary that never
-  // returns must still resolve the entry, or the page waits forever on one host.
   it('settles when a local command lookup hangs', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValue({

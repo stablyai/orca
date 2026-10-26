@@ -10,8 +10,7 @@ type BottomDrawerModalHostScope = {
 
 export const BottomDrawerModalHostContext = createContext<BottomDrawerModalHostScope | null>(null)
 
-/** Non-null when a BottomDrawer is rendered inside a shared BottomDrawerModalHost and
- *  must therefore skip its own native Modal (the host owns the single Modal). */
+// Inside shared BottomDrawerModalHost, skip per-drawer native Modal; host owns the sole window.
 export function useBottomDrawerModalHost(): BottomDrawerModalHostScope | null {
   return useContext(BottomDrawerModalHostContext)
 }

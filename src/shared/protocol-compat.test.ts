@@ -92,9 +92,7 @@ describe('evaluateCompat', () => {
   })
 
   it('mobile-too-old wins precedence when both constraints would fire', () => {
-    // Why: documents the intended kill-switch precedence — desktop's
-    // refusal of a too-old mobile takes priority over mobile's local
-    // refusal of a too-old desktop.
+    // Desktop’s too-old-mobile kill switch outranks mobile’s local judgment of desktop age.
     const verdict = evaluateCompat({
       mobileProtocolVersion: MOBILE_V,
       minCompatibleDesktopVersion: 99,

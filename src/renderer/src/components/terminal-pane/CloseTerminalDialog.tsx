@@ -24,11 +24,9 @@ export default function CloseTerminalDialog({
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
-  /** Names the tab when the prompt can target a tab the user is not looking at
-   *  (tab-strip X, middle-click). Omitted for the focused-pane keyboard path. */
+  /** Name off-focus tab-strip/middle-click targets; omit for focused-pane keyboard closes. */
   tabLabel?: string
-  /** Identifies what is being closed, for hosts that reuse one open dialog across a queue
-   *  of confirmations. Changing it clears the previous subject's "don't ask again" tick. */
+  /** Changing queued subject clears the previous tab’s opt-out without reopening the dialog. */
   subjectKey?: string
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
@@ -38,8 +36,7 @@ export default function CloseTerminalDialog({
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
 
-  // Why: each reopen represents a fresh confirmation, so clear the old choice
-  // during render rather than briefly painting it while the dialog opens.
+  // Reset each new confirmation before paint to avoid flashing the previous opt-out.
   if (open !== previousOpen) {
     setPreviousOpen(open)
     if (open) {
@@ -47,9 +44,7 @@ export default function CloseTerminalDialog({
     }
   }
 
-  // Why: a queued confirmation swaps the subject without ever closing the dialog, so the
-  // reopen reset above never fires. Ignore the swap to undefined as the dialog closes —
-  // clearing the tick mid-exit-animation would be visible for no reason.
+  // Queued subjects change without reopening; ignore closing-to-undefined so the checkbox cannot flash during exit.
   if (subjectKey !== previousSubjectKey) {
     setPreviousSubjectKey(subjectKey)
     if (subjectKey !== undefined) {

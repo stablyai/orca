@@ -143,7 +143,6 @@ describe('onboarding flow persistence', () => {
     })
   })
 
-  // Yolo mode says agents run without asking, chats included; a replay left untouched keeps them.
   it('sets new chats from a flipped Yolo mode, keeping a custom mode and an untouched replay', () => {
     const set = (mode: string) => ({ nativeChatPermissionMode: mode })
     expect(onboardingChatPermissionSetting('full-access', false, true)).toEqual(set('ask'))

@@ -37,12 +37,10 @@ function makeMode(worktreeId: string): AgentSendPopoverTargetMode {
 
 describe('selectSendTargetInputs', () => {
   it('returns the shared empty constant when the popover does not target this worktree', () => {
-    // Inactive (popover closed): stable empty reference.
     const inactive = selectSendTargetInputs(BASE, 'wt-A')
     expect(inactive).toBe(EMPTY_SEND_TARGET_INPUTS)
 
-    // Churning the hottest maps while inactive must NOT change the selected
-    // reference, so a useShallow subscription skips the re-render.
+    // Inactive cards must keep one identity across pane-title/status churn so shallow subscriptions skip rendering.
     const churned: SendTargetInputsState = {
       ...BASE,
       runtimePaneTitlesByTabId: { 'tab-1': 'claude' },
@@ -66,7 +64,6 @@ describe('selectSendTargetInputs', () => {
       runtimePaneTitlesByTabId: titles
     }
     const active = selectSendTargetInputs(s, 'wt-A')
-    // Live map references pass straight through so eligibility derives correctly.
     expect(active.runtimePaneTitlesByTabId).toBe(titles)
     expect(active).not.toBe(EMPTY_SEND_TARGET_INPUTS)
   })
@@ -80,11 +77,8 @@ describe('selectSendTargetInputs', () => {
     }
     const r1 = selectSendTargetInputs(s1, 'wt-A')
 
-    // Same underlying map refs -> shallow-equal -> no re-render.
     expect(shallow(r1, selectSendTargetInputs(s1, 'wt-A'))).toBe(true)
 
-    // A real pane-title write replaces the map ref -> shallow-unequal -> the
-    // open popover re-derives eligibility, exactly as before this change.
     const s2: SendTargetInputsState = { ...s1, runtimePaneTitlesByTabId: { 'tab-1': 'codex' } }
     expect(shallow(r1, selectSendTargetInputs(s2, 'wt-A'))).toBe(false)
   })

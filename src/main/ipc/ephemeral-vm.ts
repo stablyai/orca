@@ -10,8 +10,7 @@ import {
   type EphemeralVmRecipeResultWarning
 } from '../../shared/ephemeral-vm-recipe-diagnostics'
 import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recipe-repo-url'
-// Why: import directly from the doctor module (not the barrel) — it uses Node
-// fs/path and must stay out of the browser bundle that imports the barrel.
+// Import the Node-only doctor directly so browser consumers of the barrel do not bundle fs/path.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
 import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
@@ -146,8 +145,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
         })
       }
-      // Why: deregister only when the whole handler settles, so cancelProvision still finds the
-      // controller for every phase that reads its signal.
+      // Retain cancellation registration until every signal-consuming provisioning phase settles.
       try {
         let recipeRepoUrl = repo.repo.gitRemoteIdentity?.remoteUrl
         let sourceRef = args.ref

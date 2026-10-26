@@ -13,7 +13,7 @@ export type HooksJsonSnapshot = {
 }
 
 export function parseHooksJsonText(raw: string): HooksConfig | null {
-  // Why: JSON.parse rejects a decoded UTF-8 BOM; strip only the leading marker.
+  // JSON.parse rejects a decoded UTF-8 BOM.
   const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
   try {
     const parsed = JSON.parse(content)
@@ -23,15 +23,9 @@ export function parseHooksJsonText(raw: string): HooksConfig | null {
   }
 }
 
-// Why: generation guards abort a mutation when the file no longer matches the
-// bytes it was derived from; the raw snapshot and the parse must come from one
-// read or a concurrent save can slip between them unnoticed.
+// Generation guards need raw bytes and parsed config from the same read to detect concurrent saves.
 export function readHooksJsonWithRaw(configPath: string): HooksJsonSnapshot {
-  // Why: the read arm below already separates "no hooks configured" from "could
-  // not read", but the `existsSync` arm in front of it did not — it returned a
-  // VALID EMPTY config for a file that merely could not be opened, and the
-  // installer then wrote generated hooks over it. One read classifies both, and
-  // closes the TOCTOU window between the two calls.
+  // Only confirmed absence permits an empty config; unreadable files must not be overwritten.
   try {
     const raw = readFileSync(configPath, 'utf-8')
     return { raw, config: parseHooksJsonText(raw) }

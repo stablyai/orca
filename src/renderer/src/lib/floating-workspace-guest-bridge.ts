@@ -1,9 +1,4 @@
-// Guest → mounted-panel bridge for the floating workspace.
-// A focused floating *browser* guest's keystrokes never reach the renderer DOM; the main-process
-// guest before-input-event routes them over IPC to useIpcEvents, which (after validating the
-// source id) re-dispatches them as these typed window events so the mounted panel handles the
-// close/select through the exact same closures the keyboard path uses. Dispatch is synchronous,
-// so the reclaim intent set inside the panel's close handler still lands before webview teardown.
+// Validated guest IPC synchronously dispatches panel events because browser keystrokes bypass DOM; shared close handlers record reclaim before webview teardown.
 export const FLOATING_WORKSPACE_GUEST_CLOSE_EVENT = 'orca:floating-workspace-guest-close'
 export const FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT =
   'orca:floating-workspace-guest-select-index'

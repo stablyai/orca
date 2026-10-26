@@ -210,10 +210,7 @@ describe('useWorkspaceBoardPanel', () => {
   })
 
   it('defers Escape to a text field inside the board', async () => {
-    // Why: this listener is capture-phase on document, so it runs before React's
-    // handlers and a board field cannot stopPropagation its way out. The field
-    // owns Escape and calls closeWorkspaceBoard itself when it has nothing to
-    // cancel — without this guard, clearing a search query dismissed the board.
+    // Document capture runs before React; board fields must own Escape to cancel their edits before dismissal.
     await renderHookProbe()
     const field = appendInput('board')
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Measures the complete ProseMirror doc traversal used by the two doc-link plugins.
+// Measures doc-link scans over plain paragraph fixtures built from markdown source lines.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -99,7 +99,10 @@ function createFixture(doc, nonce) {
 
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)]
+  const middle = sorted.length / 2
+  return Number.isInteger(middle)
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[Math.floor(middle)]
 }
 
 function measureCorpus(docs) {
@@ -174,7 +177,7 @@ const large = docs.filter((doc) => doc.size > 3000)
 const biggest = docs.reduce((a, b) => (b.size > a.size ? b : a))
 const pad = (value, width) => String(value).padStart(width)
 
-console.log('Doc-link ProseMirror traversal, per editor transaction. Lower is better.')
+console.log('Doc-link ProseMirror scan over plain paragraph fixtures. Lower is better.')
 console.log(
   `docs=${docs.length} (>3KB: ${large.length}) iterations=${ITERATIONS} (interleaved median)`
 )
@@ -183,7 +186,7 @@ console.log(
 )
 
 for (const [label, set] of [
-  ['all repo markdown', docs],
+  ['repo markdown sample', docs],
   ['docs over 3 KB', large],
   [`biggest (${biggest.file.split('/').pop()})`, [biggest]]
 ]) {
@@ -198,5 +201,5 @@ for (const [label, set] of [
   )
 }
 console.log(
-  '\nAuto-conversion pays this once per keystroke; preview decorations pay it once\nper keystroke and once per caret move.'
+  '\nEach round scans one document from the selected corpus. Fixtures omit Markdown parsing,\ncode marks/blocks, link conversion, resolution and decorations; this is not full plugin timing.'
 )

@@ -46,10 +46,7 @@ export async function stopReplacedPaneOwner(
   }
 }
 
-/**
- * The replacement's bind is the swap: decided inside the bind's durable mutation, it takes a leaf
- * still naming the stopped id, or one the renderer already cleared; any other owner wins.
- */
+/** Swap inside the durable mutation: accept the stopped ID or a renderer-cleared leaf; another owner wins. */
 export function swapReplacedPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,

@@ -7,8 +7,7 @@ export const PLUGIN_KEYBINDING_LIMIT = 256
 export const PLUGIN_VM_RECIPE_LIMIT = 64
 export const PLUGIN_AGENT_PROFILE_LIMIT = 64
 
-// Why: locale ids become i18next bundle keys and filenames. This bounded BCP
-// 47 subset covers current community packs without accepting path syntax.
+// Locale IDs become filenames/i18next keys; a bounded BCP 47 subset excludes path syntax.
 export const pluginLocaleIdSchema = z
   .string()
   .min(2)

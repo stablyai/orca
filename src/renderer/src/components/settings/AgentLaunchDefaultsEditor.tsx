@@ -1,6 +1,7 @@
-import { useId, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Textarea } from '../ui/textarea'
 import { translate } from '@/i18n/i18n'
 import {
   parseAgentDefaultEnvDraft,
@@ -8,6 +9,7 @@ import {
   type AgentDefaultEnvDraftInvalidReason
 } from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
+import { AgentPermissionArgsChip } from './AgentPermissionChoiceControls'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -84,17 +86,59 @@ export function AgentCommandOverrideInput({
 export function AgentDefaultArgsInput({
   defaultArgs,
   argsOverride,
-  onSaveArgs
+  onSaveArgs,
+  permissionChip,
+  note
 }: {
   defaultArgs: string
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
+  permissionChip?: {
+    label: string
+    flag: string
+    removeRecipe: (text: string) => string | null
+    onRemove: () => void
+  }
+  note?: string
 }): React.JSX.Element {
-  const [argsDraft, setArgsDraft] = useState(argsOverride)
+  const [draft, setDraft] = useState<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const chipRef = useRef<HTMLSpanElement>(null)
+  const chipButtonRef = useRef<HTMLButtonElement>(null)
+  const argsDraft = draft ?? argsOverride
   const { pending, write } = useAgentLaunchFieldWrite()
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    const chip = chipRef.current
+    if (!input) {
+      return
+    }
+    input.style.textIndent = ''
+    if (!chip) {
+      return
+    }
+    const measure = (): void => {
+      input.style.textIndent = `calc(${chip.getBoundingClientRect().width}px + var(--spacing) * 2)`
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(chip)
+    return () => observer.disconnect()
+  }, [permissionChip?.flag])
   const commitArgs = (): void => {
-    const value = argsDraft.trim()
-    write(value, () => onSaveArgs(value))
+    if (pending || draft === null) {
+      return
+    }
+    const value = draft.trim()
+    if (value === argsOverride) {
+      setDraft(null)
+      return
+    }
+    write(
+      value,
+      () => onSaveArgs(value),
+      () => setDraft((current) => (current === draft ? null : current))
+    )
   }
 
   return (
@@ -103,38 +147,83 @@ export function AgentDefaultArgsInput({
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
       <div className="flex items-center gap-2">
-        <Input
-          value={argsDraft}
-          readOnly={pending}
-          onChange={(event) => setArgsDraft(event.target.value)}
-          onBlur={commitArgs}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+        <div
+          className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
               commitArgs()
-              event.currentTarget.blur()
-            }
-            if (event.key === 'Escape') {
-              setArgsDraft(argsOverride)
-              event.currentTarget.blur()
             }
           }}
-          placeholder={
-            defaultArgs ||
-            translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
-          }
-          spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
-        />
-        {argsOverride !== defaultArgs && (
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              inputRef.current?.focus()
+            }
+          }}
+        >
+          {permissionChip && (
+            <AgentPermissionArgsChip
+              {...permissionChip}
+              chipRef={chipRef}
+              buttonRef={chipButtonRef}
+              disabled={pending}
+              onRemove={() => {
+                if (draft !== null) {
+                  setDraft(permissionChip.removeRecipe(draft) ?? draft)
+                }
+                inputRef.current?.focus()
+                permissionChip.onRemove()
+              }}
+            />
+          )}
+          <Textarea
+            variant="composite"
+            ref={inputRef}
+            rows={1}
+            value={argsDraft}
+            readOnly={pending}
+            onChange={(event) => setDraft(event.target.value.replace(/[\r\n]/g, ''))}
+            onKeyDown={(event) => {
+              if (
+                permissionChip &&
+                event.key === 'Backspace' &&
+                !event.repeat &&
+                !event.altKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                event.currentTarget.selectionStart === 0 &&
+                event.currentTarget.selectionEnd === 0
+              ) {
+                event.preventDefault()
+                chipButtonRef.current?.focus()
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitArgs()
+                event.currentTarget.blur()
+              }
+              if (event.key === 'Escape') {
+                setDraft(null)
+              }
+            }}
+            placeholder={
+              defaultArgs ||
+              translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
+            }
+            spellCheck={false}
+            className="block min-h-5 [field-sizing:content]"
+          />
+        </div>
+        {(argsOverride !== defaultArgs || argsDraft !== defaultArgs) && (
           <Button
             type="button"
             variant="ghost"
             size="xs"
             onClick={() => {
+              setDraft(argsDraft)
               write(
                 defaultArgs,
                 () => onSaveArgs(defaultArgs),
-                () => setArgsDraft(defaultArgs)
+                () => setDraft((current) => (current === argsDraft ? null : current))
               )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
@@ -143,35 +232,52 @@ export function AgentDefaultArgsInput({
           </Button>
         )}
       </div>
+      {note ? <p className="text-[11px] text-muted-foreground">{note}</p> : null}
     </div>
   )
 }
 
 export function AgentDefaultEnvInput({
+  showEmpty = false,
   defaultEnv,
   envOverride,
   onSaveEnv
 }: {
+  showEmpty?: boolean
   defaultEnv: Record<string, string>
   envOverride: Record<string, string>
-  onSaveEnv: (value: Record<string, string>) => void
-}): React.JSX.Element {
+  onSaveEnv: (value: Record<string, string>) => void | Promise<void>
+}): React.JSX.Element | null {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
-  const [envDraft, setEnvDraft] = useState(draftSeed)
+  const [draft, setDraft] = useState<string | null>(null)
+  const envDraft = draft ?? draftSeed
+  const { pending, write } = useAgentLaunchFieldWrite()
   const [envDraftError, setEnvDraftError] = useState<AgentDefaultEnvDraftInvalidReason | null>(null)
   const envDraftErrorId = useId()
   const commitEnv = (): void => {
+    if (pending || draft === null) {
+      return
+    }
     if (envDraft === draftSeed) {
+      setDraft(null)
       return
     }
     const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
     setEnvDraftError(parsedDraft.invalidReason)
     if (!parsedDraft.invalidReason) {
-      onSaveEnv(parsedDraft.env)
+      setDraft(envDraft)
+      write(
+        stringifyAgentDefaultEnvDraft(parsedDraft.env),
+        () => onSaveEnv(parsedDraft.env),
+        () => setDraft((current) => (current === envDraft ? null : current))
+      )
     }
   }
 
+  if (!showEmpty && !defaultEnvText && !draftSeed && draft === null && !pending) {
+    return null
+  }
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">
@@ -180,8 +286,9 @@ export function AgentDefaultEnvInput({
       <div className="flex items-center gap-2">
         <Input
           value={envDraft}
+          readOnly={pending}
           onChange={(event) => {
-            setEnvDraft(event.target.value)
+            setDraft(event.target.value)
             if (envDraftError) {
               setEnvDraftError(null)
             }
@@ -193,9 +300,8 @@ export function AgentDefaultEnvInput({
               event.currentTarget.blur()
             }
             if (event.key === 'Escape') {
-              setEnvDraft(draftSeed)
+              setDraft(null)
               setEnvDraftError(null)
-              event.currentTarget.blur()
             }
           }}
           placeholder={
@@ -207,15 +313,21 @@ export function AgentDefaultEnvInput({
           aria-describedby={envDraftError ? envDraftErrorId : undefined}
           className="h-7 flex-1 font-mono text-xs"
         />
-        {draftSeed !== defaultEnvText && (
+        {(draftSeed !== defaultEnvText || envDraft !== defaultEnvText) && (
           <Button
             type="button"
             variant="ghost"
             size="xs"
             onClick={() => {
-              onSaveEnv(defaultEnv)
-              setEnvDraft(defaultEnvText)
-              setEnvDraftError(null)
+              setDraft(envDraft)
+              write(
+                defaultEnvText,
+                () => onSaveEnv(defaultEnv),
+                () => {
+                  setDraft((current) => (current === envDraft ? null : current))
+                  setEnvDraftError(null)
+                }
+              )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >

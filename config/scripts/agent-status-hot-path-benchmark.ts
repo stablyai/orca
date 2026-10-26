@@ -1,24 +1,13 @@
-/**
- * Deterministic benchmark for the renderer agent-status hot path.
- *
- * It is written so the SAME file can be checked out onto a baseline revision and re-run: it only
- * touches API that exists on both sides of the memoization change. Run it on the baseline and on
- * the candidate on one machine and diff the JSON artifact.
- *
- * Counting passes patch `Map`/`Set`/`Object.assign`/`Object.values`, which deoptimizes them, so
- * counts and timings are taken in separate passes and never from the same run.
- *
- * Run: ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.agent-status-benchmark.config.ts
- *
- * Scale mirrors the reporting user rather than the 100-worktree fixture in
- * docs/reference/renderer-agent-status-performance.md: 423 worktrees, 634 terminal tabs.
- */
+// Compare identical benchmark APIs on baseline/candidate; separate instrumented allocation counts from clean timing to avoid patch-induced deoptimization.
+// Run: ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.agent-status-benchmark.config.ts
+// Reported-user scale: 423 worktrees/634 tabs, rather than the 100-worktree fixture.
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AgentStatusBatchUpdate } from '@/store/slices/agent-status'
+import { MAX_LIVE_AGENT_STATUSES } from '@/store/slices/agent-status'
 import {
   createTestStore,
   makeTab,
@@ -197,8 +186,17 @@ async function runCommitPass(
 describe('agent-status hot path benchmark', () => {
   it('reports routing, resolution and commit cost at 423 worktrees', async () => {
     const report: Record<string, number> = {}
+    const fixture = buildFixture(false)
+    const index = createAgentStatusPaneRoutingIndex(fixture.store.getState())
+    for (const [position, paneKey] of fixture.paneKeys.entries()) {
+      const resolved = resolvePaneKeyFromRoutingIndex(index, paneKey)
+      expect(resolved).toMatchObject({
+        exists: true,
+        owningWorktreeId: fixture.owners[position].worktreeId
+      })
+      expect(resolved).toEqual(resolvePaneKey(fixture.store.getState(), paneKey))
+    }
 
-    // Routing allocations (counting pass) and routing time (clean pass), taken separately.
     {
       const alloc = buildFixture(false)
       withAllocationCounting(() => runIndexedRouting(alloc.store, alloc.paneKeys))
@@ -213,7 +211,6 @@ describe('agent-status hot path benchmark', () => {
       )
     }
 
-    // Standalone nested-loop resolution: what the leading edge used before this change.
     {
       const alloc = buildFixture(true)
       counters.tabComparisons = 0
@@ -229,7 +226,6 @@ describe('agent-status hot path benchmark', () => {
       )
     }
 
-    // Indexed resolution under the same tab-iteration counter, for a like-for-like comparison count.
     {
       const alloc = buildFixture(true)
       counters.tabComparisons = 0
@@ -275,7 +271,21 @@ describe('agent-status hot path benchmark', () => {
       report['commit.stagedPropertyCopiesPer1kUpdates'] = per1k(objectAssignPropertyCopies)
       report['commit.freshnessEntryVisitsPer1kUpdates'] = per1k(freshnessEntryVisits)
       report['commit.transactions'] = countedBatches.length
-      expect(Object.keys(counted.store.getState().agentStatusByPaneKey).length).toBeGreaterThan(0)
+      const committed = counted.store.getState().agentStatusByPaneKey
+      const expected = new Map(
+        countedBatches
+          .flat()
+          .slice(-MAX_LIVE_AGENT_STATUSES)
+          .map((update) => [update.paneKey, update])
+      )
+      expect(Object.keys(committed).sort()).toEqual([...expected.keys()].sort())
+      for (const [paneKey, update] of expected) {
+        expect(committed[paneKey]).toMatchObject({
+          ...update.payload,
+          ...update.timing,
+          ...update.routing
+        })
+      }
 
       const warm = buildFixture(false)
       await runCommitPass(warm.store, buildBatches(warm.owners, warm.paneKeys))
@@ -294,6 +304,5 @@ describe('agent-status hot path benchmark', () => {
       outputPath,
       `${JSON.stringify({ worktrees: WORKTREES, events: EVENTS, report }, null, 2)}\n`
     )
-    expect(report['routing.indexed.ms']).toBeGreaterThan(0)
   })
 })

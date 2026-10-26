@@ -1,5 +1,3 @@
-// Fake protocol opens use the same awaited host path as production adapters.
-
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type Acquire = StructuredAgentSessionAdapter['acquire']

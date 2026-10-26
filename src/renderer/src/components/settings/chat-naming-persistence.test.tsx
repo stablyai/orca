@@ -31,7 +31,7 @@ function ChatPersistenceHarness({ model }: { model: SettingsPersistenceModel }) 
     throw new Error('Settings fixture is missing')
   }
   const context = {
-    model: { ...model, settings },
+    model: { ...model, settings, fontSuggestions: [] },
     interactions: controller,
     navigation: { getSectionSearchEntries: () => [getChatNamingSearchEntry()] },
     view: { isSectionMounted: () => true }

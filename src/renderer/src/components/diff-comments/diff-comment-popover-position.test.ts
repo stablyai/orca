@@ -99,7 +99,6 @@ describe('resolveDiffCommentPopoverTop', () => {
       viewportHeight: 400
     })
 
-    // above = belowTop - lineHeight - popoverHeight = 380 - 20 - 150
     expect(top).toBe(210)
   })
 
@@ -111,7 +110,6 @@ describe('resolveDiffCommentPopoverTop', () => {
       viewportHeight: 400
     })
 
-    // maxTop = viewportHeight - popoverHeight - margin = 400 - 380 - 8
     expect(top).toBe(12)
   })
 
@@ -154,7 +152,6 @@ describe('resolveDiffCommentPopoverTop', () => {
       margin: 40
     })
 
-    // 300 + 80 + 40 = 420 > 400, so it flips above: 300 - 20 - 80
     expect(top).toBe(200)
   })
 })

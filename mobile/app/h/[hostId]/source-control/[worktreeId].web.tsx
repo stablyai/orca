@@ -4,15 +4,9 @@ import { MobileSourceControlPanel } from '../../../../src/source-control/MobileS
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-source-control-hub-tab'
 
-/**
- * The page's route for the source-control hub: the screen itself. The native route file mounts the shell, whose
- * native view module throws at import in a browser, and the manifest imports every route.
- */
+// Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileSourceControlScreen() {
-  // Through `firstParam`, as the native sibling does. The page reaches this route only through
-  // `init.route`, whose params are a `Record<string, string>`, so an array cannot arrive today —
-  // read the same way regardless, because the two files are meant to be the same screen and a
-  // difference between them is a difference nobody would look for.
+  // Match native firstParam handling even though init.route.params currently guarantees strings.
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]

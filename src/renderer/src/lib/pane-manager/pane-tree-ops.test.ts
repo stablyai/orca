@@ -283,8 +283,7 @@ describe('safeFit', () => {
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
-      // Reflow at narrower cols rewraps lines; the tracked content now lives
-      // at a different absolute line than the pre-fit viewport number.
+      // Narrower reflow moves tracked content away from its original absolute viewport line.
       activeBuffer.baseY = 130
       activeBuffer.viewportY = 0
       marker.line = 57

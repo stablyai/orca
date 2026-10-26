@@ -40,8 +40,7 @@ function modelMeta(model: MobileSpeechModel): string {
   return formatSize(model.sizeBytes)
 }
 
-// Renders the speech-model rows shared between the setup sheet and the Voice
-// settings page: size/progress, recommended badge, selected check, download, delete.
+// Share model size/progress/recommendation/selection/download/delete rows between setup and Voice settings.
 export function VoiceModelList({
   setup,
   disabled,

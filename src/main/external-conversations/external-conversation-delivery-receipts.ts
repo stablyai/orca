@@ -17,19 +17,16 @@ const RecordedDelivery = z.discriminatedUnion('outcome', [
 
 const LOST: Delivery = { outcome: 'unknown', reason: 'replayed_after_restart' }
 
-/** Unsettled connector deliveries the shared ledger holds at once, so orchestration keeps the rest. */
+// Reserve only part of the shared ledger for unsettled connector deliveries.
 export const CONNECTOR_PENDING_RECEIPT_LIMIT = 1_000
+
+// Headroom only cancels may use, so a full backlog can still be cancelled away.
+export const CONNECTOR_CANCEL_RECEIPT_RESERVE = 100
 
 const callerFingerprint = (source: ConnectorSource): string => `connector:${source}`
 const CONNECTOR_FINGERPRINTS = CONNECTOR_SOURCES.map(callerFingerprint)
 
-/**
- * A connector's delivery ids on orchestration's durable mutation receipts, under one caller
- * identity per source: the same id and payload share one answer, across restarts too, and another
- * payload is refused. A duplicate of one still running waits for it; a running one a restart
- * interrupted reads `unknown`. Refusals and throws wrote nothing, so they leave no receipt.
- * A new delivery past `CONNECTOR_PENDING_RECEIPT_LIMIT` unsettled ones is refused unrecorded.
- */
+/** Deduplicate durable delivery IDs; interrupted writes remain unknown and refused deliveries leave no receipt. */
 export class DeliveryReceipts {
   private readonly inFlight = new Map<string, Promise<Delivery>>()
   private leftoversSettled = false
@@ -39,7 +36,7 @@ export class DeliveryReceipts {
   run(
     key: ConversationKey,
     deliveryId: string,
-    method: 'connector.start' | 'connector.send',
+    method: 'connector.start' | 'connector.send' | 'connector.cancel',
     payload: unknown,
     execute: () => Promise<Delivery>
   ): Promise<Delivery> {
@@ -52,14 +49,15 @@ export class DeliveryReceipts {
     const flightKey = JSON.stringify([identity.callerFingerprint, identity.requestId])
     const db = this.db()
     if (!this.leftoversSettled) {
-      // Pending rows from a previous process already answer only unknown; record that, never delete
-      // (they may have written), so the ledger can prune them and they leave the limit.
+      // Settle old pending rows as unknown; deleting them could repeat effects they already wrote.
       db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST))
       this.leftoversSettled = true
     }
     if (
       !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
-      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >= CONNECTOR_PENDING_RECEIPT_LIMIT
+      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
+        CONNECTOR_PENDING_RECEIPT_LIMIT +
+          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
     ) {
       return Promise.resolve(refused('delivery_backlog_full'))
     }

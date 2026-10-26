@@ -12,7 +12,6 @@ import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInpu
 import { scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 
-/** Desktop parity: `NativeChatResolutionReceipt`. */
 export function MobileNativeChatResolutionReceipt({
   body,
   awaiting = true,
@@ -55,7 +54,6 @@ export function MobileNativeChatResolutionReceipt({
           subject={subject}
           pending={false}
           fontScale={fontScale}
-          // An answered group already shows each question above its answer.
           listsQuestions={answers.length === 0}
         />
       ) : (

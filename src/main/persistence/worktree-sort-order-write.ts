@@ -18,7 +18,7 @@ import { resolveWorktreeMetaOwner } from './host-qualified-worktree-meta'
 
 export type WorktreeSortOrderRequest = {
   orderedIds: readonly string[]
-  /** Parallel to `orderedIds`: the copy each id names. Older clients send none. */
+  /** Parallel host identities; omitted by older clients. */
   hostIds?: readonly string[]
 }
 
@@ -32,7 +32,6 @@ type SortOrderStore = {
   setWorktreeMeta: (target: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => unknown
 }
 
-/** The client's host for this id when a repo row of this store is stamped exactly that. */
 function knownHost(
   store: SortOrderStore,
   worktreeId: string,
@@ -46,11 +45,7 @@ function knownHost(
     : null
 }
 
-/**
- * Saves an order onto the copies it names. An id the client did not qualify lands only when one
- * host owns it, so a same-id twin on another host keeps its own order.
- * @returns the updates actually written.
- */
+/** Unqualified IDs require unique ownership; return only written updates so same-ID siblings keep their order. */
 export function writeWorktreeSortOrder(
   store: SortOrderStore,
   request: WorktreeSortOrderRequest,
@@ -64,7 +59,7 @@ export function writeWorktreeSortOrder(
     if (targets.has(worktreeId)) {
       return
     }
-    // Before any host-qualified read: that read migrates a legacy row the move must keep frozen.
+    // Host-qualified reads can migrate legacy metadata, so check frozen moves first.
     if (isBlocked(worktreeId)) {
       targets.set(worktreeId, undefined)
       return
@@ -79,8 +74,7 @@ export function writeWorktreeSortOrder(
       targets.set(worktreeId, hostWorktreeTarget({ id: worktreeId, hostId }))
       return
     }
-    // The client's `local` may be a row this server stamped with its own id, so it keeps the
-    // id-only rule (which refuses twins); any other host this store lacks is skipped.
+    // Client-local may mean this server; use unique-owner fallback, while unknown remote hosts stay skipped.
     targets.set(
       worktreeId,
       named?.kind === 'local' ? resolveWorktreeMetaOwner(store, worktreeId) : undefined

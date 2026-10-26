@@ -1,6 +1,6 @@
-import type { TaskPageGitHubMutationStateModel } from './use-task-page-github-mutation-state'
+import type { TaskPageGitHubMutationStateModel } from './task-page/github/use-task-page-github-mutation-state'
 import { useState, useRef, useEffect } from 'react'
-import type { JiraIssueType, JiraCreateField } from '../../../shared/jira-types'
+import type { JiraIssueType, JiraCreateField } from '../../../shared/jira/jira-types'
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { writeNewJiraIssueDraft } from './task-page-draft-storage'
 import { useTaskPageJiraCreationProjects } from './use-task-page-jira-creation-projects'

@@ -40,17 +40,13 @@ function mergeOverrides(
 }
 
 export type MobileSessionViewModeController = {
-  /** Whether the default and this workspace's overrides have both been read once. */
   ready: boolean
-  /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
   setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
 }
 
-/** Resolves each tab's terminal/chat view: a per-device default (reloaded on focus
- *  so a Settings change applies without remounting the route) overlaid by persisted
- *  per-tab overrides that pin a session regardless of what the default later becomes. */
+// Overlay per-tab overrides on the focus-reloaded device default so Settings changes apply without remounting or changing pinned sessions.
 export function useMobileSessionViewMode(args: {
   hostId: string
   worktreeId: string
@@ -93,8 +89,7 @@ export function useMobileSessionViewMode(args: {
     return next
   }, [])
   const [defaultView, setDefaultView] = useState<MobileSessionView>('terminal')
-  // Why: the toggle callback reads the live default without depending on it, so
-  // its identity stays stable and it never captures a stale default.
+  // Read default via ref so stable toggle callbacks cannot capture stale preferences.
   const defaultViewRef = useRef(defaultView)
   defaultViewRef.current = defaultView
 
@@ -105,12 +100,10 @@ export function useMobileSessionViewMode(args: {
       if (!active) {
         return
       }
-      // Why: toggles made during the read are authoritative, but must not
-      // discard unrelated persisted overrides from the same worktree.
+      // User toggles during hydration win without discarding other persisted workspace overrides.
       const merged = mergeOverrides(preference.overrides, runtime.currentOverrides)
       runtime.currentOverrides = merged
-      // Why: an unreadable override store cannot safely be treated as empty when
-      // the default is chat; fail closed to terminal until a user toggles.
+      // Unreadable overrides are not empty; fail closed to terminal until an explicit toggle.
       const next = { hostId, worktreeId, overrides: merged, loaded: preference.loaded }
       viewOverridesStateRef.current = next
       setViewOverridesState(next)
@@ -121,7 +114,6 @@ export function useMobileSessionViewMode(args: {
     }
   }, [ensureViewOverridesRuntime, hostId, worktreeId, scope])
 
-  // Why: reload on focus so returning from Settings picks up a changed default.
   useFocusEffect(
     useCallback(() => {
       let active = true
@@ -145,8 +137,7 @@ export function useMobileSessionViewMode(args: {
         return false
       }
       const override = viewOverridesState.overrides.get(tabId)
-      // Until this scope loads, only an immediate user toggle is authoritative;
-      // defaulting other tabs to terminal avoids activating stale cross-host chat.
+      // Before scope hydration only explicit user toggles can enable chat; stale cross-host defaults must not.
       return (override ?? (viewOverridesState.loaded ? defaultView : 'terminal')) === 'chat'
     },
     [defaultView, hostId, viewOverridesState, worktreeId]
@@ -173,14 +164,13 @@ export function useMobileSessionViewMode(args: {
       runtime.currentOverrides = overrides
       const revision = (runtime.mutationRevisions.get(tabId) ?? 0) + 1
       runtime.mutationRevisions.set(tabId, revision)
-      // Why: enqueue the individual mutation immediately so a remounted route
-      // cannot reorder it or replace unrelated overrides with a stale snapshot.
+      // Enqueue individual writes immediately so remounts cannot reorder them or overwrite unrelated overrides.
       void updateSessionViewOverride(hostId, worktreeId, tabId, nextView).catch(async () => {
         if (!mountedRef.current || viewOverridesRuntimeRef.current !== runtime) {
           return
         }
         const preference = await readSessionViewOverridesPreference(hostId, worktreeId)
-        // Why: a failed older write must not roll back a newer choice for this tab.
+        // Older failed persistence cannot roll back a newer pick.
         if (
           !mountedRef.current ||
           viewOverridesRuntimeRef.current !== runtime ||
@@ -188,8 +178,7 @@ export function useMobileSessionViewMode(args: {
         ) {
           return
         }
-        // Why: if recovery is also unreadable, fail closed instead of treating an
-        // unknown store as empty or restoring an earlier optimistic mutation.
+        // Unreadable recovery also fails closed; do not invent empty storage or revive old optimism.
         const reconciled = preference.loaded
           ? mergeOverrides(preference.overrides, runtime.currentOverrides)
           : new Map(runtime.currentOverrides)
@@ -225,7 +214,6 @@ export function useMobileSessionViewMode(args: {
   )
 
   return {
-    // Why: until both reads land a chat tab resolves to terminal, then swaps to chat after mount.
     ready: defaultViewReady && settledScope === scope,
     isTabChatView,
     setTabView,

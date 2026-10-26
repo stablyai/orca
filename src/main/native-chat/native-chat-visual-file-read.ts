@@ -1,6 +1,4 @@
-// Reading one visual out of a chat's scratch folder. This is the boundary, not the renderer: the
-// file must sit directly in the folder both lexically and canonically, be a regular file reached
-// without a symlink, and be UTF-8 text within the byte cap.
+// Enforce visual containment on the host: direct regular files, no symlinks, bounded UTF-8 text.
 
 import { createHash } from 'node:crypto'
 import { constants, type Stats } from 'node:fs'
@@ -14,11 +12,10 @@ import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
 } from '../../shared/rpc-contract/agent-session-visual-params'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { readLocalFileBounded } from '../ipc/filesystem/local-regular-file-read'
 
-// Why O_NOFOLLOW: refuses a final-component symlink at open, so no swap after a check can redirect
-// the read. Windows has no such flag; there the lstat and post-open identity checks hold the line.
+// O_NOFOLLOW prevents final-component swaps; Windows relies on lstat and post-open identity checks.
 const VISUAL_OPEN_FLAGS =
   constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (constants.O_NOFOLLOW ?? 0)
 
@@ -44,13 +41,10 @@ function sameFile(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino
 }
 
-/**
- * The folder and its parent are Orca's own directories below the trusted state directory. Either
- * one replaced by a symlink would aim every read somewhere else, so a link there is refused.
- */
+/** Reject symlinks in either owned directory so they cannot redirect all reads. */
 async function canonicalFolder(folder: string): Promise<string> {
   try {
-    // Parent first, so the answer for a broken path does not depend on which check settles first.
+    // Check parent first for deterministic broken-path refusals.
     const parentStats = await lstat(dirname(folder))
     const owned = [parentStats, await lstat(folder)]
     if (owned.some((stats) => stats.isSymbolicLink())) {
@@ -84,7 +78,7 @@ async function openVisual(candidate: string): Promise<FileHandle> {
     if (isENOENT(error) || errorCode(error) === 'ENOTDIR') {
       refuse('not_found')
     }
-    // ELOOP: the path became a symlink between the lstat and the open.
+    // Open detected a symlink swap after lstat.
     if (errorCode(error) === 'ELOOP' || errorCode(error) === 'EMLINK') {
       refuse('outside_folder')
     }
@@ -95,11 +89,7 @@ async function openVisual(candidate: string): Promise<FileHandle> {
   }
 }
 
-/**
- * After the open: the handle must still be the file directly inside the canonical folder, and the
- * folder that canonical path names must still be the real directory at Orca's own path (a symlink
- * swapped in and out around the first check would otherwise aim `folderReal` elsewhere).
- */
+/** Recheck both file containment and the owned directory to detect symlink swaps around the initial check. */
 async function assertStillContained(
   folder: string,
   candidate: string,
@@ -133,7 +123,7 @@ async function assertStillContained(
     }
     throw error
   }
-  // Why compare names case-insensitively: a case-insensitive volume may report the stored case.
+  // Case-insensitive volumes may return the stored filename case.
   if (
     dirname(resolved) !== folderReal ||
     basename(resolved).toLowerCase() !== file.toLowerCase() ||
@@ -194,7 +184,7 @@ async function readContained(
     const html = decodeVisualText(buffer)
     const revision = nativeChatVisualRevision(buffer)
     const sizeBytes = buffer.length
-    // Under the folder as named, so `path:<its folder>` is the exact selector of this file root.
+    // Keep the named folder path so the file-root selector matches exactly.
     const path = join(folder, file)
     return knownRevision === revision
       ? { ok: true, revision, sizeBytes, path, unchanged: true }
@@ -204,11 +194,7 @@ async function readContained(
   }
 }
 
-/**
- * The visual `file` from `folder`, or the refusal the host observed. Unexpected filesystem faults
- * still throw, so the client reads them as unavailable rather than as a verdict about the file; the
- * thrown error names only the error code, never a host path.
- */
+/** Unexpected faults throw code-only errors; clients show unavailable without exposing host paths. */
 export async function readNativeChatVisualFile(
   folder: string,
   file: string,

@@ -10,15 +10,11 @@ export type WorkspaceSectionRepo = {
   color: string
 }
 
-/** A repo's badge colour, else the colour its name hashes to. */
 export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor' | 'displayName'>): string {
   return (typeof repo.badgeColor === 'string' && repo.badgeColor) || repoColor(repo.displayName)
 }
 
-/**
- * The repos the filter lists, as the desktop's project filter lists them: every catalog repo by
- * id, each host's separately. Before any catalog answers, the repos the rows name.
- */
+// List catalog repos per host; before catalogs arrive, derive candidates from workspace rows.
 export function buildFilterRepos(
   filterCatalogRepos: readonly SectionRepo[],
   worktrees: readonly Worktree[]

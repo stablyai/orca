@@ -56,6 +56,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -161,6 +162,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -185,6 +187,76 @@ describe('orchestration mailbox pointer submit', () => {
     expect(markMailboxPointerEnterAttempted.mock.invocationCallOrder[0]).toBeLessThan(
       writePty.mock.invocationCallOrder[0]!
     )
+  })
+
+  it('holds the Enter while a dialog is open and submits once the agent is idle again', async () => {
+    const ptyId = 'pty-question'
+    const mailboxHandle = 'run:run-1'
+    const leaf = {
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      ptyId,
+      writable: true,
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true,
+      lastOscTitle: '✳ Claude Code'
+    }
+    const target = { leaf, terminalHandle: 'term-question', processIncarnation: 'inc-question' }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark(mailboxHandle, 1, ptyId, 'tab-1:leaf-1')
+    let dialogOpen = true
+    const writePty = vi.fn(settledWriteStub())
+    const markMailboxPointerEnterAttempted = vi.fn(() => true)
+    const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+    const isPtyAwaitingUserInput = vi.fn(() => dialogOpen)
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner: { resolve: () => mailboxHandle } as never,
+        state,
+        getDb: () =>
+          ({
+            areUnreadMessages: () => true,
+            markMailboxPointerEnterAttempted,
+            settleMailboxPointerEnter: vi.fn()
+          }) as never,
+        resolveSubmitTarget: () => target,
+        getMessageWaiters: () => undefined,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput,
+        writePty,
+        settle,
+        redrive: vi.fn()
+      },
+      {
+        leaf,
+        mailboxHandle,
+        messages: [{ id: 'msg-1', type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget: target
+      }
+    )
+
+    await vi.waitFor(() => expect(isPtyAwaitingUserInput).toHaveBeenCalledWith(ptyId))
+    await Promise.resolve()
+    expect(writePty).not.toHaveBeenCalled()
+    expect(markMailboxPointerEnterAttempted).not.toHaveBeenCalled()
+    expect(settle).not.toHaveBeenCalled()
+    expect(flight.deferredUntilIdle).toBe(true)
+
+    state.takeDeferredEnter(ptyId)?.()
+    await vi.waitFor(() => expect(isPtyAwaitingUserInput).toHaveBeenCalledTimes(2))
+    await Promise.resolve()
+    expect(writePty).not.toHaveBeenCalled()
+
+    dialogOpen = false
+    state.takeDeferredEnter(ptyId)?.()
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(writePty).toHaveBeenCalledOnce()
+    expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
   })
 
   it.each([
@@ -235,6 +307,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => currentTarget,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
         writePty,
         settle,
         redrive
@@ -365,6 +438,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => ({ ...expectedTarget, processIncarnation: 'inc-replaced' }),
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -426,6 +500,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
         writePty: vi.fn(settledWriteStub()),
         settle,
         redrive

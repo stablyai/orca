@@ -112,6 +112,7 @@ describe('legacy terminal close acknowledgments', () => {
         return current
       },
       subscribe,
+      requests: client.sendRequest,
       async acknowledge(handle: string, operation: Promise<void>) {
         await act(async () => {
           const resolve = acknowledgments.get(handle)
@@ -137,6 +138,10 @@ describe('legacy terminal close acknowledgments', () => {
         a: actions.handleCloseTerminal(initial[0]!),
         b: actions.handleCloseTerminal(initial[1]!)
       }
+      expect(harness.requests.mock.calls).toEqual([
+        ['terminal.close', { terminal: 'a' }],
+        ['terminal.close', { terminal: 'b' }]
+      ])
       await harness.acknowledge(first, closes[first])
       await harness.acknowledge(second, closes[second])
       expect(harness.read().terminals.map((terminal) => terminal.handle)).toEqual(['c'])
@@ -148,6 +153,7 @@ describe('legacy terminal close acknowledgments', () => {
   it('preserves fresh terminal metadata and a new active choice while a close is pending', async () => {
     const harness = await mount()
     const close = harness.read().actions.handleCloseTerminal(initial[0]!)
+    expect(harness.requests.mock.calls).toEqual([['terminal.close', { terminal: 'a' }]])
     act(() => {
       harness.read().publish([
         { ...initial[1]!, title: 'Renamed while closing' },

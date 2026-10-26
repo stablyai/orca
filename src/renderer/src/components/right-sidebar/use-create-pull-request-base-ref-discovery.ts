@@ -32,22 +32,18 @@ export function useCreatePullRequestBaseRefDiscovery({
   setBaseSearchPending,
   setBaseSearchError
 }: CreatePullRequestBaseRefDiscoveryOptions): string | null {
-  // Why: stamped with the repo it came from — this hook outlives a repo switch, and a
-  // previous repo's default branch would silently suppress the stacked-PR lookup.
+  // Stamp the repo so an old default cannot suppress stacked-PR lookup after navigation.
   const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
-  // Why: refs live on the repo's own host, not the focused one.
+  // Refs belong to the repo owner, which may differ from the focused host.
   const repoHostId = useAppStore((s) => {
     const repo = findRepoForHost(s.repos, repoId, { settings: s.settings })
     return repo ? getRepoExecutionHostId(repo) : null
   })
 
-  // Why: resolved separately from eligibility's defaultBaseRef, which reports the
-  // worktree's own base. Consumers that need "is this the repo's default branch?"
-  // must ask this one, not that one.
+  // Resolve the repo default separately; eligibility’s defaultBaseRef can be the worktree’s own base.
   useEffect(() => {
-    // Why: the repo default doesn't move while a repo stays open, so skip the probe
-    // once it is known — on a remote runtime it is an RPC round-trip per composer open.
+    // Cache the stable repo default to avoid an RPC on every composer opening.
     if (!open || repoDefaultBaseRef || !repoHostId) {
       return
     }

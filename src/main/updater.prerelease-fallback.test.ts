@@ -665,7 +665,7 @@ describe('updater', () => {
     })
   })
 
-  // Why: /releases/latest/download is a moving redirect; a relative ZIP URL from an old manifest can resolve against a newer release and 404.
+  // Moving latest redirects can resolve old manifests' relative asset URLs against newer releases.
   it('pins the generic feed to a concrete stable tag for a stable user', async () => {
     appMock.getVersion.mockReturnValue('1.3.17')
     fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18'])

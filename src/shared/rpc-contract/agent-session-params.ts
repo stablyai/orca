@@ -129,6 +129,7 @@ export const AutomaticEnsure = z
 export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
+    resumeOrigin: z.literal('saved').optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,

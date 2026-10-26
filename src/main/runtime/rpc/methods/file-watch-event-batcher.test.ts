@@ -65,6 +65,7 @@ describe('createFileWatchEventBatcher', () => {
         vi.advanceTimersByTime(10)
       }
       expect(emit.mock.calls.length).toBeGreaterThanOrEqual(1_000 / WATCH_BATCH_INTERVAL_MS)
+      expect(emit.mock.calls.length).toBeLessThanOrEqual(1 + 1_000 / WATCH_BATCH_INTERVAL_MS)
     } finally {
       vi.useRealTimers()
     }

@@ -53,7 +53,6 @@ describe('updater', () => {
 
     dismissAvailableUpdate()
 
-    // Why: a release dismissal is renderer-only state; main must not clear the offer it can still install.
     expect(closeLocalBuildFeedMock).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalledWith('updater:status', { state: 'idle' })
   })
@@ -123,7 +122,6 @@ describe('updater', () => {
       .map(([, status]) => status)
 
     expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
-    // Why: the raw electron-updater message is replaced so we never surface "net::ERR_FAILED" to the UI.
     expect(statuses).not.toContainEqual(
       expect.objectContaining({ state: 'error', message: 'net::ERR_FAILED' })
     )

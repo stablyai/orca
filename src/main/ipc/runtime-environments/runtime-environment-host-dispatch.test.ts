@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Pins what connect and remove do for each kind of host, so host-kind dispatch stays exhaustive.
 type WslServiceFake = { connect: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }
 
 const mocks = vi.hoisted(() => {
@@ -140,7 +139,7 @@ beforeEach(() => {
   mocks.order.length = 0
   vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
   mocks.wsl.service = {
-    // Why a macrotask: a dropped await would let getStatus run first and reorder the log.
+    // A macrotask exposes a missing await through reordered status reads.
     connect: vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       mocks.order.push('wsl.connect')
@@ -245,7 +244,7 @@ describe('runtimeEnvironments:remove by host kind', () => {
     })
     expect(mocks.wsl.service!.remove).not.toHaveBeenCalled()
     expect(mocks.removeEnvironment).toHaveBeenCalledWith('/u', id)
-    expect(mocks.retire).toHaveBeenCalledWith(id, expect.any(Function), expect.anything())
+    expect(mocks.retire).toHaveBeenCalledWith(id, expect.any(Function), expect.anything(), '/u')
     // Removed by its own id, so no legacy-selector transport is closed.
     expect(mocks.closeRequest).not.toHaveBeenCalled()
   })

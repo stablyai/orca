@@ -38,7 +38,7 @@ export async function listWorkItems(
   const prOwnerRepo = prResolved.source
   await acquire()
   try {
-    // Why: let errors propagate to IPC — a catch-all would make failure indistinguishable from empty and under-report per-repo failures.
+    // Preserve fetch failures for IPC; an empty fallback would hide per-repo outages.
     const partial = !trimmedQuery
       ? await listRecentWorkItems(
           repoPath,

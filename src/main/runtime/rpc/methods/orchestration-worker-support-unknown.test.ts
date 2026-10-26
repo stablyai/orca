@@ -24,7 +24,13 @@ describe('host support evidence', () => {
       reason: 'structured_support_unknown'
     })
     expect(unknown.detail).toContain('has not established')
-    expect(getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith('id:workspace-1', 'claude')
+    expect(getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
+      'id:workspace-1',
+      'claude',
+      {
+        requireInstalledChatProgram: true
+      }
+    )
     getStructuredAgentSessionCreateSupport.mockResolvedValue({ supported: false })
     const refusal = await resolveWorkerStartModeOnHost(runtime, mode, 'workspace-1', 'claude')
     expect(refusal.reason).toBe('structured_unsupported_on_host')

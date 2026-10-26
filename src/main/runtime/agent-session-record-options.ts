@@ -6,6 +6,7 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import { nearestAgentEffort } from './session-tabs/structured-launch-seed-listing'
 
 export function replaceAgentSessionRecordOptions(
   record: AgentSessionRecord,
@@ -22,12 +23,10 @@ export function replaceAgentSessionRecordOptions(
     : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
 }
 
-/** Saved catalog rows read before a write without starting discovery; none or an unlisted model
- *  is unknown evidence, which admits everything. */
+/** Saved catalog only; missing model evidence permits options without starting discovery. */
 export type AgentSessionAdmissionModels = readonly AgentSessionModelOption[] | undefined
 
-/** Whether `value` runs under `model`'s listed row: an effort the row lists, Fast the agent replays
- *  there (Claude needs the row's positive support). The saved tier keeps its effective-tier rule. */
+/** Check listed effort/Fast support under this model; Claude needs positive Fast support, and saved tiers retain effective-tier rules. */
 export function agentSessionOptionAdmitted(
   provider: string,
   models: AgentSessionAdmissionModels,
@@ -49,8 +48,35 @@ export function agentSessionOptionAdmitted(
   )
 }
 
-/** A new chat's options must run under its model's listed row; refused through the actionable
- *  option refusal otherwise. */
+/** Fit a remembered seed to its model's saved row: an effort the row lacks moves to the nearest listed
+ *  level, other unlisted values drop; keys the caller named this launch keep strict admission. */
+export function seedOptionsAdmittedOnSavedListing(
+  provider: string,
+  seed: Readonly<Record<string, string>>,
+  models: AgentSessionAdmissionModels,
+  explicit: ReadonlySet<string>
+): Record<string, string> | undefined {
+  const admitted: Record<string, string> = {}
+  for (const [key, value] of Object.entries(seed)) {
+    if (explicit.has(key) || agentSessionOptionAdmitted(provider, models, seed.model, key, value)) {
+      admitted[key] = value
+      continue
+    }
+    const row = models?.find((entry) => entry.id === seed.model)
+    const nearest =
+      key === 'effort' && row
+        ? nearestAgentEffort(
+            value,
+            row.efforts.map((choice) => choice.value)
+          )
+        : undefined
+    if (nearest) {
+      admitted[key] = nearest
+    }
+  }
+  return Object.keys(admitted).length > 0 ? admitted : undefined
+}
+
 export function assertAgentSessionOptionsAdmitted(
   provider: string,
   models: AgentSessionAdmissionModels,
@@ -69,8 +95,7 @@ export function assertAgentSessionOptionsAdmitted(
   }
 }
 
-/** A pick, reconciled against the record held at the write: a model pick keeps an inherited
- *  effort or Fast only where the new model runs it. */
+/** Reconcile against the record held at write time; retain effort/Fast only if the new model supports it. */
 export type AgentSessionOptionPick = {
   sessionId: string
   fence: number
@@ -105,8 +130,7 @@ export function pickAgentSessionOption(
   return replaceAgentSessionRecordOptions(record, { ...at, options })
 }
 
-/** What a turn ran on `model`, each value recorded only where the chat has none saved and only
- *  while the chat's model is that one, so a pick, even one made since, always wins. */
+/** Fill only missing options for the still-current model; explicit picks always win. */
 export type AgentSessionRanOptions = {
   sessionId: string
   fence: number
@@ -121,7 +145,7 @@ export function recordAgentSessionRanOptions(
   { model, options, models, ...at }: AgentSessionRanOptions
 ): AgentSessionRecord {
   const saved = record.options ?? {}
-  // Another model won meanwhile: none of this run's options belong to it.
+  // These run options cannot follow a concurrent model change.
   if (saved.model !== undefined && saved.model !== model) {
     return record
   }

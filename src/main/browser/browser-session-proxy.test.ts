@@ -62,7 +62,6 @@ describe('browser session proxy', () => {
     vi.restoreAllMocks()
   })
 
-  // Browser partitions cannot inherit a proxy pinned to defaultSession.
   it('pins the configured proxy onto every browser partition', async () => {
     await applyBrowserSessionProxies(PROFILES, {
       httpProxyUrl: 'socks5://127.0.0.1:1080',

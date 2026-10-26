@@ -23,9 +23,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   localBackgroundStreamUnsub?.()
   localWriteUnavailableUnsub?.()
 
-  // Why: a daemon death takes down every session at once. The provider signals
-  // each affected pane here so background panes remount + re-attach too, not
-  // just the pane whose write happened to detect the dead endpoint (STA-2373).
+  // Daemon death invalidates every session; notify background panes too so they can remount (STA-2373).
   setLocalWriteUnavailableUnsub(
     localProvider.onWriteUnavailable?.((payload) => {
       // Before the window check: a headless host has no window, only remote streams.
@@ -42,7 +40,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
+  // Apply thinning facts in stream order; gaps require snapshot restore and change transient-scan authority.
   setLocalBackgroundStreamUnsub(
     localProvider.onBackgroundStreamEvent?.((payload) => {
       if (payload.kind === 'backgroundMarker') {
@@ -68,7 +66,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Why: daemon providers lack configure().onData, so feed the runtime here or their tail buffer (terminal.read, agent-detection, mobile stream) stays empty.
+  // Daemon providers lack configure().onData; feed runtime records/streams here.
   const isLocalProvider = localProvider instanceof LocalPtyProvider
 
   setLocalDataUnsub(
@@ -92,7 +90,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         return
       }
       const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
-      // Main restarted the daemon: the pane outlives its process, for the runtime and the window.
+      // Daemon restart replaces processes while their panes survive.
       const settleRestartStop = payload.replacedByRestart
         ? session.runtime?.intentionalPtyStops?.mark(
             payload.id,
@@ -102,7 +100,6 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         : undefined
       try {
         if (!isLocalProvider) {
-          // Read before the clean-up below forgets it.
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
           clearProviderPtyState(payload.id)
           ptyOwnership.delete(payload.id)
@@ -115,12 +112,11 @@ export function bindProviderListeners(session: PtyIpcSession): void {
             ...(payload.cause ? { cause: payload.cause } : {})
           })
         }
-        // The control reply can overtake stream data; the physical exit must retire that late output.
+        // Control replies may overtake stream data; physical exit must still retire late output.
         if (syntheticExit) {
           return
         }
-        // Why not the whole payload: the exit cause is a main-process fact for the
-        // runtime's records; the renderer's pty:exit contract stays as it was.
+        // Exit cause belongs to runtime records; preserve the renderer event contract.
         session.sendPtyExitToRenderer({
           id: payload.id,
           code: payload.code,

@@ -6,8 +6,7 @@ import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
-/** Why one place: the pre-add refusal and the post-add setup must read the same decision, or a
- *  create the first allowed could fail the second with the worktree already on disk. */
+/** Share setup decision between pre-add admission and post-add execution so allowed creates cannot fail after making the worktree. */
 export function resolveRuntimeSetupDecision(
   request: Pick<RuntimeManagedWorktreeCreateArgs, 'runHooks' | 'setupDecision'>
 ): SetupDecision {
@@ -51,9 +50,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     try {
       shouldRunSetup = shouldRunSetupForCreate(repo, effectiveDecision)
     } catch {
-      // Why: the new branch may add a setup hook the caller never decided on; the worktree exists,
-      // so skip setup rather than fail the create, as the desktop create does. The skipped-hook
-      // branch below logs and returns the warning.
+      // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
     }
   }
   let didStartInProcessSetupHook = false

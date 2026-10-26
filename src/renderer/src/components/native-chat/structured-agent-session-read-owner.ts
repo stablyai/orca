@@ -19,6 +19,7 @@ import {
   readStructuredAgentSessionOlderPage
 } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 
 import type {
   StructuredAgentSessionReadSnapshot,
@@ -61,6 +62,7 @@ function createReadOwner(
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Set<symbol>()
   const listeners = new Set<() => void>()
+  const observePRLinks = createStructuredAgentSessionPRLinkObserver(sessionId, target)
 
   const emit = (): void => {
     for (const listener of listeners) {
@@ -168,8 +170,7 @@ function createReadOwner(
       if (shouldStop()) {
         return
       }
-      // A live batch that head-trimmed past the anchor makes this page discontiguous;
-      // the reducer drops it, so re-anchor rather than chase a moving window forever.
+      // Bound re-anchoring when head trimming makes older pages discontiguous.
       if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== oldest.sequence) {
         anchorSlides += 1
         if (anchorSlides >= OLDER_PAGE_ANCHOR_ATTEMPTS) {
@@ -196,10 +197,12 @@ function createReadOwner(
     }
     const transport = startStructuredAgentSessionReadTransport({
       applyRequests: apply,
-      applyEvent: (event, options) => apply({ type: 'event', event, ...options }),
+      applyEvent: (event, options) => {
+        apply({ type: 'event', event, ...options })
+        observePRLinks(event)
+      },
       applyError: (message, refusal) => {
-        // Once loaded, a failure with no host refusal attached is treated as lost contact: the
-        // transport retries it and the chat stays as it is. A refusal is the host's answer: shown.
+        // After loading, transport failures retain history while retrying; host refusals are explicit answers to show.
         if (snapshot.state.epoch !== null && refusal === undefined) {
           return
         }
@@ -256,8 +259,7 @@ function createReadOwner(
     },
     getSnapshot: () => snapshot,
     loadOlder: () => {
-      // Concurrent callers (scroll-to-top, the button, a rail jump) share one page
-      // and its result rather than reading a refusal as "no progress".
+      // Share concurrent page requests so another caller’s refusal cannot look like exhaustion.
       if (olderPage && !olderPage.shouldStop()) {
         return olderPage.promise
       }

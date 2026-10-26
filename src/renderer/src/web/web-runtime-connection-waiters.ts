@@ -1,4 +1,4 @@
-import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
 
 type WebRuntimeConnectionWaiterOptions = {

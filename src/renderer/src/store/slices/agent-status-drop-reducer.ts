@@ -30,10 +30,7 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-/** Pure form of the dropAgentStatusByTabPrefix reducer: the paired snapshot
- *  apply folds the same sweep into a patch it assembles itself, so the two
- *  paths cannot drift. `retiredAliasPaneKeys` comes from the caller because
- *  retiring pane-authority aliases is a registry side effect, not a reduction. */
+/** Share pure tab-prefix sweep between local drop and paired patches. Pass retiredAliasPaneKeys in because registry retirement is a side effect, outside reduction. */
 export function buildAgentStatusTabPrefixDropPatch(
   s: AgentStatusTabPrefixDropState,
   tabIdPrefix: string,
@@ -154,7 +151,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       delete nextRetained[key]
     }
 
-    // Why: a suppressor is only consumed on a live→gone transition, so plant one only for live paneKeys and skip already-suppressed and completed-orphan keys — otherwise it leaks (mirrors dropAgentStatus).
+    // Only live→gone consumes suppressors; skip absent/already-suppressed/completed-orphan keys to prevent leaks, like dropAgentStatus.
     const suppressorAdds = liveKeys.filter(
       (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
     )
@@ -183,7 +180,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
         ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
         : {}),
-      // Why: mirrors removeAgentStatusByTabPrefix — only bump epochs when the live map changed; retained-only sweeps don't affect sort/freshness.
+      // Bump epochs only for live-map changes; retained-only sweeps do not affect sort/freshness.
       agentStatusEpoch:
         hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
       sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch

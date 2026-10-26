@@ -10,8 +10,7 @@ import { journal } from './claude-context-usage-test-support'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { MOVED_TO_BACKGROUND } from './claude-captured-task-frames.test-fixture'
 
-// Frame shapes captured from Claude Code 2.1.280 stream-json: `/goal` answers with a root
-// `<synthetic>` assistant reply, and a met goal ends the turn with no goal frame of its own.
+// Captured from Claude Code 2.1.280: synthetic /goal replies, with no goal frame on completion.
 const OBJECTIVE = 'reply with exactly the word done'
 
 function goalSink(
@@ -87,7 +86,6 @@ describe('Claude /goal journaling', () => {
       const { frame, reply, result, goals, flush } = goalSink(null, undefined, deferred)
       reply('goal-set', '<synthetic>', `Goal set: ${OBJECTIVE}`)
       reply('work-1', 'claude-haiku-4-5', 'Working on it.')
-      // A turn cap stops Claude before the goal passes: the goal stays open and gains the time.
       result(
         'result-1',
         { subtype: 'error_max_turns', is_error: true, terminal_reason: 'max_turns' },
@@ -142,7 +140,7 @@ describe('Claude /goal journaling', () => {
     }
   )
 
-  // Seen live: a Stop pressed while Claude ran the goal's check ended the turn with a clean result.
+  // Captured Stop during the goal check returned success.
   it('keeps the goal open when a person stops the turn, even on a clean result', () => {
     const { reply, result, goals, pressStop } = goalSink()
     reply('goal-set', '<synthetic>', `Goal set: ${OBJECTIVE}`)
@@ -221,7 +219,6 @@ describe('Claude /goal journaling', () => {
       createdAt: 1,
       updatedAt: 1
     })
-    // A bare `/goal` runs no model turn, so its clean end says nothing about the goal.
     reply('status', '<synthetic>', `Goal active: ${objective} (not yet evaluated)`)
     result('status-result', { subtype: 'success', is_error: false, num_turns: 0 })
     reply('clear', '<synthetic>', `Goal cleared: ${objective}`)

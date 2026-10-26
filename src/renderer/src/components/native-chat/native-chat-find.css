@@ -1,6 +1,12 @@
-/* Why: find matches are painted as CSS highlights (Ranges, no DOM mutation), in the
-   markdown preview's colors; see use-native-chat-find-matches.ts.
-   ::highlight() supports color/background only. */
+.native-chat-appearance {
+  --native-chat-find-top-inset: 0px;
+}
+
+.native-chat-appearance:has(> .pane-title-bar) {
+  --native-chat-find-top-inset: var(--orca-pane-title-height);
+}
+
+/* Paint find Ranges with CSS highlights in preview colors; only color/background are supported. */
 ::highlight(native-chat-find-match) {
   background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
   color: inherit;

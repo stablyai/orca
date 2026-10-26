@@ -5,6 +5,8 @@ describe('isRenderableImageUri', () => {
   it('accepts local previews and real URLs the device can load', () => {
     for (const uri of [
       'file:///var/mobile/a.jpg',
+      'FILE:///var/mobile/a.jpg',
+      'HTTPS://host/a.png',
       'data:image/png;base64,AAAA',
       'content://media/1',
       'blob:abc',

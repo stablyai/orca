@@ -18,9 +18,7 @@ export type HoveredTabDropTarget = {
   panelRect?: DOMRect
 }
 
-/** Derives the in-flight hover state of a tab drag: the live preview tab to
- *  activate (deduped through private memo refs) and the hovered pane-column
- *  split target, delegating tab-strip insertion to the injected tabInsertion. */
+/** Derive preview activation and pane-column targeting; keep insertion policy in the injected tabInsertion. */
 export function useTabDragHoverPreview({
   worktreeId,
   preDragActivationSnapshotRef,

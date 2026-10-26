@@ -34,8 +34,6 @@ import {
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
 
-/** What is staged for a window's save: the save itself, or main's merge of it when main owns the
- *  layout (its content is covered by renderer-shutdown-checkpoint-sleep-records.test.ts). */
 const windowSave = (state: Partial<WorkspaceSessionState>): unknown =>
   ORCA_LAYOUT_OWNER_IS_MAIN ? expect.any(Object) : state
 
@@ -84,7 +82,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-    // Why: Store fences the staged generation without draining unrelated live mutations.
+    // Fence this staged generation without waiting for unrelated live mutations.
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith(
       expect.objectContaining({ drainToStableGeneration: false })
     )

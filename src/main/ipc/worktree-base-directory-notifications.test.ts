@@ -104,8 +104,7 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
   })
 
   it('leaves sibling commits unattributed: the moved branch can be the active local upstream', async () => {
-    // A commit to `main` in a sibling writes its index and logs/HEAD; refs/heads/main
-    // itself is not polled, so the head move must still reach the active checkout.
+    // Sibling branch commits can change the active checkout's local upstream without polling refs/heads.
     for (const paths of [
       [
         ['worktrees', 'other', 'index'],

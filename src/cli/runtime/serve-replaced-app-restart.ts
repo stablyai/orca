@@ -1,9 +1,4 @@
-/**
- * macOS charges the permissions of every process a launchd-started supervisor spawns to that
- * supervisor, so once an update deletes the app it runs from, no server may start under it. Before
- * each server starts, a supervisor whose executable was replaced re-runs itself in place (same pid)
- * from the installed app.
- */
+/** Re-exec replaced apps before spawning: macOS attributes child permissions to the launchd supervisor. */
 import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -13,7 +8,6 @@ import {
   type SupervisorRelocationDeps
 } from './serve-supervisor-relocation'
 
-/** `dev:ino` of a file, which changes when an update replaces the app; null if unreadable. */
 function fileIdentity(path: string): string | null {
   try {
     const stats = statSync(path)
@@ -32,7 +26,7 @@ function isExecutable(path: string): boolean {
   }
 }
 
-// Why process state: the first server may start long after an update wait or a park.
+// A park or update wait can delay the first server until after bundle replacement.
 let startedFrom: string | null = null
 
 export function noteServeSupervisorStart(): void {
@@ -47,16 +41,16 @@ export type ReplacedAppRestartDeps = Pick<
 /** Returns only when it did not restart. */
 export function restartServeSupervisorIfReplaced(deps: ReplacedAppRestartDeps): void {
   const installed = fileIdentity(deps.execPath)
-  // Why: after a restart the start identity is the installed one, so this never loops.
+  // Re-exec resets the identity to the installed app, preventing a loop.
   if (!deps.startedFrom || !installed || installed === deps.startedFrom) {
     return
   }
   const env = { ...deps.env }
   const relocated = Boolean(env[SERVE_SUPERVISOR_APP_ROOT_ENV])
   delete env[SERVE_SUPERVISOR_APP_ROOT_ENV]
-  // Why the app's CLI: a relocated supervisor must copy the new release aside, not rerun the old copy.
+  // Relocated supervisors must copy the new release rather than rerun their old copy.
   const cliEntry = relocated ? join(deps.appRoot, 'out', 'cli', 'index.js') : deps.argv[1]
-  // Why preflight: a failed process.execve aborts the process natively instead of throwing.
+  // A failed process.execve aborts natively; preflight the executable and entry point.
   if (!isExecutable(deps.execPath) || !existsSync(cliEntry)) {
     deps.log('[serve] Keeping the old executable; the installed app is not ready to run.')
     return

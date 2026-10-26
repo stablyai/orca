@@ -88,8 +88,6 @@ import { getWorkItemDetails } from './work-item-details'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -257,7 +255,6 @@ describe('getWorkItemDetails', () => {
       }
     ])
     expect(details?.participants?.[0]?.login).toBe('issue-author')
-    // Why: issue identities resolve hosted, pinned to github.com for dotcom.
     expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(
       { owner: 'acme', repo: 'widgets', host: 'github.com' },
       'graphql',
@@ -317,7 +314,6 @@ describe('getWorkItemDetails', () => {
     const details = await getWorkItemDetails(repoPath, 923, 'issue')
 
     expect(details?.body).toBe('WSL issue body')
-    // Why: issue identities resolve hosted, pinned to github.com for dotcom.
     expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(
       { ...repository, host: 'github.com' },
       'graphql',
@@ -333,9 +329,7 @@ describe('getWorkItemDetails', () => {
   })
 
   it('enriches a non-participating assignee avatar from the GraphQL assignees connection', async () => {
-    // Why: a GHE assignee who never commented is absent from `participants`, so
-    // the enrichment must also draw avatars from the `assignees` connection or
-    // item.assignees keeps the blank avatar `gh` returns.
+    // Assignees can be absent from participants; enrich their avatars from the assignees connection too.
     getWorkItemMock.mockResolvedValueOnce({
       id: 'issue:924',
       type: 'issue',
@@ -471,7 +465,6 @@ describe('getWorkItemDetails', () => {
       author: 'issue-author'
     })
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    // Collapsed GraphQL throws → fallback path picks up.
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('GraphQL error'))
       .mockResolvedValueOnce({ stdout: JSON.stringify({ body: 'Issue body' }) })
@@ -621,7 +614,6 @@ describe('getWorkItemDetails', () => {
       updatedAt: '2026-04-01T00:00:00Z',
       author: 'pr-author'
     })
-    // Why: PR detail resolution uses getOwnerRepoForRemote via origin repository lookup.
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
@@ -702,8 +694,7 @@ describe('getWorkItemDetails', () => {
     )
   })
 
-  // Why: details open by number, so it must pin the same source as the list;
-  // otherwise a fork and its upstream sharing PR #42 render different PRs.
+  // Number-based detail lookups must retain the list's source, avoiding same-number fork/upstream collisions.
   it('forwards the explicit origin source preference to the work item lookup', async () => {
     getWorkItemMock.mockResolvedValueOnce(null)
 
@@ -712,9 +703,7 @@ describe('getWorkItemDetails', () => {
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, {}, 'origin')
   })
 
-  // Why: `gh pr view` omits avatar_url, so the login-based github.com URL 404s on
-  // GHE. getWorkItemDetails must resolve author/reviewer/assignee avatars via the
-  // GraphQL user(login:) batch and stamp them onto the returned item. See #8784.
+  // gh pr view omits avatar_url; Enterprise identities need GraphQL enrichment instead of dotcom fallbacks.
   it('enriches PR author, reviewer, and assignee avatars from the GraphQL user lookup', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       id: 'pr:1102',
@@ -728,7 +717,6 @@ describe('getWorkItemDetails', () => {
       author: 'seah',
       reviewRequests: [{ login: 'ludi', name: null, avatarUrl: '' }],
       latestReviews: [{ login: 'inho', state: 'APPROVED', avatarUrl: '' }],
-      // A default `u/0` placeholder must be replaced by the resolved avatar.
       assignees: [{ login: 'seah', name: 'Seah', avatarUrl: 'https://avatars.example.com/u/0?v=4' }]
     })
     getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
@@ -751,7 +739,6 @@ describe('getWorkItemDetails', () => {
       }
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
       if (query.includes('user(login:')) {
-        // Return the aliased users the batch asked for, keyed by their login.
         const data: Record<string, { login: string; name: null; avatarUrl: string }> = {}
         let index = 0
         for (const login of Object.keys(avatars)) {
@@ -770,7 +757,6 @@ describe('getWorkItemDetails', () => {
     expect(details?.item.authorAvatarUrl).toBe(avatars.seah)
     expect(details?.item.reviewRequests?.[0]?.avatarUrl).toBe(avatars.ludi)
     expect(details?.item.latestReviews?.[0]?.avatarUrl).toBe(avatars.inho)
-    // The default u/0 placeholder is overridden by the resolved avatar.
     expect(details?.item.assignees?.[0]?.avatarUrl).toBe(avatars.seah)
   })
 })

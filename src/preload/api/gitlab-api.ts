@@ -31,8 +31,6 @@ export type GitLabRepoSelectorArgs = {
   repoOwnerExecutionHostId?: string
 }
 
-// ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
-// Shapes mirror gh.* except where GitLab's API differs (MR states, host-qualified project path, `glab api -i` paging).
 export type GitLabApi = {
   viewer: () => Promise<GitLabViewer | null>
   diagnoseAuth: () => Promise<GitLabAuthDiagnostic>
@@ -53,8 +51,7 @@ export type GitLabApi = {
       query?: string
     }
   ) => Promise<ListMergeRequestsResult>
-  /** Combined MR + issue list filtered by state. Issues are skipped
-   *  when state is 'merged' (issues don't merge). */
+  /** The merged filter excludes issues. */
   listWorkItems: (
     args: GitLabRepoSelectorArgs & {
       state?: MRListState
@@ -99,7 +96,6 @@ export type GitLabApi = {
   listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<GitLabAssignableUser[]>
   /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
   todos: (args: GitLabRepoSelectorArgs) => Promise<GitLabTodo[]>
-  /** Aggregated dialog payload — body + discussions + pipeline jobs. */
   workItemDetails: (
     args: GitLabRepoSelectorArgs & {
       iid: number
@@ -160,7 +156,6 @@ export type GitLabApi = {
     args: GitLabRepoSelectorArgs & {
       jobId: number
       projectRef?: GitLabProjectRef | null
-      /** Bound the trace in main to a readable excerpt (see gitLabJobTraceToLogExcerpt). */
       logExcerpt?: boolean
     }
   ) => Promise<GitLabJobTraceResult>

@@ -158,9 +158,6 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     await session.connection.request('abort', {}, { timeoutMs: 2_000 })
     return { cancelled: true, ...(turnId ? { turnId } : {}) }
   }
-  stopEndsSession(): boolean {
-    return true
-  }
   awaitStoppedRequestEnd: NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> =
     async (id, at) => {
       const session = this.sessions.get(id)

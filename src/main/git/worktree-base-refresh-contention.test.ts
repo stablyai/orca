@@ -117,7 +117,6 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     installGitFake({
       owner: true,
       mutate: () => Promise.reject(INDEX_LOCK_ERROR),
-      // The user switches the owner checkout to another branch while the first attempt waits.
       ownerHead: () => (++symbolicRefReads >= 2 ? 'refs/heads/develop' : 'refs/heads/main')
     })
 
@@ -132,7 +131,6 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     installGitFake({
       owner: true,
       mutate: () => Promise.reject(INDEX_LOCK_ERROR),
-      // The concurrent lock holder fast-forwarded local itself.
       localContainsTarget: () => true
     })
 
@@ -226,7 +224,6 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
   })
   afterEach(() => vi.useRealTimers())
 
-  // Local moves to the target once the (held) owner fast-forward finishes.
   function installRepoFake(repoPath: string) {
     let localOid = 'old-main'
     let finishMerge!: () => void
@@ -274,7 +271,7 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     await expect(first).resolves.toMatchObject({ status: 'updated' })
     await expect(Promise.all(joiners)).resolves.toEqual([undefined, undefined])
     const commands = gitExecFileAsyncMock.mock.calls.map(([args]) => commandOf(args))
-    // Nothing ran for the joiners while the first held the checkout; after its post-move check, one inspection for all.
+    // Joiners share a follow-up inspection only after the first run releases the checkout.
     expect(commands.slice(0, callsWhileFirstMerges).filter((c) => c === 'rev-list')).toHaveLength(1)
     expect(commands.slice(callsWhileFirstMerges)).toEqual(['rev-parse', 'rev-parse', 'rev-parse'])
     expect(mutationCalls()).toHaveLength(1)
@@ -312,7 +309,6 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     expect(mutationCalls()).toHaveLength(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('stopped waiting'))
 
-    // Settle the wedged run so the follow-up finds local current and frees the slot.
     repo.finishMerge()
     await vi.runAllTimersAsync()
     await vi.waitFor(() => expect(gitExecFileAsyncMock.mock.calls.at(-1)?.[0][0]).toBe('rev-parse'))

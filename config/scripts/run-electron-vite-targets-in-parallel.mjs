@@ -2,8 +2,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const buildScript = fileURLToPath(new URL('./run-electron-vite-build.mjs', import.meta.url))
-// Keep this wrapper CommonJS (the `.cts` extension) so electron-vite can load
-// each parallel target without sharing its timestamp-named ESM temp file.
+// Use CommonJS .cts wrapper so concurrent electron-vite targets do not share timestamped ESM temp file.
 const targetConfig = fileURLToPath(new URL('../electron-vite-target.config.cts', import.meta.url))
 const targets = ['main', 'preload', 'renderer']
 

@@ -13,7 +13,7 @@ import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
 } from '../../shared/remote-runtime-client'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
@@ -454,7 +454,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[0]!, 7)
     const address = await starting
 
-    // The tunnel attaches on its own subscription, so nothing outside the route observes this.
     attempts[0]!.callbacks.onClose?.()
 
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
@@ -488,8 +487,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     attempts[0]!.callbacks.onClose?.()
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
     ready(attempts[1]!, 8)
-    // Drive a request through the rebuilt tunnel so the first recovery has fully settled before
-    // the next failure; an in-flight loop would otherwise cover both deaths by itself.
+    // Wait for recovery to finish so the second failure exercises a new recovery loop.
     await expectSocksRoundTrip(address, attempts[1]!, 8, 'once-recovered.internal')
 
     attempts[1]!.callbacks.onClose?.()
@@ -710,7 +708,6 @@ function openFrames(attempt: SubscriptionAttempt) {
     )
 }
 
-/** Opens one SOCKS connection end to end, proving the route's current tunnel actually carries it. */
 async function expectSocksRoundTrip(
   address: { host: string; port: number },
   attempt: SubscriptionAttempt,

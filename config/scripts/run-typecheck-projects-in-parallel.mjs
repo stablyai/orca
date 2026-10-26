@@ -2,16 +2,14 @@ import { runProcessSync, spawnProcess } from '@orca/process-host'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
+import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
-// Peak heap per project, read from `tsc --extendedDiagnostics` and rounded up. node and
-// web are the expensive pair: run together they exceed a 16 GB CI runner, and an
-// out-of-memory runner is killed mid-check, so the job reports a lost runner instead of a
-// type error. Admission is therefore by memory, not by core count alone.
+// Admit by measured peak tsc heap, not cores alone: node+web exceed 16GB runners and OOM looks like lost runner rather than type error.
 export const TYPECHECK_PROJECTS = [
   { config: 'config/tsconfig.node.json', heapGib: 7 },
   { config: 'config/tsconfig.tc.web.json', heapGib: 6 },
@@ -20,16 +18,18 @@ export const TYPECHECK_PROJECTS = [
   { config: 'src/packages/process-host/tsconfig.test.json', heapGib: 1 }
 ]
 
+// Selected only by --project: mobile is a separate install that root checks cannot assume.
+export const MOBILE_TYPECHECK_PROJECTS = [
+  { config: 'mobile/tsconfig.json', heapGib: 2 },
+  { config: 'mobile/tsconfig.test.json', heapGib: 3 }
+]
+
 // The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.
 export function admissibleHeapGib(totalBytes) {
   return Math.max(1, (totalBytes / BYTES_PER_GIB) * 0.75)
 }
 
-/**
- * Heaviest first, admitting another project only while it fits both the memory budget and
- * the core count. A project larger than the whole budget still runs, alone, so a small
- * machine makes progress rather than producing an empty batch forever.
- */
+// Schedule heaviest first within core/memory budgets; oversized project runs alone so small hosts still progress.
 export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
   const pending = [...projects].sort((left, right) => right.heapGib - left.heapGib)
   const batches = []
@@ -61,7 +61,7 @@ export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 
 export function resolveProjectCompilerInfo(config, root = repoRoot) {
-  const require = createRequire(join(root, dirname(config), 'package.json'))
+  const require = createRequire(join(resolve(root, dirname(config)), 'package.json'))
   const manifestPath = require.resolve('typescript/package.json')
   const { bin, version } = JSON.parse(readFileSync(manifestPath, 'utf8'))
   return { program: join(dirname(manifestPath), typeof bin === 'string' ? bin : bin.tsc), version }
@@ -76,14 +76,14 @@ export const BUN_TYPESCRIPT_VERSION = '7.0.2'
 
 export function parseTypecheckOptions(args) {
   const options = {
-    compiler: 'bun',
+    compiler: 'auto',
     bunConcurrency: 2,
     bunThreads: 4,
     projects: TYPECHECK_PROJECTS
   }
   const selected = []
   for (const argument of args) {
-    if (/^--compiler=(bun|native)$/.test(argument)) {
+    if (/^--compiler=(auto|tsrs|bun|native)$/.test(argument)) {
       options.compiler = argument.slice('--compiler='.length)
     } else if (argument.startsWith('--bun-concurrency=')) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
@@ -91,7 +91,9 @@ export function parseTypecheckOptions(args) {
       options.bunThreads = Number(argument.slice('--bun-threads='.length))
     } else if (argument.startsWith('--project=')) {
       const config = argument.slice('--project='.length)
-      const project = TYPECHECK_PROJECTS.find((candidate) => candidate.config === config)
+      const project = [...TYPECHECK_PROJECTS, ...MOBILE_TYPECHECK_PROJECTS].find(
+        (candidate) => candidate.config === config
+      )
       if (!project) {
         throw new Error(`Unknown typecheck project: ${config}`)
       }
@@ -111,12 +113,17 @@ export function parseTypecheckOptions(args) {
   return options
 }
 
-/**
- * Bun is the default: on the node project it uses ~1/3 of tsc's CPU and ~2 GB instead of
- * ~16 GB, and tsc's incremental cache rarely survives an edit to an export.
- */
-export function selectTypecheckCompiler(compiler, { root, resolveBunExecutable }) {
-  if (compiler === 'native') {
+export function selectTypecheckCompiler(
+  compiler,
+  { root, resolveBunExecutable, platform = process.platform, arch = process.arch }
+) {
+  if (compiler === 'auto') {
+    compiler = supportsTsrs(platform, arch) ? 'tsrs' : 'bun'
+  }
+  if (compiler === 'tsrs' && !supportsTsrs(platform, arch)) {
+    throw new Error(`tsrs is unavailable on ${platform}/${arch}; use --compiler=bun.`)
+  }
+  if (compiler === 'native' || compiler === 'tsrs') {
     return { compiler }
   }
   const bunExecutable = resolveBunExecutable(root)
@@ -130,15 +137,25 @@ export function selectTypecheckCompiler(compiler, { root, resolveBunExecutable }
 
 export function typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism }) {
   return planTypecheckBatches(
-    compiler === 'bun' ? projects.map((project) => ({ ...project, heapGib: 4 })) : projects,
+    compiler === 'native'
+      ? projects
+      : projects.map((project) => ({ ...project, heapGib: compiler === 'tsrs' ? 7 : 4 })),
     {
       budgetGib: admissibleHeapGib(memoryBytes),
-      parallelism: compiler === 'bun' ? Math.min(parallelism, bunConcurrency) : parallelism
+      parallelism:
+        compiler === 'bun'
+          ? Math.min(parallelism, bunConcurrency)
+          : compiler === 'tsrs'
+            ? Math.min(parallelism, 2)
+            : parallelism
     }
   )
 }
 
 export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+  if (compiler === 'tsrs') {
+    return resolveTsrsTypecheckCommand(config, root)
+  }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
     throw new Error(
@@ -186,8 +203,8 @@ export async function runTypecheckProjects({
   parallelism = availableParallelism()
 } = {}) {
   const batches = typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism })
-  if (compiler === 'bun') {
-    // Equal Bun reservations let a freed slot start the next project without waiting for peers.
+  if (compiler === 'bun' || compiler === 'tsrs') {
+    // Keep a freed compiler slot busy while its peer finishes.
     const pending = batches.flat()
     const failures = []
     let next = 0

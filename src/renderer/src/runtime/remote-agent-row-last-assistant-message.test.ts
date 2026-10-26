@@ -1,23 +1,4 @@
-/**
- * #12906 / STA-3596: on a paired (remote) runtime the sidebar agent row renders
- * its identity line and its status subtitle, but the last-assistant-message line
- * below is permanently blank. Local panes show it.
- *
- * Causal boundary: buildMirroredAgentStatusPatch in web-session-tabs-sync.ts.
- * A remote pane has TWO writers for one store key — this renderer's OSC byte
- * pipeline (pty-connection claims every pane with a runtimeEnvironmentId) and
- * the mirrored host `session.tabs` snapshot. When the client owns the key the
- * merge keeps the client's entry wholesale and copies only paneKey/worktreeId/
- * tabId/providerSession off the host frame. `lastAssistantMessage` is hook-only
- * content the byte pipeline can never see (setAgentStatus writes
- * `payload.lastAssistantMessage` straight through, so each OSC write also blanks
- * it), so the host's text is discarded on every republication.
- *
- * Everything runs through the real seams: the real host-snapshot mirror, the
- * real store, the real sidebar row builder. The oracle is the field both row
- * renderers read — DashboardAgentRowMessage and the compact row's secondary
- * line consume `entry.lastAssistantMessage` and nothing else.
- */
+// Client OSC ownership once discarded mirrored lastAssistantMessage, which only host hooks know (#12906/STA-3596). OSC writes lack that field, so wholesale client precedence blanked every paired row. Drive real mirror/store/sidebar builder and assert entry.lastAssistantMessage, the field both row renderers consume.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -42,8 +23,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from '../components/sidebar/worktree-card-status-inputs'
 
-// Why: web-session-tabs-sync imports the app-level store singleton; this
-// harness drives a createTestStore instance instead, like its sibling suites.
+// Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),
@@ -228,8 +208,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
 
   it('shows the message on a pane this renderer owns from the byte stream', () => {
     const store = seedPairedClientStore()
-    // The agent finished its turn: the host hook has the completion text, and
-    // this renderer's OSC pipeline independently saw the pane go idle.
+    // Host hook receives completion text while client OSC independently observes idle.
     const mirrored = applyHostSnapshot(
       store,
       makeHostSnapshot({
@@ -358,8 +337,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
       'precondition: the fenced pane adopted the host message'
     ).toBe(HOST_MESSAGE)
 
-    // A host that predates #9914's fix drops lastAssistantMessage when it demotes
-    // a stale status under a neutral title. That must not blank the mirrored line.
+    // Older hosts can drop message when stale status demotes under neutral titles (#9914); do not blank retained text.
     applyHostSnapshot(
       store,
       makeHostSnapshot({
@@ -392,8 +370,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
       }),
       T0 - 9_000
     )
-    // A new prompt starts: the byte pipeline sees the spinner before the host's
-    // hook catches up, so its `done` frame is now the previous turn's evidence.
+    // Spinner starts a new turn before host hook catches up; its done frame belongs to the previous turn.
     replayClientByteStatus(store, OWNED, 'working', T0)
     applyHostSnapshot(
       store,
@@ -411,8 +388,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
       T0 + 2_000
     )
 
-    // Local parity: setAgentStatus writes payload.lastAssistantMessage straight
-    // through, so a local pane starting a new turn shows no completion text.
+    // Local writes replace lastAssistantMessage directly, so starting a new turn clears completion text.
     const messages = observeRowMessages(store, T0 + 2_000)
     expect(Object.keys(messages)).toContain(mirrorPaneKey(OWNED))
     expect(messages[mirrorPaneKey(OWNED)]).toBeUndefined()

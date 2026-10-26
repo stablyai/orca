@@ -59,9 +59,8 @@ export function normalizeFolderWorkspaces(
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
     seen.add(raw.id)
-    // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
-    // stamp that can name a `runtime:*` authority the desktop store does not own, and it
-    // carries no generation to fence on. `connectionId` below is the durable pin main projects from.
+    // Do not persist fetch-time executionHostId: it may name an unowned runtime authority and lacks a generation fence.
+    // connectionId is the durable pin main projects from.
     workspaces.push({
       id: raw.id,
       projectGroupId: raw.projectGroupId,
@@ -127,8 +126,7 @@ export function normalizeFolderWorkspaces(
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
-      // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
-      // PersistedState.folderWorkspaceDiffComments.
+      // Legacy #14112 builds stored notes inline; canonical storage is PersistedState.folderWorkspaceDiffComments.
       ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
       // Entries are validated where they are read (external-conversation-links.ts).
       ...(Array.isArray(raw.externalConversations)

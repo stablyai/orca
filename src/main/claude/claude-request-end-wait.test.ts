@@ -9,8 +9,6 @@ import type { ClaudeSession } from './claude-structured-session-state'
 
 type InFlight = { translator: { currentTurnId: string | null }; dispatchWaiters: unknown[] }
 
-// Only what Claude has in flight is read: the wait derives everything else from it. `state` is the
-// same object, for the test to move Claude along.
 function claudeWith(
   currentTurnId: string | null = 'turn-1',
   unanswered = 0
@@ -63,7 +61,6 @@ describe("a Stop's wait for Claude to wind down what it has in flight", () => {
   it('waits on a send Claude has not echoed, through its turn, to that turn’s end', async () => {
     const { claude, state } = claudeWith(null, 1)
     const waiting = awaitClaudeRequestEnd(claude, CLAUDE_STOP_GRACE_MS)
-    // The echo answers the send and opens its turn; a settle in between leaves it in flight.
     state.dispatchWaiters.length = 0
     state.translator.currentTurnId = 'turn-1'
     settleClaudeTurnEndWaiters(claude)

@@ -143,9 +143,7 @@ export function createPurgeStaleRuntimeHostState(
             repoIdsWithoutSurvivingOwners.delete(repoId)
           }
 
-          // Preserve host ownership for recency teardown. The other bulk maps are
-          // keyed by raw worktree id, but a host-qualified visit must not be
-          // removed when an id twin survives on another host.
+          // Preserve host-qualified visit recency for surviving twins even though other bulk maps use bare IDs.
           const addRemovedWorktreeTarget = (
             worktreeId: string,
             hostId: ExecutionHostId | undefined

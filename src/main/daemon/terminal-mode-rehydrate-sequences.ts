@@ -1,14 +1,11 @@
 import type { TerminalModes } from './types'
 import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 
-// Why no kitty flags here: renderers re-assert the snapshot's kitty flags
-// (carried beside the payload) in their replay epilogue, after these screen
-// switches. A re-seeded emulator uses modes.kittyKeyboardFlags directly.
+// Restore kitty flags separately after screen switches, which swap their state.
 export function buildRehydrateSequences(modes: TerminalModes): string {
   const seqs: string[] = []
   if (modes.alternateScreen) {
-    // Why: normal-buffer serialization can leave its pen active, while the
-    // separately serialized alt body assumes it starts from default SGR.
+    // The alternate buffer assumes default SGR; normal-buffer replay may leave a different pen active.
     seqs.push(`${RESET_GRAPHIC_RENDITION}\x1b[?1049h`)
   }
   if (modes.bracketedPaste) {
@@ -17,13 +14,10 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   if (modes.applicationCursor) {
     seqs.push('\x1b[?1h')
   }
-  // Why: a reattached pane's input mirror reads this to keep pi's modified Enter unambiguous;
-  // xterm itself ignores XTMODKEYS, so older clients are unaffected.
+  // Input mirrors consume XTMODKEYS to preserve modified Enter; xterm ignores it.
   if (modes.modifyOtherKeys !== undefined) {
     seqs.push(`\x1b[>4;${modes.modifyOtherKeys}m`)
   }
-  // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
-  // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
   const trackingMode = modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none'
   switch (trackingMode) {
     case 'x10':
@@ -41,14 +35,13 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
     case 'none':
       break
   }
-  // Why: xterm tracks the mouse protocol and SGR encoding as independent
-  // modes, so snapshots must preserve the encoding even when reporting is off.
+  // Mouse encoding is independent of tracking and must survive even when reporting is off.
   if (modes.sgrMousePixelsMode) {
     seqs.push('\x1b[?1016h')
   } else if (modes.sgrMouseMode) {
     seqs.push('\x1b[?1006h')
   } else if (trackingMode !== 'none') {
-    // Why: states the default encoding, so a replay reader never has to guess it.
+    // Emit default encoding explicitly so replay readers need not infer it.
     seqs.push('\x1b[?1006l')
   }
   return seqs.join('')

@@ -7,16 +7,7 @@ import type { GitHistoryPanelState } from './git-history-panel'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 
-/**
- * Loads commit history for the active worktree.
- *
- * State is kept per worktree so switching tabs restores the previous result instead of reloading,
- * and entries are pruned when `worktreeMap` drops a worktree. Fetching is gated on the panel being
- * expanded and visible, and stale responses are discarded by per-worktree request id.
- *
- * `refreshGitHistoryRef` exists for callers that must refresh from an effect without re-subscribing
- * whenever the callback identity changes.
- */
+/** Cache/prune history per worktree and reject superseded requests; refreshGitHistoryRef lets effects refresh without callback resubscription. */
 export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
@@ -50,7 +41,7 @@ export function useSourceControlGitHistory({
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
-  // Why: the read is routed by owner host, so track it as a stable string — a new settings object alone must not refetch.
+  // Use stable owner identity so settings-object replacement cannot refetch history.
   const ownerHostKey =
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : ''
 
@@ -102,7 +93,7 @@ export function useSourceControlGitHistory({
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const result = await getRuntimeGitHistory(
         {
-          // Why: route the history read by the repo OWNER host, not the focused runtime.
+          // Read history on the repo owner, which may differ from the focused host.
           target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId,
           worktreePath,
@@ -143,26 +134,26 @@ export function useSourceControlGitHistory({
     worktreePath
   ])
   const refreshGitHistoryRef = useRef(refreshGitHistory)
-  // Why: publish in an effect, not the render body — a discarded render must not install its callback. Declared first so the effect below sees the fresh one.
+  // Publish before consumer effects, never during render where discarded renders could install callbacks.
   useEffect(() => {
     refreshGitHistoryRef.current = refreshGitHistory
   }, [refreshGitHistory])
 
   useEffect(() => {
-    // Why: history shells out to git; defer first load until the user expands Commits so source control stays cheap for large/remote repos.
+    // Defer Git subprocesses until Commits is expanded and visible, especially for large/remote repos.
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
     void refreshGitHistoryRef.current()
   }, [
-    // Why: history is fetched with compareBaseRef, so re-run when it changes (effectiveBaseRef can stay put while it moves).
+    // History uses compareBaseRef, which can move independently of effectiveBaseRef.
     activeWorktreeId,
     compareBaseRef,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
     isGitHistoryVisible,
-    // Why: same worktree + path can switch owner host; without this the panel keeps the previous host's commits.
+    // Owner changes can occur without worktree/path changes; refetch rather than retain another host’s commits.
     ownerHostKey,
     worktreePath
   ])

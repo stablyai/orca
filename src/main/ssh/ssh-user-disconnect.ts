@@ -3,12 +3,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 
-/**
- * Hosts the user pressed Disconnect on. Until the user explicitly connects again, no background
- * dial (a managed server's tunnel or status check, a census, a pane or automation restore) may
- * reconnect them. Session-only, like a paired server's manual disconnect, so both halves of a
- * managed host are forgotten together at restart.
- */
+/** Session-only disconnect blocks every background dial until explicit connect; restart clears both SSH and managed-server disconnects together. */
 const userDisconnectedTargets = new Set<string>()
 
 export function recordSshUserDisconnected(targetId: string): void {

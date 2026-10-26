@@ -24,9 +24,7 @@ const state = vi.hoisted(() => {
     store: Store | null
     layoutOwnerIsMain: boolean
     rekeyWorkerTerminalResourcePaneKey: Mock<() => number>
-    /** What a startup step saw on disk; set by a test that watches the order. */
     onStartupStep: ((step: string) => void) | null
-    /** The startup pass that shows live terminals fails outright. */
     placementRejects: boolean
   } = {
     root: '',
@@ -45,7 +43,7 @@ vi.mock('../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
-// Why: startup reconciles the user-global agent configs; keep it off this machine's real home.
+// Isolate reconciliation from the developer’s real global agent configs.
 vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: vi.fn()
@@ -100,7 +98,6 @@ vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: () => null }))
-// The real Store orcad loads, on a profile holding one terminal drawn in two panes.
 vi.mock('./orcad-profile-state-startup', () => ({
   createOrcadProfileStateStartup: async () => ({
     store: state.store,
@@ -137,6 +134,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     attachAgentStatusStore() {
       return () => {}
     }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'repair-runtime'
     }
@@ -183,7 +181,6 @@ const DUPLICATE = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
 beforeEach(() => {
-  // startOrcad canonicalizes this; stubbing restores the prior value after each test.
   vi.stubEnv('ORCA_USER_DATA_PATH', '')
 })
 
@@ -205,7 +202,6 @@ function temporaryDirectory(prefix: string): string {
   return directory
 }
 
-/** The stored shape a window save leaves behind: one terminal drawn in two panes of one tab. */
 function duplicatePtyProfile(): string {
   const window = new WindowSession(getDefaultWorkspaceSession())
   window.addTab(FIXTURE_GIT_WORKTREE_ID, TAB, KEPT)
@@ -265,7 +261,6 @@ it('repairs a stored duplicate-terminal pane at orcad startup, moving owners bef
       fromPaneKey: `${TAB}:${DUPLICATE}`,
       toPaneKey: `${TAB}:${KEPT}`
     })
-    // The status moved while disk still held both panes.
     expect(diskAtTransfer).toEqual([[KEPT, DUPLICATE]])
   } finally {
     await host.stop()
@@ -305,7 +300,6 @@ it('writes the repair before reconcile and RPC even when a profile write is in f
   const diskAtStep: Record<string, string[]> = {}
   state.onStartupStep = (step) => (diskAtStep[step] = storedLeafIds(profileDirectory))
 
-  // An earlier profile write is still in flight; the repair queues behind it.
   const held = authority.pause()
   store.updateSettings({ agentStatusHooksEnabled: false })
   const heldWrite = store.flushPendingOrThrowAsync()

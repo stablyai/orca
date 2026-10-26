@@ -36,8 +36,7 @@ describe('buildStartupCommandSubmission', () => {
     )
   })
 
-  // Why: on the raw path every line break submits a line, so an interior LF is the same
-  // remappable Ctrl+J the trailing terminator was (#23250).
+  // Interior LF is remappable Ctrl+J too; every raw line must submit with CR (#23250).
   it('submits every line of a raw multiline command with CR', () => {
     for (const command of ['echo one\necho two', 'echo one\r\necho two', 'echo one\recho two']) {
       expect(buildStartupCommandSubmission(command, { bracketedPasteSafe: false })).toBe(

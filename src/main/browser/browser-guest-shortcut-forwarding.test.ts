@@ -239,7 +239,7 @@ describe('setupGuestShortcutForwarding', () => {
       const tabReleasePreventDefault = triggerBeforeInput({ ...ctrlTabInput, type: 'keyUp' })
       const keyUpPreventDefault = triggerBeforeInput(releaseInput)
 
-      // Why: keydown must not preventDefault or Electron drops the commit keyup.
+      // Preventing keydown loses the commit keyup in Electron.
       expect(keyDownPreventDefault).not.toHaveBeenCalled()
       expect(tabReleasePreventDefault).not.toHaveBeenCalled()
       expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
@@ -336,8 +336,6 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
-  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
-  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
   it('forwards browser Find by page alone when no workspace owner is registered', () => {
     setupGuestShortcutForwarding({
       browserTabId,
@@ -397,7 +395,11 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
   })
 
-  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
+  // Why: Orca claims these on every repeat but acts once, so a held chord's repeats never reach the page.
+  it.each([
+    ['workspace delete', { code: 'Backspace', key: 'Backspace' }],
+    ['next tab', { code: 'BracketRight', key: '}' }]
+  ])('consumes repeated %s shortcuts from focused guest pages', (_name, chord) => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -406,8 +408,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     const isMac = process.platform === 'darwin'
     const preventDefault = triggerBeforeInput({
-      code: 'Backspace',
-      key: 'Backspace',
+      ...chord,
       meta: isMac,
       control: !isMac,
       shift: true,
@@ -566,7 +567,9 @@ describe('setupGuestShortcutForwarding', () => {
     const secondDownPreventDefault = triggerBeforeInput(modifierInput)
 
     expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:browserPageTabShortcut', {
+      doubleTapModifier: 'Shift'
+    })
   })
 
   it('resets guest double-tap detection on blur', () => {
@@ -596,11 +599,8 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalledWith('ui:openQuickOpen')
   })
 
-  // A floating-workspace-owned guest routes close/index chords to the floating-scoped
-  // IPC *carrying its source id*; a main-owned guest keeps main routing.
   describe('source-aware close/index routing', () => {
     const closeInput = { code: 'KeyW', key: 'w' }
-    // workspace.selectByIndex default is Mod+1; tab.selectByIndex default is Ctrl+1 (darwin) / Alt+1 (other).
     const workspaceIndexInput = { code: 'Digit1', key: '1' }
     const tabIndexInput =
       process.platform === 'darwin'

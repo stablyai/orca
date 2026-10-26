@@ -3,8 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const MAIN_ROOT = join(__dirname, '..')
-// Why: only these may touch electron.safeStorage directly; every keychain read or write must
-// go through guardedSafeStorage so a withheld keychain can never block the main thread.
+// Route keychain access through the run-wide guard so withheld keychains cannot block the main thread.
 const ALLOWED = new Set(['host/safe-storage-availability.ts', 'host/electron-secret-store.ts'])
 
 function listSources(dir: string): string[] {

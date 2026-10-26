@@ -43,7 +43,6 @@ describe('update install exit watchdog', () => {
 
     vi.advanceTimersByTime(1)
     expect(appMock.exit).toHaveBeenCalledExactlyOnceWith(0)
-    // A wedged teardown may not have reached its own record of the update.
     expect(recordAgentSessionRuntimeEndMock).toHaveBeenCalledExactlyOnceWith('update')
     expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
       'install_exit_watchdog_fired',

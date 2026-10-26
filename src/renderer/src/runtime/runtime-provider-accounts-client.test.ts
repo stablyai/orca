@@ -388,8 +388,7 @@ describe('fetchProviderAccountsSnapshot', () => {
     claudeListLocal.mockRejectedValue(new Error('Claude keychain unavailable'))
     codexListLocal.mockResolvedValue(codexState)
 
-    // Why: one-shot consumers (status bar menus) must keep the healthy provider
-    // even when the sibling list rejects instead of seeing a rejected promise.
+    // One-shot menus must retain the healthy provider despite sibling failure.
     await expect(fetchProviderAccountsSnapshot(LOCAL)).resolves.toEqual({
       claude: emptyClaudeState(),
       codex: codexState,
@@ -455,8 +454,7 @@ describe('provider account mutations', () => {
     ])
     expect(runtimeEnvironmentCall.mock.calls[0]?.[0]).toMatchObject({
       selector: 'env-1',
-      // Why this matters: the server API takes only accountId; host/WSL
-      // targeting is a desktop-local concept and must not leak into params.
+      // Server accepts only accountId; desktop host/WSL targeting must stay outside params.
       params: { accountId: 'server-codex-2' }
     })
     expect(codexSelectLocal).not.toHaveBeenCalled()

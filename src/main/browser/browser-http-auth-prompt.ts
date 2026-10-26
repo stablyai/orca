@@ -16,10 +16,7 @@ function parseCredentials(value: unknown): BrowserHttpAuthCredentials | undefine
   return undefined
 }
 
-/**
- * App `login` handler for sites in browser tabs. Returning without preventDefault keeps Electron's
- * default, which cancels the challenge, so the page gets the site's 401 page.
- */
+/** Leaving login unhandled lets Electron cancel the authentication challenge. */
 export function handleBrowserGuestLogin(
   event: { preventDefault(): void },
   guest: Electron.WebContents | null,
@@ -27,12 +24,12 @@ export function handleBrowserGuestLogin(
   authInfo: Electron.AuthInfo,
   callback: (username?: string, password?: string) => void
 ): void {
-  // Why: proxy challenges belong to handleElectronProxyLogin; a null guest is a utility process.
+  // Proxy challenges use handleElectronProxyLogin; utility processes may have no guest.
   const origin = browserPagePromptOrigin(details.url)
   if (authInfo.isProxy || !guest || guest.isDestroyed() || !origin) {
     return
   }
-  // Why: as in Chrome, an embedded image or script from another site must not ask for a password.
+  // Cross-origin subresources must not trigger password prompts.
   if (!details.isRequestForNavigation && origin !== browserPagePromptOrigin(guest.getURL())) {
     return
   }
@@ -41,7 +38,7 @@ export function handleBrowserGuestLogin(
     requester: guest,
     target: browserManager.resolvePagePromptTarget(guest),
     details: () => ({ origin, retry: !details.firstAuthAttempt }),
-    // Why: a page loading ten protected images gets one question.
+    // Coalesce protected resources sharing one challenge.
     coalesceKey: `${origin} ${authInfo.scheme} ${authInfo.realm}`,
     parseAnswer: parseCredentials,
     settle: (credentials) => {

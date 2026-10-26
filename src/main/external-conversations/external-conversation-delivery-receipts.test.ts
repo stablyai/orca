@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/mutation-receipt-capacity'
 import {
+  CONNECTOR_CANCEL_RECEIPT_RESERVE,
   CONNECTOR_PENDING_RECEIPT_LIMIT,
   DeliveryReceipts
 } from './external-conversation-delivery-receipts'
@@ -48,10 +49,39 @@ describe('DeliveryReceipts ledger capacity', () => {
     expect(db.countPendingMutationReceipts(['connector:dev'])).toBe(CONNECTOR_PENDING_RECEIPT_LIMIT)
     db.close()
 
-    // Process loss, then a restart that never starts connectors.
+    // Reopen without starting connectors to model a process restart before connector initialization.
     const reopened = new OrchestrationDb(path)
     expect(reopened.beginMutationReceipt(ORDINARY).disposition).toBe('started')
     reopened.close()
+  })
+
+  it('still admits a cancel when sends fill the backlog, within its own reserve', async () => {
+    const { db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
+      void receipts.run(KEY, String(i), 'connector.send', ['hello'], never)
+    }
+    await expect(
+      receipts.run(KEY, 'cancel', 'connector.cancel', [], async () => ({ outcome: 'accepted' }))
+    ).resolves.toEqual({ outcome: 'accepted' })
+    for (let i = 0; i < CONNECTOR_CANCEL_RECEIPT_RESERVE; i++) {
+      void receipts.run(KEY, `held-cancel-${i}`, 'connector.cancel', [], never)
+    }
+    await expect(receipts.run(KEY, 'one-more', 'connector.cancel', [], never)).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'delivery_backlog_full'
+    })
+    for (const method of ['connector.send', 'connector.start'] as const) {
+      await expect(receipts.run(KEY, method, method, [], never)).resolves.toEqual({
+        outcome: 'refused',
+        reason: 'delivery_backlog_full'
+      })
+    }
+    expect(db.countPendingMutationReceipts(['connector:dev'])).toBe(
+      CONNECTOR_PENDING_RECEIPT_LIMIT + CONNECTOR_CANCEL_RECEIPT_RESERVE
+    )
+    expect(db.beginMutationReceipt(ORDINARY).disposition).toBe('started')
+    db.close()
   })
 
   it('answers a recorded delivery even when the backlog is full', async () => {
@@ -88,7 +118,6 @@ describe('DeliveryReceipts ledger capacity', () => {
     expect(
       reopened.getMutationReceipt('connector:dev', JSON.stringify(['thread', '0']))?.state
     ).toBe('completed')
-    // The settled rows no longer hold the connector's budget.
     await expect(after.run(KEY, 'new', 'connector.send', ['hello'], execute)).resolves.toEqual({
       outcome: 'accepted'
     })

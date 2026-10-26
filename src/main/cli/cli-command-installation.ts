@@ -175,7 +175,7 @@ export class CliCommandInstallation extends CliCommandInspection {
     return extractedRoot
   }
 
-  /** Why: a 0700 root-owned link is unreadable to the user, so root opens it up before the normal ownership check. */
+  // Repair unreadable root-owned links before checking ownership.
   private async inspectStableSymlink(
     commandPath: string,
     launcherPath: string

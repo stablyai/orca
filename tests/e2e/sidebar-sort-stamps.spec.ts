@@ -42,8 +42,7 @@ test('the host stamps a workspace as its agent is prompted, finishes and asks fo
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const endpoint = await readHookEndpoint(electronApp)
   const pane = await waitForActivePaneHookDescriptor(orcaPage)
-  // A terminal spawning in the pane clears what an earlier agent there reported, so hooks posted
-  // before it spawns are lost; wait for it, and hold its foreground as the agent would.
+  // Wait for pane spawn and hold its foreground; spawn clears earlier hook status.
   await execInTerminal(
     orcaPage,
     await waitForActivePanePtyId(orcaPage),

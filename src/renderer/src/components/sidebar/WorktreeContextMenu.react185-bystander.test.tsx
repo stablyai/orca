@@ -1,15 +1,6 @@
 /**
  * @vitest-environment happy-dom
- *
- * Reproduces the shape of the production React #185 cluster filed under
- * boundary_id `sidebar.worktrees` (component stack: RovingFocusGroupItem inside
- * DropdownMenuItem inside the worktree row's context menu).
- *
- * The point of the test is that the menu is a BYSTANDER: it contains no loop of
- * its own (first case), and it only takes the blame because Radix's roving-focus
- * item runs `onFocusableItemAdd()` — a setState — from a mount LAYOUT effect,
- * which is the next dispatch after an unrelated driver has already pushed
- * React's root-global nested-update counter past its limit (second case).
+ * Radix may be blamed when its mount effect crosses React’s update limit after an unrelated cascade.
  */
 import React, { act, useLayoutEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -126,10 +117,7 @@ function mount(node: React.ReactNode, capture: Capture): HTMLDivElement {
   return container
 }
 
-/**
- * Stands in for whatever unrelated sidebar/app code kept sync lanes pending
- * commit after commit in the field report. It is the driver, not the menu.
- */
+/** Model the unrelated cascade driver; the menu itself has no update loop. */
 function CommitCascadeDriver({
   ticks,
   onTick
@@ -168,14 +156,11 @@ describe('WorktreeContextMenu and React #185', () => {
     expect(capture.errors.map((error) => error.message)).toEqual([])
   })
 
-  // Reproduces the field report: the driver is elsewhere, the menu is blamed.
   it('is blamed for a driver-owned cascade when its items mount past the limit', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const blamedFrames: string[] = []
 
-    // Which commit the right-click lands on decides which mounting fiber
-    // dispatches first past the limit; sweep the window around it rather than
-    // pinning one React-version-specific offset.
+    // Sweep the opening commit around the update limit because the first blamed fiber depends on React timing.
     for (
       let openAt = REACT_NESTED_UPDATE_LIMIT - 6;
       openAt <= REACT_NESTED_UPDATE_LIMIT;
@@ -186,8 +171,7 @@ describe('WorktreeContextMenu and React #185', () => {
       function Harness(): React.JSX.Element {
         const [ticks, setTicks] = useState(0)
         const hostRef = React.useRef<HTMLDivElement>(null)
-        // Right-click lands mid-cascade, so the menu content — and every
-        // RovingFocusGroupItem inside it — mounts while the counter is already deep.
+        // Mount menu items while the unrelated driver has already deepened the root’s update counter.
         useLayoutEffect(() => {
           if (ticks !== openAt) {
             return
@@ -218,15 +202,12 @@ describe('WorktreeContextMenu and React #185', () => {
     }
     consoleError.mockRestore()
 
-    // Carried as the assertion message so a React/Radix version bump reports the
-    // frames it blamed instead of a bare `false`.
+    // Include blamed frames in failures so React/Radix upgrades remain diagnosable.
     const blamed = blamedFrames.map((frame) => frame.split(' (')[0]).join(', ')
-    // The production report's innermost component_stack frame.
     expect(
       blamedFrames.some((frame) => frame.startsWith('at RovingFocusGroupItem')),
       blamed
     ).toBe(true)
-    // ...and the loop is never in menu code: only the driver owns a setState loop.
     expect(
       blamedFrames.some((frame) => frame.startsWith('at CommitCascadeDriver')),
       blamed

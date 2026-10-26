@@ -1,15 +1,5 @@
-// The one route every mutating agent-session call takes: recompute the fingerprint,
-// accept a plan that declares a command receipt through it, otherwise admit
-// through the ledger and check the lease. Methods cannot grow their own admission rules.
-//
-// Ledger-backed admission is two-phase when a call brings `prepareSession`. The ledger's
-// answer comes first and places nothing. An id it refuses is answered then, with
-// nothing opened; so is a recorded id that settled refused. Any other recorded id
-// is answered after the plan's own preparation for a replay (a send's only opens
-// the conversation), from the journal, with no admit write. A call the ledger
-// admits, or a replay that proves nothing landed, may then give the session an
-// owner, and only after that are the row placed and the lease checked — against
-// the lease as it stands once the owner is there.
+// Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
+// prepare ownership before lease admission, while command-receipt plans use their own admission.
 
 import {
   admitAgentSessionMutation,
@@ -31,7 +21,7 @@ import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-r
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
-} from '../../runtime/agent-session-operation-admission'
+} from '../../runtime/agent-session/ownership/agent-session-operation-admission'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   classifyJournalOpenFailure,
@@ -73,12 +63,10 @@ export type AgentSessionMutationRequest<TValue> = {
   callerKey: string
   envelope: AgentSessionMutationEnvelope
   plan: MutationPlan<TValue>
-  /** Journal of the attached session, read after `prepareSession`; absent when this host holds none. */
+  /** Read after preparation; absent if no conversation is held. */
   journal: () => AgentSessionJournal | undefined
-  /** The host's projection of the chat's current work (`hostStructuredAgentSessionCurrentWork`). */
   currentWork?: () => StructuredAgentSessionCurrentWork | null
-  /** Between the ledger's answer and the lease check, for a call that may first have to make the
-   *  session ready for itself. Answers with the refusal that ends the call, if any. */
+  /** Prepare between ledger evaluation and lease admission; return any terminal refusal. */
   prepareSession?: (
     ledger: Exclude<AgentSessionOperationDecision['decision'], 'refused'>,
     record: AgentSessionRecord
@@ -116,7 +104,6 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
     }
     if (ledger.decision.decision === 'refused') {
-      // Nothing to read, prepare or write: a closed chat or a store that takes no write answers alike.
       return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, ledger.decision))
     }
     if (ledger.decision.decision === 'replay') {
@@ -157,7 +144,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       isAgentSessionRefusalError(error) ||
       classifyJournalOpenFailure(error) === 'journalCorrupt'
     ) {
-      // A store refusing the row (a newer Orca's records) or damage SQLite proves: as an open says.
+      // Match open-time refusal for newer records or proven SQLite corruption.
       return refuseAgentSessionMutation(journalOpenRefusal(error))
     }
     throw error
@@ -177,10 +164,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     if (replayed !== 'rerun') {
       return replayed
     }
-    // Nothing durable landed, so this id is about to run for the first time. A
-    // refused call leaves its ledger row behind, and replaying past the lease
-    // would let a resend act with no live owner — so a first run pays the full
-    // admission price either way.
+    // No durable effect landed; require first-run lease admission even if a refused ledger row exists.
     const rerun = admitAgentSessionMutation({
       envelope,
       hostFingerprint,
@@ -195,8 +179,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
 
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
-    // A global send replay can cross caller identities. Settlement still owns
-    // the durable row admitted by the original caller.
+    // Global replay may cross callers; settle the original caller’s durable row.
     operationCallerKey: admission.row.callerKey,
     envelope,
     plan,
@@ -207,11 +190,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     : refuseAgentSessionMutation(outcome.refusal)
 }
 
-/**
- * A resend of a recorded id, answered with no admit write: a refusal its first run recorded, with
- * nothing opened; otherwise, after the plan's own preparation for a replay, from the conversation
- * its run wrote to. `rerun` when nothing durable landed, so the call runs as a first run.
- */
+/** Replay recorded failures directly; otherwise prepare/read without admission, rerunning only absent effects. */
 async function answerRecordedOperation<TValue>(
   request: AgentSessionMutationRequest<TValue>,
   prepareSession: NonNullable<AgentSessionMutationRequest<TValue>['prepareSession']>,
@@ -235,7 +214,7 @@ async function answerRecordedOperation<TValue>(
     return prepared
   }
   const journal = request.journal()
-  // Read again after the open: the row as it stands, against the record the open left.
+  // Opening may change the record or receipt; evaluate again.
   const current = request.store.evaluateMutationOperation({
     callerKey: request.callerKey,
     envelope,
@@ -252,14 +231,13 @@ async function answerRecordedOperation<TValue>(
     return refuseAgentSessionMutation(agentSessionLedgerRefusal(envelope, current.decision))
   }
   if (current.decision.decision === 'admit') {
-    // The row is gone since: the first-run path decides it from scratch.
     return 'rerun'
   }
   const context = mutationTurnContext(request, journal, current.record)
   return replayRecordedOperation(request, context, current.decision.row)
 }
 
-/** The recorded answer from the journal, or `rerun` when the plan says nothing durable landed. */
+/** Reconstruct the recorded answer; rerun only when no durable effect landed. */
 export function replayRecordedOperation<TValue>(
   {
     plan,

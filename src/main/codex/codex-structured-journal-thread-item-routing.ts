@@ -1,8 +1,3 @@
-// Where one `item/started` or `item/completed` notification goes: nowhere for a subagent's
-// activity item, whose child draws its own row from the host's records; else the typed item
-// translator or the generic fallback — and, when the item is Codex echoing a send back, the turn
-// attribution that echo unlocks.
-
 import type { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import type { CodexJournalItems } from './codex-structured-journal-items'
 import type {
@@ -31,6 +26,7 @@ export function createCodexThreadItemRouter(input: {
 }): (event: ThreadItemEvent) => CodexThreadItemRouting {
   return (event) => {
     const subagentItem = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
+    // The host records child activity; duplicating it here would create extra rows.
     if (subagentItem && readCodexSubagentActivity(subagentItem) !== null) {
       return CODEX_JOURNAL_ADMITTED
     }

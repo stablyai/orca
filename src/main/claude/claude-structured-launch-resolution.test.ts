@@ -88,7 +88,6 @@ describe('claude structured launch resolution', () => {
 
     const launch = await resolverFor(floating)({ identity: IDENTITY })
 
-    // resolverFor answers `/repos/<id>` — the current setting — which a pinned resume must ignore.
     expect(launch.cwd).toBe(pinned)
   })
 
@@ -112,7 +111,6 @@ describe('claude structured launch resolution', () => {
       supportedDialogKinds: [],
       extraArgs: { 'replay-user-messages': null },
       systemPrompt: { type: 'preset', preset: 'claude_code' },
-      // A start the host named no mode for asks.
       permissionMode: 'default',
       sessionId: first.providerSessionId
     })
@@ -189,7 +187,6 @@ describe('claude structured launch resolution', () => {
   })
 
   it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
-    // The Orca-minted id, never the provider's: the provider id rotates on /clear.
     const launch = await resolverFor(record(), () => ({
       ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
     }))({ identity: IDENTITY })
@@ -268,12 +265,10 @@ describe('claude structured launch resolution', () => {
       providerSessionId: 'provider-current',
       resumeLeafUuid: null,
       resumesTranscript: false,
-      // Launching the id fresh does not start a new conversation: the child continues the chain.
       continuesChain: true
     })
   })
 
-  // Full access is the owned bypass flag, never the SDK's typed option older binaries reject.
   it('starts a Full access chat with the bypass flag and no permission mode', async () => {
     const launch = await resolverFor(record())({
       identity: IDENTITY,
@@ -292,14 +287,22 @@ describe('claude structured launch resolution', () => {
     ['ask', 'default'],
     ['accept-edits', 'acceptEdits'],
     ['auto', 'auto']
-  ] as const)('starts a %s chat in permission mode %s', async (permissionMode, expected) => {
-    const launch = await resolverFor(record())({ identity: IDENTITY, permissionMode })
+  ] as const)(
+    'starts and resumes a %s chat in permission mode %s',
+    async (permissionMode, expected) => {
+      const launches = [
+        await resolverFor(record())({ identity: IDENTITY, permissionMode }),
+        await resolverFor(RESUMABLE)({ identity: identityAt('leaf-current'), permissionMode })
+      ]
 
-    expect(launch.options.permissionMode).toBe(expected)
-    expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
-  })
+      expect(launches[1]?.options.resume).toBe('provider-current')
+      for (const launch of launches) {
+        expect(launch.options.permissionMode).toBe(expected)
+        expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+      }
+    }
+  )
 
-  // The chat's own mode replaces Agent Permissions: a Yolo terminal setting grants a chat nothing.
   it('ignores the bypass flag the agent Arguments carry', async () => {
     const launch = await resolverFor(
       record(),
@@ -530,7 +533,11 @@ describe('claude structured launch resolution', () => {
       })
     })({ identity: IDENTITY })
 
-    expect((launch.env?.PATH ?? launch.env?.Path)?.split(delimiter)[0]).toBe(binDir)
+    // Right behind this app's CLI, so a runtime dir holding another `orca` cannot shadow it.
+    expect((launch.env?.PATH ?? launch.env?.Path)?.split(delimiter).slice(1)).toEqual([
+      binDir,
+      '/usr/bin'
+    ])
   })
 
   it('refuses other hosts, WSL, providers, and account-home variables', async () => {
@@ -574,8 +581,7 @@ describe('readable Claude thinking', () => {
       ...(cliFlags ? { cliFlags } : {})
     })({ identity: IDENTITY })
 
-  // Whether the CLI's directory holds a `node` decides if the runtime pairing puts that directory
-  // first on PATH (Linux CI's /usr/local/bin does, a Mac's usually does not), so both are pinned.
+  // Pin both runtime layouts instead of relying on the host's /usr/local/bin contents.
   it.each([
     ['without a sibling Node runtime', false],
     ['with a sibling Node runtime', true]
@@ -599,14 +605,12 @@ describe('readable Claude thinking', () => {
       expect(asked).toMatchObject({ command, cwd: '/repos/workspace-1' })
       const segments = (env: Record<string, string> | undefined) =>
         (env?.PATH ?? env?.Path ?? '').split(delimiter)
-      // The launch's PATH is the probe's plus Orca's own CLI directory, which holds no `claude` or
-      // runtime, so both resolve the same binary and the same shims in the same order.
+      // Orca's CLI directory is the only PATH difference between probe and launch.
       const orcaCliDir = launch.env?.ORCA_CLI_COMMAND ? dirname(launch.env.ORCA_CLI_COMMAND) : null
       expect(segments(launch.env).filter((dir) => dir !== orcaCliDir)).toEqual(segments(asked?.env))
       expect(segments(asked?.env)[0] === binDir).toBe(sibling)
       expect(asked?.env).toMatchObject({ PROJECT_SHIM: '1' })
       expect(asked?.env).not.toHaveProperty('ANTHROPIC_API_KEY')
-      // The launch keeps the credential the user gave it.
       expect(launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-user' })
       expect(launch.options.extraArgs).toEqual({
         'replay-user-messages': null,

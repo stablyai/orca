@@ -9,13 +9,6 @@ import {
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
 
-// A snippet has to name which of a row's four columns matched, and the marks
-// FTS5 wraps a match in are the only signal. Searching the marked text for the
-// public `[[` reads a transcript's own brackets as a highlight — and transcripts
-// are full of them, because a bash `[[ -f x ]]` and numpy's `[[1, 2]]` are
-// exactly the sort of thing an agent session holds. Whether a column matched is
-// the difference between two renderings of the same text instead.
-
 let harness: SessionSearchHarness | null = null
 
 afterEach(async () => {
@@ -28,8 +21,6 @@ const TOOL = 'zebrafish appears only in the tool output here'
 
 it('shows the column that matched, not the one that happens to contain brackets', async () => {
   harness = await openSessionSearchHarness('ss-snippet-marks')
-  // Session 1's match is in tool output while its user turn holds a bash test
-  // expression; session 2 is the same match with no brackets anywhere.
   addSyntheticSession(harness.db, { id: 1, text: BASH, toolText: TOOL })
   addSyntheticSession(harness.db, { id: 2, text: 'run this script please', toolText: TOOL })
 
@@ -44,9 +35,6 @@ it('shows the column that matched, not the one that happens to contain brackets'
 })
 
 it('falls back to any column for an identifier-only match, brackets or not', async () => {
-  // `zebra` reaches this row only through the identifier shadow column, which is
-  // what column -1 exists for. The user turn holds numpy output, so a bracket
-  // scan would have stopped at it and shown a column with no match in it.
   harness = await openSessionSearchHarness('ss-snippet-marks-fallback')
   addSyntheticSession(harness.db, {
     id: 1,
@@ -62,8 +50,6 @@ it('falls back to any column for an identifier-only match, brackets or not', asy
 })
 
 it('leaves a transcript’s own brackets in the text it shows', async () => {
-  // The marks are rewritten from private-use code points at the very end, so a
-  // row that both matches and contains `[[` keeps its own characters.
   harness = await openSessionSearchHarness('ss-snippet-marks-literal')
   addSyntheticSession(harness.db, { id: 1, text: `zebrafish ${BASH}` })
 
@@ -75,10 +61,6 @@ it('leaves a transcript’s own brackets in the text it shows', async () => {
 })
 
 it('picks by comparison, so a private-use code point in content cannot pose as a mark', async () => {
-  // The marks are private-use code points, and a transcript may hold one:
-  // agent output carries Nerd Font glyphs, which live in the same block. So the
-  // column is chosen by comparing a marked rendering against an unmarked one,
-  // not by looking for a mark in the text.
   harness = await openSessionSearchHarness('ss-snippet-marks-private-use')
   addSyntheticSession(harness.db, {
     id: 1,
@@ -92,10 +74,6 @@ it('picks by comparison, so a private-use code point in content cannot pose as a
 })
 
 it('truncates on the last real mark, not on a bracket the transcript wrote', async () => {
-  // Over the character ceiling the snippet is cut, and it must not cut between
-  // an open mark and its close. Finding that open mark by searching for `[[`
-  // stops at the transcript's own bracket instead and throws away everything
-  // after it.
   harness = await openSessionSearchHarness('ss-snippet-marks-truncation')
   const long = (letter: string): string =>
     Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
@@ -106,15 +84,10 @@ it('truncates on the last real mark, not on a bracket the transcript wrote', asy
 
   const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''
   expect(snippet).toContain('[[zebrafish]]')
-  // The cut is the character ceiling, so the text after the transcript's own
-  // bracket survives up to it.
   expect(snippet).toContain('qqqqq')
 })
 
 it('marks only what FTS5 marked, so a glyph in the text stays a glyph', async () => {
-  // The marked and plain renderings are compared character by character, so a
-  // private-use code point the transcript wrote has a counterpart in both and
-  // is text; replacing every one of them would show it as a highlight.
   harness = await openSessionSearchHarness('ss-snippet-marks-literal-private-use')
   addSyntheticSession(harness.db, { id: 1, text: 'a \uE000 glyph then zebrafish and \uE001 after' })
 
@@ -124,13 +97,10 @@ it('marks only what FTS5 marked, so a glyph in the text stays a glyph', async ()
   )
   expect(snippet).toContain('a \uE000 glyph')
   expect(snippet).toContain('\uE001 after')
-  // One highlight, and only one: the literals are not a second pair.
   expect(snippet.split(SESSION_SEARCH_SNIPPET_MARK_OPEN)).toHaveLength(2)
 })
 
 it('does not cut a snippet at a private-use code point the transcript wrote', async () => {
-  // The balance check looks for the last open mark, and a content glyph is not
-  // one; treating it as one throws away every character after it.
   harness = await openSessionSearchHarness('ss-snippet-marks-literal-truncation')
   const long = (letter: string): string =>
     Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')

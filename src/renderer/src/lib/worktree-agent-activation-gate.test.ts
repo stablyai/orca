@@ -535,8 +535,7 @@ describe('worktree agent activation gate', () => {
     }
   )
 
-  // Failing closed must not also fail silent: an unreadable census leaves the workspace with
-  // no surface, so the gate has to hand the caller its seed instead of claiming 'adopted'.
+  // Unreadable census must not claim adopted without a surface; fail-closed still returns caller seeding responsibility.
   it('declines to mint but still asks for a seed when the host cannot answer', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
@@ -613,8 +612,7 @@ describe('worktree agent activation gate', () => {
   it.each([
     ['ssh:box@@pty-1', WORKTREE_ID],
     [`${WORKTREE_ID}@@legacy`, ''],
-    // A relay seeds worktreeId from the host's own ORCA_WORKTREE_ID, so a foreign value must not
-    // hide a session the minted id already claims for this workspace.
+    // Host ORCA_WORKTREE_ID may seed a foreign relay worktreeId; prefix-minted IDs must still include this workspace’s sessions.
     [`${WORKTREE_ID}@@stale-env`, 'other-repo::/elsewhere']
   ])(
     'adopts %s using workspace metadata or the legacy ID fallback',

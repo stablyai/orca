@@ -9,9 +9,7 @@ import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 
-// STA-4557: #14866 deferred command-finished retirement for OpenCode panes behind an
-// async "is the foreground still OpenCode?" read. These pin the two ways a finished
-// session then kept or regained orchestration authority (the #14943 revert reason).
+// STA-4557: deferred OpenCode foreground reads retained/revived finished authority (#14866, reverted in #14943).
 
 const WORKTREE_PATH = '/tmp/worktree-a'
 const WORKTREE = {
@@ -98,7 +96,6 @@ async function launchOpenCodePane(options: {
 
 type OrcaRuntimeServiceDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
 
-/** Drain the microtask + timer queues the deferred foreground read chains through. */
 async function settle(ticks = 40): Promise<void> {
   for (let tick = 0; tick < ticks; tick += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -134,8 +131,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
 
     expect(pane.runtime.verifyOrchestrationCompatibilityCaller(pane.evidence)).not.toBeNull()
 
-    // OpenCode exits; the shell prints its OSC 133;D and repaints its title while the
-    // foreground read is still in flight, then the read lands proving a plain shell.
+    // Shell completion/title repaint precede the pending read proving a plain shell.
     pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
     pane.runtime.onPtyData(pane.ptyId, '\x1b]0;~/worktree-a\x07', 101)
     resolveForeground?.('zsh')
@@ -177,7 +173,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     await server.start({ env: 'production' })
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-reuse',
-      // OpenCode is a TUI: it is still the foreground process when its command completes.
+      // OpenCode remains foreground when an internal TUI command completes.
       getForegroundProcess: async () => 'opencode',
       retireAgentHookCompatibilityAuthority: (paneKey) => server.retirePaneAuthority(paneKey),
       attestAgentHookCompatibilityAuthority: (candidate) =>
@@ -215,8 +211,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
     await settle()
 
-    // Every later process in this shell inherits ORCA_AGENT_LAUNCH_TOKEN from the PTY env,
-    // so the finished session's token must stop attesting once its command completed.
+    // Every later shell child inherits the launch token; finished sessions must stop attesting it.
     expect(
       server.attestCompatibilityAuthority({
         paneKey: pane.paneKey,
@@ -243,8 +238,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
         server.attestCompatibilityAuthority(candidate)
     })
     const hookEnv = server.buildPtyEnv()
-    // Both sessions post the same launchToken: it lives in the PTY env, so every
-    // process started in this shell inherits it. Only sessionID separates them.
+    // Both sessions inherit the PTY launch token; only sessionID distinguishes them.
     const post = (sessionId: string): Promise<Response> =>
       fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
@@ -272,9 +266,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     await post('session-1')
     expect(attestCurrent()).not.toBeNull()
 
-    // Session 1 ends. Nothing about the PTY changes across an agent session boundary:
-    // same record, same incarnation, no title write — so every guard on the deferred
-    // read still matches the baseline captured for session 1.
+    // Session boundary leaves PTY/incarnation/title unchanged, so stale deferred guards still match session 1.
     pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
     await post('session-2')
     resolveForeground?.('opencode')
@@ -320,8 +312,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
 
-    // After a restart the PTY survives with ORCA_AGENT_LAUNCH_TOKEN still in its env and
-    // pty.launchToken gone, so a persisted commitment is the whole proof of authority.
+    // Restart retains token in PTY env but loses pty.launchToken; persisted commitment is the only authority proof.
     expect(
       restarted.attestCompatibilityAuthority({
         paneKey: pane.paneKey,

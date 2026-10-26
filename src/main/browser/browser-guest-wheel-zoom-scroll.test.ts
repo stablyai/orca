@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const agentInjection = vi.hoisted(() => ({ active: false }))
+vi.mock('./agent-input-injection', () => ({
+  isAgentInjectingInput: () => agentInjection.active
+}))
+
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 
-describe('guest viewport wheel forwarding', () => {
+describe('guest before-mouse-event forwarding', () => {
   const rendererSend = vi.fn()
   const guestOn = vi.fn()
 
@@ -37,6 +43,41 @@ describe('guest viewport wheel forwarding', () => {
     })
     return preventDefault
   }
+
+  function sideButton(
+    type: 'mouseDown' | 'mouseUp',
+    button: string
+  ): Partial<Electron.MouseWheelInputEvent> {
+    const mouse: Partial<Electron.MouseWheelInputEvent> = {}
+    // Why: overrides trigger's wheel defaults; Electron reports side buttons as 'back'/'forward'
+    // at runtime, which its typing omits.
+    Reflect.set(mouse, 'type', type)
+    Reflect.set(mouse, 'button', button)
+    return mouse
+  }
+
+  it('reports a press into the page and steps history on a side-button release', () => {
+    expect(trigger(false, sideButton('mouseDown', 'back'))).not.toHaveBeenCalled()
+    expect(trigger(false, sideButton('mouseUp', 'back'))).not.toHaveBeenCalled()
+    trigger(false, sideButton('mouseUp', 'forward'))
+
+    expect(rendererSend.mock.calls).toEqual([
+      ['ui:browserPagePointerDown', { browserPageId: 'tab-1' }],
+      ['ui:browserHistoryNavigate', { browserPageId: 'tab-1', direction: 'back' }],
+      ['ui:browserHistoryNavigate', { browserPageId: 'tab-1', direction: 'forward' }]
+    ])
+  })
+
+  it('leaves presses an agent makes in the page to the page alone', () => {
+    agentInjection.active = true
+    try {
+      trigger(false, sideButton('mouseDown', 'left'))
+      trigger(false, sideButton('mouseUp', 'back'))
+    } finally {
+      agentInjection.active = false
+    }
+    expect(rendererSend).not.toHaveBeenCalled()
+  })
 
   it('forwards plain wheel deltas only for an active preset', () => {
     const preventDefault = trigger(true, { deltaX: 24, deltaY: 120 })

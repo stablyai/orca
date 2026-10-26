@@ -63,7 +63,7 @@ async function opencodeDbPathsForSource(
   const onRefusal = (path: string, error: WslTranscriptFsError): void => {
     recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
   }
-  // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
+  // Custom storage roots still place SQLite databases in the parent data directory.
   if (sourceIndex === 0 && options.opencodeStorageDir) {
     return listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
   }

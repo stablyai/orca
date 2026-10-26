@@ -1,3 +1,4 @@
+import { readPinnedBunVersion } from './pinned-bun-executable.mjs'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import path from 'node:path'
@@ -52,8 +53,8 @@ const command = (program, args, label) =>
     ...(process.platform === 'win32' ? { timeoutMs: 900_000 } : {})
   })
 const version = await command(bun, ['--version'], 'bun-version')
-if (version.code !== 0 || version.stdout.trim() !== '1.4.3') {
-  throw new Error('Pin Bun 1.4.3 for this comparison')
+if (version.code !== 0 || version.stdout.trim() !== readPinnedBunVersion(root)) {
+  throw new Error(`Pin Bun ${readPinnedBunVersion(root)} for this comparison`)
 }
 report.host.bun = version.stdout.trim()
 report.host.typescript = JSON.parse(

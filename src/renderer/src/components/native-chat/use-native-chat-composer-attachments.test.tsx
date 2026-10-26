@@ -15,6 +15,34 @@ import { imageReferenceToken } from '../../../../shared/native-chat-image-refere
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import type { Tab } from '../../../../shared/tab-types'
+
+const initialStoreState = useAppStore.getInitialState()
+function publishOwner(
+  scopeKey: string,
+  owner: draftStorage.NativeChatComposerDraftOwner | undefined
+): void {
+  const sessionId = draftStore.structuredAgentSessionIdOfDraftScope(scopeKey)
+  const tab: Tab = {
+    id: scopeKey,
+    entityId: sessionId ?? scopeKey,
+    worktreeId: owner?.workspaceId ?? 'unknown',
+    groupId: 'group',
+    contentType: 'agent-session',
+    label: 'Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  useAppStore.setState({
+    unifiedTabsByWorktree: owner ? { [owner.workspaceId]: [tab] } : {},
+    activeWorktreeId: owner?.workspaceId ?? null,
+    activeWorkspaceExecutionHostId: owner?.executionHostId ?? null
+  })
+}
+
 import * as draftStore from './native-chat-composer-draft-store'
 import * as draftStorage from './native-chat-composer-draft-storage'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
@@ -55,6 +83,7 @@ function publishUnrelatedStatuses(): void {
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
@@ -167,8 +196,10 @@ describe('useNativeChatComposerAttachments', () => {
     const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
     storage.drafts.set(scope, { text: '', images: [image], owner: storedOwner, savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    let owner = storedOwner
-    const resolveOwner = vi.fn(() => owner)
+    publishOwner(scope, storedOwner)
+    const resolveOwner = vi.fn((key: string) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
     draftStore.setNativeChatComposerDraftOwnerResolver(resolveOwner)
     const old = Promise.withResolvers<boolean>()
     const next = Promise.withResolvers<boolean>()
@@ -182,12 +213,12 @@ describe('useNativeChatComposerAttachments', () => {
       probe = await renderProbe(scope, true)
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
       expect(pathExists).toHaveBeenCalledTimes(1)
-      owner = { ...storedOwner, executionHostId: 'runtime:remote' }
+      publishOwner(scope, { ...storedOwner, executionHostId: 'runtime:remote' })
       await act(async () => old.resolve(false))
       expect(draftStore.readNativeChatComposerDraft(scope).images).toEqual([image])
       await act(async () => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      owner = storedOwner
+      publishOwner(scope, storedOwner)
       await act(async () => useAppStore.setState({}))
       expect(pathExists).toHaveBeenCalledTimes(2)
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
@@ -217,8 +248,10 @@ describe('useNativeChatComposerAttachments', () => {
     const paste = { id: 'paste', path: '/state/native-chat-pastes/orca-paste-1-a.png' }
     storage.drafts.set('pty-1', { text: '', images: [image, paste], savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    let owner: draftStorage.NativeChatComposerDraftOwner | undefined
-    draftStore.setNativeChatComposerDraftOwnerResolver(() => owner)
+    publishOwner(scope, undefined)
+    draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
     const exists = Promise.withResolvers<boolean>()
     const pathExists = vi.fn(() => exists.promise)
     const originalApi = window.api
@@ -237,16 +270,16 @@ describe('useNativeChatComposerAttachments', () => {
       expect(nativeChatImagesHoldSend(terminal.latest().imageAttachments)).toBe(false)
       act(() => terminal.root.unmount())
       const probe = await renderProbe(scope, true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       act(() => useAppStore.setState({}))
       expect(pathExists).not.toHaveBeenCalled()
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       await act(async () => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       const newer = { id: 'edit', path: '/repo/new.png' }
       await act(async () => {
@@ -272,10 +305,10 @@ describe('useNativeChatComposerAttachments', () => {
       const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
       storage.drafts.set(scope, { text: 'hi', images: [image, other], savedAt: 1 })
       draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-      draftStore.setNativeChatComposerDraftOwnerResolver(() => ({
-        workspaceId: 'wt',
-        executionHostId: 'local'
-      }))
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
+      draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+        resolveNativeChatDraftOwner(useAppStore.getState(), key)
+      )
       let present = true
       const pathExists = vi.fn(async () => present)
       const originalApi = window.api
@@ -319,8 +352,7 @@ describe('useNativeChatComposerAttachments', () => {
       first.latest().attachResolvedPaths(['/tmp/orca-native-chat-attach-test.png'])
     })
 
-    // Images are NOT sent to the TUI on attach — they ride along on submit, so
-    // the chip and the TUI input never diverge and removing a chip is clean.
+    // Attach only on submit so chip removal cannot leave stale image paths in TUI input.
     expect(first.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
@@ -416,10 +448,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Today's only caller settles ownership synchronously before it calls, so this
-  // verdict cannot arrive false — but the hook exports this entry point. Pinned
-  // because the fallback is not a refusal: a false verdict is not "owned", so a
-  // remote target would blame client-local attachments for an ownership failure.
+  // False ownership must name the ownership failure, even though the current immediate caller checks synchronously.
   it('names the ownership failure when an immediate attach arrives already false', async () => {
     runtimeTarget.remote = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => false })
@@ -435,8 +464,6 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Ownership is per path: the target-owned drop still lands, the client-local
-  // paste is refused, and the refusal is reported rather than hidden.
   it('keeps the owned half of a mixed queued batch after the target becomes remote', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -456,9 +483,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // References are inserted in the order the user made them. Splitting the queue
-  // into an owned half and a client-local half would hoist every workspace drop
-  // ahead of a paste that came first.
+  // Preserve mixed attachment order; grouping by ownership would move workspace drops ahead of earlier pastes.
   it('keeps a mixed queued batch in the order it was attached', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -490,9 +515,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // An already-blocked target refuses at the drop instead of queueing. Queued
-  // paths that can never attach would still spend the pending budget, and the
-  // next legitimate drop would be turned away for being one too many.
+  // Refuse permanently blocked targets before queueing so invalid paths cannot exhaust the pending budget.
   it('refuses an already-blocked target at the drop without spending the queue budget', async () => {
     runtimeTarget.remote = true
     let composing = true
@@ -505,6 +528,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
     composing = false
@@ -553,8 +577,7 @@ describe('useNativeChatComposerAttachments', () => {
     })
 
     expect(probe.draft()).toBe('각 @/remote/b.txt @/remote/b.txt @/remote/a.txt ')
-    // The focus this flush must not steal would be scheduled a frame out, so without advancing
-    // one the assertions below hold even when the flush does steal focus.
+    // Advance a frame so scheduled focus theft cannot make these assertions pass vacuously.
     await act(async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve))
     })
@@ -796,8 +819,7 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().attachResolvedPaths(['/tmp/later.png'])
     })
 
-    // A composer that comes back must still wait for the pending one, which no draft saves; the
-    // later image is saved at once, and shows behind it.
+    // Pending chips survive remounts in memory while later completed images persist without overtaking them.
     expect(nativeChatPendingAttachmentSnapshot('pty-1')).toMatchObject([
       { id: pendingId, path: '', pending: true },
       { path: '/tmp/later.png' }
@@ -811,7 +833,6 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().imageAttachments.find((attachment) => attachment.id === pendingId)?.previewUrl
     ).toBe('blob:preview-1')
 
-    // Thumbnails keep the order they were attached in, so their numbers don't jump.
     act(() => probe.latest().resolvePendingImageAttachment(pendingId ?? '', '/tmp/first.png'))
     expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
       { path: '/tmp/first.png' },

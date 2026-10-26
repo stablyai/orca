@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { searchTaskPageJiraIssues } from './task-page-jira-search'
 
 const ISSUE: JiraIssue = {

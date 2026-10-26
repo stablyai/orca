@@ -1,11 +1,4 @@
-// The agent's open requests to the user (permission, question, plan approval), each held as the
-// JSON-RPC call it is until a person answers it, a Stop cancels it, or the agent withdraws it.
-// An answer claims the request, commits the journal compare-and-set while the claim is held, and
-// only then replies, so a second client loses the commit and the agent hears exactly one answer.
-// Each request is this module's to answer: once the agent cancels it, or a Stop or steer withdraws
-// what is open (`withdrawAll`), an unclaimed one is answered with the agent's own cancelled reply
-// and a claimed one still sends the committed answer — except a permission the agent itself
-// cancelled, which the protocol answers `cancelled` the moment it is cancelled.
+// Claim requests through journal commit before replying so competing clients cannot answer twice.
 
 import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
 import {
@@ -20,11 +13,11 @@ import type { AcpStructuredLane } from './acp-structured-lane'
 type OpenRequest = {
   key: string
   presentation: AcpRequestPresentation
-  /** A permission, whose cancellation the protocol answers itself. */
+  /** Protocol cancellation can answer permissions immediately, even while a claim is saved. */
   permission: boolean
   signal: AbortSignal
   claimed: boolean
-  /** A Stop or steer withdrew it while an answer was being saved: a failed save withdraws it. */
+  /** Deferred withdrawal applies if the claimed answer fails to save. */
   withdrawing: boolean
   settle: (reply: unknown) => void
 }
@@ -34,9 +27,9 @@ export class AcpStructuredPrompts {
 
   constructor(
     private readonly lane: () => AcpStructuredLane | null,
-    /** Whether a request arriving now belongs to a turn that may still ask the person. */
+    /** Allows interactive requests for the current turn. */
     private readonly admits: () => boolean,
-    /** Whether its turn may still show what a request answered at once carried. */
+    /** Allows content from requests that settled immediately. */
     private readonly shows: () => boolean
   ) {}
 
@@ -44,7 +37,6 @@ export class AcpStructuredPrompts {
     return this.open.size
   }
 
-  /** Answers one agent request: a row the user can act on, or the translator's verdict on it. */
   handle(method: string, params: unknown, context: AcpRequestContext): Promise<unknown> {
     const lane = this.lane()
     if (!lane || context.id === null) {
@@ -52,15 +44,13 @@ export class AcpStructuredPrompts {
     }
     const translated = lane.translator.request(method, params, context.id)
     if (translated.settled) {
-      // Answered at once; what it carried shows only while its turn may still show anything.
       if (this.shows()) {
         lane.apply(translated.events)
       }
       return Promise.resolve(translated.settled.reply)
     }
     if (translated.presentation && !this.admits()) {
-      // No prompt of Orca's runs, or a Stop or steer is cutting it short: the agent hears its own
-      // cancelled reply and no card opens.
+      // Reply cancelled without opening a card when the turn can no longer ask.
       return Promise.resolve(translated.presentation.reply(null))
     }
     lane.apply(translated.events)
@@ -86,8 +76,7 @@ export class AcpStructuredPrompts {
         }
       }
       this.open.set(key, entry)
-      // The agent or a Stop gave up on it: its card can no longer be answered, and the agent hears
-      // its own cancelled reply. A claimed one finishes its answer.
+      // Unclaimed requests withdraw immediately; claimed answers finish their commit.
       context.signal.addEventListener(
         'abort',
         () => {
@@ -129,12 +118,12 @@ export class AcpStructuredPrompts {
     }
     entry.settle(reply)
     if (entry.permission && entry.signal.aborted) {
-      // Cancelled while the answer was saved: the agent already heard `cancelled`, not this answer.
+      // Protocol cancellation already replied while the permission answer was being saved.
       throw new Error(`the agent stopped waiting for the answer to ${input.itemId}`)
     }
   }
 
-  /** A Stop or steer: the agent hears its own cancelled reply to everything no answer has claimed. */
+  /** Cancel unclaimed requests; let claimed answers finish saving. */
   withdrawAll(): void {
     for (const entry of this.open.values()) {
       if (entry.claimed) {
@@ -150,7 +139,6 @@ export class AcpStructuredPrompts {
     this.lane()?.apply([{ type: 'request.withdrawn', request: entry.key }])
   }
 
-  /** The child is gone: nobody can answer for it any more. */
   clear(): void {
     this.open.clear()
   }

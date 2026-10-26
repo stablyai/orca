@@ -1,13 +1,9 @@
-/**
- * Which tab, layout and owner a persisted pane or editor row belongs to. Source export, the
- * destination's validation and profile transfer all read these, so they must agree by construction.
- */
+/** Share persisted-pane/editor ownership across source export, destination validation and profile transfer. */
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
-// Why the last ':': makePaneKey builds `${tabId}:${leafId}` with a colon-free tab id, and the
-// destination validates by this split; a prefix match would accept keys the destination rejects.
+// Split at the last colon like destination validation; prefix matching would accept keys it rejects.
 export function paneBelongsToTabs(paneKey: string, tabIds: ReadonlySet<string>): boolean {
   const separator = paneKey.lastIndexOf(':')
   return separator > 0 && tabIds.has(paneKey.slice(0, separator))

@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
 import type {
   AlignType,
@@ -14,9 +15,8 @@ import remend from 'remend'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
-// CommonMark with GitHub's tables, strikethrough, autolinks and footnotes: the rules desktop's
-// renderer follows, read by a parser fast enough for the phone's JavaScript engine.
-const markdown = new MarkdownIt({ html: true, linkify: true }).use(footnote)
+// Match desktop CommonMark/GFM tables, strikethrough, autolinks, footnotes and CJK emphasis using phone-efficient parser.
+const markdown = new MarkdownIt({ html: true, linkify: true }).use(footnote).use(cjkFriendly)
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
@@ -98,8 +98,7 @@ function phrasing(
       if (token.type === 'link_open') {
         nodes.push({ type: 'link', url: token.attrGet('href') ?? '', children: inner.nodes })
       } else if (
-        // `_` emphasis against a path separator stays literal, so a dunder segment
-        // (`a/__tests__/x.ts`) keeps its path whole and tappable.
+        // Keep underscore emphasis literal beside path separators so a/__tests__/x.ts remains whole/tappable.
         token.markup.startsWith('_') &&
         (PATH_FLANK.test(before) || PATH_FLANK.test(after))
       ) {
@@ -239,12 +238,7 @@ function toTree(tokens: readonly Token[], source: string): Root {
   return root
 }
 
-/**
- * Raw HTML the parser found, and only that: code is never an `html` node, so nothing inside a
- * code block or span is touched. A block is read as the Markdown the preview cleanup makes of
- * it (README headers and badges); an inline tag becomes the text the cleanup leaves, if any.
- * `nested`: a block the cleanup produced, where leftover block HTML stays text.
- */
+// Clean only parser HTML nodes, never code: blocks become preview Markdown, inline tags become remaining text; nested leftover block HTML stays text.
 function withoutHtml(parent: Parent, nested: boolean): void {
   const inline = !BLOCK_PARENTS.has(parent.type)
   parent.children = parent.children.flatMap((child): RootContent[] => {

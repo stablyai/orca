@@ -132,8 +132,6 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
-    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
-    // aliases so a conventional guess resolves instead of dead-ending.
     aliases: [
       ['worktree', 'remove'],
       ['worktree', 'delete']
@@ -236,8 +234,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
-    // Why: `focus` is the legacy verb for this action; keep it working as an
-    // alias rather than a duplicate spec + handler registration.
+    // Preserve the legacy focus verb.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
@@ -264,8 +261,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
+      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command', 'retry-split'],
+    notes: [
+      'A timeout does not mean the split failed: the pane may still open and run --command. Re-run the same command with --retry-split <leafId> from the error to wait for that pane instead of splitting again.'
+    ],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
       'orca terminal split --terminal term_abc123 --command "codex"'

@@ -1,16 +1,7 @@
 import { z } from 'zod'
 
-/**
- * Plugin capability model v0. The manifest declares capabilities, the user
- * consents against a fingerprint covering capabilities and worker trust, and the
- * host enforces at every plugin-callable boundary (panel bridge + worker host
- * API). Electron-free: shared by desktop main, headless serve, the relay
- * conformance path, and tests.
- *
- * v0 is a closed set of unscoped kinds so a typo (or a capability from a newer
- * Orca) fails manifest validation instead of silently granting nothing.
- * Scoped kinds (net:fetch hosts, process:exec globs) arrive in later phases.
- */
+/** Closed v0 capabilities fail unknown kinds instead of silently granting nothing. Consent binds capabilities and worker trust;
+ * host boundaries enforce them across desktop, headless serve and relay. Scoped kinds remain future work. */
 
 export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:read',
@@ -24,14 +15,12 @@ export const PLUGIN_CAPABILITY_KINDS = [
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
 
-// Strict object (not a bare enum) so scoped fields can be added per-kind later
-// without changing the manifest shape.
+// Object shape permits future per-kind scopes without changing manifest structure.
 export const pluginCapabilitySchema = z.object({ kind: z.enum(PLUGIN_CAPABILITY_KINDS) }).strict()
 
 export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 
-/** Plain-language consent copy per capability. Shown verbatim in the install
- *  preview / consent dialog; keep each line honest about what is enforced. */
+/** Consent copy shown verbatim; describe only what the host actually enforces. */
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {
   'workspace:read': 'Read the name, branch, and terminal list of your focused worktree',
   'terminal:send': 'Type text into a terminal you can see (always a specific terminal)',
@@ -43,12 +32,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'settings:own': "Read and change the plugin's own settings"
 }
 
-/**
- * Canonical serialization of a capability set. Order- and duplicate-
- * insensitive so consent is stable across manifest reformatting;
- * key-sorted so future scoped fields cannot produce two encodings of the
- * same grant.
- */
+/** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */
 export function canonicalizeCapabilitySet(capabilities: readonly PluginCapability[]): string {
   const encoded = capabilities.map((capability) =>
     JSON.stringify(

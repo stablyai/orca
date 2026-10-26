@@ -1,7 +1,3 @@
-/**
- * IPC for WSL hosts (WSL-via-orcad C7); Windows only, or an e2e fake on any OS, and only with the
- * internal gate open.
- */
 import { BrowserWindow, ipcMain } from 'electron'
 import {
   WSL_HOST_STATUS_CHANNEL,
@@ -55,7 +51,6 @@ function publish(status: WslHostStatus): void {
   }
 }
 
-/** Removal reaches orcad the way every other call to the host does: by environment id. */
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
     isReady: (environmentId) =>
@@ -106,7 +101,7 @@ type WslHostHandlerArgs = {
 }
 
 function createService(args: WslHostHandlerArgs): WslHostService | null {
-  // Closed gate: no service, so no holder adoption, wsl.exe spawn or reconnect can start.
+  // A closed gate must prevent service adoption, WSL spawns and reconnects.
   if (!wslHostsGateOpen()) {
     return null
   }
@@ -130,7 +125,12 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       }
     },
     removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store)
+      retireRemovedRuntimeEnvironment(
+        environmentId,
+        args.invalidateTransport,
+        args.store,
+        args.getUserDataPath()
+      )
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)
@@ -179,7 +179,7 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   for (const channel of WSL_HOST_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
-  // Why none at all: without a service (gate closed, or not Windows) the preload exposes no API.
+  // Install no API without a service, matching the preload gate.
   const wsl = getWslHostService() ?? startService(args)
   if (!wsl) {
     return

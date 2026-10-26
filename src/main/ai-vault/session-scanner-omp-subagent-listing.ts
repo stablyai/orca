@@ -15,20 +15,12 @@ import {
 } from './session-scanner-omp-subagent-transcripts'
 import { errorMessage } from './session-scanner-values'
 
-// Match the Claude subagent lister's deliberate parse batching: opening every
-// read stream at once stalls over WSL UNC paths.
+// Bound simultaneous read streams to avoid stalling WSL UNC paths.
 const OMP_SUBAGENT_PARSE_CONCURRENCY = 8
-// Bulk directory work, so 'scan' — same reasoning as the Claude lister.
+// Bulk reads use scan priority, leaving the exact lane for live probes.
 const OMP_SUBAGENT_FS_PRIORITY = 'scan'
 
-/**
- * List the task-subagent transcripts of one OMP session, on demand. The main
- * scan prunes session artifact directories for speed, so this is the only path
- * that reads them — and only when the user expands a session's details.
- * (Lives apart from session-scanner-omp-subagent-transcripts.ts so the graph
- * parser can import the count decorator without a parser↔lister import cycle —
- * the same split as Claude's transcripts/lister pair.)
- */
+/** List pruned task transcripts on demand; keep parser imports out of the count module to avoid a cycle. */
 export async function listOmpSubagentSessions(args: {
   parentFilePath: string
   platform?: NodeJS.Platform
@@ -41,8 +33,7 @@ export async function listOmpSubagentSessions(args: {
   try {
     entries = await wslGatedReaddir(artifactDir, OMP_SUBAGENT_FS_PRIORITY)
   } catch (err) {
-    // A gate refusal is a stalled distro, not a session without subagents —
-    // report it so the panel offers a retry instead of showing an empty list.
+    // Report WSL refusal so the panel can retry instead of showing no subagents.
     if (err instanceof WslTranscriptFsError) {
       recordSessionScanIssue(issues, { agent: 'omp', path: artifactDir, message: err.message })
     }
@@ -56,9 +47,7 @@ export async function listOmpSubagentSessions(args: {
     return { sessions: [], issues }
   }
 
-  // Why: the layout fixes the parent's sessionId (<stamp>_<uuid>.jsonl → the
-  // artifact dir); deriving it here keeps a child linking to its parent even
-  // when the child transcript carries its own distinct session record.
+  // Derive parent identity from the layout; the child transcript records its own distinct session ID.
   const parentSessionId = sessionIdFromFileName(args.parentFilePath)
   const parsed: (AiVaultSession | null)[] = []
   for (let index = 0; index < transcriptNames.length; index += OMP_SUBAGENT_PARSE_CONCURRENCY) {
@@ -89,7 +78,6 @@ async function parseOmpSubagentTranscript(args: {
   const filePath = join(args.artifactDir, args.name)
   try {
     const fileStat = await wslGatedStat(filePath, OMP_SUBAGENT_FS_PRIORITY)
-    // Each child carries its own count for on-demand nested expansion.
     const session = await parseMessageGraphSessionFile(
       'omp',
       { path: filePath, mtimeMs: fileStat.mtimeMs, modifiedAt: fileStat.mtime.toISOString() },
@@ -100,15 +88,12 @@ async function parseOmpSubagentTranscript(args: {
     }
     return {
       ...session,
-      // Why: OMP names each child transcript after the task's label — the name
-      // the coordinator gave it. That beats the transcript-derived fallback
-      // (the raw task prompt).
+      // The filename is the coordinator-assigned task label, preferable to the raw prompt fallback.
       title: basename(args.name, extname(args.name)),
       subagent: {
         parentSessionId: args.parentSessionId,
         agentType: null,
-        // OMP parents don't record per-child terminal statuses in a shape this
-        // lister can attribute; unknown beats a stale guess.
+        // Parent logs provide no attributable per-child terminal status.
         status: null
       }
     }

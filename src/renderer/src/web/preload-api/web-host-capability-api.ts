@@ -63,8 +63,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       }
       return callRuntimeResult<PreflightStatus>('preflight.check', args)
     },
-    // Why 'unknown' rather than a runtime call: the probe spawns the host's own `zcode`, and
-    // a paired web client has no business deciding anything about the host's CLI install.
+    // The zcode probe spawns a host CLI; web must not decide the host’s install state.
     zcodeInteractiveCapability: async () => 'unknown' as const,
     detectAgents: async () => {
       if (!requireActiveEnvironmentOrNull()) {
@@ -183,8 +182,6 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     listOwnedShares: () =>
       Promise.reject(new Error('Skill package management requires the desktop app.')),
     revokeShare: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
-    deletePackageVersion: () =>
       Promise.reject(new Error('Skill package management requires the desktop app.')),
     deletePackage: () =>
       Promise.reject(new Error('Skill package management requires the desktop app.')),

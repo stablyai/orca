@@ -35,9 +35,6 @@ vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) => ({
   deriveCodexHookHashes: mocks.deriveCodexHookHashes
 }))
 
-// Why this file (#13746): a status-hook problem costs only Orca's status. The
-// system default must keep launching on ~/.codex, so its own login is used.
-
 const hooksPath = (): string => join(getSystemCodexHomePath(), 'hooks.json')
 const tomlPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
 
@@ -95,7 +92,7 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
     const store = createStore(createSettings({ realHomeRoutable: true }))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
     const service = new CodexRuntimeHomeService(store as never)
-    // Wired as app start wires it, so the status reads the home launches get.
+
     startCodexHooks({
       pathReady: Promise.resolve(),
       isEnabled: () => true,
@@ -104,7 +101,7 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
     await _internals.settledForTesting()
 
     expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    // The resolver headless serve and the PTY launch both use: null keeps CODEX_HOME unset.
+
     expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBeNull()
     await expect(service.prepareForCodexLaunchAsync()).resolves.toBeNull()
     const status = readCurrentCodexHookStatus()

@@ -15,6 +15,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { buildCli } from './build-cli.mjs'
 import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { resolveProjectCompiler } from './run-typecheck-projects-in-parallel.mjs'
+import { supportsTsrs } from './tsrs-typecheck-compiler.mjs'
 
 const ROOT = process.cwd()
 const resolveBunExecutable = () => resolvePinnedBunExecutable(ROOT, runProcessSync)
@@ -191,11 +192,7 @@ it('blocks output for real type errors and rejects compiler version drift', asyn
   expect(execute).not.toHaveBeenCalled()
 })
 
-const supportsRustCompiler =
-  (process.platform === 'darwin' && process.arch === 'arm64') ||
-  (process.platform === 'linux' && ['arm64', 'x64'].includes(process.arch))
-
-it.skipIf(!supportsRustCompiler)(
+it.skipIf(!supportsTsrs())(
   'the optional compiler preserves emitted bytes and blocks output on type errors',
   async () => {
     const root = fixture()

@@ -1,8 +1,3 @@
-// File-path detection for a single tap in the terminal. Mirrors the desktop
-// link detection (src/renderer/src/lib/terminal-links.ts) but only finds the
-// one path span containing the tapped column — mobile opens a tapped path, it
-// does not render hover links over the whole line.
-
 import {
   parseFileLinkLocation,
   type ParsedFileLinkLocation
@@ -10,11 +5,7 @@ import {
 
 export type TappedFilePath = ParsedFileLinkLocation
 
-// Separator-anchored path tokens (absolute, relative, ~/, drive-letter, UNC) OR
-// a bare filename with an extension (README.md, index.ts), optionally suffixed
-// with :line or :line:col. Like desktop, we propose candidates and let the host
-// existence-check reject non-files — agents often print a bare filename, so
-// requiring a slash would miss the common case.
+// Accept bare filenames as well as slash paths; host existence checks filter prose candidates.
 const LOCAL_PATH_REGEX =
   /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
 const SPACED_PATH_REGEX =
@@ -53,7 +44,6 @@ export function parsePathWithOptionalLineColumn(value: string): TappedFilePath |
     return null
   }
   const { pathText, line, column } = parsed
-  // Reject a directory-only token (trailing separator) for either slash style.
   if (pathText.endsWith('/') || pathText.endsWith('\\')) {
     return null
   }
@@ -78,9 +68,7 @@ function trimSpacedPathTrailingProse(
   range: Span & { text: string },
   col?: number
 ): (Span & { text: string }) | null {
-  // Why: a line-end extension token only extends the span when the added
-  // segment is path-like (contains a separator) — "v1.2 reports/result.json"
-  // extends, prose like "failed to start app.py" must not be swallowed.
+  // Extend spaced paths only over separator-bearing segments so trailing prose cannot be swallowed.
   let selected: string | null = null
   const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
   let match: RegExpExecArray | null
@@ -163,8 +151,6 @@ function matchSpacedFilePathAtColumn(lineText: string, col: number): TappedFileP
   return null
 }
 
-// Returns the file-path span (after punctuation trim) that contains `col`, or
-// null when the tap isn't on a path.
 export function matchFilePathAtColumn(lineText: string, col: number): TappedFilePath | null {
   const spaced = matchSpacedFilePathAtColumn(lineText, col)
   if (spaced) {

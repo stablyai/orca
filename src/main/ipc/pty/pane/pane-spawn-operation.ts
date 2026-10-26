@@ -15,7 +15,7 @@ export type AbsentPaneBinding = { ptyId: string; incarnationIds: readonly string
 /** In-process authority of the enclosing operation; never sent over IPC/RPC or saved. */
 export type PaneSpawnOperation = { mustExist: boolean; absentOwner?: AbsentPaneBinding }
 
-// Why: a window save can replay the binding the operation just proved dead; that is not an owner.
+// A delayed window save can replay a proven-dead binding without creating a new owner.
 export function isAbsentBindingReplay(
   absent: AbsentPaneBinding | undefined,
   ptyId: string,

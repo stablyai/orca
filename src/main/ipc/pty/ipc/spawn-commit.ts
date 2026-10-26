@@ -7,11 +7,12 @@ import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { resumeSpawnRefusal, savedResumeResult } from '../host-env/saved-resume-admission'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
     const args = ctx.args
-    // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
+    // Bound untrusted IPC identity strings before they enter runtime registration maps.
     const worktreeId =
       typeof args.worktreeId === 'string' &&
       args.worktreeId.length > 0 &&
@@ -97,10 +98,20 @@ function ipcSpawnPaneBinding(ctx: PtyIpcSpawnState): PtySpawnPaneBinding | undef
 }
 
 function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
+  const args = ctx.args
   const { startupCwdSource: _startupCwdSource, ...providerResult } = ctx.result
   const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   return {
     ...providerResult,
+    ...(!ctx.result.isReattach && !resumeSpawnRefusal(ctx.resumeAdmission)
+      ? {
+          launchAgent: args.launchAgent,
+          launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined,
+          resumeProviderSession: ctx.codexResumeLaunch.droppedResumeArgv
+            ? undefined
+            : args.resumeProviderSession
+        }
+      : {}),
     // Why both or neither: a pane can only adopt proven kitty flags together
     // with the sequence boundary they describe.
     ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
@@ -112,10 +123,22 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     ...(startupCwdFallback ? { startupCwdFallback } : {}),
-    // Why: the pane asked to resume and got a fresh session instead; only the
-    // renderer can say so, and a reattach never ran this launch command.
-    ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach
+    ...resumeDisposition(ctx)
+  }
+}
+
+/** What became of a requested resume, on every result the renderer receives. */
+function resumeDisposition(ctx: PtyIpcSpawnState) {
+  // Why: the pane asked to resume and got a fresh session instead; only the
+  // renderer can say so, and a reattach never ran this launch command.
+  if (ctx.result.isReattach) {
+    return {}
+  }
+  const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
+  return {
+    ...(ctx.codexResumeLaunch.notifyResumeUnavailable || refusal
       ? { agentResumeUnavailable: true as const }
-      : {})
+      : {}),
+    ...savedResumeResult(ctx.resumeAdmission)
   }
 }

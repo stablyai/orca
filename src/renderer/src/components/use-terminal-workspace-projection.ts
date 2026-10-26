@@ -66,8 +66,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const worktreeBrowserTabs = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
     : []
-  // Why: this strip only renders before the worktree has a layout, which is exactly when a paired
-  // client can have opened a page the host never has. Without a row here it stays uncloseable.
+  // Before host layout arrives, paired clients may own browser pages absent on host; include them so they remain closable.
   const worktreeClientHostedBrowserRows = useClientHostedBrowserRows(renderedActiveWorktreeId ?? '')
   const getEffectiveLayoutForWorktree = useCallback(
     (worktreeId: string) =>

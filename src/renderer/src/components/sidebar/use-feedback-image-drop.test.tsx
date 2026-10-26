@@ -219,7 +219,6 @@ describe('useFeedbackImageDrop', () => {
     await renderHarness(true, vi.fn())
     const dialog = container.querySelector<HTMLElement>('[data-testid="dialog"]')!
 
-    // Why: DataTransfer.files is empty until drop; only `types` is populated.
     act(() => {
       dialogChild().dispatchEvent(dragEvent('dragenter', []))
     })

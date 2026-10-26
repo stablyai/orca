@@ -8,8 +8,7 @@ export type PtyDataEvent = {
   seq?: number
 }
 
-/** Notification-bearing fact a thinning transport detected while it held
- *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
+/** Notification fact observed while the thinning transport owned scan authority for this PTY. */
 export type PtyTransientFact =
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }

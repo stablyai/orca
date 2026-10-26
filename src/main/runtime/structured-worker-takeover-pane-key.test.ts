@@ -79,8 +79,7 @@ describe('resolving a structured worker takeover by session', () => {
   })
 
   it('answers nothing for a session that is not an orchestration worker', () => {
-    // A plain chat session owns no worker-terminal resource, so there is no ownership to
-    // relinquish and nothing to mark.
+    // Plain chats own no worker resource, so takeover has nothing to relinquish.
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     expect(runtime().getStructuredWorkerPaneKeyForSession(SESSION_ID)).toBeNull()
   })

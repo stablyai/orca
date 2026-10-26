@@ -52,8 +52,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
   })
 
   it('drops a prior path another live workspace now owns', () => {
-    // Sessions are keyed by cwd alone, so claiming a path a live workspace
-    // occupies would show that workspace's transcripts under this one.
+    // Sessions use cwd identity; claiming an occupied prior path would expose another workspace's transcripts.
     const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
     const active = makeWorktree({
       id: 'repo-1::/repo/orca-renamed',
@@ -72,18 +71,14 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
   })
 
   it('drops a claimed prior path regardless of where the claimant sits in the list', () => {
-    // Ordering must not decide the claim: a lookup keyed by path has to
-    // exclude the active workspace up front, or listing it before a claimant
-    // that shares the path would mask the claim.
+    // Exclude the active workspace before indexing owners so duplicates cannot hide later claimants.
     const active = makeWorktree({
       id: 'repo-1::/repo/orca-renamed',
       path: '/repo/orca-renamed',
       priorWorktreeIds: ['repo-1::/repo/orca']
     })
     const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
-    // The active workspace also listed at the prior path — the only shape where
-    // a first-writer-wins map would name the active workspace the owner and so
-    // report the path unclaimed.
+    // Listing the active workspace at the prior path exposes first-writer-wins ownership bugs.
     const activeAtPriorPath = makeWorktree({ id: active.id, path: '/repo/orca' })
 
     for (const liveWorktrees of [
@@ -99,8 +94,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
   })
 
   it('derives workspace scope paths at scale', () => {
-    // Separate from the session-scope guard: a quadratic dedupe reintroduced
-    // only in the workspace pass would not surface there.
+    // The session-scope guard cannot catch quadratic deduplication confined to the workspace pass.
     const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
@@ -169,13 +163,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
   })
 
   it('derives scope paths at scale without re-normalizing the accumulator', () => {
-    // Regression guard: deduping by rescanning the accumulated paths made this
-    // O(n^2) in normalize('NFC') and cost ~190ms on a 1124-workspace profile —
-    // on the workspace-switch path, since these paths follow the active
-    // worktree. Times the real fan-out so it fails on a return to that shape.
-    // Path length matters as much as count: normalize() cost scales with it,
-    // so short synthetic paths would understate the old shape. ~50 chars
-    // matches the real profile this was measured on.
+    // Match profile count/path lengths to catch quadratic normalization on workspace switches (~190ms before).
     const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
@@ -186,7 +174,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
     const elapsedMs = performance.now() - startedAt
 
     expect(paths).toHaveLength(worktrees.length)
-    // ~190ms before, ~1ms after; loose enough for a slow CI box.
+    // Allow slow CI hosts while catching the previous ~190ms cost (now ~1ms).
     expect(elapsedMs).toBeLessThan(100)
   })
 })

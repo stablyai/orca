@@ -70,9 +70,7 @@ export type SkillsApi = {
     input: SkillBundleInstallPreviewInput
   ) => Promise<SkillBundleInstallPreviewOperation>
   removeInstall: (input: SkillRemoveInput) => Promise<SkillRemoveOperation>
-  /** Whether the host answering `previewDelete`/`delete` supports them. Always
-   *  true on desktop; on web the "local" host is a remote server that updates
-   *  independently and may predate the capability. */
+  /** Always true on desktop; web clients may use a server predating skill deletion. */
   deleteSupported: () => Promise<boolean>
   previewDelete: (request: SkillDeleteRequest) => Promise<SkillDeletePlan>
   delete: (request: SkillDeleteRequest) => Promise<SkillDeleteResult>
@@ -80,10 +78,6 @@ export type SkillsApi = {
   getPackage: (packageId: string) => Promise<SkillCloudOperation<SkillCloudPackageDetails>>
   listOwnedShares: () => Promise<SkillCloudOperation<SkillCloudOwnedShare[]>>
   revokeShare: (shareId: string) => Promise<SkillCloudOperation<void>>
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }) => Promise<SkillCloudOperation<void>>
   deletePackage: (packageId: string) => Promise<SkillCloudOperation<void>>
   listWslDistros: (environmentId?: string) => Promise<string[]>
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void) => () => void

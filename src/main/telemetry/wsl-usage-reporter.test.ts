@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ vi.mock('./client', () => ({
 
 import {
   collectWslProjects,
+  countWindowsDriveReposWithWslWorktrees,
   listRunningDistrosForSnapshot,
   WSL_USAGE_SNAPSHOT_INTERVAL_MS,
   WslUsageReporter,
@@ -24,6 +25,7 @@ const input: WslUsageSnapshotInput = {
   wslPackageVersion: '2.4.13',
   wslAvailableCached: true,
   projects: [],
+  windowsDriveReposWithWslWorktrees: 0,
   wslHostsGateOpen: false
 }
 
@@ -180,5 +182,64 @@ describe('collectWslProjects', () => {
   it('counts a WSL-host project on a Windows drive when the gate is open', () => {
     const projects = collectWslProjects(wslStore, true, () => new Map([['env-1', 'Debian']]), null)
     expect(projects).toContainEqual({ location: 'windows_drive', kind: 'folder', distro: 'Debian' })
+  })
+})
+
+describe('countWindowsDriveReposWithWslWorktrees', () => {
+  let root: string
+  const originalPlatform = process.platform
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-wsl-usage-links-'))
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  function repoWithLinks(id: string, links: string[]) {
+    const path = join(root, id)
+    links.forEach((link, index) => {
+      mkdirSync(join(path, '.git', 'worktrees', `w${index}`), { recursive: true })
+      writeFileSync(join(path, '.git', 'worktrees', `w${index}`, 'gitdir'), `${link}\n`)
+    })
+    mkdirSync(join(path, '.git'), { recursive: true })
+    return { id, path, displayName: id, badgeColor: '', addedAt: 0 }
+  }
+
+  it('counts Windows-drive WSL repos with a worktree WSL Git made, reading files only', async () => {
+    const repos = [
+      repoWithLinks('mixed', ['C:/src/mixed-a/.git', '/mnt/c/src/mixed-b/.git']),
+      repoWithLinks('native', ['C:/src/native-a/.git']),
+      repoWithLinks('none', []),
+      repoWithLinks('share', ['//server/share/app-feature/.git'])
+    ]
+    const countStore: WslUsageStore = {
+      getRepos: () => repos,
+      getProjects: () => [
+        {
+          id: 'p',
+          displayName: 'p',
+          badgeColor: '',
+          sourceRepoIds: repos.map((repo) => repo.id),
+          createdAt: 0,
+          updatedAt: 0,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      getSettings: () => ({})
+    }
+    await expect(countWindowsDriveReposWithWslWorktrees(countStore)).resolves.toBe(1)
+  })
+
+  it('ignores repos that run on Windows', async () => {
+    const repos = [repoWithLinks('mixed', ['/mnt/c/src/mixed-b/.git'])]
+    await expect(
+      countWindowsDriveReposWithWslWorktrees({
+        getRepos: () => repos,
+        getProjects: () => [],
+        getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+      })
+    ).resolves.toBe(0)
   })
 })

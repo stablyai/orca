@@ -231,8 +231,7 @@ describe('simulator-palette-search', () => {
   })
 
   it('stamps each row with its own execution host when worktree ids collide', () => {
-    // Two hosts can serve the same worktree id, so activation needs the host
-    // that owns the row rather than the first id match in the store.
+    // Same workspace IDs can exist on different hosts; activation must follow the row’s owner.
     const entries = [
       makeEntry({
         tab: makeTab({ id: 'sim-local' }),
@@ -416,8 +415,7 @@ describe('simulator-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J sees the same potentially corrupt store display names as workspace search.
     const entries = [
       makeEntry({
         tab: makeTab(),

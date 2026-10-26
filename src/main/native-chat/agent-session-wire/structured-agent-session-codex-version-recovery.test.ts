@@ -3,7 +3,6 @@ import { AgentCliInstallationError } from '../agent-cli-installation-error'
 import { isStructuredAgentSessionStartFailureRow } from '../../../shared/structured-agent-session-start-failure-row-key'
 import { projectQueuedMessageCards } from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -67,8 +66,6 @@ it.each(['returned', 'held'] as const)(
       await journal.queuedMessages.insert({
         messageId: id,
         body: hostTestMessage('retained instruction'),
-        fingerprint: 'retained-instruction',
-        hostInstance: structuredAgentSessionHostInstance(),
         holdReason: 'send_failed'
       })
     }

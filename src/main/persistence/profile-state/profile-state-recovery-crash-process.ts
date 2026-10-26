@@ -16,7 +16,7 @@ export type RecoveryCrashOptions = {
   kind: 'json' | 'sqlite'
 }
 
-/** Build only the recovery graph into an isolated test directory, never shared out/. */
+/** Isolate the recovery graph from shared out/ builds. */
 export function buildRecoveryCrashProcess(directory: string): {
   bundle: string
   metafile: Metafile
@@ -109,7 +109,7 @@ maintenance.release()
 throw new Error('Requested crash boundary was not reached: ' + stage)
 `
 
-/** A pipe barrier proves the syscall completed before the parent sends SIGKILL. */
+/** A pipe barrier proves syscall completion before SIGKILL. */
 export async function killRecoveryAt(
   bundle: string,
   options: RecoveryCrashOptions,

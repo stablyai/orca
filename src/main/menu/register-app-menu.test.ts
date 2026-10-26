@@ -193,9 +193,6 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
-    // Why: Check for Updates lives under the app-name menu on macOS and
-    // under Help on Windows/Linux. The click behavior must be identical
-    // either way.
     const parentLabel = isMac ? 'Orca' : 'Help'
     const item = getSubmenu(getTemplate(), parentLabel).find(
       (entry) => entry.label === 'Check for Updates...'
@@ -264,8 +261,6 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  // Why: pin the platform on every case — CI runs this suite on Linux only, so an
-  // unpinned test leaves the other platforms' branches entirely uncovered.
   it.each(['darwin', 'linux', 'win32'] as const)(
     'routes Edit > Paste through Orca coordinated paste ownership on %s',
     (platform) => {
@@ -451,7 +446,7 @@ describe('registerAppMenu', () => {
       registerAppMenu(buildMenuOptions())
 
       const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
-      // Why: this case asserts only a negative, so it would pass green if the item vanished.
+      // Negative-only assertions must not pass when the item itself vanished.
       expect(pasteItem).toBeDefined()
       pasteItem?.click?.({} as never, {} as never, {} as never)
 
@@ -463,9 +458,6 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const template = getTemplate()
-    // Why: no redundant app-named "Orca" menu should exist on non-mac — the
-    // app-menu contents (Settings, Exit, Check for Updates, About) have been
-    // redistributed so users see them in File / Help instead.
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
@@ -491,8 +483,6 @@ describe('registerAppMenu', () => {
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
     expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
-    // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu. Without global Export, there is no File item left.
     expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual([
@@ -635,9 +625,7 @@ describe('registerAppMenu', () => {
 
     expect(options.onToggleLeftSidebar).toHaveBeenCalledTimes(1)
     expect(options.onToggleRightSidebar).toHaveBeenCalledTimes(1)
-    // Why: these entries must not bind Cmd/Ctrl+B as real accelerators
-    // because before-input-event carries a TipTap-bold carve-out that the
-    // menu accelerator would bypass.
+    // Native accelerators would bypass the markdown editor's bold shortcut carve-out.
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
@@ -663,7 +651,6 @@ describe('registerAppMenu', () => {
       expect(quit?.role).toBeUndefined()
       expect(quit?.label).toBe(platform === 'darwin' ? 'Quit Orca' : 'Exit')
       expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
-      // Why untyped: the handler ignores its Electron arguments.
       const click: unknown = quit?.click
       if (typeof click === 'function') {
         click()

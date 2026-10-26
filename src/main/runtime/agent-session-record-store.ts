@@ -1,7 +1,6 @@
-/** Durable single-writer session records and their operation ledger, as rows in the host's chat
- *  journal database. */
+/** Single-writer records/operation ledger in the host chat-journal database. */
 
-import { backfillAgentSessionPermissionModes } from './agent-session-permission-backfill'
+import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -21,11 +20,11 @@ import {
   settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
-} from './agent-session-operation-admission'
+} from './agent-session/ownership/agent-session-operation-admission'
 import {
   isAgentSessionClaimKeyVerifiable,
   retireAgentSessionClaimKey
-} from './agent-session-claim-key-retention'
+} from './agent-session/ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
@@ -39,7 +38,7 @@ import {
   evictAgentSessionOwner,
   proveAgentSessionOwner,
   type AgentSessionProcessIdentityCommit
-} from './agent-session-lease-transitions'
+} from './agent-session/ownership/agent-session-lease-transitions'
 import {
   settleFailedAgentSessionAcquisition,
   settleFailedAgentSessionPostAcquisitionAttachment,
@@ -49,25 +48,25 @@ import {
 import {
   renewAgentSessionLeases,
   type AgentSessionLeaseRenewal
-} from './agent-session-lease-renewal'
+} from './agent-session/ownership/agent-session-lease-renewal'
 import {
   applyAgentSessionRestartProbes,
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
-} from './agent-session-restart-reconciliation'
+} from './agent-session/ownership/agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
-} from './agent-session-reservation-admission'
+} from './agent-session/ownership/agent-session-reservation-admission'
 import { heldAgentSessionIds, type AgentSessionStoreState } from './agent-session-store-state'
 import {
   agentSessionVisibleTabIndex,
   listVisibleAgentSessionIds,
   setAgentSessionTabVisibility,
   showAgentSessionTabs
-} from './agent-session-tab-table'
+} from './agent-session/agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
@@ -76,8 +75,10 @@ import { AgentSessionStoreTransactions } from './agent-session-store-transaction
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
   compareAndSetAgentSessionRecordName,
+  type AgentSessionUserNameWrite,
   type CompareAndSetConversationName,
-  setAgentSessionRecordConversationName
+  setAgentSessionRecordConversationName,
+  setAgentSessionRecordUserNameThrough
 } from './agent-session-record-conversation-name'
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
@@ -96,7 +97,7 @@ export class AgentSessionRecordStore {
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
 
-  /** Reads every structurally valid row, independently of which agents this host can start. */
+  /** Structural readability does not depend on which agents this host can launch. */
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
@@ -110,7 +111,7 @@ export class AgentSessionRecordStore {
     return this.transactions.state
   }
 
-  /** A newer Orca wrote the database: every read answers, and every write is refused. */
+  /** Newer-build databases permit reads, never writes. */
   get readOnly(): boolean {
     return this.transactions.readOnly
   }
@@ -123,13 +124,13 @@ export class AgentSessionRecordStore {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
-  /** The runtimes this one replaced for a chat, as found at load; absent for a chat it began. */
+  /** Replaced runtimes captured at load; absent for sessions this runtime created. */
   replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
 
-  /** Every chat this host holds a row for, readable or not. */
+  /** Include unreadable records in presence queries. */
   listHeldSessionIds = (): string[] => heldAgentSessionIds(this.state)
 
-  /** Whether this host has recorded a chat, readable or not. Nothing removes a record row. */
+  /** Record presence is permanent, including unreadable rows. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
   listVisibleSessionIds = (): string[] => listVisibleAgentSessionIds(this.state)
@@ -137,20 +138,15 @@ export class AgentSessionRecordStore {
   getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
     agentSessionVisibleTabIndex(this.state)
 
-  /** The id of the chat tab showing this conversation, if one does. */
   getSessionTabId = (sessionId: string): string | null =>
     this.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
-  /**
-   * Persist the user-visible tab reference separately from the rollback-sensitive profile tabs.
-   * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
-   */
+  /** Persist chat-tab identity separately from rollback-sensitive profile tabs; explicit tabId restores hidden tabs under their old ids. */
   setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
     return this.transact((draft) => setAgentSessionTabVisibility(draft, sessionId, visible, tabId))
   }
 
-  /** Shows each session that still has a record, in one write: an index written part way would
-   *  read as complete at the next launch and drop the rest. */
+  /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
   showSessionTabs(sessionIds: readonly string[]): Promise<void> {
     return this.transact((draft) => showAgentSessionTabs(draft, sessionIds))
   }
@@ -160,23 +156,26 @@ export class AgentSessionRecordStore {
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
 
-  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
-   *  writer lease. `null` clears it. */
+  /** Names are metadata, not ownership: write unfenced; null clears. */
   setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
       setAgentSessionRecordConversationName(record, name, Date.now())
     )
 
+  /** The user's name for the conversation; see `AgentSessionUserNameWrite`. */
+  setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
+    setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
+
   compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
     compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)
 
-  /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
+  /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
       pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
     )
 
-  /** A record this build cannot validate: readable as present, never grantable as a writer. */
+  /** Unreadable records still count as present and can never grant writers. */
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
@@ -215,7 +214,6 @@ export class AgentSessionRecordStore {
     )
   }
 
-  /** Settle the failed attach and its reservation in one durable transaction. */
   settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
     this.transact((draft) => settleFailedAgentSessionAcquisition(draft, args))
 
@@ -246,11 +244,7 @@ export class AgentSessionRecordStore {
     transition: (record: AgentSessionRecord) => AgentSessionRecord
   ): Promise<AgentSessionRecord> => this.mutate(sessionId, transition)
 
-  /**
-   * Adjudicate loaded leases, or only the addressed session. No lease grants a writer until it
-   * appears here. On a newer database, verdicts stay in memory only: they are re-derived at every
-   * start, and none grants a writer there, since every grant is a write.
-   */
+  /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(
     args: AgentSessionRestartProbeArgs
   ): Promise<Map<string, AgentSessionRecord>> {
@@ -260,11 +254,10 @@ export class AgentSessionRecordStore {
     })
   }
 
-  /** Admits one non-reservation mutation through the durable ledger. */
   admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
     this.transact((draft) => admitAgentSessionOperationInto(draft, args))
 
-  /** Send ids stay global after a caller reconnects under a different identity. */
+  /** Global send ids survive caller reconnect/identity changes. */
   admitGlobalOperation = (
     args: AgentSessionOperationAdmission
   ): Promise<AgentSessionOperationDecision> =>
@@ -273,17 +266,14 @@ export class AgentSessionRecordStore {
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact((draft) => admitAgentSessionMutationOperation(draft, args))
 
-  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  /** Replay evaluation writes nothing; admitMutationOperation owns the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     evaluateAgentSessionMutationOperation(this.state, args)
 
-  /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
-   *  read `pending`, and only a conditional swap tells the one that may run from the one that must
-   *  replay. */
+  /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>
     this.transact((draft) => claimAgentSessionOperationInto(draft, args))
 
-  /** Admission and, when `claimAfter` allows, the claim: one durable write before the effect. */
   admitAndClaimOperation = (
     args: Parameters<typeof admitAndClaimAgentSessionOperationInto>[1],
     claimAfter: ClaimAfterAdmission
@@ -293,7 +283,7 @@ export class AgentSessionRecordStore {
     args: Parameters<typeof settleAgentSessionOperationInto>[1]
   ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
 
-  /** Settlement committed with its journal write; a new submission also clears Sleep in that draft. */
+  /** Commit settlement with the journal write; new submissions also clear Sleep in that draft. */
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
 
@@ -312,8 +302,7 @@ export class AgentSessionRecordStore {
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
-  /** One options revision from `agent-session-record-options`, decided against the record this
-   *  ordered write holds. */
+  /** Evaluate options against the record held by this ordered write. */
   reviseSessionOptions = <A extends { sessionId: string }>(
     revise: (record: AgentSessionRecord, args: A) => AgentSessionRecord,
     args: A
@@ -340,21 +329,19 @@ export class AgentSessionRecordStore {
     })
   }
 
-  /** Told, once committed, of each session a transaction wrote a proof of death for — whichever
-   *  transition wrote it, since every one lands here. Must not throw. */
+  /** Notify committed death evidence from every transition; listeners must not throw. */
   onDeathEvidence(listener: (sessionId: string) => void): () => void {
     this.deathEvidenceListeners.add(listener)
     return () => this.deathEvidenceListeners.delete(listener)
   }
 
-  /** Told, once committed, when the store records its first chat. Must not throw. */
+  /** Notify first committed record; listeners must not throw. */
   onFirstRecord(listener: () => void): () => void {
     this.firstRecordListeners.add(listener)
     return () => this.firstRecordListeners.delete(listener)
   }
 
-  /** Serializes every mutation. `apply` changes only the draft it is given; readers see the change
-   *  once its rows have committed. */
+  /** Serialize draft mutations; publish to readers only after row commit. */
   private transact = async <T>(
     apply: (draft: AgentSessionStoreState) => T,
     options?: { inMemoryWhenReadOnly?: boolean }

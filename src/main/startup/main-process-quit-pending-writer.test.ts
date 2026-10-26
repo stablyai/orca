@@ -25,7 +25,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
   '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
-  '../runtime/structured-agent-session-runtime-teardown': {
+  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
@@ -33,7 +33,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
+  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
+  '../browser/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
@@ -169,8 +172,7 @@ it('starts the SSH shutdown and the final save at once when no pane grid waits',
   expect(flushesByNextMicrotask).toBe(1)
 })
 
-// The chat teardown decides which chats to offer to resume from the hook server's status store,
-// and finishes after the hook server stops: that stop must leave the store readable.
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })

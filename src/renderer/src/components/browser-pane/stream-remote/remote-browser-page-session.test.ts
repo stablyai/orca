@@ -13,7 +13,6 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-/** What the host answers to tabShow for the row's own id. */
 type ShowReply = 'runs' | 'not-found' | 'other-error'
 
 function rpcError(code: string): Error {
@@ -25,7 +24,6 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
   const tokens = new RemoteBrowserOperationTokens({
     isMounted: () => true,
     isActive: () => true,
-    // A frame-drawn row is named by the host's page id.
     getTabId: () => 'host-page-1',
     getEnvironmentId: () => 'env-1',
     browserPageExists: () => true
@@ -77,8 +75,7 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
 }
 
 describe('RemoteBrowserPageSession.ensureRemotePage without a stored handle', () => {
-  // A saved page a restarted host has not started is woken by this same tabShow (see
-  // orca-runtime-serve-browser-restore.test.ts).
+  // tabShow also wakes host-saved pages that have not started yet.
   it('adopts the page the host runs under the row id instead of creating a second one', async () => {
     const harness = setup({ show: 'runs' })
 

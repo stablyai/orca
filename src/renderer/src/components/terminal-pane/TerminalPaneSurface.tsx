@@ -37,6 +37,7 @@ export function TerminalPaneSurface({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
+    activeAgentId,
     activePane,
     activePaneCanContinueInNewSession,
     activePaneCanResumeInChat,
@@ -188,16 +189,17 @@ export function TerminalPaneSurface({
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}
+        agentId={activeAgentId}
         isActive={isActive}
         pane={activePane}
         tabId={tabId}
       />
-      {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
+      {/* Let SSH recovery own its strip instead of covering it with the raw connection-error toast. */}
       {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}
+              agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}

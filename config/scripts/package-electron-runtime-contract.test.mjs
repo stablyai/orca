@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -11,8 +12,7 @@ const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtim
 const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
 const packageJson = JSON.parse(readProject('package.json'))
 const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
-// Why not process.platform: the win32 plan resolves wherever its os-gated npm addon is
-// installed; @orca/windows-registry is a workspace link and present everywhere.
+// Resolve the win32 plan wherever its OS-gated addon is installed; windows-registry is a workspace link on every platform.
 const windowsAddonsInstalled = existsSync(
   join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
@@ -26,8 +26,7 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
     expect(packageJson.optionalDependencies['@orca/windows-registry']).toBe('workspace:*')
-    // Why: allowBuilds stops pnpm running node-gyp at install time -- the root
-    // Windows-only rebuild owns this addon so it is built against the right runtime ABI.
+    // allowBuilds suppresses install-time node-gyp; the Windows rebuild owns the addon’s runtime ABI.
     expect(pnpmWorkspace.allowBuilds['@orca/windows-registry']).toBe(false)
     if (windowsAddonsInstalled) {
       expect(packageTargets.win32).toEqual(
@@ -68,13 +67,9 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows process-table addon optional and platform-gated', () => {
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
-    // Why: same rule as the registry addon -- allowBuilds stops pnpm running node-gyp at
-    // install time so the Windows-only rebuild owns it with the right runtime ABI.
+    // As with registry, suppress install-time node-gyp so the Windows rebuild selects the runtime ABI.
     expect(pnpmWorkspace.allowBuilds['@vscode/windows-process-tree']).toBe(false)
-    // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
-    // libraries our build agents do not carry, and the enumeration stops after
-    // 1024 processes -- on a busy host that silently hides the very descendants
-    // teardown is looking for.
+    // Patch removes unavailable Spectre-library requirement and 1024-process enumeration cap that hides descendants on busy hosts.
     expect(pnpmWorkspace.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
       'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     )
@@ -110,6 +105,30 @@ describe('Electron runtime package contract', () => {
     )
 
     expect(releaseWorkflowText).not.toContain('blacksmith-')
+    for (const caller of Object.values(releaseWorkflow.jobs)) {
+      if (!caller.uses?.startsWith('./.github/workflows/')) {
+        continue
+      }
+      const child = parse(readProject(caller.uses))
+      const inputs = {
+        ...Object.fromEntries(
+          Object.entries(child.on.workflow_call.inputs).map(([name, input]) => [
+            name,
+            input.default ?? ''
+          ])
+        ),
+        ...caller.with
+      }
+      for (const job of Object.values(child.jobs)) {
+        if (!job['runs-on']) {
+          continue
+        }
+        const runner = job['runs-on'].startsWith('${{')
+          ? compileAggregateExpression(job['runs-on'], ['inputs'])({ inputs }).coerceString()
+          : job['runs-on']
+        expect(runner).not.toMatch(/^(blacksmith-|orca-)/)
+      }
+    }
     expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
     expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
     expect(macDispatchStep.run).toBe(
@@ -146,7 +165,6 @@ describe('Electron runtime package contract', () => {
           for (const cancelled of [false, true]) {
             const needs = {
               cut: { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } },
-              'dependency-security': { result: 'success' },
               build: { result: matrix },
               'build-mac': { result: dispatch },
               'verify-mac-build': { result: verification },
@@ -169,7 +187,6 @@ describe('Electron runtime package contract', () => {
     }
     for (const prerequisite of [
       'cut',
-      'dependency-security',
       'skill-sharing-linux-floor-release-gate',
       'skill-sharing-release-gate',
       'terminal-rendering-golden'
@@ -178,7 +195,6 @@ describe('Electron runtime package contract', () => {
         ['cut', { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } }],
         ...[
           'build',
-          'dependency-security',
           'build-mac',
           'verify-mac-build',
           'skill-sharing-linux-floor-release-gate',

@@ -13,7 +13,7 @@ function settingsField(settings: unknown, key: string): unknown {
   return boxed[key]
 }
 
-// Settings remain opaque: callers historically retain fields without validating their shapes.
+// Keep settings opaque because callers retain fields without validating their shapes.
 const settingsReader: RpcCompatibleReader<unknown, 'settings-member', unknown> = (raw) => ({
   compatible: true,
   variant: 'settings-member',
@@ -95,8 +95,7 @@ const copyTrimsGutterReader: RpcCompatibleReader<unknown, 'copy-trims-gutter', b
   return {
     compatible: true,
     variant: 'copy-trims-gutter',
-    // Why `!== false`: a host predating the setting sends no key, and the
-    // desktop default is on, so absence must read as on.
+    // Older hosts omit this setting; absence inherits the desktop’s enabled default.
     value: trims !== false,
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
@@ -118,7 +117,7 @@ type HostListSettings = {
   newCardStyle: boolean
 }
 
-// Why `=== true` throughout: a host predating a setting sends no key, and each desktop default is off.
+// Older hosts omit these settings; only explicit true overrides their disabled defaults.
 const hostListSettingsReader: RpcCompatibleReader<
   unknown,
   'host-list-settings',
@@ -138,7 +137,6 @@ const hostListSettingsReader: RpcCompatibleReader<
   }
 }
 
-/** The desktop settings the workspace list mirrors: pinned placement, Card layout and card style. */
 export const hostListSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.host-list-settings-or-skip',

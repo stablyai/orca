@@ -113,9 +113,7 @@ export function ManageSessionsSection(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
-  // Why: this section stays mounted for a whole settings search, so a kill routed through
-  // another surface (status-bar Kill All) must reach the table through the invalidation
-  // signal rather than a remount. Own mutations already read on settle.
+  // Retained search sections need invalidation from external kills; own mutations refresh when settled.
   useEffect(
     () =>
       subscribeDaemonSessionInventoryInvalidated(() => {

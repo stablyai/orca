@@ -17,7 +17,7 @@ export type PaneSpawnReservationResult = {
   }
 } & Partial<PtySpawnResult>
 
-// Why: identical pane coordinates on different worktrees or hosts are independent owners.
+// Pane coordinates belong to independent owners across worktrees and execution hosts.
 export const paneSpawnReservationsByOwnerKey = new Map<string, PaneSpawnReservation>()
 export type PendingRuntimePaneCreate = {
   count: number
@@ -41,10 +41,7 @@ export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
   return reservation
 }
 
-/**
- * Awaits a concurrent spawn of the same pane. Null when that spawn was an automatic one refused for a
- * slept worktree: its refusal is not the pane's outcome, so a joining user wake must spawn itself.
- */
+/** Join a concurrent spawn; automatic slept-worktree refusal leaves a user wake free to start its own process. */
 export async function joinPaneSpawn(
   reservation: PaneSpawnReservation
 ): Promise<PaneSpawnReservationResult | null> {
@@ -61,7 +58,6 @@ export async function joinPaneSpawn(
   }
 }
 
-/** Reserves the pane once no runtime create or other spawn holds it. */
 export async function reserveIdlePaneSpawn(ownerKey: string): Promise<PaneSpawnReservation> {
   for (;;) {
     const pendingCreate = pendingRuntimePaneCreatesByOwnerKey.get(ownerKey)
@@ -154,7 +150,6 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
   return response
 }
 
-/** Records the terminal a runtime create started in the pane, for a view waiting on that create. */
 export function noteRuntimePaneCreateResult(
   ownerKey: string | null | undefined,
   result: PaneSpawnReservationResult

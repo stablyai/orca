@@ -4,6 +4,10 @@ import {
   nativeChatDraftScopeTabId,
   structuredAgentSessionIdOfDraftScope
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  chatWorkspaceByTabId,
+  structuredChatWorkspacesBySessionId
+} from './structured-chat-tab-index'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 
 function workspaceOfDraftScope(
@@ -11,25 +15,12 @@ function workspaceOfDraftScope(
   scopeKey: string
 ): string | null {
   const sessionId = structuredAgentSessionIdOfDraftScope(scopeKey)
-  if (sessionId !== null) {
-    for (const [workspaceId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
-      if (tabs.some((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)) {
-        return workspaceId
-      }
-    }
-    return null
-  }
-  const tabId = nativeChatDraftScopeTabId(scopeKey)
-  for (const [workspaceId, tabs] of Object.entries(state.tabsByWorktree)) {
-    if (tabs.some((tab) => tab.id === tabId)) {
-      return workspaceId
-    }
-  }
-  return null
+  return sessionId !== null
+    ? (structuredChatWorkspacesBySessionId(state.unifiedTabsByWorktree, sessionId)[0] ?? null)
+    : chatWorkspaceByTabId(state.tabsByWorktree, nativeChatDraftScopeTabId(scopeKey))
 }
 
-/** The workspace, and the host it runs on, whose open chat a new draft is written in; the same
- *  route a removal of that workspace resolves, so the removal finds the draft. */
+/** Resolve the same workspace/host route for draft creation and removal so teardown finds the draft. */
 export function resolveNativeChatDraftOwner(
   state: AppState,
   scopeKey: string

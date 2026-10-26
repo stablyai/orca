@@ -7,8 +7,7 @@ const require = createRequire(import.meta.url)
 const vitePackageJson = require.resolve('vite/package.json')
 const viteCli = path.join(path.dirname(vitePackageJson), 'bin', 'vite.js')
 
-// Why: Raspberry Pi and release runners can hit Node's default old-space
-// ceiling, but smaller hosts still need memory left for the OS and bundler.
+// Raise heap for Pi/release runners while reserving memory for OS/bundler on smaller hosts.
 const nodeOptions = appendBuildOldSpaceOption(process.env.NODE_OPTIONS)
 
 const child = spawn(

@@ -25,8 +25,6 @@ export type MarkupPointerParams = {
   setState: React.Dispatch<React.SetStateAction<MarkupEditorState>>
 }
 
-// Canvas pointer interactions: draw a new shape, erase touched ones, or place
-// text. Split out of useMarkupEditor to keep that hook focused.
 export function useMarkupPointerHandlers(params: MarkupPointerParams) {
   const {
     busy,
@@ -59,8 +57,7 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
       }
       const point = pointFromEvent(event)
       if (tool === 'text') {
-        // Why: a box is already open — this click's job is only to commit it (the
-        // input's blur fires), not to open a second box at the click point.
+        // With a text input open, this click commits via blur instead of opening another placement.
         if (pendingText) {
           return
         }

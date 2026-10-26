@@ -1,11 +1,5 @@
-// omp (pi-agent) JSONL line → NativeChatMessage decoder.
-//
-// Conversation turns are `type: 'message'`; every other record type is session
-// bookkeeping. Rendering follows file order, so `parentId` is not consulted:
-// omp's file is really a tree and its own TUI renders pathTo(leaf), so a session
-// rewound onto a new branch shows the abandoned turns here too. That matches the
-// Claude decoder, which ignores `parentUuid` the same way; unwinding the branch
-// needs a stateful decoder contract shared by every agent, not an omp-only fix.
+// OMP history is a tree, but this stateless decoder renders file order, including abandoned branches.
+// Correct branch selection requires state across records.
 
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -22,14 +16,6 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { toolResultOutput } from './transcript-record-blocks'
 
-/**
- * omp session rows: `type: 'message'` turns carrying user/assistant/toolResult/
- * developer records with text, thinking, toolCall and image content blocks, the
- * content-less bash/python execution cells, plus the `type: 'custom_message'`
- * rows extensions inject into the conversation, and a `compaction` row as the
- * boundary it draws in the context. Other session bookkeeping rows (session_init,
- * mode_change, custom) are skipped, as are records of an unrecognized type.
- */
 export function decodeOmpTranscriptLine(
   line: string,
   fallbackId: string
@@ -45,7 +31,7 @@ export function decodeOmpTranscriptLine(
   const timestamp = parseTimestamp(record.timestamp)
 
   if (record.type === 'compaction') {
-    // Why: responses before this row measured a context omp has since replaced.
+    // Compaction invalidates earlier context measurements.
     return {
       id,
       role: 'system',
@@ -56,9 +42,7 @@ export function decodeOmpTranscriptLine(
   }
 
   if (record.type === 'custom_message') {
-    // Why: these extension-authored turns reach the model, and omp's own
-    // transcript renders them — but only when `display` is set; the rest are
-    // extension state it never shows (CustomMessageEntry, session-entries.d.ts).
+    // Match OMP visibility: undisplayed custom messages are hidden extension state.
     const customBlocks = record.display === true ? ompContentBlocks(record.content) : []
     return customBlocks.length === 0
       ? null
@@ -88,9 +72,7 @@ export function decodeOmpTranscriptLine(
   }
 
   if (role === 'bashExecution' || role === 'pythonExecution') {
-    // Why: omp persists a TUI `!command` / python run as a content-less message
-    // ({role, command|code, output, exitCode}) and renders it as a command cell.
-    // Surface it as a tool turn so the output keeps its collapsible affordance.
+    // Execution cells have no content array; render invocation/output as a collapsible tool turn.
     return {
       id,
       role: 'tool',
@@ -101,9 +83,7 @@ export function decodeOmpTranscriptLine(
   }
 
   if (role === 'fileMention') {
-    // Why: an `@path` attachment is another content-less record omp's transcript
-    // renders. List the paths only — `files[].content` is an auto-read dump that
-    // would bury the conversation.
+    // Render mentioned paths only; embedded auto-read file contents would bury the conversation.
     const paths = ompFileMentionPaths(message.files)
     return paths.length === 0
       ? null
@@ -116,20 +96,13 @@ export function decodeOmpTranscriptLine(
         }
   }
 
-  // Why: sessions written before version 3 stored extension turns as
-  // `type: 'message'` with role custom/hookMessage and a message-level
-  // `display` flag (the v3 migration rewrites hookMessage -> custom). Honor the
-  // same gate the `custom_message` branch does, or a resumed legacy session
-  // renders state omp itself hides.
+  // Pre-v3 custom/hookMessage rows use the same display gate as current custom_message rows.
   if ((role === 'custom' || role === 'hookMessage') && message.display !== true) {
     return null
   }
   const blocks = ompContentBlocks(message.content)
   if (blocks.length === 0) {
-    // Why: omp stamps an aborted turn onto the assistant message itself
-    // (`stopReason: 'aborted'`), and when nothing streamed before the abort the
-    // content is empty — so the turn would silently vanish. Surface it as the
-    // same interrupted row Claude and Codex emit for their own aborts.
+    // Empty aborted messages still need interruption status; preserve any partial content otherwise.
     return role === 'assistant' && message.stopReason === 'aborted'
       ? {
           id,
@@ -153,13 +126,12 @@ export function decodeOmpTranscriptLine(
   return { id, role: role === 'user' ? 'user' : 'system', blocks, timestamp, source: 'transcript' }
 }
 
-/** Which provider/model served an assistant record, and what prompt it read. */
 function ompServing(
   message: Record<string, unknown>
 ): Pick<NativeChatMessage, 'model' | 'provider' | 'usage'> {
   const model = extractString(message.model)
   const provider = extractString(message.provider)
-  // Why: omp's own context gauge skips aborted and errored replies' accounting.
+  // Match OMP’s context gauge, which excludes failed/aborted reply accounting.
   const usage =
     message.stopReason === 'aborted' || message.stopReason === 'error'
       ? null
@@ -188,20 +160,15 @@ function tokenCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
-/** A bash/python execution cell: the invocation, then its captured output. */
 function ompExecutionBlocks(
   role: 'bashExecution' | 'pythonExecution',
   message: Record<string, unknown>
 ): NativeChatBlock[] {
   const isBash = role === 'bashExecution'
-  // Why: read these raw rather than via `extractString` — it trims, and leading
-  // or trailing whitespace is meaningful in captured command output.
+  // Preserve whitespace meaningful in source/output; extractString trims it.
   const source = isBash ? message.command : message.code
   const output = message.output
-  // Why: every cancel/timeout path returns `{exitCode: undefined, cancelled: true}`,
-  // and JSON.stringify drops the undefined key, so a cancelled run carries NO
-  // exitCode on disk. Without the `cancelled` arm it would render as a clean
-  // success next to partial output; omp's own cell shows a cancelled marker.
+  // JSON omits undefined exitCode on cancellation; cancelled must distinguish it from success.
   const failed =
     message.cancelled === true || (typeof message.exitCode === 'number' && message.exitCode !== 0)
   return [
@@ -218,7 +185,6 @@ function ompExecutionBlocks(
   ]
 }
 
-/** The `path` of every entry in a fileMention's `files` array. */
 function ompFileMentionPaths(files: unknown): string[] {
   if (!Array.isArray(files)) {
     return []
@@ -233,7 +199,6 @@ function ompFileMentionPaths(files: unknown): string[] {
   return paths
 }
 
-/** Build the blocks for one omp content array. */
 function ompContentBlocks(content: unknown): NativeChatBlock[] {
   if (typeof content === 'string') {
     return content.trim() ? [{ type: 'text', text: content }] : []
@@ -251,7 +216,6 @@ function ompContentBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
-/** Map one omp content entry; unknown block types yield null and are dropped. */
 function ompContentBlock(record: Record<string, unknown> | null): NativeChatBlock | null {
   if (!record) {
     return null
@@ -282,7 +246,6 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
   }
 }
 
-/** `timestampMs` yields NaN for an unparsable value; the chat model wants null. */
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null

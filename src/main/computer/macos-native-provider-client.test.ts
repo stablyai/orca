@@ -225,8 +225,6 @@ describe('MacOSNativeProviderClient', () => {
     await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
     const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
 
-    // Why: a timed-out helper socket can flush events after restart. Those
-    // stale events must not clear/reject the active replacement request.
     firstSocket.emit('data', '{"id":999,"ok":false,"error":{"code":"old","message":"old"}}\n')
     expect(() => firstSocket.emit('error', new Error('old helper failed late'))).not.toThrow()
     firstSocket.emit('close')
@@ -579,8 +577,7 @@ describe('MacOSNativeProviderClient', () => {
     await rejection
 
     const provider = providers[0]!
-    // Why: a wedged helper never reads `terminate`, so the socket write alone
-    // is what used to leak the process on every request timeout.
+    // Socket termination cannot stop a helper wedged in a native call; signal it too.
     expect(socket.writes.at(-1)).toContain('"method":"terminate"')
     expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
     expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
@@ -624,7 +621,6 @@ describe('MacOSNativeProviderClient', () => {
 
     const secondCall = client.capabilities()
     await vi.waitFor(() => expect(providers).toHaveLength(2))
-    // Why: the replacement must not inherit the previous generation's teardown.
     expect(providers[1]!.kill).not.toHaveBeenCalled()
 
     const secondSocket = sockets[1]!
@@ -650,8 +646,6 @@ describe('MacOSNativeProviderClient', () => {
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
 
-    // Why: a helper that dies takes its socket down with a bare 'close', with no
-    // preceding 'error' — the teardown path most likely to run in the wild.
     sockets[0]!.emit('close')
     await rejection
 
@@ -672,7 +666,6 @@ describe('MacOSNativeProviderClient', () => {
     sockets[0]!.emit('close')
     await rejection
 
-    // Why: signalling a reaped pid is how a recycled pid gets hit.
     expect(provider.kill).not.toHaveBeenCalled()
   })
 
@@ -704,8 +697,6 @@ describe('MacOSNativeProviderClient', () => {
     pendingConnects[0]!.resolve(new FakeSocket())
     await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
 
-    // Why: the superseded throw is caught by this function's own catch, so the
-    // helper must be reaped exactly once, not once per handler.
     expect(providers[0]!.kill).toHaveBeenCalledTimes(1)
     expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
     expect(providers[1]!.kill).not.toHaveBeenCalled()

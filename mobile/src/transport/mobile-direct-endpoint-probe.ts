@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
@@ -6,10 +6,7 @@ export function directPathForEndpoint(endpoint: string): Exclude<MobileConnectio
   return isTailscaleEndpoint(endpoint) ? 'tailscale' : 'lan'
 }
 
-// Why: 'reconnecting' is published on any socket close, so it cannot tell a dead
-// LAN (instant 1006, then doomed redials) from one access-point flap that the
-// first redial recovers. One redial fits here; a dead LAN still fails in ~2s
-// instead of holding the supervisor's operation mutex for the full outer bound.
+// Allow one redial to distinguish an access-point flap from a dead LAN without holding the recovery mutex for the full bound.
 const RECONNECT_GRACE_MS = 2_000
 
 function waitForAuthenticatedSession(
@@ -42,9 +39,7 @@ function waitForAuthenticatedSession(
         graceTimer = armGrace()
         return
       }
-      // Why: the redial fires at 500ms but 'connected' waits on the Noise handshake
-      // and a capability RPC. 'handshaking' is proof the peer answered, so extend
-      // once; a dead handshake still fails at ~4s, far inside the outer bound.
+      // Extend once on handshake progress; connection also waits for capabilities, while a dead handshake must still time out promptly.
       if (state === 'handshaking' && graceTimer && !graceExtended) {
         graceExtended = true
         clearTimeout(graceTimer)

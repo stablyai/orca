@@ -2,11 +2,7 @@ import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement
 import type { TerminalPaneSplitDirection } from '../../shared/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
 
-/**
- * A runtime-started tab opens in the group asked for, else the first group (as the live view). Its
- * title is the caller's name for it when the window would show it too: a revealed tab keeps the
- * name, a background tab (a worker the window never revealed) keeps its live title.
- */
+/** Use requested/first group; revealed tabs honor user names, background worker tabs keep live titles. */
 export function newTabIn(opts: {
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string

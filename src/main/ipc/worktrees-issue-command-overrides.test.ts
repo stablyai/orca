@@ -4,11 +4,7 @@ import { join } from 'node:path'
 import * as issueCommandFile from '../issue-command-file'
 import * as projectGitOptions from '../project-runtime-git-options'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createIssueCommandRunnerScriptMock,
-  addWorktreeMock,
-  listWorktreesMock
-} from './worktrees-test-module-mocks'
+import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
@@ -173,30 +169,6 @@ describe('registerWorktreeHandlers', () => {
     }
   })
 
-  it('creates an issue-command runner for an existing repo/worktree pair', async () => {
-    const result = await handlers['hooks:createIssueCommandRunner'](null, {
-      repoId: 'repo-1',
-      worktreePath: '/workspace/improve-dashboard',
-      command: 'codex exec "long command"'
-    })
-
-    expect(createIssueCommandRunnerScriptMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'repo-1' }),
-      '/workspace/improve-dashboard',
-      'codex exec "long command"',
-      {},
-      // Why: issue runners take the resolved setup shell; it is undefined off Windows.
-      undefined
-    )
-    expect(result).toMatchObject({
-      runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
-      envVars: {
-        ORCA_ROOT_PATH: '/workspace/repo',
-        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
-      }
-    })
-  })
-
   it('rejects SSH issue-command writes, which this process does not serve', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -224,8 +196,6 @@ describe('worktrees:create execution host routing', () => {
   })
 
   it('refuses a row that names an SSH host only as executionHostId instead of creating locally', async () => {
-    // No `connectionId`: the raw read answered "local" and ran `git worktree add` on the client
-    // against `/remote/repo`. The host is not served here, so the create refuses.
     useRepo(makeRepo({ executionHostId: 'ssh:target-a' }))
 
     await expect(
@@ -246,7 +216,7 @@ describe('worktrees:create execution host routing', () => {
   })
 
   it('refuses a runtime row that also names a nested SSH target', async () => {
-    // `target-a` names a target inside env-1, never one on this machine.
+    // This target belongs to env-1, never the local client.
     useRepo(makeRepo({ executionHostId: 'runtime:env-1', connectionId: 'target-a' }))
 
     await expect(
@@ -257,8 +227,7 @@ describe('worktrees:create execution host routing', () => {
   })
 
   it('answers local for a row that declares itself local while carrying a connection', async () => {
-    // A contradictory row: `getRepoSshConnectionId` lets `local` win, and the runtime sibling has
-    // always read it that way. The raw field sent it remote, so the two entry points disagreed.
+    // Explicit local ownership overrides legacy connection fields.
     useRepo(
       makeRepo({ path: '/workspace/repo', executionHostId: 'local', connectionId: 'target-a' })
     )

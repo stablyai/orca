@@ -1,11 +1,5 @@
-/**
- * Synthetic benchmark for native chat's post-incremental renderer hot paths.
- * Run: pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts
- *
- * This excludes transcript parsing, IPC/remote latency, React, and DOM work. The
- * 2 KB/message fixtures intentionally stress fallback-key normalization and are
- * not estimates of average production message size or end-to-end frame latency.
- */
+// Run pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts. Synthetic 2KB messages stress fallback-key normalization.
+// Excludes parsing, IPC/remote latency, React/DOM; results are not average production size or end-to-end frame latency.
 
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { performance } from 'node:perf_hooks'
@@ -14,12 +8,6 @@ import { getVerifiedNativeChatCommands } from '../../src/shared/native-chat-agen
 import { surfaceSkillInvocationUserTurns } from '../../src/shared/native-chat/native-chat-command-envelope'
 import { prepareNativeChatLiveMessages } from '../../src/renderer/src/components/native-chat/native-chat-live-message-preparation'
 import { mergeNativeChatLiveSession } from '../../src/renderer/src/components/native-chat/native-chat-live-status'
-import {
-  matchingNativeChatUserRows,
-  selectPendingIndicesRepresentedByUserRows,
-  type NativeChatUserRow
-} from '../../src/renderer/src/components/native-chat/native-chat-pending-occurrence'
-import { pendingSendsAsMessages } from '../../src/renderer/src/components/native-chat/native-chat-pending'
 import { assembleNativeChatSession } from '../../src/renderer/src/components/native-chat/native-chat-session-assembler'
 
 type Operation = (index: number) => number
@@ -33,11 +21,9 @@ let checksum = 0
 let expectedChecksum = 0
 let validatedCases = 0
 let cappedCalibrations = 0
-let sessionSink: NativeChatSession | null = null
+const sessionSink: { value: NativeChatSession | null } = { value: null }
 let messageArraySink: NativeChatMessage[] | null = null
 let contentSink = ''
-let pendingMatchSink: Set<number> | null = null
-let userRowSink: readonly NativeChatUserRow[] | null = null
 const benchmarkStartedAt = performance.now()
 
 function proseFixture(count: number, bytes: number, withTurnId: boolean): NativeChatMessage[] {
@@ -95,14 +81,6 @@ function directMessageUpdateSession(messages: NativeChatMessage[]): NativeChatSe
   })
 }
 
-function oldEmptyPending(messages: NativeChatMessage[]): NativeChatMessage[] {
-  // An empty queue makes the renderer skip candidate-row construction entirely, so the
-  // row scan is the whole cost here — keep it escaping and let the matcher take its exit.
-  userRowSink = matchingNativeChatUserRows(messages)
-  pendingMatchSink = selectPendingIndicesRepresentedByUserRows([], [])
-  return []
-}
-
 function blockContent(message: NativeChatMessage): string {
   const block = message.blocks[0]
   if (!block) {
@@ -117,7 +95,10 @@ function blockContent(message: NativeChatMessage): string {
   if (block.type === 'tool-result') {
     return block.output
   }
-  return block.type === 'image-ref' ? (block.path ?? block.url ?? block.alt ?? '') : block.groupId
+  if (block.type === 'image-ref') {
+    return block.path ?? block.url ?? block.alt ?? ''
+  }
+  return block.type === 'background-task' ? block.taskId : block.groupId
 }
 
 function messageWeight(message: NativeChatMessage, content: string): number {
@@ -127,7 +108,7 @@ function messageWeight(message: NativeChatMessage, content: string): number {
 }
 
 function consumeSession(session: NativeChatSession, index: number): number {
-  sessionSink = session
+  sessionSink.value = session
   messageArraySink = session.messages
   const message = session.messages[index % session.messages.length]
   if (!message) {
@@ -136,11 +117,6 @@ function consumeSession(session: NativeChatSession, index: number): number {
   }
   contentSink = blockContent(message)
   return session.status.charCodeAt(0) + messageWeight(message, contentSink)
-}
-
-function consumePendingOutput(messages: NativeChatMessage[], index: number): number {
-  messageArraySink = messages
-  return (index % 7) + 1
 }
 
 function cyclicChecksum(values: readonly number[], iterations: number): number {
@@ -163,10 +139,6 @@ function sessionExpectedChecksum(session: NativeChatSession): ExpectedChecksum {
     return messageWeight(message, content)
   })
   return (iterations) => statusWeight * iterations + cyclicChecksum(weights, iterations)
-}
-
-function pendingExpectedChecksum(iterations: number): number {
-  return cyclicChecksum([1, 2, 3, 4, 5, 6, 7], iterations)
 }
 
 function runSample(operation: Operation, expected: ExpectedChecksum, iterations: number): number {
@@ -305,32 +277,10 @@ benchmarkSessionArms(
     })
 )
 
-deepStrictEqual(pendingSendsAsMessages([], prose300), oldEmptyPending(prose300))
-benchmark(
-  '300 x 2KB empty pending',
-  (index) => consumePendingOutput(oldEmptyPending(prose300), index),
-  (index) => consumePendingOutput(pendingSendsAsMessages([], prose300), index),
-  pendingExpectedChecksum
-)
-
-const combinedSessionExpected = sessionExpectedChecksum(legacyMessageUpdateSession(prose300))
-benchmark(
-  '300 x 2KB combined',
-  (index) =>
-    consumeSession(legacyMessageUpdateSession(prose300), index) +
-    consumePendingOutput(oldEmptyPending(prose300), index),
-  (index) =>
-    consumeSession(directMessageUpdateSession(prose300), index) +
-    consumePendingOutput(pendingSendsAsMessages([], prose300), index),
-  (iterations) => combinedSessionExpected(iterations) + pendingExpectedChecksum(iterations)
-)
-
 strictEqual(checksum, expectedChecksum, 'benchmark checksum accounting drifted')
-strictEqual(sessionSink?.sessionId, 'benchmark', 'session outputs did not escape')
+strictEqual(sessionSink.value?.sessionId, 'benchmark', 'session outputs did not escape')
 strictEqual(Array.isArray(messageArraySink), true, 'message arrays did not escape')
 strictEqual(contentSink.length > 0, true, 'message content did not escape')
-strictEqual(pendingMatchSink instanceof Set, true, 'pending baseline scan did not escape')
-strictEqual(Array.isArray(userRowSink), true, 'user row scan did not escape')
 console.log(
   `validated=${validatedCases} cases, checksum=${checksum}, capped calibrations=${cappedCalibrations}, runtime=${(
     performance.now() - benchmarkStartedAt

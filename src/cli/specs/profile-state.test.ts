@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseArgs, validateCommandAndFlags } from '../args'
+import { findCommandSpec, parseArgs, validateCommandAndFlags } from '../args'
+import { formatCommandHelp } from '../help'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 
 describe('profile state rollback discovery', () => {
@@ -27,13 +28,18 @@ describe('profile state rollback discovery', () => {
     expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
   })
 
-  it('explains that adoption selects one full state and preserves both copies', () => {
-    const spec = PROFILE_STATE_COMMAND_SPECS.find((item) => item.path.at(-1) === 'rollback')
-    expect(spec?.usage).toContain('--current-json')
-    expect(spec?.notes?.join('\n')).toContain('without merging; both copies are archived')
-    expect(spec?.examples).toContain('orca profile state rollback --current-json')
-    expect(spec?.usage).toContain('--latest-json')
-    expect(spec?.notes?.join('\n')).toContain('exports the latest SQLite state')
-    expect(spec?.examples).toContain('orca profile state rollback --latest-json')
+  it('renders rollback help explaining state selection and archival', () => {
+    const spec = findCommandSpec(PROFILE_STATE_COMMAND_SPECS, ['profile', 'state', 'rollback'])
+    if (!spec) {
+      throw new Error('Missing profile state rollback spec')
+    }
+    const help = formatCommandHelp(spec)
+
+    expect(help).toContain('--current-json')
+    expect(help).toContain('without merging; both copies are archived')
+    expect(help).toContain('$ orca profile state rollback --current-json')
+    expect(help).toContain('--latest-json')
+    expect(help).toContain('exports the latest SQLite state')
+    expect(help).toContain('$ orca profile state rollback --latest-json')
   })
 })

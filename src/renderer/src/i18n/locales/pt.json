@@ -294,6 +294,7 @@
     "view": "Exibir",
     "reload": "Recarregar",
     "forceReload": "Forçar Recarregamento",
+    "toggleDevTools": "Alternar Ferramentas de Desenvolvedor",
     "resetSize": "Redefinir Tamanho",
     "zoomIn": "Aumentar Zoom",
     "zoomOut": "Diminuir Zoom",
@@ -501,12 +502,8 @@
       "certificateDateInvalid": "O certificado de {{value0}} não é válido na data e hora atuais.",
       "certificateAuthorityInvalid": "O Orca não confia na autoridade que emitiu o certificado de {{value0}}.",
       "certificateVerificationFailed": "O Orca não conseguiu verificar o certificado de {{value0}}.",
-      "trustedCertificateGuidance": "Para desenvolvimento local, use um certificado local confiável quando possível.",
       "retry": "Tentar novamente",
-      "copyAddress": "Copiar Endereço",
-      "addressCopied": "Endereço da página atual copiado.",
       "openExternally": "Abrir Externamente",
-      "tryHttps": "Tentar HTTPS",
       "proceedUnsafe": "Continuar Assim Mesmo (Inseguro)",
       "connecting": "Conectando…",
       "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
@@ -514,7 +511,23 @@
       "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova.",
       "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
       "sshRoutedHint": "Esta página navega através do host SSH do espaço de trabalho — o host pode estar desconectado ou incapaz de acessar este site.",
-      "recheckSshRoute": "Executar verificação de conexão"
+      "recheckSshRoute": "Executar verificação de conexão",
+      "notRunningTitle": "Ainda não há nada em execução em {{host}}",
+      "notRunningDescription": "Inicie o servidor de desenvolvimento deste endereço.",
+      "refusedTitle": "{{host}} recusou a conexão",
+      "refusedDescription": "O site pode estar fora do ar ou o endereço pode estar errado.",
+      "dnsTitle": "Não foi possível encontrar {{host}}",
+      "dnsDescription": "Verifique se há erros de digitação no endereço.",
+      "offlineTitle": "Você está offline",
+      "timeoutTitle": "{{host}} demorou demais para responder",
+      "resetTitle": "A conexão com {{host}} foi interrompida",
+      "routeDownTitle": "Não é possível acessar o host SSH",
+      "routeDownDescription": "Esta página é carregada pelo host SSH do espaço de trabalho, que não está conectado agora.",
+      "waiting": "Recarrega quando o servidor responder",
+      "waitingForHost": "Recarrega quando o host SSH reconectar",
+      "waitingForNetwork": "Recarrega quando você voltar a ficar online",
+      "notRunningSshDescription": "Inicie o servidor de desenvolvimento no host SSH do espaço de trabalho.",
+      "waitingForServer": "Recarrega quando o servidor iniciar"
     },
     "guestRecovery": {
       "title": "Página do navegador parou",
@@ -594,6 +607,30 @@
     },
     "request": {
       "pairedServerWorkspace": "Este espaço de trabalho está em um servidor pareado. Use as abas do navegador desse servidor."
+    },
+    "managedProfile": {
+      "createFailed": "Não foi possível criar o perfil do navegador deste espaço de trabalho. Feche esta aba e abra uma nova para tentar novamente."
+    },
+    "newTab": {
+      "emptyHint": "Pesquise ou digite um endereço acima. Os sites que você visitar, os servidores de desenvolvimento em execução neste espaço de trabalho e o PR e a issue vinculados aparecerão aqui.",
+      "openServerFailed": "Não foi possível abrir {{address}}",
+      "removedFromHistory": "“{{title}}” removido do histórico",
+      "removeSuggestion": "Remover do histórico",
+      "state": {
+        "closed": "Fechado",
+        "draft": "Rascunho",
+        "merged": "Mesclado",
+        "open": "Aberto"
+      },
+      "suggested": "Sugestões",
+      "thisWorkspace": "Este espaço de trabalho",
+      "undo": "Desfazer",
+      "checks": {
+        "failing": "Verificações com falha",
+        "passing": "Verificações aprovadas",
+        "pending": "Verificações pendentes"
+      },
+      "runningElsewhere": "{{count}} em execução em outros espaços de trabalho"
     }
   },
   "settings": {
@@ -635,6 +672,11 @@
         }
       },
       "chat": {
+        "fontFamily": "Fonte",
+        "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
+        "inheritFont": "Mesma fonte do IDE",
+        "fontPreviewLabel": "Prévia da fonte do chat",
+        "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Chat",
         "textSize": "Tamanho do texto",
         "textSizeDescription": "Mensagens, atividade das ferramentas e caixa de mensagem. {{increase}} / {{decrease}} em um chat também alteram este tamanho.",
@@ -717,11 +759,27 @@
           "microphone": "microfone",
           "location": "localização",
           "notifications": "notificações",
-          "clipboard": "área de transferência"
+          "clipboard": "área de transferência",
+          "localNetwork": "rede local"
         }
+      },
+      "profileScope": {
+        "optionShared": "Compartilhado",
+        "keywordRepo": "repositório",
+        "keywordIsolate": "isolar",
+        "optionRepoTooltip": "Os espaços de trabalho de cada repositório compartilham um perfil, criado na primeira utilização.",
+        "optionSharedTooltip": "Novas abas usam o perfil Padrão (ou o escolhido em Sessão e Cookies).",
+        "optionWorktreeTooltip": "Cada espaço de trabalho obtém seu próprio perfil, excluído com o espaço de trabalho.",
+        "description": "Compartilhe um perfil padrão em qualquer lugar ou forneça a cada repositório ou espaço de trabalho seus próprios cookies e armazenamento, para que os servidores de desenvolvimento locais parem de compartilhar logins.",
+        "optionWorktree": "Por espaço de trabalho",
+        "title": "Perfil para novas abas",
+        "repoProfileLabel": "Repositório: {{name}}",
+        "worktreeProfileLabel": "Espaço de trabalho: {{name}}",
+        "optionRepo": "Por repositório"
       }
     },
     "chat": {
+      "permissionsAgentsLink": "Configurações → Agentes",
       "permissionsTitle": "Permissões para novos chats",
       "permissionsDescription": "Somente novos chats. Os padrões de cada agente estão em Configurações → Agentes.",
       "description": "Escolha a aparência e o comportamento dos chats.",
@@ -832,7 +890,11 @@
       "customPermissions": "Argumentos personalizados",
       "replaceWithPermissionMode": "Substituir por {{mode}}",
       "expandAgentSettings": "Expandir configurações do agente",
-      "collapseAgentSettings": "Recolher configurações do agente"
+      "collapseAgentSettings": "Recolher configurações do agente",
+      "defaultOpensAs": "Abrir {{value0}} como",
+      "defaultOpensAsChat": "Chat",
+      "defaultOpensAsCli": "CLI",
+      "defaultOpensAsScope": "Aplica-se a novas sessões de {{value0}} iniciadas neste computador, inclusive em hosts pareados. Corresponde à opção em Provedores."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -984,6 +1046,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "O espaço de trabalho não está conectado a um host Orca remoto.",
+        "splitSourceUnpublished": "O painel não foi dividido: o terminal ainda não foi iniciado no host.",
         "terminalCreateUnconfirmed": "O Orca não conseguiu confirmar que o novo terminal foi aberto no host."
       },
       "gitlabJobTraceClient": {
@@ -1855,6 +1918,11 @@
         "openInChat": "Esta conversa de {{value0}} está aberta em um chat. Atualize o Histórico de sessões para abri-la.",
         "ownershipUnknown": "O Orca não conseguiu confirmar quem é o proprietário desta conversa de {{value0}}. Atualize o Histórico de sessões e tente novamente."
       },
+      "composerCreateHandoff": {
+        "reopen": "Reabrir",
+        "preparationTimedOut": "A preparação do worktree expirou.",
+        "needsInput": "O worktree não foi criado porque precisa de mais informações."
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "Obtendo arquivos… {{percent}}%",
         "provisioningVm": "Provisionando VM…",
@@ -2459,10 +2527,6 @@
               "waiting": {
                 "label": "Atualiza quando o Claude é executado",
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
-              },
-              "expired": {
-                "label": "Login expirado",
-                "message": "Os dados de uso do Claude expiraram. Inicie o Claude nesta conta para atualizá-los."
               }
             }
           },
@@ -3430,7 +3494,7 @@
             "glm": "glm",
             "cursor": {
               "title": "Uso do Cursor",
-              "description": "Mostrar o uso mensal do plano Cursor pela sessão conectada neste computador.",
+              "description": "Mostrar o uso do plano Cursor pela sessão conectada neste computador.",
               "kw": {
                 "cursor": "cursor"
               }
@@ -3605,6 +3669,11 @@
               "modifier": "modificador",
               "invert": "inverter",
               "opposite": "oposto"
+            },
+            "linkRoutingBackground": {
+              "background": "segundo plano",
+              "focus": "foco",
+              "tab": "aba"
             },
             "terminalLinkActions": {
               "terminal": "terminal",
@@ -4739,7 +4808,7 @@
             "25591bf95b": "Cole o cabeçalho Cookie completo de opencode.ai, incluindo __Host-console_session, para consultar os limites de uso.",
             "cursor": {
               "title": "Uso do Cursor",
-              "description": "Uso mensal do plano consultado pela sessão do Cursor já conectada neste computador (cursor-agent login).",
+              "description": "Uso do plano consultado pela sessão do Cursor já conectada neste computador (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
                 "usage": "uso",
@@ -7274,7 +7343,8 @@
           "failed": "Falha na atualização",
           "serviceManagerHelp": "Atualize o Orca no host do servidor — através do gerenciador de pacotes do sistema se foi instalado de um .deb ou .rpm, ou através do gerenciador de serviços que o inicia.",
           "unpackedHelp": "Builds de desenvolvimento precisam ser atualizadas a partir do seu checkout de origem.",
-          "legacyHelp": "Atualize este servidor manualmente uma vez para habilitar atualizações remotas."
+          "legacyHelp": "Atualize este servidor manualmente uma vez para habilitar atualizações remotas.",
+          "managedOverSshHelp": "Este desktop atualiza este servidor por SSH. Use Atualizar na linha dele em Servidores remotos do Orca."
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" removido.",
@@ -7640,6 +7710,11 @@
           "191ac34567": "Orquestração de Agentes",
           "nestedWorkerDepthTitle": "Profundidade de worker aninhado",
           "nestedWorkerDepthDescription": "Quantas gerações de workers despachados podem gerar seus próprios workers. 1 mantém a árvore de agentes plana: um coordenador despacha workers, e esses workers não despacham.",
+          "chatErrorEscalationTitle": "Avisar o coordenador sobre erros do chat",
+          "chatErrorEscalationDescription": "Quando um agente atribuído encontra um erro que encerra seu turno, envia o erro exato ao coordenador que o atribuiu. A tarefa continua atribuída ao agente. Funciona apenas para agentes executados na interface de chat.",
+          "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
+          "chatErrorEscalationKeywordError": "erro",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {
@@ -8135,6 +8210,10 @@
           "descriptionSystem": "Os links abrem no Orca, então {{chord}}+clique envia um para o seu navegador do sistema.",
           "descriptionOrca": "Os links abrem no seu navegador do sistema. Quando ativado, {{chord}}+clique abre um no navegador integrado do Orca."
         },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Abrir links em segundo plano",
+          "description": "Links do terminal, do chat e do markdown abrem no navegador sem tirar o foco de onde você clicou."
+        },
         "PluginKeybindingConsentPreview": {
           "heading": "Atalhos de teclado",
           "worktree": "Executa somente enquanto um espaço de trabalho está ativo.",
@@ -8159,7 +8238,8 @@
           "5f5142a62a": "Ícone anterior"
         },
         "BrowserDefaultZoomSetting": {
-          "265597101f": "Zoom Padrão"
+          "265597101f": "Zoom Padrão",
+          "siteDefault": "Zoom para sites cujo zoom você ainda não alterou."
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Abrir Uso do Computador",
@@ -8348,7 +8428,7 @@
             "desktop": "Cursor IDE"
           },
           "title": "Cursor",
-          "subtitle": "Mostra o uso mensal do seu plano Cursor pela sessão já conectada neste computador. O Orca apenas a lê — nunca altera seu login no Cursor.",
+          "subtitle": "Mostra o uso do seu plano Cursor pela sessão já conectada neste computador. O Orca apenas a lê — nunca altera seu login no Cursor.",
           "dashboardLink": "Painel do Cursor",
           "loading": "Carregando…",
           "signedIn": "Conectado",
@@ -8358,7 +8438,7 @@
           "signedOut": "Nenhuma sessão do Cursor encontrada neste computador",
           "signedOutHelp": "Entre no Cursor IDE ou execute cursor-agent login em um terminal e clique em Atualizar uso aqui.",
           "refreshUsage": "Atualizar uso",
-          "usageTitle": "Uso mensal do plano",
+          "usageTitle": "Uso do plano",
           "usageDescription": "O Cursor cobra dois saldos que são renovados a cada ciclo de cobrança, além de gastos sob demanda quando eles se esgotam.",
           "planTotal": "Plano",
           "resets": "Renova {{when}}",
@@ -8398,7 +8478,10 @@
             "forgetDescription": "Desvincula este servidor aqui sem entrar em contato com o host. Se o host voltar, o servidor ainda poderá estar em execução nele.",
             "orcaVersion": "Orca neste host: {{version}}",
             "stopOrcaDescription": "Para o Orca no host SSH e o remove desta lista.",
-            "updateOrcaOnHost": "Atualizar Orca neste host"
+            "updateOrcaOnHost": "Atualizar Orca neste host",
+            "updateAnyway": "Atualizar mesmo assim",
+            "notNow": "Agora não",
+            "forceUpdate": "Há terminais em execução neste host. Eles continuam em execução durante a atualização, e seus painéis se reconectam quando o servidor do Orca reiniciar."
           },
           "title": "Orca nos seus hosts SSH",
           "description": "O Orca se instala em um host SSH vazio e se mantém atualizado.",
@@ -8530,7 +8613,8 @@
           "nodeDownloadBlocked": "Nem este computador nem este host conseguiram baixar o Node.js, necessário para o servidor Orca. Use um espelho do Node.js ou verifique a rede nas duas máquinas.",
           "nodeDownloadBlockedNoMirror": "Nem este computador nem este host conseguiram baixar o Node.js, necessário para o servidor Orca. Verifique a rede ou o proxy nas duas máquinas e conecte novamente.",
           "nodeDownloadBlockedMirrorTried": "Nem este computador nem este host conseguiram baixar o Node.js, nem mesmo pelo espelho de downloads do Node.js. Verifique a configuração do espelho e conecte novamente.",
-          "reassurance": "É executado em {{host}}, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para {{host}}."
+          "reassurance": "É executado em {{host}}, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para {{host}}.",
+          "refusedBlockedReason": "O Orca ainda não está configurado neste host. {{reason}}"
         },
         "ZcodeCliSetupSection": {
           "title": "Usar GLM com ZCode",
@@ -8857,6 +8941,12 @@
           "attentionSharedNotCurrent": "Atenção necessária · A cópia compartilhada usada por esta pasta não é do Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Atualização ignorada em {{places}} locais: {{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}"
+        },
+        "ReleaseBuildPicker": {
+          "build": "Build",
+          "searchLabel": "Buscar builds",
+          "searchPlaceholder": "Buscar builds…",
+          "noMatches": "Nenhuma build encontrada."
         }
       },
       "right": {
@@ -10390,7 +10480,37 @@
             "databaseCount_one": "{{value0}} banco de dados",
             "databaseCount_other": "{{value0}} bancos de dados",
             "scanning": "Verificando {{value0}}",
-            "scanned": "Verificação concluída: {{value0}}"
+            "scanned": "Verificação concluída: {{value0}}",
+            "agentChecked": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados",
+            "checking": "Verificando {{value0}}"
+          },
+          "run": {
+            "source": {
+              "control": {
+                "agent": {
+                  "action": {
+                    "start": {
+                      "git": {
+                        "operation": {
+                          "running": "Aguarde a conclusão da operação do Git em execução."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "Não foi possível iniciar: {{value0}}",
+                  "4c119f5e2a": "Ainda não iniciado",
+                  "b817a96fcf": "Parado: {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -11552,6 +11672,9 @@
               },
               "chat": {
                 "partial": "O host não conseguiu confirmar que a conversa foi interrompida. Outros painéis podem ter sido fechados; verifique a conexão e tente novamente."
+              },
+              "vm": {
+                "running": "Os terminais do espaço de trabalho pararam, mas a máquina não pôde ser suspensa e ainda está em execução."
               }
             }
           }
@@ -12563,6 +12686,15 @@
             },
             "sectionStale": {
               "notice": "Este arquivo mudou no disco desde que esta seção foi carregada."
+            },
+            "notUtf8": {
+              "notice": "O salvamento automático está pausado para {{name}} porque não é texto UTF-8. Salvá-lo você mesmo o regrava como UTF-8 e substitui os caracteres que não são UTF-8 válido.",
+              "refused": "Este arquivo não é texto UTF-8, então não foi salvo.",
+              "confirm": {
+                "title": "Salvar {{name}} como UTF-8?",
+                "description": "Este arquivo não é texto UTF-8. Salvá-lo como UTF-8 substitui por � os caracteres que não são UTF-8 válido, e os bytes originais não poderão ser recuperados.",
+                "action": "Salvar como UTF-8"
+              }
             }
           }
         },
@@ -13256,7 +13388,7 @@
           "projectDefaultBaseRef": "padrão do projeto",
           "createFromBaseRef": "Criar a partir de {{baseRef}}",
           "missingWorkspace": "Espaço de trabalho faltando",
-          "runUsageSummary": "{{cost}} est. · {{tokens}} tokens",
+          "runUsageSummary": "{{cost}} estimados · {{tokens}} tokens",
           "usageUnavailable": "Uso indisponível",
           "noRunUsageYet": "Ainda sem uso de execução",
           "noWorkspace": "Nenhum espaço de trabalho",
@@ -15534,13 +15666,28 @@
             "c337c9d75c": "Fechar"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "Reconectando ao runtime remoto",
             "disconnectedTitle": "Runtime remoto desconectado",
-            "retryingBody": "O Orca vai tentar novamente por até um minuto. Este terminal vai retomar se a conexão voltar.",
             "disconnectedBody": "As tentativas automáticas foram interrompidas. Reconecte para retomar esta sessão de terminal.",
             "reconnectButton": "Reconectar",
             "pairingRefusedTitle": "Este host não aceita mais este computador",
-            "pairingRefusedBody": "O Orca não conseguiu parear com ele novamente via SSH. Nada no host foi interrompido. Reconecte para tentar novamente."
+            "pairingRefusedBody": "O Orca não conseguiu parear com ele novamente via SSH. Nada no host foi interrompido. Reconecte para tentar novamente.",
+            "signInTitle": "Aguardando login SSH",
+            "signInBody": "Este terminal continua sozinho quando você entrar no host.",
+            "signInButton": "Entrar",
+            "serverRestartingTitle": "{{server}} está reiniciando",
+            "serverRestartingBody": "O Orca se reconecta quando o servidor voltar, e os terminais são retomados nesse momento.",
+            "streamStalledTitle": "O terminal parou de responder",
+            "streamStalledBody": "{{server}} parou de enviar a saída deste terminal. O Orca está reconectando-o automaticamente.",
+            "sessionEndedTitle": "Reconectando o terminal",
+            "sessionEndedBody": "{{server}} fechou o fluxo deste terminal. O Orca está reconectando-o automaticamente.",
+            "waitingTitle": "Aguardando {{server}}",
+            "waitingBody": "O Orca reconecta este terminal quando o servidor o oferecer de novo ou a conexão mudar. Clique em Reconectar para tentar agora.",
+            "downFor": "Sem conexão há {{duration}}",
+            "tailscaleHint": "Verifique o caminho do Tailscale:",
+            "fallbackServerName": "o servidor",
+            "connectionLostTitle": "Reconectando a {{server}}",
+            "connectionLostBody": "A conexão com o servidor caiu. O Orca está tentando novamente de forma automática, e os terminais serão retomados quando ela voltar.",
+            "reattachingBody": "O Orca está reconectando este terminal a {{server}} automaticamente."
           },
           "TerminalPane": {
             "ac112e9036": "Remover título",
@@ -15598,12 +15745,15 @@
             "restoring": "Restaurando terminal…"
           },
           "AgentLaunchPaneNotice": {
-            "commandNotFound": "O comando dele não foi encontrado nesta máquina.",
+            "agent": "O agente",
+            "commandNotFound": "Não foi possível iniciar {{agent}} porque seu comando não foi encontrado neste computador.",
             "copyPrompt": "Copiar prompt",
-            "exitedDuringStart": "Ele encerrou durante a inicialização.",
-            "notStarted": "Não foi possível iniciar o agente.",
-            "unconfirmed": "Não foi possível confirmar que o agente iniciou.",
-            "workspaceGone": "O espaço de trabalho dele não está mais disponível."
+            "exitedDuringStart": "{{agent}} foi encerrado durante a inicialização.",
+            "notStarted": "Não foi possível iniciar {{agent}}.",
+            "restoreWorkspace": "Restaure a pasta do espaço de trabalho ou abra um espaço de trabalho disponível e tente novamente.",
+            "tryInTerminal": "Execute-o em um terminal nesta pasta para descobrir o motivo e tente novamente.",
+            "unconfirmed": "Não foi possível confirmar que {{agent}} iniciou. Verifique seu terminal antes de tentar novamente.",
+            "workspaceGone": "Não foi possível iniciar {{agent}} porque seu espaço de trabalho não está mais disponível."
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "As restaurações automáticas estão pausadas porque o host parou inesperadamente. Sua sessão está salva.",
@@ -15694,7 +15844,7 @@
             "25d6e8a491": "feat/mobile-page",
             "c791677f2f": "Retomar",
             "cf3f98fa3f": "Desconectado",
-            "091355da3d": "M1 Mini · home",
+            "091355da3d": "M1 Mini · casa",
             "0bc1881bc4": "Conectado · 40 worktrees · 5 ativas",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
@@ -16419,7 +16569,26 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "fileUrlUnsupported": "Esta aba do navegador não pode abrir arquivos locais. Use \"Abrir Pré-visualização ao Lado\" no arquivo em vez disso.",
-            "cc4a071d3a": "Anotar elemento da página ({{value0}})"
+            "cc4a071d3a": "Anotar elemento da página ({{value0}})",
+            "undo": "Desfazer",
+            "redo": "Refazer",
+            "paste": "Colar",
+            "selectAll": "Selecionar Tudo",
+            "cut": "Recortar",
+            "searchSelection": "Pesquisar “{{value1}}” em {{value0}}",
+            "inspect": "Inspecionar",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "Acoplar à direita",
+            "devToolsDockBottom": "Acoplar na parte inferior",
+            "devToolsUndock": "Abrir em uma janela separada",
+            "devToolsClose": "Fechar DevTools",
+            "copyImageAddress": "Copiar endereço da imagem",
+            "pasteAndMatchStyle": "Colar e adaptar estilo",
+            "addToDictionary": "Adicionar ao dicionário",
+            "copyImage": "Copiar imagem",
+            "pasteAsPlainText": "Colar como texto simples",
+            "openImageInNewTab": "Abrir imagem em nova aba",
+            "saveImage": "Salvar imagem"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -16444,7 +16613,16 @@
             "bf648471c5": "Criando…",
             "53bbe3dab4": "{{value0}} cookies importados do arquivo.",
             "c5f0e4d3b2a1": "{{value0}} cookies importados de {{value1}} ({{value2}}).",
-            "d6a1f5e4c3b2": "{{value0}} cookies importados de {{value1}}."
+            "d6a1f5e4c3b2": "{{value0}} cookies importados de {{value1}}.",
+            "zoom": "Zoom",
+            "zoomOut": "Diminuir zoom",
+            "zoomIn": "Aumentar zoom",
+            "resetZoom": "Redefinir zoom",
+            "appearance": "Aparência",
+            "appearanceMatchOrca": "Usar aparência do Orca",
+            "appearanceLight": "Claro",
+            "appearanceDark": "Escuro",
+            "zoomPercent": "Zoom {{value0}}%"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Anexar à IA",
@@ -16538,7 +16716,8 @@
               "bar": {
                 "suggestions": {
                   "87fcdd0da9": "Buscar {{value0}}"
-                }
+                },
+                "placeholder": "Pesquise ou digite uma URL"
               }
             }
           },
@@ -18775,7 +18954,8 @@
             "clipboard": "Área de transferência",
             "midi": "Dispositivos MIDI",
             "windowManagement": "Gerenciamento de janelas",
-            "idleDetection": "Uso do dispositivo"
+            "idleDetection": "Uso do dispositivo",
+            "localNetwork": "Rede local"
           },
           "ask": {
             "camera": "Usar sua câmera",
@@ -18785,7 +18965,8 @@
             "clipboard": "Ver textos e imagens copiados para a área de transferência",
             "midi": "Usar seus dispositivos MIDI",
             "windowManagement": "Gerenciar janelas em todas as suas telas",
-            "idleDetection": "Saber quando você está usando este dispositivo ativamente"
+            "idleDetection": "Saber quando você está usando este dispositivo ativamente",
+            "localNetwork": "Acessar apps neste dispositivo e dispositivos na sua rede local"
           },
           "title": "{{site}} quer",
           "allow": "Permitir",
@@ -18914,6 +19095,21 @@
         "copyFailed": "Não foi possível copiar o link.",
         "signingIn": "Entrando…",
         "cancel": "Cancelar"
+      },
+      "plainSshTerminal": {
+        "open": "Abrir terminal SSH simples",
+        "unmanaged": "SSH simples — não gerenciado. Não é um espaço de trabalho do Orca: os agentes e as abas aqui não são acompanhados, e este terminal não é restaurado. Fechá-lo encerra a sessão SSH.",
+        "ended": "O ssh foi encerrado com o código {{code}}. Feche esta janela quando terminar a leitura.",
+        "title": "SSH simples · {{host}}",
+        "minimize": "Minimizar",
+        "close": "Fechar e encerrar sessão",
+        "unknownTarget": "Este host SSH não está mais salvo no Orca.",
+        "notBlocked": "O Orca consegue acessar este host novamente. Use os terminais do Orca. O SSH simples só está disponível enquanto o Orca não consegue se configurar no host.",
+        "alreadyOpen": "Outra janela do Orca já tem um terminal SSH simples aberto para este host.",
+        "endedBySignal": "O ssh foi interrompido (sinal {{signal}}). Feche esta janela quando terminar a leitura.",
+        "cancelled": "Este terminal SSH simples foi fechado antes de iniciar.",
+        "terminalUnavailable": "O Orca não conseguiu abrir um terminal aqui.",
+        "openHint": "Permite continuar trabalhando no host enquanto o Orca não consegue se configurar nele."
       }
     },
     "startup": {
@@ -18967,7 +19163,8 @@
     "jiraUserPicker": {
       "select": "Selecionar {{value0}}",
       "search": "Pesquisar usuários",
-      "empty": "Nenhum usuário encontrado"
+      "empty": "Nenhum usuário encontrado",
+      "useKnownId": "Usar o ID de usuário conhecido \"{{value0}}\""
     },
     "native-chat": {
       "taskList": {
@@ -19132,7 +19329,8 @@
           "minimal": "Mín",
           "medium": "Méd",
           "xhigh": "Extra alto"
-        }
+        },
+        "imageUnavailable": "Prévia indisponível"
       },
       "tool": {
         "exitCode": "saída {{value0}}",
@@ -19200,6 +19398,8 @@
         "runFileChangeMany": "Editou {{value0}} arquivos",
         "runWebSearchOne": "Buscou na web 1 vez",
         "runWebSearchMany": "Buscou na web {{value0}} vezes",
+        "runBrowserOne": "Usou o navegador",
+        "runBrowserMany": "Usou o navegador {{value0}} vezes",
         "runIntegrationOne": "Usou 1 integração",
         "runIntegrationMany": "Usou {{value0}} integrações",
         "runAgentOne": "Executou 1 agente",
@@ -19222,6 +19422,8 @@
         "runLiveFileChangeMany": "Editando {{value0}} arquivos",
         "runLiveWebSearchOne": "Buscando na web 1 vez",
         "runLiveWebSearchMany": "Buscando na web {{value0}} vezes",
+        "runLiveBrowserOne": "Usando o navegador",
+        "runLiveBrowserMany": "Usando o navegador {{value0}} vezes",
         "runLiveIntegrationOne": "Usando 1 integração",
         "runLiveIntegrationMany": "Usando {{value0}} integrações",
         "runLiveAgentOne": "Executando 1 agente",
@@ -19229,7 +19431,9 @@
         "runLivePlanOne": "Atualizando o plano",
         "runLivePlanMany": "Atualizando o plano {{value0}} vezes",
         "runLiveToolOne": "Usando 1 ferramenta",
-        "runLiveToolMany": "Usando {{value0}} ferramentas"
+        "runLiveToolMany": "Usando {{value0}} ferramentas",
+        "showBrowserPage": "Mostrar",
+        "showBrowserPageLabel": "Mostrar {{value0}}"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -19336,7 +19540,9 @@
         "send": "Enviar",
         "next": "Próximo",
         "skip": "Pular",
-        "sending": "Enviando…"
+        "sending": "Enviando…",
+        "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
+        "openTerminal": "Responder no terminal"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",
@@ -19351,7 +19557,9 @@
         "cancel": "Cancelar",
         "reason": "Motivo",
         "plan": {
-          "file": "Arquivo do plano"
+          "file": "Arquivo do plano",
+          "reviewTitle": "Revisar plano proposto",
+          "refineHint": "Refinar plano fecha a revisão para que você possa enviar o que deseja alterar."
         },
         "needsAccess": "Precisa de acesso a",
         "needsNewerOrca": "Esta solicitação requer uma versão mais recente do Orca."
@@ -19493,7 +19701,8 @@
         "agentNotSignedIn": "Entre na conta de {{agent}}.",
         "thenSendAgain": "Depois, envie sua mensagem novamente.",
         "runCommandWhenDone": "Execute /{{command}} quando terminar.",
-        "commandAfterAnswer": "Responda à pergunta ou ao pedido de aprovação do agente e execute /{{command}}."
+        "commandAfterAnswer": "Responda à pergunta ou ao pedido de aprovação do agente e execute /{{command}}.",
+        "cliTooOld": "A versão {{installedVersion}} de {{agent}} é antiga demais para chats. Atualize para a versão {{minimumVersion}} ou mais recente."
       },
       "writeNotice": {
         "notDoneReadHistory": "Não foi possível carregar o histórico deste chat.",
@@ -19506,7 +19715,6 @@
         "notDoneAnswer": "Sua resposta não foi enviada.",
         "notDoneOption": "A configuração não foi alterada.",
         "notDoneCommand": "O comando não foi executado.",
-        "notDoneGoal": "O objetivo não foi alterado.",
         "notDoneQueuedEdit": "Sua edição não foi salva.",
         "restartFailed": "Não foi possível reiniciar o agente.",
         "capacity": "O Orca no computador que executa este chat atingiu um limite de requisições. Atualize o Orca lá e tente novamente.",
@@ -19582,8 +19790,8 @@
       },
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
-        "exitUnconfirmedFromTerminal": "O Orca não consegue confirmar se o {{agent}} foi encerrado no terminal. Pare o que estiver em execução lá ou feche o terminal e abra esta conversa no Histórico de sessões.",
-        "exitUnconfirmed": "O Orca não consegue confirmar se o {{agent}} foi encerrado no terminal. Pare o que estiver em execução lá ou feche o terminal e tente novamente.",
+        "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
+        "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
         "cannotResume": "Esta conversa do {{agent}} não pode ser retomada em um chat nativo."
       },
@@ -19751,6 +19959,10 @@
         "checking": "Verificando as permissões de chat deste host…",
         "outdatedHost": "Este host executa uma versão antiga do Orca que ignora as permissões de chat; por isso, o {{value0}} seria executado aqui sem pedir aprovação. Atualize o Orca neste host para usar {{value1}}.",
         "unverified": "O Orca não conseguiu confirmar as permissões do host para {{value0}}."
+      },
+      "imagePreview": {
+        "fileActions": "Ações do arquivo",
+        "linkActions": "Ações do link"
       }
     },
     "tab": {
@@ -19760,7 +19972,9 @@
           "switchToChatView": "Alternar para visualização de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fechar Outras"
+          "closeOthers": "Fechar Outras",
+          "muteTab": "Silenciar Aba",
+          "unmuteTab": "Reativar Som da Aba"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fechar Outras"
@@ -20037,6 +20251,17 @@
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
           "unavailableDetails": "Detalhes indisponíveis"
+        },
+        "unsavedEdits": {
+          "discarded_one": "As alterações não salvas em {{count}} arquivo serão descartadas:",
+          "discarded_other": "As alterações não salvas em {{count}} arquivos serão descartadas:",
+          "moreFiles": "e mais {{value}}",
+          "blocked_one": "Primeiro, salve ou feche {{count}} arquivo não salvo em {{name}}",
+          "blocked_other": "Primeiro, salve ou feche {{count}} arquivos não salvos em {{name}}",
+          "closedToast_one": "{{count}} arquivo com alterações não salvas de {{workspace}} foi fechado",
+          "closedToast_other": "{{count}} arquivos com alterações não salvas de {{workspace}} foram fechados",
+          "reopen": "Reabrir",
+          "reopenFailed": "Não foi possível reabrir alguns arquivos. Abra um espaço de trabalho e tente Reabrir novamente."
         }
       }
     },
@@ -20569,7 +20794,12 @@
     "remoteScopeAccountsAddHere": "Mostrando contas gerenciadas por {{value0}}. Novas contas são conectadas lá; você conclui no navegador deste dispositivo."
   },
   "fileSearch": {
-    "failed": "A busca falhou. Tente novamente."
+    "failed": "A busca falhou. Tente novamente.",
+    "filters": {
+      "toggle": "Alternar detalhes da busca",
+      "active": "Filtros ativos: {{count}}"
+    },
+    "noResults": "Nenhum resultado. Tente outra busca ou ajuste os filtros."
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Não foi possível salvar a preferência de exclusão",
@@ -20918,5 +21148,66 @@
       "loading": "Carregando idioma…",
       "saving": "Salvando idioma…"
     }
+  },
+  "resourceManager": {
+    "pty": {
+      "unavailable": "Indisponível",
+      "ownerUnknown": "Desconhecido",
+      "workspace": "Espaço de trabalho",
+      "binding": "Aba",
+      "idCopied": "ID da sessão do Orca copiado",
+      "cancel": "Cancelar",
+      "unassigned": "Não atribuído",
+      "thisComputer": "Este computador",
+      "retry": "Tentar novamente",
+      "ownerAbsent": "Ausente",
+      "ownerPresent": "Presente",
+      "incarnation": "Instância",
+      "bound": "Com aba",
+      "sessionId": "ID da sessão do Orca",
+      "unbound": "Sem aba",
+      "cwd": "Último diretório de trabalho informado",
+      "pid": "PID",
+      "copyFailed": "Não foi possível copiar o ID da sessão do Orca",
+      "refreshBeforeEnd": "A opção de encerrar fica indisponível até que os PTYs sejam atualizados.",
+      "endUnsupported": "Não é possível encerrar este terminal por aqui. O host não oferece as verificações de segurança necessárias. Feche-o pela aba ou no próprio host.",
+      "agentOwnership": "Evidência de vínculo com o agente",
+      "observationTime": "Horário da observação",
+      "goToTerminal": "Ir para o terminal",
+      "endTitle": "Encerrar {{terminal}}?",
+      "checkingTabs": "Verificando abas…",
+      "detailsNamed": "Detalhes para {{terminal}}",
+      "copyId": "Copiar ID da sessão do Orca",
+      "ending": "Encerrando…",
+      "localOwnedCount_one": "{{count}} PTY do Orca neste computador",
+      "endDescription": "Isso encerra o terminal e seus processos filhos. O trabalho não salvo pode ser perdido.",
+      "lastProcess": "Último processo visto: {{process}}",
+      "localOwnedCount_other": "{{count}} PTYs do Orca neste computador",
+      "loading": "Carregando terminais…",
+      "endNamed": "Encerrar {{terminal}}",
+      "end": "Encerrar terminal",
+      "openNamed": "Abrir {{terminal}}",
+      "withoutTab": "{{count}} sem aba",
+      "observedTime": "Última observação: {{time}}",
+      "noLocalOrcaPtys": "Nenhum PTY local do Orca",
+      "endShort": "Encerrar",
+      "endHint": "Encerrar este terminal e seus processos filhos.",
+      "attached": "Um cliente agora está conectado a este terminal. Atualize antes de tentar novamente.",
+      "claimed": "Um agente assumiu este terminal. Atualize antes de tentar novamente.",
+      "failed": "Não foi possível verificar: os terminais locais não puderam ser atualizados. São mostrados os últimos terminais observados.",
+      "unverifiableEnd": "Não foi possível verificar: o host não confirmou o resultado. O terminal pode ainda estar em execução."
+    },
+    "resources": "Recursos",
+    "refresh": "Atualizar",
+    "killFailed": "Não foi possível encerrar o terminal. As últimas sessões observadas são mantidas.",
+    "localDaemonScope": "Isso afeta os terminais deste computador.",
+    "countUnavailable": "contagem de terminais indisponível",
+    "openToObserve": "Abra Recursos para observar as sessões de terminal.",
+    "killAllLocal": "Encerrar todas as sessões locais",
+    "ptys": "PTYs",
+    "restartLocal": "Reiniciar daemon local"
+  },
+  "browserTab": {
+    "agentDriving": "Um agente está usando esta página"
   }
 }

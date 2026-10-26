@@ -6,16 +6,11 @@ import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-typ
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { TranscriptMessage } from './session-transcript-consumers'
 
-// Why: request/response shapes shared by the worker entry and the main-thread
-// client. Kept type-only (and electron-free) so importing it into the worker
-// bundle can never pull the client's Electron dependency across the boundary.
-
 export type OpenCodeSqliteListRequest = {
   id: number
   kind: 'list'
   dbPaths: readonly string[]
   limit: number | null
-  /** When 'opencode2', lists from the v2 channel-scoped DB schema (session_v2). */
   agent?: 'opencode2' | 'zcode'
   /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
   scopePaths?: readonly string[]
@@ -28,20 +23,16 @@ export type OpenCodeSqliteParseRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
-  /** When 'opencode2', parses from the v2 channel-scoped DB schema (session_v2). */
   agent?: 'opencode2' | 'zcode'
 }
 
-// Same arguments as `parse`, different answer: the session plus every message
-// the session holds. Its own kind rather than a flag on `parse` so the two
-// response shapes stay distinguishable at the type level on both sides.
+// Separate capture requests keep full-transcript response types distinct from preview-only parses.
 export type OpenCodeSqliteCaptureRequest = {
   id: number
   kind: 'capture'
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
-  /** When 'opencode2', captures from the v2 channel-scoped schema. */
   agent?: 'opencode2' | 'zcode'
 }
 
@@ -65,17 +56,11 @@ export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeNativeChatReadRequest
 ) & { timeoutMs?: number }
 
-// The list leg returns candidates plus the issues it accumulated; the worker
-// mutates a local array and hands it back so the caller can merge it into the
-// scan's shared issue list.
 export type OpenCodeSqliteListValue = {
   candidates: SessionFileCandidate[]
   issues: AiVaultScanIssue[]
 }
 
-// The session the panel shows, and the transcript the search index folds. Both
-// come from one open of the database, so the two can never disagree about which
-// generation of the session they describe.
 export type OpenCodeSqliteCaptureValue = {
   session: AiVaultSession | null
   messages: TranscriptMessage[]

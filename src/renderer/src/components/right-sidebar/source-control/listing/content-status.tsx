@@ -5,11 +5,6 @@ import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { TooManyChangesBanner } from './too-many-changes-banner'
 
-/**
- * Renders the banners and empty states that sit above the source control file list: conflict
- * summary or in-progress operation, the huge-repository warning, and the empty state matching the
- * current filter (none, too large, or no matches).
- */
 export function SourceControlContentStatus({
   unresolvedConflictCount,
   conflictOperation,
@@ -69,7 +64,6 @@ export function SourceControlContentStatus({
           />
         </div>
       )}
-      {/* Why: show the operation banner when a rebase/merge/cherry-pick is in progress with no unresolved conflicts. */}
       {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
         <div className="px-3 pb-2">
           <OperationBanner
@@ -84,7 +78,7 @@ export function SourceControlContentStatus({
       )}
       {repositoryHuge && (
         <div className="px-3 pb-2">
-          {/* Why: a slow SSH retry must not keep the next worktree's Retry disabled after navigation. */}
+          {/* Key retry state so slow SSH results cannot disable Retry in the next workspace. */}
           <TooManyChangesBanner
             key={worktreeId}
             limit={repositoryHuge.limit}

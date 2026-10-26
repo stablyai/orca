@@ -28,7 +28,6 @@ export type InitialTerminalSeeder = {
   dispose: () => void
 }
 
-/** One worktree stream's first-terminal seeding, including a verdict that arrived while unselected. */
 export function createInitialTerminalSeeder(
   environmentId: string,
   worktreeId: string
@@ -47,11 +46,7 @@ export function createInitialTerminalSeeder(
     return shouldBootstrapInitialWebRuntimeTerminal({
       event,
       activeWorktreeId: worktreeId,
-      // Why both: the closure flag records that this subscription already owned a create, so the
-      // same closure never seeds twice even once the shared latch is released; a create that threw
-      // never set it, so a later frame may retry. The shared latch is what survives the effect
-      // re-runs a workspace switch triggers — without it a second closure seeds a second terminal
-      // while the first create is still in flight (STA-6173).
+      // Closure guard prevents reseeding after its successful create; failed creates leave it retryable. Shared latch survives effect reinstall so fresh closures cannot duplicate pending creates (STA-6173).
       requestedInitialTerminal:
         requestedInitialTerminal ||
         isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, worktreeId),
@@ -63,7 +58,6 @@ export function createInitialTerminalSeeder(
   }
 
   const seed = async (): Promise<void> => {
-    // Latch claim, create, and row-conditional release live in the dispatch helper.
     if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)) {
       requestedInitialTerminal = true
     }

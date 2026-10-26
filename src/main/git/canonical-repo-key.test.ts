@@ -28,7 +28,6 @@ describe('readGitCommonDir', () => {
   })
 
   it('drops the flag Git older than 2.31 echoes back, and resolves the relative answer', () => {
-    // Without this every repository on such a host would answer `.git` and collide.
     expect(readGitCommonDir('--path-format=absolute\n.git\n', '/repo')).toBe('/repo/.git')
   })
 

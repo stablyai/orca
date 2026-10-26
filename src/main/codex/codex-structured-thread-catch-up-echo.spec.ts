@@ -15,7 +15,6 @@ import {
   applyJournalRow,
   createJournalReducerState
 } from '../native-chat/agent-session-journal/journal-reducer'
-import { draftsDeliveredByAppliedEcho } from '../native-chat/agent-session-journal/queued-message-delivered-echo'
 
 export function registerCodexCatchUpEchoTests(input: {
   chat: typeof catchUpChat
@@ -37,9 +36,7 @@ export function registerCodexCatchUpEchoTests(input: {
     const fingerprint = agentSessionSendBodyFingerprint(SESSION, body)
     await c.journal.queuedMessages.insert({
       messageId: 'draft',
-      body,
-      fingerprint,
-      hostInstance: 'p'
+      body
     })
     const states = ['unknown', 'rejected'] as const
     for (const state of states) {
@@ -51,9 +48,7 @@ export function registerCodexCatchUpEchoTests(input: {
           fence: 1,
           handoverRecorded: true
         },
-        state === 'rejected'
-          ? { messageId: 'draft', expect: 'waiting', settledByOp: null }
-          : undefined
+        state === 'rejected' ? { messageId: 'draft', expect: 'waiting' } : undefined
       )
       await c.journal.resolveDispatch({
         clientMessageId: state,
@@ -135,7 +130,7 @@ export function registerCodexCatchUpEchoTests(input: {
     for (const row of replay.rows) {
       applyJournalRow(state, row)
     }
-    expect(draftsDeliveredByAppliedEcho(state, [draft])).toEqual([])
+    expect(state.queue.cards.get('draft')).toEqual(draft)
   })
 
   it('keeps native display identity after a real retained cut and disk reopen', async () => {

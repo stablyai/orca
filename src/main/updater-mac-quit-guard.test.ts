@@ -192,8 +192,7 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
   })
 
   it('lets an ordinary quit with a staged update exit instead of converting it into a relaunching install', () => {
-    // Why: restart flows call app.relaunch() then app.quit(); converting that quit into
-    // quitAndInstall would race the relaunched old app against ShipIt.
+    // Relaunch flows also call app.quit; converting that to an install races the old app against ShipIt.
     const install = vi.fn()
     registerGuard(true, install)
     handleMacInstallerReady(true, vi.fn(), vi.fn())

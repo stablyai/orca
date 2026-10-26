@@ -37,7 +37,6 @@ vi.mock('./runtime-client', () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 
-// Why: StorageKeyValue requires a non-empty key but accepts any string value, empty included.
 describe('orca cli storage set preserves an empty value', () => {
   beforeEach(() => {
     callMock.mockReset()
@@ -82,7 +81,7 @@ describe('orca cli storage set preserves an empty value', () => {
     })
   })
 
-  // Why: PowerShell 5.1 drops empty native-exe args, so `--value=` is the Windows escape hatch.
+  // PowerShell 5.1 drops empty native arguments; equals form preserves them.
   it('passes an empty --value= (equals form) through to browser.storage.local.set', async () => {
     queueFixtures(callMock, okFixture('req_storage_local_set', { success: true }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -133,8 +132,6 @@ describe('orca cli storage set preserves an empty value', () => {
   })
 })
 
-// Why: CookieSet.value and SetCredentials.pass accept any string, empty included,
-// while name and user require a non-empty one.
 describe('orca cli cookie set and set credentials preserve an empty value', () => {
   beforeEach(() => {
     callMock.mockReset()

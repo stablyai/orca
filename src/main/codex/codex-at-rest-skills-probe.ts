@@ -16,12 +16,12 @@ import {
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { isCodexSkillsListUnsupported, requestCodexSkillReport } from './codex-skill-list'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
+import { resolveHiddenProbeCwd } from '../rate-limits/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
 } from './codex-structured-launch-resolution'
 
-/** How long Codex has to answer `skills/list`. */
 const ANSWER_TIMEOUT_MS = 15_000
 /** Startup grace for plugin sync; longer sync can still be interrupted and retain staging. */
 export const CODEX_SKILLS_PROBE_SETTLE_MS = 70_000
@@ -31,10 +31,9 @@ const MAX_PROBES_ANSWERING = 2
 export type CodexAtRestSkillsDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** The sync a launch runs on this home first, so the probe reads what a launch would. */
+  /** Apply launch-time home sync so the probe sees the same configuration. */
   prepareHome?: (home: string) => void
   now?: () => number
-  /** Test seams. */
   runSession?: typeof runCodexAppServerSession
   sleep?: (ms: number) => Promise<void>
 }
@@ -52,11 +51,7 @@ function definedEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> 
 const sleepFor = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)))
 
-/**
- * Codex's own skills for the folder a resting Codex chat launches in, from one short-lived
- * app-server using the chat's plugin configuration. It answers immediately, then retains a
- * startup grace period; that period does not guarantee plugin sync has finished.
- */
+/** Reports launch-folder skills before plugin startup grace expires; sync may still be unfinished. */
 export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRestCommandCatalog {
   const answering = new PrioritySemaphore(MAX_PROBES_ANSWERING)
   return new AtRestCommandCatalog({
@@ -112,7 +107,8 @@ async function probeCodexSkills(
     {
       command,
       args: [...args, 'app-server'],
-      cwd,
+      // skills/list takes the folder per request; a settling probe in it blocks Windows worktree removal (#33174).
+      cwd: resolveHiddenProbeCwd(),
       cliPath: command,
       env: { ...definedEnv(environment), CODEX_HOME: accountHomePath },
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],

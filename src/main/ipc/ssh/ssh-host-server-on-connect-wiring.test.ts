@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
 import { RemoteNodeRuntimeNoexecError } from '../../ssh/orcad-remote-node-runtime-report'
@@ -62,8 +62,7 @@ beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'host-server-wiring-'))
   store = createSqliteTestStore(Store, { dataFile: join(userDataPath, 'orca-data.json') })
   store.addSshTarget(TARGET)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
-  mocks.registry.current = new SshConnectionStore(store as never)
+  mocks.registry.current = new SshConnectionStore(store)
 })
 
 afterEach(async () => {
@@ -99,7 +98,6 @@ describe('connect-time server decision against the real profile', () => {
     })
     expect(allowsDirectSshRelay(target())).toBe(true)
 
-    // Not retried on the next connect of the same build.
     mocks.deploy.mockClear()
     await resolveHostServerOnConnect(target(), hostServerOnConnectDeps(userDataPath))
     expect(mocks.deploy).not.toHaveBeenCalled()
@@ -118,7 +116,6 @@ describe('connect-time server decision against the real profile', () => {
       reason: 'orcad_unavailable',
       detail: 'runtime_noexec'
     })
-    // The connect's own error, which the host row shows, names noexec rather than "unsupported".
     expect(decision.route === 'unserved' && unservedHostServerMessage(decision)).toMatch(
       /noexec.*connect again/
     )

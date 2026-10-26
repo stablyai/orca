@@ -103,6 +103,7 @@ describe('orca cli browser page targeting', () => {
       index: undefined,
       page: 'page-2'
     })
+    expect(callMock.mock.calls[0][1]).not.toHaveProperty('focus')
   })
 
   it('still resolves the current worktree when tab switch --page is combined with --worktree current', async () => {
@@ -138,18 +139,6 @@ describe('orca cli browser page targeting', () => {
       page: 'page-1',
       focus: true
     })
-  })
-
-  it('omits focus from the payload when --focus is absent', async () => {
-    queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['tab', 'switch', '--page', 'page-1', '--json'], '/tmp/repo/feature/src')
-
-    expect(callMock).toHaveBeenCalledTimes(1)
-    const call = callMock.mock.calls[0]
-    expect(call[0]).toBe('browser.tabSwitch')
-    expect(call[1]).not.toHaveProperty('focus')
   })
 
   it('passes explicit profile ids to tab create', async () => {

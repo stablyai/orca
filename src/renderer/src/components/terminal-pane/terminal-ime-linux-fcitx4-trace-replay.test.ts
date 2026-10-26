@@ -1,10 +1,5 @@
 // @vitest-environment happy-dom
-// Replays real fcitx4 captures (#28213) through the pane's full keyboard stack and a real xterm.
-// Recorded in an Ubuntu 22.04 container on Xvfb with Electron 43.7.5 on X11, keys driven by
-// xdotool. Sogou draws its preedit in its own window: the letters arrive as keyups only, and a
-// single-character pick is a plain Space/digit keydown whose keypress and insertText carry the
-// candidate. Google Pinyin with an in-client preedit runs a composition session instead and is
-// kept as the regression check for that path.
+// Replay Ubuntu/X11 fcitx4 captures through real xterm: Sogou panel picks arrive as plain Space/digit input, while Google Pinyin uses composition sessions (#28213).
 import { describe, expect, it } from 'vitest'
 import sogouGtkTrace from './__fixtures__/fcitx4-sogou-gtk-im-module-trace.json'
 import sogouXimTrace from './__fixtures__/fcitx4-sogou-xim-trace.json'
@@ -33,8 +28,7 @@ const TRACES: [string, RecordedTrace][] = [
 describe.each(TRACES)('fcitx4 %s', (_label, trace) => {
   useLinuxPaneTestEnvironment()
 
-  // Why the kitty pushes: Claude Code negotiates flags 1 or 5, and xterm's kitty encoder sends a
-  // printable key from its keydown and cancels it, so the keypress carrying the pick never fires.
+  // Kitty flags 1/5 let xterm cancel printable keydown before keypress can deliver the candidate.
   describe.each([
     ['legacy keyboard', null],
     ['kitty flags 1', '\x1b[>1u'],
@@ -57,8 +51,7 @@ const KITTY_RELEASE_SUFFIX = ';1:3u'
 describe('fcitx4 Sogou via XIM under kitty event reporting', () => {
   useLinuxPaneTestEnvironment()
 
-  // Why: the XIM pick keydown carries `code: ''` while its keyup is the real key, so the unpaired
-  // keyup reached xterm and the next pick settled the stale claim too — two releases per pick.
+  // XIM’s empty-code pick press must pair with its real-key release; otherwise the next pick emits two releases.
   it('reports one release per pick', async () => {
     const events = sogouXimTrace.events.filter(
       (event) => event.scenario === 's1_ni_space' || event.scenario === 's2_hao_3'

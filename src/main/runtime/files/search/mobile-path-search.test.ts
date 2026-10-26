@@ -19,19 +19,49 @@ describe('rankRuntimeMobileFilePaths', () => {
       '.hidden',
       'a/./b.ts'
     ]
-    for (const query of ['', ' ', 'b', '.ts', '😀', '/', 'a\\', 'missing']) {
+    const rankings = [
+      {
+        query: '',
+        ranked: [
+          '',
+          '/',
+          'a/',
+          'a//b.ts',
+          'b.ts',
+          'B.TS',
+          'a\\b.ts',
+          '界/😀.ts',
+          '.hidden',
+          'a/./b.ts'
+        ]
+      },
+      {
+        query: ' ',
+        ranked: [
+          '',
+          '/',
+          'a/',
+          'a//b.ts',
+          'b.ts',
+          'B.TS',
+          'a\\b.ts',
+          '界/😀.ts',
+          '.hidden',
+          'a/./b.ts'
+        ]
+      },
+      { query: 'b', ranked: ['a//b.ts', 'b.ts', 'B.TS', 'a/./b.ts', 'a\\b.ts'] },
+      { query: '.ts', ranked: ['a//b.ts', 'b.ts', 'B.TS', 'a\\b.ts', '界/😀.ts', 'a/./b.ts'] },
+      { query: '😀', ranked: ['界/😀.ts'] },
+      { query: '/', ranked: ['/', 'a/', 'a//b.ts', '界/😀.ts', 'a/./b.ts'] },
+      { query: 'a\\', ranked: ['a\\b.ts'] },
+      { query: 'missing', ranked: [] }
+    ]
+    for (const { query, ranked } of rankings) {
       for (const limit of [0, 1, 3, 100]) {
-        const q = query.trim().toLowerCase()
-        const prefix = paths.filter((path) => {
-          const lower = path.toLowerCase()
-          return lower.startsWith(q) || (lower.split('/').pop() ?? lower).startsWith(q)
-        })
-        const other = paths.filter(
-          (path) => !prefix.includes(path) && path.toLowerCase().includes(q)
-        )
         expect(rankRuntimeMobileFilePaths(paths, query, limit)).toEqual({
-          paths: [...prefix, ...other].slice(0, limit),
-          totalCount: prefix.length + other.length
+          paths: ranked.slice(0, limit),
+          totalCount: ranked.length
         })
       }
     }
@@ -52,7 +82,7 @@ describe('rankRuntimeMobileFilePaths', () => {
 })
 
 describe('RuntimeMobileFilePathSearchCache', () => {
-  it('reuses a live entry, reloads after expiry, and evicts the oldest key', async () => {
+  it('reuses a live entry and evicts the oldest key at capacity', async () => {
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
     const load = vi.fn(async (path: string) => ({
       paths: [path],
@@ -70,8 +100,7 @@ describe('RuntimeMobileFilePathSearchCache', () => {
   })
 
   it('reloads an unevicted key once its TTL has elapsed', async () => {
-    // TTL expiry without capacity pressure — exercises the now >= expiresAt path
-    // that LRU eviction otherwise masks.
+    // Isolate TTL expiry from capacity eviction.
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
     const load = vi.fn(async (path: string) => ({ paths: [path], totalCount: 1, truncated: false }))
 

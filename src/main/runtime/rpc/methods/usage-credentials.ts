@@ -18,10 +18,8 @@ import {
   saveZcodePlanApiKeyCredential
 } from '../../../zcode/zcode-plan-credential-commands'
 
-// Why on the host: its own usage poller reads these keys, so a paired client saves them here.
-// Statuses carry presence and protection only; a key never travels back to a client. A host with
-// no poller (a WSL host, whose desktop owns its accounts) refuses every call instead, and a key the
-// other Orca app on this machine sealed is never overwritten from here (forgetting it is allowed).
+// Host pollers own these keys; replies expose presence/protection only. Hosts without pollers refuse calls (including WSL).
+// Never overwrite keys sealed by another Orca app; forgetting them is allowed.
 export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxCredentialsStatus',

@@ -1,24 +1,5 @@
-/**
- * Why an SFTP stream needs an `'error'` listener that outlives its transfer.
- *
- * ssh2 answers an SFTP request by invoking the pending request's callback from inside
- * the protocol parser, on the socket's `data` handler stack. For a write stream that
- * callback is `WriteStream.open`'s, and it does a bare `this.emit('error', err)`. Node
- * throws when `'error'` is emitted on an emitter with no listener, so once a transfer
- * has settled and removed its listener, a late STATUS reply becomes a *synchronous
- * throw* out of `Protocol.parse` -> `Socket.emit('data')`.
- *
- * That is an uncaught exception, not a rejection: `installUnhandledRejectionLogging`
- * absorbs rejections, but `installUncaughtPipeErrorGuard` re-throws uncaught exceptions
- * and the app dies (#15479). A jump host that sandboxes the SFTP subsystem into its own
- * chroot makes a late `SSH_FX_NO_SUCH_FILE` the normal answer, so the listener has to
- * outlive the transfer rather than the other way round.
- *
- * `waitForSshChannelOpen` does this for every SFTP session `SshConnection.sftp()` opens;
- * this is the same guarantee one level down, on the streams.
- */
+/** Keep error listeners past transfer settlement: late ssh2 STATUS callbacks emit synchronously from the socket parser, and an unhandled error kills main (#15479). Session-level protection does not cover stream emitters. */
 
-/** SSH_FX_* status code ssh2 copies onto the `Error` it builds from a STATUS reply. */
 const SSH_FX_NO_SUCH_FILE = 2
 
 type ErrorEmitter = {
@@ -26,7 +7,6 @@ type ErrorEmitter = {
 }
 
 export type SftpStreamErrorLatch = {
-  /** Call once the transfer has settled; any error after this point is the late one. */
   markTransferSettled(): void
 }
 
@@ -51,23 +31,12 @@ export function latchLateSftpStreamErrors(
   }
 }
 
-/**
- * A chrooted SFTP subsystem answers a path outside its namespace with
- * `SSH_FX_NO_SUCH_FILE`, because the path genuinely does not exist in the view it
- * serves. `SSH_FX_PERMISSION_DENIED` is not that: it is an ordinary mode/ownership
- * refusal on a path the subsystem *can* see — a read-only home, a root-owned parent,
- * a quota — and rewriting it into "your bastion chroots SFTP" would send the user to
- * fix ProxyJump for a `chmod`.
- */
+/** Only NO_SUCH_FILE suggests an invisible SFTP namespace; permission denial is a mode/ownership problem, not evidence of sandboxing. */
 export function isSandboxedSftpNamespaceError(error: unknown): boolean {
   return (error as { code?: unknown } | null)?.code === SSH_FX_NO_SUCH_FILE
 }
 
-/**
- * POSIX hosts fall back to exec-channel stdin when SFTP is sandboxed (ssh-relay-install-transfers).
- * A Windows host over bundled ssh2 has no such fallback, so there it is a clean failure with an
- * actionable message, not a degraded mode.
- */
+/** POSIX can fall back to exec stdin; bundled ssh2 on Windows must report the namespace failure with actionable guidance. */
 export function describeSandboxedSftpFailure(error: unknown, remotePath: string): Error {
   const detail = error instanceof Error ? error.message : String(error)
   return Object.assign(

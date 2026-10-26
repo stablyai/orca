@@ -9,16 +9,8 @@ export type PendingBrowserCookieImport =
       path: string
     }
 
-// Why: no userAgent fields — the session UA is always derived from the running
-// engine at startup (clean or native), never persisted. Imports before Aug 2026
-// stored a synthesized source-browser UA here; persistMeta drops those legacy
-// TOP-LEVEL keys on the next write because this loader no longer carries them.
-//
-// This does not extend to the retired per-profile `userAgentMode`: it lives inside each
-// BrowserSessionProfile in `profiles`, which is carried through untouched, so those bytes
-// survive every write. That retention is deliberate — it is what makes rollback and
-// data-loss machinery unnecessary — and the startup notice keys on it, so nothing may
-// start stripping it. See inspectRetiredBrowserSessionProfileUserAgentModes.
+// Session identity comes from the running engine; discard legacy top-level UA fields.
+// Retain per-profile userAgentMode for rollback and migration notices.
 export type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
   pendingCookieDbPath: string | null
@@ -28,7 +20,7 @@ export type BrowserSessionMeta = {
 
 export const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 
-// Why: the path is resolved lazily (app.getPath('userData') throws pre-ready) so the failure lands inside the existing swallow.
+// Resolve the path inside the load error boundary.
 export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
@@ -71,7 +63,7 @@ export function loadBrowserSessionMeta(
   }
 }
 
-// Why: write-temp-then-rename is atomic, so a crash mid-write can't corrupt the live file.
+// Write to a temporary file so an interrupted write leaves the existing metadata intact.
 export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string,
@@ -83,7 +75,5 @@ export function persistBrowserSessionMeta(
     mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
     writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
     renameSync(tmpPath, resolveMetadataPath())
-  } catch {
-    // best-effort
-  }
+  } catch {}
 }

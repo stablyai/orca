@@ -7,9 +7,7 @@ import type { AcpStructuredConnection } from './acp-structured-connection'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 export const PID = 4242
 
-/** A scripted agent behind the connection surface: the real protocol runtime over in-memory stdio,
- *  with the process lifecycle `AcpAgentConnection` gives it (stdout EOF is not exit; the exit closes
- *  the protocol with the agent's last words; a protocol failure while it runs is `onClose`). */
+/** Real in-memory protocol with separate stream, process-exit and connection-loss lifecycles. */
 export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConnection {
   readonly agent: AcpScriptedAgent
   readonly pid: number | undefined = PID
@@ -56,7 +54,7 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   resumeReading(): void {
     this.agent.stdout.resume()
   }
-  /** What a close proves once the protocol is closed; replace it to leave the exit unproven. */
+  /** Override to simulate a close without proven exit. */
   proveClose = async (): Promise<boolean> => {
     this.exit()
     return true
@@ -67,7 +65,6 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
     this.drainNotifications(error)
     return this.proveClose().finally(() => super.close(error))
   }
-  /** The agent process ends on its own (or Orca's close landed). */
   exit(): void {
     if (this.gone) {
       return

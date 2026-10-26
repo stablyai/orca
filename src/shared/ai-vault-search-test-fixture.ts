@@ -39,8 +39,7 @@ export function fakeSearchService() {
     search: vi.fn(
       async (
         _request: AiVaultSearchRequest,
-        // The host's scope verdict, declared so `mock.calls` records it. Typed
-        // loosely because its type is a host-side one and this fixture is shared.
+        // Declare the host scope verdict for mock.calls; keep it loose to avoid a host-only type in shared fixtures.
         _hostScope?: unknown
       ): Promise<AiVaultSearchResponse> => searchResults()
     ),

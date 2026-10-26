@@ -17,7 +17,10 @@ export function createEditorBufferIdentityActions(
   _get: EditorGet
 ): Pick<
   EditorSlice,
-  'reconcileEditorBufferIdentities' | 'detachRetiredEditorBuffers' | 'releaseKeptEditorBuffers'
+  | 'reconcileEditorBufferIdentities'
+  | 'detachRetiredEditorBuffers'
+  | 'releaseKeptEditorBuffers'
+  | 'settleKeptEditorBuffers'
 > {
   return {
     reconcileEditorBufferIdentities: () =>
@@ -55,6 +58,28 @@ export function createEditorBufferIdentityActions(
         const editorBufferKept = { ...s.editorBufferKept }
         for (const [recordId] of released) {
           delete editorBufferKept[recordId]
+        }
+        return { editorBufferKept }
+      }),
+
+    settleKeptEditorBuffers: (viewIds, content, signature) =>
+      set((s) => {
+        const settled = Object.entries(s.editorBufferKept).filter(([, entry]) =>
+          entry.viewIds.some((id) => viewIds.includes(id))
+        )
+        if (settled.length === 0) {
+          return s
+        }
+        const editorBufferKept = { ...s.editorBufferKept }
+        for (const [recordId, entry] of settled) {
+          if (entry.draft === content) {
+            delete editorBufferKept[recordId]
+          } else {
+            editorBufferKept[recordId] = {
+              ...entry,
+              record: { ...entry.record, lastKnownDiskSignature: signature }
+            }
+          }
         }
         return { editorBufferKept }
       })

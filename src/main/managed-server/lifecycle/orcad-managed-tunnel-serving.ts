@@ -1,10 +1,4 @@
-/**
- * The serving check behind an established managed tunnel. A restarted orcad may bind a port
- * other than the one the tunnel forwards to; the forward is then dropped, and the next build
- * forwards to the port the new server actually bound. Whoever restarted it — this desktop or
- * another — the host's readiness record names that port, so a tunnel that stopped answering
- * re-reads it rather than waiting for a start this desktop never sees.
- */
+// Reread readiness after unanswered tunnels: another desktop may have restarted orcad on a new port.
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import type { OrcadManagedServingCheck } from './orcad-managed-tunnel-resume'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import {
   runtimeHostBlockedCopy,
   runtimeHostConnectionDetail,

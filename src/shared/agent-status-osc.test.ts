@@ -114,7 +114,14 @@ describe('createAgentStatusOscProcessor', () => {
     const stream =
       'before😀\x1b]9999;{"state":"working","prompt":"漢字"}\x07between' +
       '\x1b]9999;{"state":"done"}\x1b\\after'
-    const expected = createAgentStatusOscProcessor()(stream)
+    const expected = {
+      cleanData: 'before😀betweenafter',
+      payloads: [
+        { state: 'working', prompt: '漢字' },
+        { state: 'done', prompt: '' }
+      ],
+      lastPayloadCleanOffset: 'before😀between'.length
+    }
     const other = createAgentStatusOscProcessor()
 
     for (let split = 0; split <= stream.length; split += 1) {

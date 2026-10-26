@@ -28,6 +28,13 @@ import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-ma
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
+import {
+  captureSavedResumeCleanup,
+  admitColdRestoreReattach,
+  forgetRefusedResume,
+  resumeSpawnRefusal,
+  savedResumeRecord
+} from '../host-env/saved-resume-admission'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
@@ -42,8 +49,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   const replacedPaneKey =
     args.replacesPtyId !== undefined ? resolveEarlyPaneSpawnReservationKey(args) : null
   if (replacedPaneKey) {
-    // Why: hold the pane across the stop, so a spawn for it arriving meanwhile (a hidden tab
-    // revealed mid-restart) joins the replacement instead of reattaching the owner being stopped.
+    // Reserve through stop so concurrent reveals join the replacement instead of the dying owner.
     ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacedPaneKey)
     ctx.paneSpawnReservationKey = replacedPaneKey
   }
@@ -57,7 +63,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     ctx.paneSpawnOperation = operation
     ctx.paneSpawnReservation = null
     ctx.earlyStablePaneOwner = null
-    // Awaited only for a launch: an ordinary spawn reaches its provider in the same turn as before.
+    // Avoid a new await for ordinary spawns; launch planning alone needs this yield.
     if (ctx.args.agentLaunch !== undefined) {
       await planPaneAgentLaunch(ctx)
     }
@@ -75,19 +81,48 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     })
     const complete = async (scope: PaneSpawnOperation) => {
       ctx.paneSpawnOperation = scope
-      // Right before the provider spawn, with nothing awaited in between: a closed pane starts nothing.
+      // Check immediately before spawn, with no intervening await, so closed panes cannot start commands.
       ctx.paneAgentLaunch?.refuseIfClosed()
-      // Switch point: a pane main closed or took back while this spawn waited starts nothing.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         refuseClosedPaneSpawn(deps.store, args.tabId, args.leafId)
       }
       try {
         await executePtyIpcSpawn(ctx)
+        if (!ctx.resumeAdmission) {
+          ctx.resumeAdmission = await admitColdRestoreReattach(
+            deps.runtime,
+            ctx.result,
+            { paneKey: ctx.stablePaneKey, saved: savedResumeRecord(deps.store, ctx.stablePaneKey) },
+            ctx.expectedWslDistro
+          )
+          await captureSavedResumeCleanup(
+            deps.runtime,
+            deps.store,
+            ctx.stablePaneKey,
+            ctx.resumeAdmission,
+            args.worktreeId
+          )
+        }
         const committed = await commitPtyIpcSpawn(ctx)
+        const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
+        forgetRefusedResume(ctx.stablePaneKey, refusal)
+        if (args.worktreeId && ctx.stablePaneKey && refusal && refusal.verdict !== 'unverifiable') {
+          void deps.runtime
+            ?.forgetRefusedSavedResume?.(
+              args.worktreeId,
+              ctx.stablePaneKey,
+              refusal.refused,
+              refusal.sourceRecord
+            )
+            .catch((error: unknown) => console.warn('[pty] refused resume cleanup failed', error))
+        }
         endPaneAgentLaunch(
           ctx,
           ctx.exitedBeforeRegistration ? { exitedDuringStart: true } : { started: true }
         )
+        if (!ctx.result.isReattach) {
+          deps.runtime?.rememberSavedTerminalLaunchResult?.(committed.id, committed)
+        }
         return committed
       } finally {
         if (ctx.pendingRegistrationPtyId) {
@@ -128,7 +163,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       if (adopted) {
         releaseAbandonedAgentTeamsLeader(ctx)
       }
-      return adopted?.result ?? completed!
+      return adopted
+        ? { ...adopted.result, ...deps.runtime?.getTerminalLaunchResult?.(adopted.result.id) }
+        : completed!
     }
     return complete(operation)
   }
@@ -180,7 +217,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
         ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, adopted.result.id, true)
       })
       endPaneAgentLaunch(ctx, { started: true })
-      return adopted.result
+      return { ...adopted.result, ...deps.runtime?.getTerminalLaunchResult?.(adopted.result.id) }
     }
     return freshResult!
   } catch (caught) {
@@ -200,12 +237,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     if (ctx.replacedPaneOwner) {
       await releaseStoppedPaneBinding(deps.store, ctx.replacedPaneOwner)
     }
-    // Why: once the reservation is created, any later throw —
-    // spawn failure, persist failure, or a post-spawn helper such as
-    // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
-    // it lingers in paneSpawnReservationsByOwnerKey and every future spawn
-    // for this pane awaits a promise that never resolves. reject is a
-    // no-op once the reservation has already resolved.
+    // Settle reservations on every later failure, including post-spawn saves/helpers, or future pane spawns hang forever.
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
     throw err
   } finally {

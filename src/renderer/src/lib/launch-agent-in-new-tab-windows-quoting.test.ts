@@ -1,13 +1,9 @@
-// Windows/WSL shell-quoting coverage for launchAgentInNewTab, split from
-// launch-agent-in-new-tab.test.ts to keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockCreateWebRuntimeAgentSessionTerminal = vi.fn()
 const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockCreateTab = vi.fn()
-/** Startup commands published with the created tabs, in creation order. */
 function queuedStartups() {
   return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
 }
@@ -342,8 +338,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     )
   })
 
-  // Platform resolution lands on posix here because vitest's node environment does not
-  // report Windows. This pins single-quote escaping of user-configured default agent args.
+  // Node tests resolve POSIX here; verify single-quote escaping in configured default arguments.
   it('escapes a single quote inside default agent args', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     store.settings.agentDefaultArgs = { codex: '--profile "don\'t"' }

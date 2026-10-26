@@ -241,8 +241,6 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    // No renderer graph on purpose: headless rename attribution must work from
-    // the persisted session alone.
     const { worktrees } = await runtime.getWorktreePs()
     const oldSummary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
     const renamedSummary = worktrees.find((worktree) => worktree.worktreeId === renamedWorktreeId)
@@ -265,8 +263,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'tab-1',
       worktreeId: TEST_WORKTREE_ID,
       connectionId: null,
-      // Same agent as the OSC turn below: the store resolves pane identity itself, and a
-      // cross-agent flip inside the inheritance window is a different rule's subject.
+      // Keep the agent unchanged to isolate freshness from cross-agent inheritance.
       payload: { state: 'working', prompt: 'earlier hook row', agentType: 'codex' }
     })
     runtime.attachWindow(1)
@@ -329,8 +326,7 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
-      // Why: local rows only project while their tab exists (#6072); freshness
-      // is what varies here, so keep the tab present in the runtime graph.
+      // Keep the tab present: this test varies freshness, not the closed-tab filter (#6072).
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [
@@ -349,14 +345,12 @@ describe('OrcaRuntimeService', () => {
 
       const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
       expect(summary).toMatchObject({ hasHostSidebarActivity, status })
-      // Why: inactive must mean "projected but not fresh", never "row dropped".
       expect(summary?.agents).toHaveLength(1)
     }
   )
 
   it('drops a hydrated done hook row after its local tab is closed', async () => {
-    // Why (#6072): last-status.json hydrates hook rows for days; a closed tab's
-    // agent must not resurface on mobile as current worktree activity.
+    // Hydrated hook rows for closed tabs must not reappear as current mobile activity (#6072).
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -390,8 +384,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a hydrated row while its persisted session tab exists and no renderer graph is attached', async () => {
-    // Why: headless serve has no renderer graph; session.tabs.list serves this
-    // tab to mobile as current, so its agent row must stay (desktop parity).
+    // Headless session tabs remain current without a renderer graph.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -435,8 +428,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('resolves legacy numeric pane keys through the stale filter too', async () => {
-    // Why: non-UUID leaves produce `tabId:paneRuntimeId` keys with no tabId
-    // field; they still name a real tab and must not bypass the filter.
+    // Non-UUID pane keys without a tabId field must still pass through the closed-tab filter.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -489,8 +481,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a local hook row while a connected PTY still backs its pane', async () => {
-    // Why: daemon-held terminals stay live across renderer graph gaps even when
-    // no session tab records them; a connected PTY is proof the pane exists.
+    // A connected daemon PTY proves the pane exists even during graph and session gaps.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -518,7 +509,7 @@ describe('OrcaRuntimeService', () => {
       leafId: '77777777-7777-4777-8777-777777777777',
       ptyId: 'daemon-pty'
     })
-    // paneKey-only record: the tabId rescue must not be what keeps this row.
+    // Omit tabId to isolate paneKey rescue.
     runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
       connected: true,
       paneKey,
@@ -535,8 +526,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a local hook row when a connected PTY matches only its tab id', async () => {
-    // Split-pane sibling: the PTY's paneKey names another leaf of the same tab,
-    // so only the tabId conjunct can rescue this row.
+    // Use another split leaf to isolate tabId rescue.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -579,9 +569,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps an OSC row via its connected PTY after the pane binding is cleared', async () => {
-    // A controller incarnation change nulls pty.tabId/paneKey while the PTY
-    // stays connected (adoptControllerTerminalHandle); the terminal handle the row was
-    // stamped with is then the only rescue left for it.
+    // After controller incarnation changes clear pane coordinates, only the stamped terminal handle can rescue the row.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -619,8 +607,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps the connected-PTY rescue when a hook row outraces the OSC row for the same pane', async () => {
-    // Hook payloads carry no ptyId; the OSC-observed one must survive the
-    // hook row winning the freshness race or the ptyId rescue goes dead.
+    // Hooks carry no ptyId; preserve the OSC-observed id when a fresher hook wins.
     const paneKey = 'race-tab:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),

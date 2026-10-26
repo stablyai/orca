@@ -8,6 +8,7 @@ import { useAppStore } from '../../store'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
+import { ChatFontFamilySetting } from './ChatFontFamilySetting'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { NumberField, SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
@@ -24,11 +25,15 @@ export type AppearanceChatSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisiblePrimary?: boolean
+  fontSuggestions?: string[]
+  onRequestFontSuggestions?: () => void
 }
 
 export function AppearanceChatSection({
   settings,
   updateSettings,
+  fontSuggestions,
+  onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceChatSectionProps): React.JSX.Element {
   const appearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
@@ -49,6 +54,13 @@ export function AppearanceChatSection({
         appearance={appearance}
         onChange={update}
         forceVisiblePrimary={forceVisiblePrimary}
+      />
+      <ChatFontFamilySetting
+        settings={settings}
+        onChange={(fontFamily) => update({ fontFamily })}
+        fontSuggestions={fontSuggestions}
+        onRequestFontSuggestions={onRequestFontSuggestions}
+        forceVisible={forceVisiblePrimary}
       />
       <SearchableSetting
         id={entries.textSize.targetSectionId}

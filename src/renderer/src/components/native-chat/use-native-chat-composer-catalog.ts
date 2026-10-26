@@ -18,12 +18,7 @@ export type NativeChatComposerCatalog = {
   sessionSkills: readonly NativeChatSessionSkill[] | undefined
 }
 
-/**
- * What the `/` menu offers. A structured chat offers the host's own commands, then
- * what the session reports it actually loaded — the only list that includes this
- * repo's own commands and the skills that reach the session through plugin roots —
- * and Orca's `/resume`. The PTY lane keeps the curated per-agent catalog.
- */
+/** Structured chats use host and session-loaded commands/skills plus Orca /resume; PTY chats retain curated catalogs. */
 export function useNativeChatComposerCatalog(
   agent: AgentType,
   structuredTransport?: NativeChatStructuredComposerTransport

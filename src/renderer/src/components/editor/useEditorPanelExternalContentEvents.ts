@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 import {
-  getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
@@ -15,8 +14,8 @@ import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
-import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
-import { withRecordDiskText } from './editor-buffer-adapter'
+import { isEditorModelDirty } from './editor-save-disk-precondition'
+import { externalChangeRecordViewIds, withRecordDiskText } from './editor-buffer-adapter'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -71,9 +70,7 @@ export function useEditorPanelExternalContentEvents({
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
     const reloads = createEditorWatcherReloadCoalescer()
-    // Why: a coalesced follow-up starts later; re-check the tab. A closed tab is skipped; one that
-    // left the screen is marked stale so its queued change reloads on reveal; one edited meanwhile
-    // keeps its draft but records that disk moved, so autosave can't silently overwrite it.
+    // Recheck queued targets: skip closed tabs, invalidate hidden ones and mark newly dirty drafts as conflicting instead of reloading.
     const resolveReloadTarget = (fileId: string): OpenFile | 'stale' | null => {
       const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
       if (!file) {
@@ -123,20 +120,9 @@ export function useEditorPanelExternalContentEvents({
       const invalidatedDiffFileIds: string[] = []
       const invalidatedFileIds: string[] = []
       const storeState = useAppStore.getState()
-      const matched = getOpenFilesForExternalFileChange(openFilesRef.current, detail)
-      // Why: a tab of another workspace showing the same model is stale too.
-      const siblingIds = new Set(
-        matched.flatMap((file) =>
-          storeState?.openFiles?.some((tab) => tab.id === file.id)
-            ? editorModelSiblingTabs(storeState, file).map((tab) => tab.id)
-            : [file.id]
-        )
-      )
+      const siblingIds = externalChangeRecordViewIds(storeState, openFilesRef.current, detail)
       for (const file of openFilesRef.current.filter((tab) => siblingIds.has(tab.id))) {
-        // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
-        // marked changed-on-disk upstream and resolves via the editor banner,
-        // a save, or a later clean reload. Reloading here would clobber it. A
-        // clean tab of a model another tab is editing shows that buffer too.
+        // Preserve unsaved shared buffers, including clean sibling views; the conflict banner owns their resolution.
         if (
           file.isDirty ||
           (storeState.openFiles.some((tab) => tab.id === file.id) &&
@@ -149,8 +135,7 @@ export function useEditorPanelExternalContentEvents({
           continue
         }
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          // Why: external writes must replace any in-flight pre-change read so
-          // the tab shows the new on-disk content, not a stale dedupe result.
+          // External changes must supersede reads started before the write instead of reusing stale dedupe results.
           reloads.run(`content:${file.id}`, () => runContentReload(file.id, eventGeneration))
           if (editorViewModeRef.current[file.id] === 'changes') {
             reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
@@ -192,8 +177,9 @@ export function useEditorPanelExternalContentEvents({
       }
       const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
       const recordViewIds = detail.recordViewIds ?? [detail.fileId]
+      updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
       if (!file) {
-        // Why: the saving tab closed mid-save; the record's other views still move to the disk text.
+        // Saved text still reaches record siblings after the saving view closes.
         setFileContents((prev) =>
           withRecordDiskText(prev, recordViewIds, detail.fileId, detail.content)
         )
@@ -205,7 +191,6 @@ export function useEditorPanelExternalContentEvents({
           [file.id]: { content: detail.content, isBinary: false }
         }))
       }
-      updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
       if (file.mode === 'edit' || file.mode === 'markdown-preview') {
         return
       }
@@ -259,9 +244,11 @@ function updateSavedPreviewTabs(
   detail: EditorFileSavedDetail,
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 ): void {
+  // Why the record's views: the saving view may have closed while its siblings' previews remain.
+  const sources = new Set<string | undefined>([detail.fileId, ...(detail.recordViewIds ?? [])])
   const previewTabs = openFiles.filter(
     (openFile) =>
-      openFile.mode === 'markdown-preview' && openFile.markdownPreviewSourceFileId === detail.fileId
+      openFile.mode === 'markdown-preview' && sources.has(openFile.markdownPreviewSourceFileId)
   )
   if (previewTabs.length === 0) {
     return
@@ -295,8 +282,7 @@ export function usePruneClosedEditorContent(
         delete fileLoadRetryAttemptsRef.current[fileId]
       }
     }
-    // Why: conflict-review entry loads use absolute paths as content ids; only
-    // ids that have belonged to tabs are safe to prune as closed tabs.
+    // Conflict-review paths can be content IDs without tabs; prune only IDs known to have belonged to closed tabs.
     for (const fileId of Object.keys(fileReadGenerationRef.current)) {
       if (knownOpenFileIdsRef.current.has(fileId) && !openIds.has(fileId)) {
         delete fileReadGenerationRef.current[fileId]

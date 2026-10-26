@@ -38,7 +38,6 @@ describe('handleForeignSqliteReaderRequest', () => {
   })
 
   it('rejects a kind no reader owns instead of running one', () => {
-    // Parsed, as a structured clone arrives: untyped, with a kind outside the union.
     const request = JSON.parse('{"id":9,"kind":"list","dbPaths":[]}')
     expect(handleForeignSqliteReaderRequest(request)).toEqual({
       id: 9,

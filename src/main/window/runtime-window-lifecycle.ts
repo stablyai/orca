@@ -35,7 +35,7 @@ export function registerRuntimeWindowLifecycle(
   const send = rendererNotifications.send
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed, options) => {
-      // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
+      // Invalidate scan TTLs before notifying renderer or its immediate read can return stale mutation results.
       if (options?.invalidateGitScans !== false) {
         runWorktreeChangeInvalidators(repoId)
       }
@@ -44,6 +44,7 @@ export function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
+    browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,
@@ -88,7 +89,7 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
-          // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
+          // Renderer-supplied request IDs confer no authority; only this window can satisfy reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
@@ -133,7 +134,7 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
           ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
           ...(opts.agentLaunchViewer ? { agentLaunchViewer: opts.agentLaunchViewer } : {}),
-          // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
+          // Pre-mint tabId to match the PTY paneKey so hook events reach the correct tab.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
@@ -249,7 +250,7 @@ export function registerRuntimeWindowLifecycle(
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
-      // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
+      // Clear window-capturing notifier closures during windowless gaps to release destroyed graphs.
       runtime.setNotifier(null)
       activeRuntimeNotifierToken = null
     }

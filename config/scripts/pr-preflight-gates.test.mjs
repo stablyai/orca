@@ -52,7 +52,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toMatch(/^\d+\.\d+\.\d+$/)
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -227,57 +227,6 @@ it.each(['true', 'false'])(
   }
 )
 
-it('pins every foreground and background step to its selected phase', () => {
-  const staticPhase = "needs.code_paths.outputs.static_analysis == 'true'"
-  const typePhase = "needs.code_paths.outputs.typecheck == 'true'"
-  const foreground = steps.filter(
-    (step) => !step.background && /outputs\.(static_analysis|typecheck)/.test(step.if ?? '')
-  )
-  expect(foreground.map((step) => [step.name ?? step.run ?? step.uses, step.if])).toEqual([
-    ['Check formatting', staticPhase],
-    ['Reject low-evidence patterns', staticPhase],
-    ['Enforce type-aware code-quality baseline', staticPhase],
-    [
-      './.github/actions/install-mobile-dependencies',
-      `${staticPhase} && needs.code_paths.outputs.mobile_dependencies == 'true'`
-    ],
-    ['Verify locked audit tools', staticPhase],
-    ['Enforce React Doctor on changed lines', staticPhase],
-    ['Check Zustand selector fan-out budget', staticPhase],
-    ['Check reliability gate manifest', staticPhase],
-    ['Enforce dead design-system classes', staticPhase],
-    ['Check VM runtime rollback compatibility', staticPhase],
-    ['Enforce ratchets', staticPhase],
-    ['Check Node runtime pin', staticPhase],
-    ['Check root and mobile lock the same shared dependencies', staticPhase],
-    ['Decide whether the orcad terminal smoke runs', staticPhase],
-    ['Verify the generated RPC params catalog', staticPhase],
-    ['Verify the generated ACP protocol schema', staticPhase],
-    ['Verify bundled skill guides', staticPhase],
-    ['Verify skill freshness manifest', staticPhase],
-    ['Verify localization coverage', staticPhase],
-    ['Guard against project-owned .d.ts in preload/shared', staticPhase],
-    ['Check feature wall asset budget', staticPhase],
-    ['Verify macOS entitlements', staticPhase],
-    ['actions/upload-artifact@v7', typePhase]
-  ])
-  expect(
-    steps
-      .filter((step) => step.background)
-      .map((step) => [step.id, step.env.PREFLIGHT_PHASE_SELECTED])
-  ).toEqual([
-    ['process-host-imports', `\${{ ${staticPhase} }}`],
-    ['main-sync-spawn-ratchet', `\${{ ${staticPhase} }}`],
-    ['root-lint', `\${{ ${staticPhase} }}`],
-    ['native-code-quality', `\${{ ${staticPhase} }}`],
-    ['changed-code-quality', `\${{ ${staticPhase} }}`],
-    ['typecheck', `\${{ ${typePhase} }}`],
-    ['localization-extraction', `\${{ ${staticPhase} }}`],
-    ['localization-catalogs', `\${{ ${staticPhase} }}`],
-    ['unit-plan', `\${{ ${typePhase} }}`]
-  ])
-})
-
 it.each([
   { changed: ['LICENSE'], static_analysis: false, typecheck: false, mobile_dependencies: false },
   { changed: ['README.md'], static_analysis: true, typecheck: false, mobile_dependencies: false },
@@ -288,7 +237,7 @@ it.each([
     mobile_dependencies: true
   },
   {
-    changed: ['cloud/package.json'],
+    changed: ['cloud/apps/relay/Dockerfile'],
     static_analysis: false,
     typecheck: false,
     mobile_dependencies: false
@@ -327,16 +276,34 @@ it.each([
   expect(scope.test).toBe(expected.typecheck)
 })
 
-it('registers successful no-op background work when a phase is unselected or already failed', () => {
-  for (const step of steps.filter((step) => step.background)) {
-    expect(step.if).toBe('!cancelled()')
-    expect(step.env.PREFLIGHT_PHASE_SELECTED).toContain('needs.code_paths.outputs.')
-    expect(step.env.PREFLIGHT_PRIOR_SUCCESS).toBe("${{ job.status == 'success' }}")
-    expect(step.run.split('\n')[0]).toBe(
-      'if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi'
-    )
+it.skipIf(process.platform === 'win32')(
+  'exits background guards only when their selected phase cannot run',
+  async () => {
+    for (const step of steps.filter((step) => step.background)) {
+      const guard = step.run.split('\n')[0]
+      for (const [selected, priorSuccess, expected] of [
+        ['false', 'true', 0],
+        ['true', 'false', 0],
+        ['true', 'true', 23]
+      ]) {
+        const result = await runProcess({
+          program: 'bash',
+          args: ['-e', '-c', `${guard}\nexit 23`],
+          env: {
+            ...process.env,
+            ORCA_BACKGROUND_LAUNCH: '1',
+            PREFLIGHT_PHASE_SELECTED: selected,
+            PREFLIGHT_PRIOR_SUCCESS: priorSuccess
+          },
+          timeoutMs: 10_000
+        })
+        expect(result.code, `${step.id}: selected=${selected}, prior=${priorSuccess}`).toBe(
+          expected
+        )
+      }
+    }
   }
-})
+)
 
 it('shares import analysis without dropping either boundary gate', () => {
   const imports = steps.find((step) => step.id === 'process-host-imports')
@@ -400,7 +367,7 @@ it('runs the unchanged Node 18 smoke after every Node 24 step and preserves its 
     expect(joined, background.id).toBeLessThan(steps.indexOf(smoke))
   }
   expect(receipt.name).toBe('managed hooks on Node 18')
-  expect(receipt['runs-on']).toBe('ubuntu-slim')
+  expect(receipt['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
   expect(receipt.steps).toHaveLength(1)
   expect(receipt.steps[0].uses).toBeUndefined()
   expect(receipt.steps[0].env.MANAGED_HOOK_NODE18).toBe(

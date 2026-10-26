@@ -25,12 +25,7 @@ import { bindHiddenStartupRendererQueryWrite } from './hidden-startup-renderer-q
 import { bindHiddenOutputRestoreDrain } from './hidden-output-restore-drain'
 
 export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void {
-  // Why record-only: DECSET 2031 subscribes to future color changes, it is not a query —
-  // the protocol's query is `CSI ?996n`. fish arms 2031 for the ~1ms it paints a prompt, so
-  // any reply lands after the withdrawal and paints `?997;1n` as literal text (#9993).
-  // Why here and not in xterm's CSI handler: xterm batches several PTY chunks into one
-  // synchronous parse, so a handler cannot tell where a chunk ended. One raw chunk in,
-  // one order-aware final state out.
+  // DECSET 2031 subscribes silently; late replies paint junk after fish withdraws it (#9993). Scan raw chunks because xterm batching hides per-chunk subscription state.
   session.observeLiveMode2031Chunk = function (data: string): void {
     // Gate-managed PTYs never see these bytes; main's '2031-subscribe' fact records them.
     if (session.isHiddenDeliveryGateManagedPty(session.transport.getPtyId())) {
@@ -46,8 +41,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       return
     }
     const settings = useAppStore.getState().settings
-    // Why seed the mode: maybePushMode2031Flip only pushes on a change, so an unseeded
-    // subscription would read as a flip on the next unrelated appearance re-apply.
+    // Seed the current mode so unrelated appearance reapply cannot masquerade as a theme flip.
     session.deps.paneMode2031Ref.current.set(session.pane.id, true)
     session.deps.paneLastThemeModeRef.current.set(
       session.pane.id,
@@ -55,22 +49,11 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     )
   }
 
-  // Why installed here: the handler observes CSI 3 J inside xterm's parse, so a
-  // redraw split across PTY chunks is reported once, with the pane's rows for
-  // this write already applied.
+  // Observe CSI 3 J inside xterm parse so split redraws report once with current rows already applied.
   session.liveScrollbackRestore?.dispose()
   session.liveScrollbackRestore = installTerminalLiveScrollbackRestore(session.pane.terminal)
 
-  // Why read it live: `?1049` is not a no-op when the pane is already on the
-  // target buffer — xterm still runs restoreCursor and swaps the kitty flag
-  // registers — so the replay prologue must only switch when it truly differs.
-  //
-  // Best-effort by design. xterm parses asynchronously, so this sees only
-  // PARSED writes; a `?1049` transition still queued reads stale. Draining
-  // first with a write sentinel was tried and reverted: it puts the repaint
-  // behind xterm's queue, so a wedged terminal stalls recovery, and it breaks
-  // the disposal/cancellation ordering the restore paths rely on. A stale read
-  // costs one mis-scoped buffer switch; the barrier costs the repaint.
+  // Switch buffers only on mismatch: repeated ?1049 still restores cursor and swaps Kitty slots. Read parsed state best-effort; draining first can stall recovery and break cancellation.
   session.isPaneOnAlternateScreen = function (): boolean {
     return session.pane.terminal.buffer.active.type === 'alternate'
   }
@@ -128,15 +111,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
 
   bindHiddenStartupRendererQueryWrite(session)
   bindHiddenOutputRestoreChunk(session)
-  /**
-   * Apply an authoritative snapshot to the pane's kitty mirror in the order:
-   * unproven reset, replay-semantics scan of the snapshot
-   * bytes (so screen selection lands first), then the owner's proven flags.
-   *
-   * Why the reset only happens when the owner proved something: an old host
-   * omits the field, and downgrading a mirror that is already tracking live
-   * output would lose correct state instead of preserving it.
-   */
+  /** Scan snapshot screen selection before owner-proven flags; only demote when the owner supplies evidence, preserving live-tracked state for older hosts. */
   session.applySnapshotKittyKeyboardModes = function (
     snapshotData: string,
     snapshot: { kittyKeyboardFlags?: number; snapshotSeq?: number }
@@ -146,11 +121,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
         ? undefined
         : parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
     if (proven === undefined) {
-      // Why the demotion: a mirror grounded in this PTY's stream keeps its
-      // state, but a constructor-fresh tracker (window reload) holds a
-      // known-zero that was never proven for the reattached PTY — demote it
-      // so the serializer cannot republish it downstream as host-proven
-      // inactive.
+      // Fresh mirrors’ initial zero proves nothing about reattached PTYs; demote it before downstream serialization can claim known-inactive flags.
       if (!session.kittyKeyboardModes.hasProvenBaseline) {
         session.kittyKeyboardModes.resetForSnapshot()
       }
@@ -160,8 +131,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     session.kittyKeyboardModes.resetForSnapshot()
     session.kittyKeyboardModes.scanReplay(snapshotData)
     session.kittyKeyboardModes.restoreSnapshotFlags(proven)
-    // Why in the same critical section: without the baseline a quiet pane
-    // could not publish a coherent snapshot until unrelated output arrived.
+    // Publish the baseline atomically with flags so quiet panes can serialize coherently without waiting for more output.
     session.recordRendererOrderedSeq({ seq: snapshot.snapshotSeq })
   }
 

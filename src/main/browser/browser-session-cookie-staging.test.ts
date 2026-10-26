@@ -19,7 +19,7 @@ let userData = ''
 const metadataPath = (): string => join(userData, 'browser-session-meta.json')
 
 beforeEach(() => {
-  // Why: macOS reports /private/var for a /var mkdtemp path, so resolve before comparing paths.
+  // Resolve macOS /var symlinks before comparing paths.
   userData = realpathSync(mkdtempSync(join(tmpdir(), 'orca-cookie-staging-')))
   appGetPathMock.mockReturnValue(userData)
 })

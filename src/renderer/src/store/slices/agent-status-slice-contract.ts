@@ -75,7 +75,6 @@ export type AgentStatusSlice = {
     ptyId?: string | null
   }) => void
 
-  /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
     payload: AgentStatusPayload,
@@ -85,8 +84,7 @@ export type AgentStatusSlice = {
     metadata?: AgentStatusMetadata
   ) => void
 
-  /** Apply ordered status updates as one status publication (generated titles and tab
-   *  titles still publish after it — three total, not 2N). */
+  /** Publish ordered status batch once; generated/tab titles publish separately (three writes, not 2N). */
   setAgentStatuses: (updates: readonly AgentStatusBatchUpdate[]) => boolean[]
 
   /** Fold caller-derived updates against exact staged state, committing one status publication. */
@@ -97,7 +95,6 @@ export type AgentStatusSlice = {
   /** Patch a live row's OSC 7501 facet only (`null` clears it); false when no row or no change. */
   setAgentProgramStatus: (paneKey: string, programStatus: ProgramStatusFacet | null) => boolean
 
-  /** Record resume identity without creating a visible turn-status row. */
   recordAgentProviderSession: (
     paneKey: string,
     agent: ResumableTuiAgent,
@@ -124,10 +121,8 @@ export type AgentStatusSlice = {
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
 
-  /** Remove a single entry (e.g., when a pane's terminal exits). */
   removeAgentStatus: (paneKey: string) => void
 
-  /** Remove all entries whose paneKey starts with the given prefix (tab close prefix-sweep). */
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
   /** Remove stale live rows while preserving pane launch and resume identity. */
@@ -149,8 +144,7 @@ export type AgentStatusSlice = {
     opts?: DropHibernatedAgentPaneOptions
   ) => void
 
-  /** Remove all entries for a worktree AND suppress re-retention for live rows (worktree sleep/remove).
-   *  Sweeps live rows by tab prefix and by main-stamped worktree attribution so worker rows that arrive before their tab don't survive. */
+  /** Worktree sleep/remove sweeps tab prefixes plus main worktree attribution so pre-tab worker status cannot survive; suppress retention only for live rows. */
   dropAgentStatusByWorktree: (worktreeId: string, opts?: DropAgentStatusByWorktreeOptions) => void
 
   captureSleepingAgentSessionsByWorktree: (worktreeId: string, paneKeys?: string[]) => void
@@ -163,19 +157,16 @@ export type AgentStatusSlice = {
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
-  /** Retain agent snapshots. Accepts an array so simultaneous disappearances produce a single set() with no mid-loop intermediate states. */
+  /** Retain simultaneous disappearances in one set without intermediate states. */
   retainAgents: (entries: RetainedAgentEntry[]) => void
 
-  /** Dismiss a retained entry by its paneKey. */
   dismissRetainedAgent: (paneKey: string) => void
 
   /** Dismiss several retained entries in one set (Activity "Clear completed"). */
   dismissRetainedAgents: (paneKeys: readonly string[]) => void
 
-  /** Dismiss all retained entries belonging to a worktree. */
   dismissRetainedAgentsByWorktree: (worktreeId: string) => void
 
-  /** Prune retained entries whose worktreeId is not in the given set. */
   pruneRetainedAgents: (validWorktreeIds: Set<string>) => void
 
   /** Clear one-shot teardown suppressors after the retention sync declines to retain the row. */
