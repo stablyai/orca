@@ -12,7 +12,7 @@ afterEach(() => {
   background.mockClear()
 })
 
-it('carries the accepted route across preparation and retains CLI startup/prompt under chat defaults', async () => {
+it('retains the accepted route and resolves project task drafts for either launch surface', async () => {
   const prepared: PreparedQuickSubmit = {
     submitLinkedWorkItem: {
       type: 'issue',
@@ -47,6 +47,7 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
   }
   const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
   const original = useAppStore.getState().settings
+  const originalProjects = useAppStore.getState().projects
   const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
   const { result } = renderHook(() =>
     useQuickCreationExecution({
@@ -120,7 +121,45 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
         expect(request.startup).toBeUndefined()
       }
     }
+    const url = 'https://example.atlassian.net/browse/APP-123'
+    useAppStore.setState({
+      settings: { ...settings, linkedWorkItemPromptTemplate: '/global {{url}}' },
+      projects: [
+        {
+          id: 'project-1',
+          displayName: 'Repo',
+          badgeColor: '',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1,
+          linkedWorkItemPromptTemplate: '{{url}} /jira-engineer'
+        }
+      ]
+    })
+    for (const route of ['terminal-tui', 'structured-native-chat'] as const) {
+      prepare.mockResolvedValueOnce({
+        ...prepared,
+        submitLinkedWorkItem: { provider: 'jira', type: 'issue', number: 0, title: 'Fix bug', url },
+        trimmedNote: 'Read first'
+      })
+      await act(async () => {
+        await result.current.executeQuickCreation(
+          { kind: 'none' },
+          'opencode',
+          'fix',
+          null,
+          'repo-1',
+          { launchChoice: { agent: 'opencode', route } }
+        )
+      })
+      expect(background.mock.calls.at(-1)?.[0]).toMatchObject({
+        agentLaunchRoute: route,
+        quickPrompt: '',
+        launchDraftPrompt: `Read first\n\n${url} /jira-engineer`,
+        promptDelivery: 'draft'
+      })
+    }
   } finally {
-    useAppStore.setState({ settings: original })
+    useAppStore.setState({ settings: original, projects: originalProjects })
   }
 })

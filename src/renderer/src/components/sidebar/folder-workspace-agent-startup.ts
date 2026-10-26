@@ -35,9 +35,14 @@ export function getFolderWorkspaceAgentLaunchFact(
 
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
-  note: string
+  note: string,
+  template?: string
 ): string | null {
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
+  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
+    linkedWorkItem,
+    note,
+    template
+  )
   return (draftPrompt ?? prompt.trim()) || null
 }
 
@@ -45,6 +50,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
   linkedWorkItem: LinkedWorkItemSummary
   note: string
+  promptTemplate?: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
@@ -52,7 +58,11 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   shell?: AgentStartupShell
   isRemote: boolean
 }): AgentStartupPlan | null {
-  const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
+  const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(
+    args.linkedWorkItem,
+    args.note,
+    args.promptTemplate
+  )
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
         agent: args.agent,

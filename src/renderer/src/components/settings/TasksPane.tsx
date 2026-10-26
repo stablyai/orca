@@ -28,6 +28,8 @@ import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
+import { TaskPromptTemplateSetting } from './TaskPromptTemplateSetting'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../../shared/linked-work-item-prompt-settings'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -95,6 +97,7 @@ const PROVIDER_META: Record<
 export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.JSX.Element {
   const visibleProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -141,6 +144,18 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
   return (
     <div className="space-y-6">
+      <TaskPromptTemplateSetting
+        scope="global"
+        value={settings.linkedWorkItemPromptTemplate ?? ''}
+        commit={async (value) => {
+          await updateSettingsOrThrow({ linkedWorkItemPromptTemplate: value })
+          return (
+            normalizeLinkedWorkItemPromptTemplate(
+              useAppStore.getState().settings?.linkedWorkItemPromptTemplate
+            ) === normalizeLinkedWorkItemPromptTemplate(value)
+          )
+        }}
+      />
       <section className="space-y-3">
         <SettingsSubsectionHeader
           title={translate(

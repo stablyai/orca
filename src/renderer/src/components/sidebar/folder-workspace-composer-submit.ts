@@ -24,6 +24,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
+import { getLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
 import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
@@ -97,7 +98,9 @@ export async function submitFolderWorkspaceCreate({
     nameIsAutoManaged && linkedName
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
-  const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
+  const launchState = useAppStore.getState()
+  const promptTemplate = getLinkedWorkItemPromptTemplate(launchState)
+  const launchHost = getFolderWorkspaceAgentLaunchFact(launchState, projectGroup)
   if (quickAgent && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)
   }
@@ -111,6 +114,7 @@ export async function submitFolderWorkspaceCreate({
           agent: quickAgent,
           linkedWorkItem,
           note,
+          promptTemplate,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
@@ -133,7 +137,9 @@ export async function submitFolderWorkspaceCreate({
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note, promptTemplate)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: newAgentLaunchRequestId(),

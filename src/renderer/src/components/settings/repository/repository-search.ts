@@ -10,6 +10,7 @@ import { translateSearchKeyword } from '../settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './execution/repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './execution/repository-git-worktree-search-entries'
+import { getTaskPromptTemplateSearchEntry } from '../task-prompt-template-search'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -26,6 +27,7 @@ export function getRepositoryPaneSearchEntries(
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
+    getTaskPromptTemplateSearchEntry(),
     {
       title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
       description: translate(

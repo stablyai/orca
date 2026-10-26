@@ -32,6 +32,7 @@ export type CreateWorkspaceFromComposerArgs = {
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
   note: string | undefined
+  linkedWorkItemPromptTemplate?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }
@@ -113,6 +114,7 @@ async function createWorkItemWorkspace(args: {
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
   note: string | undefined
+  linkedWorkItemPromptTemplate?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
@@ -149,7 +151,8 @@ async function createWorkItemWorkspace(args: {
     compareBaseRef,
     branchNameOverride,
     pushTarget,
-    nameIsAutoManaged: args.nameIsAutoManaged
+    nameIsAutoManaged: args.nameIsAutoManaged,
+    linkedWorkItemPromptTemplate: args.linkedWorkItemPromptTemplate
   })
   // Reuse the computed name for collision suffixes, matching blank-workspace creation.
   const baseName = String(params.name)

@@ -223,6 +223,31 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('updates and resets project prompt templates through the runtime contract', async () => {
+    const updateProject = vi.fn().mockReturnValue({ id: 'project-1' })
+    const dispatcher = repoDispatcher({ getRuntimeId: () => 'test-runtime', updateProject })
+    for (const template of ['{url} /engineer', null]) {
+      const response = await dispatcher.dispatch(
+        makeRequest('project.update', {
+          projectId: 'project-1',
+          updates: { linkedWorkItemPromptTemplate: template }
+        })
+      )
+      expect(response).toMatchObject({ ok: true })
+      expect(updateProject).toHaveBeenLastCalledWith('project-1', {
+        linkedWorkItemPromptTemplate: template
+      })
+    }
+    const invalid = await dispatcher.dispatch(
+      makeRequest('project.update', {
+        projectId: 'project-1',
+        updates: { linkedWorkItemPromptTemplate: 12 }
+      })
+    )
+    expect(invalid).toMatchObject({ ok: false })
+    expect(updateProject).toHaveBeenCalledTimes(2)
+  })
+
   it('creates a repo on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -404,7 +404,7 @@ describe('createWorkspaceFromComposerSource', () => {
     expect(calls[0]?.params).not.toHaveProperty(['target', 'create', 'startupAgent'])
   })
 
-  it('sends the work-item URL as startupDraft through worktree.create', async () => {
+  it('sends the custom work-item prompt as startupDraft through worktree.create', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-draft' } }), calls)
     const selection: MobileComposerCreateSelection = {
@@ -423,6 +423,7 @@ describe('createWorkspaceFromComposerSource', () => {
       client,
       selection,
       ...baseArgs,
+      linkedWorkItemPromptTemplate: '{{url}} /ticket-skill',
       agent: { choice: 'claude' },
       agentLaunchSupported: { replay: false }
     })
@@ -430,7 +431,7 @@ describe('createWorkspaceFromComposerSource', () => {
     expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
     expect(calls[0]!.params).toMatchObject({
       createdWithAgent: 'claude',
-      startupDraft: 'https://github.test/acme/app/issues/7'
+      startupDraft: 'https://github.test/acme/app/issues/7 /ticket-skill'
     })
   })
 

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  updateSettingsOrThrow: vi.fn<(updates: Partial<GlobalSettings>) => Promise<void>>(),
+  promptSettings: { linkedWorkItemPromptTemplate: '' },
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
@@ -69,24 +71,29 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (
-    selector: (state: {
-      openSettingsPage: () => void
-      openSettingsTarget: (target: unknown) => void
-      refreshPreflightStatus: () => void
-      checkLinearConnection: () => void
-      checkJiraConnection: () => void
-      settingsSearchQuery: string
-    }) => unknown
-  ) =>
-    selector({
-      openSettingsPage: mocks.openSettingsPage,
-      openSettingsTarget: mocks.openSettingsTarget,
-      refreshPreflightStatus: mocks.refreshPreflightStatus,
-      checkLinearConnection: mocks.checkLinearConnection,
-      checkJiraConnection: mocks.checkJiraConnection,
-      settingsSearchQuery: ''
-    })
+  useAppStore: Object.assign(
+    (
+      selector: (state: {
+        openSettingsPage: () => void
+        openSettingsTarget: (target: unknown) => void
+        refreshPreflightStatus: () => void
+        checkLinearConnection: () => void
+        checkJiraConnection: () => void
+        settingsSearchQuery: string
+        updateSettingsOrThrow: typeof mocks.updateSettingsOrThrow
+      }) => unknown
+    ) =>
+      selector({
+        openSettingsPage: mocks.openSettingsPage,
+        openSettingsTarget: mocks.openSettingsTarget,
+        refreshPreflightStatus: mocks.refreshPreflightStatus,
+        checkLinearConnection: mocks.checkLinearConnection,
+        checkJiraConnection: mocks.checkJiraConnection,
+        updateSettingsOrThrow: mocks.updateSettingsOrThrow,
+        settingsSearchQuery: ''
+      }),
+    { getState: () => ({ settings: mocks.promptSettings }) }
+  )
 }))
 
 const baseSettings = {
@@ -122,6 +129,8 @@ async function rerenderInteractivePane(): Promise<void> {
 
 describe('TasksPane', () => {
   beforeEach(() => {
+    mocks.updateSettingsOrThrow.mockReset()
+    mocks.promptSettings.linkedWorkItemPromptTemplate = ''
     mocks.linearSetupProps = []
     mocks.jiraSetupProps = []
     mocks.openSettingsPage.mockClear()
@@ -139,6 +148,42 @@ describe('TasksPane', () => {
       jira: { connected: false, checking: false, visible: false }
     }
   })
+
+  it.each([true, false])(
+    'confirms a global prompt only when the host applied it: %s',
+    async (applied) => {
+      mocks.updateSettingsOrThrow.mockImplementation(async (updates) => {
+        if (applied) {
+          mocks.promptSettings.linkedWorkItemPromptTemplate =
+            updates.linkedWorkItemPromptTemplate ?? ''
+        }
+      })
+      await renderInteractivePane()
+      const textarea = container?.querySelector('textarea')
+      if (!textarea) {
+        throw new Error('Missing task start prompt')
+      }
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+          textarea,
+          '{{url}} /global'
+        )
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        textarea.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      })
+      expect(mocks.updateSettingsOrThrow).toHaveBeenCalledWith({
+        linkedWorkItemPromptTemplate: '{{url}} /global'
+      })
+      expect(container?.querySelector('[role="status"]')?.textContent).toBe(
+        applied ? 'Saved' : undefined
+      )
+      expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+        applied
+          ? undefined
+          : 'Could not save the prompt. Edit it or leave the field again to retry.'
+      )
+    }
+  )
 
   afterEach(async () => {
     if (root) {

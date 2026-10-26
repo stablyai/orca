@@ -480,6 +480,47 @@ describe('launchWorkItemDirect', () => {
     expect(startup?.draftPrompt).toBeUndefined()
   })
 
+  it('delivers the project Jira template instead of the global template as an unsent draft', async () => {
+    const expected = 'https://example.atlassian.net/browse/APP-12 /jira-engineer'
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    mocks.store.settings = {
+      linkedWorkItemPromptTemplate: '/global-work {{url}}'
+    }
+    mocks.store.projects = [
+      {
+        id: 'repo-1',
+        displayName: 'Repo',
+        badgeColor: '',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 1,
+        updatedAt: 1,
+        linkedWorkItemPromptTemplate: '{{url}} /jira-engineer'
+      }
+    ]
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        item: {
+          provider: 'jira',
+          type: 'issue',
+          number: null,
+          title: 'Fix crash',
+          url: 'https://example.atlassian.net/browse/APP-12'
+        }
+      })
+    ).resolves.toBe(true)
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: expected,
+      createdAt: expect.any(Number)
+    })
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+  })
+
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
     // Linear drafts always contain newlines; rejecting multiline mirrors would hide every linked issue in chat.
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
