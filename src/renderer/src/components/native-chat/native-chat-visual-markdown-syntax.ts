@@ -1,6 +1,6 @@
 // Parse assistant visual directives as markdown blocks so fences, quotes and lists retain their grammar.
 
-import type { Paragraph, Root, RootContent } from 'mdast'
+import type { Node, Paragraph, Root, RootContent } from 'mdast'
 import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
 import type {
   Code,
@@ -32,7 +32,7 @@ export const NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES = [
   TITLE_PROPERTY
 ] as const
 
-export type NativeChatVisualNode = {
+export type NativeChatVisualNode = Node & {
   type: 'nativeChatVisual'
   file: string
   title: string | null

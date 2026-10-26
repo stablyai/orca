@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -153,8 +155,8 @@ function newChatRecord(
   options: Record<string, string>
 ): AgentSessionRecord {
   const providerHandleChain: AgentSessionRecord['providerHandleChain'] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service and the at-rest read touch only these fields.
-  return {
+
+  return agentSessionRecordFixture({
     sessionId: `${agent}-new`,
     provider: agent,
     accountHome: HOMES[agent]!,
@@ -167,7 +169,7 @@ function newChatRecord(
       workspaceKind: 'git-worktree'
     },
     options
-  } as AgentSessionRecord
+  })
 }
 
 /** A host whose catalog for `agent`'s account is warm, holding one new chat that never sent. */
@@ -187,6 +189,10 @@ function host(agent: string, record: AgentSessionRecord) {
   }
   const modelCatalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = sessionId === record.sessionId ? record : undefined
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async (name) => HOMES[name]!,
@@ -222,7 +228,16 @@ function host(agent: string, record: AgentSessionRecord) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the at-rest read touches only these members.
   const context = {
-    deps: { adapter: {}, agents: AGENTS, store: { getRecord: () => record }, modelCatalog },
+    deps: {
+      adapter: {},
+      agents: AGENTS,
+      store: {
+        getRecord: () => record,
+        getConversation: () => (record ? agentSessionConversationView(record) : null),
+        requireWritableRecord: () => record
+      },
+      modelCatalog
+    },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => resting,
     conversation: async () => resting

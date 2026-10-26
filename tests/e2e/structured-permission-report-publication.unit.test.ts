@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+import {
+  fakeCodex,
+  THREAD_ID as CODEX_THREAD_ID
+} from '../../src/main/codex/codex-structured-session-adapter-fixture'
+import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -451,3 +456,140 @@ it.each([
     }
   }
 )
+
+it('publishes accepted Codex fresh policy to desktop and phone without stale startup readback', async () => {
+  const { host, store, root } = hostTestState()
+  const answer = Promise.withResolvers<unknown>()
+  const codex = fakeCodex({ 'turn/start': () => answer.promise })
+  codex.routes['thread/start'] = () => ({
+    thread: { id: CODEX_THREAD_ID },
+    model: 'gpt-live',
+    approvalPolicy: 'on-request',
+    approvalsReviewer: 'auto_review',
+    sandbox: { type: 'workspaceWrite' }
+  })
+  const settlements: Promise<void>[] = []
+  const adapter = structuredAgentRuntimeRegistration('codex')!.createAdapter({
+    deps: {
+      ...host.deps,
+      stateDirectory: root,
+      hostId: 'local',
+      resolveWorkspacePath: async () => root,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
+      resolveCodexCommand: () => 'codex',
+      readCodexInstallation: async () => ({ version: '0.136.0' }),
+      readProcessStartTime: async () => 1_700_000_000_000,
+      openCodexConnection: codex.openConnection
+    },
+    store,
+    journalDatabase: host.deps.journalDatabase,
+    environment: {
+      resolveBaseEnvironment: async () => ({}),
+      resolveAgentEnvironment: async () => ({}),
+      refreshAfterMissingProgram: async () => {}
+    },
+    host: () => host,
+    followUps: { onDispatchSettledLate: () => {} },
+    deliverLifecycle: (event) => {
+      settlements.push(host.handleAdapterEvent(event))
+    }
+  })
+  host.deps.adapter = adapter
+  let sending: ReturnType<typeof adapter.dispatch> | undefined
+  try {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY])
+    expect(
+      (
+        await host.attach(
+          CALLER,
+          attachParams({
+            providerHandle: undefined,
+            options: { permissionMode: 'own' }
+          })
+        )
+      ).ok
+    ).toBe(true)
+    await waitFor(() => expect(host.readStatusSummary(sessionId)?.hostExecutionPhase).toBe('ready'))
+    const fence = store.getRecord(sessionId)!.lease.runtimeFence
+    const child = host.collaboratorsForTests().sessions.get(sessionId)!.child!
+    const { mount } = permissionConsumersFor(host, 'codex', fence)
+    const views = mount()
+    const descriptions = () =>
+      views.map(
+        (view) =>
+          view.result.current.optionSnapshot.find((row) => row.id === 'permissionMode')?.description
+      )
+    await waitFor(() => expect(descriptions()).toEqual(['Approve for me', 'Approve for me']))
+    const desktop = views[0]!
+    await act(async () => {
+      expect(await desktop.result.current.setStructuredOption('permissionMode', 'ask')).toBe(true)
+    })
+    const saved = structuredClone(store.getRecord(sessionId))
+    const staleRead = (await adapter.prepareReadOptions!({ sessionId, fence }))!
+    sending = adapter.dispatch({
+      sessionId,
+      clientMessageId: 'same-child-ask',
+      body: USER_MESSAGE,
+      fence,
+      admitFreshInput: async (enqueue) => enqueue('ask', false)
+    })
+    const finished = sending.then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error })
+    )
+    await waitFor(() =>
+      expect(codex.connections[0]!.calls.some((call) => call.method === 'turn/start')).toBe(true)
+    )
+    codex.connections[0]!.handlers.onNotification?.('turn/started', {
+      threadId: CODEX_THREAD_ID,
+      turn: { id: 'applied-ask' }
+    })
+    expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({ fence, mode: 'auto' })
+    expect(descriptions()).toEqual(['Approve for me', 'Approve for me'])
+    await act(async () => {
+      answer.resolve({ turn: { id: 'applied-ask' } })
+      expect(await finished).toMatchObject({ value: { state: 'admitted' } })
+      await Promise.all(settlements)
+    })
+    await waitFor(() => expect(descriptions()).toEqual(['Ask for approval', 'Ask for approval']))
+    expect(staleRead().current.reportedPermissionMode).toBe('ask')
+    expect(store.getRecord(sessionId)).toEqual(saved)
+    expect((await host.readOptions(sessionId)).current).toMatchObject({
+      permissionMode: 'ask',
+      reportedPermissionMode: 'ask'
+    })
+    await act(async () => {
+      await host.handleAdapterEvent({
+        type: 'options-reported',
+        sessionId,
+        fence: fence - 1,
+        acquisitionGeneration: 'retired-child',
+        reportedOptions: { model: 'gpt-live', reportedPermissionMode: 'auto' }
+      })
+    })
+    expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({ fence, mode: 'ask' })
+    expect(host.collaboratorsForTests().sessions.get(sessionId)!.child).toBe(child)
+    expect(codex.connections).toHaveLength(1)
+    const starts = codex.connections[0]!.calls.filter((call) => call.method === 'turn/start')
+    expect(starts).toHaveLength(1)
+    expect(starts[0]!.params).toMatchObject({
+      clientUserMessageId: 'same-child-ask',
+      approvalPolicy: 'on-request',
+      approvalsReviewer: 'user',
+      sandboxPolicy: { type: 'readOnly' }
+    })
+    views.forEach((view) => view.unmount())
+  } finally {
+    answer.resolve({ turn: { id: 'applied-ask' } })
+    await sending?.catch(() => {})
+    await Promise.all(settlements)
+    cleanup()
+    resetStructuredAgentSessionStatusFeedsForTests()
+    resetHostModelCatalogSnapshotsForTests()
+    await host.close(sessionId, 'user-close')
+    await adapter.closeAll()
+    await Promise.all(settlements)
+    setLocalRuntimeCapabilitiesForTests(null)
+  }
+})

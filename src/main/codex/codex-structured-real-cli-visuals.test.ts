@@ -9,7 +9,7 @@ import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'
-const MANUAL = codexStructuredPermissionPolicy('ask')
+const WORKSPACE_POLICY = codexStructuredPermissionPolicy('auto')
 
 describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
   it('lists the visuals skill and grants the chat folder beside the user writable roots', async () => {
@@ -38,7 +38,7 @@ describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
           connection,
           {
             cwd,
-            permissionPolicy: MANUAL,
+            permissionPolicy: WORKSPACE_POLICY,
             visuals: { folder, skill: { pluginDir, skillsRoot: join(pluginDir, 'skills') } }
           },
           { sessionId: 'real-codex-visuals' }
@@ -51,7 +51,11 @@ describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
         )
         const opened = await connection.request(
           'thread/start',
-          { cwd, ...MANUAL, ...(launch.threadConfig ? { config: launch.threadConfig } : {}) },
+          {
+            cwd,
+            ...WORKSPACE_POLICY,
+            ...(launch.threadConfig ? { config: launch.threadConfig } : {})
+          },
           { timeoutMs: 20_000 }
         )
         expect(opened).toMatchObject({

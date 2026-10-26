@@ -18,81 +18,33 @@ import { guardSupervisedProviderGroup } from '../provider-process/provider-group
 const OPENCODE_PREFLIGHT_KILL_SITE = 'opencode-launch-model-preflight'
 const SUPERVISOR_PIPE_CLOSE_MS = 1_000
 
-const model = z.object({ id: z.string(), providerID: z.string() })
-const availableModel = model.extend({ enabled: z.boolean() })
 const agent = z.object({
-  id: z.string(),
-  mode: z.enum(['primary', 'subagent', 'all']),
-  hidden: z.boolean(),
-  model: model.optional()
+  id: z.string().min(1),
+  mode: z.string().optional(),
+  hidden: z.boolean().optional()
 })
 const location = z.object({ directory: z.string() })
-const modelResponse = z.object({ location, data: availableModel.array() })
-const agentResponse = z.object({ location, data: agent.array() })
-const defaultModelResponse = z.object({
-  location,
-  data: availableModel.nullable()
-})
-const configResponse = z.array(
-  z.object({
-    type: z.enum(['directory', 'document']),
-    info: z.object({ default_agent: z.string().optional() }).optional()
-  })
-)
+const agentResponse = z.object({ location, data: z.unknown().array() })
 
 export type OpenCodeLaunchModelContext = {
   primaryAgent: string
-  availableModels: string[]
-  primaryModel: string | null
 }
 
 export function parseOpenCodeLaunchModelContext(options: {
   directory: string
-  models: unknown
   agents: unknown
-  defaultModel: unknown
-  config: unknown
 }): OpenCodeLaunchModelContext | null {
-  const models = modelResponse.safeParse(options.models)
   const agents = agentResponse.safeParse(options.agents)
-  const defaultModel = defaultModelResponse.safeParse(options.defaultModel)
-  const config = configResponse.safeParse(options.config)
-  if (
-    !models.success ||
-    !agents.success ||
-    !defaultModel.success ||
-    !config.success ||
-    models.data.location.directory !== options.directory ||
-    agents.data.location.directory !== options.directory ||
-    defaultModel.data.location.directory !== options.directory ||
-    !defaultModel.data.data?.enabled ||
-    agents.data.data.length === 0
-  ) {
+  if (agents.success && agents.data.location.directory !== options.directory) {
     return null
   }
-  // OpenCode 2.x `agent.list` returns the selected default agent first.
-  const primary = agents.data.data.find((item) => item.mode !== 'subagent' && !item.hidden)
-  const configured = config.data.reduce<string | undefined>(
-    (value, entry) => entry.info?.default_agent ?? value,
-    undefined
-  )
-  const available = models.data.data.filter((item) => item.enabled)
-  if (
-    !primary ||
-    (configured !== undefined && primary.id !== configured) ||
-    !available.some(
-      (item) =>
-        item.id === defaultModel.data.data?.id &&
-        item.providerID === defaultModel.data.data?.providerID
-    )
-  ) {
-    return null
-  }
-  return {
-    primaryAgent: primary.id,
-    availableModels: available.map((item) => `${item.providerID}/${item.id}`),
-    primaryModel: primary.model ? `${primary.model.providerID}/${primary.model.id}` : null
-  }
+  const primary = agents.success
+    ? agents.data.data
+        .map((item) => agent.safeParse(item))
+        .find((item) => item.success && item.data.mode !== 'subagent' && !item.data.hidden)
+    : undefined
+  const primaryAgent = primary?.success ? primary.data.id : undefined
+  return primaryAgent ? { primaryAgent } : null
 }
 
 export async function probeOpenCodeLaunchModelContext(options: {
@@ -100,8 +52,6 @@ export async function probeOpenCodeLaunchModelContext(options: {
   cwd: string
   env: NodeJS.ProcessEnv
   signal?: AbortSignal
-  expectedPrimaryAgent?: string
-  expectedPrimaryModel?: string
 }): Promise<OpenCodeLaunchModelContext | null> {
   const password = randomBytes(32).toString('base64url')
   const spawnSpec = createProviderSpawnSpec(
@@ -191,28 +141,12 @@ export async function probeOpenCodeLaunchModelContext(options: {
             await cancelUnreadResponseBody(response)
           }
         }
-        const [models, agents, defaultModel, config] = await Promise.all([
-          read('model'),
-          read('agent'),
-          read('model/default'),
-          read('config')
-        ])
+        const agents = await read('agent')
         context = parseOpenCodeLaunchModelContext({
           directory: options.cwd,
-          models,
-          agents,
-          defaultModel,
-          config
+          agents
         })
-        if (
-          context &&
-          (!options.expectedPrimaryAgent ||
-            context.primaryAgent === options.expectedPrimaryAgent) &&
-          (!options.expectedPrimaryModel || context.primaryModel === options.expectedPrimaryModel)
-        ) {
-          break
-        }
-        context = null
+        break
       }
       await delay(100, undefined, { signal })
     }

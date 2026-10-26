@@ -13,7 +13,11 @@ export async function failureLeftByGit(
     return undefined
   }
   const failure = {
-    message: error instanceof Error ? error.message : String(error),
+    message: (error instanceof Error ? error.message : String(error)).replace(
+      / Close (?:that program|any program using it) and delete again\.$/,
+      () =>
+        ` Close any program using it. You may need to delete the remaining folder at ${record.worktreePath} manually to finish removing this workspace.`
+    ),
     failedAt: Date.now()
   }
   await finishGitSideOfFailedRemoval(record, cleanupPushTargetRemote)

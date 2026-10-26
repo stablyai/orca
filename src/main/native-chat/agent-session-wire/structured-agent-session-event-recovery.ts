@@ -68,14 +68,18 @@ export class StructuredAgentSessionEventRecovery {
       holdUnrunSends: async (sessionId, fence, cause) => {
         const journal = this.context.sessions.get(sessionId)?.journal
         if (journal) {
-          await holdUnsentSends(journal, { fence, hold: { cause }, unrun: true })
+          await holdUnsentSends(journal, {
+            fence,
+            hold: { cause },
+            unrun: (s) => !finalizingStructuredAgentSessionInput(journal, s.clientMessageId)
+          })
         }
       },
       route: {
         runtimeState,
         acknowledgeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId)
       },
-      abortOpen: (sessionId) => runtimeState.acquireAborts.abortOpen(sessionId)
+      abortBound: (sessionId) => runtimeState.acquireAborts.abortBound(sessionId)
     }
   }
 
@@ -133,3 +137,4 @@ export class StructuredAgentSessionEventRecovery {
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }
 }
+import { finalizingStructuredAgentSessionInput } from './structured-agent-session-handing-over'

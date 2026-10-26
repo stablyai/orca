@@ -7,6 +7,7 @@ import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachme
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
+import { useWslHostOffForRepo } from './use-wsl-host-off-review'
 import {
   getWorkspaceReferenceRequest,
   getWorkspaceReferenceRuntimeVersion,
@@ -25,6 +26,8 @@ export function useWorkspaceReferenceDetails(
   hoverOpen: boolean
 ): WorkspaceReferenceDetailsMap {
   const runtimeVersion = getWorkspaceReferenceRuntimeVersion(workspace, repo)
+  // Its WSL host is off: show what is cached as last known, and don't ask the host.
+  const hostOff = useWslHostOffForRepo(repo)
   const requests = useMemo(
     () =>
       getWorkspaceAttachments(workspace).map((item) => ({
@@ -39,7 +42,7 @@ export function useWorkspaceReferenceDetails(
     )
   )
   useEffect(() => {
-    if (!hoverOpen) {
+    if (!hoverOpen || hostOff) {
       return
     }
     const controller = new AbortController()
@@ -47,7 +50,7 @@ export function useWorkspaceReferenceDetails(
       void readWorkspaceReferenceDetails(request, controller.signal).catch(() => {})
     }
     return () => controller.abort()
-  }, [requests, hoverOpen])
+  }, [requests, hoverOpen, hostOff])
   const matching = requests.filter(
     (request) =>
       matchWorkspaceReferenceReview(request.item, review) &&
@@ -62,7 +65,11 @@ export function useWorkspaceReferenceDetails(
           : undefined
       return [
         getWorkspaceAttachmentKey(request.item),
-        entry ? (entry.data ? { ...entry.data, stale: entry.stale } : undefined) : primary
+        entry
+          ? entry.data
+            ? { ...entry.data, stale: entry.stale || hostOff }
+            : undefined
+          : primary
       ]
     })
   )

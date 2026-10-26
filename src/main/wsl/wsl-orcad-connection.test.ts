@@ -21,6 +21,7 @@ import {
   type WslOrcadConnectionDependencies
 } from './wsl-orcad-connection'
 import {
+  WslDistroNotRunningError,
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
@@ -178,6 +179,61 @@ describe('WslOrcadConnectionManager', () => {
     expect(manager.list()).toEqual([a])
     expect(manager.get('UBUNTU')).toBe(a)
     expect(children.commands).toHaveLength(1)
+  })
+
+  it('a no-boot connect spawns nothing in a distro not confirmed running (E9)', async () => {
+    const { manager, deployAndLaunch, children } = setup()
+    const requireRunning = vi.fn(async () => false)
+    await expect(manager.ensure('Ubuntu', { requireRunning })).rejects.toBeInstanceOf(
+      WslDistroNotRunningError
+    )
+    expect(requireRunning).toHaveBeenCalledWith('Ubuntu')
+    expect(deployAndLaunch).not.toHaveBeenCalled()
+    expect(children.commands).toHaveLength(0)
+    requireRunning.mockResolvedValue(true)
+    await expect(manager.ensure('Ubuntu', { requireRunning })).resolves.toBeTruthy()
+    expect(deployAndLaunch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a connect that may boot does not ride on an in-flight no-boot one (E9)', async () => {
+    const { manager, deployAndLaunch } = setup()
+    let answer: (running: boolean) => void = () => {}
+    const requireRunning = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve
+        })
+    )
+    const poll = manager.ensure('Ubuntu', { requireRunning })
+    // The user focuses the host while the poll's running-list read is pending.
+    const focus = manager.ensure('Ubuntu')
+    answer(false)
+    await expect(poll).rejects.toBeInstanceOf(WslDistroNotRunningError)
+    await expect(focus).resolves.toBeTruthy()
+    expect(deployAndLaunch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a no-boot refusal reports no failure; liveness owns the distro verdict (E9)', async () => {
+    const { manager, onChange } = setup()
+    await expect(
+      manager.ensure('Ubuntu', { requireRunning: async () => false })
+    ).rejects.toBeInstanceOf(WslDistroNotRunningError)
+    expect(onChange.mock.calls.map(([, , status]) => status.state)).not.toContain('failed')
+  })
+
+  it('a close during the running-list read supersedes the connect before it deploys (E9)', async () => {
+    const { manager, deployAndLaunch } = setup()
+    let answer: (running: boolean) => void = () => {}
+    const pending = manager.ensure('Ubuntu', {
+      requireRunning: () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve
+        })
+    })
+    await manager.close('Ubuntu')
+    answer(true)
+    await expect(pending).rejects.toBeInstanceOf(WslOrcadConnectionSupersededError)
+    expect(deployAndLaunch).not.toHaveBeenCalled()
   })
 
   it('keeps the bridge when orcad still listens on the same port', async () => {

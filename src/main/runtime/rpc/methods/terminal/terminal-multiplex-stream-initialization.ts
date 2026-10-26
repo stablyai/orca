@@ -105,10 +105,11 @@ export async function initializeMultiplexStream(
     }
     stream.outputBatcher.push(data, meta)
   })
-  // Remote xterm answers delivered queries; paused streams drop output, returning reply authority to main.
+  // Remote xterm answers delivered queries; paused streams and unelected phones return reply authority to main.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
-    () => stream.outputPaused
+    () => stream.outputPaused,
+    isMobile ? request.client?.id : undefined
   )
   // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice

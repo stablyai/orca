@@ -178,10 +178,18 @@ describe('updater check failure handling', () => {
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()
-    netFetchMock.mockReset().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve('<feed></feed>')
+    netFetchMock.mockReset().mockImplementation(async (url: string) => {
+      if (url.endsWith('/releases/latest')) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'https://github.com/stablyai/orca/releases/tag/v1.0.51' }
+        })
+      }
+      return new Response(
+        url.endsWith('.atom')
+          ? '<feed></feed>'
+          : 'version: 1.0.51\nfiles:\n  - url: orca-windows-setup.exe\n'
+      )
     })
     netRequestMock.mockReset()
     installNetRequestFetchAdapter(netRequestMock, netFetchMock)

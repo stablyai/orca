@@ -1,4 +1,4 @@
-// Refresh login/permission mode by replacing outgrown children before sending; agents read them only at startup.
+// Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -68,13 +68,17 @@ function owesWakeUp(
 /** Compare the actual launch mode so replacement cannot loop. */
 async function launchedWithOtherPermissionMode(
   child: OutgrownChildReading['child'],
-  current: (() => Promise<AgentChatPermissionChoice | null>) | undefined
+  current: (() => Promise<AgentChatPermissionChoice | null>) | undefined,
+  requiresAcquisition: ((mode: AgentChatPermissionChoice) => boolean) | undefined
 ): Promise<boolean> {
   if (!child || child.phase === 'starting' || child.close || !child.permissionMode || !current) {
     return false
   }
   const mode = await current()
-  return mode !== null && mode !== child.permissionMode
+  return (
+    mode !== null &&
+    (requiresAcquisition ? requiresAcquisition(mode) : mode !== child.permissionMode)
+  )
 }
 
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
@@ -87,6 +91,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
@@ -95,10 +100,13 @@ export async function retireOutgrownStructuredAgentSessionChild(
     !session ||
     !(
       structuredAgentSessionChildReportedSignedOut(session) ||
-      (await launchedWithOtherPermissionMode(session.child, deps.launchPermission))
+      (await launchedWithOtherPermissionMode(
+        session.child,
+        deps.launchPermission,
+        deps.permissionRequiresAcquisition
+      ))
     ) ||
-    structuredAgentSessionChildHasOpenWork(deps.work) ||
-    owesWakeUp(session.journal, deps.work.childWork())
+    structuredAgentSessionChildOwesWork(session.journal, deps.work)
   ) {
     return
   }
@@ -109,4 +117,13 @@ export async function retireOutgrownStructuredAgentSessionChild(
       error
     })
   )
+}
+
+export function structuredAgentSessionChildOwesWork(
+  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+  work: StructuredAgentSessionChildWorkReads & {
+    childWork: () => readonly AgentChildWorkView[] | undefined
+  }
+): boolean {
+  return structuredAgentSessionChildHasOpenWork(work) || owesWakeUp(journal, work.childWork())
 }

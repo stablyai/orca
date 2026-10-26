@@ -255,9 +255,9 @@ async function reuseCachedSession(
   // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
   if (session && session.messageCount === 0) {
     const subagentTranscriptCount =
-      candidate.agent === 'claude'
+      session.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path)
-        : candidate.agent === 'omp'
+        : session.agent === 'omp'
           ? await countOmpSubagentTranscripts(candidate.file.path)
           : null
     if (

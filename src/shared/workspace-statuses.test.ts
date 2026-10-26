@@ -268,6 +268,14 @@ describe('workspace status visuals', () => {
     })
   })
 
+  it('truncates long labels without splitting an emoji surrogate pair', () => {
+    const [status] = normalizeWorkspaceStatuses([
+      { id: 'review', label: `${'a'.repeat(31)}🚀 later` }
+    ])
+
+    expect(status.label).toBe('a'.repeat(31))
+  })
+
   it('clamps workspace board column widths to resizable bounds', () => {
     expect(clampWorkspaceBoardColumnWidth(undefined)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT)
     expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)

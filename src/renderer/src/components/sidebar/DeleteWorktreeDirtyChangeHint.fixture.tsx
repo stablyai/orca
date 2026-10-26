@@ -14,7 +14,7 @@ const preview: DeleteWorktreeDirtyChangePreview = {
       status: 'modified',
       hasUnresolvedConflict: true
     },
-    { path: 'docs/reference/component-fixtures.md', status: 'added', hasUnresolvedConflict: false },
+    { path: 'docs/STYLEGUIDE.md', status: 'added', hasUnresolvedConflict: false },
     { path: 'scratch/notes.txt', status: 'untracked', hasUnresolvedConflict: false },
     { path: 'src/main/legacy-relay.ts', status: 'deleted', hasUnresolvedConflict: false }
   ],

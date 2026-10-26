@@ -5,14 +5,14 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
-import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-reply'
+import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcContextUsage } from './rpc-context-usage'
-import { PiRpcMessages } from './rpc-messages'
+import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { piRpcMessageSchema } from './rpc-protocol'
+import { piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
@@ -201,6 +201,17 @@ export class PiRpcTurns {
             typeof frame.finalError === 'string' ? frame.finalError : 'Pi auto-retry failed'
         }
         break
+    }
+  }
+
+  /** Settlement rides on the small agent_settled; a skipped event still applies its head. */
+  skipped(type: string, prefix: string): void {
+    const { head, contentLost } = piRpcSkippedEvent(type, prefix)
+    if (head) {
+      this.receive(head)
+    }
+    if (contentLost && this.active && !this.ended) {
+      this.deps.lane.apply([piRpcSkippedEventNotice(this.active)])
     }
   }
 

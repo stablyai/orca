@@ -16,6 +16,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 let renderer: ReactTestRenderer | null = null
 
@@ -125,6 +126,12 @@ describe('MobileMarkdown rendering', () => {
     ]
   ])('%s', (_name, content, expected) => {
     expect(texts(render(content))).toEqual(expected)
+  })
+
+  it('gives each code block its own copy button holding only that code', () => {
+    const tree = render('Run this:\n\n```sh\npnpm test\n```\n\nthen:\n\n```\nexit\n```')
+    const buttons = tree.root.findAll((node) => String(node.type) === 'MobileSourceCopyButton')
+    expect(buttons.map((button) => button.props.text)).toEqual(['pnpm test', 'exit'])
   })
 
   it('C12: opens a link with brackets in it, and one with a title, at their own address', () => {

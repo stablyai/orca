@@ -16,11 +16,12 @@ type LocalWindowsRemovalRecoveryArgs = {
   registeredWorktree: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
   deleteBranch: boolean
   closeWatcher: (worktreePath: string) => Promise<void>
+  signal?: AbortSignal
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
   LocalWindowsRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher'
+  'error' | 'force' | 'closeWatcher' | 'signal'
 >
 
 function preservedBranchResult(
@@ -117,7 +118,11 @@ export async function recoverLocalWindowsWorktreeRemoval(
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   try {
-    await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
+    await removeLocalWorktreePath(
+      args.canonicalWorktreePath,
+      args.localWorktreeGitOptions,
+      args.signal
+    )
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }

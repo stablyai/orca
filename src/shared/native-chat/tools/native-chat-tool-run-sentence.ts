@@ -47,8 +47,9 @@ export const NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY: Record<
 export const NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS = {
   /** Exactly two clauses. */
   pair: '{{value0}} and {{value1}}',
-  /** Three or more: everything but the last, already comma-joined, then the last. */
-  list: '{{value0}}, and {{value1}}'
+  /** Three or more: everything but the last, joined by separator, then the last. */
+  list: '{{value0}}, and {{value1}}',
+  separator: ', '
 } as const
 
 export type NativeChatToolRunClause = {
@@ -73,7 +74,7 @@ export function joinNativeChatToolRunClauses(
   clauses: readonly string[],
   format: {
     pair: (first: string, second: string) => string
-    list: (leading: string, last: string) => string
+    list: (leading: readonly string[], last: string) => string
   }
 ): string {
   const continued = clauses.map((clause, index) =>
@@ -90,13 +91,13 @@ export function joinNativeChatToolRunClauses(
   if (continued.length === 2) {
     return format.pair(continued[0], continued[1])
   }
-  return format.list(continued.slice(0, -1).join(', '), continued.at(-1) ?? '')
+  return format.list(continued.slice(0, -1), continued.at(-1) ?? '')
 }
 
 export type NativeChatToolRunSentenceWords = {
   clause: (category: NativeChatToolCategory, count: number, live: boolean) => string
   pair: (first: string, second: string) => string
-  list: (leading: string, last: string) => string
+  list: (leading: readonly string[], last: string) => string
 }
 
 /** The one line a run reads as: past tense once settled, present while live. */
@@ -141,5 +142,9 @@ export const NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH: NativeChatToolRunSentenceWor
     return count === 1 ? copy.one : fill(copy.many, [String(count)])
   },
   pair: (first, second) => fill(NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.pair, [first, second]),
-  list: (leading, last) => fill(NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list, [leading, last])
+  list: (leading, last) =>
+    fill(NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list, [
+      leading.join(NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.separator),
+      last
+    ])
 }

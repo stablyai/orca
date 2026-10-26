@@ -42,7 +42,7 @@ export function isDocPreviewSession(candidate: Electron.Session): boolean {
 }
 
 // Block outbound requests that could exfiltrate grant-readable files.
-// Electron 43 DNS-prefetch bypasses these hooks; see browser-route-dns-prefetch.electron.test.ts.
+// Electron 43 DNS-prefetch bypasses these request hooks.
 const DOC_PREVIEW_CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",

@@ -89,37 +89,43 @@ export function useNewWorktreeRuntimeCapabilities(
     promise: Promise<NewWorktreeRuntimeCapabilities | null>
   } | null>(null)
   const getCapabilities = useCallback(async (): Promise<NewWorktreeRuntimeCapabilities | null> => {
-    const generation = client?.getGeneration?.()
-    const connectedAt = client?.getLastConnectedAt()
-    let probe = capabilityProbeRef.current
-    if (
-      !probe ||
-      probe.client !== client ||
-      probe.generation !== generation ||
-      probe.connectedAt !== connectedAt
-    ) {
-      // Queued creates can precede passive effects; share the same status barrier.
-      probe = {
-        client,
-        generation,
-        connectedAt,
-        promise: client ? readNewWorktreeRuntimeCapabilities(client) : Promise.resolve(null)
+    for (;;) {
+      const generation = client?.getGeneration?.()
+      const connectedAt = client?.getLastConnectedAt()
+      let probe = capabilityProbeRef.current
+      if (
+        !probe ||
+        probe.client !== client ||
+        probe.generation !== generation ||
+        probe.connectedAt !== connectedAt
+      ) {
+        // Queued creates can precede passive effects; share the same status barrier.
+        probe = {
+          client,
+          generation,
+          connectedAt,
+          promise: client ? readNewWorktreeRuntimeCapabilities(client) : Promise.resolve(null)
+        }
+        capabilityProbeRef.current = probe
       }
-      capabilityProbeRef.current = probe
+      const capabilities = await probe.promise
+      const current = capabilityProbeRef.current
+      if (
+        current === probe &&
+        client?.getGeneration?.() === generation &&
+        client?.getLastConnectedAt() === connectedAt
+      ) {
+        if (!capabilities) {
+          // Probe failure does not establish missing host support.
+          capabilityProbeRef.current = null
+        }
+        return capabilities
+      }
+      // A reconnect or path switch keeps the host; wait for the current connection's answer.
+      if (current?.client !== client) {
+        return null
+      }
     }
-    const capabilities = await probe.promise
-    if (
-      capabilityProbeRef.current !== probe ||
-      client?.getGeneration?.() !== generation ||
-      client?.getLastConnectedAt() !== connectedAt
-    ) {
-      return null
-    }
-    if (!capabilities && capabilityProbeRef.current === probe) {
-      // Probe failure does not establish missing host support.
-      capabilityProbeRef.current = null
-    }
-    return capabilities
   }, [client])
 
   useEffect(() => {

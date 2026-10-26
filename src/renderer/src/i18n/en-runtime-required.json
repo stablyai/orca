@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
+      "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.",
+      "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
+    }
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"
@@ -3398,6 +3405,18 @@
           "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca",
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
+        }
+      }
+    },
+    "tab": {
+      "bar": {
+        "bulkClose": {
+          "confirm": "Close tabs",
+          "description": "The selected tabs will be closed. Pinned tabs will stay open.",
+          "editors": "Close all editor tabs?",
+          "left": "Close tabs to the left?",
+          "others": "Close other tabs?",
+          "right": "Close tabs to the right?"
         }
       }
     },

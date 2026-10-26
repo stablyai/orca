@@ -64,7 +64,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           ? requireStructuredHost(ctx)
           : await requireInstalledStructuredHost(ctx, params.sessionId)
       const record =
-        params.sessionId === undefined ? null : host.deps.store.getRecord(params.sessionId)
+        params.sessionId === undefined ? null : host.deps.store.getConversation(params.sessionId)
       const coherent =
         ctx.clientKind === undefined ||
         ctx.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true

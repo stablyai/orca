@@ -8,11 +8,16 @@ import type {
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentModelCatalogWorkspaceDeps } from './agent-model-catalog-workspace'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type {
+  AgentModelCatalogWorkspaceDeps,
+  AgentModelCatalogRecord
+} from './agent-model-catalog-workspace'
 export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps & {
+  getConversation: (sessionId: string) => AgentSessionConversationView | undefined
   getRecord: (sessionId: string) => AgentSessionRecord | undefined
   /** Unlaunchable records cannot authorize probing their account with a different host binary. */
-  drivesRecord: (record: AgentSessionRecord) => boolean
+  drivesRecord: (record: AgentModelCatalogRecord) => boolean
   /** Share the launch resolver so recordless reads use the account a new chat would pin. */
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>

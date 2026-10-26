@@ -1,3 +1,6 @@
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import * as turnEnd from './codex-structured-turn-end-settlement'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
@@ -203,6 +206,34 @@ export async function answerCodexStructuredPrompt(input: {
     answerCodexPrompt(session.prompts, session.connection, claim, prepared)
   } catch (error) {
     session.prompts.releaseClaim(claim)
+    throw error
+  }
+}
+
+/** The reply acknowledges receipt; the translator observes turn completion separately. */
+export async function compactCodexStructuredSession(
+  session: CodexSession,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0],
+  requestTimeoutMs: number | undefined
+): ReturnType<NonNullable<StructuredAgentSessionAdapter['compact']>> {
+  session.translator?.beginCommand(input.command)
+  try {
+    await session.connection.request(
+      'thread/compact/start',
+      { threadId: session.threadId },
+      { timeoutMs: requestTimeoutMs }
+    )
+    return { state: 'accepted', providerIdentity: null }
+  } catch (error) {
+    session.translator?.forgetCommand(input.command.turnId)
+    if (isCodexAppServerRequestError(error)) {
+      return {
+        state: 'rejected',
+        ...turnEnd.codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
+        )
+      }
+    }
     throw error
   }
 }

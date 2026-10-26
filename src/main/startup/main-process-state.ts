@@ -14,6 +14,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
@@ -91,6 +92,8 @@ export const mainProcessState = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
   desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
   desktopPushService: null as DesktopPushService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the connector assigned by main-process-connector-startup.
+  connectorCloud: null as ConnectorCloud | null,
   desktopRelayStatus: 'offline' as RelayBrokerStatus,
   desktopRelayCellUrl: undefined as string | undefined,
   pendingUnpairedDeviceAuthFailure: false,

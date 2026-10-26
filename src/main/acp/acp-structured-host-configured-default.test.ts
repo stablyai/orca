@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Regression: initialize listed Grok 4.7 while new sessions actually ran Grok 4.6.
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -44,7 +45,9 @@ const OTHER_CHAT = 'grok-chat-2'
 
 function otherChat(store: AgentSessionRecordStore | null) {
   const first = store?.getRecord(SESSION)
-  return first ? { ...first, sessionId: OTHER_CHAT } : undefined
+  return first
+    ? { ...first, sessionId: OTHER_CHAT, lease: { ...first.lease, sessionId: OTHER_CHAT } }
+    : undefined
 }
 
 const agents: AcpScriptedAgent[] = []
@@ -112,6 +115,11 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
   const discovery = GROK.modelDiscovery
   const catalog = createAgentModelCatalogService({
     store: new AgentModelCatalogStore(),
+    getConversation: (id) => {
+      const saved =
+        records.store?.getRecord(id) ?? (id === OTHER_CHAT ? otherChat(records.store) : undefined)
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) =>
       records.store?.getRecord(sessionId) ??
       (sessionId === OTHER_CHAT ? otherChat(records.store) : undefined),

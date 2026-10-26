@@ -131,6 +131,7 @@ export function NativeChatMarkdown({
             ? withoutPendingNativeChatVisualDirectiveTail(content)
             : content
         }
+        math
         extension={extension}
         fileLinkExists={fileLinkExists}
         fadeWords={fadeWords}

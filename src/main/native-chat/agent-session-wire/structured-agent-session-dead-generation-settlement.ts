@@ -73,9 +73,6 @@ export function planStructuredAgentSessionDeadGeneration(
 ): { mutations: JournalLifecycleMutationInput[]; dispatches: ResolveDispatchInput[] } {
   const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
   const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
-  if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
-    return { mutations: [], dispatches: [] }
-  }
   // Leave queued sends to delivery. Failed-start handoffs never ran; ready-child handoffs remain uncertain.
   const startupFailure = input.exitedDuringStartup
     ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
@@ -84,6 +81,9 @@ export function planStructuredAgentSessionDeadGeneration(
   const unrun =
     startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
   const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
+  if (!showUnexpectedExitOutcome && !hasUnfinishedWork && withdrawn.length === 0) {
+    return { mutations: [], dispatches: [] }
+  }
   const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
   const dispatches = [
     ...withdrawn,

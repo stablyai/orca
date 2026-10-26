@@ -93,6 +93,7 @@ function closeProviderRoot(
   if (!adapter.disposeSession && !adapter.closeSession) {
     return Promise.resolve(true)
   }
+  context.deps.store.requireWritableRecord(sessionId)
   return stopAgentSessionProviderRoot(
     async () => {
       const close = adapter.disposeSession ?? adapter.closeSession
