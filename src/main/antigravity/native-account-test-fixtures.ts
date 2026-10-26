@@ -26,6 +26,19 @@ export function credential(subject: string, generation = 1, email = `${subject}@
   })
 }
 
+// agy's refresh keeps the grant's refresh_token but stores no id_token (agy 1.4.7).
+export function refreshedWithoutIdToken(generation: number, refreshToken = 'refresh-1') {
+  return JSON.stringify({
+    auth_method: 'consumer',
+    id_token_email: 'a@example.invalid',
+    token: {
+      access_token: `synthetic-${generation}`,
+      refresh_token: refreshToken,
+      expiry: generation
+    }
+  })
+}
+
 export function harness(initial: string | null = credential('a')) {
   let native = initial
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }

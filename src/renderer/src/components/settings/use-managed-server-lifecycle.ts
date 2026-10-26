@@ -49,7 +49,6 @@ function isLiveTerminalsDeferral(result: { outcome: string } | OrcadManagedDefer
   )
 }
 
-/** Turns a refusal or deferral into the one line the user acts on. */
 function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0]): string | null {
   return result.outcome === 'deferred' ||
     result.outcome === 'refused' ||
@@ -58,7 +57,6 @@ function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0])
     : null
 }
 
-/** Status and lifecycle actions for a server Orca deployed and owns over SSH. */
 export function useManagedServerLifecycle({
   api,
   environment,

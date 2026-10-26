@@ -80,16 +80,13 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
-    // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
-    // Once a foreground agent is known, it is the process that will consume the bytes;
-    // launchAgent is only the fallback during startup before process detection settles.
+    // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
     const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
       pty?.foregroundAgent ?? pty?.launchAgent
     )
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
-    // Why no gate for a ready composer: a live Claude never settles it, so Enter always waited out
-    // its 8 s cap, where the desktop's own paste submitted in about 2 s.
+    // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.
     const renderGate = options.composerReady
       ? null
       : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
@@ -114,8 +111,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         permissionBaseline,
         this.getAgentPromptActivity(handle, ptyId)
       )
-      // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
-      // beginning when a large frame is split into independently processed chunks.
+      // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
@@ -182,8 +178,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
             writeHostPlatform,
             this.getPtyAgent(ptyId),
-            pastePayload,
-            options.composerReady === true
+            pastePayload
           )
         }))
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
@@ -222,9 +217,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
-    // Providers without a lifecycle verifier still get an honest accepted
-    // receipt; they must not fail a Dispatch merely because Orca cannot prove
-    // submission through hooks.
+    // Without a lifecycle verifier, report accepted input; inability to prove submission must not fail Dispatch.
     if (!settlementAgent) {
       return { submits, prompt: inputAccepted }
     }

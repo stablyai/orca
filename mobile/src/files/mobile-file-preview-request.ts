@@ -42,7 +42,6 @@ export type MobileFilePreviewSource =
     }
   | MobileTerminalArtifactPreviewSource
 
-/** Which read the path selects, and the params that read takes. */
 export type MobileFilePreviewRequest =
   | {
       method: MobileFilePreviewReadMethod
@@ -53,11 +52,7 @@ export type MobileFilePreviewRequest =
       params: { worktree: string; absolutePath: string; grantId: string }
     }
 
-/**
- * A settled preview send. The refusal is carried rather than interpreted because the preview
- * screen's fallback copy is the host's `code`, which no acceptance policy exposes, and the grant
- * refresh reads the same code to decide whether a stale grant is worth re-minting.
- */
+// Carry raw refusal codes: the preview uses them as fallback copy and grant refresh uses them to detect stale grants.
 type MobileFilePreviewOutcome =
   | { accepted: true; payload: unknown }
   | { accepted: false; refusal: RpcFailure['error'] }

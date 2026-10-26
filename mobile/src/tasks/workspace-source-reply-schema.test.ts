@@ -10,8 +10,6 @@ import {
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
 
-// Pins the SSH status degrade, the error tri-state beside it, and the preset requirement.
-
 const connected = {
   targetId: 'ssh-1',
   status: 'connected',
@@ -98,9 +96,7 @@ describe('status is an open enum that degrades to disconnected', () => {
   })
 })
 
-// The degrade above is only allowed because it is invisible to every reader. Main passed an arm it
-// did not know straight through as a string; these pin that the degraded value reaches the same
-// verdict, so a newer host's arm renders what main rendered.
+// Unknown SSH states must degrade to the same disconnected/readiness verdicts every consumer already uses.
 describe('the degrade is inert at the gate that reads status', () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models the status arm a newer host sends, which is precisely what SshConnectionStatus cannot express: the union names every arm this build knows, so the value under test has to enter as one the compiler would reject.
   const newerArm = 'handshaking-v2' as SshConnectionStatus
@@ -151,9 +147,7 @@ describe('error is a tri-state the drawer renders', () => {
   })
 })
 
-// The record is a salvagedOptional, so any fatal member drops the WHOLE record, and the connect
-// path's fallback for a dropped record is `fallbackSshState(connectionId, 'connected', null)`.
-// Requiring a member nothing reads would therefore turn a partial reply into a connected drawer.
+// One fatal member drops the whole state and triggers connected fallback; unread fields must not invalidate an auth-failed record.
 describe('a partial record survives with the status it came with', () => {
   it('keeps a record that omits reconnectAttempt, which nothing reads', () => {
     const parsed = sshConnectionStateSchema.safeParse({

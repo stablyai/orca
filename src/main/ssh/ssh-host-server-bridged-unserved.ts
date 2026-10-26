@@ -1,9 +1,4 @@
-/**
- * COMPAT(legacy-relay-bridge, revisit 2027-01-15): a host that can't move only because relay
- * terminals the bridge serves run in a project the host's server already holds (another desktop on
- * the same login moved it) stays connected and unmoved, so those terminals keep working in their
- * old tabs. The next connect after they exit links the project.
- */
+/** COMPAT(legacy-relay-bridge, revisit 2027-01-15): keep blocked same-checkout relinks connected/unmoved while old tabs still need bridged terminals. Reconnect after exit can link the server's existing project. */
 import type { SshManagedServerRelayReason } from '../../shared/ssh-types'
 import type {
   HostServerOnConnectResult,

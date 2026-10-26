@@ -131,9 +131,7 @@ async function flush(): Promise<void> {
   }
 }
 
-// react-test-renderer's types do not resolve in the type-aware lint project, so both
-// ReactTestRenderer and ReturnType<typeof create> degrade to `any` and poison this union.
-// Name the two methods this suite actually uses instead.
+// Name only the methods used: unresolved react-test-renderer types become any in the type-aware project.
 type MountedHarness = {
   unmount: () => void
   update: (element: ReturnType<typeof createElement>) => void

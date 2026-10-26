@@ -471,8 +471,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-daemon-reattach')
       expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-daemon-reattach')
-      // Why: the restored shell keeps the CODEX_HOME it was spawned with, and this
-      // bind is the first moment the daemon PTY can be inspected for it.
+      // Inspect stale CODEX_HOME at first binding because the restored shell retains its original environment.
       expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('pty-daemon-reattach')
     })
 
@@ -531,7 +530,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
     })
 
     it('drops xterm onData while pane is replaying restored bytes', async () => {
-      // Regression: during replay, xterm auto-replies to embedded queries (DA1/DECRQM/OSC/CPR) via onData must not reach transport.sendInput or they land as stray chars on the prompt. See replay-guard.ts.
+      // Guard replay query replies from leaking through onData into fresh-shell stdin (replay-guard.ts).
       const { connectPanePty } = await import('./pty-connection')
 
       const transport = createMockTransport('pty-live')
@@ -558,12 +557,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
-      // Simulate xterm emitting a DA1 auto-reply during replay parse.
       ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.claimViewport).not.toHaveBeenCalled()
 
-      // Once replay completes (guard cleared), real keystrokes flow through.
       replayingPanesRef.current.delete(1)
       setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
       transport.claimViewport.mockClear()
@@ -577,8 +574,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
     })
 
     it('forwards focus and hover reports without claiming a parked mirror (#26469)', async () => {
-      // Regression: a TUI re-arms DECSET 1004 after every SIGWINCH and xterm answers with a focus
-      // report. Claiming on it made two mirrors of different grids take the PTY from each other.
+      // SIGWINCH can re-arm focus reporting; focus replies must not make different-grid mirrors steal PTY ownership from each other.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)

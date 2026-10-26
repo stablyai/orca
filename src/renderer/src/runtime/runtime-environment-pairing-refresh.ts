@@ -1,9 +1,4 @@
-/**
- * A re-paired environment (a managed server's update rotates its pairing) gets a new pairing
- * revision in main. Every renderer request carries the revision it last read, so until the
- * renderer re-reads the catalog each retry is refused the same way. The first refusal re-reads
- * it; subscribers keyed on the revision then resubscribe and requests use the new pairing.
- */
+// Main rotates pairing revisions during managed updates. First stale-revision refusal refreshes renderer catalog, letting revision-keyed subscribers reconnect and requests use current credentials.
 const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 
 type CatalogRefresher = () => Promise<void>

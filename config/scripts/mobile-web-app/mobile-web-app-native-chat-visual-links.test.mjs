@@ -1,12 +1,5 @@
-/**
- * A chat visual's in-page links on both mobile surfaces, in real engines.
- *
- * The visual is a srcdoc document, and a srcdoc document inherits its embedder's policy before its
- * own meta parses. So whether the shell's `about:srcdoc` base applies -- and with it whether `#x`
- * stays in the visual -- is decided by the host page's policy, which only an engine can answer.
- * WebKit as well as Chromium, because WebKit also fires the frame's `load` for an in-page link in a
- * sandboxed frame, which the host must not mistake for the visual navigating away.
- */
+// srcdoc inherits embedder CSP before its meta; test real engines to prove about:srcdoc base keeps #links inside visual.
+// WebKit also fires sandboxed-frame load for in-page links; host must not treat that as navigation away.
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, webkit } from 'playwright-core'
@@ -17,14 +10,12 @@ const bundles = mobileWebAppDependenciesPresent()
 const describeEngines = bundles ? describe : describe.skip
 
 const THEME = { colorScheme: 'light', tokens: {} }
-// The same host timeout mechanism, advanced by the browser clock.
 const PONG_TIMEOUT_MS = 300
 const VISUAL =
   '<style>section{height:900px}section:target{outline:1px solid}</style>' +
   '<script>window.marker = String(Math.random())</script>' +
   '<a id="to-s2" href="#s2">s2</a> <a id="to-route" href="#/reports">reports</a>' +
   '<section id="s1">one</section><section id="s2">two</section>'
-// Stands in for the WebView bridge: the host page posts here, and the test reads what it sent.
 const BRIDGE =
   '<script>window.sent=[];window.ReactNativeWebView={postMessage:function(m){window.sent.push(JSON.parse(m))}}</script>'
 
@@ -39,15 +30,13 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  // Imported behind the gate: transforming a mobile/ module reads mobile/tsconfig.json, which
-  // extends a package the root-only unit shards do not install (see the session-dictation check).
+  // Import behind dependency gate: transforming mobile/ reads Expo tsconfig absent from root-only shards.
   ;({ buildNativeChatVisualDocument, NATIVE_CHAT_VISUAL_PONG_TYPE: pongType } =
     await import('../../../src/shared/native-chat-visual-shell'))
   ;({ buildMobileNativeChatVisualHostDocument } =
     await import('../../../mobile/src/session/mobile-native-chat-visual-host-document'))
   const header = await readShellCsp()
   const sealed = buildNativeChatVisualDocument({ html: VISUAL, channel: 'sealed', theme: THEME })
-  // The web shell's page, under the header the shell ships, holding the visual as the web sibling does.
   shellServer = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': header })
     response.end(
@@ -77,7 +66,6 @@ async function visualFrame(page) {
   return page.frames().find((one) => one !== page.mainFrame())
 }
 
-/** The native host page with one visual, as the WebView loads it (no URL of its own). */
 async function openNativeHost(browser, html = VISUAL) {
   const page = await browser.newPage()
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') })

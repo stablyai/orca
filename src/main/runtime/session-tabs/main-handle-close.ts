@@ -1,6 +1,4 @@
-// Layout-owner builds: a close by a terminal's handle, for a pane main owns, is main's own layout
-// close. Main finds the pane in its layout, closes it there (recorded, so a late start is refused)
-// and stops the terminals the close ends; no window or phone row takes part.
+// Main-owned handle close commits pane/tab retirement before stopping ended terminals; no window or phone row is required.
 
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
@@ -29,11 +27,7 @@ export type MainHandleCloseHost = {
   ) => RuntimeTerminalClose
 }
 
-/**
- * Closes the pane (or, with `wholeTab` or for a tab's last pane, the tab) the handle names in
- * main's layout. Null for a workspace main does not own, and for a pane close of a terminal in
- * no pane: today's close path answers those.
- */
+/** Close the handle's pane or whole/last-pane tab in main layout; null falls back for unowned workspaces or paneless pane closes. */
 export async function closeMainOwnedPaneByHandle(
   host: MainHandleCloseHost,
   handle: string,

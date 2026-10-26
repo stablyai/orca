@@ -8,7 +8,6 @@ import { matchFilePathAtColumn, parsePathWithOptionalLineColumn } from './termin
 
 type InjectedPathMatcher = typeof matchFilePathAtColumn
 
-// Returns the column of the first occurrence of `needle` in `line` (+offset).
 function colOf(line: string, needle: string, offset = 0): number {
   return line.indexOf(needle) + offset
 }
@@ -98,8 +97,7 @@ describe('matchFilePathAtColumn', () => {
   })
 
   it('matches a bare filename with an extension (no slash)', () => {
-    // Why: agents commonly print a bare filename (e.g. a markdown link whose
-    // target was consumed). The host existence-check rejects non-files.
+    // Agents often print bare filenames; host existence checks reject false positives.
     const line = '• Here you go: README.md'
     const result = matchFilePathAtColumn(line, colOf(line, 'README'))
     expect(result?.pathText).toBe('README.md')
@@ -124,7 +122,6 @@ describe('injected matchFilePathAtColumn', () => {
   )
 })
 
-/** The document's own copy of the matcher: a module now, so the comparison is an import. */
 function createInjectedPathMatcher(): InjectedPathMatcher {
   return documentMatchFilePathAtColumn
 }

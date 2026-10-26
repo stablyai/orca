@@ -1,6 +1,3 @@
-// What a chat shows a message's sender as: the name Orca shows for that agent (its chat tab, or its
-// sidebar agent row), else the task it was dispatched, else its agent's generic label.
-
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
@@ -80,10 +77,7 @@ function chatNaming(
   return { ownName, fallback }
 }
 
-/** The task its dispatch was given: the federated `dispatch:<id>` address, or the dispatch a local
- *  worker holds, else the one its own `worker_done` reports, since that report settles its dispatch
- *  before it is delivered. Never a dispatch the worker merely held once: one may have failed
- *  before it ran, and an old one names work long done. */
+/** Use the live Dispatch or the sender's own just-settled worker_done; historical assignments may never have run. */
 function dispatchTaskName(
   party: Party,
   federated: boolean,

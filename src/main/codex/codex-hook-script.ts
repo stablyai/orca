@@ -2,8 +2,7 @@ import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 
@@ -17,7 +16,6 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

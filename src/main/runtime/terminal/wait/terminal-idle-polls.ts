@@ -22,18 +22,8 @@ import {
   type TuiIdleEvidenceSource
 } from '../../tui-idle-evidence-source'
 
-/**
- * Why null counts as quiet on an `open` lane: a record with no output timestamp has produced
- * nothing the RUNTIME OBSERVED since it was created. That is not the same as silence — the
- * reachable case is a daemon-hosted pane whose bytes never reach the runtime, which may still
- * be streaming. The trade is deliberate: "never settles" becomes "settles uncorroborated",
- * the caller keeps its timeout, and delivery cannot reach this lane. Reading it as `0ms since output`
- * inverted that — `0 >= quiescenceMs` is false forever, so an adopted pane that never
- * emitted could not settle no matter how long the caller waited.
- * Why not on `after-paint`: that pane runs a known agent, whose TUI must paint before it can
- * take input, so until the command has painted it is still booting. The shell's prompt and
- * echoed command line are not the agent's paint (see terminal-command-paint.ts).
- */
+/** Open lanes accept missing clocks as uncorroborated quiet for unseen daemon output; caller timeouts remain and delivery cannot use this lane.
+ * Known agents on after-paint lanes must first paint their own command output, excluding shell prompts/echo. */
 function isQuietForQuiescence(
   lastOutputAt: number | null,
   quiescenceMs: number,
@@ -107,14 +97,11 @@ export class RuntimeTerminalIdlePolls {
   private start(entry: IdlePollEntry, verdict: TuiIdleVerdict | undefined): void {
     this.entries.add(entry)
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
-    // Why one shared timer for every waiter: a per-waiter interval multiplied idle
-    // main-process wakeups by the number of concurrent `wait` calls, independent of
-    // whether any terminal produced output. Same shape as the synthetic-title spinner.
+    // Share one sweep timer so idle main wakeups do not scale with waiter count.
     if (!this.sweepTimer) {
       this.sweepTimer = setInterval(() => this.sweep(), this.deps.intervalMs)
     }
-    // Why: the evidence is already in hand and only needs its screen read; a probe that
-    // times out under one interval (the automation start probe) would otherwise never see it.
+    // Probe weak ready immediately; short automation waits may expire before the next sweep.
     if (verdict?.kind === 'ready-weak') {
       void this.tick(entry)
     } else if (verdict) {
@@ -136,10 +123,7 @@ export class RuntimeTerminalIdlePolls {
   }
 
   private sweep(): void {
-    // Why a snapshot and no await: each entry must run its checks and then interleave
-    // its own foreground read exactly as an independent interval callback did — one
-    // slow `ps` must never delay another waiter's checks, and a waiter registered by a
-    // resolve inside this sweep must wait for the next tick, as a fresh interval would.
+    // Snapshot and run independently without awaiting: slow process reads cannot delay peers, and newly registered waits start next tick.
     for (const entry of Array.from(this.entries)) {
       void this.tick(entry)
     }
@@ -148,8 +132,7 @@ export class RuntimeTerminalIdlePolls {
   private sample(entry: IdlePollEntry): IdlePollSample {
     const { handle } = entry.waiter
     if (entry.kind === 'pty') {
-      // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
-      // records are mutated in place rather than swapped, and a capture stays live.
+      // PTY records mutate in place, so this captured reference remains live.
       const { pty } = entry
       const readWaitText = () =>
         buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
@@ -167,10 +150,7 @@ export class RuntimeTerminalIdlePolls {
           )
       }
     }
-    // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
-    // renderer publish, so the record captured at registration stops advancing. Its
-    // `lastOutputAt` freezes, the quiescence gate then reads an ever-growing elapsed
-    // time, and the waiter settles while the pane is in fact still streaming.
+    // Graph sync replaces leaf objects; re-read current output clocks or frozen captures falsely appear quiet.
     const leaf = this.deps.getLiveLeaf(entry.leaf)
     const readWaitText = () =>
       buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
@@ -205,15 +185,13 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.blocked(verdict.reason))
         return
       }
-      // Why strong ready outranks the screen: the detector is not scoped to a region, so dialog
-      // wording anywhere on a finished agent's screen would otherwise read as blocked.
+      // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
       if (verdict.kind === 'ready-strong') {
         this.settle(entry, sample.ready())
         return
       }
       this.armRecheck(entry, verdict)
-      // Why no screen read while working: its output can quote dialog wording (a diff of this
-      // detector), and the dialogs only the screen shows are start-up ones, painted before any title.
+      // Working output can quote dialog source; do not screen-probe it for startup blockers.
       if (verdict.kind === 'working' || entry.screenReadInFlight) {
         return
       }

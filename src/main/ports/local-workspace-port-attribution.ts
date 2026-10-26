@@ -83,9 +83,7 @@ export function enrichPort(
   }
 
   if (owner) {
-    // Why: only enrich workspace-attributed ports. Container and external
-    // ports may have URLs printed in unrelated terminals — the worktree
-    // scoping is the primary false-positive filter.
+    // Limit URL enrichment to workspace-owned ports so unrelated terminals cannot label external/container ports.
     const advertised = urlWatcher.lookup(owner.worktreeId, port.port, port.pid)
     return {
       ...base,
@@ -118,8 +116,7 @@ export function reconcileAdvertisedUrls(
     observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
   }
   for (const [worktreeId, observations] of observationsByWorktree) {
-    // Why: the scanner sees port disappearance and PID changes before a lazy
-    // lookup would otherwise pin a stale banner to a new listener.
+    // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
     urlWatcher.reconcileScan([worktreeId], observations)
   }
 }
@@ -197,8 +194,7 @@ function includesPathBoundary(commandLine: string, normalizedPath: string): bool
 
 function normalizeComparablePath(input: string): string {
   if (input.startsWith('/')) {
-    // Why: command-line evidence for SSH/WSL/POSIX workspaces can be evaluated
-    // on a Windows host; path.resolve would reinterpret "/repo" as "G:/repo".
+    // Windows may evaluate remote POSIX paths; native resolve would reinterpret /repo as G:/repo.
     return normalizeComparableText(path.posix.resolve(input))
   }
   return normalizeComparableText(path.resolve(input))

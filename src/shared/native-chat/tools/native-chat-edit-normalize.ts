@@ -10,19 +10,13 @@ import { editFilesFromPatchText, splitMoveMarker } from './native-chat-edit-patc
 import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat-unified-patch'
 import type { NativeChatEditPatch } from '../../native-chat-types'
 
-// `NotebookEdit` is deliberately absent: its input carries only the new cell
-// source, so a card would render an unchanged cell as wholly added. It falls
-// through to the generic tool view instead.
+// NotebookEdit has only new cell text; diff cards would falsely mark unchanged cells added. Keep the generic view.
 const CLAUDE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace'])
-/** Command tools, which run a patch as one of many things they can run, so a
- *  quoted envelope is not evidence that one was applied. */
+/** Command tools can quote patches without applying them. */
 const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
-/** Tools whose input may wrap a `*** Begin Patch` envelope. The dedicated patch
- *  tool applies whatever it is given; a command tool must say that it is. */
+/** Dedicated patch tools apply their envelope; general command tools must explicitly apply it. */
 const PATCH_ENVELOPE_TOOLS = new Set(['apply_patch', ...COMMAND_PATCH_TOOLS])
-/** Tools whose whole payload is patch text. `Diff` reaches its patch only
- *  through the result, because the structured journal projects a diff item as a
- *  call carrying just the path. */
+/** Diff carries patch text only in its result; its journal call contains just a path. */
 const PATCH_TEXT_TOOLS = new Set(['apply_patch', 'Diff'])
 
 export function isEditToolName(name: string): boolean {
@@ -37,13 +31,11 @@ function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
-/** Rows straight from resolved hunks, which is the only path with true numbers
- *  for a provider that reports its edits as a snippet pair. */
+/** Resolved hunks provide true file positions for snippet-pair providers. */
 function linesFromEditPatch(patch: NativeChatEditPatch): NativeChatEditLine[] {
   const lines: NativeChatEditLine[] = []
   for (const hunk of patch.hunks) {
-    // Hunks are separate regions of the file; run together the gutter jumps
-    // from one to the next with nothing marking the skipped span.
+    // Separate hunks with gaps so skipped file regions remain visible.
     pushEditGap(lines)
     let oldNo = hunk.oldStart
     let newNo = hunk.newStart
@@ -69,11 +61,7 @@ function linesFromEditPatch(patch: NativeChatEditPatch): NativeChatEditLine[] {
   return lines
 }
 
-/** A whole-content write looks identical whether it created the file or
- *  overwrote one, so only positive evidence may claim a creation. With no
- *  evidence either way this errs toward the weaker claim: calling a creation an
- *  edit is imprecise, while calling an overwrite a creation is false and paints
- *  an existing file as wholly new. */
+/** Whole-file writes do not prove creation. Require positive evidence; falsely calling an overwrite new misrepresents every existing line. */
 const CREATED_FILE_RESULT = /^\s*File created successfully/
 
 function wholeContentChangeKind(
@@ -206,8 +194,6 @@ function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
   })
 }
 
-/** One diff model for a tool call and its result, across every shape the
- *  supported agents use to report a file edit. */
 export function editFilesFromToolPair(pair: {
   name: string
   input: unknown
@@ -215,10 +201,8 @@ export function editFilesFromToolPair(pair: {
   state?: 'running' | 'completed' | 'failed'
   result?: { output?: string; isError?: boolean; editPatch?: NativeChatEditPatch }
 }): NativeChatEditFile[] | null {
-  // A card states the edit as made, so it takes evidence that it landed: the
-  // provider reporting the call complete, or a result that is not an error.
-  // Anything else — failed, still running, or a turn that stopped before the
-  // call was answered — keeps the generic tool view and its error body.
+  // Cards assert a landed edit: require completed lifecycle or a non-error result.
+  // Failed/running/unanswered calls retain generic tool/error views.
   if (pair.state === 'failed' || pair.state === 'running' || pair.result?.isError === true) {
     return null
   }
@@ -239,9 +223,7 @@ export function editFilesFromToolPair(pair: {
     ]
   }
 
-  // Only a tool that runs a patch may be searched for an envelope: a file's own
-  // contents can quote one, and scanning a write's payload rendered a card for
-  // the quoted file while the file actually written never appeared.
+  // Search envelopes only in eligible patch tools; Write payloads can quote unrelated patches and would hide the file actually written.
   if (PATCH_ENVELOPE_TOOLS.has(pair.name)) {
     const envelope = unwrapBeginPatch(pair.input, {
       requireApplyCommand: COMMAND_PATCH_TOOLS.has(pair.name)
@@ -266,9 +248,7 @@ export function editFilesFromToolPair(pair: {
   if (!PATCH_TEXT_TOOLS.has(pair.name)) {
     return null
   }
-  // The result fallback is scoped to `Diff`, whose call carries only a path.
-  // Reading any command tool's output as a patch reclassified `git diff` as a
-  // file edit and swallowed the command line with it.
+  // Only Diff falls back to result text; treating command output as patches would turn git diff reads into edits and hide commands.
   const patchText =
     text(input?.patch) ?? text(input?.diff) ?? (pair.name === 'Diff' ? pair.result?.output : null)
   if (!patchText) {

@@ -48,8 +48,7 @@ function localShellConnection(rewrite: (command: string) => string = (c) => c): 
         autoDestroy: false,
         emitClose: false,
         read() {},
-        // Why no error is forwarded: ssh2 silently drops writes once the remote side stops reading,
-        // so EPIPE here would race the exit code and fail the upload for the wrong reason.
+        // Model ssh2 dropping writes after remote stdin closes; local EPIPE must not mask the host exit failure.
         write(chunk, encoding, callback) {
           if (child.stdin.destroyed) {
             callback()

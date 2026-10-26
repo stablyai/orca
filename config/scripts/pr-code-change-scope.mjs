@@ -72,10 +72,7 @@ const GIT_COMPAT_PREFIXES = [
   'config/scripts/git-binary-compatibility'
 ]
 
-// Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
-// depends on it, its app-server transport, or the contract itself changes. The same
-// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
-// approval Orca writes for its hook entry in managed Codex homes and ~/.codex.
+// Scope real Codex contract to read-repair/transport plus wrapper --no-daemon, project trust and hook approvals in managed/user homes.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-hook-file-entry-binary-contract',
   'src/main/codex/codex-hook-trust-',
@@ -161,10 +158,8 @@ const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/electron-serve-browser-process'
 ]
 
-// The page bundle the desktop packages: the builder and verifier, the manifest writer and the
-// packaging guard they share, the entry, the route tree it mounts, the mobile source those routes
-// import, and the shell policy the render check runs the page under.
-// What decides which deps each package sees; package.json and the lockfile already force every job.
+// Include page build/verification/manifest/packaging, entry/routes/imported mobile sources and render-check shell policy.
+// Dependency visibility also matters; package.json/lockfile already force all jobs.
 const DEPENDENCY_ISOLATION_PREFIXES = [
   'pnpm-workspace.yaml',
   'config/pnpmfile.cjs',
@@ -218,8 +213,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
-  // The released and current WebSocket transports both accept the web upgrade marker
-  // (cross-version-web-upgrade-marker).
+  // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/ws-transport.ts',
   'src/shared/web-origin-security.ts',
   'src/shared/browser-client-host-placement',
@@ -227,8 +221,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session-wire',
   'src/shared/agent-session-mutation-envelope',
-  // The send a client builds (the agent-session suite sends it to the release host) and the
-  // fingerprint the host's ledger and journal re-derive.
+  // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
   'src/shared/structured-agent-session-mutation.ts',
   'src/shared/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
@@ -424,8 +417,7 @@ const STATIC_ANALYSIS_AUDIT_SCRIPTS = [
   'audit:anti-slop'
 ]
 
-// Positional arguments of an oxlint invocation are the trees it lints. `--config` consumes the
-// next token; every other flag here is valueless.
+// oxlint positional args name lint trees; --config consumes one value, other listed flags none.
 function oxlintScanRoots(command) {
   const roots = []
   for (const segment of command.split('&&')) {
@@ -444,9 +436,7 @@ function oxlintScanRoots(command) {
   return roots
 }
 
-// Why derived from the commands rather than listed here: `mobile/` is desktop-irrelevant for every
-// other job, yet these audits lint it. A second, hand-maintained copy of "which trees the gate
-// reads" is what let #20702 land violations no PR check ran, so read it off the argv instead.
+// Derive lint trees from command argv: mobile is otherwise desktop-irrelevant, and duplicate scope lists let #20702 bypass audits.
 function readStaticAnalysisScanRoots() {
   const manifest = join(import.meta.dirname, '../../package.json')
   const { scripts = {} } = JSON.parse(readFileSync(manifest, 'utf8'))
@@ -489,8 +479,7 @@ export function isDocsOnlyPath(file) {
 }
 
 export function shouldRunPrChecks(changedFiles) {
-  // Why empty-run: a silent empty diff is more likely a detector bug than a
-  // genuine no-op PR, so fail closed and keep the expensive jobs.
+  // Empty diff likely signals detector failure; fail closed and retain expensive jobs.
   if (changedFiles.length === 0) {
     return true
   }
@@ -498,10 +487,7 @@ export function shouldRunPrChecks(changedFiles) {
 }
 
 export function needsMobileDependencies(changedFiles) {
-  // Why: static analysis lints CHANGED files, mobile ones included, and its
-  // type-aware pass resolves types from mobile/node_modules. Mobile is a
-  // separate pnpm project, so without this the root-only install leaves every
-  // mobile type an `error` type and the gate reports phantom findings.
+  // Changed-mobile type-aware lint needs mobile/node_modules: root-only install resolves mobile types as error and produces phantom findings.
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
@@ -543,17 +529,11 @@ export function classifyPrJobs(
           ))
     ])
   )
-  // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
-  // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
-  // it then fails this same gate on every later PR's merge ref.
-  // Why formatted paths too: the formatting check reads the whole tree, so a docs-only diff that
-  // skipped it would land drift that then fails every later PR.
+  // Keep repo-wide audits outside desktop should_run: mobile-only diffs still need lint; formatted/docs paths also require whole-tree formatting.
   jobs.static_analysis =
     jobs.static_analysis ||
     changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
-  // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
-  // that is exactly the diff that changes the page this job builds. Gated on should_run it would
-  // skip on every PR that can break it and run on none.
+  // Page-bundle gate must bypass desktop should_run or mobile-only diffs skip the very build they change.
   jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
   const mobileCiTools =
     allowMobileCiTools &&
@@ -594,8 +574,7 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
-    // Not redundant with the lift below the jobs map: without a case here the default detector
-    // returns true, which would run this job on every desktop-relevant PR.
+    // Handle inside map too: default detector otherwise runs this job on every desktop-relevant PR.
     case 'mobile_web_app':
       return changesMobileWebApp
     case 'cross-version-wire':
@@ -685,8 +664,7 @@ function matchesPrefix(file, prefixes) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // Why streamed, not readFileSync(0): a single read of fd 0 throws EAGAIN once the writer
-  // outgrows the 64 KB pipe buffer, which a stale PR base.sha reaches easily.
+  // Stream stdin: readFileSync(0) can throw EAGAIN beyond the 64KB pipe buffer on stale-base diffs.
   let input = ''
   process.stdin.setEncoding('utf8')
   for await (const chunk of process.stdin) {

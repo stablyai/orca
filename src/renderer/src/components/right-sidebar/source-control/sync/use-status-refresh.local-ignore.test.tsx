@@ -59,8 +59,7 @@ async function renderOwner(
       worktreePath: '/same/path',
       isFolder: false,
       repositoryHuge: { limit: 1000 },
-      activeConnectionId: connectionId,
-      worktreeMap: new Map()
+      activeConnectionId: connectionId
     })
     return null
   }

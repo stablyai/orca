@@ -1,10 +1,7 @@
-// The one launch path every native-chat agent's resolver runs through. The shared steps live here:
-// admitting the record, its launch directory, the base environment and the user's overlay, the
-// chat's visuals, and sealing the child. An agent's own part never sets the directory or the
-// sealed environment; it only adds what is that agent's.
+// Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
@@ -36,9 +33,7 @@ export type StructuredAgentLaunchSources = {
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
-/** What an agent's part reads. Each read runs once, when the part first asks, so every agent keeps
- *  its own order: a refusal it states before reading the directory still leaves a floating record
- *  unpinned. */
+/** Resolve each input lazily once in agent-defined order; refusals before directory reads leave floating records unpinned. */
 export type StructuredAgentLaunchBasis = {
   /** Exists, belongs to this agent, runs on this host, and pins what this agent drives. */
   record: AgentSessionRecord
@@ -51,18 +46,17 @@ export type StructuredAgentLaunchBasis = {
   /** Null when the chat gets no visuals. */
   visuals(): Promise<NativeChatVisualsLaunch | null>
   commandSettings(): StructuredAgentCommandSettings
-  /** For a part that found no program: refreshes the environment, after which both environment
-   *  reads return the refreshed one. Absent when the runtime never retries. */
+  /** After a missing program, refresh both environment reads together; absent means no retry. */
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 }
 
 export type StructuredLaunchRequest = {
   identity: AgentSessionJournalIdentity
   /** The reservation's token, which the seal hands the child. */
   spawnToken: string
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 }
 
 /** What the composition sets on a launch; an agent's part never does. */
@@ -120,8 +114,7 @@ function admittedRecord(
     throw new Error(`session ${sessionId} is a ${record.provider} session`)
   }
   const { location } = record
-  // A session pinned elsewhere belongs to that host's runtime; starting it here would put a second
-  // writer on the same provider session.
+  // A session pinned elsewhere belongs to that host; local launch would create a second provider-session writer.
   if (!isNativeLocalLocation(location)) {
     throw new Error(
       `${definition.agent} structured sessions run on the local host, not ${location.executionHostId}`
@@ -142,7 +135,7 @@ async function composedPart<L>(
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>,
   identity: AgentSessionJournalIdentity,
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})

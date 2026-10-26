@@ -1,9 +1,6 @@
 import { agentPhaseTransition, type AgentPhase, type AgentTransition } from '../agent-transitions'
 
-/**
- * Sort stamps the host that owns a workspace writes on its record when something happens there.
- * Every client sorts by them; none keeps a clock. `recentAt` is stored in `lastActivityAt`.
- */
+/** Owning hosts stamp events; every client sorts without a clock. recentAt persists in lastActivityAt. */
 
 /** Smart's tiers, most demanding first. No tier means Rest, ordered by `recentAt`. */
 export const SMART_TIERS = ['needs-you', 'done', 'working'] as const satisfies readonly AgentPhase[]
@@ -25,8 +22,7 @@ export type AgentPaneState = { phase: AgentPhase; at: number }
 export const RECENT_STAMP_THROTTLE_MS = 10_000
 
 export type SortStampEvent =
-  /** One pane moved; `transition` is the detector's news in it, `panes` every pane of the
-   *  workspace afterwards. */
+  /** A pane’s transition plus every pane’s state afterwards. */
   | {
       kind: 'agent'
       from: AgentPhase
@@ -37,11 +33,7 @@ export type SortStampEvent =
   | { kind: 'bell' }
   | { kind: 'terminal-started' }
 
-/**
- * A pane's state on entering `phase` at `now`, from `previous`. Done stays until the next prompt or
- * the agent exits (owner decision Q1: no fade). Resuming after an approval is the same turn, so it
- * keeps the time it asked.
- */
+/** Done holds until prompt/exit with no fade. Resuming approval stays in the same turn and retains its request time. */
 export function enterAgentPaneState(
   previous: AgentPaneState,
   phase: AgentPhase,
@@ -58,10 +50,8 @@ export const REST_PANE: AgentPaneState = { phase: 'rest', at: 0 }
 /** A read Done ranks below Working: the user has seen that finish, another pane still runs. */
 const READ_TIER_ORDER = ['needs-you', 'working', 'done'] as const satisfies readonly SmartTier[]
 
-/**
- * The workspace's tier is its most demanding pane, Done counting over Working only while unread;
- * its time is that tier's latest entry. A read Done alone stays Done, which readers show as Rest.
- */
+/** Most demanding pane wins; unread Done outranks Working, read Done does not. Use the tier’s latest time.
+ * Read Done alone remains Done on disk but readers show Rest. */
 export function workspaceSmartStamp(
   panes: readonly AgentPaneState[],
   isUnread = true
@@ -81,11 +71,8 @@ export function workspaceSmartStamp(
   return { smartTier: tier, smartAt }
 }
 
-/**
- * The stamps after `event`, or null when nothing changes. Pure: `now` is the host's time of the
- * event; `isUnread` the workspace's flag after it (unset: Done outranks Working). Prompts,
- * finishes and requests for input stamp `recentAt`; tier changes apply at once.
- */
+/** Pure host-time event classification; use post-event unread state (absent lets Done outrank Working).
+ * Prompts/finishes/input requests stamp recentAt; tier changes apply immediately; null means unchanged. */
 export function classifySortStampEvent(
   current: SortStamps,
   event: SortStampEvent,
@@ -112,10 +99,7 @@ export function classifySortStampEvent(
   }
 }
 
-/**
- * A finish (or failure), a request for input or a bell: news that flags the workspace for whoever
- * isn't looking. A session boundary's done moves the tier but is no news.
- */
+/** Finishes/failures/input requests/bells mark unseen news; session-boundary Done changes tier without raising unread. */
 export function isUnreadNews(event: SortStampEvent): boolean {
   if (event.kind !== 'agent') {
     return event.kind === 'bell'

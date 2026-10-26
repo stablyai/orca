@@ -14,15 +14,8 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-/**
- * The in-page hop the sidebar makes, in a browser, under the grants the session actually has.
- *
- * On a wide layout `app/h/_layout.tsx` renders the worktree list beside every `/h` route, and its
- * header pushes `/h/<id>/tasks` through `useRouteHandoff`. Keeping that local runs the tasks page
- * under the opener's grants, so its copy actions refuse with nothing on screen. The unit tests pin
- * the decision; only a browser proves the control exists, is reachable at that viewport, and that
- * the document does not move when the hop is handed over.
- */
+// Wide sidebar pushes Tasks through useRouteHandoff; local navigation inherits opener grants and silently refuses copy actions.
+// Browser check proves control is present/reachable and shell handoff leaves document in place.
 
 const HOST_ROUTE = '/h/render-check-host'
 const FILES_ROUTE = '/h/render-check-host/files/wt-1'
@@ -62,8 +55,7 @@ let origin
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
-/** The target route's own chunk file, resolved from the build rather than matched by name: the
- *  bundler hashes chunk names, so there is nothing in the URL to recognise a route by. */
+// Resolve target chunk from build; content-hash URLs cannot identify routes by name.
 let tasksChunk = null
 
 beforeAll(async () => {
@@ -76,8 +68,7 @@ beforeAll(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-handoff-'))
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   tasksChunk = built.routeChunks[TASKS_ROUTE_KEY]
-  // The precondition the absence assertions below need: a chunk that cannot be named cannot be
-  // observed as missing, and every one of those cases would pass on a typo.
+  // Require resolvable target chunk or every absence assertion could pass on a typo.
   expect(tasksChunk, `no chunk for ${TASKS_ROUTE_KEY}`).toBeTruthy()
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
   server = served.server
@@ -118,9 +109,7 @@ async function openHostRoute({
     ownsHostArea
   })
   const errors = []
-  // Every script answer with its status, not only the ones that arrived. A 200-only list cannot
-  // show a chunk the navigation asked for and did not get, and the absence assertions below would
-  // read that failed request as a fetch that never happened.
+  // Record every response status: failed chunk fetches must count as requests, not false evidence of no navigation.
   const jsResponses = []
   page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
   page.on('console', (message) => {
@@ -154,13 +143,7 @@ function navigates(page) {
   )
 }
 
-/**
- * The wait for the hop to land, and the page's own account of why it did not.
- *
- * A navigation that never commits reads as a bare 30 s timeout. The CI failure this file first hit
- * was a `TypeError` thrown inside React Navigation that blanked the document, and it was invisible
- * because the error assertions run after a wait that never returns.
- */
+// Race navigation wait with page errors; React Navigation throws once blanked document and hid behind a bare 30s timeout.
 async function waitForTasksRoute(page, opened, clickedAt) {
   try {
     await page.waitForFunction(() => location.pathname.endsWith('/tasks'), {
@@ -202,11 +185,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     expect(await navigates(page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
-    // Handed over, not taken: the document stayed on the worktree list, and the tasks route's own
-    // chunk was never requested — which is what says the page did not quietly render it under
-    // these grants. That chunk by name, not "no chunk arrived after the click": the opener's own
-    // chunk can still be in flight when the click lands, and counting it as new reds a case whose
-    // rule held. At any status, because a request answered 404 is still a page that asked.
+    // Require original route and no target-chunk request at any status; opener chunks can still arrive after click and must not count as target navigation.
     expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
     expect(jsResponses.filter(({ path }) => path.endsWith(tasksChunk))).toEqual([])
     expect(errors).toEqual([])
@@ -214,8 +193,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
   }, 60_000)
 
   it('keeps the hop in the document when the session covers tasks', async () => {
-    // The same tap, the same viewport, one more grant. Without this the case above would pass on a
-    // page that simply never navigates.
+    // Grant-positive control proves the same tap can navigate; absence alone could pass on an inert page.
     const opened = await openHostRoute({
       viewport: WIDE,
       grants: [
@@ -237,18 +215,14 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
   }, 60_000)
 
   it('hands the hop over from the narrow header too, whose control C2.10 named', async () => {
-    // At this viewport `app/h/_layout.tsx` renders no sidebar, so the route's own header is the
-    // narrow toolbar. C2.10 gave its Tasks control the wide sibling's role and label, so the hop
-    // can be aimed at here rather than asserted absent, and the rule must hold on this branch as
-    // well: the control the phone actually presses is this one.
+    // Narrow layout has no sidebar; aim at C2.10 Tasks toolbar sibling and enforce same handoff rule.
     const opened = await openHostRoute({
       viewport: NARROW,
       grants: [faultGrant, 'navigate', 'storage', 'haptics']
     })
     const { page, errors, jsResponses } = opened
     const tasks = page.getByLabel('Tasks')
-    // Exactly one: the narrow layout renders one toolbar, so this is the control, not a pick
-    // among siblings that could have hidden a wide header rendering here.
+    // Require one narrow toolbar control or selecting among duplicates could hide a stray wide header.
     expect(await tasks.count()).toBe(1)
     await tasks.click()
     await expect
@@ -266,8 +240,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
   }, 60_000)
 
   it('keeps the old behaviour when the shell sent no pairs at all', async () => {
-    // An older shell: the page cannot tell covered from uncovered, and must not start handing
-    // every hop over on the strength of a field nobody sent.
+    // Older shells omit coverage field; absence must not force every hop into shell handoff.
     const opened = await openHostRoute({
       viewport: WIDE,
       grants: [faultGrant, 'navigate', 'storage', 'haptics'],
@@ -283,9 +256,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
   }, 60_000)
 
   it('draws no sidebar beside a files route in a wide viewport, so there is no hop to make', async () => {
-    // The defect this case used to pin was the sidebar a detail page drew beside the shell's own,
-    // which is the double sidebar. A page draws it only when `init` says it owns the host area,
-    // and no detail route's session is told that, so the files page is the files page alone.
+    // Only init host-area ownership permits page sidebar; detail routes omit it to avoid duplicating shell sidebar.
     const opened = await openHostRoute({
       viewport: WIDE,
       grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics'],

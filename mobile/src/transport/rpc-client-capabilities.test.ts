@@ -165,8 +165,7 @@ describe('mobile rpc-client capabilities', () => {
       socket.receive('encrypted:{"type":"e2ee_authenticated"}')
       sentRequest(socket, 'runtime.clientCapabilities.update')
 
-      // Why: the 5s capability deadline used to force-close the socket, so a link
-      // this slow never left 'connecting' — it just redialled forever.
+      // An unanswered advisory must let slow links reach connected rather than repeatedly closing them.
       await vi.advanceTimersByTimeAsync(5_001)
 
       expect(client.getState()).toBe('connected')

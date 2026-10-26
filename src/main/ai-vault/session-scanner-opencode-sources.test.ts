@@ -2,12 +2,17 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 
-const { discoverOpenCodeSessionsMock, listOpenCodeDatabasesMock, listOpenCode2SessionsMock } =
-  vi.hoisted(() => ({
-    discoverOpenCodeSessionsMock: vi.fn(),
-    listOpenCodeDatabasesMock: vi.fn(),
-    listOpenCode2SessionsMock: vi.fn().mockResolvedValue([])
-  }))
+const {
+  discoverOpenCodeSessionsMock,
+  listOpenCodeDatabasesMock,
+  listOpenCodeDatabasesInDirectoryMock,
+  listOpenCode2SessionsMock
+} = vi.hoisted(() => ({
+  discoverOpenCodeSessionsMock: vi.fn(),
+  listOpenCodeDatabasesMock: vi.fn(),
+  listOpenCodeDatabasesInDirectoryMock: vi.fn(),
+  listOpenCode2SessionsMock: vi.fn().mockResolvedValue([])
+}))
 
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', () => ({
   listOpenCode2SqliteSessionsViaWorker: listOpenCode2SessionsMock
@@ -18,7 +23,8 @@ vi.mock('./session-scanner-opencode-sqlite-discovery', () => ({
 }))
 
 vi.mock('../opencode-usage/opencode-database-discovery', () => ({
-  listOpenCodeDatabases: listOpenCodeDatabasesMock
+  listOpenCodeDatabases: listOpenCodeDatabasesMock,
+  listOpenCodeDatabasesInDirectory: listOpenCodeDatabasesInDirectoryMock
 }))
 
 describe('opencodeDiscoveries', () => {
@@ -59,5 +65,35 @@ describe('opencodeDiscoveries', () => {
       limitPerAgent: 25,
       issues
     })
+  })
+
+  it('scans managed account stores that Orca launches OpenCode with', async () => {
+    vi.stubEnv('XDG_DATA_HOME', '/xdg/data')
+    const accountDir = join(
+      '/user-data',
+      'managed-data-accounts',
+      'opencode',
+      'a',
+      'data',
+      'opencode'
+    )
+    const accountDb = join(accountDir, 'opencode.db')
+    listOpenCodeDatabasesMock.mockResolvedValue([])
+    listOpenCodeDatabasesInDirectoryMock.mockResolvedValue([accountDb])
+    discoverOpenCodeSessionsMock.mockResolvedValue({ agent: 'opencode', rootDir: '', files: [] })
+
+    await Promise.all(
+      opencodeDiscoveries(
+        { opencodeAccountDataDirs: [accountDir, join('/xdg/data', 'opencode')] },
+        [],
+        25,
+        []
+      )
+    )
+
+    expect(listOpenCodeDatabasesInDirectoryMock).toHaveBeenCalledTimes(1)
+    expect(listOpenCode2SessionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ dbPaths: [accountDb] })
+    )
   })
 })

@@ -16,7 +16,6 @@ vi.mock('electron', () => ({
 
 import { _internals } from './hook-service'
 
-// Execute the generated module against legacy and current plugin contracts.
 describe('OpenCode status plugin module contract', () => {
   type PluginHooks = {
     event: (input: { event: unknown }) => Promise<void>
@@ -31,9 +30,7 @@ describe('OpenCode status plugin module contract', () => {
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
-  // Why: the plugin resolves hook coords from the endpoint file first and only then from
-  // env. Pin every input here so the run does not depend on the developer's Orca session
-  // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
+  // Isolate endpoint-file and environment inputs so tests cannot post to a live Orca session.
   const ENV_KEYS = [
     'ORCA_OPENCODE_PLUGIN_API',
     'ORCA_PANE_KEY',
@@ -53,9 +50,7 @@ describe('OpenCode status plugin module contract', () => {
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    // Why: the generated plugin self-disables when this names a different major,
-    // so an inherited value from the developer's own Orca pane would leave
-    // `hooks.event` undefined and fail the contract for the wrong reason.
+    // An inherited major selector can disable the generated plugin.
     delete process.env.ORCA_OPENCODE_PLUGIN_API
     delete process.env.ORCA_OPENCODE_AGENT
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
@@ -95,7 +90,7 @@ describe('OpenCode status plugin module contract', () => {
   async function loadPluginModule(
     source = _internals.getOpenCodePluginSource()
   ): Promise<PluginModule> {
-    // Why: a unique basename per load defeats the ESM module cache between cases.
+    // Bypass ESM caching between cases.
     const pluginPath = join(
       tempDir,
       `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
@@ -145,8 +140,6 @@ describe('OpenCode status plugin module contract', () => {
     const hooks = await module.default?.server?.({
       client: {
         session: {
-          // Why: a root session (no parentID) must pass the child-session filter,
-          // otherwise every event is dropped before it can post.
           get: async () => ({ data: { id: 'ses_root', parentID: undefined } })
         }
       }
@@ -158,7 +151,7 @@ describe('OpenCode status plugin module contract', () => {
         properties: { sessionID: 'ses_root', status: { type: 'busy' } }
       }
     })
-    // Why: lifecycle delivery is queued; let the plugin's FIFO drain before asserting.
+    // Let queued lifecycle delivery drain before asserting.
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     const hookPosts = posts.filter((post) => post.url.includes('/hook/opencode'))

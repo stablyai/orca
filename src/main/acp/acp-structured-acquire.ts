@@ -22,6 +22,7 @@ import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
+import { AcpLoadHistory } from './acp-history-replay'
 import { asReattachHistory, routeAcpSessionEvent } from './acp-structured-session'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from './acp-structured-turns'
@@ -49,6 +50,7 @@ export async function acquireAcpStructuredSession(input: {
   const { acquire, deps, generation } = input
   const { spec } = deps
   const agentName = acpAgentName(spec.agent)
+  const logger = deps.logger ?? createStructuredAgentSessionLogger()
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const events = acquire.events
@@ -65,10 +67,11 @@ export async function acquireAcpStructuredSession(input: {
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
   let session: AcpStructuredChild | null = null
   // Use a slot so closure writes do not conflict with control-flow narrowing.
-  const slot: { lane: AcpStructuredLane | null; reattaching: boolean } = {
-    lane: null,
-    reattaching: false
-  }
+  const slot: {
+    lane: AcpStructuredLane | null
+    reattaching: boolean
+    history: AcpLoadHistory | null
+  } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(launch.spec.dialect)
   // Agent-initiated turns cannot open interactive requests; settled request content may still show.
   const prompts = new AcpStructuredPrompts(
@@ -121,7 +124,10 @@ export async function acquireAcpStructuredSession(input: {
       },
       onRequest: (method, params, context) => prompts.handle(method, params, context),
       onExtensionNotification: (method, params) =>
-        whenLane(() =>
+        whenLane(() => {
+          if (slot.reattaching) {
+            slot.history?.keep(method, params)
+          }
           slot.lane?.apply(
             slot.lane.translator.notification(
               method,
@@ -129,7 +135,7 @@ export async function acquireAcpStructuredSession(input: {
               now()
             )
           )
-        ),
+        }),
       onDiagnostic: (message) =>
         deps.logger?.warn('ACP agent protocol diagnostic', {
           scope: 'acp-diagnostic',
@@ -142,11 +148,20 @@ export async function acquireAcpStructuredSession(input: {
       onExit: () => input.onExit(session)
     }
   )
+  if (!spec.permissionModeConfig) {
+    options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
+  }
   // From here, cancellation closes this connection even before exit is proven.
   input.track(connection)
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
       if (slot.lane) {
+        if (slot.reattaching) {
+          slot.history?.keep(
+            'session/update',
+            event.kind === 'known' ? event.notification : event.raw
+          )
+        }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
       }
       if (
@@ -160,7 +175,7 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.read().current
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values)
         })
       }
     })
@@ -183,7 +198,7 @@ export async function acquireAcpStructuredSession(input: {
       now,
       childStops: () => session?.childStops ?? NO_ACP_CHILD_STOPS,
       ...acpLaneChildWorkDelivery(deps, sessionId, events),
-      logger: deps.logger ?? createStructuredAgentSessionLogger(),
+      logger,
       onInputAccepted: (clientMessageId) => {
         if (isAcpReadySession(session)) {
           session.turns?.accept(clientMessageId)
@@ -193,6 +208,17 @@ export async function acquireAcpStructuredSession(input: {
     })
     slot.lane = lane
     slot.reattaching = attaching
+    // What the agent replays is kept for catch-up, never written as it arrives.
+    slot.history =
+      attaching && spec.historyCatchUp
+        ? new AcpLoadHistory(providerSessionId, () =>
+            logger.warn(`${agentName} chat did not catch up on turns made outside it`, {
+              scope: 'acp-history-catch-up',
+              sessionId,
+              reason: 'replay-too-large'
+            })
+          )
+        : null
     if (attaching) {
       lane.translator.beginLoad()
     }
@@ -241,9 +267,13 @@ export async function acquireAcpStructuredSession(input: {
           create: makeLane,
           clear: () => {
             slot.lane = null
+            slot.history = null
           },
           finishLoad: () => {
             slot.reattaching = false
+            const replayed = slot.history?.frames() ?? null
+            slot.history = null
+            return replayed
           }
         },
         onSettled: input.onSettled,

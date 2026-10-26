@@ -3,9 +3,7 @@ import { Hourglass, LoaderCircle } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
-/** Desktop's LoadingSpinner: the same turning circle, once per second.
- *  Why: a spinner frozen by reduced motion reads as stuck, so the still state is
- *  a different icon that says "working" without moving. */
+// Match desktop one-second spinner; reduced motion uses distinct working icon so frozen circle does not look stuck.
 export function LoadingSpinner({
   size,
   color

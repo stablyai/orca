@@ -31,8 +31,7 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).at(-1) || path
 }
 
-/** The break between two regions of the file, quiet enough not to read as a
- *  row of content but present enough that the gutter's jump is accounted for. */
+/** Mark omitted file regions so gutter line jumps do not resemble missing rendered content. */
 function DiffGapRow(): React.JSX.Element {
   return (
     <div
@@ -59,8 +58,7 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
     >
       {gutterWidth > 0 ? (
         <span
-          // Why: the gutter carries its own ground so the number column stays
-          // legible against a tinted row instead of dissolving into it.
+          // Give gutter numbers their own background to keep them legible on tinted diff rows.
           className={cn(
             'shrink-0 select-none pr-1.5 text-right tabular-nums text-chat-foreground-faint',
             line.kind === 'add' && 'bg-[var(--diff-added-gutter)]',
@@ -90,7 +88,7 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
   )
 }
 
-/** The card's rows. Its own component so a collapsed card builds none of them. */
+/** Mount rows separately so collapsed cards do not build their DOM. */
 function DiffCardRows({
   lines,
   gutterWidth
@@ -116,11 +114,7 @@ function DiffCardRows({
   )
 }
 
-/** Inline card for one file an agent edited: verb header, path with change
- *  counts, and the unified rows. The gutter is blank when the provider gave no
- *  resolved ranges, because a snippet-relative number would read as a file
- *  position. A change reported with no body — a delete names the file and
- *  nothing else — keeps the header rows and offers no empty disclosure. */
+/** Render file edits without invented line numbers; header-only changes have no empty disclosure. */
 export function NativeChatDiffCard({
   file,
   revealSignal,
@@ -145,13 +139,10 @@ export function NativeChatDiffCard({
   useLayoutEffect(() => {
     if (revealSignal && cardRef.current) {
       setExpanded(true)
-      // Reported from the card, not the row: a turn that touched four files must
-      // land on the one that was asked for, and only the card knows where it is.
+      // Reveal the requested file’s own card, not the enclosing turn that may contain several files.
       onReveal?.(cardRef.current)
     }
   }, [revealSignal, onReveal, setExpanded])
-  // Joining every row to seed the copy button is the card's most expensive
-  // work, and a collapsed card renders none of those rows.
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const hasBody = file.lines.length > 0
   const widest = file.lineNumbersKnown

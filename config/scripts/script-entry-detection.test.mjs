@@ -31,8 +31,7 @@ describe('isDirectInvocation', () => {
     expect(isDirectInvocation(import.meta.url, entry, { realpath })).toBe(false)
   })
 
-  // Why an injected converter: a win32 path cannot be exercised through node:url's pathToFileURL
-  // on a posix runner, and CI is ubuntu.
+  // Inject converter to exercise Windows URLs from POSIX CI.
   const toWin32FileUrl = (windowsPath) => new URL(`file:///${windowsPath.replaceAll('\\', '/')}`)
 
   it('matches a Windows entry path, which the file:// template form never does', () => {
@@ -49,9 +48,7 @@ describe('isDirectInvocation', () => {
 })
 
 describe('running a builder through a symlink', () => {
-  // Node resolves symlinks in import.meta.url but not in argv[1]. Before the guard realpath'd the
-  // entry path, `node /tmp/<link>` compared /tmp against /private/tmp and the builder exited 0
-  // having written nothing — a green packaging job with no bundle in it.
+  // Canonicalize argv symlink: /tmp versus /private/tmp otherwise exits 0 without producing bundle.
   it('still recognises the entry module', async () => {
     const scratch = await mkdtemp(join(tmpdir(), 'orca-script-entry-link-'))
     try {

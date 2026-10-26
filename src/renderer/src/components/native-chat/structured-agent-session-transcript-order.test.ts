@@ -48,7 +48,6 @@ function answered(question: string): AgentJournalItemBody {
   }
 }
 
-/** The ids the desktop transcript list draws, top to bottom. */
 function drawn(
   items: AgentJournalRenderItem[],
   outbox: StructuredAgentSessionOptimisticMessage[] = [],
@@ -82,7 +81,6 @@ describe('structured transcript order', () => {
       })
     ]
     expect(drawn(items)).toEqual(['ask', 'reply', 'steer', 'recovered'])
-    // The host's outline, published to every client, uses the same order.
     expect(projectAgentSessionConversationOutline(items, []).map(({ itemId }) => itemId)).toEqual([
       'ask',
       'steer',
@@ -91,8 +89,7 @@ describe('structured transcript order', () => {
   })
 
   it("draws one write's questions by their place in it, whatever order they arrive in", () => {
-    // One Codex ask: a single journal write, one sequence and one timestamp. Neither
-    // the ids nor the arrival order below spell the order it was asked in.
+    // Same-write questions share time/sequence; neither ids nor arrival order supplies their write index.
     const scope = journalItem('q:scope', 5, 500, answered('Which files?'))
     const priority = journalItem('q:priority', 5, 500, answered('What matters?'), {
       sequenceIndex: 1
@@ -112,7 +109,6 @@ describe('structured transcript order', () => {
   })
 
   it('keeps a send the journal recorded and the provider refused at its journal place', () => {
-    // The agent kept writing after the refused steer; its Retry stays with the composer.
     const refused = agentJournalSubmissionKey('steer')
     const items = [
       journalItem('ask', 1, 100, said('user', 'Fix the parser')),

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import * as electron from 'electron'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { setPtyHostBindings } from './pty-host-bindings'
+import { setPtyHostBindings } from './pty/pty-host-bindings'
 import { testPtyIpcSurface } from './pty-ipc-test-surface'
 import type { Mock } from 'vitest'
 import {
@@ -28,6 +28,7 @@ import {
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
+  forgetRefusedPaneResumeMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
@@ -148,6 +149,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
+    forgetRefusedPaneResumeMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
@@ -219,8 +221,10 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
         ? '/tmp/orca-opencode2-overlay'
         : '/tmp/orca-opencode2-config'
     }))
-    mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
-      MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
+    mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
+      MIMOCODE_CONFIG_DIR: existingConfigDir
+        ? '/tmp/orca-mimocode-overlay'
+        : '/tmp/orca-mimocode-shared'
     }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',

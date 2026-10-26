@@ -31,7 +31,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       }
       const seq = claimDocumentRead(markdownReadSeqRef.current, tab.id)
       const visibleAtStart = markdownDocsRef.current.get(tab.id)
-      // Why: swapping a visible document for `loading` unmounts the WebView and drops the caret.
+      // Retain visible documents during refresh so WebView unmount cannot drop the caret.
       const loading: MarkdownDocState = { status: 'loading' }
       setMarkdownDocs((prev) =>
         installDocumentReadPlaceholder(prev, tab.id, loading, keepMarkdownVisibleDuringRead)

@@ -1,11 +1,5 @@
-/**
- * Synthetic benchmark for native chat's post-incremental renderer hot paths.
- * Run: pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts
- *
- * This excludes transcript parsing, IPC/remote latency, React, and DOM work. The
- * 2 KB/message fixtures intentionally stress fallback-key normalization and are
- * not estimates of average production message size or end-to-end frame latency.
- */
+// Run pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts. Synthetic 2KB messages stress fallback-key normalization.
+// Excludes parsing, IPC/remote latency, React/DOM; results are not average production size or end-to-end frame latency.
 
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { performance } from 'node:perf_hooks'

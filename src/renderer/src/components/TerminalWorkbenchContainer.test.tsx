@@ -16,8 +16,7 @@ vi.mock('../store', () => ({
   }
 }))
 
-// Why: the driver and automation-lease modules are the real ones — mocking them would leave
-// the wiring under test unproven, which is the whole point of this file.
+// Use real driver/lease modules to exercise the paint-retention wiring.
 const { setDriverForBrowserPage } = await import('../lib/pane-manager/browser-mobile-driver-state')
 const { acquireBrowserAutomationVisibility, releaseBrowserAutomationVisibility } =
   await import('./browser-pane/host-guest/browser-automation-visibility')
@@ -61,8 +60,7 @@ describe('TerminalWorkbenchContainer', () => {
     expect(node.hasAttribute('inert')).toBe(false)
   })
 
-  // Why: `hidden` is display:none, and Chromium emits no screencast frames from inside such a
-  // subtree — this is the exact regression that froze a phone's browser pane on Settings.
+  // display:none stops Chromium screencasts, freezing phone browsers on Settings.
   it('never applies display:none while a phone drives one of its pages', () => {
     setDriverForBrowserPage(PAGE_ID, { kind: 'mobile', clientId: 'client-1' })
     const node = mountWorkbench(false)
@@ -70,9 +68,7 @@ describe('TerminalWorkbenchContainer', () => {
     expect(node.className).toContain('opacity-0')
   })
 
-  // Why: the cold-start deadlock. A screencast cannot start until the guest registers, and the
-  // guest only mounts under an automation bootstrap lease — gating on the mobile driver alone
-  // means the guest never mounts, so the driver never flips.
+  // Bootstrap leases must permit guest mounting before screencasts can register a mobile driver.
   it('never applies display:none while an automation lease holds one of its pages', () => {
     const token = acquireBrowserAutomationVisibility(PAGE_ID)
     try {
@@ -85,8 +81,7 @@ describe('TerminalWorkbenchContainer', () => {
   })
 
   it('stays out of flow and non-interactive while painting hidden', () => {
-    // Why: the active page is a flex sibling — an in-flow workbench would halve its height,
-    // and a hittable one would swallow its clicks.
+    // Invisible workbenches must neither shrink the active page nor intercept its clicks.
     setDriverForBrowserPage(PAGE_ID, { kind: 'mobile', clientId: 'client-1' })
     const node = mountWorkbench(false)
     expect(node.className).toContain('absolute')

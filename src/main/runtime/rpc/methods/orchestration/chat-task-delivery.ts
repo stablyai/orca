@@ -1,8 +1,4 @@
-/**
- * A chat assignee's task, sent as any agent's message into a chat is: the composer's queued send,
- * held as a card while the chat is busy, recording the Dispatch it is from. The operation id is
- * derived from the Dispatch, so a second send for one Dispatch replays instead of queueing twice.
- */
+/** Queue the chat assignee's task as a composer card while busy; derive operation id from Dispatch so repeat sends replay instead of duplicating cards. */
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session-journal-types'

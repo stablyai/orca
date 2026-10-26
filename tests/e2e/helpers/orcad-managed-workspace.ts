@@ -1,8 +1,4 @@
-/**
- * A repository workspace on an orcad-managed Docker SSH host, reached the way users reach one:
- * a saved SSH profile whose first connect deploys the managed server. Plus the terminal moves the
- * managed-host journey specs share, driven through the tab bar and the keyboard.
- */
+// Drive conversion through a saved Docker SSH profile, then exercise managed-terminal journeys through production UI paths.
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './orca-app'
 import { createRestartSession } from './orca-restart'
@@ -19,7 +15,6 @@ import { getManagedOrcadSshTargetId } from '../../../src/shared/managed-orcad-ex
 
 export const ORCAD_TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 
-/** Skips the calling spec file unless the Docker SSH host and the orcad template are available. */
 export function skipUnlessManagedDockerHost(): void {
   test.skip(
     !ORCAD_TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1',
@@ -34,7 +29,6 @@ export type ManagedHostFixture = {
   app: ElectronApplication | null
 }
 
-/** A fresh Docker SSH host and profile for `body`, torn down whatever it throws. */
 export async function withManagedHost(
   testInfo: TestInfo,
   body: (fixture: ManagedHostFixture) => Promise<void>,
@@ -106,7 +100,6 @@ export async function launchConvertedProfile(
   return { app, page, seeded, environmentId }
 }
 
-/** Like `launchConvertedProfile`, and leaves the managed repository active. */
 export async function launchManagedWorkspace(
   fixture: ManagedHostFixture,
   options: ManagedProfileOptions = {}
@@ -120,7 +113,6 @@ export async function launchManagedWorkspace(
   return workspace
 }
 
-/** Quits the live launch and relaunches the same profile, waiting for startup to settle. */
 export async function relaunchManagedApp(
   fixture: ManagedHostFixture,
   onLaunch?: (page: Page) => void | Promise<void>,
@@ -172,7 +164,6 @@ export function terminalTabIds(page: Page, worktreeId: string): Promise<string[]
   )
 }
 
-/** Opens a terminal the way the tab bar's + does and waits for its pane to mount. */
 export async function openTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const before = new Set(await terminalTabIds(page, worktreeId))
   await page.evaluate(async (worktreeId) => {
@@ -221,7 +212,6 @@ export function selectTerminalTab(page: Page, tabId: string): Promise<void> {
   }, tabId)
 }
 
-/** Types `command` into the tab's pane and presses Enter, as a user at the keyboard would. */
 export async function typeInTerminal(page: Page, tabId: string, command: string): Promise<void> {
   await selectTerminalTab(page, tabId)
   await waitForPane(page, tabId)
@@ -244,7 +234,6 @@ export async function expectPaneText(
     .toContain(text)
 }
 
-/** Echoes a unique marker and waits for the output; returns the marker. */
 export async function echoMarker(
   page: Page,
   tabId: string,

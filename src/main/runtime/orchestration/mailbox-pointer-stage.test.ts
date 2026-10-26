@@ -30,7 +30,7 @@ function pointerDeps(
     getLeaf: () => LEAF,
     getLeafKey: () => 'tab-1:leaf-1',
     getLiveLeafForHandle: () => LEAF,
-    // These cases exercise staging and Enter phases, not the idle gate; the pane is settled.
+    // Hold the pane settled to isolate staging and Enter phases from the idle gate.
     isAgentSettledForDelivery: () => true,
     getMessageWaiters: () => undefined,
     getCliCommand: () => 'orca' as const,
@@ -70,7 +70,6 @@ describe('mailbox pointer staging watermark', () => {
       to: 'run:run-1',
       subject: 's'
     })
-    // A concurrent flight already owns the reservation, so this claim cannot succeed.
     expect(
       db.stageMailboxPointerEnter([message.id], { ptyId: 'other-pty', processIncarnation: 'inc-x' })
     ).toBe(true)
@@ -198,7 +197,6 @@ describe('mailbox pointer staging watermark', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(writePty).not.toHaveBeenCalled()
 
-    // Newer mail must still reach the agent; a leaked watermark used to park it forever.
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'second' })
     delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
     await new Promise((resolve) => setImmediate(resolve))
@@ -229,8 +227,7 @@ describe('mailbox pointer staging watermark', () => {
 })
 
 describe('retiring a pty mid-delivery', () => {
-  // Why: an Enter that was already written may have landed. Releasing it would send the same
-  // mail a second time, so only phases that provably never submitted become redeliverable.
+  // Only provably unsubmitted phases may retry; an attempted Enter may already have landed.
   it('leaves an attempted Enter at its phase instead of making it redeliverable', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
@@ -246,12 +243,11 @@ describe('retiring a pty mid-delivery', () => {
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
       delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
 
-      // Settle the pointer write, so the pane reaches WRITE_ATTEMPTED and arms the Enter.
       settlements[0]?.(WRITE_ACCEPTED)
       await vi.advanceTimersByTimeAsync(0)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(2)
 
-      // Fire the Enter but never settle it: this is the ambiguous state.
+      // Attempt Enter without settling it to create an ambiguous handoff.
       await vi.advanceTimersByTimeAsync(600)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(3)
 

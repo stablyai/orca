@@ -109,7 +109,6 @@ describe('createIpcPtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    // Agent starts working
     onData?.({ id: 'pty-1', data: ']0;. Claude working' })
     await flushPtySideEffects()
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
@@ -126,7 +125,6 @@ describe('createIpcPtyTransport', () => {
       snapshot.commit()
     }
 
-    // Exit handler should still work (exit handlers are kept alive)
     onExit?.({ id: 'pty-1', code: -1 })
     expect(onPtyExit).toHaveBeenCalledWith('pty-1', -1)
   })
@@ -227,22 +225,18 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
 
-      // Agent starts working — sets the title to a working indicator
       onData?.({ id: 'pty-1', data: ']0;. Claude working' })
       vi.advanceTimersByTime(0)
       expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
-      // Data arrives without a title change — starts the 3 s staleTitleTimer
       onData?.({ id: 'pty-1', data: 'some output without title\r\n' })
       vi.advanceTimersByTime(0)
 
       // Unregister must cancel the staleTitleTimer and reset the tracker so no stale idle transition fires.
       const snapshots = unregisterPtyDataHandlers(['pty-1'])
 
-      // Advance past the 3 s stale-title timeout
       vi.advanceTimersByTime(4000)
 
-      // The staleTitleTimer must NOT have fired onAgentBecameIdle
       expect(onAgentBecameIdle).not.toHaveBeenCalled()
       for (const snapshot of snapshots) {
         snapshot.commit()

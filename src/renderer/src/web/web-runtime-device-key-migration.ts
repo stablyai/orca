@@ -9,11 +9,7 @@ import type {
 
 type MigratePlan = Extract<WebRuntimeAuthPlan, { kind: 'migrate' }>
 
-/**
- * Runs on a v2 token socket that just authenticated: checks the host takes device keys, registers
- * this installation's key against this socket's transcript, and records the forked device id.
- * The caller then reconnects with the key. Every failure leaves the token in place.
- */
+/** Register the key against the authenticated v2 socket transcript, recording the forked device ID before reconnect. Every failure preserves the token. */
 export async function migrateWebRuntimeToDeviceKey(args: {
   plan: MigratePlan
   transcriptHashB64: string | null

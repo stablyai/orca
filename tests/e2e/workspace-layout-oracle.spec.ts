@@ -1,13 +1,5 @@
-/**
- * Layout oracle scenarios with a window attached. Each drives a layout journey through the same
- * commands a user, the CLI or a paired client sends, and after every step checks the runtime's
- * layout against the structural rules, the window's DOM, the paired-client and CLI views, the
- * expected end layout and, where the journey restarts, the layout from before the restart.
- *
- * Findings a scenario still has on main are listed in `workspace-layout-oracle-known-on-main.ts`;
- * any other finding fails. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing.
- * `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats every scenario n times (catch-rate measurement).
- */
+// Drive user/CLI/paired-client layout journeys; compare structural rules, window DOM, client/CLI views, expected layout and restart preservation after every step.
+// Fail findings absent from workspace-layout-oracle-known-on-main.ts. ORCA_LAYOUT_ORACLE_RECORD=1 records without failing; ORCA_LAYOUT_ORACLE_REPEAT=<n> repeats.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'

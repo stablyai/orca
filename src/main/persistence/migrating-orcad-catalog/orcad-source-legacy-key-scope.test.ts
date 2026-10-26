@@ -55,7 +55,6 @@ function manifest(state: PersistedState): OrcadMigrationManifest {
   }
 }
 
-/** Host B's state in every store that is not a session partition, keyed by legacy repo ids. */
 function hostBLegacyState(): PersistedState {
   const state = getDefaultPersistedState('/home/test')
   state.repos = [REPO_A, REPO_B]
@@ -144,7 +143,7 @@ describe('an identity alias whose metadata is gone (the B4 profile shape)', () =
   it('is nothing to move, and retirement drops it', () => {
     const state = getDefaultPersistedState('/home/test')
     state.repos = [REPO_A]
-    // As saved on B4: the legacy row carries the metadata; the alias names an identity that is gone.
+    // Older builds may retain metadata only in a legacy row beside a dangling alias.
     state.worktreeMeta[WORKTREE] = { ...meta('ssh:host-a'), instanceId: 'instance-1' }
     const alias = `ssh:host-a|${WORKTREE}`
     state.worktreeIdentityAliases = { [alias]: ['wt2:ssh%3Ahost-a:instance-1'] }
@@ -158,7 +157,6 @@ describe('an identity alias whose metadata is gone (the B4 profile shape)', () =
     expect(inspection.blockedCount).toBe(0)
     expect(inspection.rows.map((row) => row.sourceKey)).toEqual([WORKTREE])
 
-    // A dangling alias with no legacy row beside it is dropped too.
     state.worktreeIdentityAliases[`ssh:host-a|${REPO_A.id}::/srv/gone`] = ['wt2:ssh%3Ahost-a:x']
     expect(inspectOrcadSourceWorktreeMetadata(state, scope).blockedCount).toBe(0)
     subtractOrcadMigrationSourceDormantState(state, manifest(state))

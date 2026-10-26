@@ -30,7 +30,6 @@ function digest(id: number): string {
   return String(id).padStart(64, '0')
 }
 
-/** A plan identified by `id`; `updates` names skills with update work. */
 function plan(id: number, updates: string[] = []): BundledSkillPlan {
   return planOf(
     updates.map((name) => sharedEntry(name, 'update')),

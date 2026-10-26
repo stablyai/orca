@@ -7,15 +7,9 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const TERMINAL = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 const CONNECTION = 'connection-1'
-/** Four base64 characters per byte-triple; short enough that one chunk covers a whole upload. */
 const IMAGE_BASE64 = 'AAAA'.repeat(8)
 
-/**
- * The clipboard image path a phone takes to get pixels into a terminal: the chunked host upload and
- * its single-frame fallback, the picker-driven attachment that rides on it, and the native-chat
- * paste sequence. The picker itself is injected by the attachment's own dependency object, so no
- * image-picker module is reached; the recording observes the upload and the terminal writes.
- */
+// Inject picker pixels through product dependencies; record chunked/fallback upload and terminal writes without native picker imports.
 export function clipboardImageMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

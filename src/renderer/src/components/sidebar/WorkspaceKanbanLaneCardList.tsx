@@ -6,10 +6,8 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import { registerWorkspaceKanbanVirtualLaneLayout } from './workspace-kanban-virtual-lane-layout'
 
-// Why: board cards are uniform one-line rows; a close estimate keeps the first
-// virtual window right so the lane does not reflow once cards measure.
+// Estimate uniform card height so the first virtual window cannot reflow after measurement.
 const WORKSPACE_BOARD_CARD_ESTIMATED_HEIGHT = 36
-// Matches the `space-y-2` rhythm the lane used before virtualization.
 const WORKSPACE_BOARD_CARD_GAP = 8
 const WORKSPACE_BOARD_CARD_OVERSCAN = 6
 
@@ -59,8 +57,7 @@ function WorkspaceKanbanLaneCardList({
     ),
     overscan: WORKSPACE_BOARD_CARD_OVERSCAN,
     gap: WORKSPACE_BOARD_CARD_GAP,
-    // Why: sync-flushing rich card renders inside the scroll listener stalls the
-    // wheel; async + overscan keeps the lane filled without blocking input.
+    // Async renders plus overscan avoid blocking wheel events with rich-card flushes.
     useFlushSync: false
   })
 

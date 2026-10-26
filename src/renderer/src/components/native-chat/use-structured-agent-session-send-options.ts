@@ -18,7 +18,7 @@ export function useStructuredAgentSessionSendOptions(
     if (!takesSendOptions) {
       return undefined
     }
-    // Read, not rendered: a pick the launch just took is not in this render's props yet.
+    // Read held picks directly because launch acceptance can precede this render’s props.
     const selection = getStructuredAgentSessionLaunchSelection(sessionId)
     // A pick on its way resolves as the picker shows it.
     const view = optionView(optionStateRef.current, selection?.seed ?? launch?.seedOptions, {

@@ -2,7 +2,6 @@ type ConnectionRevivalReason = 'app-resume' | 'network-change'
 
 const listeners = new Set<(reason: ConnectionRevivalReason) => void>()
 
-/** Hears each OS signal that the link may be back, as client-context relays it to live clients. */
 export function subscribeConnectionRevival(
   listener: (reason: ConnectionRevivalReason) => void
 ): () => void {

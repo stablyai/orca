@@ -63,11 +63,7 @@ export function createRepoCatalogActions(
             setups: remainingSetups
           }
         )
-        // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
-        // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
-        // hands the store arrays straight back when nothing moved, so writing them
-        // unconditionally still leaves identity-keyed selectors untouched.
+        // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
           s.projects,
           compatibility.projects,

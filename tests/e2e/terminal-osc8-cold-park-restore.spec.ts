@@ -141,10 +141,8 @@ test('restores and opens an OSC 8 link after its terminal is cold-parked', async
   const label = `#${randomUUID().slice(0, 6)}`
   const url = `https://example.com/orca-osc8-${randomUUID()}`
   const linkedOutput = `\x1b[?1049h\x1b[2J\x1b[H\x1b]8;id=cold-park;${url}\x1b\\${label}\x1b]8;;\x1b\\\n`
-  // Why staged rather than `node -e`: PowerShell mangles the escapes (#8521), and it
-  // keeps the label out of the command line so the readiness poll below cannot be
-  // satisfied by the shell's own echo. `staged.command` is bypassed because it runs a
-  // bare `node`; nodeTerminalCommand pins process.execPath for Windows CI's PATH.
+  // Stage to avoid PowerShell escape mangling (#8521) and keep the readiness label out of command echo.
+  // Use nodeTerminalCommand instead of bare-node staged.command to pin Windows CI’s executable.
   const staged = stageNodeScriptForTerminal(alternateScreenFixtureScript(linkedOutput), {
     prefix: 'orca-osc8-cold-park'
   })

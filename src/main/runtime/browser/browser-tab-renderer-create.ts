@@ -41,7 +41,7 @@ export async function createBrowserTabInRenderer(
       url,
       worktreeId,
       ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
-      // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
+      // undefined preserves renderer default-profile inheritance; null would override it.
       sessionProfileId: profileId,
       sessionPartition,
       activate

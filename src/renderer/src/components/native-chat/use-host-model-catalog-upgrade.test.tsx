@@ -101,7 +101,6 @@ function catalogReads(): unknown[] {
     .map(([, , params]) => params)
 }
 
-/** The picker opens and takes a pick: what a usable first frame means. */
 function usable(snapshot: readonly SessionOptionDescriptor[]): boolean {
   return model(snapshot).settable && modelChoices(snapshot).length > 0
 }
@@ -130,7 +129,6 @@ describe('host model catalog read', () => {
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    // No built-in label the host's list could replace.
     expect(modelChoices(result.current.optionSnapshot)).toEqual([])
     expect(model(result.current.optionSnapshot).settable).toBe(false)
     first.resolve(HOST_CATALOG)
@@ -152,8 +150,7 @@ describe('host model catalog read', () => {
       { agent: 'codex', sessionId },
       { agent: 'codex', sessionId, waitForListing: true }
     ])
-    // Once the host says it has none: the built-in list, open to a pick, naming nothing it
-    // could replace.
+    // A settled empty host catalog enables built-ins without claiming a replaceable model default.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
     expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()

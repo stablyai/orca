@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AgentStatusPayload } from './agent-status-contract'
+import type { AgentStatusPayload } from './agent-status/agent-status-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { createAgentStatusLiveActions } from './agent-status-live-actions'
 

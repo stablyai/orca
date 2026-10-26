@@ -11,8 +11,7 @@ export type SshIdentityFileRead = { contents: Buffer } | { contents: null; probl
 
 const READ_OPTIONS = { regularFileOnly: true }
 
-// Why one reader: identity paths come from user config, so a FIFO or device must never block the
-// main process and an oversized file must never be loaded whole.
+// Config paths may name FIFOs/devices/huge files; require bounded regular-file reads so main cannot block.
 export function readSshIdentityFileSync(filePath: string): SshIdentityFileRead {
   try {
     return {

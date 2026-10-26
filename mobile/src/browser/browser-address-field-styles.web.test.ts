@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// StyleSheet.create is identity in React Native and on RN Web alike, and every other export of the
-// module reaches the native runtime this test does not have.
+// Mock only identity StyleSheet.create; other RN exports require native runtime.
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles }
 }))
 
-// The seam as the page bundle resolves it. Without this the `.web.ts` styles below would read the
-// native seam and the test would pass on a size that no browser ever renders.
+// Resolve web text-input seam as page does; native seam could falsely pass a size no browser renders.
 vi.mock(
   '../platform/text-input-font-size',
   async () => await import('../platform/text-input-font-size.web')

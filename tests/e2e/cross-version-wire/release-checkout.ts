@@ -26,13 +26,10 @@ const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-check
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
 
 export type ReleaseCheckout = {
-  /** The ref as requested, e.g. `v1.4.169`. */
   ref: string
-  /** Resolved commit the tree was extracted from. */
   commit: string
   /** Directory name under the cache root; also the dynamic-import path segment. */
   label: string
-  /** Absolute path to the extracted checkout root (contains `src/`). */
   root: string
 }
 
@@ -51,13 +48,7 @@ function git(args: string[]): string {
   }).trim()
 }
 
-/**
- * The version point the harness pairs current code against. An explicit
- * {@link BASELINE_REF_ENV} wins; otherwise the newest stable desktop release tag.
- *
- * Throws rather than skipping: a cross-version lane that quietly runs nothing is
- * the exact failure this harness exists to prevent.
- */
+// Prefer the explicit baseline override, then the newest stable desktop tag; missing baselines must fail rather than skip.
 export function resolveBaselineReleaseRef(): string {
   const override = process.env[BASELINE_REF_ENV]?.trim()
   if (override) {
@@ -111,14 +102,7 @@ function checkoutModulePath(root: string, rootRelativePath: string): string {
   return absolute.split('\\').join('/')
 }
 
-/**
- * Import a source module with `/src/...` anchored to the extracted release root.
- *
- * The specifier handed to `importModule` is a raw absolute forward-slash path,
- * never a `file://` URL: CI vite-node resolves URL specifiers as root-relative
- * ids and fails with `ERR_MODULE_NOT_FOUND` (run 33049571360). `importModule`
- * is injectable only so tests can pin that contract deterministically.
- */
+// Pass raw absolute forward-slash paths: CI vite-node treats file:// URLs as root-relative ids (run 33049571360).
 export function importReleaseCheckoutModule(
   checkout: ReleaseCheckout,
   rootRelativePath: string,
@@ -138,13 +122,7 @@ export function releaseModuleExport<T>(module: Record<string, unknown>, name: st
   return value as T
 }
 
-/**
- * Import a copy of a working-tree module placed under the cache root.
- *
- * Why: vite transforms a file against its nearest tsconfig, and `mobile/tsconfig.json` extends
- * Expo's, which the root-only CI lane does not install. The copy gets the root tsconfig, as the
- * release checkout's copy does. Its relative imports are pinned to the working-tree files they name.
- */
+// Copy under the root tsconfig because root-only CI lacks Expo’s mobile config; pin relative imports to working-tree sources.
 export async function importWorkingTreeModuleCopy(
   rootRelativePath: string,
   cacheRoot: string = DEFAULT_CACHE_ROOT
@@ -168,10 +146,7 @@ export async function importWorkingTreeModuleCopy(
   return import(/* @vite-ignore */ copy) as Promise<Record<string, unknown>>
 }
 
-/**
- * Extract `src/` at `ref` into a cached, gitignored checkout the test can import.
- * Cached by resolved commit, so a moved tag or a bumped rewrite format re-extracts.
- */
+// Cache extracted source by resolved commit and rewrite format so moved tags cannot reuse stale trees.
 export async function materializeReleaseCheckout(
   ref: string,
   options: MaterializeReleaseCheckoutOptions = {}

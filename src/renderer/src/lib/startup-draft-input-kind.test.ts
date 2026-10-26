@@ -68,7 +68,6 @@ function createPaneDraftSession(agent?: 'codex') {
   return { session, kinds }
 }
 
-/** The pane route: the pane's transport pastes the draft once the agent's composer is ready. */
 async function paneRouteKinds(): Promise<TerminalInputKind[]> {
   const { session, kinds } = createPaneDraftSession()
   session.observeStartupDraftPasteReadiness('\x1b[?2004h')
@@ -77,7 +76,6 @@ async function paneRouteKinds(): Promise<TerminalInputKind[]> {
   return kinds
 }
 
-/** The helper route: the draft helper waits for the agent, then writes through the runtime. */
 async function helperRouteKinds(): Promise<TerminalInputKind[]> {
   const { kinds } = stubPtyApi()
   const pasted = pasteDraftToAgentPtyWhenReady({

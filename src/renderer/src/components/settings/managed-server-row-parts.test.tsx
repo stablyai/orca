@@ -15,7 +15,7 @@ import {
 import { useManagedServerLifecycle } from './use-managed-server-lifecycle'
 
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
-// Why: menu items render inline as buttons so the row's actions can be clicked directly.
+// Render menu items as buttons so tests can invoke row actions directly.
 vi.mock('../ui/dropdown-menu', () => ({
   DropdownMenuSeparator: () => null,
   DropdownMenuItem: ({

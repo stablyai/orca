@@ -70,10 +70,7 @@ function isLinkedWorktree(repoRoot) {
   }
 }
 
-/**
- * A dev Orca's terminals inherit the runner's derived env. A `pnpm dev` started from one of those
- * terminals in another worktree must derive its own identity instead of reusing the parent's.
- */
+// Nested dev launches must derive their own worktree identity instead of inheriting the parent's.
 export function dropInheritedDevInstanceEnv(env, repoRoot) {
   const inheritedRoot = env.ORCA_DEV_REPO_ROOT
   if (!inheritedRoot || sameFilesystemPath(inheritedRoot, repoRoot)) {
@@ -242,10 +239,7 @@ function readUserPassedDebugPort(forwardedArgs) {
   return null
 }
 
-/**
- * Why: every `pnpm dev` should be attachable from agent-browser/playwright-cli without manual
- * port juggling. Exports ORCA_DEV_RENDERER_PORT for electron.vite.config.ts.
- */
+// Allocate discoverable dev ports for browser agents; Electron Vite reads ORCA_DEV_RENDERER_PORT.
 export async function resolveDevInstancePorts({ forwardedArgs, instanceKey, env = process.env }) {
   // Why: exact match (or `=` form) avoids false positives on `--remote-debugging-port-*` flags;
   // `--remote-debugging-pipe` opts into pipe-based debugging, so no port is injected.

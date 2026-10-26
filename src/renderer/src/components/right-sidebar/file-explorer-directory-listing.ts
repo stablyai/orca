@@ -47,7 +47,7 @@ export function keepOpenedDirectoryLinks(
   const openedLinks = new Map<string, string>()
   for (const child of previousChildren ?? []) {
     const cachedLink = dirCache[child.path]
-    // Why: pending/failed reads and listings from another host aren't proof of an opened folder.
+    // Failed/pending reads and other-host listings do not prove a folder link was opened.
     if (
       child.isSymlink &&
       child.isDirectory &&
@@ -115,9 +115,7 @@ export async function readFileExplorerDirectory(
       ? { followSymlinks: true }
       : undefined
   )
-  // Why: remote-runtime and paired-web routes return the host's order verbatim,
-  // and an older host may still sort lexicographically; re-sorting an already
-  // sorted local listing is near-free (adaptive sort).
+  // Older remote hosts may return lexical order; adaptive sorting keeps already-sorted local listings cheap.
   return {
     entries: sortDirEntries(entries),
     operationOwner

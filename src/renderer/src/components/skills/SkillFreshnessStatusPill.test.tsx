@@ -75,7 +75,6 @@ describe('SkillFreshnessStatusPill', () => {
 
     const rendered = await renderPill('orca-cli')
     expect(pillText(rendered)).toBe('Up to date')
-    // Why: nothing is out of date, so the review dialog would have no row to show.
     expect(detailsButton(rendered)).toBeNull()
   })
 

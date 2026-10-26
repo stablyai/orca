@@ -43,7 +43,6 @@ import {
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
 
-/** What Project grouping reads beyond the rows: the desktop's all-host catalog and header order. */
 export type ProjectSectionCatalog = {
   /** Catalog repos of the hosts the list shows; each without rows gets an empty section. */
   repos: readonly SectionRepo[]
@@ -61,7 +60,6 @@ export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
   projectOrderBy: 'manual'
 }
 
-/** Catalog repos by id, plus a stand-in from the row for a repo its host's catalog lacks. */
 export function buildSectionRepoMap(
   catalogRepos: readonly SectionRepo[],
   worktrees: readonly Worktree[]
@@ -97,9 +95,7 @@ function makeSection(
   }
 }
 
-// Why: the previous 10-minute lastOutputAt window was too strict — most
-// worktrees with idle terminal prompts had no recent output and were excluded.
-// Any worktree with live terminals or unread output counts as "active".
+// Idle prompts have no recent output; live terminals or unread output still count as active.
 export function isWorktreeActive(w: Worktree): boolean {
   if (w.hasHostSidebarActivity !== undefined) {
     return w.hasHostSidebarActivity
@@ -116,17 +112,15 @@ export function isWorktreeActive(w: Worktree): boolean {
   return false
 }
 
-/** An older host's row says nothing about its default branch; guess the way the phone always has. */
+// Older hosts omit the main-worktree flag; use the legacy branch heuristic.
 function guessDefaultBranchWorkspace(w: Worktree): boolean {
   if (w.isMainWorktree !== undefined) {
     return w.isMainWorktree && w.branch.trim() !== ''
   }
-  // Why: hosts that predate isMainWorktree in worktree.ps; main/master is the only signal.
   const branch = w.branch.replace(/^refs\/heads\//, '')
   return branch === 'main' || branch === 'master'
 }
 
-/** The facts the shared Workspace options filters read, from what the host stamped on each row. */
 function phoneRowFacts(
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
 ): WorkspaceRowFactReader<Worktree> {

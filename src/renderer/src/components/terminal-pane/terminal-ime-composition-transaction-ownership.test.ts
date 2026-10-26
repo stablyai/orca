@@ -80,8 +80,7 @@ describe('xterm composition transaction ownership', () => {
     expect(textarea.value).toBe('')
   })
 
-  // A Linux `Process` keydown is never claimed, and xterm dedupes its own echo; stopping the
-  // input here dropped a commit typed before the transaction settled (#28213).
+  // Unclaimed Linux Process commits stay with xterm’s own dedup; stopping them here loses text (#28213).
   it('leaves unclaimed input with xterm while a transaction settles', () => {
     const sendInput = vi.fn()
     const downstream = vi.fn()

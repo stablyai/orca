@@ -58,7 +58,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     model.accountBackedTaskSourceHostId,
     selectedJiraSiteId
   )
-  // Jira tab state
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)

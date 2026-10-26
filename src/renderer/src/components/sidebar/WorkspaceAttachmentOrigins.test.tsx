@@ -12,26 +12,18 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorktreeLinkedItemRow } from './WorktreeLinkedItemRow'
 import { makeWorktree, makeTerminalTab } from '../../store/slices/worktrees-slice-test-fixtures'
 import { WorkspaceAttachmentOrigins } from './WorkspaceAttachmentOrigins'
+import { useAppStore } from '@/store'
 
 const mocks = vi.hoisted(() => ({
-  state: {
-    unifiedTabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    tabsByWorktree: {},
-    agentStatusByPaneKey: {},
-    setActiveWorktree: vi.fn(() => true),
-    activateTab: vi.fn()
-  },
+  setActiveWorktree: vi.fn(() => true),
+  activateTab: vi.fn(),
   activateTabAndFocusPane: vi.fn()
 }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
-    { getState: () => mocks.state }
-  )
+vi.mock('@/store', async () => ({
+  useAppStore: (await import('@/store/slices/store-test-helpers')).createTestStore()
 }))
 vi.mock('@/attention/notification-subject-owner', () => ({
   resolveNotificationTabOwner: (_state: unknown, tab: Tab) => ({
@@ -55,18 +47,30 @@ const tab = (id: string): Tab => ({
   createdAt: 0,
   agentSessionAgent: 'codex'
 })
+beforeEach(() => {
+  useAppStore.setState(
+    {
+      ...useAppStore.getInitialState(),
+      setActiveWorktree: mocks.setActiveWorktree,
+      activateTab: mocks.activateTab
+    },
+    true
+  )
+})
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
 })
 function setup() {
-  mocks.state.unifiedTabsByWorktree = {
-    [workspace.id]: [
-      tab('Session A'),
-      tab('Session B'),
-      { ...tab('Foreign session'), executionHostId: 'ssh:other' }
-    ]
-  }
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      [workspace.id]: [
+        tab('Session A'),
+        tab('Session B'),
+        { ...tab('Foreign session'), executionHostId: 'ssh:other' }
+      ]
+    }
+  })
 }
 describe('reference session associations', () => {
   it('reveals automatic observations without checks selection or manual assignment controls', () => {
@@ -102,7 +106,7 @@ describe('reference session associations', () => {
     expect(screen.queryByText('Linked to Session A')).toBeNull()
     expect(screen.queryByRole('checkbox')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Seen in Session B' }))
-    expect(mocks.state.activateTab).toHaveBeenCalledWith('Session B', { worktreeId: workspace.id })
+    expect(mocks.activateTab).toHaveBeenCalledWith('Session B', { worktreeId: workspace.id })
     fireEvent.click(screen.getByRole('button', { name: 'Unlink PR #23' }))
     expect(onRemove).toHaveBeenCalledOnce()
   })
@@ -141,8 +145,8 @@ describe('reference session associations', () => {
       />
     )
     fireEvent.click(screen.getByRole('button', { name: 'Seen in Session A' }))
-    expect(mocks.state.setActiveWorktree).toHaveBeenCalledWith(workspace.id, 'local')
-    expect(mocks.state.activateTab).toHaveBeenCalledWith('Session A', { worktreeId: workspace.id })
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(workspace.id, 'local')
+    expect(mocks.activateTab).toHaveBeenCalledWith('Session A', { worktreeId: workspace.id })
   })
 
   it.each([true, false])(
@@ -151,26 +155,28 @@ describe('reference session associations', () => {
       setup()
       const leafId = '11111111-1111-4111-8111-111111111111'
       const otherLeaf = '22222222-2222-4222-8222-222222222222'
-      mocks.state.unifiedTabsByWorktree = {
-        [workspace.id]: [{ ...tab('Terminal'), contentType: 'terminal' }]
-      }
-      mocks.state.tabsByWorktree = {
-        [workspace.id]: [makeTerminalTab({ id: 'Terminal', worktreeId: workspace.id })]
-      }
-      mocks.state.terminalLayoutsByTabId = {
-        Terminal: {
-          ...singlePaneLayoutSnapshot(otherLeaf),
-          root: present
-            ? {
-                type: 'split',
-                direction: 'horizontal',
-                ratio: 0.5,
-                first: { type: 'leaf', leafId },
-                second: { type: 'leaf', leafId: otherLeaf }
-              }
-            : { type: 'leaf', leafId: otherLeaf }
+      useAppStore.setState({
+        unifiedTabsByWorktree: {
+          [workspace.id]: [{ ...tab('Terminal'), contentType: 'terminal' }]
+        },
+        tabsByWorktree: {
+          [workspace.id]: [makeTerminalTab({ id: 'Terminal', worktreeId: workspace.id })]
+        },
+        terminalLayoutsByTabId: {
+          Terminal: {
+            ...singlePaneLayoutSnapshot(otherLeaf),
+            root: present
+              ? {
+                  type: 'split',
+                  direction: 'horizontal',
+                  ratio: 0.5,
+                  first: { type: 'leaf', leafId },
+                  second: { type: 'leaf', leafId: otherLeaf }
+                }
+              : { type: 'leaf', leafId: otherLeaf }
+          }
         }
-      }
+      })
       render(
         <WorkspaceAttachmentOrigins
           workspace={workspace}
@@ -188,7 +194,7 @@ describe('reference session associations', () => {
         />
       )
       fireEvent.click(screen.getByRole('button', { name: 'Seen in Terminal' }))
-      expect(mocks.state.activateTab).toHaveBeenCalledWith('Terminal', { worktreeId: workspace.id })
+      expect(mocks.activateTab).toHaveBeenCalledWith('Terminal', { worktreeId: workspace.id })
       if (present) {
         expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('Terminal', leafId)
       } else {
@@ -207,7 +213,7 @@ const foreignOrigin: WorkspaceAttachmentOrigin = {
 }
 describe('session association host and keyboard regressions', () => {
   beforeEach(() => {
-    mocks.state.unifiedTabsByWorktree = { [workspace.id]: [localTab] }
+    useAppStore.setState({ unifiedTabsByWorktree: { [workspace.id]: [localTab] } })
   })
   it('keeps another host observation unavailable even when a live tab has the same id', () => {
     render(

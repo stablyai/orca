@@ -13,7 +13,6 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
 
-/** A row the agent worked in, which a settled turn folds away. */
 function workRow(id: string): NativeChatMessage {
   return {
     id,
@@ -91,7 +90,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(1_000)
-      // A turn offers its disclosure only when it folds something away, as on desktop.
       const messages: NativeChatMessage[] = [
         {
           id: 'u1',
@@ -119,8 +117,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       })
       const second = renderer!.root.findByType(Result).props.disclosure.resolveRow(0, refreshed[0])
 
-      // The row carries the key; the handler itself lives on the hook and stays
-      // stable for the scope, so a re-render never disturbs a row's memo.
+      // Keep one scoped handler so rerendering cannot invalidate each row’s memo.
       expect(first.turnKey).toBe('u1')
       expect(second.turnKey).toBe('u1')
       const firstHandler = renderer!.root.findByType(Result).props.disclosure.onToggleTurn
@@ -144,7 +141,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
       })
-      // Locally this turn ran 5s; the host says 3m 17s and the host wins.
       vi.setSystemTime(6_000)
       const settledTurns = new Map([['u1', { startedAt: 500, workedSeconds: 197 }]])
       act(() => {
@@ -181,7 +177,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       })
       vi.setSystemTime(6_000)
       seen.length = 0
-      // No host duration for this turn: the settle is stamped locally, one pass later.
       act(() => {
         renderer?.update(createElement(Recorder, { isWorking: false }))
       })
@@ -290,7 +285,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         vi.setSystemTime(10_000)
         const t1 = { kind: 'turn', turnItemId: 't1' } as const
         const thread = { kind: 'thread' } as const
-        // B was handed over while A's turn runs, so the host scopes it to that turn.
         const whileA = [
           user('A', 1, thread),
           turn('t1', 2, 'running', 'A', thread),
@@ -312,7 +306,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           true
         ])
 
-        // B's own turn opens: A takes the host's settled duration, B counts from A's end.
         const whileB = [
           user('A', 1, thread),
           turn('t1', 2, 'interrupted', 'A', thread),
@@ -340,8 +333,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     it("a queued card's Steer joins the running turn: no bar of its own, and live with it", () => {
       const t1 = { kind: 'turn', turnItemId: 't1' } as const
       const thread = { kind: 'thread' } as const
-      // Steer hands the draft over under a fresh submission id while A's turn runs, so the host
-      // scopes the row to that turn; the submission names the card it came from.
+      // Steer uses a fresh submission id while retaining the queued card’s identity and the running turn’s scope.
       const steerId = agentJournalSubmissionKey('hand-off-1')
       const steered = [userMessage('A'), tool, userMessage(steerId)]
       render({
@@ -393,7 +385,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         let [rowA, rowTool, rowB] = rows()
         expect(rowA.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: null })
         expect(rowB.turnStatus).toBeNull()
-        // Liveness follows the owning turn: A's tool row stays live while B waits.
         expect(rowTool.activeTurnIsWorking).toBe(true)
         expect(rowB.activeTurnIsWorking).toBe(false)
 
@@ -511,7 +502,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
   })
 
   it('draws the live bar on a turn whose record and opening message are not loaded', () => {
-    // The newest rows of a long turn; its record is above the page, named only by the host.
     const items: AgentJournalRenderItem[] = ['a300', 'a301'].map((itemId, index) => ({
       itemId,
       revision: 0,
@@ -549,7 +539,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     expect(hosted[0]?.turnStatus).toMatchObject({ startedAt: 1_000 })
     expect(hosted.map((row) => row.activeTurnIsWorking)).toEqual([true, true])
 
-    // From the loaded rows alone, nothing names the turn, so no bar draws.
     expect(rowsWith(undefined).map((row) => row.turnStatus)).toEqual([null, null])
   })
 })
@@ -595,13 +584,11 @@ describe('the open reasoning block the live line discloses', () => {
     act(() => latest().onToggleReasoning('reasoning:r-1'))
     expect(latest().liveLine.reasoningExpanded).toBe(true)
 
-    // Closed while the turn works on: the line discloses nothing, and the row draws open.
     show([prompt, block('r-1', 'completed')], { thinking: false })
     expect(latest().liveLine).toMatchObject({ reasoning: null })
     const row = latest().resolveRow(1, block('r-1', 'completed'))
     expect(row).toMatchObject({ reasoningIsLive: false, reasoningExpanded: true })
 
-    // The next block starts collapsed.
     show([prompt, block('r-1', 'completed'), block('r-2', 'running')], { thinking: true })
     expect(latest().liveLine).toMatchObject({
       reasoning: { message: { id: 'r-2' } },

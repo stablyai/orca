@@ -5,10 +5,7 @@ import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input
 import { describe, expect, it, vi } from 'vitest'
 import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-submit-binding'
 
-/**
- * The seam is mocked so the handler it was handed can be called on demand: the real one is a DOM
- * listener, and what is under test is which closure that listener reaches, on every platform.
- */
+// Mock only the platform listener seam so tests can invoke the closure it actually captured.
 const mocks = vi.hoisted(() => {
   const boundHandlers: Array<() => void> = []
   return {
@@ -77,8 +74,6 @@ function reset(): void {
 }
 
 describe('the terminal text field submit binding', () => {
-  // The listener is attached once, so this says the ref behind it follows the caller's newest
-  // closure rather than pinning the one the first render was given.
   it('calls the handler the newest commit supplied, not the first', () => {
     reset()
     let renderer: ReactTestRenderer | null = null

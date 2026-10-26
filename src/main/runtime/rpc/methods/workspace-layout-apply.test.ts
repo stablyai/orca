@@ -658,7 +658,6 @@ describe('layout.apply', () => {
     expect(parses({ kind: 'generated', renames: [] })).toBe(false)
     expect(parses({ kind: 'custom', renames: [titled] })).toBe(false)
     expect(parses({ kind: 'generated', renames: [{ ...titled, workspace: '' }] })).toBe(false)
-    // A title that replaces the tab's first one reaches main as such.
     const replacing = { ...titled, replaceExisting: true }
     expect(
       apply?.params?.safeParse({
@@ -767,7 +766,6 @@ describe('layout.apply', () => {
     await expect(runtime.applyLayoutCommand(SPLIT)).resolves.toEqual({
       ok: true,
       result: { leafId: 'minted' },
-      // No one subscribes, so the stream has sent nothing.
       frameSeq: 0
     })
     expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'])

@@ -217,8 +217,7 @@ export function RichMarkdownEditorSurface({
               if (!shouldFocusEmptyEditorFromSurfaceClick(event, editor)) {
                 return
               }
-              // Why: native contenteditable only places the caret on actual line
-              // boxes; an empty note should still focus from blank document space.
+              // Blank notes have no native caret line box; still allow clicking empty document space to focus.
               event.preventDefault()
               editor?.commands.focus('start')
             }}

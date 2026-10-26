@@ -60,8 +60,11 @@ import { reportProfileStateSaveDelay } from './profile-state-save-delay'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
-  // Why: a headless automated run must not claim a macOS Dock tile or the menu bar.
-  applyBackgroundActivationPolicy({ warn: console.warn })
+  // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
+  applyBackgroundActivationPolicy({
+    serveWithoutDesktopWindow: state.isServeMode,
+    warn: console.warn
+  })
   installElectronProxyRequestGuard(session.defaultSession)
   app.on('login', (event, webContents, details, authInfo, callback) => {
     handleElectronProxyLogin(
@@ -77,7 +80,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
   installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
-  // Why: install certificate decisions before any webview or headless window issues its first TLS request.
+  // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
     (event, webContents, url, error, certificate, callback, isMainFrame) => {
@@ -99,18 +102,16 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (process.platform === 'win32') {
     app.setAppUserModelId(app.isPackaged ? identity.appUserModelId : process.execPath)
   }
-  // Why: names the app menu/About panel. Dev already applied this pre-ready (see the
-  // safeStorage note above); this call stays unconditional so packaged builds keep their
-  // existing post-ready rename, which lands after the Keychain name is already resolved.
+  // Post-ready naming preserves packaged Keychain identity; dev already renamed before ready.
   app.setName(identity.appName)
   updateGpuAccelerationAboutPanel()
   if (state.isServeMode) {
-    // Why before the profile loads: loading can decrypt secrets, which is the call that hangs.
+    // Profile loading can decrypt and hang; fence unreachable keychains first.
     await withholdUnreachableKeychainForServe({
       usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
     })
   }
-  // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
+  // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
   state.managedWslCliReconciliationStatus = 'pending'
   state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
     isPackaged: app.isPackaged,
@@ -133,8 +134,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   )
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
-  // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
-  // read has to have happened by then or the renderer and the browser-host lease disagree.
+  // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
   initializeBrowserClientHostId(profile.profileDirectory)
   const profileState = await createProfileStateStoreForStartup({
     userDataPath: getProfileUserDataPath(),
@@ -155,20 +155,14 @@ export async function initializeReadyFoundation(): Promise<void> {
   const store = profileState.store
   state.store = store
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
-  // Why before any handler or runtime: a project a WSL move is taking must never get a new terminal.
+  // Fence WSL moves before handlers/runtime can create terminals in moving projects.
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
-  // Finishes a move that committed before a crash; gated off it does nothing, and it never throws.
   void runGatedWslMoveDesktopRewritePass({ userDataPath: getAppEnvironment().getPath('userData') })
-  // Why: create pending readiness before the guard can observe the default session.
-  // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
-  // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —
-  // but the guard below already holds every default-session request until this settles, so
-  // awaiting it inline only delayed window creation. Runtime launch awaits it before the first
-  // fetcher (the desktop relay / headless serve).
+  // Publish proxy readiness before guarding default-session requests; network awaits it, while window creation can proceed.
   state.initialProxyApplicationReady = applyElectronProxySettings(store.getSettings()).then(
     (result) => {
       if (result.source === 'invalid-settings') {
-        // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+        // STA-3442: log invalid configured proxies so DIRECT fallback is diagnosable.
         console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
       }
     },
@@ -177,22 +171,17 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   installElectronProxyRequestGuard(session.defaultSession)
-  // Why armed here and not at install time: the report remembers what it last said, and
-  // that state lives beside the profile data file, which does not exist until now.
-  // Why scheduled and not called: the report probes the OS keyring, which blocks on Linux
-  // and must not gate the first window (STA-5765).
+  // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
     force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1',
     deferUntilFirstWindow: !state.isServeMode,
     skipInDevelopment: !app.isPackaged
   })
-  // Why here: the host key store is a sidecar of the same profile, and every SSH connect consults
-  // it. Left unbound it reports nothing trusted, which is safe but silently discards our own
-  // accept records on every launch.
+  // Bind the profile host-key sidecar before connects or accepted trust records silently vanish each launch.
   initSshHostKeyStoreFile(profile.dataFile)
   initOrcadHeldFenceTokenFile(profile.dataFile)
-  // Why: must precede PTY handler registration and run in headless serve too, which returns before openMainWindow.
+  // Neutralize legacy shims before PTY handlers, including headless serve which never opens a main window.
   neutralizeLegacyTerminalShimDir(app.getPath('userData'))
   const windowsShellPathHydration = createWindowsShellPathHydration()
   state.windowsShellPathHydration = windowsShellPathHydration
@@ -215,13 +204,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
-  // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
+  // Refresh the tiny pre-ready marker so next launch avoids reparsing settings.
   writeHttp1CompatibilityMarker(
     canonicalUserDataPath,
     store.getSettings().electronHttp1CompatibilityMode === true,
     profile.profile.id
   )
-  // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
     if ('electronHttp1CompatibilityMode' in updates) {
@@ -232,7 +220,6 @@ export async function initializeReadyFoundation(): Promise<void> {
       )
     }
     if ('terminalWindowsWslDistro' in updates) {
-      // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
     if (
@@ -252,14 +239,12 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
     if ('showMenuBarIcon' in updates) {
-      // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
+      // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
-      // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
-      // guest process and timers, and on must restart them — otherwise open WSL panes report no
-      // status until their next spawn.
+      // The ensure gate blocks only new relays; stop live guests/timers on disable and resume on enable for existing panes.
       if (isAgentStatusHooksEnabled(settings)) {
         wslHookRelayManager.resumeStoppedRelays()
       } else {
@@ -271,23 +256,22 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
     suppressDevEducationForStore(store)
   }
-  // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
+  // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
+  // Protocol-scoped preview handlers must exist before webview attachment.
   installMediaPreviewProtocolHandler()
   installJiraImageProtocolHandler()
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
-  // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
+  // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
   initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
     profileDirectory: profile.profileDirectory,
-    // Why: local direct-SSH partitions are scoped to targets, and the orphan
-    // sweep must see the live target list or it would clear their cookie jars.
+    // Sweep against current SSH targets or live target cookie jars look orphaned.
     listLocalSshTargetIds: () => {
       const currentStore = state.store
       if (!currentStore) {
-        // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
+        // An empty list would delete every SSH jar; throw to skip sweeping when the store is unavailable.
         throw new Error('ssh target store unavailable at partition sweep')
       }
       return currentStore.getSshTargets().map((target) => target.id)
@@ -296,7 +280,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   browserSiteDisplayController.followZoomSettings(store)
   browserManager.setSiteDisplayController(browserSiteDisplayController)
   try {
-    // Why: awaited here so the first guest navigation cannot race the installer's fire-and-forget write.
+    // Await proxy writes so first guest navigation cannot race them.
     await applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), store.getSettings())
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')

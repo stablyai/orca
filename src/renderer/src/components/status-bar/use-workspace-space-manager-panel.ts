@@ -167,9 +167,7 @@ export function useWorkspaceSpaceManagerPanel() {
       if (targets.length === 0) {
         return
       }
-      // Why (STA-4343): the Space scan lists one row per host, so a bare id would
-      // route the delete at whichever host the id-keyed lookup happens to hold.
-      // Resolve each row on ITS host and hand over the store row's own identity.
+      // Resolve each scan row on its host and use the store’s instance identity so deletion cannot target a same-ID checkout elsewhere.
       const state = useAppStore.getState()
       const identities = toWorktreeDeleteIdentities(
         targets.flatMap((target) => {
@@ -196,8 +194,7 @@ export function useWorkspaceSpaceManagerPanel() {
 
   const forceDeleteWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree): void => {
-      // Bulk deletion stays non-force; failed rows retain an explicit recovery path.
-      // The failure toast is keyed by the store row's host, which a host-less saved Space row lacks.
+      // Keep bulk deletion non-force; resolve retry toast identity through the store row’s host.
       const storeRow = getWorktreeOnHostFromState(
         useAppStore.getState(),
         worktree.worktreeId,

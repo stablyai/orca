@@ -14,8 +14,7 @@ export function openSetupScriptSettings(input: {
   openSettingsPage: () => void
 }): void {
   const { hostId, openSettingsPage, openSettingsTarget, repoId, setSettingsSearchQuery } = input
-  // Why: imported setup commands are local repo settings; a stale Settings
-  // search should not hide the exact editor this action opens.
+  // Clear stale Settings search so it cannot hide this repo’s setup editor.
   setSettingsSearchQuery('')
   openSettingsTarget({
     pane: 'repo',

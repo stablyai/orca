@@ -1,5 +1,5 @@
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,

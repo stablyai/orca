@@ -169,10 +169,7 @@ describe('applyTerminalPaneCloseRequest', () => {
   })
 })
 
-// Why: onPaneCreated uses paneOwnsQueuedStartup to decide whether a pane may spend the tab's queued
-// startup command. Setup/issue splits borrow the same deps.startup field for their own one-shot
-// payload, so a looser test would let a split pane spend a command it never runs — re-breaking
-// STA-4876 for split-setup worktrees.
+// Setup splits borrow startup for their own payload; only the primary pane may consume the tab’s queued command (STA-4876).
 describe('paneOwnsQueuedStartup', () => {
   it('grants ownership only to the pane still holding the queued object', () => {
     const queuedStartup = { command: 'echo queued' }
@@ -184,9 +181,7 @@ describe('paneOwnsQueuedStartup', () => {
       ownershipAtConnect.push(paneOwnsQueuedStartup(deps.startup, queuedStartup))
     }
 
-    // Primary pane connects first and owns the queued command.
     observeConnect()
-    // connectPanePty took it; the lifecycle nulls the outer slot so splits cannot replay it.
     deps.startup = null
     splitPaneWithOneShotStartup(deps, { command: 'orca setup' }, () => {
       observeConnect()
@@ -200,8 +195,7 @@ describe('paneOwnsQueuedStartup', () => {
     expect(ownershipAtConnect).toEqual([true, false, false])
   })
 
-  // Why this case matters: a truthiness regression ("has a startup") passes the test above, because
-  // the split payload is non-null there too. Only a structurally-identical payload separates them.
+  // An identical payload distinguishes ownership checks from a startup truthiness check.
   it('denies ownership to a split payload structurally identical to the queued command', () => {
     const queuedStartup = { command: 'orca setup' }
 
@@ -221,7 +215,6 @@ describe('createQueuedStartupConsumer', () => {
     const queuedStartup = { command: 'echo queued' }
     const consume = vi.fn()
 
-    // A setup split's borrowed payload, structurally identical to the queued command.
     expect(
       createQueuedStartupConsumer({ command: 'echo queued' }, queuedStartup, consume, () => true)
     ).toBeUndefined()
@@ -229,8 +222,7 @@ describe('createQueuedStartupConsumer', () => {
     expect(consume).not.toHaveBeenCalled()
   })
 
-  // Why: onPtySpawn fires again on hibernation wake and the respawn ladder. Spending the slot on a
-  // later spawn would drop a command queued after the first launch, without ever delivering it.
+  // Wake/respawn must not consume a command queued after this pane’s first launch.
   it('spends the queued command at most once across repeated spawns', () => {
     const queuedStartup = { command: 'echo queued' }
     const consume = vi.fn()
@@ -245,8 +237,7 @@ describe('createQueuedStartupConsumer', () => {
     expect(consume).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a replacement can land before this pane's own spawn, so the one-shot guard alone still lets
-  // the callback delete a command it never launched (STA-4876).
+  // A replacement queued before first spawn must retain its own launch’s command (STA-4876).
   it('leaves a command that replaced the captured one queued for its own launch', () => {
     const capturedStartup = { command: 'echo captured' }
     let pending: object | null = capturedStartup
@@ -269,8 +260,7 @@ describe('createQueuedStartupConsumer', () => {
     expect(pending).toBe(replacement)
   })
 
-  // Why: the replacement belongs to the launch that queued it, so this pane's respawn ladder must not
-  // reach for it after skipping its own spent chance.
+  // Skipping the original command does not authorize a later respawn to consume its replacement.
   it('does not spend a replacement on a later spawn of the same pane', () => {
     const capturedStartup = { command: 'echo captured' }
     let pending: object | null = { command: 'echo replacement' }

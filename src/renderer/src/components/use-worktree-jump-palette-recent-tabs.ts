@@ -157,8 +157,7 @@ export function useWorktreeJumpPaletteRecentTabs({
     [openTabRecentRows]
   )
   const [recentTabSnapshot, setRecentTabSnapshot] = useState(EMPTY_RECENT_TAB_SNAPSHOT)
-  // Why: recent rows are already narrowed by the filter, so a filter change mid-open must
-  // re-capture — a frozen order would otherwise hide rows a cleared chip brought back.
+  // Filter changes must refresh frozen recent order or newly included rows stay hidden.
   const capturedFilterRef = useRef(filter)
   const recentOrderAttentionIncomplete = useMemo(() => {
     for (const { item, worktree, row } of openTabRecentRows) {

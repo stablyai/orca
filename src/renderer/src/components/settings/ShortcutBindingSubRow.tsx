@@ -21,9 +21,7 @@ type ShortcutBindingSubRowProps = {
   onRemove: (actionId: KeybindingActionId, index: number) => void
 }
 
-// A second-or-later binding of an action. The chord sits at the right edge (so
-// chips line up with the binding on the command row); the remove control reveals
-// on hover.
+// Align extra bindings with the command row’s recorder.
 export function ShortcutBindingSubRow({
   actionId,
   title,
@@ -43,9 +41,7 @@ export function ShortcutBindingSubRow({
   return (
     <div className="group/binding flex min-h-8 items-center gap-1 rounded-md py-0.5 pr-2 pl-5 transition-colors hover:bg-accent/30">
       <div className="min-w-0 flex-1" />
-      {/* Remove reveals on hover/focus to keep the row calm; keyboard users
-          reach it via focus-within. The append slot reserves the column with an
-          invisible spacer so the recorder stays aligned across rows. */}
+      {/* Reveal removal on hover/focus; reserve the append slot’s column to keep recorders aligned. */}
       {isAppendSlot ? (
         <span className="size-6 shrink-0" aria-hidden="true" />
       ) : (

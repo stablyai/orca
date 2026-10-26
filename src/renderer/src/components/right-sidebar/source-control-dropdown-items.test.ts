@@ -6,8 +6,6 @@ import {
   resolveHostedReviewActionUpstreamStatus
 } from './source-control/review/hosted-review-push-target'
 
-// Why: a shared defaults object keeps each case row terse while making the
-// "this is the one knob that differs from the baseline" intent obvious.
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {
     stagedCount: 0,
@@ -373,10 +371,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('keeps explicit push rows available while upstreamStatus is undefined', () => {
-    // Why: mirrors the primary-action guard — while fetchUpstreamStatus is in
-    // flight we must not let the user click Publish on an already-tracked
-    // branch, but explicit Push/Force Push resolve their git target at click
-    // time and should remain available.
+    // Block Publish while upstream loads; explicit Push/Force Push safely resolve their target at click time.
     const items = resolveDropdownItems(
       inputs({ stagedCount: 1, hasMessage: true, upstreamStatus: undefined })
     )
@@ -395,8 +390,6 @@ describe('resolveDropdownItems', () => {
       expect(byKind[kind].disabled).toBe(true)
       expect(byKind[kind].title).toBe('Checking branch status…')
     }
-    // Commit itself does not depend on upstream — it remains enabled when
-    // staged + message are present and no commit is in flight.
     expect(byKind.commit.disabled).toBe(false)
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
@@ -409,9 +402,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('keeps explicit push rows enabled and surfaces publish-first tooltips elsewhere', () => {
-    // Why: sibling to the upstreamStatus=undefined test above. Once the fetch
-    // resolves to hasUpstream=false, only pull/sync rows need publish-first
-    // copy; explicit push rows can set the upstream themselves.
+    // Explicit pushes can set upstream; Pull/Sync need publish-first guidance after absence is confirmed.
     const items = resolveDropdownItems(
       inputs({
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
@@ -553,8 +544,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('keeps explicit Push available for a linked review with a usable target and no commits ahead', () => {
-    // Why: branchCommitsAhead === 0 must not be confused with a missing review
-    // head. Primary Push stays enabled; dropdown Push/Force Push match that.
+    // Zero commits ahead still has a valid review head; match the primary Push gate.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -576,9 +566,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('blocks Push when an open linked review has no branch target', () => {
-    // Why: faked hasUpstream=false for an unusable review head must not re-open
-    // push against an unrelated configured upstream. Primary already blocks
-    // this; the always-allow Push rows keep the same target-safety gate.
+    // Missing review heads must not fall through to an unrelated configured upstream; match the primary target gate.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -618,9 +606,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('omits counts from compound commit labels even when ahead/behind are nonzero', () => {
-    // Why: the commit itself changes ahead/behind, so pre-commit counts would
-    // be stale the moment the action fires. Plain Push/Pull/Sync continue to
-    // carry counts because no commit is interposed.
+    // Commit changes ahead/behind, invalidating compound-label counts; plain remote actions keep their counts.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -633,7 +619,6 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.commit_push.label).toBe('Commit & Push')
     expect(byKind.commit_sync.label).toBe('Commit & Sync')
-    // Sanity check: plain counterparts still carry counts.
     expect(byKind.push.label).toBe('Push (2)')
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
   })
@@ -662,8 +647,7 @@ describe('resolveDropdownItems', () => {
   })
 })
 
-// Why: PR #8196 — drive the real push-target resolution the component uses so
-// the whole chain stays regression-proof.
+// Exercise the real push-target resolution chain used by the component (#8196).
 describe('resolveDropdownItems with an unhydrated linked-review push target', () => {
   function pipeline(args: {
     branchName: string

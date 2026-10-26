@@ -137,18 +137,12 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return { alive, killed }
   }
 
-  /**
-   * Before a Sleep, what only the daemon still knows about a session: one this client never
-   * spawned or reattached (a relaunched window has not reopened it) is adopted, or that Sleep
-   * writes no checkpoint; one it reattached has no spawn environment, so no pane key to read its
-   * WSL shell's folder by.
-   */
+  /** Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session. */
   protected async adoptListedSessionForSleep(
     sessionId: string,
     deadlineMs?: number
   ): Promise<void> {
-    // Why active too: a session this client suspended after a seed failure must stay suspended,
-    // or its fresh-only screen would replace the history it was restored from.
+    // Keep seed-failed sessions suspended so a fresh screen cannot overwrite their restore history.
     const needsAdoption =
       !!this.historyManager &&
       !this.historyManager.hasWriter(sessionId) &&

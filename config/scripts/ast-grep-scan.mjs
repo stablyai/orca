@@ -5,9 +5,7 @@ import process from 'node:process'
 export const AST_GREP_CONFIG = 'config/sgconfig.yml'
 export const AST_GREP_SCAN_PATHS = ['src', 'config', 'tests', 'mobile']
 
-// Why the platform binary: the package's `ast-grep` bin is either a JS launcher or (after its
-// postinstall) the native binary, and on Windows a .cmd shim Node refuses to spawn without a shell.
-// Resolved from this script, not the scanned root, so scans of temp or nested roots still find it.
+// Resolve the platform binary here: Windows .cmd shims need a shell, and temporary scan roots lack dependencies.
 export function resolveAstGrepBinary() {
   const binary = createRequire(import.meta.url)('@ast-grep/cli/postinstall.js').resolveBinaryPath()
   if (!binary) {

@@ -7,7 +7,6 @@ import {
 import type { ProfileStateOfflineLocation } from './profile-state-offline-settings'
 import { ProfileStateRecoveryCommandError } from '../../../shared/profile-state-recovery-command'
 
-/** Resolve the active profile files for offline profile-state commands. */
 export function getActiveProfileStateLocation(
   userDataPath: string,
   selectedProfileId?: string
@@ -36,7 +35,7 @@ export function getActiveProfileStateLocation(
         }
       }
     } catch {
-      // Try the profile-index backup before failing closed.
+      // Try the index backup before failing closed.
     }
   }
   throw new ProfileStateRecoveryCommandError(

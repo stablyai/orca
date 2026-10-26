@@ -139,9 +139,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   forgetRetiredEpochCensuses((candidate) => candidate === key)
-  // The receipt ledger and removal watermark are deliberately kept: they order a delayed
-  // predecessor frame against the live publisher's next one, which is the whole point of a
-  // retraction. Clearing the live view is this function's job; forgetting what was received is not.
+  // Retain receipt/removal boundaries after clearing live view; they distinguish delayed predecessors from live republication.
   untrackWebSessionTabsWorktree(environmentId, worktreeId)
   removeWebSessionTabsEnvironment(environmentId, worktreeId)
   lastHostTerminalTabCountByWorktree.delete(key)

@@ -11,12 +11,12 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-// Why: Kimi's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting so the UI shows the attention icon, not a spinner.
+// Auto-allowed AskUserQuestion still blocks a human on PreToolUse.
 export function isKimiUserInputTool(toolName: string | undefined): boolean {
   return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
-// Why: Kimi Code emits Claude-compatible payloads/event names; normalize but attribute to Kimi so the sidebar shows Kimi's icon/label, not Claude's.
+// Normalize Claude-shaped events while retaining Kimi attribution.
 export function normalizeKimiEvent(
   state: HookListenerState,
   eventName: unknown,

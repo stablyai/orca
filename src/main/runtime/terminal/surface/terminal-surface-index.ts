@@ -1,7 +1,4 @@
-// Layout-owner builds: the terminal tabs and panes of every workspace main owns, read from main's
-// one layout projection (the layout stream's) rather than from the window's graph. A paired server's
-// workspaces (`runtime:<env>` partitions) are not here: the window still mirrors those. A local
-// workspace's tabs an older build left in such a partition are (#18202): their terminals are local.
+// Project main-owned panes from layout, including older builds' spilled local tabs; paired-server workspaces remain window-mirrored (#18202).
 
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -263,12 +260,7 @@ export class TerminalSurfaceIndex {
   }
 }
 
-/**
- * The window's graph with main's panes in place of the window's own list for every workspace main
- * owns. A pane the window shows takes its renderer pane id and title; any other is parked, as a
- * live pane the window does not mount is today. A pane lists its terminal once that terminal has
- * registered, as the window lists one once its transport attaches.
- */
+/** Replace window panes for main-owned workspaces; reuse mounted renderer ids/titles, park others, and expose bound terminals only after registration. */
 export function composeMainTerminalSurfaces(
   graph: RuntimeSyncWindowGraph,
   main: MainTerminalSurfaces,
@@ -330,19 +322,12 @@ function spilledTerminalTab(
   )
 }
 
-/**
- * The paired server a pane's binding runs on, named by its terminal id alone; null for a terminal
- * of this host. Such a terminal never registers here, so its binding stands without a record.
- */
+/** Paired-runtime ids name a foreign host whose terminals never register here; their saved binding stands without a local record. */
 export function pairedRuntimeHostOfBinding(ptyId: string): ExecutionHostId | 'foreign' | null {
   return isRemoteRuntimePtyId(ptyId) ? getPtyExecutionHost(ptyId) : null
 }
 
-/**
- * Whether a registered terminal is the one a pane's binding names. Ids alone can collide (a local
- * id reused after a restart, or a record made before its adoption registers), so the workspace
- * must match, and the incarnation too when the binding was stamped with one.
- */
+/** Bindings require matching workspace and stamped incarnation; PTY ids alone can collide across restart or adoption. */
 export function terminalHoldsPane(
   terminal: BoundTerminal | null,
   pane: { worktreeId: string },

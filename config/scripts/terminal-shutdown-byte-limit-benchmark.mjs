@@ -19,6 +19,7 @@ const layoutFunctions = layoutAst.statements.filter(
 )
 assert.equal(layoutFunctions.length, layoutNames.length)
 const layoutSubset = `import { isTerminalLeafId } from '../../../../shared/stable-pane-id';
+import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio';
 ${layoutFunctions.map((node) => node.getText(layoutAst)).join('\n')}`
 
 async function load(source) {
@@ -87,8 +88,19 @@ function captureArgs(panes, captureBuffers = true, cleared = false) {
       })
   )
   let root = leaves[0] ?? null
+  let storedRoot = panes[0] ? { type: 'leaf', leafId: panes[0].leafId } : null
   for (const leaf of leaves.slice(1)) {
     root = new FixtureElement({ classes: ['pane-split', 'is-horizontal'], children: [root, leaf] })
+    storedRoot = {
+      type: 'split',
+      direction: 'horizontal',
+      first: storedRoot,
+      second: { type: 'leaf', leafId: leaf.dataset.leafId }
+    }
+  }
+  assert.equal(storedRoot === null, panes.length === 0)
+  if (storedRoot) {
+    assert.equal(storedRoot.type, panes.length === 1 ? 'leaf' : 'split')
   }
   const prior = Object.fromEntries(panes.map((pane) => [pane.leafId, 'prior-buffer']))
   return {
@@ -105,9 +117,9 @@ function captureArgs(panes, captureBuffers = true, cleared = false) {
     ),
     paneTitlesByPaneId: Object.fromEntries(panes.map((pane) => [pane.id, `title-${pane.id}`])),
     existingLayout: Object.freeze({
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null,
+      root: storedRoot,
+      activeLeafId: panes[0]?.leafId ?? null,
+      expandedLeafId: panes[1]?.leafId ?? null,
       buffersByLeafId: Object.freeze(prior),
       scrollbackRefsByLeafId: Object.freeze({ [leafId(0)]: 'v1-prior' }),
       ptyIdsByLeafId: Object.freeze({ [leafId(1)]: 'local-prior' })
@@ -161,6 +173,13 @@ function compareFixture(config) {
     return { layout, events: fixture.events }
   })
   assert.deepEqual(results[1], results[0])
+  if (config.capture && !config.fail && config.rows > 0) {
+    for (const [index, unit] of config.units.entries()) {
+      if (unit) {
+        assert(results[1].layout.buffersByLeafId?.[leafId(index)])
+      }
+    }
+  }
   comparisons++
 }
 for (const unit of units.filter(Boolean)) {

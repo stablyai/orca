@@ -108,7 +108,7 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       transportFactoryQueue.push(createMockTransport())
       const pane = createPane(91)
-      // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
+      // Use a unique tab ID to avoid other tests’ pending-spawn entries and force fresh spawn.
       const deps = createDeps({ tabId: 'tab-kitty-fresh-spawn' })
       // The pane's previous occupant left the alternate screen and kitty flags on.
       const mirror = new TerminalKittyKeyboardModeTracker()

@@ -8,7 +8,6 @@ import {
   type MainProcessRuntimeLaunchOptions
 } from './main-process-runtime-launch'
 
-/** Runs the ready-phase composition in the same dependency order as the legacy entry point. */
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
 ): Promise<void> {

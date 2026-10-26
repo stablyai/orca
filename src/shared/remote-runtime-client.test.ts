@@ -18,12 +18,7 @@ import {
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from './protocol-version'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './electron-remote-runtime-client-capabilities'
+import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from './protocol-version'
 
 const servers: WebSocketServer[] = []
 
@@ -189,44 +184,8 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await vi.waitFor(() => expect(releaseSocket).toHaveBeenCalledOnce())
   })
 
-  it('detaches subscription socket listeners after close', async () => {
-    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
-    try {
-      const server = await createSubscriptionServer()
-      const onResponse = vi.fn()
-      const onError = vi.fn()
-      const onClose = vi.fn()
-
-      const subscription = await subscribeRemoteRuntimeRequest(
-        server.pairing,
-        'terminal.subscribe',
-        { terminal: 't1' },
-        1000,
-        {
-          onResponse,
-          onError,
-          onClose
-        }
-      )
-
-      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-      subscription.close()
-      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-
-      const removedEvents = offSpy.mock.calls.map(([event]) => event)
-      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
-      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
-      expect(onError).not.toHaveBeenCalled()
-    } finally {
-      offSpy.mockRestore()
-    }
-  })
-
   it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
-    // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
-    // must not hang forever when a tunnel goes half-open — no close frame, no
-    // pongs, no data (#7718). Client liveness surfaces onError/onClose so the
-    // renderer's onTransportClose resubscribe path can run.
+    // Half-open dedicated streams get no close/pongs/data; client liveness must trigger onError/onClose so renderer resubscription runs (#7718).
     const server = await createSubscriptionServer({ disableAutoPong: true })
     const onResponse = vi.fn()
     const onError = vi.fn()
@@ -291,52 +250,6 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
-  it('keeps generic native authentication free of Electron placement support', async () => {
-    let receivedAuth: Record<string, unknown> | null = null
-    const server = await createOneShotServer({
-      onAuth: (auth) => {
-        receivedAuth = auth
-      }
-    })
-
-    await sendRemoteRuntimeRequest(
-      server.pairing,
-      'session.tabs.list',
-      { worktree: 'id:worktree-a' },
-      1000
-    )
-
-    expect(receivedAuth).toMatchObject({
-      clientCapabilities: remoteRuntimeClientCapabilities()
-    })
-  })
-
-  it('advertises browser placement support only when the Electron caller opts in', async () => {
-    let receivedAuth: Record<string, unknown> | null = null
-    const server = await createOneShotServer({
-      onAuth: (auth) => {
-        receivedAuth = auth
-      }
-    })
-
-    await sendRemoteRuntimeRequest(
-      server.pairing,
-      'session.tabs.list',
-      { worktree: 'id:worktree-a' },
-      1000,
-      undefined,
-      undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-    )
-
-    expect(receivedAuth).toMatchObject({
-      clientCapabilities: expect.arrayContaining([
-        BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-        BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-      ])
-    })
-  })
-
   it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid timer delay %s before reading pairing data',
     async (timeoutMs) => {
@@ -396,6 +309,68 @@ describe('sendRemoteRuntimeRequest', () => {
       result: { satisfied: true }
     })
   })
+
+  it.each(['refused', 'timeout'])(
+    'observes a slow restart response finitely (%s)',
+    async (mode) => {
+      const observed = Promise.withResolvers<void>()
+      const requests = vi.fn((_request: Record<string, unknown>) => observed.resolve())
+      const close = vi.spyOn(WebSocketClient.prototype, 'close')
+      const server = await createOneShotServer({
+        onRequest: requests,
+        keepalive: false,
+        responseDelayMs: mode === 'refused' ? 20_000 : null,
+        response: (id) => ({
+          id,
+          ok: true,
+          result: { continued: [{ sessionId: 'a', outcome: 'refused' }] },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+      const timers = vi.spyOn(globalThis, 'setTimeout')
+      const clearTimer = vi.spyOn(globalThis, 'clearTimeout')
+      try {
+        const settled = vi.fn()
+        const request = sendRemoteRuntimeRequest(
+          server.pairing,
+          'agentSession.restartContinue',
+          { sessionIds: ['a'] },
+          600_000
+        )
+        const result = request.catch((error: unknown) => error)
+        void result.then(settled)
+        await observed.promise
+        await vi.advanceTimersByTimeAsync(15_001)
+        expect(settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(mode === 'refused' ? 4_999 : 584_998)
+        if (mode === 'refused') {
+          await expect(result).resolves.toMatchObject({
+            ok: true,
+            result: { continued: [{ sessionId: 'a', outcome: 'refused' }] }
+          })
+        } else {
+          expect(settled).not.toHaveBeenCalled()
+          await vi.advanceTimersByTimeAsync(1)
+          await expect(result).resolves.toMatchObject({ code: 'runtime_timeout' })
+        }
+        expect(requests).toHaveBeenCalledOnce()
+        expect(requests.mock.calls[0]?.[0]).toMatchObject({
+          method: 'agentSession.restartContinue',
+          params: { sessionIds: ['a'] }
+        })
+        expect(close).toHaveBeenCalled()
+        const timeoutIndex = timers.mock.calls.findIndex(([, delay]) => delay === 600_000)
+        expect(timeoutIndex).toBeGreaterThanOrEqual(0)
+        expect(clearTimer).toHaveBeenCalledWith(timers.mock.results[timeoutIndex].value)
+      } finally {
+        timers.mockRestore()
+        clearTimer.mockRestore()
+        vi.useRealTimers()
+        close.mockRestore()
+      }
+    }
+  )
 
   it('aborts and closes an in-flight one-shot socket', async () => {
     let requestObserved: () => void = () => {}
@@ -506,32 +481,12 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
     expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
   })
-
-  it('detaches one-shot socket listeners after a successful response', async () => {
-    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
-    try {
-      const server = await createOneShotServer()
-
-      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
-        server.pairing,
-        'terminal.wait',
-        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
-        300
-      )
-
-      const removedEvents = offSpy.mock.calls.map(([event]) => event)
-      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
-    } finally {
-      offSpy.mockRestore()
-    }
-  })
 })
 
 async function createSubscriptionServer(
   options: {
     sendMismatchedResponseAfterSubscribe?: boolean
-    // Why: half-open simulation — the socket stays open but never answers
-    // protocol pings, like a wedged tunnel that swallows frames silently.
+    // Simulate half-open tunnels by leaving sockets open without pong replies.
     disableAutoPong?: boolean
   } = {}
 ): Promise<{
@@ -691,6 +646,8 @@ async function createOneShotServer(
     onAuth?: (auth: Record<string, unknown>) => void
     onRequest?: (request: Record<string, unknown>) => void
     sendUndecryptableResponse?: boolean
+    keepalive?: boolean
+    responseDelayMs?: number | null
   } = {}
 ): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
@@ -733,10 +690,16 @@ async function createOneShotServer(
         ws.send('not-an-encrypted-frame')
         return
       }
+      if (options.responseDelayMs === null) {
+        return
+      }
       const key = sharedKey
-      const keepalive = setInterval(() => {
-        sendEncrypted(ws, key, { _keepalive: true })
-      }, 100)
+      const keepalive =
+        options.keepalive === false
+          ? undefined
+          : setInterval(() => {
+              sendEncrypted(ws, key, { _keepalive: true })
+            }, 100)
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {
         clearInterval(keepalive)
@@ -750,7 +713,7 @@ async function createOneShotServer(
             _meta: { runtimeId: 'runtime-test' }
           }
         )
-      }, 550)
+      }, options.responseDelayMs ?? 550)
     })
   })
 

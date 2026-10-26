@@ -19,7 +19,6 @@ import { ToolRun } from './MobileNativeChatToolRun'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 const platform = vi.hoisted(() => ({ OS: 'web' }))
-// The page list's scrollable node: the fake page below, once mounted.
 const scrollable = vi.hoisted(() => {
   const held: { node: unknown } = { node: null }
   return held
@@ -27,8 +26,6 @@ const scrollable = vi.hoisted(() => {
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  // A class, so an opened run's box can scroll it the way it scrolls a real ScrollView, and the
-  // page list reads its scrollable node through it.
   class ScrollView extends React.Component<{ children?: ReactNode }> {
     scrollToEnd = (): void => {}
     scrollTo = (): void => {}
@@ -90,7 +87,16 @@ vi.stubGlobal(
   }
 )
 
+const mountedRenderers = new Set<ReactTestRenderer>()
+
 afterEach(() => {
+  act(() => {
+    for (const renderer of mountedRenderers) {
+      renderer.unmount()
+    }
+  })
+  mountedRenderers.clear()
+  scrollable.node = null
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -111,7 +117,6 @@ const run = (n: number): NativeChatMessage[] => [
   { ...say(`a${n}`, 'assistant', ''), blocks: [edit(n)] },
   { ...say(`r${n}`, 'user', ''), blocks: [{ type: 'tool-result', callId: `c${n}`, output: 'ok' }] }
 ]
-// An earlier turn, then a reply working silently through 40 edits.
 const chat = [say('u0', 'user', 'first'), say('x0', 'assistant', 'answer'), say('u1', 'user', 'go')]
   .concat({
     ...say('a1', 'assistant', 'On it'),
@@ -129,9 +134,7 @@ type Element = {
 const oldHostTail = (): NativeChatMessage[] => JSON.parse(JSON.stringify(chat))
 const from = (id: string) => oldHostTail().slice(chat.findIndex((m) => m.id === id))
 
-/** The page with one 20-tall line per text, as the list's scrollable node counting its writes. It is
- *  anchored at its end as the real one is: scrollTop is 0 at the end and negative above it, so rows
- *  added above leave the view where it was. */
+// Model end-anchored scrollTop=0 at the tail and negative offsets above; prepending history must not shift the view.
 function page(tree: () => Node | Node[] | null) {
   const boxes = (): Box[] => {
     const out: Box[] = []
@@ -180,9 +183,7 @@ function page(tree: () => Node | Node[] | null) {
     get scrollHeight(): number {
       return boxes()[0]?.bottom ?? 0
     },
-    /** Where the viewport's top is in the content. */
     viewTop: (): number => Math.max(0, node.scrollHeight - node.clientHeight) + node.scrollTop,
-    /** Puts the viewport's top at `y` in the content. */
     showFrom: (y: number): void => {
       node.scrollTop = y - Math.max(0, node.scrollHeight - node.clientHeight)
     },
@@ -194,7 +195,6 @@ function page(tree: () => Node | Node[] | null) {
     removeEventListener: (type: string): void => {
       listeners.delete(type)
     },
-    /** The reader's finger on the list. */
     touch: (type: 'touchstart' | 'touchend'): void => listeners.get(type)?.(),
     querySelectorAll: (selector: string): Element[] => select(boxes(), 0, Infinity, selector),
     top: (id: string): number =>
@@ -212,9 +212,7 @@ function Row({
 }: {
   message: NativeChatMessage
   rowKey: string
-  /** Lines the chat's state adds to the row, as a run's new members do. */
   joined?: number
-  /** As the chat draws a run: its head draws every member, and the members draw nothing. */
   workRun?: readonly NativeChatMessage[]
   joinsWorkRun?: boolean
 }): ReactElement | null {
@@ -235,9 +233,7 @@ function Chat(props: {
   messages: NativeChatMessage[]
   following: boolean
   live: boolean
-  /** Lines the last row's state adds, outside its messages. */
   joined?: number
-  /** Tool rows group into runs, as in a structured chat. */
   runs?: boolean
 }): ReactElement {
   const folded = useMemo(
@@ -285,6 +281,7 @@ function mount(
   let renderer!: ReactTestRenderer
   act(() => {
     renderer = create(h('div'))
+    mountedRenderers.add(renderer)
   })
   const scroller = page(() => renderer.toJSON())
   scrollable.node = scroller
@@ -293,7 +290,6 @@ function mount(
     act(() => renderer.update(h(Chat, { ...options, messages: next, joined })))
     return scroller.writes - before
   }
-  // The reader's own scroll, as RN Web reports it, on a clock the test moves.
   vi.useFakeTimers({ now: 10_000, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   const scrolled = () =>
     act(() =>
@@ -303,7 +299,6 @@ function mount(
     act(() => {
       vi.advanceTimersByTime(400)
     })
-  /** The reader scrolls there and stops. */
   const read = (move: () => void) => {
     move()
     scrolled()
@@ -322,15 +317,14 @@ function mount(
 }
 
 it('keeps the line a reader was on, its run open, when older messages join the run from an old host', () => {
-  // On a line inside the run, or at the top beside Load earlier while the window opens on a result
-  // that the run's older calls take in.
+  // Exercise anchoring both inside a run and at Load earlier when older calls absorb the visible orphan result.
   for (const atTop of [false, true]) {
     const chat0 = mount(from('r31'))
     chat0.press(mobileNativeChatRowId('a32'))
     chat0.press('chat-member:call:c34')
     const opened = chat0.lines('chat-member:call:c34')
     chat0.read(() => (chat0.scroller.scrollTop += chat0.scroller.top('chat-member:call:c34')))
-    // An old host ignores the cursor and sends the whole tail again: new objects, the same ids.
+    // Old hosts can replay the whole tail as new objects with unchanged ids.
     for (const [older, first] of [
       ['r21', 'c32'],
       ['u0', 'c22']
@@ -344,21 +338,17 @@ it('keeps the line a reader was on, its run open, when older messages join the r
       expect(chat0.scroller.top(line)).toBe(top)
     }
 
-    // The run keeps its row, so the earlier turn sits above it and the run stays open.
     expect(chat0.rows().slice(0, 3)).toEqual(['u0', 'x0', 'u1'].map(mobileNativeChatRowId))
     expect(chat0.lines('chat-member:call:c34')).toBe(opened)
     expect(chat0.drawn('chat-member:call:c1')).toBe(1)
-    // The result row the window opened on is now drawn by the run.
     expect(shownKeys.current('r21')).toBe('a32')
 
-    // A reply and a send land after the run: what the reader had loaded stays drawn.
     chat0.show([...oldHostTail(), say('done', 'assistant', 'Done'), say('ask', 'user', 'next')])
     expect(chat0.drawn(mobileNativeChatRowId('a32'))).toBe(1)
     expect(chat0.drawn('chat-member:call:c34')).toBe(1)
   }
 
-  // The rows after the run stay put: collapsed, its header holds where it was, not in the result
-  // row's place; open, the line on screen holds while older calls join the run above it.
+  // Both collapsed headers and open lines must stay anchored as older calls join above.
   const later = Array.from({ length: 10 }, (_, i) => say(`t${i}`, 'user', 'later'))
   for (const open of [false, true]) {
     const tail = mount([...from('r21'), ...later])
@@ -377,12 +367,11 @@ it('holds back a change below a scrolling reader until they rest, then keeps the
   const chat0 = mount(rows)
   chat0.scroller.showFrom(40)
   chat0.scrolled()
-  // Mid-fling the reply below would push the line, and putting it back would stop the fling.
+  // A correction mid-fling would stop iOS momentum; hold the below-reader reply until rest.
   const line = chat0.scroller.top(mobileNativeChatRowId('m4'))
   expect(chat0.show([...rows, say('n1', 'assistant', 'reply')])).toBe(0)
   expect(chat0.drawn(mobileNativeChatRowId('n1'))).toBe(0)
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
-  // At rest it lands, and the line stays where the reader stopped.
   chat0.rest()
   expect(chat0.drawn(mobileNativeChatRowId('n1'))).toBe(1)
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
@@ -394,7 +383,6 @@ it("holds a row's look with its messages: what the chat's state adds lands once 
   chat0.scroller.showFrom(40)
   chat0.scrolled()
   const line = chat0.scroller.top(mobileNativeChatRowId('m4'))
-  // Moving: a new member of the last row's run is drawn by the renderer, not by a new message.
   expect(chat0.show(rows, 3)).toBe(0)
   expect(chat0.lines(mobileNativeChatRowId('m11'))).toBe(1)
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
@@ -415,7 +403,6 @@ it('draws a run once when an older page brings in its start while the reader mov
   const chat0 = mount([thought, call('b'), ...later], { following: false, live: false, runs: true })
   chat0.scroller.showFrom(40)
   chat0.scrolled()
-  // The page ends inside the run: its first call joins the thought and call the reader has.
   chat0.show([say('u', 'user', 'go'), call('a'), thought, call('b'), ...later])
   const once = ['u', 'a', 'm0'].map(mobileNativeChatRowId)
   expect(chat0.rows().slice(0, 3)).toEqual(once)
@@ -442,7 +429,6 @@ it('holds a row the reader taps open in place, and a reply below waits out a fli
   const chat0 = mount([...from('r21'), ...later])
   const header = mobileNativeChatRowId('a22')
   chat0.read(() => (chat0.scroller.scrollTop += chat0.scroller.top(header) - 40))
-  // A tap moves nothing, so its row opens below the finger and the header stays where it was.
   chat0.scroller.touch('touchstart')
   chat0.scroller.touch('touchend')
   const before = chat0.scroller.top(header)
@@ -450,7 +436,7 @@ it('holds a row the reader taps open in place, and a reply below waits out a fli
   resized()
   expect(chat0.scroller.top(header)).toBe(before)
 
-  // A drag's release hands over to a fling: a reply below waits for it to end.
+  // Touch release can start a fling; it is not evidence the list is at rest.
   chat0.scroller.touch('touchstart')
   chat0.scroller.scrollTop -= 30
   chat0.scrolled()
@@ -487,9 +473,7 @@ it('at the cap, a trim and an append of equal height hold a parked reader and le
     }
   }
 
-  // Trims split the top run: sequential calls leave a result above it; parallel calls (each call,
-  // then each output, or all outputs in one message) leave results below it. Results never take
-  // the run's key.
+  // Sequential and parallel trims split results to opposite sides; orphan results must never inherit a run’s key.
   const output = (n: number): NativeChatMessage => ({
     ...say(`o${n}`, 'user', ''),
     role: 'tool',
@@ -515,18 +499,14 @@ it('at the cap, a trim and an append of equal height hold a parked reader and le
     }
     trim(1)
     expect(top.drawn(mobileNativeChatRowId(orphan))).toBe(1)
-    // A second single trim, then two at once.
     trim(2)
     trim(4)
-    // Paging back folds every result that was split off into the run again.
     top.show([...source, ...rows, say('done4', 'assistant', 'Done')])
     expect(absorbed.map(shownKeys.current)).toEqual(absorbed.map(() => head))
-    // Once its last call leaves, the run is gone; its outputs don't take its key.
     top.show([...source.slice(last), ...rows, say('done', 'assistant', 'Done')])
     expect(top.drawn(mobileNativeChatRowId(head))).toBe(0)
   }
 
-  // A trim takes the very line the reader is on: the next one keeps its place.
   const reader = mount([...chat.slice(3, 15), ...rows])
   reader.press(mobileNativeChatRowId('a1'))
   reader.read(() => (reader.scroller.scrollTop += reader.scroller.top('chat-member:call:c1')))
@@ -550,13 +530,11 @@ it('a roster keeps its key when the fold moves it, and the rows the reader saw a
   const all = [...said('old'), sibling('s1'), ...said('mid'), sibling('s2'), ...said('new')]
   const chat0 = mount(all.slice(25))
   const tops = (ids: string[]) => ids.map((id) => chat0.scroller.top(mobileNativeChatRowId(id)))
-  // The roster first on screen: an older sibling joining moves it up to that sibling's place.
   chat0.read(() => chat0.scroller.showFrom(20))
   const below = tops(['new0', 'new5'])
   expect(chat0.show(all)).toBeLessThanOrEqual(1)
   expect(tops(['new0', 'new5'])).toEqual(below)
   expect(chat0.drawn(mobileNativeChatRowId('s2'))).toBe(1)
-  // And back: a trim of the first sibling moves the roster down to the second's place.
   chat0.read(() => (chat0.scroller.scrollTop += chat0.scroller.top(mobileNativeChatRowId('s2'))))
   const after = tops(['mid0', 'mid5'])
   expect(chat0.show(all.slice(13))).toBeLessThanOrEqual(1)

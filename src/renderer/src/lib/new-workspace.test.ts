@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   mockInspectRuntimeTerminalProcess,
-  mockSendRuntimePtyInputVerified,
   mockPasteDraftToAgentPtyWhenReady,
   mockShowAutomationPromptNotSentToast,
   mockTrack,
@@ -11,7 +10,6 @@ const {
   startupLeafId
 } = vi.hoisted(() => ({
   mockInspectRuntimeTerminalProcess: vi.fn(),
-  mockSendRuntimePtyInputVerified: vi.fn(),
   mockPasteDraftToAgentPtyWhenReady: vi.fn(),
   mockShowAutomationPromptNotSentToast: vi.fn(),
   mockTrack: vi.fn(),
@@ -74,9 +72,6 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
-}))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
 }))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
@@ -184,9 +179,7 @@ describe('getWorkspaceSeedName', () => {
   })
 
   it('does not leave internal ".." in the slug (git refuses such branches)', () => {
-    // Why: the original composer bug — a prompt containing "../../" in
-    // relative path references slugified to a name with internal `..`,
-    // which git rejects with "is not a valid branch name".
+    // ../../ references can slugify to internal .., which git rejects as a branch name.
     const seed = getWorkspaceSeedName({
       explicitName: '',
       prompt: 'For ../../ the sibling worktree from another repo',
@@ -279,7 +272,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       foregroundProcess: 'aider',
       hasChildProcesses: true
     })
-    mockSendRuntimePtyInputVerified.mockResolvedValue(true)
     mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(true)
   })
 
@@ -300,16 +292,20 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      'pty-1',
-      'fix the spinner\r',
-      'launch'
+    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: 'pty-1',
+        content: 'fix the spinner',
+        agent: 'aider',
+        submit: true,
+        forcePaste: true
+      })
     )
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
   it('does not track when follow-up prompt delivery is rejected by the terminal runtime', async () => {
-    mockSendRuntimePtyInputVerified.mockResolvedValue(false)
+    mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(false)
 
     await ensureAgentStartupInTerminal({
       worktreeId: 'wt-1',
@@ -326,8 +322,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
   })
 
   it('surfaces the not-sent toast when a follow-up prompt is dropped', async () => {
-    // Foreground never becomes a recognized agent and there is no live child,
-    // so the readiness wait times out and the prompt is not delivered.
+    // No recognized agent or live child means readiness times out without delivering text.
     mockInspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'zsh',
       hasChildProcesses: false
@@ -344,7 +339,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
     expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
   })
 
@@ -385,7 +380,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
   })
 
   it('does not track when follow-up prompt delivery rejects', async () => {
-    mockSendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
+    mockPasteDraftToAgentPtyWhenReady.mockRejectedValue(new Error('runtime timeout'))
 
     await expect(
       ensureAgentStartupInTerminal({
@@ -809,7 +804,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     await delivery
 
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
   })
 })
 

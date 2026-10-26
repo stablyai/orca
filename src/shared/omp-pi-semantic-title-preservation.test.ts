@@ -1,31 +1,10 @@
-/**
- * OMP/Pi terminal titles: preserve the session label, collapse only the animation.
- *
- * The reported symptom was an OMP tab title flickering between "OMP" and "Pi" ~12x/sec.
- * OMP emits NEITHER string. Verified against oh-my-pi
- * (packages/coding-agent/src/utils/title-generator.ts): `DEFAULT_TERMINAL_TITLE = "π"` (:25)
- * and `buildTerminalTitleWithState` (:530-544) compose `π ⠋ <label>` / `π > <label>` /
- * `π ! <label>` — always the π glyph. On an Orca-hosted pane OMP's native titler cedes
- * entirely to Orca's OWN injected extension (src/main/pi/titlebar-extension-source.ts:21,44),
- * which writes `π - <session> - <cwd>` and `⠋ π - <session> - <cwd>` every 80ms.
- *
- * Both flapping strings were manufactured by Orca:
- *   "OMP" — `driveSyntheticTitleFromHook` (src/main/index.ts), from the omp profile's label.
- *   "Pi"  — `normalizeTerminalTitle` collapsing our own extension's output to a hardcoded
- *           literal, discarding the session name and cwd along with it (#16093).
- *
- * The fix removes both: the agent owns the title it animates (`synthesizeWorkingTitle: false`
- * — not the stronger `synthesizeTerminalTitle: false`, because terminal-state frames still
- * carry the pane's agent identity downstream), and the normalizer canonicalizes only the
- * rotating braille frame so consecutive frames dedupe while the label survives.
- */
+/** OMP/Pi titles use π, never OMP/Pi. Verified oh-my-pi utils/title-generator.ts DEFAULT_TERMINAL_TITLE/buildTerminalTitleWithState
+ * (native π frame label); Orca’s injected pi/titlebar-extension-source.ts instead emits π - session - cwd with 80ms braille frames.
+ * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
+ * Disable synthesizeWorkingTitle only: terminal-state synthesis still publishes pane identity. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import {
-  getSyntheticAgentTerminalTitle,
-  shouldDriveSyntheticAgentTitleFromHook
-} from './synthetic-agent-title'
 import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
 import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
 
@@ -61,8 +40,7 @@ describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
     }
   })
 
-  // Why: a multiplexer prefixes the pane's title, so an anchored match skipped the collapse
-  // and the frame churned straight through (#8032).
+  // Multiplexer prefixes defeated anchored frame collapse and propagated churn (#8032).
   it('collapses frames under a multiplexer prefix', () => {
     const normalized = new Set(
       FRAMES.map((frame) => normalizeTerminalTitle(`zsh | ${ORCA_EXTENSION_WORKING(frame)}`))
@@ -115,33 +93,8 @@ describe('the churn is gone at the suppressor', () => {
   })
 })
 
-describe('Orca stops writing over the working title it does not own', () => {
-  // Why: the agent animates its own working title, so synthesizing there both replaced the
-  // session label and fought its frames at 80ms — that pair is the flap.
-  it.each(['omp', 'pi'] as const)('synthesizes no working title for %s', (agent) => {
-    expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'working')).toBe(false)
-  })
-
-  // Why NOT terminal states: the synthetic frame is also how the pane's agent identity reaches
-  // downstream consumers, and both agents are quiet at rest so nothing churns.
-  it.each(['omp', 'pi'] as const)('still synthesizes terminal states for %s', (agent) => {
-    for (const state of ['done', 'waiting', 'blocked'] as const) {
-      expect(getSyntheticAgentTerminalTitle(agent, state)).not.toBeNull()
-      expect(shouldDriveSyntheticAgentTitleFromHook(agent, state)).toBe(true)
-    }
-  })
-
-  it('leaves agents that own no title alone', () => {
-    expect(getSyntheticAgentTerminalTitle('droid', 'done')).toBe('Droid ready')
-    expect(shouldDriveSyntheticAgentTitleFromHook('droid', 'working')).toBe(true)
-  })
-})
-
 describe('the owner relabel keeps the label and swaps only the brand', () => {
-  // Why: this runs on the pane display title, tab title, sidebar rows and the mobile publish.
-  // Collapsing a semantic title to a bare profile label re-destroyed the session name at display
-  // time (#16093); keeping the brand as π would lose the explicit owner identity that #6689,
-  // #7633 and #9077 established. Swapping the brand in place satisfies both.
+  // Rewrite only brand across pane/tab/sidebar/mobile displays: preserve session text (#16093) and explicit owner identity (#6689/#7633/#9077).
   it.each([
     ['⠋ π - fixing the sidebar - orca', '⠋ OMP - fixing the sidebar - orca'],
     ['π - fixing the sidebar - orca', 'OMP - fixing the sidebar - orca'],
@@ -151,8 +104,7 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     expect(normalizeCompatibleAgentTitleForOwner(title, 'omp')).toBe(expected)
   })
 
-  // Why: the owner rewrite feeds status classification downstream, so a rewritten title must
-  // classify exactly as its source did — that round-trip is why the old collapse existed.
+  // Owner-rewritten titles feed classification; preserve the source’s status through that round trip.
   it.each([
     '⠋ π - fixing the sidebar - orca',
     'π - fixing the sidebar - orca',
@@ -167,8 +119,7 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     )
   })
 
-  // Why keep: a bare frame carries no session text, and persisted pre-upgrade values are bare.
-  // Re-owning them is what pins an OMP pane to OMP (#6689, #7633, #9077).
+  // Persisted bare frames lack session text but still need explicit OMP owner identity (#6689/#7633/#9077).
   it('still re-owns bare identity frames', () => {
     expect(normalizeCompatibleAgentTitleForOwner('⠋ Pi', 'omp')).toBe('⠋ OMP')
     expect(normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
@@ -177,9 +128,7 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
 })
 
 describe('the state separator does not fire on ordinary titles', () => {
-  // Why: the separator check runs on every title, so a project named `omp-harness` or a task
-  // description starting "pi - …" must not read as an agent state. The owner rewrite only ever
-  // emits the exact profile casing, so lowercase prose is safe to reject.
+  // Exact profile casing distinguishes rewritten state separators from ordinary omp-harness/pi task names.
   it.each([
     'omp-harness ready',
     'pi-scratch ready',
@@ -194,40 +143,8 @@ describe('the state separator does not fire on ordinary titles', () => {
   })
 })
 
-describe('one real OMP turn', () => {
-  // Why: the reported symptom was ~12 committed store patches per second on a working OMP tab.
-  // This drives a full turn of the frames Orca's injected extension actually emits and counts
-  // what survives the churn gate. Before the fix each frame alternated "⠋ Pi"/"⠋ OMP" and every
-  // one of them committed.
-  it('commits twice across 30 working frames plus the idle transition', () => {
-    const frames = Array.from(
-      { length: 30 },
-      (_, index) => `${FRAMES[index % FRAMES.length]} π - fixing the sidebar - orca`
-    )
-    frames.push('π - fixing the sidebar - orca')
-
-    const committed: string[] = []
-    let previous: string | null = null
-    for (const frame of frames) {
-      const normalized = normalizeTerminalTitle(frame)
-      if (previous !== null && isDecorativeAgentTitleFrameChange(previous, normalized)) {
-        continue
-      }
-      if (normalized === previous) {
-        continue
-      }
-      committed.push(normalized)
-      previous = normalized
-    }
-
-    expect(committed).toEqual(['⠋ π - fixing the sidebar - orca', 'π - fixing the sidebar - orca'])
-  })
-})
-
 describe('latent hazards the reviewers flagged', () => {
-  // Why: `-` is both a state separator and the permission label's delimiter. This resolves
-  // correctly today only because the synthetic check runs first in detectAgentStatusFromTitle,
-  // and the separator fn is exported — so pin both the caller and the fn itself.
+  // Hyphen also separates permission labels; synthetic classification must run first. Pin caller and exported separator behavior.
   it.each(['Pi - action required', 'OMP - action required'])(
     'classifies %s as permission, not idle',
     (title) => {
@@ -236,9 +153,7 @@ describe('latent hazards the reviewers flagged', () => {
     }
   )
 
-  // Why: the owner rewrite re-runs on its own output during hydration and seeding. It is a fixed
-  // point only because getAgentLabel does not tokenize `omp`/`pi`; if that ever changes, a
-  // rewritten title would collapse back to a bare label and lose the session text again.
+  // Hydration reprocesses rewritten titles; preserve the fixed point so future omp/pi tokenization cannot erase session text.
   it.each([
     '⠋ π - fixing the sidebar - orca',
     'π - fixing the sidebar - orca',

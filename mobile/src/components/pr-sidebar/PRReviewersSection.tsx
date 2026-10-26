@@ -18,13 +18,9 @@ type Props = {
   worktreeId: string
 }
 
-// Requested reviewers + their latest review status, with a picker to request /
-// remove (optimistic add/remove via the actions hook).
+// Requested reviewers/latest verdicts with optimistic request/remove picker.
 export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
-  // details === null means phase 2 (work-item payload) is still in flight — same
-  // signal Comments uses. Do not treat that as "no reviewers" or the section goes
-  // blank while checks (phase 1) already paint. A synthetic placeholder means
-  // phase 2 failed (no body/comments/reviews landed).
+  // Null details means heavy phase 2 still loading; synthetic placeholder means failure, neither means no reviewers.
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
   const authoritativeRows = useMemo(
@@ -36,8 +32,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   )
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  // The authoritative requested-set drives optimistic resolution; an optimistic
-  // add can surface a login not yet in authoritativeRows.
+  // Resolve optimism against authoritative request set; newly added login may have no fetched row yet.
   const authoritativeRequested = useMemo(
     () => new Set(authoritativeRows.map((r) => r.login.toLowerCase())),
     [authoritativeRows]
@@ -45,9 +40,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   const isRequested = (login: string): boolean =>
     actions.resolveReviewerRequested(login, authoritativeRequested.has(login.toLowerCase()))
 
-  // Render rows = authoritative rows whose optimistic membership is still true.
-  // An optimistic add of a brand-new login surfaces in the row list only after
-  // refetch supplies it authoritatively; until then the picker's check reflects it.
+  // Filter authoritative rows by optimistic membership; new login appears after refetch, while picker check updates immediately.
   const rows = authoritativeRows.filter((r) => isRequested(r.login))
 
   const seededLogins = useMemo(() => {
@@ -88,8 +81,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
                   {row.name ? `${row.name} (${row.login})` : row.login}
                 </Text>
               </View>
-              {/* Neutral gray like the desktop PR page (the label text carries the
-                  state); keeps the sidebar mostly monochrome. */}
+              {/* Use neutral desktop tone; label text carries review state. */}
               <Text style={[styles.rowStatus, { color: colors.textSecondary }]}>
                 {row.stateLabel}
               </Text>

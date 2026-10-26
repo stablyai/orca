@@ -1,12 +1,10 @@
 import type { Terminal } from '@xterm/xterm'
 
-// Why: xterm 6 can leave its scrollbar thumb stale when ydisp is unchanged.
-// A synchronous one-line jiggle updates the scrollbar without a visible paint.
+// xterm 6 can leave the thumb stale at unchanged ydisp; a synchronous one-line jiggle updates it without visible paint.
 export function forceTerminalViewportScrollbarSync(terminal: Terminal): void {
   const buf = terminal.buffer.active
   if (buf.viewportY >= buf.baseY) {
-    // Why: jiggle-scrolling at bottom makes xterm stop following active output
-    // after split-pane resizes; scrollToBottom already places the thumb there.
+    // At bottom use scrollToBottom; jiggle would stop live following after split resize.
     return
   }
   if (buf.viewportY > 0) {

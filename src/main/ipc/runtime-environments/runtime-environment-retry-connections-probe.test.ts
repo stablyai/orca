@@ -11,7 +11,7 @@ vi.mock('../../../shared/remote-runtime-socket-liveness', async (importOriginal)
 import { retryRemoteRuntimeSharedControlConnectionsNow } from './runtime-environment-request-connections'
 
 describe('retryRemoteRuntimeSharedControlConnectionsNow', () => {
-  it('probes every remote runtime socket even when no reconnect is pending', () => {
+  it('requests a socket-liveness probe even when no reconnect is pending', () => {
     retryRemoteRuntimeSharedControlConnectionsNow()
 
     expect(probeAllRemoteRuntimeSocketsNow).toHaveBeenCalledTimes(1)

@@ -21,13 +21,7 @@ export type { LiveAgentWorktreeStatus }
 
 const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
 
-/**
- * Worktree ids that currently have a live agent session, derived from the
- * live `agentStatusByPaneKey` map.
- *
- * Why only fresh in-progress rows: disconnected SSH and completed headless
- * agents can retain status entries without an open session.
- */
+/** Keep only fresh in-progress agents; disconnected SSH/completed headless rows can outlive actual open sessions. */
 export function getWorktreeIdsWithLiveAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
@@ -81,8 +75,7 @@ export function hasActiveWorkspaceActivity(
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
-  // Why not folded into hasLiveTerminal: a structured chat has no PTY and no entry in
-  // tabsByWorktree, so every terminal-shaped signal above reads it as absent.
+  // Structured chats lack PTYs/tabsByWorktree entries; their visibility evidence must remain separate from terminal signals.
   const hasStructuredChat = worktreeIdsWithStructuredChat.has(worktreeId)
   return hasLiveTerminal || hasBrowser || hasLiveAgent || hasStructuredChat
 }

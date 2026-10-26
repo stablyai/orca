@@ -1,5 +1,4 @@
-// Every runtime create (CLI, agents, phone, paired clients, orchestration) is listed in the host's
-// creation registry while it runs, and names its workspace before the host announces it.
+// Runtime creates must enter the host registry and name their workspace before announcement.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))

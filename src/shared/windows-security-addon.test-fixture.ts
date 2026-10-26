@@ -23,10 +23,7 @@ const ACE_TYPES: Record<string, number> = { A: 0, D: 1, OA: 5, XA: 9 }
 const ACE_FLAGS: Record<string, number> = { OI: 0x1, CI: 0x2, NP: 0x4, IO: 0x8, ID: 0x10 }
 const RIGHTS: Record<string, number> = { FA: 0x1f01ff, FR: 0x120089, GA: 0x10000000 }
 
-/**
- * Test-only: the structure the addon's getDaclAces returns for an SDDL fixture, so tests can keep
- * writing DACLs the way Windows prints them. Production never parses SDDL.
- */
+/** Test-only SDDL parser for native getDaclAces-shaped fixtures; production never parses SDDL. */
 export function daclFromSddl(sddl: string): WindowsDacl | null {
   if (sddl.includes('NO_ACCESS_CONTROL')) {
     return null

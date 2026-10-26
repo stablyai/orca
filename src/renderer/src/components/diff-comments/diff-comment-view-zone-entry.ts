@@ -4,12 +4,12 @@ import type { Root } from 'react-dom/client'
 export type ZoneEntry = {
   zoneId: string
   domNode: HTMLElement
-  // Hold the delegate so layoutZone re-reads our updated heightInPx — mutating the delegate is the supported way to resize a zone in place.
+  // Retain the delegate because Monaco re-reads its mutated heightInPx on layoutZone.
   delegate: monacoEditor.IViewZone
   root: Root
   disposeMouseDownStopper: () => void
   lastRenderSignature: string
-  // First onDomNodeTop = deterministic "zone laid out" signal; gates scroll-to-note instead of polling getTopForLineNumber.
+  // Use the first onDomNodeTop as the layout signal for scroll-to-note instead of polling.
   laidOut: boolean
 }
 
@@ -39,7 +39,7 @@ export type ResizableZoneEntry = {
   delegate: monacoEditor.IViewZone
 }
 
-// Re-measure/re-layout the zone: mutate delegate.heightInPx first (Monaco's _layoutZone re-reads it) so inline edit expands without clipping.
+// Resize through the delegate; Monaco re-reads heightInPx during layoutZone.
 export function resizeDiffCommentZone(
   editor: monacoEditor.ICodeEditor,
   entry: ResizableZoneEntry
@@ -48,10 +48,9 @@ export function resizeDiffCommentZone(
   const wrapperStyle = window.getComputedStyle(entry.domNode)
   const verticalPadding =
     Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
-  // Monaco pins the zone node to its previous height (scrollHeight can't shrink), so measure the rendered card+padding to allow collapse.
+  // Monaco pins the zone’s old height, so scrollHeight cannot detect shrinking; measure the card plus padding.
   const childHeight = child?.getBoundingClientRect().height ?? 0
-  // React can commit while Monaco's zone is detached; preserve the safe
-  // initial estimate until the observer sees a measurable card.
+  // Detached zones cannot be measured; retain the initial estimate until the observer sees the card.
   if (childHeight <= 0) {
     return
   }

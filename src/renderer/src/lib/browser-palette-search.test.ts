@@ -81,8 +81,7 @@ describe('browser-palette-search', () => {
   })
 
   it('stamps the row execution host so activation never resolves by id alone', () => {
-    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
-    // host's workspace behind a row labelled with this one's name and branch.
+    // IDs repeat across hosts; retain the row’s owner so activation cannot open its same-ID twin.
     const [result] = searchBrowserPages(
       [
         makeEntry({
@@ -501,8 +500,7 @@ describe('browser-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J shares worktree objects with searchWorktrees, including corrupt raw display names.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/browser-search'

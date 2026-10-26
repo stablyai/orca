@@ -13,7 +13,7 @@ import {
 } from './managed-server-copy'
 import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
 
-// Why: a status that never loaded is unknown, not exited; only a loaded status may say "Not running".
+// Unloaded status means unknown; only loaded evidence can claim Not running.
 export function managedServerVersionLabel(
   status: OrcadManagedRuntimeStatus | null,
   statusError: string | null
@@ -30,7 +30,6 @@ export function managedServerVersionLabel(
     : translate('auto.components.settings.managedServers.row.checking', 'Checking…')
 }
 
-/** The one managed-server fact that should replace the row's meta line, if any. */
 export function getManagedServerSummary(lifecycle: ManagedServerLifecycle): string | null {
   const { status, recovery } = lifecycle
   if (recovery) {
@@ -203,7 +202,6 @@ export function managedServerHasConfirmation(lifecycle: ManagedServerLifecycle):
   )
 }
 
-/** Second-step confirmations; they stay on the row until answered. */
 export function ManagedServerConfirmations({
   lifecycle
 }: {
@@ -321,7 +319,7 @@ export function ManagedServerMenuItems({
           {translate('auto.components.settings.managedServers.row.rollback', 'Roll back')}
         </DropdownMenuItem>
       ) : null}
-      {/* Why: while a stop is half done, Cancel stop holds the primary slot and Recover lives here. */}
+      {/* Cancel stop owns the primary slot during decommission; keep Recover in the menu. */}
       {recovery?.operation === 'decommission' ? (
         <DropdownMenuItem disabled={disabled} onSelect={() => void run('recover')}>
           <Wrench />

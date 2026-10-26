@@ -4,10 +4,7 @@ import { parseGitRevListAheadBehindCounts } from '../git-rev-list-output'
 import { isShowRefNoMatchError } from '../git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
-/**
- * The execution host's git, injected so the main process (local and WSL repos) and the SSH relay
- * run this one policy. `exec` rejects on a non-zero exit with git's output on the error.
- */
+/** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
   /** Each worktree's path and checked-out branch as a full ref, as this host reports them. */
@@ -44,12 +41,8 @@ export type LocalBaseBranchFastForwardOutcome =
   | { status: 'nothing_to_do' }
   | { status: LocalBaseRefRefreshStatus; ownerWorktreePath?: string; shallowHistory?: true }
 
-// Why: an update Orca makes on the user's behalf must be a plain fast-forward whatever the user's
-// merge settings say: no post-merge hooks (the create waits on it), auto-gc or autostash, no
-// branch-level mergeOptions (`-s ours` or `--squash` there would drop or stage upstream), no
-// signature refusal of the tip the workspace was created from, and no overwrite of an ignored file
-// (a `.env`) at a path the new commit adds. Command-line flags beat config; keys older Git does not
-// know are ignored; `/dev/null/<hook>` never exists. Git 2.25 has no `ort` or `--no-autostash`.
+// Force a plain fast-forward without hooks, auto-GC, autostash, branch mergeOptions, signature refusal or ignored-file overwrite. Flags override config; older Git ignores unknown keys.
+// /dev/null/<hook> never exists. Git 2.25 has neither ort nor --no-autostash.
 function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   return [
     '-c',
@@ -74,7 +67,7 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-/** Read-only: how far local is behind, and whether its checkout would let it move. */
+/** Read-only inspection of local drift and checkout readiness. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
@@ -101,8 +94,7 @@ export async function inspectLocalBaseBranch(
     }
     behind = counts.behind
   } catch {
-    // Why (#15331): a branch that does not exist yet cannot be stale. Only a proven absence
-    // suppresses the warning; an unusable repo or a lost transport keeps it.
+    // Only proven branch absence suppresses the warning; repo/transport failure cannot (#15331).
     return (await isRefProvenAbsent(git, repoPath, fullRef))
       ? { status: 'nothing_to_do' }
       : { status: 'skipped_not_fast_forward' }
@@ -122,12 +114,7 @@ export async function inspectLocalBaseBranch(
   }
 }
 
-/**
- * Fast-forwards local to its remote-tracking ref. A checked-out branch moves with
- * `merge --ff-only`, which refuses under git's own index lock to overwrite an edit or untracked
- * file, or to drop a commit made since the inspection; a free branch moves with a compare-and-swap
- * `update-ref`. Never rejects.
- */
+/** Fast-forward with Git’s index-lock protections in an owner checkout, or compare-and-swap update-ref for a free branch. Refuse overwritten edits/untracked files or dropped commits; never reject. */
 export async function fastForwardLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
@@ -160,20 +147,20 @@ export async function fastForwardLocalBaseBranch(
         )
         return
       }
-      // Why: merge moves whatever HEAD is; this narrows, but cannot close, a branch-switch window, which the post-move check reports as a warning.
+      // Recheck the owner’s branch before merging HEAD; this narrows the switch race, and post-move verification warns if it occurred.
       const { stdout: head } = await git.exec(['symbolic-ref', '-q', 'HEAD'], ownerWorktreePath)
       if (head.trim() !== fullRef) {
         throw new Error(`${fullRef} is no longer checked out at ${ownerWorktreePath}`)
       }
       await git.exec(ownerFastForwardArgs(branch, remoteOid), ownerWorktreePath)
     })
-    // Why: "updated" must mean local is exactly the target, whatever a merge setting did instead.
+    // Report updated only if local equals the target, regardless of merge settings.
     if (ownerWorktreePath && (await revParseCommit(git, repoPath, fullRef)) !== remoteOid) {
       return { status: 'skipped_error', ...owner }
     }
     return { status: 'updated', ...owner }
   } catch (error) {
-    // Why: a concurrent update (another Orca, the user's own pull) may already have moved local.
+    // A concurrent pull/Orca update may already have moved local.
     if (await localContains(git, repoPath, fullRef, remoteOid)) {
       return { status: 'updated', ...owner }
     }
@@ -222,7 +209,7 @@ async function revParseCommit(
 }
 
 async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string): Promise<boolean> {
-  // Why: a read must not take index.lock in the user's checkout, where it would fail their own git.
+  // Read without index.lock so inspection cannot fail the user’s concurrent Git command.
   const { stdout } = await git.exec(
     ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'],
     worktreePath
@@ -230,8 +217,7 @@ async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string):
   return stdout.trim().length > 0
 }
 
-// Why: past a shallow boundary every older local commit counts as "ahead", so only a missing
-// merge base in a shallow repo proves the comparison itself is blind rather than local diverged.
+// Shallow boundaries make older commits look ahead; require a missing merge base to distinguish that from divergence.
 async function isHistoryCutByShallowClone(
   git: LocalBaseBranchGit,
   repoPath: string,
@@ -289,7 +275,7 @@ const REFRESH_STATUSES: readonly LocalBaseRefRefreshStatus[] = [
   'skipped_error'
 ]
 
-/** Validates a relay reply; anything unrecognized reads as an error rather than a silent success. */
+/** Reject unrecognized relay replies as errors rather than implying success. */
 export function parseLocalBaseBranchFastForwardOutcome(
   value: unknown
 ): LocalBaseBranchFastForwardOutcome {

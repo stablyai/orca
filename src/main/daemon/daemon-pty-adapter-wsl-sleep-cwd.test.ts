@@ -162,8 +162,7 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     expect(woken.coldRestore).toBeTruthy()
   })
 
-  // awin verify-10, X2: production never calls reconcileOnStartup, so after a relaunch a pane the
-  // window has not reopened is known only from the inventory; its Sleep wrote no checkpoint at all.
+  // After relaunch, unopened panes exist only in daemon inventory; Sleep must still checkpoint their history and folder.
   it('reads it for a pane a relaunched app only listed, never adopted or reattached', async () => {
     const before = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
     const { id } = await before.spawn({

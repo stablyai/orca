@@ -1,4 +1,3 @@
-/** What a Claude account switch does to running Claude terminal sessions: ask, or apply the setting. */
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -15,7 +14,6 @@ import {
 } from './claude-session-account-move'
 
 export type ClaudeAccountSwitchPrompt = {
-  /** Distinguishes one switch's question from the next. */
   id: number
   sessions: ClaudeSessionMoveCandidate[]
   previousAccountLabel: string
@@ -82,16 +80,12 @@ export function answerClaudeAccountSwitchPrompt(
   }
 }
 
-/** A selected account row and the roster it was selected from. */
 export type ClaudeAccountSnapshot = {
   state: Pick<ClaudeRateLimitAccountsState, 'accounts'>
   accountId: string | null
 }
 
-/**
- * Runs after a Claude account switch has already applied: asks, restarts, or keeps Claude
- * sessions still on the outgoing account. 'show-confirmation' leaves the caller's own toast.
- */
+/** After account selection applies, ask/restart/retain sessions on the outgoing account; show-confirmation leaves the caller’s toast. */
 export async function handleRunningClaudeSessionsAfterSwitch(args: {
   owner: RuntimeClientTarget
   target: CodexAccountSelectionTarget

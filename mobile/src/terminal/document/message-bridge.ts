@@ -6,13 +6,7 @@ import { refreshTerminalSurface } from './webgl-recovery'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
 
-/**
- * One frame from the host, routed.
- *
- * The parse is here rather than in the transport because the shape it parses into is the router's:
- * a bridge hands over JSON text and a host that holds `send` hands over the object, and either way
- * the document reads the same message.
- */
+// Parse at the router boundary so native JSON transport and embedded object sends share one message shape.
 export function handleIncomingMessage(
   scope: TerminalDocumentScope,
   frame: TerminalDocumentHostFrame
@@ -35,13 +29,7 @@ export function handleIncomingMessage(
   }
 }
 
-/**
- * The document's answer to its host: whatever transport the host has, and readiness.
- *
- * Both are seams because the two hosts differ on both (ruling 24). The WebView is sent frames as
- * `message` events and loads its engine from a script tag that can fail; the page calls `send`
- * directly and imported the engine before it built this document.
- */
+// Native receives events and may lack its engine script; embedded hosts call send and import the engine before startup.
 export function startMessageBridge(scope: TerminalDocumentScope) {
   scope.uninstallHostTransport = scope.installHostTransport((frame) =>
     handleIncomingMessage(scope, frame)
@@ -51,7 +39,7 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
       return
     }
     if (scope.hasEngine()) {
-      // Why: ready carries the cell box xterm itself laid out, so the host sizes the first subscribe.
+      // Ready must carry xterm’s measured cell box to size the first host subscription.
       if (scope.start().shown) {
         prepareTerminal(scope)
       }

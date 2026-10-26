@@ -17,8 +17,7 @@ export type ChecksPanelReviewSelectionInput = {
 }
 
 export function gitHubPRToChecksPanelReview(pr: PRInfo): ChecksPanelReview {
-  // Why: the checks panel must not maintain a second GitHub PR metadata mapper;
-  // merge-state fields drifting here regressed the right-sidebar action label.
+  // Reuse the GitHub mapper so merge-state metadata cannot drift and regress action labels.
   return hostedReviewInfoFromGitHubPRInfo(pr)
 }
 

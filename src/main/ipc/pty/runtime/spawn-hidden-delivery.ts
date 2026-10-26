@@ -9,7 +9,7 @@ export function markRuntimeSpawnHiddenBeforeSpawn(ctx: RuntimePtySpawnState): vo
   // Reattached IDs may already back visible panes.
   if (
     ctx.args.initiallyHidden !== true ||
-    !ctx.isNewDaemonSession ||
+    !ctx.ownsNewIncarnation ||
     ctx.effectiveSessionAppId === undefined
   ) {
     return

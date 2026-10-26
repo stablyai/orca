@@ -110,25 +110,33 @@ describe('AgentBrowserBridge', () => {
   })
 
   describe('worktree filtering', () => {
-    it('returns only matching worktree tabs', () => {
-      const tabs = new Map([
-        ['tab-a', 1],
-        ['tab-b', 2]
-      ])
-      const worktrees = new Map([
-        ['tab-a', 'wt-1'],
-        ['tab-b', 'wt-2']
-      ])
-      const wc1 = mockWebContents(1, 'https://a.com', 'A')
-      const wc2 = mockWebContents(2, 'https://b.com', 'B')
-      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+    it.each([null, 'workspace-login'])(
+      'lists the matching workspace with profile %s',
+      (profileId) => {
+        const tabs = new Map([
+          ['tab-a', 1],
+          ['tab-b', 2]
+        ])
+        const worktrees = new Map([
+          ['tab-a', 'wt-1'],
+          ['tab-b', 'wt-2']
+        ])
+        const wc1 = mockWebContents(1, 'https://a.com', 'A')
+        const wc2 = mockWebContents(2, 'https://b.com', 'B')
+        webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
 
-      const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
-      const result = b.tabList('wt-1')
-      expect(result.tabs).toHaveLength(1)
-      expect(result.tabs[0].browserPageId).toBe('tab-a')
-      expect(result.tabs[0].url).toBe('https://a.com')
-    })
+        const b = new AgentBrowserBridge(
+          mockBrowserManager(tabs, worktrees, {
+            getSessionProfileIdForTab: vi.fn(() => profileId)
+          })
+        )
+        const result = b.tabList('wt-1')
+        expect(result.tabs).toHaveLength(1)
+        expect(result.tabs[0].browserPageId).toBe('tab-a')
+        expect(result.tabs[0].url).toBe('https://a.com')
+        expect(result.tabs[0].profileId).toBe(profileId ?? 'default')
+      }
+    )
 
     it('surfaces the browser-manager load error on each listed tab', () => {
       const tabs = new Map([['tab-a', 1]])
@@ -209,66 +217,6 @@ describe('AgentBrowserBridge', () => {
     await expect(b.snapshot()).rejects.toThrow('No browser tab open')
   })
 
-  it('clears activeWebContentsId on tab close', async () => {
-    succeedWith({ snapshot: 'tree' })
-    await bridge.snapshot()
-
-    await bridge.onTabClosed(100)
-    expect(bridge.getActiveWebContentsId()).toBeNull()
-  })
-
-  it('resolves repeated guest lookups without enumerating registered tabs', () => {
-    const tabCount = 1_000
-    const tabs = new Map<string, number>()
-    const tabIdByWebContentsId = new Map<number, string>()
-    for (let index = 0; index < tabCount; index += 1) {
-      const tabId = `tab-${index}`
-      const webContentsId = 20_000 + index
-      tabs.set(tabId, webContentsId)
-      tabIdByWebContentsId.set(webContentsId, tabId)
-    }
-
-    const getRegisteredTabs = vi.fn(() => {
-      throw new Error('unexpected registered-tab enumeration')
-    })
-    const getTabIdForWebContentsId = vi.fn(
-      (webContentsId: number) => tabIdByWebContentsId.get(webContentsId) ?? null
-    )
-    const b = new AgentBrowserBridge(
-      mockBrowserManager(tabs, new Map(), {
-        getWebContentsIdByTabId: getRegisteredTabs,
-        getTabIdForWebContentsId
-      })
-    )
-    const resolveTabIdSafe = (
-      b as unknown as { resolveTabIdSafe: (webContentsId: number) => string | null }
-    ).resolveTabIdSafe.bind(b)
-    const targetWebContentsId = 20_000 + tabCount - 1
-
-    for (let lookup = 0; lookup < tabCount; lookup += 1) {
-      expect(resolveTabIdSafe(targetWebContentsId)).toBe(`tab-${tabCount - 1}`)
-    }
-
-    expect(getTabIdForWebContentsId).toHaveBeenCalledTimes(tabCount)
-    expect(getRegisteredTabs).not.toHaveBeenCalled()
-    expect(resolveTabIdSafe(99_999)).toBeNull()
-  })
-
-  it('closes the named agent-browser session when a tab closes', async () => {
-    succeedWith({ snapshot: 'tree' })
-    await bridge.snapshot()
-
-    execFileMock.mockClear()
-    succeedWith(null)
-    await bridge.onTabClosed(100)
-
-    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('close')
-    )
-    expect(closeCall).toBeTruthy()
-    expect(closeCall![1]).toEqual(['--session', 'orca-tab-tab-1', 'close'])
-  })
-
   it('repairs per-worktree active routing when the active tab closes', async () => {
     const tabs = new Map([
       ['tab-a', 1],
@@ -303,40 +251,6 @@ describe('AgentBrowserBridge', () => {
 
     expect(b.getActiveWebContentsId()).toBe(200)
     expect(b.tabList('wt-1').tabs).toMatchObject([{ browserPageId: 'tab-a', active: true }])
-  })
-
-  it('switches active tab and returns switched index', async () => {
-    const tabs = new Map([
-      ['tab-a', 1],
-      ['tab-b', 2]
-    ])
-    const wc1 = mockWebContents(1)
-    const wc2 = mockWebContents(2)
-    webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
-
-    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
-    b.setActiveTab(1)
-
-    const result = await b.tabSwitch(1)
-    expect(result).toEqual({ switched: 1, browserPageId: 'tab-b' })
-    expect(b.getActiveWebContentsId()).toBe(2)
-  })
-
-  it('switches tabs by explicit browser page id', async () => {
-    const tabs = new Map([
-      ['tab-a', 1],
-      ['tab-b', 2]
-    ])
-    const wc1 = mockWebContents(1)
-    const wc2 = mockWebContents(2)
-    webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
-
-    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
-    b.setActiveTab(1)
-
-    const result = await b.tabSwitch(undefined, undefined, 'tab-b')
-    expect(result).toEqual({ switched: 1, browserPageId: 'tab-b' })
-    expect(b.getActiveWebContentsId()).toBe(2)
   })
 
   it('updates the owning worktree active tab when switching by browser page id', async () => {

@@ -115,10 +115,7 @@ function isInside(parent, child) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
-/**
- * Orca imports a profile's legacy orca-data.json into SQLite on first launch, so the seed writes
- * that JSON instead of copying live databases. Never writes to sourceDir.
- */
+// Seed legacy JSON for first-launch SQLite migration; never copy live databases or write to sourceDir.
 export async function seedDevProfile({ sourceDir, targetDir, report = console.error }) {
   if (!profileHasState(sourceDir)) {
     throw new Error(`Seed source has no Orca profile state: ${sourceDir}`)

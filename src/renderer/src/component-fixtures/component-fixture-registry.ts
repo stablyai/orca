@@ -4,8 +4,7 @@ import {
   type ComponentFixtureModule
 } from './component-fixture'
 
-// Why lazy: the explorer only pays for the fixture module it renders, so one
-// screenshot does not transform every fixture's component graph.
+// Lazy-load fixtures so one screenshot does not transform every component graph.
 const fixtureModuleLoaders = import.meta.glob<ComponentFixtureModule>('../**/*.fixture.tsx')
 
 export type ComponentFixtureEntry = {

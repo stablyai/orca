@@ -29,11 +29,7 @@ export function resolveSignalAgentForLaunchOwner(
   )
 }
 
-/**
- * Probe-free evidence a launched agent exited: title shows no agent, no live
- * hook remains, and either the hook completed or observed activity vanished.
- * Vanished-activity is local-only — remote rows also drop on transport blips.
- */
+/** Without probes, missing title/hook plus completion or vanished local activity proves exit. Remote activity loss can be transport blips and must not count. */
 export function resolveLaunchedAgentExitEvidence(args: {
   title: string
   defaultTitle?: string
@@ -77,7 +73,7 @@ export function resolveTabAgentFromSignals(args: {
   launchAgent?: TuiAgent
 }): TerminalAgent | null {
   const launchAgent = args.launchAgent ?? null
-  // Durable focused-pane owner (launch intent → hook → session); focused-pane-scoped so a sibling can't re-own the focused title (would mislabel a Pi pane as OMP).
+  /** Focused-pane ownership follows launch → hook → session; sibling ownership cannot reinterpret this title (e.g. Pi as OMP). */
   const ownerRecord = resolvePaneAgentOwnerRecord({
     launchAgent,
     hookAgent: args.hookAgent,
@@ -111,13 +107,12 @@ export function resolveTabAgentFromSignals(args: {
   )
   const sleepingSessionAgent = args.sleepingSessionAgent ?? null
 
-  // Title carries identity only as a reuse override (names a DIFFERENT-group agent) or a legacy standalone id when no hook — same-group titles say nothing (OMP wraps Pi), so the record wins.
+  /** Titles identify only different-group reuse or legacy hookless agents; same-group titles (OMP wrapping Pi) defer to durable records. */
   const rawTitleAgent = resolveExplicitTerminalTitleAgentType(args.title)
   const explicitTitleAgent = resolveSignalAgentForLaunchOwner(rawTitleAgent, owner, ownerIsLaunch)
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
-  // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
-  // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
+  // A task mentioning claude cannot take another agent’s pane; only titles presenting Claude establish identity (#8940).
   const titleClaimsIdentity =
     explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
@@ -153,8 +148,7 @@ export function resolveTabAgentFromSignals(args: {
     processShellForeground: args.processShellForeground
   })
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
-  // Exit evidence also retires hibernation occupancy; a stale sleeping record must not
-  // repopulate the tab icon after /exit has returned the pane to a local shell.
+  // Exit evidence retires sleeping occupancy too; stale records must not restore agent icons after local shell return.
   const activeSleepingSessionAgent =
     launchedAgentExited || processProvesShell ? null : sleepingSessionAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.

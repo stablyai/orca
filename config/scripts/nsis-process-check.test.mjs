@@ -66,9 +66,7 @@ describe.runIf(process.platform === 'win32')(
       `[Console]::Out.WriteLine('${policyReceipt}');`
     ].join(' ')
 
-    // A watchdog against a wedged probe, not a latency budget: Windows PowerShell 5.1
-    // cold start under the packaged-CI process load has reached the former 20s cap. Matches
-    // the synchronous-probe ceiling in tests/tools/win-update-e2e/powershell-runner.mjs.
+    // Watchdog matches powershell-runner.mjs: Windows PowerShell 5.1 cold start under CI load exceeded the old 20s cap; this is no latency budget.
     const PROBE_TIMEOUT_MS = 60_000
     // Vitest's 30s default would otherwise cap the blocking spawn ahead of PROBE_TIMEOUT_MS.
     const PROBE_TEST_TIMEOUT_MS = PROBE_TIMEOUT_MS + 15_000

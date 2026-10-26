@@ -1,4 +1,3 @@
-/** User-facing words for managed-server states; every string goes through the catalog. */
 import type {
   OrcadManagedPendingMigrationRow,
   OrcadManagedRuntimeStatus
@@ -142,7 +141,6 @@ const MIGRATION_CODES = new Set([
   'orcad_rollback_crosses_migration'
 ])
 
-/** The one localized line for a managed-server action that did not go through. */
 export function managedServerOutcomeLabel(result: {
   outcome: string
   code?: string

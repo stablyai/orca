@@ -170,7 +170,6 @@ function Chat({
   working = false
 }: {
   rows: NativeChatMessage[]
-  /** Runs, their lines and settled turns start open, as a reader who opened them left them. */
   open?: boolean
   shown?: boolean
   scope?: string

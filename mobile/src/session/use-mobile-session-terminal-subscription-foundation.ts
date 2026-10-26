@@ -35,18 +35,12 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       leaseOnlyHandlesRef.current.delete(handle)
       terminalDiagnosticsRef.current.terminalUnsubscribed(handle)
       subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
-      // Why: reset the high-water mark so a fresh subscription's first scrollback isn't dropped as stale.
+      // Reset sequence state so a fresh subscription’s first snapshot cannot look stale.
       layoutSeqRef.current.delete(handle)
-      // Why: a drawn snapshot belongs to this subscription; the next one must draw its own or live redraws land on a stale screen.
+      // A new subscription needs its own snapshot before cell diffs can safely redraw.
       initializedHandlesRef.current.delete(handle)
-      // Why compare against the RENDERED lease: `clear` reports the drop from its
-      // synchronous mirror, so a `subscribed`+`end` pair applied in one render batch
-      // reports "dropped" while React only ever sees false → the effect never re-runs
-      // and the composer stays locked (#10681). A dead PTY can also emit `end` with no
-      // preceding `subscribed`, where the clear is a no-op for the same reason. Either
-      // way the flip carries no signal, so bump. When the lease really was up on
-      // screen, `leaseReady` already re-runs the effect and bumping too would
-      // double-render this whole route on every chat open.
+      // Signal teardown when rendered lease was already false: batched subscribed/end or end alone would otherwise never rerun chat recovery.
+      // An actually rendered lease already triggers recovery through state; another signal there would rerender the route twice.
       const leaseWasOnScreen = nativeChatInputLeaseReadyRef.current
       const leaseDropped = clearNativeChatInputLease(handle)
       if (

@@ -8,18 +8,13 @@ import {
   type MobileAgentLaunchAvailability
 } from './mobile-agent-launch-availability'
 
-// Launches an agent for the PR triage actions ("Fix checks with AI" / "Resolve
-// conflicts with AI") via launchAgentWithPrompt; see pr-ai-triage-launch.ts.
-
 export type PrAiTriageKey = 'fix-checks' | 'resolve-conflicts'
 
-// The desktop's saved-recipe ids and telemetry sources for the same two buttons.
 const TRIAGE_LAUNCH = {
   'fix-checks': { actionId: 'fixChecks', launchSource: 'task_page' },
   'resolve-conflicts': { actionId: 'resolveConflicts', launchSource: 'conflict_resolution' }
 } as const
 
-/** What the last launch from one button left to show under that button. */
 export type PrAiTriageLaunchNotice = {
   success: string | null
   error: string | null
@@ -39,7 +34,6 @@ type Input = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  /** Named in the confirmation; the screen's workspace label, else its branch. */
   workspaceLabel: string | null
   hostCapabilities: readonly string[]
   hostStatusPending: boolean
@@ -57,10 +51,9 @@ export function useMobilePrAiTriage(input: Input) {
     hostStatusReadable
   } = input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
-  // Keyed by button, so one button's launch never shows (or offers to copy) under the other.
+  // Scope feedback by button so launches cannot display another action’s prompt-copy state.
   const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, PrAiTriageLaunchNotice>>>({})
-  // Synchronous lock: setBusyKey commits async, so a fast double-tap could pass the
-  // busyKey check twice before either render. The ref flips immediately and dedupes.
+  // Lock synchronously because async busy state cannot stop same-frame double-tap launches.
   const inFlightRef = useRef(false)
   const availability: MobileAgentLaunchAvailability = resolveMobileAgentLaunchAvailability({
     hostCapabilities,
@@ -74,8 +67,6 @@ export function useMobilePrAiTriage(input: Input) {
 
   const launch = useCallback(
     async (key: PrAiTriageKey, buildPrompt: () => string): Promise<boolean> => {
-      // Guard re-entry: one triage launch at a time keeps us from opening a pile
-      // of agents on a fast double-tap.
       if (inFlightRef.current || busyKey !== null) {
         return false
       }

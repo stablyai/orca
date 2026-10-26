@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { shouldFollowMouseFocus, type FocusFollowsMouseInput } from './focus-follows-mouse'
 
 describe('shouldFollowMouseFocus', () => {
-  // Base input where every gate passes. Individual tests flip one field
-  // at a time to assert that each gate blocks focus independently.
+  // Start with every gate passing, then change one field to isolate each focus veto.
   const base: FocusFollowsMouseInput = {
     featureEnabled: true,
     activePaneId: 1,

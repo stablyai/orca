@@ -11,7 +11,7 @@ import {
 } from './native-chat-edit-patch-files'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 
-/** A diff card's own words. Desktop maps these onto `translate`; mobile renders them. */
+/** Shared diff-card copy: desktop translates, mobile renders directly. */
 export const NATIVE_CHAT_DIFF_CARD_COPY = {
   diffTruncated: 'Diff truncated',
   diffGap: 'Lines not shown',
@@ -66,9 +66,7 @@ export type EditCardModel = {
   consumedResults: Set<NativeChatBlock>
 }
 
-/** An edit renders as one card, so its result block is folded into the call. The
- *  model decides which calls have landed; a call that has not keeps the generic
- *  tool view, its result still visible as the provider's own error. */
+/** Fold results into landed-edit cards only. Unconfirmed edits retain generic tool/error rows. */
 export function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
   const editCards: EditCardModel['editCards'] = new Map()
   const consumedResults: EditCardModel['consumedResults'] = new Set()

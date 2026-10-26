@@ -16,14 +16,9 @@ export type LaunchAgentStartupPromptPlan = {
   submitPastedPrompt: boolean
 }
 
-/**
- * Decide how a new-tab launch delivers its prompt: argv/flag agents fold it
- * into the launch command, while followup and generated launches start clean
- * and paste after the TUI is ready.
- */
+/** Choose argv/flag delivery versus clean launch plus post-ready paste for follow-up/generated prompts. */
 export function planLaunchAgentStartupPrompt(args: {
   base: StartupPlanBase
-  /** Already trimmed. */
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   isFollowupPath: boolean

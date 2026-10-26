@@ -17,8 +17,7 @@ import { E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV } from '../../src/main/daemon/d
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
-// Why: holds the daemon guard's decision until well past the ~600ms it takes
-// electron.launch to resolve, which is the earliest the stderr listener can attach.
+// Delay guard decisions beyond electron.launch so the test can attach its stderr listener.
 const GUARD_DECISION_DELAY_MS = 3_000
 
 function readDaemonPid(userDataDir: string): number {
@@ -70,17 +69,8 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     firstApp = null
 
     const stderrLines: string[] = []
-    // Why: force the failed-health branch without SIGSTOP. Stopping the daemon
-    // also blocks listSessions, so the preserve guard races a fixed SIGCONT
-    // timer under CI load and often takes the healthy path (or misses logs).
-    // With health forced unreachable, listSessions still succeeds and the only
-    // way to keep the same daemon PID is the failed-health preserve path.
-    //
-    // The init delay is what makes the guard's log observable: Playwright owns
-    // the child's stderr from spawn and this listener can only attach once
-    // electron.launch resolves (~600ms in CI). Forced-unreachable health returns
-    // with no timeout, so an undelayed guard decides at ~500ms and its line is
-    // lost before the test is listening.
+    // Force only health unreachable: SIGSTOP also blocks listSessions and races the preserve decision.
+    // Delay init until Playwright releases stderr after launch or the decision log is lost.
     const secondLaunch = await session.launch({
       extraEnv: {
         [E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV]: '1',
@@ -102,18 +92,13 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     await waitForPaneCount(secondLaunch.page, 1, 30_000)
     await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
 
-    // Why: the same PID alone also holds on the healthy-adoption path, so assert
-    // the guard's own decision line — otherwise a seam that silently stopped
-    // working would leave this test passing for the wrong reason. Match the
-    // stable "preserve…daemon…health check" concepts so a reword doesn't flake.
+    // A stable PID also passes healthy adoption; require the guard’s preserve decision to prove this failure path ran.
     await expect
       .poll(() => stderrLines.join(''), { timeout: 10_000 })
       .toMatch(/preserv\w*\s+daemon[^\n]*health check/i)
     expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
     expect(stderrLines.join('')).not.toMatch(/\breplacing daemon\b/i)
-    // Why: a killed daemon cold-restores scrollback from history, so the
-    // marker text alone cannot distinguish a live session from a dead one.
-    // The restore banner only appears for cold-restored (dead) sessions.
+    // Cold restore can replay the marker; absence of its banner distinguishes a live session.
     expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
   } finally {
     if (secondApp) {

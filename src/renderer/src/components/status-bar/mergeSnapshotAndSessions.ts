@@ -1,21 +1,4 @@
-/**
- * Resource Manager popover merge helper.
- *
- * Produces a single grouped list (repo → worktree → session) by unifying:
- *
- *   - `MemorySnapshot.worktrees` — local PTYs only, with numeric CPU/Mem
- *     per worktree and per session (the local memory collector doesn't see
- *     SSH process trees, by design — see src/main/memory/collector.ts and
- *     the registerPty branch at src/main/ipc/pty.ts:832).
- *   - `pty.listSessions()` — every PTY the daemon tracks, local or SSH.
- *
- * The merge is renderer-only and pure. It does NOT widen the shared
- * `WorktreeMemory` shape; instead it emits a renderer-local view-model
- * with `Metric = number | null`, where `null` means "no local sample"
- * (e.g. an SSH session). The popover renders `null` cells as `—`.
- *
- * See docs/resource-usage-merge-spec.md for the full design.
- */
+/** Merge local/paired-host samples and daemon sessions by project/workspace; unsampled metrics are null and paired rows are read-only. */
 
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
@@ -38,8 +21,6 @@ import {
   resolveSnapshotSessionLabel
 } from './resource-session-labels'
 
-// ─── Public merge function ─────────────────────────────────────────
-
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
 export const UNATTRIBUTED_REPO_NAME = 'Unattributed'
 
@@ -51,9 +32,7 @@ export function mergeSnapshotAndSessions(
   const repos = new Map<string, UnifiedProjectGroup>()
   const worktreeRowsByRepo = new Map<string, Map<string, UnifiedWorktreeRow>>()
   const seenSessionIds = new Set<string>()
-  // Why: pre-build O(1) lookup indices once per merge. This includes live
-  // ptyIdsByTabId plus deferred-reattach wake hints, so restored inactive
-  // sessions do not appear as Resource Manager orphans before their pane mounts.
+  // Include deferred wake hints so inactive restored sessions cannot become reclaimable orphans before their panes mount.
   const index = buildResourceSessionBindingIndex(ctx)
   const boundPtyIds = index.boundPtyIds
   // Only the daemon inventory supplies ownership and incarnation evidence.
@@ -143,8 +122,7 @@ export function mergeSnapshotAndSessions(
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
       const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-      // Why: local snapshot data must never render under a runtime-hosted repo
-      // row; belt-and-braces with the matching session-ingest guard below.
+      // Reject local samples for runtime-hosted workspaces to prevent cross-host attribution.
       if (runtimeHostId) {
         continue
       }
@@ -158,15 +136,13 @@ export function mergeSnapshotAndSessions(
     }
   }
 
-  // ── Step 1b: each paired server's own samples, attributed only to workspaces it hosts.
   for (const host of ctx.runtimeHostResources ?? []) {
     for (const wt of host.worktrees) {
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
       const owned =
         resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
-      // Why: an id this client does not place on that server (orphans, another client's
-      // project) is still that server's load, but must not merge into a same-id row elsewhere.
+      // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
       ingestSampledWorktree(wt, {
         worktreeId: owned ? wt.worktreeId : `${host.hostId}|${wt.worktreeId}`,
         worktreeName: (owned && worktree?.displayName?.trim()) || wt.worktreeName,
@@ -179,14 +155,12 @@ export function mergeSnapshotAndSessions(
     }
   }
 
-  // ── Step 2: union daemon sessions that the snapshot didn't cover.
   for (const session of daemonSessions) {
     if (seenSessionIds.has(session.id)) {
       continue
     }
     seenSessionIds.add(session.id)
 
-    // 2a: tab-store walk — does this session belong to a tab in this renderer?
     const tabId = index.ptyIdToTabId.get(session.id) ?? null
     let worktreeId = tabId ? (index.tabIdToWorktreeId.get(tabId) ?? null) : null
 
@@ -195,7 +169,6 @@ export function mergeSnapshotAndSessions(
       worktreeId = session.worktreeId || parsePtySessionId(session.id).worktreeId
     }
 
-    // 2c: unattributed bucket.
     const isUnattributed = !worktreeId
     const finalWorktreeId = worktreeId ?? `${UNATTRIBUTED_REPO_ID}::${session.id}`
     const worktree = resolveResourceFolderWorkspace(ctx, finalWorktreeId)
@@ -209,8 +182,7 @@ export function mergeSnapshotAndSessions(
       ? session.title || session.id.slice(0, 12)
       : worktree?.displayName?.trim() || deriveWorktreeNameFromWorktreeId(finalWorktreeId)
 
-    // Why: the current daemon inputs are local/SSH only; this guard prevents a
-    // future local daemon row accidentally exposing kill actions for runtime PTYs.
+    // Local/SSH daemon inventory cannot grant kill actions for paired-host PTYs.
     const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(
       ctx,
       finalWorktreeId,
@@ -255,7 +227,6 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 3: add browser resources, including browser-only workspaces.
   for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {
     const worktree = ctx.worktreeById?.get(worktreeId)
     if (!worktree || browsers.length === 0) {

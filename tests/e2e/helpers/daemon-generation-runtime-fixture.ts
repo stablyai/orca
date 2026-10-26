@@ -176,8 +176,7 @@ export async function createDaemonGenerationRuntime(
     },
     remove: () => {
       assertDisposableRoot(rootDir)
-      // Why: Windows can release ConPTY/log handles just after exact-PID
-      // liveness reaches zero; keep fixture cleanup bounded but non-flaky.
+      // Retry briefly after process exit because Windows may still hold ConPTY/log handles.
       rmSync(rootDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
     }
   }

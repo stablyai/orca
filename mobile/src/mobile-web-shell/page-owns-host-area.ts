@@ -1,4 +1,4 @@
-/** Natively there is no `init`: the page's own sidebar rule lives in the web sibling. */
+// Native has no init; the web sibling reads the page’s ownership fact.
 export function usePageOwnsHostArea(): boolean {
   return false
 }

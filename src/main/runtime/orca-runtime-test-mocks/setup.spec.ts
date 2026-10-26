@@ -1,10 +1,9 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem-path-containment'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
-// Why: durable review-head refs are scoped by remote identity (name + URL hash).
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
@@ -12,6 +11,17 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 
 type TestMock = Mock
+
+const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({
+    reconcile: reconcileClaudeAgentViewMock,
+    ready: async () => {},
+    readyForLaunch: async () => {},
+    prepareProfile: async () => {},
+    read: () => undefined
+  })
+}))
 
 export const ORIGINAL_PLATFORM = process.platform
 export const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -92,9 +102,7 @@ const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn()
 const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
-// Why install the port instead of mocking ../ipc/filesystem-watcher: the runtime calls
-// WorktreeWatcherRemoval now, so a module mock would be inert and every assertion below
-// would silently pass against the inert default. Same mocks, same expectations.
+// Runtime calls the WorktreeWatcherRemoval port; filesystem-watcher module mocks would be inert.
 setWorktreeWatcherRemoval({
   closeLocal: closeLocalWatcherForWorktreePathMock,
   restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
@@ -352,7 +360,7 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem-auth', () => ({
+vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
@@ -364,10 +372,10 @@ vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
-// Why: the real check also matches relay-rebuilt errors, which carry only the ENOENT message.
-vi.mock('../../ipc/filesystem-path-containment', async () => {
+// Relay-rebuilt ENOENT errors may retain only the message.
+vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem-path-containment'
+    '../../ipc/filesystem/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })
@@ -488,7 +496,7 @@ vi.mock('../../github/issues', async (importOriginal) => {
   }
 })
 
-// Why: CLI worktree creation resolves a default against fabricated repo paths, so keep the async resolver deterministic.
+// Fabricated repo paths need deterministic async default-ref resolution.
 vi.mock('../../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   const actualGetBaseRefDefault = actual.getBaseRefDefault as (
@@ -497,7 +505,7 @@ vi.mock('../../git/repo', async (importOriginal) => {
   ) => Promise<string | null>
   return {
     ...actual,
-    // Why: fabricated local test repos need a deterministic default, while WSL coverage must still exercise the real async Git-options path.
+    // Keep fake local defaults deterministic while WSL exercises real async Git options.
     getBaseRefDefault: vi
       .fn()
       .mockImplementation((path: string, options?: { wslDistro?: string }) =>
@@ -604,3 +612,5 @@ export {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 }
+
+export { reconcileClaudeAgentViewMock }

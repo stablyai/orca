@@ -40,7 +40,7 @@ function terminateDedicatedPosixGroup(
     // ESRCH says only that the group is empty; a descendant that left it, or a root that never led it, may live.
     return hasErrorCode(error, 'ESRCH') ? null : 'unverifiable'
   }
-  // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
+  // Keep breadcrumb failures outside the signal-error catch so they cannot be mistaken for ESRCH.
   recordSelfInitiatedTreeKill({
     pid: rootPid,
     site: deps.site,
@@ -59,8 +59,7 @@ async function terminatePosixTree(
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
   if (!snapshot) {
-    // No observation rather than the reaper's `unverifiable`: Codex's diagnostic treated this as accepted.
-    // The reaper-move follow-up maps it to `unverifiable` and takes that Codex change deliberately.
+    // Preserve Codex compatibility: missing snapshot is no observation (null), not an unverifiable verdict.
     child.kill('SIGKILL')
     return null
   }
@@ -75,8 +74,7 @@ async function terminatePosixTree(
     const signalGroup =
       deps.signalProcessGroup ??
       ((pgid: number, toSend: NodeJS.Signals) => process.kill(-pgid, toSend))
-    // The stopped root cannot reap or release its direct children's PIDs. Its snapshot pins
-    // their identity until after this root is killed, even if a later table read fails.
+    // SIGSTOP prevents the root reaping direct children, pinning their PIDs even if later table reads fail.
     for (const descendant of snapshot.descendants) {
       if (descendant.ppid !== rootPid) {
         continue
@@ -85,7 +83,7 @@ async function terminatePosixTree(
         try {
           signalGroup(descendant.pid, 'SIGKILL')
         } catch {
-          // An already exited group is safe to ignore.
+          // Group-signalling failure must not skip the exact child and root kill attempts.
         }
       }
       try {
@@ -111,7 +109,7 @@ async function terminatePosixTree(
   return verdict
 }
 
-/** Stops every process owned by one provider launch before releasing its wrapper. */
+/** Attempt tree termination; callers must inspect the verdict before claiming descendant exit. */
 async function terminateOnce(
   child: TeardownChild,
   deps: ProviderProcessTeardownDeps
@@ -124,9 +122,9 @@ async function terminateOnce(
   if ((deps.platform ?? process.platform) === 'win32') {
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
     const treeTerminated = await terminate(rootPid, { site: deps.site })
-    // taskkill owns the tree; this preserves the prior direct-child fallback when it fails.
+    // Always stop the held root, even when taskkill fails.
     child.kill('SIGKILL')
-    // Taskkill's own report, not an observation: only its clean exit says the tree is gone.
+    // Only successful taskkill supplies tree-exit proof here.
     return treeTerminated ? 'exited' : 'unverifiable'
   }
   if (deps.dedicatedProcessGroup) {

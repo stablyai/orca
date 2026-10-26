@@ -1,15 +1,5 @@
-// Cross-version coverage for the structured agent-session surface, paired the same
-// way the terminal wire harness is: current code against a real published release.
-//
-// Three skews matter here, and none can be checked from one build alone — an old
-// client must not receive a journal-backed RPC surface it cannot read, a new client
-// must find an old host's missing surface cleanly, and a client's cursor must survive
-// the host process that minted it.
-//
-// The session-tabs projection may keep a metadata-only row for an incapable mobile client so the
-// chat is not simply absent on the phone. Every `agentSession.*` method and destructive close stays
-// refused, which is what the tests below pin; the row-level behaviour is pinned in
-// src/main/runtime/rpc/methods/session-tab-agent-status-projection.test.ts.
+// Pair real builds: old clients must refuse unreadable structured RPCs, new clients must detect missing methods, and cursors must survive host restart.
+// Incapable mobile clients may retain metadata-only tabs; their destructive/agentSession calls stay refused.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -77,7 +67,6 @@ import { codexProviderHandle } from '../../../src/shared/agent-session-provider-
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
 describeReleasedStopNoteProjection({
@@ -98,13 +87,7 @@ beforeAll(async () => {
   baseline = await loadAgentSessionWireBuild(baselineRef)
 }, SUITE_TIMEOUT_MS)
 
-/**
- * What a client too old to know the structured surface advertises: the baseline's
- * own list, minus the capability. Derived rather than assumed to be the baseline's
- * list as-is — the baseline is the newest release tag, so the day a release ships
- * this capability the list would contain it and the gate below would stop being
- * exercised at all, on a pull request that changed nothing.
- */
+// Remove the capability from the baseline’s own list so the old-client gate remains exercised after releases gain it.
 function legacyClientCapabilities(): string[] {
   return baseline.capabilities.filter(
     (capability) =>
@@ -413,21 +396,13 @@ describe('cross-version structured agent sessions', () => {
     it(
       'executes every method a release-shaped checkout registers',
       async () => {
-        // The stand-in for the release that ships this surface: the same source,
-        // read the way a release checkout reads it rather than through the test
-        // runner's module graph. It is the only place the "registered means
-        // usable" claim is executable today, because the baseline registers none
-        // of these methods — so it has to carry the whole manifest, not a sample.
+        // Validate the full manifest through an extracted checkout graph as well as the working-tree module graph.
         const releasedCurrent = await loadAgentSessionWireBuild('HEAD')
         expect(releasedCurrent.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
         expect(
           releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.'))
         ).toHaveLength(STRUCTURED_CALLS.length)
-        // Each build owns its own host slot, so the one the suite installed in
-        // current source is not this dispatcher's. Installing here is also the
-        // anti-vacuous guard: without it every host-backed method answers
-        // `structured_agent_session_unsupported`, the same words the capability
-        // gate uses, and the run would read as a refusal rather than a miss.
+        // Install this graph’s host slot explicitly so unsupported-host fallback cannot masquerade as capability refusal.
         const hostCalls = structuredHostStub(SESSION, WORKSPACE)
         await releasedCurrent.installStructuredHost(installableHost(hostCalls))
         try {
@@ -652,10 +627,7 @@ describe('cross-version structured agent sessions', () => {
       ).toMatchObject({ ok: false, error: { code: 'agent_session_conflict' } })
       expect(createMobileSessionTerminal).not.toHaveBeenCalled()
 
-      // The positive control for the three refusals above: the same client, the
-      // same method, a command that is not this thread's resume, and it lands.
-      // Without it, a stub whose shape drifted from the runtime would satisfy
-      // "was never called" by never being reachable at all.
+      // Send a non-resume command as positive control so an unreachable stub cannot satisfy every refusal assertion.
       expect(
         (
           await callBuild(
@@ -685,14 +657,11 @@ describe('cross-version structured agent sessions', () => {
     let handshake: Promise<void> = Promise.resolve()
     let starts = 0
 
-    /** Phase 2 owns provider processes; the adapter is the only stub here. A ready provider
-     *  proves its start once its handshake answers. */
+    // Stub only provider acquisition; published adapters prove start after their handshake.
     function adapter(host: () => StructuredAgentSessionHost): StructuredAgentSessionAdapter {
       return startsWhenPublished(
         {
-          // Every real adapter answers this; without it adapterSupportsCreate falls through to
-          // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
-          // refused for the fake's silence rather than for the location.
+          // Supply supportsCreate like real adapters, or missing fake capabilities would refuse location before the tested gate.
           supportsCreate: () => true,
           open: async () => {
             await handshake
@@ -739,8 +708,7 @@ describe('cross-version structured agent sessions', () => {
       )
     }
 
-    /** Reopens the store from disk and installs a fresh host over the same journal
-     *  root — what a process restart actually leaves behind. */
+    // Reopen disk state under a fresh host, preserving the journal root as a real process restart does.
     async function bootHost(generation: string, startupLimits?: { ceilingMs: number }) {
       store = await openTestAgentSessionRecordStore(root)
       const host: StructuredAgentSessionHost = new StructuredAgentSessionHost({
@@ -768,8 +736,7 @@ describe('cross-version structured agent sessions', () => {
       refusal?: { code: string; currentFence?: number }
     }
 
-    /** Reattaching after a restart: the client's fence died with the previous
-     *  host, and the refusal that says so is what hands it the live one. */
+    // A restarted host’s refusal replaces the dead client fence with its live authority.
     async function reattach(staleFence: number): Promise<HostAnswer> {
       const refused = await answer('agentSession.ensure', attachParams(staleFence))
       expect(refused).toMatchObject({
@@ -877,9 +844,7 @@ describe('cross-version structured agent sessions', () => {
       })
     })
 
-    // A released client answers a send's `pending` as delivered-or-refused; it has no way to show
-    // a rejection that arrives after it. So it is answered once the message is handed over, while
-    // a client that advertises accepted sends is answered at acceptance, start or no start (W9).
+    // Legacy clients cannot show rejection after pending; answer after handoff, while accepted-send clients may answer before provider start.
     it('holds the send reply of a released client until the handover, and answers a current one at once', async () => {
       // Why: the baseline is the newest release, which will itself carry accepted sends.
       const released = baseline.capabilities.filter(
@@ -933,9 +898,7 @@ describe('cross-version structured agent sessions', () => {
       )
     })
 
-    // The create a released client sends answers at spawn now, so its first send's reply carries
-    // the handshake instead. A start that never proves itself is ended by the startup limit, and
-    // the reply answers with the message's rejection rather than hanging.
+    // Create replies at spawn, so the first send carries handshake proof; unproven starts must time out as rejected messages.
     it("answers a released client's send once the startup limit ends a start that never proves itself", async () => {
       const released = baseline.capabilities.filter(
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY

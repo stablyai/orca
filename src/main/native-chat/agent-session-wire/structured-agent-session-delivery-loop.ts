@@ -1,26 +1,15 @@
+import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 // Accept sends separately, then derive each delivery step from journal/child state. Wait outside
 // serialization for startup/readiness/provider calls so acceptance and Stop stay responsive.
 // Recover earlier-process queued sends before any handover; running commands block input.
 
-import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
-import type {
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChildIdentity
-} from './structured-agent-session-host-types'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
-  acceptedNoLaterThan,
   oldestQueuedSubmission,
   recordStructuredAgentSessionStartFailure,
-  refusedStructuredAgentSessionStart,
   startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
 import {
@@ -29,54 +18,22 @@ import {
 } from './structured-agent-session-handover'
 import { structuredAgentSessionNextHandover } from './structured-agent-session-opening-send'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
-import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
 import { holdRestartedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
-import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from './structured-agent-session-message-options'
-import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
 import { sameProviderChild } from './structured-agent-session-provider-child'
-import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 
-export type StructuredAgentSessionDeliveryLoopDeps = {
-  deliveryOrder: StructuredAgentSessionDeliveryOrder
-  sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
-  adapter: StructuredAgentSessionAdapter
-  agents: StructuredAgentRegistry
-  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  /** Track from enqueue so quit drains any child the start may create. */
-  trackStart: <T>(start: Promise<T>) => Promise<T>
-  startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
-  /** Retire mismatched login/permission children under serialization. */
-  retireOutgrownChild: (sessionId: string) => Promise<void>
-  readiness: (
-    sessionId: string,
-    child: StructuredAgentSessionProviderChildIdentity
-  ) => StructuredAgentSessionStartReadiness | null
-  conversationFence: (sessionId: string) => number
-  /** Settle sends covered by partial close; later sends remain eligible. False means settlement failed. */
-  closeWhatTheUserClosed: (sessionId: string) => Promise<boolean>
-  failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
-  logger: StructuredAgentSessionLogger
-  record: (sessionId: string) => AgentSessionRecord | null
-  currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
-  /** Publish row-free changes in current work. */
-  workChanged?: (sessionId: string) => void
-  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
-  childWorkOpen: (sessionId: string) => boolean
-  stopping: (sessionId: string) => boolean
-  now: () => number
-  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
-  recordRanOptions?: StructuredAgentSessionRanRecorder
-}
+export type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 
 type Prepared =
   | 'stop'
-  | { start: StructuredAgentSessionStartClaim; acceptedBy: AgentJournalCursor }
+  | 'continue'
+  | { start: StructuredAgentSessionStartClaim }
   | {
       ok: true
       awaited: StructuredAgentSessionProviderChildIdentity
+      clientMessageId: string
       readiness: StructuredAgentSessionStartReadiness | null
       before: Promise<void>
     }
@@ -130,22 +87,35 @@ export class StructuredAgentSessionDeliveryLoop {
         if (prepared === 'stop') {
           return
         }
+        if (prepared === 'continue') {
+          continue
+        }
         if ('start' in prepared) {
-          // Start outside serialization so sends remain acceptable.
-          const started = await prepared.start.outcome
-          if (started.ok || started.aborted) {
-            // Intentional cancellation settled its work; re-derive so later sends get fresh starts and quit stops the loop.
-            continue
-          }
-          const failure = refusedStructuredAgentSessionStart(this.deps.record(sessionId), started)
-          if (started.refusal.details?.reason !== 'previousExitUnverifiable') {
-            await this.deps.serialize(sessionId, () => this.fail(sessionId, failure))
+          // Outside the serialize: sends are accepted while the agent starts.
+          const completed = await prepared.start.outcome.then(
+            () => true,
+            (error: unknown) => {
+              this.deps.logger.warn('waiting for an agent start failed', {
+                scope: 'delivery-loop-start',
+                sessionId,
+                error
+              })
+              return false
+            }
+          )
+          if (!completed) {
+            await this.deps
+              .serialize(sessionId, async () => this.stop(sessionId))
+              .catch((error: unknown) =>
+                this.deps.logger.warn('parking delivery after a failed start failed', {
+                  scope: 'delivery-loop-start',
+                  sessionId,
+                  error
+                })
+              )
             return
           }
-          // Unproven close applies only to work captured for this start; later sends may retry proof.
-          await this.deps.serialize(sessionId, () =>
-            this.recordFailure(sessionId, failure, prepared.acceptedBy)
-          )
+          // The flight settled its requester; joiners rederive their own work.
           continue
         }
         if (prepared.readiness) {
@@ -153,7 +123,12 @@ export class StructuredAgentSessionDeliveryLoop {
         }
         await prepared.before
         const handed = await this.deps.serialize(sessionId, () =>
-          this.handOver(sessionId, prepared.awaited, prepared.readiness !== null)
+          this.handOver(
+            sessionId,
+            prepared.awaited,
+            prepared.clientMessageId,
+            prepared.readiness !== null
+          )
         )
         if (handed === 'stop') {
           return
@@ -176,10 +151,17 @@ export class StructuredAgentSessionDeliveryLoop {
       })
       const cause = { hostFault: true } as const
       await this.deps
-        .serialize(sessionId, () => this.fail(sessionId, { startKey: null, cause }))
+        .serialize(sessionId, async () => {
+          try {
+            const session = this.deps.sessions.get(sessionId)
+            const selected = session && oldestQueuedSubmission(session)
+            await this.fail(sessionId, { startKey: null, cause }, selected?.clientMessageId ?? null)
+          } finally {
+            this.stop(sessionId)
+          }
+        })
         .catch((failure: unknown) => {
           // Keep failed-settlement leftovers for the next accept/open recovery.
-          this.running.delete(sessionId)
           this.deps.logger.warn('recording a failed delivery failed', {
             scope: 'delivery-loop-fail',
             sessionId,
@@ -210,21 +192,24 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
+    if (this.deps.startFlights?.has(sessionId)) {
+      return { start: this.deps.startProviderChild(sessionId, oldest.clientMessageId) }
+    }
     const failedStart = startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
-      return this.fail(sessionId, failedStart)
+      return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
     await this.deps.retireOutgrownChild(sessionId)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
       return {
-        start: this.deps.startProviderChild(sessionId, oldest.clientMessageId),
-        acceptedBy: session.journal.cursor()
+        start: this.deps.startProviderChild(sessionId, oldest.clientMessageId)
       }
     }
     return {
       ok: true,
       awaited: { generation: child.generation, fence: child.fence },
+      clientMessageId: oldest.clientMessageId,
       readiness: child.phase === 'starting' ? this.deps.readiness(sessionId, child) : null,
       before: this.deps.deliveryOrder.beforeSend(sessionId, oldest.clientMessageId)
     }
@@ -233,6 +218,7 @@ export class StructuredAgentSessionDeliveryLoop {
   private async handOver(
     sessionId: string,
     awaited: StructuredAgentSessionProviderChildIdentity,
+    clientMessageId: string,
     waited: boolean
   ): Promise<'continue' | 'stop' | StructuredAgentSessionPendingHandover> {
     const session = this.deps.sessions.get(sessionId)
@@ -249,12 +235,16 @@ export class StructuredAgentSessionDeliveryLoop {
       if (endedFailure === null) {
         return 'continue'
       }
-      return this.fail(sessionId, {
-        startKey: awaited.generation,
-        cause: endedFailure ??
-          // Unknown disappearance is not an observed provider exit.
-          { failure: agentSessionFailureFact('startFailed') }
-      })
+      return this.fail(
+        sessionId,
+        {
+          startKey: awaited.generation,
+          cause: endedFailure ??
+            // Gone with no end observed: nothing says the provider stopped.
+            { failure: agentSessionFailureFact('startFailed') }
+        },
+        clientMessageId
+      )
     }
     // Stop may take the lane during readiness; recheck before steering into work it is ending.
     if (this.deps.stopping(sessionId) || awaitedChild.phase !== 'ready') {
@@ -303,16 +293,11 @@ export class StructuredAgentSessionDeliveryLoop {
     return pending ?? 'continue'
   }
 
-  private async fail(sessionId: string, failure: StartFailure): Promise<'stop'> {
-    await this.recordFailure(sessionId, failure)
-    return this.stop(sessionId)
-  }
-
-  private async recordFailure(
+  private async fail(
     sessionId: string,
     failure: StartFailure,
-    acceptedBy?: AgentJournalCursor
-  ): Promise<void> {
+    clientMessageId: string | null
+  ): Promise<'continue'> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
       await recordStructuredAgentSessionStartFailure(
@@ -324,9 +309,10 @@ export class StructuredAgentSessionDeliveryLoop {
             this.deps.failureTextContext(sessionId)
           )
         },
-        acceptedBy && acceptedNoLaterThan(session.journal, acceptedBy)
+        clientMessageId
       )
     }
+    return 'continue'
   }
 
   /** Clear under serialization so the next accept can wake a new loop. */

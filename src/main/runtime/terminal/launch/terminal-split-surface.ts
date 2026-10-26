@@ -94,9 +94,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
               tabId: parentTabId,
               leafId: parsedPaneKey.leafId,
               ptyId: pty.ptyId,
-              // Why: the store can only match its own persisted map, so a live-only id it never
-              // recorded would reject every split from a session restored without incarnations.
-              // The live id is fenced by revalidateSourceAuthority below instead.
+              // Persisted maps cannot match live-only incarnations; revalidateSourceAuthority fences those separately.
               ...(sourceAuthority.persistedIncarnationId
                 ? { incarnationId: sourceAuthority.persistedIncarnationId }
                 : {})
@@ -160,9 +158,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       revalidateSourceAuthority()
       if (!sourceAuthority.persisted) {
         await revealSplit()
-        // Why: rejecting here unmounts the pane the reveal just added only because the retire
-        // below always emits its exit and the tab still holds the source sibling — the renderer's
-        // exit handler closes non-final panes. Never close it by tabId: that drops the whole tab.
+        // Retirement emits a non-final pane exit and unmounts only the new pane; closing by tabId would also drop the source sibling.
         revalidateSourceAuthority()
       }
       if (createdPty) {
@@ -209,8 +205,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         )
       : null
     if (committedSourceAuthority?.persisted && !committedSourceAuthority.rendererRunsOtherPty) {
-      // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
-      // Not gated on the window's graph: it lags tabs the window already holds (STA-9417).
+      // Reveal only projects an already durable main commit; failure cannot undo it, and lagging window graphs cannot gate it (STA-9417).
       void revealSplit().catch(() => undefined)
     }
 

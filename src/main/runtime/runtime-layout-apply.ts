@@ -12,10 +12,7 @@ import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane
 import { isWslMoveWorkspaceSessionFrozen } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 
-/**
- * A window's layout command: one on a tab, which names its partitions, or on the group tree or a
- * browser tab's record, which go to the workspace's routed partition.
- */
+/** Route tab commands to their holding partitions; group trees and browser records use the workspace partition. */
 export type WindowLayoutCommand =
   | RenameTabsCommand
   | (LayoutCommand &
@@ -23,12 +20,9 @@ export type WindowLayoutCommand =
         | { tabId: string }
         | { type: 'setGroupRatios' }
         | { type: 'closeTabs'; tabIds: [string] }
-        // A browser tab's record lives in its workspace's partition, so it routes by workspace.
         | { browserTabId: string }
         | { type: 'moveTabToWorkspace' }
-        // Editor tabs live in their workspace's routed partition.
         | { type: 'renameEditorFiles' }
-        // So does the workspace's default-tabs mark, which no tab carries.
         | { type: 'setDefaultTabsApplied' | 'applyDefaultTabs' }
       ))
 
@@ -36,12 +30,8 @@ export type LayoutCommandRunOptions = NonNullable<
   Parameters<NonNullable<RuntimeStore['applyLayoutCommand']>>[2]
 >
 
-/**
- * `layout.apply`: the window's command on the partitions holding its tab, routed partition first;
- * a group tree command goes to the workspace's routed partition. A pane close is the user's: main
- * marks it so, and the window cannot. A pane moved to a new tab follows the desktop's move rules.
- * A workspace a WSL move has paused is refused: its write would be dropped and the change revert.
- */
+/** Apply to tab holders, routed partition first; workspace commands use its partition. Only main records user closes.
+ * Preserve desktop pane-move rules and refuse WSL-move-paused workspaces whose writes would be dropped. */
 export async function applyWindowLayoutCommand(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
@@ -56,7 +46,7 @@ export async function applyWindowLayoutCommand(
   }
   if (
     isWslMoveWorkspaceSessionFrozen(command.workspace) ||
-    // The target's dropped write would lose the tab the source gave up.
+    // Refuse a dropped target write before source gives up its tab.
     (command.type === 'moveTabToWorkspace' && isWslMoveWorkspaceSessionFrozen(command.toWorkspace))
   ) {
     return { ok: false, code: 'wsl_move_in_progress' }
@@ -74,26 +64,24 @@ export async function applyWindowLayoutCommand(
         ? command.tabIds[0]
         : null
   const hostIds = hostIdsFor(command.workspace, routedTabId)
-  // Why: a paired server's workspaces keep today's mirrored layout until that server owns it.
+  // Paired servers keep mirrored layout until they advertise ownership.
   if (!hostIds[0] || parseExecutionHostId(hostIds[0])?.kind === 'runtime') {
     return { ok: false, code: 'host_not_owned' }
   }
   if (!store.applyLayoutCommand) {
     throw new Error('layout_store_unavailable')
   }
-  // Why every holder: a legacy relay reattach can leave one tab in two partitions.
+  // Legacy relay reattach can leave one tab in two partitions; update every holder.
   const holders = hostIds.filter((hostId) => parseExecutionHostId(hostId)?.kind !== 'runtime')
   if (command.type === 'closeTabs') {
-    // The window already confirmed, removed the tab and stopped its terminals: main forces the
-    // close, records it, and stops nothing (a terminal another tab shares must live on). A sender
-    // that asks main to refuse pinned tabs (the CLI, new phones) gets that refusal, not the force.
-    // Read before the close drops the tab's record.
+    // Window closes already confirmed/stopped terminals: force removal without killing shared PTYs. Honor pinned-tab refusals from CLI/new phones.
+    // Read intent before close removes the record.
     const terminalTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabIds[0])
     const reply = await store.applyLayoutCommand(
       { ...command, force: command.refusePinned ? command.force === true : true },
       holders
     )
-    // Only a tab the close took: a refused (pinned) tab's launches still finish into it.
+    // Cancel launches only for tabs actually closed; refused pinned tabs still receive theirs.
     if (
       command.recordClose === 'user' &&
       reply.ok &&
@@ -101,18 +89,17 @@ export async function applyWindowLayoutCommand(
     ) {
       markAgentLaunchesClosedByUser(command.workspace, { kind: 'tab', tabId: terminalTabId })
     }
-    // Why: a workspace main lacks has no tab to close; the window drops the tab as for tab_not_found.
+    // Missing workspaces have no tab to close; let windows handle this as tab_not_found.
     return reply.ok && reply.result.alreadyClosed
       ? { ok: false, code: 'workspace_not_found' }
       : reply
   }
   if (command.type === 'movePaneToNewTab') {
-    // Read before the move, which re-homes the pane.
     const sourceTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabId)
     const reply = await store.applyLayoutCommand(
       {
         ...command,
-        // Why: main mints the new tab's id, so the window's is not carried.
+        // Main mints destination tab ids; discard the window's proposed id.
         windowDetach: {
           ptyId: command.windowDetach?.ptyId ?? null,
           ...(command.windowDetach?.startupCwd
@@ -130,7 +117,7 @@ export async function applyWindowLayoutCommand(
         leafId: command.leafId,
         ptyId: reply.result.ptyId ?? null
       }
-      // Why: the move is committed; a throw here would send the window to today's move as well.
+      // Move already committed; throwing would make the window repeat it through the legacy path.
       try {
         onPaneMoved(move)
       } catch (error) {
@@ -140,14 +127,14 @@ export async function applyWindowLayoutCommand(
     return reply
   }
   if (command.type !== 'closePane') {
-    // A pane's sleeping record lives with the pane, in each partition that holds its tab.
+    // Move sleeping records with panes in every holding partition.
     const target = command.type === 'sleep' || command.type === 'wake' ? holders : [hostIds[0]]
     return run
       ? store.applyLayoutCommand(command, target, run)
       : store.applyLayoutCommand(command, target)
   }
   const { workspace, tabId, leafId } = command
-  // A launch still starting in the pane the user closed stops, and says so (as the legacy close).
+  // Cancel pending launches in user-closed panes, as legacy close did.
   markAgentLaunchesClosedByUser(workspace, { kind: 'pane', tabId, leafId })
   return store.applyLayoutCommand(
     { type: 'closePane', workspace, tabId, leafId, userPaneClose: true },
@@ -155,10 +142,7 @@ export async function applyWindowLayoutCommand(
   )
 }
 
-/**
- * Each title in its tab's routed partition, as a `renameTab` would be, all in one durable write;
- * a title main cannot give is named in `untitled` with the code its own `renameTab` would get.
- */
+/** Rename in each tab's routed partition in one durable write; untitled reports the same refusal codes as renameTab. */
 async function renameTabs(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
@@ -197,16 +181,12 @@ async function renameTabs(
   return { ok: true, result: untitled.length > 0 ? { untitled } : {} }
 }
 
-/**
- * Applied in the one partition holding both workspaces, or across the two that do (a local and an
- * SSH workspace) in one durable write: a window save no longer carries the move.
- */
+/** Move groups within/across holding partitions atomically; window save no longer carries the move. */
 async function moveTabToWorkspace(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
   command: CommandOf<'moveTabToWorkspace'>
 ): Promise<LayoutApplyReply> {
-  // An editor tab lives in its workspace's routed partition.
   const [from] = hostIdsFor(command.workspace, null)
   const [to] = hostIdsFor(command.toWorkspace, null)
   if (
@@ -228,10 +208,7 @@ async function moveTabToWorkspace(
   return store.applyLayoutCommand(command, [from])
 }
 
-/**
- * One disk move's renames across workspaces, each partition's in one command, all in one durable
- * write: written everywhere or nowhere. A workspace a paired server owns refuses the whole.
- */
+/** Rename disk-move paths across partitions in one durable write; paired-server ownership refuses the whole operation. */
 async function renameEditorFilesInWorkspaces(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],

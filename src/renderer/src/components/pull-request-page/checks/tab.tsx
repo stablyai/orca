@@ -162,8 +162,7 @@ export function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
-  // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
-  // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
+  // All-neutral checks remain unresolved; list length alone cannot justify a green tick.
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure

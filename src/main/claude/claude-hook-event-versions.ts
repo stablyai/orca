@@ -16,6 +16,8 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PermissionRequest: '2.0.45',
   PostToolUseFailure: '2.0.56',
   TeammateIdle: '2.1.33',
+  Elicitation: '2.1.63',
+  ElicitationResult: '2.1.63',
   PostCompact: '2.1.76',
   StopFailure: '2.1.78'
 } as const

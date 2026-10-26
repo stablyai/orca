@@ -6,14 +6,6 @@ import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metr
 import { commitFitScale } from './document/fit-scale'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
-// The scope object plus the metrics block, exactly as the document carries them.
-/**
- * The metrics module over a scope the case owns.
- *
- * Imported rather than evaluated: the module reads the terminal and the notify seam off the scope
- * it is handed, so a case builds one with its own terminal double and reads the notifications back
- * out of the seam it passed in.
- */
 function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
   const scope = createTerminalDocumentScope({
@@ -113,7 +105,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
       { name: 'underline', data: '\x1b[4m     \x1b[0m', expected: 7 },
       { name: 'strikethrough', data: '\x1b[9m     \x1b[0m', expected: 7 },
       { name: 'overline', data: '\x1b[53m     \x1b[0m', expected: 7 },
-      // Hidden text still reserves TUI layout, so keyboard avoidance treats it as content.
+      // Hidden text still occupies TUI layout and must count toward keyboard avoidance.
       { name: 'invisible text', data: '\x1b[8mfooter\x1b[0m', expected: 7 }
     ]
 
@@ -189,7 +181,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
   })
 
   it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {
-    // Desktop display mode keeps the desktop's rows and the fit shrinks the grid by width.
     const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
     const measuredTerm = {
       buffer: { active: buffer },
@@ -211,7 +202,6 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     const notifications: Record<string, unknown>[] = []
     const scope = createTerminalDocumentScope({
       postToHost: (message) => notifications.push(message),
-      // Half the width 80 columns of 8 px need, so the fit commits a scale of 0.5.
       viewportRect: () => ({ left: 0, top: 0, width: 320, height: 700 })
     })
     const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }

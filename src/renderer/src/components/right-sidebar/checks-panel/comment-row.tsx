@@ -20,7 +20,6 @@ import {
   ResolveButton
 } from './comment-controls'
 
-/** A single comment row — used for both root and reply comments. */
 export function CommentRow({
   comment,
   botAuthorOverrides,

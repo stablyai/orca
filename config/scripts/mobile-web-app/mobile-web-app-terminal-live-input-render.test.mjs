@@ -21,29 +21,9 @@ import {
 } from './preview/mobile-web-app-render-harness.mjs'
 import { LAYOUT_SOURCE } from './preview/mobile-web-app-terminal-probe-route.mjs'
 
-/**
- * The terminal's live input, in a real browser, on the bundle the shell would serve.
- *
- * What only a browser answers: that the writes the live-input hooks make against
- * `liveInputRef.current` are writes React Native Web can honour. Natively the ref is a host
- * component with `setNativeProps`; on the page it is the DOM node, which has no such method, so
- * the call is a `TypeError` thrown from a mount effect — the page faults, the shell tears the view
- * down, and the session route comes up with a 0x0 terminal and a keyboard that never opens.
- *
- * **Why `mobile-web-app-session-render.test.mjs` is green on the same defect.** It opens the real
- * session route with a shell double that answers no RPC, so the screen has no tab snapshot and no
- * terminal inventory, so `activeHandle` stays null and `liveInputEnabled` is false. The field the
- * ref points at is inside that branch and never renders, `liveInputRef.current` is null, and
- * `liveInputRef.current?.setNativeProps(...)` is skipped by its own optional chain. The check's
- * error list is exactly empty for a page that never made the call. Its two siblings —
- * `mobile-web-app-session-terminal-closure.test.mjs` and `mobile-web-app-session-media-picker.test.mjs`
- * — are source censuses over the route closure and mount nothing at all.
- *
- * So this file gives the hooks the one thing that route cannot: a mounted field. Everything else
- * is the page as shipped — the real bundler, the real module resolution (a `.web.ts` sibling wins
- * here exactly as it would on a registered route), the shell's own policy header, and the page's
- * own `PageFaultBoundary` reporting through the bridge.
- */
+// Mount real live-input field: RN-Web refs are DOM nodes without setNativeProps, which once threw in effect and tore down session page.
+// No-RPC session-render leaves activeHandle null/live input disabled, so optional ref chain skips defect; source censuses mount nothing.
+// Use shipped bundler/web resolution/CSP and PageFaultBoundary to exercise actual hook writes.
 
 const PROBE_ROUTE = `/${MOBILE_WEB_APP_ROUTE_ROOT}/live-input-probe`
 const SHELL_HOST = {
@@ -77,7 +57,7 @@ beforeAll(async () => {
   const routeDir = join(appDir, MOBILE_WEB_APP_ROUTE_ROOT)
   await mkdir(routeDir, { recursive: true })
   await writeFile(join(routeDir, '_layout.tsx'), LAYOUT_SOURCE)
-  // Extensionless, so the bundler picks a `.web.ts` sibling exactly as it would for a real route.
+  // Extensionless import selects web sibling as shipped route would.
   await writeFile(
     join(routeDir, 'live-input-probe.tsx'),
     liveInputProbeRouteSource({
@@ -106,12 +86,7 @@ afterAll(async () => {
   }
 })
 
-/**
- * Open the probe and wait for the route to settle either way.
- *
- * Settled is "the probe registered" or "the page reported a fault", because those are the two
- * outcomes and waiting only for the first turns the defect into a 60s timeout that names nothing.
- */
+// Wait for probe registration or reported fault; success-only wait hides useful failure behind 60s timeout.
 async function openProbe({ userAgent } = {}) {
   const page = await browser.newPage({
     viewport: { width: 390, height: 844 },
@@ -154,7 +129,6 @@ async function openProbe({ userAgent } = {}) {
 const fieldValue = (page) =>
   page.evaluate((id) => document.getElementById(id)?.value ?? null, LIVE_INPUT_FIELD_ID)
 
-/** Typed text, as the field and the mirror both hold it once a native edit has landed. */
 async function typeIntoField(page, text) {
   await page.evaluate((typed) => globalThis.__orcaLiveInputProbe.type(typed), text)
   await page.waitForFunction(
@@ -168,9 +142,7 @@ describeRender(
   'the terminal live input on the page',
   () => {
     it('mounts a session-startup clear without faulting the page', async () => {
-      // The emulator's first line: `[web-shell] the page faulted { category: 'TypeError', message:
-      // 'r.current?.setNativeProps is not a function' }`, then a torn-down view. The route's mount
-      // effect is the same call from the same place, so an unhonourable write lands here.
+      // Catch original page-only TypeError from calling setNativeProps on DOM ref before shell tears view down.
       const { errors, faults, page } = await openProbe()
       expect(faults).toEqual([])
       expect(errors).toEqual([])
@@ -180,10 +152,7 @@ describeRender(
 
     it('writes the field itself, so a drifted value is cleared without a render', async () => {
       const { errors, page } = await openProbe()
-      // The state the native write exists for: the DOM node holds text React's `value` prop does
-      // not know about, which is where an IME leaves the field mid-composition. The capture state
-      // is already '' here, so the clear below is a no-op for React — it re-renders nothing — and
-      // the only thing that can empty the node is the write itself.
+      // Seed DOM text unknown to React value prop, like mid-composition IME; clearing unchanged empty capture state cannot rerender it away.
       await page.evaluate((id) => {
         document.getElementById(id).value = 'ime-preedit'
       }, LIVE_INPUT_FIELD_ID)
@@ -197,9 +166,7 @@ describeRender(
     }, 300_000)
 
     it('clears the field when Enter submits, the way it does natively', async () => {
-      // The emulator's second page-only line: the command ran and the Live input row kept showing
-      // the text that had just been sent. Keys go in through the browser because the thing under
-      // test is react-native-web's keydown handler, which is what turns Enter into onSubmitEditing.
+      // Use real keydown to exercise RN-Web Enter/onSubmitEditing; command must clear previously sent live text.
       const { errors, page } = await openProbe()
       await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
       await page.keyboard.type('ls')
@@ -216,8 +183,7 @@ describeRender(
         undefined,
         { timeout: 30_000, polling: 100 }
       )
-      // Exact, not `includes`: react-native-web cancels every keydown it submits on, so the page's
-      // own line-break binding must stay silent here rather than send a second carriage return.
+      // Require exact output once: RN-Web cancels submitted keydown, so page line-break binding must not send second CR.
       expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
         'l',
         's',
@@ -229,10 +195,7 @@ describeRender(
     }, 300_000)
 
     it('submits when Enter arrives with the keyboard composition still open', async () => {
-      // The emulator's page-only defect. An Android soft keyboard holds a composition over the
-      // word being typed, so the Enter keydown carries `isComposing: true` — and that is exactly
-      // the condition react-native-web reads to decide `onSubmitEditing` must not fire. Native
-      // Android has no such suppression: its editor action fires and the field clears.
+      // Android soft-keyboard Enter carries isComposing; RN-Web suppresses onSubmitEditing unlike native editor action.
       const { errors, page } = await openProbe()
       await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
       const input = await page.context().newCDPSession(page)
@@ -249,8 +212,7 @@ describeRender(
 
       await page.keyboard.press('Enter')
 
-      // The held composition is committed to the terminal first, then the carriage return, which
-      // is the order the native path produces for the same keystroke.
+      // Commit held composition before CR, matching native keystroke order.
       await page.waitForFunction(
         () => globalThis.__orcaLiveInputProbe.sent().includes('\r'),
         undefined,
@@ -266,10 +228,7 @@ describeRender(
     }, 300_000)
 
     it("clears the field when the key bar's Enter chip ends the line", async () => {
-      // The device trace's variant (a), which is what shots/23 actually was: the chip emits no DOM
-      // key event at all, so react-native-web's submit handling never runs and the accessory hook
-      // is the only thing that could end the field's editing session. It did not, and the next
-      // keystrokes appended to the text still sitting there.
+      // Accessory chip emits no DOM key event; hook itself must finish edit or next keys append to sent text.
       const { errors, page } = await openProbe()
       await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
       await page.keyboard.type('ls')
@@ -281,8 +240,7 @@ describeRender(
 
       await page.evaluate(() => globalThis.__orcaLiveInputProbe.accessory({ bytes: '\r' }))
 
-      // Exactly once, whichever branch carries it: the hook sends the control itself or defers to
-      // the caller, and a fix that did both would double the command.
+      // Exactly one branch sends control: hook sends or defers to caller, never both.
       await page.waitForFunction(
         () => (globalThis.__orcaLiveInputProbe.sent() ?? []).includes('\r'),
         undefined,
@@ -299,9 +257,7 @@ describeRender(
     }, 300_000)
 
     it('edits the field from the accessory bar and mirrors the erase to the terminal', async () => {
-      // The second write site: an accessory Backspace is a local edit, so the hook writes the
-      // shortened text into the field itself and the mirror diff sends the PTY erase. On the page
-      // the write threw before the send, so the bar did nothing at all.
+      // Accessory Backspace writes shortened DOM field before mirror sends PTY erase; broken native-prop write prevented both on page.
       const { errors, page } = await openProbe()
       await typeIntoField(page, 'ab')
 
@@ -315,8 +271,7 @@ describeRender(
         LIVE_INPUT_FIELD_ID,
         { timeout: 30_000, polling: 100 }
       )
-      // One DEL reached the terminal, so the field edit above is a mirror of the PTY rather than a
-      // local edit that silently diverged from it.
+      // Require one DEL on wire so local field edit cannot silently diverge from PTY.
       expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
         'ab',
         '\u007f'
@@ -326,14 +281,11 @@ describeRender(
     }, 300_000)
 
     describe('under an Android keyboard, which composes every word it types', () => {
-      // The OTA shell's WebView. Its keyboards hold a composing region over the Latin word being
-      // typed, so every input event mid-word says `isComposing: true`; native Android reports no
-      // range at all, and there each ASCII keystroke reaches the terminal as it is typed.
+      // Android WebView Latin keyboard keeps composing region mid-word; native Android reports no range and forwards ASCII immediately.
       const ANDROID_WEBVIEW_USER_AGENT =
         'Mozilla/5.0 (Linux; Android 16; Pixel 9 Pro Build/BP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/140.0.0.0 Mobile Safari/537.36'
       const sent = (page) => page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())
 
-      /** One composition step through the browser's own IME path, which fires the DOM composition events. */
       async function compose(input, text) {
         await input.send('Input.imeSetComposition', {
           text,
@@ -351,8 +303,7 @@ describeRender(
       }
 
       it('sends each letter of a composed word after a slash as it is typed', async () => {
-        // The reported shape: `/tui` in a Codex terminal, where the `/` arrived and `tui` did not
-        // until Enter. The keyboard commits `/` outright and opens a composition for the letters.
+        // Reproduce /tui: slash commits, keyboard composes letters which once waited until Enter to reach terminal.
         const { errors, page } = await openProbe({ userAgent: ANDROID_WEBVIEW_USER_AGENT })
         await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
         const input = await page.context().newCDPSession(page)
@@ -404,8 +355,7 @@ describeRender(
       }, 300_000)
 
       it("still holds a composition off Android, where it is the text system's marked text", async () => {
-        // The guard: an iOS WebView composes only what native iOS marks, pinyin before conversion
-        // among it, and that is not text yet on either side of the bridge.
+        // iOS guard: pinyin composition before conversion is not committed text on either side.
         const { errors, page } = await openProbe({
           userAgent:
             'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
@@ -428,10 +378,7 @@ describeRender(
         page.evaluate((id) => document.getElementById(id)?.value ?? null, BUFFERED_FIELD_ID)
 
       it('sends the draft and empties the field on a plain Enter', async () => {
-        // The guard, not a repro: the clear belongs to `beginBufferedTerminalDraftSend`, which
-        // writes '' for the handle at the start of the send. What a browser adds is that the field
-        // is a controlled `<input>` here, so this says the draft left the screen and not just the
-        // store.
+        // Controlled DOM field must clear as buffered send begins, not just backing store.
         const { errors, page } = await openProbe()
         await page.focus(`#${BUFFERED_FIELD_ID}`)
         await page.keyboard.type('ls -la')
@@ -451,9 +398,7 @@ describeRender(
       }, 300_000)
 
       it('sends the draft when Enter arrives with the keyboard composition still open', async () => {
-        // The same react-native-web gate the live field had: this field also reaches its send
-        // through `onSubmitEditing` alone, so a soft keyboard's open composition swallows Enter and
-        // the draft neither goes out nor leaves the field.
+        // Buffered field shares RN-Web composing-Enter suppression; require draft sends and clears via web binding.
         const { errors, page } = await openProbe()
         await page.focus(`#${BUFFERED_FIELD_ID}`)
         const input = await page.context().newCDPSession(page)
@@ -484,9 +429,7 @@ describeRender(
       }, 300_000)
 
       it("leaves the draft alone when the key bar's Enter chip fires", async () => {
-        // Buffered mode turns the live handle set empty, so the accessory hook declines at its own
-        // guard and the chip is a plain terminal key: one carriage return on the wire, and a draft
-        // the chip never claimed to send.
+        // Buffered mode leaves live handles empty: accessory declines and chip sends one terminal CR without claiming buffered draft.
         const { errors, page } = await openProbe()
         await page.evaluate(() => globalThis.__orcaLiveInputProbe.setLiveInputEnabled(false))
         await page.focus(`#${BUFFERED_FIELD_ID}`)

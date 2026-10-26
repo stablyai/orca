@@ -1,11 +1,4 @@
-/**
- * Folds query results back onto the catalog for display.
- *
- * Kept separate from the catalog the controller is given: this one changes on
- * every commit, and re-applying a catalog advances generations and cancels
- * in-flight requests. The picker, notice, and empty state read this projection;
- * the scheduler reads the store-derived one.
- */
+/** Project query health separately from the scheduler’s store-derived catalog; feeding every cache commit back into it would advance generations and cancel pending work. */
 
 import type {
   AutomationHostCacheEntry,
@@ -25,11 +18,7 @@ export type AutomationHostLoadCounts = {
 
 export type AutomationHostHealthInput = {
   entry: (stableKey: string) => AutomationHostCacheEntry | null
-  /**
-   * Authorities whose most recent list attempt failed outside the per-host
-   * cache — today the page's own unscoped refresh. Without this a failed load
-   * would render as an empty host, which claims we looked and found nothing.
-   */
+  /** Include failures outside the per-host cache so an unscoped read failure cannot appear as an answered empty host. */
   failedAuthorityKeys?: ReadonlySet<string>
 }
 
@@ -110,11 +99,7 @@ const FAILED_HEALTH: ReadonlySet<AutomationAuthorityHealth> = new Set([
   'incompatible'
 ])
 
-/**
- * Counts hosts, not authorities: the summary tells the user how much of the
- * list is missing, and one unreachable server can account for several hosts.
- * Removed entries are excluded — a ghost was never expected to load.
- */
+/** Count missing hosts rather than authorities; exclude removed entries that were never expected to load. */
 export function automationHostLoadCounts(catalog: AutomationHostCatalog): AutomationHostLoadCounts {
   const counted = catalog.entries.filter((entry) => entry.catalogState !== 'removed')
   return {

@@ -91,10 +91,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       return {
         runtimeId: this.runtimeId,
         terminalHandle,
-        // Both EMPTY on purpose. `verifyOrchestrationCompatibilityCaller` falls back to the
-        // restored-authority receipt keyed by ptyId when there is no launch token, so filling
-        // either of these in would silently open hook attestation to a session that has no PTY,
-        // no launch secret, and no hook to attest with.
+        // Empty PTY/token prevent restored-receipt fallback from granting hook attestation to a structured session with no PTY or launch secret.
         ptyId: '',
         worktreeId: structured.identity.worktreeId,
         processIncarnation: structured.identity.processIncarnation,
@@ -194,9 +191,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     recentOutputBuffer.append(data)
     if (
       this.recentPtyPathCandidateTrackingActive ||
-      // Why: an over-window chunk is stored pre-sliced, so activation backfill
-      // could never replay its original text. Extract while intact; oversized
-      // chunks are rare, so the desktop-only gate still skips the hot path.
+      // Extract over-window chunks intact before slicing; later backfill cannot reconstruct them.
       data.length > RECENT_PTY_OUTPUT_LIMIT
     ) {
       this.recentPtyPathCandidatesById.set(
@@ -211,22 +206,13 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       return
     }
     this.recentPtyPathCandidateTrackingActive = true
-    // Why: synchronous backfill from the retained raw windows so a file tap
-    // right after first mobile connect resolves exactly as before the gate.
-    // Replay each retained chunk in its original full form: joining or
-    // trimming chunks would change the candidate set (e.g. a window cut can
-    // shorten an over-4KiB line under the extractor's line guard, minting
-    // candidates the eager extractor rejected).
-    // Accepted best-effort loss: output that scrolled past the raw window
-    // before the first-ever connect no longer yields candidates.
+    // Backfill synchronously with original chunk boundaries; trimming/joining changes candidate semantics. Output evicted before first connection remains unavailable.
     for (const [ptyId, buffer] of this.recentPtyOutputById) {
       let candidates = this.recentPtyPathCandidatesById.get(ptyId)
       const { chunks, headChunkIsPartial } = buffer.retainedChunks()
       for (let index = 0; index < chunks.length; index += 1) {
         if (index === 0 && headChunkIsPartial) {
-          // A pre-sliced over-window chunk was already extracted eagerly at
-          // append time (while its original text was intact); replaying its
-          // truncated remainder would mint or drop candidates spuriously.
+          // Oversized chunks were extracted intact at append; replaying truncated remnants could change the candidate set.
           continue
         }
         candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
@@ -302,14 +288,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
         : undefined
     })
   }
-  /**
-   * Recover a live terminal handle for a worker whose durable handle stopped resolving
-   * (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
-   * the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
-   * reused ptyId belonging to a different process can never be closed, and fails closed on an
-   * unknown host scope (this is also consumed by workerShow, which does no lease re-check).
-   * Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
-   */
+  /** Recover a handle only for an exact live process incarnation and known host scope; never close a replacement under a reused PTY id. workerShow also uses this without lease rechecks. */
   resolveTerminalHandleByProcessIncarnation(
     processIncarnation: string,
     serializedHostScope: string | null
@@ -317,19 +296,14 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     if (!processIncarnation || !serializedHostScope) {
       return null
     }
-    // Scan by the incarnation itself (startsWith + exact equality, mirroring
-    // classifyWorkerTerminalProcessIncarnation) rather than splitting on a colon, so relay/SSH
-    // ptyIds and colon-bearing incarnationIds still match. A pty with no incarnationId can never
-    // match, so the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` fence stays fail-closed.
+    // Match the complete incarnation rather than splitting colons: PTY/incarnation ids may contain them, and missing-incarnation legacy ids stay fail-closed.
     for (const [ptyId, pty] of this.ptysById) {
       if (!matchesProcessIncarnation(ptyId, pty.incarnationId, processIncarnation)) {
         continue
       }
       const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
       if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
-        // Keep scanning: a colon-ambiguous decoy pty in a different host scope that this
-        // incarnation string happens to prefix-match must not suppress the genuine same-scope
-        // pty later in ptysById. The scope check still fences the real match below.
+        // A colon-ambiguous foreign-host decoy must not hide a later genuine same-scope match.
         continue
       }
       return this.issuePtyHandle(pty)

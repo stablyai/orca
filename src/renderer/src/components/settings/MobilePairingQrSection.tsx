@@ -37,7 +37,7 @@ export function MobilePairingQrSection({
   const hadPairingUrlRef = useRef(pairingUrl != null)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
 
-  // Why: the reset timeout is owned here, so clearing only the parent's timer would leave it running.
+  // Clear this section’s reset timer; clearing only the parent timer leaves it active.
   const clearCodeCopiedResetTimer = useCallback(() => {
     if (codeCopiedResetTimerRef.current !== null) {
       window.clearTimeout(codeCopiedResetTimerRef.current)

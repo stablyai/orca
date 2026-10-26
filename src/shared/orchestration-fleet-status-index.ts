@@ -44,8 +44,7 @@ export function createFleetStatusIndex(
   }
   for (const evidence of statuses) {
     const binding = evidence.binding
-    // An unresolved row identifies nothing; indexing it under the pane it was observed on is
-    // exactly the false bind this union exists to prevent.
+    // Indexing unresolved evidence by its observed pane would recreate the false binding this union prevents.
     if (binding.kind === 'unresolved') {
       continue
     }
@@ -68,8 +67,7 @@ function addOwner(ownersByKey: Map<string, Set<string>>, key: string, dispatchId
   ownersByKey.set(key, owners)
 }
 
-/** Delivery order, deliberately: replays restamp `deliveredAt`, and the newest delivery is the
- *  row the pane's producer last asserted. The observation clock decides staleness, never order. */
+/** Order by delivery: replays restamp it and newest is the producer’s last assertion. Observation clocks measure age only. */
 function keepFreshest(
   statusesByKey: Map<string, FleetAgentStatusEvidence>,
   key: string,
@@ -127,8 +125,7 @@ function statusIdentityMatchesWorker(
   }
   const paneMatches = identity.kind !== 'pane_and_terminal' || binding.paneKey === identity.paneKey
   if (binding.kind === 'worker') {
-    // A row that names this dispatch on this handle may be a reminted pane; the durable
-    // resource's incarnation is what makes the handle authoritative across the remint.
+    // Durable process incarnation authenticates matching handles across pane remints.
     return paneMatches || Boolean(worker.resource?.processIncarnation)
   }
   return (
@@ -141,11 +138,8 @@ function statusIdentityMatchesWorker(
   )
 }
 
-/** The durable resource names the incarnation the worker was dispatched onto. A hook row carries
- *  no incarnation of its own, so the pane's incarnation at mint time is what says which process
- *  the evidence describes; a row minted against a different one is evidence about that process.
- *  A worker with no materialized resource has no incarnation authority to contradict, and
- *  fencing it out on absence would report a running unsupervised worker as missing. */
+/** Hooks lack incarnation: use the pane’s identity at mint time against durable worker identity.
+ * Missing materialized resources carry no contradictory authority; fencing on absence would hide running unsupervised workers. */
 function incarnationMatchesWorker(
   worker: FleetDurableWorker,
   binding: Exclude<FleetEvidenceBinding, { kind: 'unresolved' }>

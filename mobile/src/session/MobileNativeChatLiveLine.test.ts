@@ -100,7 +100,6 @@ describe('MobileNativeChatLiveLine', () => {
     expect(byType(root, 'LoadingSpinner')).toHaveLength(1)
   })
 
-  // The bar owns the clock; the tail line never repeats it.
   it('reads plain "Working…" when the turn is not reasoning, and holds no timer', () => {
     vi.useFakeTimers()
     const root = render({ thinking: false })
@@ -146,7 +145,6 @@ describe('MobileNativeChatLiveLine', () => {
       expect(ancestor.props.accessibilityLiveRegion).toBeUndefined()
       ancestor = ancestor.parent
     }
-    // iOS selects inline, so the body takes no long press.
     expect(body?.props.onLongPress).toBeUndefined()
   })
 

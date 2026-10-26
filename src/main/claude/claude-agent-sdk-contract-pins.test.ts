@@ -13,7 +13,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 
@@ -124,7 +124,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(permissionMode: AgentChatPermissionMode, launchArgs: string[] = []) {
+function resolvedLaunch(permissionMode: AgentChatPermissionChoice, launchArgs: string[] = []) {
   const record = {
     sessionId: 'contract-pin-session',
     provider: 'claude',
@@ -314,6 +314,26 @@ describe('Claude Agent SDK contract pins', () => {
     })
     const replayArgs = replaySpawns[0]!.args
     expect(replayArgs.filter((arg) => arg === '--replay-user-messages')).toHaveLength(1)
+  })
+
+  it('leaves own-settings permission resolution to the CLI in the real SDK child argv', async () => {
+    const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
+    const spawns: SpawnSeen[] = []
+    const launch = await resolvedLaunch('own')
+    await drainQuery({
+      ...launch.options,
+      pathToClaudeCodeExecutable: FAKE_CLI,
+      cwd: scenario.cwd,
+      env: scenarioEnv(scenario),
+      canUseTool: async () => ({ behavior: 'deny', message: 'unused' }),
+      spawnClaudeCodeProcess: recordingSpawner(spawns)
+    })
+
+    expect(spawns).toHaveLength(1)
+    const argv = normalizeArgv(spawns[0]!.args)
+    expect(argv).not.toContain('--permission-mode')
+    expect(argv).not.toContain('--dangerously-skip-permissions')
+    expect(launch.options.permissionMode).toBeUndefined()
   })
 
   it('produces a matching CLI flag for every pre-SDK argv entry', async () => {

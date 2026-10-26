@@ -39,6 +39,27 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
+  it('keeps old-host fallback while capable hosts display only the nullable report', () => {
+    const pr1 = live('codex', { permissionMode: 'ask' })
+    expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
+    expect(permission({ ...pr1, permissionOwnSupported: false })).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'ask' }
+    })
+    const capable = { ...pr1, permissionOwnSupported: true, permissionMode: 'own' }
+    for (const reportedPermissionMode of [undefined, null, 'full-access', 'read-only']) {
+      const descriptor = permission({ ...capable, reportedPermissionMode })
+      expect(descriptor).toMatchObject({
+        settable: typeof reportedPermissionMode === 'string',
+        kind: {
+          currentValue: reportedPermissionMode ?? undefined,
+          choices: expect.not.arrayContaining([expect.objectContaining({ value: 'own' })])
+        }
+      })
+    }
+    expect(permission({ ...capable, permissionMode: 'ask' })?.settable).toBe(false)
+  })
+
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {
     const state = createStructuredAgentSessionOptionState(
       'codex',

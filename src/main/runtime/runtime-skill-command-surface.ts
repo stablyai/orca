@@ -12,6 +12,7 @@ import {
   type AgentSkillShareRequest
 } from '../../shared/agent-skill-sharing-contract'
 import type { DiscoveredSkill } from '../../shared/skills'
+import { SharingUnavailableOnHostError } from '../../shared/sharing-unavailable-on-host'
 import { SKILL_SHARE_NAME_TAKEN_ERROR } from '../../shared/skill-sharing-contract'
 import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
 import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
@@ -37,12 +38,17 @@ export class RuntimeSkillCommands
   setSkillCloudService(service: SkillCloudService): void {
     this.skillCloudService = service
   }
+  hasSkillCloudService(): boolean {
+    return this.skillCloudService !== null
+  }
   assertAgentSkillSharingAllowed(): void {
+    // A host with no sharing service must not blame the device setting it cannot change.
+    this.requireCloud()
     assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.host.getSettings()))
   }
   private requireCloud(): SkillCloudService {
     if (!this.skillCloudService) {
-      throw new Error("Skill sharing isn't available on this Orca server.")
+      throw new SharingUnavailableOnHostError()
     }
     return this.skillCloudService
   }

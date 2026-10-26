@@ -12,7 +12,6 @@ type MockWorktreeDeleteState = {
 }
 
 const mocks = vi.hoisted(() => {
-  // Declared up here so the empty initialisers can be typed rather than asserted.
   const gitStatusByWorktree: Record<string, unknown[]> = {}
   const deleteStateByWorktreeId: Record<string, MockWorktreeDeleteState> = {}
   const openFiles: {
@@ -75,8 +74,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/selectors', () => ({
   getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
   getWorktreeMapFromState: () => mocks.state.worktreeMap,
-  // Host-qualified lookup (STA-4343); this fixture keys one row per id, so the
-  // host only has to agree when the row declares one.
+  // Match declared hosts even though this fixture indexes only one worktree per ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const row = mocks.state.worktreeMap.get(worktreeId)
     return row && (!hostId || row.hostId === hostId) ? row : undefined
@@ -209,7 +207,6 @@ describe('delete worktree flow', () => {
       'delete-worktree',
       expect.objectContaining({ worktreeIds: ['wt-failed', 'wt-dirty'] })
     )
-    // The failed row's own error still shows in the dialog: it comes from the row.
     expect(mocks.state.deleteStateByWorktreeId).toEqual({})
   })
 
@@ -273,7 +270,7 @@ describe('delete worktree flow', () => {
   })
 
   it('revalidates each queued instance immediately before execution', async () => {
-    // Same-repo deletes queue on a host that does not serialize their branch cleanup itself.
+    // Model a host relying on renderer serialization for same-repo branch cleanup.
     setWorktrees([
       {
         id: 'wt-1',
@@ -396,8 +393,7 @@ describe('delete worktree flow', () => {
     toastOptions?.onForceDelete()
 
     await vi.waitFor(() => {
-      // Why (#11960): clicking Force Delete on the failure toast is an explicit
-      // force, so it also waives the PTY-stop proof the first attempt failed.
+      // Explicit Force Delete waives the PTY-stop proof that blocked the first attempt.
       expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(
         2,
         { id: 'wt-1', executionHostId: null },
@@ -454,8 +450,7 @@ describe('delete worktree flow', () => {
     const toastOptions = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0]?.[0]
     toastOptions?.onViewChanges()
 
-    // Why: the Source Control panel is the surface; seeding a shell would repopulate a
-    // workspace the user is trying to delete and erase its closed-last-terminal tombstone.
+    // Use Source Control as the initial surface; a seeded shell would repopulate a deleting workspace and clear its terminal tombstone.
     const { activateAndRevealWorktree } = await import('@/lib/worktree-activation')
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
@@ -648,8 +643,7 @@ describe('delete worktree flow', () => {
     )
   })
 
-  // Why: the delete-current-workspace shortcut (useIpcEvents) forwards whatever workspace is
-  // active, and a folder workspace is never in the worktree map — claiming it vanished would lie.
+  // Folder shortcuts use another funnel; missing Git worktree records must not imply their disappearance.
   it('stays silent for a folder workspace, which this funnel does not route', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([])
@@ -751,8 +745,7 @@ describe('delete worktree flow', () => {
     })
   })
 
-  // #19334: a waived delete is still a delete — the caller's bookkeeping has to hear about it, or a
-  // batch/Space-panel list keeps showing the workspace it just removed.
+  // Waived deletion still needs success bookkeeping so batch lists remove the finished row.
   it('reports a Delete Anyway success to the caller like a force retry', async () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     mocks.state.removeWorktree
@@ -778,7 +771,6 @@ describe('delete worktree flow', () => {
     toastOptions?.onDeleteAnyway()
 
     await vi.waitFor(() => {
-      // The waiver rides its own option; force stays whatever the original attempt used.
       expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(
         2,
         { id: 'wt-1', executionHostId: null },

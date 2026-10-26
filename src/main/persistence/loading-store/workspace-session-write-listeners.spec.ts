@@ -21,7 +21,6 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
 
   type Mode = 'none' | 'publisher' | 'throwing'
 
-  /** The first partition holding the workspace's rows owns it. */
   function homeOf(store: Store, key: string): ExecutionHostId | null {
     return (
       store
@@ -59,7 +58,6 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
     }
   }
 
-  /** Every write shape the publisher hooks: debounced set and patch, durable bind and retire, a failed write's rollback, removal. */
   async function runScenario(mode: Mode) {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -117,7 +115,7 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
     }
   }
 
-  /** Each fixture store gets a fresh temp dir and leaf ids; rename them by first appearance. */
+  /** Normalize randomized fixture IDs by first appearance. */
   function withStableFixtureIds(value: unknown): unknown {
     const fixed = new Set([TEST_LEAF_1, TEST_LEAF_2])
     const renamed = new Map<string, string>()
@@ -165,7 +163,7 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
           [TEST_LEAF_1, 'observed-pty'],
           [TEST_LEAF_2, 'split-pty']
         ],
-        // Memory is published before the disk write; the failed write's rollback republishes.
+        // Failed disk writes republish rollback after the provisional memory update.
         [
           [TEST_LEAF_1, 'failed-pty'],
           [TEST_LEAF_2, 'split-pty']
@@ -182,7 +180,6 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
       ])
       const ssh = pushes.filter((event) => event.key === 'repo-ssh::/remote/wt')
       expect(ssh).toEqual([expect.objectContaining({ type: 'workspace' })])
-      // Published from the SSH partition that owns it: its tabs run on that host.
       expect(ssh[0]?.type === 'workspace' && ssh[0].layout.tabs[0]?.executionHostId).toBe(SSH_HOST)
     })
   })

@@ -149,7 +149,6 @@ describe('RelayControlOrigin pending-connection replay', () => {
     const { origin } = createOrigin()
     await origin.open()
     fakes.controls[0]!.options.onConnectionOpen(connOpen())
-    // The blip that costs the control also kills the in-flight data socket.
     fakes.transports[0]!.openConnections.delete('conn-1')
 
     await origin.rebind('relay-jwt', ASSIGNMENT)
@@ -182,14 +181,11 @@ describe('RelayControlOrigin pending-connection replay', () => {
 
     await origin.rebind('relay-jwt', ASSIGNMENT)
 
-    // conn-active is spliced already and conn-1 still holds its data socket.
     expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
   })
 
   it('skips a pending connection no control ever described', async () => {
-    // Documents the contract gap: pendingConns entries carry only the
-    // identifiers, and a dial without the relay's kind/device would guess at
-    // both the pairing authority and the E2EE device binding.
+    // Identifiers alone cannot authorize pairing or E2EE binding; never guess missing kind/device.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     fakes.controlConnect.mockResolvedValue(
       ack({ pendingConns: [{ connId: 'conn-unknown', connTicket: TICKET }] })
@@ -210,8 +206,6 @@ describe('RelayControlOrigin pending-connection replay', () => {
     await origin.open()
     await origin.close()
 
-    // A conn-open still in flight when teardown ran must not open a data socket
-    // that nothing is left to close.
     fakes.controls[0]!.options.onConnectionOpen(connOpen({ connId: 'conn-late' }))
 
     expect(fakes.transports[0]!.openConnection).not.toHaveBeenCalled()

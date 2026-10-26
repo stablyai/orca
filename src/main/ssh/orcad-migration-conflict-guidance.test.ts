@@ -12,7 +12,7 @@ const NO_DESKTOP_STEP = [
 ]
 
 describe('orcad migration conflict guidance', () => {
-  // Why no UI words here: this text also reaches clients that have no plain SSH terminal.
+  // This guidance also reaches clients without a plain SSH terminal.
   it('names the code for every conflict retrying can’t clear, and no client-only action', () => {
     for (const kind of NO_DESKTOP_STEP) {
       const text = orcadMigrationConflictGuidance(

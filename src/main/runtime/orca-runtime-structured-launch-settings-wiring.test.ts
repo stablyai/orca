@@ -43,7 +43,7 @@ describe('execution host structured launch settings wiring', () => {
     settings.agentDefaultArgs = { claude: '--dangerously-skip-permissions', codex: '' }
     expect(deps?.resolveAgentFullAccess?.('claude')).toBe(true)
     expect(deps?.resolveAgentFullAccess?.('codex')).toBe(false)
-    // OMP has no bypass argument, so its chats from before modes take the new-chat setting.
+    // OMP lacks bypass arguments; legacy chats inherit the new-chat permission setting.
     settings.nativeChatPermissionMode = 'full-access'
     expect(deps?.resolveAgentFullAccess?.('omp')).toBe(true)
     settings.nativeChatPermissionMode = 'ask'
@@ -58,7 +58,7 @@ describe('execution host structured launch settings wiring', () => {
     expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
   })
 
-  // The chat child's PATH and home decide which binary runs, for a saved bare command and the stock one.
+  // Both stock and bare saved commands must resolve in the chat child's PATH/home.
   it.skipIf(process.platform === 'win32')(
     'resolves both agents against the PATH and home the chat child will run with',
     async () => {

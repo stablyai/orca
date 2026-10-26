@@ -11,7 +11,7 @@ import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-nat
 import {
   getStructuredAgentSessionLaunchFailure,
   resetStructuredAgentLaunchRegistryForTests
-} from '../structured-agent-session-launch-registry'
+} from './launch/structured-agent-session-launch-registry'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-launch-admission'
 import {
@@ -31,7 +31,6 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-// Switch-on, main opens and closes the chat's tab and its frames draw it.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -71,7 +70,6 @@ function terminalRecord(id: string): TerminalTab {
 
 let refuse = (): void => {}
 
-// The host's refusal lands once the test releases it, after the chat's tab is drawn.
 function planSettlingAs(error: StructuredAgentSessionCreateRefusalError): AgentSessionLaunchPlan {
   const refusal = new Promise<never>((_, reject) => {
     refuse = () => reject(error)
@@ -106,13 +104,11 @@ beforeEach(async () => {
 
 afterEach(() => main.close())
 
-// Main takes the terminal tabs the test drew straight into the store, as a real create sends them.
 async function mainLoadsStoreLayout(): Promise<void> {
   main.close()
   main = await drawTabsFromMain(useAppStore)
 }
 
-/** The user's pin: the tab bar sends it to main switch-on, whose frame draws it. */
 function pinAsUser(tabId: string): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     useAppStore.getState().pinTab(tabId)
@@ -126,7 +122,6 @@ function pinAsUser(tabId: string): void {
   )
 }
 
-/** The tab bar's rename and colour: main's commands with the switch on. */
 function labelAsUser(tabId: string, label: string, color: string): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     useAppStore.getState().setTabCustomLabel(tabId, label)
@@ -142,7 +137,6 @@ function labelAsUser(tabId: string, label: string, color: string): void {
   sendLayoutCommandToOwner('wt-1', { type: 'setTabProps', tabId, color }, asToday)
 }
 
-/** The group main's frame drew the tab in. */
 function groupOf(tabId: string): string {
   const groupId = useAppStore.getState().getTab(tabId)?.groupId
   if (!groupId) {
@@ -227,7 +221,6 @@ describe('a provisional structured chat tab', () => {
       view.unmount()
       return
     }
-    // Switch-on, main's frame draws the tab the open named.
     expect(useAppStore.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(
       expect.objectContaining({ ...chat, contentType: 'agent-session' })
     )
@@ -237,7 +230,6 @@ describe('a provisional structured chat tab', () => {
       split: { sourceGroupId: groupOf(chat.id), splitDirection: 'right', activate: true }
     })
     const groupId = sibling.groupId
-    // Main loads only terminal tabs with their terminal's record.
     const siblingRecords = () =>
       ORCA_LAYOUT_OWNER_IS_MAIN ? [terminalRecord(sibling.entityId)] : []
     useAppStore.setState({ tabsByWorktree: { 'wt-1': siblingRecords() } })
@@ -361,8 +353,7 @@ describe('a provisional structured chat tab', () => {
     view.unmount()
   })
 
-  // A hidden launch slot is in the window's group order but not in main's: the terminal's place
-  // is counted among the tabs both draw.
+  // Hidden launch slots exist only in window order; count terminal position among tabs both window and main draw.
   it("places a declined chat's terminal right after the chat past a hidden launch slot", async () => {
     const { launch, chat, fallback, complete } = openChat()
     await main.settle()

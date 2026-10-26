@@ -1,9 +1,6 @@
 import type { UserConfig } from 'electron-vite'
 
-/**
- * Default in dev (opt out with `ORCA_DEV_BUNDLED=0`): Vite's bundled dev mode serves the renderer as
- * bundled chunks instead of thousands of per-module requests, which shortens dev startup and reloads.
- */
+/** Default to bundled dev chunks to reduce renderer requests and startup/reload time; opt out with ORCA_DEV_BUNDLED=0. */
 export function withBundledRendererDev(
   config: UserConfig,
   env: NodeJS.ProcessEnv = process.env

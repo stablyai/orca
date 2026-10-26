@@ -27,10 +27,14 @@ async function load(source, sourcefile = 'src/shared/native-chat-tool-fold.ts') 
         setup(builder) {
           builder.onResolve({ filter: /^\./ }, (args) => {
             const target = path.resolve(args.resolveDir, args.path)
-            for (const name of ['native-chat-tool-pairs', 'native-chat-folded-tool-results']) {
+            for (const [name, directory] of [
+              ['native-chat-tool-pairs', 'src/shared/native-chat/tools'],
+              ['native-chat-folded-tool-results', 'src/shared/native-chat/tools'],
+              ['native-chat-provider-frame-summary', 'src/shared/native-chat']
+            ]) {
               const previous = path.join(root, 'src/shared', name)
               if (target === previous || target === `${previous}.ts`) {
-                return { path: path.join(root, 'src/shared/native-chat/tools', `${name}.ts`) }
+                return { path: path.join(root, directory, `${name}.ts`) }
               }
             }
             return undefined

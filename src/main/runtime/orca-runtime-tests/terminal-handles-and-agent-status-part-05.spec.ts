@@ -66,9 +66,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('recovers the agent type from the hook row when the pane was launched without an agent hint', async () => {
-    // A user who types `claude` in a plain terminal leaves no launchAgent, and headless
-    // has no renderer to publish one; without the hook's agentType mobile treats the tab
-    // as a non-agent terminal and hides native chat even though the session is addressable.
+    // A manually launched headless agent needs hook identity to expose native chat.
     const paneKey = makePaneKey('shell-tab', HEADLESS_LEAF_ID)
     const providerSession = {
       key: 'session_id' as const,
@@ -117,9 +115,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reads one agent-status snapshot per projection, not one per terminal tab', async () => {
-    // The getter rebuilds every known pane's payload on each call, so reading it
-    // inside the per-tab loop made a projection O(tabs x panes) of pure garbage —
-    // worst in headless serve, where every terminal tab takes the hook fallback.
+    // Read the hook snapshot once per projection to avoid O(tabs × panes) rebuilding.
     let snapshotReads = 0
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentProviderSessionSnapshot: () => {
@@ -145,15 +141,12 @@ describe('OrcaRuntimeService', () => {
 
     const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
-    // Guards the assertion below from passing vacuously on a one-tab projection.
     expect(result.tabs.filter((tab) => tab.type === 'terminal').length).toBeGreaterThan(1)
     expect(snapshotReads).toBe(1)
   })
 
   it('publishes hook-only identity for a pane that never emitted an agent title', async () => {
-    // The hook row is the whole evidence here: no launchAgent hint, no recognized OSC
-    // title, so `pty.lastAgentStatus` stays unset. Gating the hook read behind that
-    // made the headless carrier unreachable in exactly the case it exists for.
+    // Hook-only agents can have no launchAgent or OSC status; do not gate their hook read on either.
     const paneKey = makePaneKey('quiet-tab', HEADLESS_LEAF_ID)
     const providerSession = {
       key: 'session_id' as const,
@@ -199,9 +192,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reads a resume-identity-only row the live-agent snapshot filters out', async () => {
-    // Pi publishes its session separately from status, and the shared getter drops
-    // those rows so they can't read as running agents — leaving native chat with no
-    // transcript to address unless the unfiltered snapshot is consulted too.
+    // Pi session-only rows are excluded from running status but still carry the transcript native chat needs.
     const paneKey = makePaneKey('pi-tab', HEADLESS_LEAF_ID)
     const providerSession = {
       key: 'session_id' as const,
@@ -294,9 +285,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not claim a stale hook agent owns a pane whose agent has since exited', async () => {
-    // `pty.lastAgentStatus` outlives the agent, so an unbounded hook read would keep
-    // offering mobile native chat for what is now a plain shell — and point it at a
-    // dead transcript. The session id may stay; the ownership claim must not.
+    // Retained status must not offer native chat for an agent that exited to its shell.
     const paneKey = makePaneKey('exited-tab', HEADLESS_LEAF_ID)
     const staleReceivedAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1_000
     const runtime = new OrcaRuntimeService(store, undefined, {

@@ -37,9 +37,7 @@ describe('useNewWorktreeDrawerNavigation', () => {
     vi.useRealTimers()
   })
 
-  // BottomDrawerModalHost keeps one native Modal mounted for the whole flow. A
-  // transition beat that renders no sheet is therefore a transparent full-screen
-  // window that eats every tap, and the queued timer is the only way out of it.
+  // The shared native Modal stays mounted; a transition rendering no sheet leaves a transparent window that swallows taps until the timer fires.
   it('shows the form sheet for the whole transition, even if the queued timer never lands', () => {
     const nav = renderNavigation(true)
     act(() => nav.current.openSourceDrawer())

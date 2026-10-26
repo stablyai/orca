@@ -1,6 +1,4 @@
-// Why: every row's label and disabled state reads the same handful of derived branch/review facts.
-// Deriving them once keeps the rows consistent — a row computing `hasUpstream` its own way is how
-// Publish and Push drift apart.
+// Derive shared branch/review facts once so dropdown labels and disabled states cannot disagree.
 
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-commit-eligibility'
@@ -59,7 +57,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
 
   const hasStaged = stagedCount > 0
   const hasDirtyLocalChanges = hasStaged || inputs.hasUnstagedChanges
-  // Why: undefined upstreamStatus means loading (transient after a worktree switch), not unpublished — treating it as hasUpstream=false would re-enable Publish Branch and clobber the real upstream.
+  // Undefined means loading, not unpublished; treating it as false could republish and clobber the upstream.
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const hasOpenHostedReview = prState === 'open' || prState === 'draft'
@@ -69,7 +67,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     hasCurrentBranch &&
     branchCommitsAhead !== 0 &&
     canPushLinkedReviewWithoutUpstream
-  // Why: only a missing review head hard-blocks; branchCommitsAhead === 0 still means the target is known, so Push stays available.
+  // Only missing review heads block Push; zero ahead commits still means the target is known.
   const pushBlockedByOpenHostedReviewTarget =
     !hasUpstream && hasOpenHostedReview && !canPushLinkedReviewWithoutUpstream
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
@@ -79,7 +77,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  // Why: prefer branch-compare for force-push counts — unpublished/loading branches report ahead=0 and patch-equivalent rewrites inflate upstream ahead.
+  // Use branch-compare counts; upstream ahead can be zero while loading or inflated by patch-equivalent rewrites.
   const pushLabelCount =
     branchCommitsAhead !== undefined &&
     branchCommitsAhead > 0 &&
@@ -88,7 +86,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
       : ahead
   const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
 
-  // Why: lock the whole menu during any in-flight op so a second click can't queue on a stale status snapshot.
+  // Lock all rows during in-flight work to prevent queued actions against stale snapshots.
   const globalBusy = isCommitting || isRemoteOperationActive || isPullRequestOperationActive
 
   const commitDisabledReason = resolveCommitDisabledReason({

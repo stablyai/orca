@@ -1,27 +1,5 @@
-/**
- * Reproduction for #17770: closing one pane of a split terminal in a paired
- * remote-server workspace must not leave the other pane mounted as a blank,
- * dead ghost.
- *
- * Topology: a headless paired Orca runtime host + a paired Orca desktop client.
- * The host owns the pane layout; the client mirrors it. The host splits a
- * terminal (two leaves, two remote PTYs, each a login shell), then the user
- * quits the second shell with `exit`. The host retires that leaf and
- * republishes a one-leaf layout.
- *
- * Before the fix, the host-authoritative reconciler planned insertions only, so
- * the client kept the retired leaf's pane mounted forever — a blank ghost with
- * no exit overlay and no restart control. The refutation-proof shape (verified
- * here) is that the client's store layout shrinks to one leaf while its DOM
- * keeps two panes. After the fix the client removes the retired pane and store
- * + DOM agree at exactly the surviving leaf. Exiting the original pane also
- * moves the host's active leaf; the client must not write the retired pane back
- * into its layout while that PTY is still ending.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #17770: a headless host retires an exited split leaf; client store and DOM must retain exactly the surviving pane.
+// Insertion-only reconciliation shrank store layout but left a dead DOM ghost; retiring the active leaf must also avoid writing it back during PTY exit.
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
@@ -83,7 +61,6 @@ async function expectHostRetiredPaneRemoved(
       { environmentId: client.environmentId, worktreeId }
     )
 
-    // Host splits the terminal: a second leaf with its own remote login shell.
     const split = await host.client.call<{ split: { handle: string; tabId: string } }>(
       'terminal.split',
       { terminal: firstHandle, direction: 'horizontal' }
@@ -91,7 +68,6 @@ async function expectHostRetiredPaneRemoved(
     const secondHandle = split.result.split.handle
     const webTabId = toWebTerminalSurfaceTabId(split.result.split.tabId)
 
-    // The client mirrors the split as two mounted panes, each PTY-bound.
     await expect
       .poll(() => mountedPaneCount(client!.page, webTabId), {
         timeout: 90_000,
@@ -106,18 +82,13 @@ async function expectHostRetiredPaneRemoved(
       .toBe(true)
     const beforeExit = await mountedLeafPtyIds(client.page, webTabId)
 
-    // The user quits one shell — the host retires that leaf and
-    // republishes a one-leaf layout.
     await host.client.call('terminal.send', {
       terminal: exitedPane === 'split' ? secondHandle : firstHandle,
       text: 'exit',
       enter: true
     })
 
-    // The host-authoritative layout the client holds shrinks to one leaf
-    // (confirms the retirement). This is the refutation-proof signal: before the
-    // fix the store layout shrinks here while the DOM keeps a ghost; after the
-    // fix the DOM follows and both agree at one leaf.
+    // Require both one-leaf host layout and one DOM pane; store-only assertions passed with the old ghost.
     await expect
       .poll(() => hostLayoutLeafIds(client!.page, webTabId).then((ids) => ids.length), {
         timeout: 60_000,
@@ -125,7 +96,6 @@ async function expectHostRetiredPaneRemoved(
       })
       .toBe(1)
 
-    // The client must drop the retired pane and keep exactly the surviving one.
     await expect
       .poll(() => mountedPaneCount(client!.page, webTabId), {
         timeout: 60_000,
@@ -141,7 +111,6 @@ async function expectHostRetiredPaneRemoved(
     expect(afterExit[0]?.leafId).toBeTruthy()
     expect(afterExit[0]?.ptyId).toBeTruthy()
     expect(exitedLeafId).toBeTruthy()
-    // The pane that survives is the one the host still names.
     await expect(hostLayoutLeafIds(client.page, webTabId)).resolves.toEqual([afterExit[0]?.leafId])
   } finally {
     await client?.dispose()

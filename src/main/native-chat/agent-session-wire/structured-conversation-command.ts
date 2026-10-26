@@ -1,3 +1,4 @@
+import { neverThrowingStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -157,6 +158,16 @@ async function clearUnderSerialize(
       }
     }
   })
+  if (result.ok && command === 'clear') {
+    try {
+      context.publishConversationName?.(sessionId)
+    } catch (error) {
+      neverThrowingStructuredAgentSessionLogger(context.deps.logger).warn(
+        'Chat name publication failed',
+        { scope: 'conversation-name', sessionId, error }
+      )
+    }
+  }
   return result.ok &&
     'runtimeFence' in result.value &&
     typeof result.value.runtimeFence === 'number'

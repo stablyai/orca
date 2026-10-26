@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatStaleInputForTests } from './native-chat/mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 
 vi.mock('../platform/media-picker', () => ({

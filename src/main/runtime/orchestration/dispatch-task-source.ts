@@ -3,8 +3,7 @@ import { agentMessageSender, type SenderNameResolver } from './agent-message-sen
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 
-/** Who a Dispatch's task is from, as the worker's chat shows it: the coordinator, and the
- *  records the task joins back to. */
+/** Task provenance shown in worker chat: coordinator identity and the joined task records. */
 export function dispatchTaskSource(args: {
   db: OrchestrationDb
   dispatch: Pick<DispatchContextRow, 'id' | 'run_id' | 'task_id'>

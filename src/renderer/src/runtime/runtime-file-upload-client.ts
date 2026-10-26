@@ -35,8 +35,7 @@ export async function uploadRuntimeFileWithoutClobber(
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
     session.assertCurrent()
-    // Why: main owns the file handle and the runtime socket, so it streams the
-    // body in slices; the renderer never holds the whole file.
+    // Main owns file/socket handles and streams slices; renderer never loads the whole body.
     try {
       await window.api.fs.uploadExternalFileToRuntime({
         environmentId: session.target.environmentId,
@@ -52,8 +51,7 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedEnvironmentRuntimeId: session.expectedEnvironmentRuntimeId
       })
     } catch (error) {
-      // Why: this surfaces in the import result as-is, and Electron wraps a
-      // main-process throw in "Error invoking remote method '…'".
+      // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
     await callRuntimeFileImportMutation(

@@ -13,16 +13,14 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { colors, spacing } from '../theme/mobile-theme'
-// Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
-// the exact same gate as BottomDrawer rather than duplicating it.
+// Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Why: leftward drags (negative translateX) pull the panel past its docked edge;
-// damp them with a rubber-band factor so the drawer resists over-pulling inward.
+// Damp negative translateX so panel resists pulling inward past docked edge.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
 const HIDE_DURATION = 150
@@ -39,14 +37,12 @@ export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Pro
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
-  // Why: opening drawers should mount before commit; waiting for a passive
-  // Effect adds a null render before the drawer can animate in.
+  // Mount opening drawer before commit; passive effect adds blank render before animation.
   if (resolvedMounted !== mounted) {
     setMounted(resolvedMounted)
   }
 
-  // Why: hidden drawers are rendered by parent screens even while closed; keep
-  // their Reanimated/Gesture setup out of hot paths until they are actually shown.
+  // Keep Reanimated/Gesture setup out of closed-drawer parent hot paths.
   if (!resolvedMounted) {
     return null
   }
@@ -97,9 +93,7 @@ function MountedRightDrawer({
     }
   }, [onHidden, visible])
 
-  // The same seam every session sheet takes: the hardware key natively, and a claim on the shell's
-  // key inside the page. The review screen is this drawer's one caller and C4 serves that route
-  // from the page, so both halves are reachable.
+  // Use native hardware Back or page’s shell Back claim; review route reaches both platform seams.
   useBackClaim(
     visible
       ? () => {
@@ -114,8 +108,7 @@ function MountedRightDrawer({
   }, [onClose])
 
   const scrollGesture = Gesture.Native()
-  // Why: swipe-from-right (positive translationX) dismisses; the horizontal
-  // activeOffset lets the inner vertical ScrollView keep its gestures.
+  // Positive horizontal swipe dismisses; activeOffset leaves vertical ScrollView gestures intact.
   const panGesture = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)

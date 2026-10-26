@@ -188,7 +188,6 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     const session = dormantSession('shared output\r\n')
     const shell = session.tabsByWorktree[WORKTREE_ID]![0]!
     const tabIds = ['tab-1', 'tab-2', 'tab-3']
-    // Pane ids are unique across tabs; the server refuses a repeat.
     const leafOf = (tabId: string): string => (tabId === 'tab-1' ? 'leaf-1' : `leaf-${tabId}`)
     session.tabsByWorktree[WORKTREE_ID] = tabIds.map((id, sortOrder) => ({
       ...shell,
@@ -227,7 +226,7 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
         offset += piece.length
         eof = chunk.eof
       }
-      // The local-only copy wins over the shared one, as the renderer reads it.
+      // Match renderer precedence: local-only scrollback wins.
       expect(bytes).toBe(saved?.[snapshot.tabId]?.[leafOf(snapshot.tabId)])
     }
   })

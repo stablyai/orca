@@ -1,9 +1,3 @@
-// Stopping an installed structured-session runtime, and the durable record of WHY it is stopping.
-//
-// Split out of `structured-agent-session-runtime` because installing a runtime and tearing one down
-// are separate concerns that share only the handle below — and because that module had no room
-// left to grow.
-
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
@@ -14,16 +8,13 @@ export type InstalledRuntime = {
   adapter: { closeAll(): Promise<void> }
   /** Closed last, once every conversation has drained into it. */
   journalDatabase: JournalHostDatabase
-  /** Resolves after every observed adapter exit has published, and every
-   *  recovery callback it raised has settled. */
+  // Wait for observed adapter exits to publish and all recovery callbacks they raised to settle.
   waitForRecovery: () => Promise<void>
   /** Host bookkeeping that runs on timers, stopped before anything else. */
   stopBackgroundWork?: () => void
 }
 
-/** Why the app is going away, for the resume markers teardown stamps. A module-level latch rather
- *  than an argument because the quit path's call to `stopStructuredAgentSessionRuntime()` is
- *  asserted verbatim by the startup-ordering ratchet. */
+/** Latch the resume-marker trigger: the startup-ordering ratchet requires the quit call without arguments. */
 let teardownTrigger: AgentSessionResumeTrigger = 'quit'
 
 export function setStructuredAgentSessionTeardownTrigger(trigger: AgentSessionResumeTrigger): void {
@@ -38,29 +29,17 @@ export async function tearDownRuntime(
   installed: InstalledRuntime,
   trigger: AgentSessionResumeTrigger
 ): Promise<void> {
-  // First, before any wait: should this quit not finish, the next start must still know it was a
-  // quit and not a crash.
+  // Record quit before any await so an interrupted shutdown is not mistaken for a crash.
   recordAgentSessionRuntimeEnd(trigger)
-  // An exit settled while recovery drains wakes delivery, which would start a fresh child for
-  // teardown to kill; queued messages wait for the next launch instead.
+  // Stop delivery before recovery can wake queued sends and start children teardown would kill.
   installed.stopBackgroundWork?.()
   installed.host.stopDelivery()
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()
   const failures: unknown[] = []
-  // Host teardown runs FIRST, which inverts the older order. It is what stops this host's
-  // provider children now: it evicts each owned session through the adapter, and that eviction
-  // only releases the lease once `disposeSession` PROVES the child gone. Closing the adapter
-  // first would hand every one of those steps a vacuous receipt from an already-closed router,
-  // and would race the attach drain the host runs in the same teardown.
-  //
-  // Tail rows are protected by eviction's own per-session ordering — stop the child, drain what
-  // it already published, settle, then unbind the sink — not by which of the two teardowns runs
-  // first. `closeAll` is only a backstop for children eviction never took: an acquisition that
-  // failed before the host indexed it, or a session whose eviction was refused and left indexed.
-  // A row a child delivers during that backstop close is not captured, and was not captured
-  // under the old order either. The drain below keeps a late callback from outliving the runtime.
+  // Evict host sessions first so child stop, tail drain, settlement and lease release run with their sinks.
+  // closeAll backs up unindexed/refused children; drain their late exit callbacks before closing the database.
   try {
     await installed.host.flushAllStreamedEvents({ trigger })
   } catch (error) {
@@ -79,7 +58,7 @@ export async function tearDownRuntime(
     failures.push(error)
   }
   if (failures.length === 0) {
-    // After every sink drained and every conversation settled: nothing writes after this.
+    // Close only after all sinks drain and conversations settle.
     installed.journalDatabase.close()
     return
   }

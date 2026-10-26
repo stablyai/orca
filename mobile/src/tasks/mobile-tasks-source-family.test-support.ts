@@ -5,12 +5,7 @@ import ts from 'typescript-api'
 const TASKS_DIRECTORY = __dirname
 const SOURCE_PATTERN = /^(?:MobileTasks.*\.tsx|mobile-tasks-.*\.tsx?|use-mobile-tasks-.*\.tsx?)$/
 
-/**
- * The screen moved out of `app/h/[hostId]/tasks.tsx` into this directory when the route became the
- * shell's flag switch, so it arrives through the pattern below rather than as a listed path. The
- * route file that remains declares no hook and no statement of its own and is covered by the flag
- * census, not by this family.
- */
+// Audit the extracted Tasks screen via the pattern; its shell-flag route has no hooks and belongs to the flag census.
 export const MOBILE_TASKS_SOURCE_FILES = [
   ...readdirSync(TASKS_DIRECTORY)
     .filter(

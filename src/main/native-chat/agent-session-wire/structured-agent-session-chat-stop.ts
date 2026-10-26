@@ -33,7 +33,10 @@ import {
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { structuredAgentSessionCommandWasStopped } from './structured-agent-session-command-turn'
+import {
+  structuredAgentSessionStopNoteIdentity,
+  structuredAgentSessionCommandWasStopped
+} from './structured-agent-session-command-turn'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -70,6 +73,7 @@ export function mutateWithChatStop<TValue>(
     context.deps.logger.warn('ending the agent process on Stop failed', {
       scope: 'stop-child',
       sessionId,
+      operationId: envelope.clientOperationId,
       error
     })
   // Failed durable acceptance must leave the agent running.
@@ -121,18 +125,62 @@ export function mutateWithChatStop<TValue>(
   ): Promise<ChatStopOutcome> => {
     // Turns may advance during acceptance; only a replacement child escapes this Stop.
     const current = context.sessions.get(ctx.sessionId)?.child
-    if (target.reach === 'withdraw' || current !== target.child) {
+    if (target.reach === 'withdraw' || !target.child || current !== target.child) {
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     const { child } = target
+    const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
+    let stopOutcome = child.close?.stopOutcome
     const stopChild = async () => {
       if (context.sessions.get(sessionId)?.child === child) {
-        await context.stopAgent(sessionId, { recorded: 'user-stop' })
+        try {
+          await context.stopAgent(sessionId, {
+            recorded: 'user-stop',
+            observeClose: (evidence) => {
+              if (stopOutcome) {
+                if (evidence?.root === 'exited') {
+                  stopOutcome.root = 'exited'
+                }
+                if (evidence?.workload === 'exited') {
+                  stopOutcome.workload = 'exited'
+                }
+              }
+            }
+          })
+        } finally {
+          if (child.close) {
+            child.close.stopOutcome ??= stopOutcome
+          }
+        }
       }
     }
     if (target.reach === 'close') {
       // Join existing close and retry exit proof; the child already refuses input.
-      await stopChild().catch(logChildEnd)
+      if (ctx.agent === 'codex') {
+        stopOutcome ??= {
+          pause: 'unconfirmed',
+          interrupt: 'unconfirmed',
+          root: 'unproven',
+          workload: 'unproven',
+          errors: []
+        }
+        windDown = {
+          ctx,
+          stopChild,
+          owed: {
+            outcome: stopOutcome,
+            feedbackId,
+            operationId: envelope.clientOperationId,
+            noteFence: () =>
+              context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? ctx.fence,
+            waitsForProvider: false,
+            stoppedAt: Date.now(),
+            stopNote: structuredAgentSessionStopNoteIdentity(envelope.clientOperationId)
+          }
+        }
+      } else {
+        await stopChild().catch(logChildEnd)
+      }
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     if (target.reach === 'starting') {
@@ -152,6 +200,8 @@ export function mutateWithChatStop<TValue>(
         // Host drops the child only after proven exit; no other work runs meanwhile.
         childReleased: () => context.sessions.get(sessionId)?.child !== child,
         endSession: (owed) => {
+          stopOutcome = owed.outcome
+          owed.feedbackId = feedbackId
           windDown = { owed, ctx, stopChild }
         },
         withdrewQueued: Promise.resolve(settled),
@@ -239,7 +289,7 @@ export function mutateWithChatStop<TValue>(
     openForWrite(context, envelope)
   )
   // Queue in the mutation’s tick so intervening sends wait behind child shutdown.
-  void context.serialize(sessionId, async () => {
+  const shutdown = context.serialize(sessionId, async () => {
     if (windDown) {
       const { owed, ctx, stopChild } = windDown
       await endStoppedStructuredAgentSession(
@@ -255,5 +305,6 @@ export function mutateWithChatStop<TValue>(
       )
     }
   })
+  void shutdown.catch(logChildEnd)
   return result
 }

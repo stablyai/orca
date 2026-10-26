@@ -78,12 +78,10 @@ function transcriptImageIdentity(
   }`
 }
 
-// Why one access kind for every role: a turn's role says who sent it, not who chose the path, and these
-// load on scroll with no click, so main only serves local image files by their real type.
+// Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
-// Why the cache key, not the context object: the owner hook rebuilds an equal context on
-// unrelated store updates, and releasing on each one revoked the URL the <img> was showing.
+// Key release by value: equal rebuilt owner contexts must not revoke a URL still shown by img.
 function transcriptImageReleaseKey(
   source: string | undefined,
   filePath: string,
@@ -308,7 +306,7 @@ export function ProviderFrameRow({
   const frame = block.providerFrame
   return (
     <details className="group text-xs text-chat-foreground-faint">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="transition-transform motion-reduce:transition-none group-open:rotate-90">
           ›
         </span>

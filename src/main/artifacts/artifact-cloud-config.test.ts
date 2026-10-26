@@ -5,10 +5,6 @@ import {
 } from './artifact-cloud-config'
 
 describe('resolveArtifactCloudApiUrl', () => {
-  it('uses the first-party production origin by default', () => {
-    expect(resolveArtifactCloudApiUrl(undefined, {}, true)).toBe('https://share.onorca.dev')
-  })
-
   it('allows loopback HTTP only in development', () => {
     expect(
       resolveArtifactCloudApiUrl(

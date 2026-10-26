@@ -1,19 +1,5 @@
-/**
- * Repro spec for the frozen-terminal-after-renderer-recovery report
- * (Discord #performance, GitHub #2836 family).
- *
- * Field evidence: pane shows content, shell is alive, daemon output.log does
- * not grow while typing — i.e. keystrokes silently vanish somewhere between
- * xterm and the PTY. This spec forces the suspected trigger — renderer
- * process death followed by the automatic recovery reload
- * (createMainWindow.ts scheduleRendererRecovery) — then discriminates which
- * layer drops input via the probes in helpers/terminal-input-probes.ts.
- *
- * Post-crash phases are driven from the MAIN process: a crashed target
- * severs Playwright's CDP session even though the app recovers, so page.*
- * calls can never observe the recovered renderer (verified empirically —
- * main saw did-finish-load while every window handle stayed dead).
- */
+// #2836: force renderer death/recovery, then discriminate frozen input between xterm transport and PTY routing.
+// Drive recovery from main because renderer crash severs Playwright’s CDP session even after the app reloads.
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -36,9 +22,7 @@ import {
   probeKeyboardType
 } from './helpers/terminal-input-probes'
 
-// Why 2, not more: the renderer recovery circuit breaker allows 3 recoveries
-// per 60s window (DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES); a third forced
-// crash risks tripping it and testing the breaker instead of the reattach.
+// Use two crashes: the third risks tripping the three-per-minute recovery circuit breaker.
 const CRASH_CYCLES = 2
 
 // Recovery = 250ms reload timer + full document reload + session hydration.
@@ -53,11 +37,7 @@ declare global {
   var __crashProbe: CrashProbe | undefined
 }
 
-/**
- * Observe the crash/recovery lifecycle from the MAIN process. Re-arming
- * replaces the probe object, so counts reset per cycle; stale listeners from
- * a previous arm write only to their own superseded probe object.
- */
+// Re-arm per-cycle main-process lifecycle probes; old listeners retain only superseded probe objects.
 async function armMainProcessCrashProbe(electronApp: ElectronApplication): Promise<void> {
   // Safe to repeat: re-arming supersedes the probe a collected attempt may have installed.
   await retryTransientMainEvaluate(() =>
@@ -113,9 +93,7 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await waitForPaneCount(orcaPage, 1, 30_000)
 
-    // Baseline: both the DOM keyboard layer (Playwright-driven, only possible
-    // pre-crash) and the PTY roundtrip must work before we crash anything,
-    // otherwise a post-crash failure would be uninterpretable.
+    // Prove DOM keyboard and PTY roundtrip before crash so recovery failures are interpretable.
     const baselinePtyId = await discoverActivePtyId(orcaPage)
     expect(
       await probeKeyboardType(orcaPage, 'KB_BASELINE_OK'),
@@ -139,14 +117,10 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
 
       await waitForRendererRecovery(electronApp)
 
-      // Daemon-backed sessions survive renderer death by design, so the pane
-      // should reattach to the same session rather than spawn a fresh shell.
+      // Require reattach to the daemon session that survives renderer death.
       const postPtyIds = await mainGetStorePtyIds(electronApp)
 
-      // Why: the post-crash transport reattach is async — a single fire-and-forget
-      // probe can race the reconnect window. Poll over the recovery budget so a
-      // transient unbound-transport window does not fail the test; a transport
-      // still dead after the full budget is the real frozen-pane bug reported below.
+      // Poll through async transport recovery; a single write can race the temporary unbound interval.
       let transportAlive = false
       try {
         await expect

@@ -1,12 +1,4 @@
-/**
- * A desktop AI-button launch, whose prompt this window pastes once the agent is ready, as main does.
- *
- * This window owns the workspace's tab layout, so it makes the agent's tab at the click, in the
- * split it was asked for, as any new agent tab is made. The tab's pane carries the launch in its own
- * spawn, as "+" carries its command: main plans it with the host's planner and starts it in that
- * pane, at the pane's real size, writing no launch record. A pane whose agent could not start says
- * why.
- */
+/** Create the AI-button tab immediately in its requested split; its first pane spawn lets main plan/start the agent at real dimensions without a launch record. The window pastes when ready, and the pane reports startup failure. */
 
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -23,7 +15,6 @@ import type { SessionOptionValue } from '../../../shared/native-chat-session-opt
 export type HostAgentLaunchArgs = {
   agent: TuiAgent
   worktreeId: string
-  /** The split the launch was made from; the tab joins it. */
   groupId?: string
   /** Kept by the window: a pane whose agent could not start offers to copy it. */
   prompt: string
@@ -36,7 +27,6 @@ export type HostAgentLaunchArgs = {
   quickCommandLabel?: string | null
   /** The launch seeds a workspace being opened, so its spawn must not reshuffle Recent. */
   pendingActivationSpawn?: boolean
-  /** The view the tab opens in, decided as for any new agent tab. */
   viewMode?: Tab['viewMode']
   suppressStartupUpdatePrompt?: boolean
 }
@@ -61,8 +51,7 @@ function launchParams(args: HostAgentLaunchArgs) {
   }
 }
 
-/** Where the host could turn a launch into a chat (chat is the default), this window's paste has no
- *  terminal to go to, so such a launch keeps main's own path. */
+/** Keep main’s path when it may choose structured chat; this window’s delayed paste requires a terminal. */
 export function windowMakesHostLaunchTab(): boolean {
   return !isNativeChatEnabled(useAppStore.getState().settings)
 }
@@ -99,7 +88,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   }
   rememberAgentLaunchPanePrompt(tabId, args.prompt)
   seedNativeChatAppliedSessionOptions(tabId, args.agent, args.sessionOptions)
-  // Why: without it an activated launch can stay hidden behind an editor.
+  // An activated launch must reveal Terminal or it can remain hidden behind an editor.
   store.setActiveTabType('terminal', args.worktreeId)
   persistAgentLaunchTabOrder(args.worktreeId, tabId)
   return { tabId, started }

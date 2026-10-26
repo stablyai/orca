@@ -213,7 +213,6 @@ describe('a + menu launch into an open workspace', () => {
       kind: 'launched',
       result: { outcome: { kind: 'terminal', handle: 'term_1' } }
     })
-    // The replay carries the same ids, so the host answers it from its ledger.
     expect(attempts).toHaveLength(2)
     expect(attempts[1]).toEqual(attempts[0])
     expect(runtime.createTerminal).toHaveBeenCalledTimes(1)

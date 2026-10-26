@@ -1,7 +1,6 @@
 import type { DescendantSnapshot } from './pty-descendant-termination'
 
-/** Graceful plain-shell close leaves nohup/disown jobs to the shell's SIGHUP, as any terminal does.
- *  Only background groups the shell itself leads qualify; agent-made groups (Codex MCP servers) are still swept. */
+/** Let SIGHUP decide shell-owned background jobs on graceful close; still sweep agent-created groups. */
 export function excludeShellBackgroundJobs(
   snapshot: DescendantSnapshot,
   shellIsRootChild: boolean

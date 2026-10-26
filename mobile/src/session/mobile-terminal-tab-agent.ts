@@ -5,23 +5,12 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
-// Why: tab identity + title cleaning uses the same shared glyph/label maps as
-// desktop, so the two platforms do not drift on which titles identify agents.
-
-/**
- * Resolve which coding agent a mobile terminal tab is running, for its tab
- * icon. Hook-reported `agentType` is the authoritative signal; the OSC title is
- * the fallback for sessions without hook status or a host launch identity.
- * Returns null when no agent is identified (plain shell / unknown), so the tab
- * keeps its text-only label.
- */
 type MobileTerminalTabAgentIdentity = {
   title: string
   agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
   launchAgent?: TuiAgent | null
 }
 
-/** The host's own pane identity for a terminal tab, as `terminal.list` last reported it. */
 export function getMobileTerminalTabHostAgentIdentity(
   tab: MobileSessionTab,
   terminals: readonly { handle: string; agentIdentity?: string }[]
@@ -84,9 +73,7 @@ export function getMobileSessionTabTitle(
   if (tab.type === 'agent-session') {
     return tab.title || 'Chat'
   }
-  // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
-  // provider icon. Mobile falls back for glyph-only titles because iOS can
-  // render the bare status glyph as a stray colored box beside the icon.
+  // Strip status glyphs when showing provider icons; glyph-only iOS titles otherwise leave stray colored boxes.
   if (resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)) {
     return stripLeadingAgentTitleDecorationOrEmpty(tab.title) || 'Terminal'
   }

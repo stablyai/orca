@@ -1,10 +1,6 @@
 import { z } from 'zod'
 
-/**
- * Experimental consent write contract shared by desktop IPC and serve RPC.
- * The reviewed fingerprint makes approval conditional on the exact manifest
- * trust boundary the user saw, rather than whichever same-key plugin is current.
- */
+/** Bind desktop/serve consent writes to the exact reviewed manifest fingerprint, never just the currently installed key. */
 export const pluginConsentRequestSchema = z
   .object({
     pluginKey: z.string().min(1),

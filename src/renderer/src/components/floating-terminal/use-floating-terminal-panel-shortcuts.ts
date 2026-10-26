@@ -51,9 +51,7 @@ export function useFloatingTerminalPanelShortcuts({
   open,
   onOpenChange
 }: FloatingTerminalPanelShortcutsInput) {
-  // Why the tab (not a pane): with an xterm focused the capture policy defers to the terminal's
-  // own dispatch, which closes the active pane; outside terminal focus the close targets the tab,
-  // matching the main workspace's strip-close semantics.
+  // Terminal focus delegates pane closing to terminal dispatch; other panel focus closes the whole tab.
   const closeActiveFloatingTerminalPane = useCallback(() => {
     if (activeClosableTab) {
       closeFloatingItemConfirmed(activeClosableTab.id)

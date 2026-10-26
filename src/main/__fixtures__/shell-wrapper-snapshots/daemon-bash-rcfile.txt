@@ -42,7 +42,7 @@ if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
     export OPENCODE_DB="opencode.db"
   fi
 fi
-[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+[[ -n "${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="${ORCA_MIMOCODE_CONFIG_DIR}"
 # Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.

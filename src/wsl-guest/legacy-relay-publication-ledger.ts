@@ -83,10 +83,7 @@ export class LegacyRelayPublicationLedger {
     })
   }
 
-  // Why the thunk overload: the aggregate ceiling below decides on its own most of the time, and it
-  // decides *first*. A caller passing an eager array has already built one string per client before
-  // learning the keys were never going to be read -- and it pays that most in the loaded case,
-  // because that is exactly when the aggregate check short-circuits.
+  // Build per-client keys lazily: aggregate admission short-circuits first, especially under load.
   belowLowWater(clientKeys?: readonly string[] | (() => readonly string[])): boolean {
     if (this.aggregateBytes > this.relayLowBytes) {
       return false

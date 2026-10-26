@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   clearMobileSessionOptionRecordsForTests,
   useMobileNativeChatSessionOptions,
@@ -57,24 +57,7 @@ describe('useMobileNativeChatSessionOptions', () => {
     api = null
   })
 
-  it('serves the shared catalog snapshot for the agent', () => {
-    mount()
-    expect(api!.snapshot[0]).toMatchObject({ id: 'model', category: 'model' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ type: 'select' })
-  })
-
-  it('returns an empty snapshot for agents without a catalog', () => {
-    mount({ agent: 'amp' })
-    expect(api!.snapshot).toEqual([])
-  })
-
-  it('does not expose catalog-backed agents outside the Claude and Codex scope', () => {
-    mount({ agent: 'gemini' })
-    expect(api!.snapshot).toEqual([])
-  })
-
   it('shows an OMP session under the model its hook reported', () => {
-    // OMP seeds no models, so the pill exists only once the hook names one.
     mount({ agent: 'omp' })
     expect(api!.snapshot).toEqual([])
     update({ reportedModel: 'deepseek/deepseek-v4-pro' })
@@ -118,7 +101,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     const model = api!.snapshot[0]!
     expect(model).toMatchObject({ valueSource: 'dispatched' })
     expect(model.kind).toMatchObject({ currentValue: 'minimax-cn/MiniMax-M3' })
-    // The hook confirming the switch is the next report; a changed value is evidence.
     update({ reportedModel: 'minimax-cn/MiniMax-M3' })
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
   })
@@ -229,13 +211,11 @@ describe('useMobileNativeChatSessionOptions', () => {
       applied = api!.setOption('effort', 'low')
       await Promise.resolve()
     })
-    // A report lands while `/effort low` is still in flight and moves the model.
     update({ reportedModel: 'claude-opus-5' })
     await act(async () => {
       resolvers[0]!('accepted')
       await applied
     })
-    // The effort must not be recorded against Opus — it was sent for Sonnet.
     const effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort?.kind).not.toMatchObject({ currentValue: 'low' })
   })
@@ -246,8 +226,7 @@ describe('useMobileNativeChatSessionOptions', () => {
       await api!.setOption('model', 'opus')
     })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
-    // Leaving the tab and returning re-delivers the SAME session-start report,
-    // which cannot have observed the `/orca-model opus` sent after it.
+    // Re-entering repeats session-start evidence that predates later user picks.
     update({ scopeKey: 'host\0worktree\0other' })
     update({ scopeKey: 'host\0worktree\0tab' })
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
@@ -269,8 +248,7 @@ describe('useMobileNativeChatSessionOptions', () => {
     await act(async () => {
       await api!.setOption('model', 'opus')
     })
-    // Far more scopes than the cap, revisiting the live tab in between the way a
-    // chat↔terminal flip does — insertion-order eviction would shed it.
+    // Repeatedly touch the live tab while exceeding capacity so insertion-order eviction would lose it.
     for (let index = 0; index < 40; index += 1) {
       update({ scopeKey: `host\0worktree\0overflow-${index}` })
       update({ scopeKey: 'host\0worktree\0tab' })

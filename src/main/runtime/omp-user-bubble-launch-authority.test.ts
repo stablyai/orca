@@ -7,9 +7,7 @@ import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-// #10923: every OMP user bubble ends with OSC 133 `B C D;0`. Read as the shell's command
-// finishing, that retired the pane's hook authority mid-turn, which deleted its status row and
-// with it the provider session the phone's chat view addresses the transcript by.
+// #10923: OMP user bubbles emit OSC 133 B C D;0; treating it as shell completion retires live hook/session authority.
 const OMP_TRANSCRIPT = readFileSync(
   join(__dirname, '__fixtures__/omp-user-bubble-osc133-zone.txt'),
   'utf8'

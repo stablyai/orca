@@ -50,8 +50,7 @@ export function createAllHostRepoCatalogActions(
       const isCurrent = (fence: HostCatalogFence): boolean =>
         latestAllHostRepoCatalogGenerationByStore.get(get) === generation &&
         isHostCatalogFenceCurrent(get, fence)
-      // Why: fetching only the active host hides every other host's repos ("my projects vanished"); load local + all runtime envs, each failing soft.
-      // Returns false for a dropped catalog: a superseded fetch or replaced connection is not an answer.
+      // Load local/all runtime catalogs fail-soft or all-host sidebars lose projects from unfocused hosts.
       const applyCatalog = (catalog: FetchedRepoCatalog, fence: HostCatalogFence): boolean => {
         // Why: a concurrent refresh or a replaced connection must not let an older catalog resurrect a migrated SSH owner.
         if (!isCurrent(fence)) {
@@ -141,8 +140,7 @@ export function createAllHostRepoCatalogActions(
         return
       }
 
-      // Why: unreachable remotes can spend the full connect timeout; merge each resolved host via the state updater so parallel loads don't clobber.
-      // A superseded load must not claim remote fences, or it would void the newer load's catalogs.
+      // Merge hosts as they resolve; unreachable peers can wait a full timeout and parallel loads must not clobber.
       await loadRuntimeHostCatalogs(
         get,
         'repos',
@@ -189,7 +187,7 @@ export function createAllHostRepoCatalogActions(
         },
         () => latestAllHostRepoCatalogGenerationByStore.get(get) === generation
       )
-      // Why: validate repo-scoped UI only after every host answers; first-paint loads only local repos, so an offline runtime would erase its saved filters.
+      // Validate saved repo UI only after all hosts answer; local-first paint otherwise erases offline-runtime filters.
       if (!failed && get().reposFetchGeneration === generation) {
         validateRepoScopedUi()
       }

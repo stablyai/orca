@@ -24,16 +24,19 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => testState.home }
 })
 // Prevent the selection-triggered history bridge from spawning a real app-server.
-
-vi.mock('../codex/codex-account-session-index-heal', () => ({
-  createCodexAccountStateDb: async () => false,
-  healCodexAccountSessionIndex: async () => ({
+vi.mock('../codex/codex-account-session-index-heal', () => {
+  const upToDate = async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
     missingThreads: 0,
     failedThreads: 0
   })
-}))
+  return {
+    createCodexAccountStateDb: async () => false,
+    healCodexAccountSessionIndex: upToDate,
+    healPendingCodexAccountThreads: upToDate
+  }
+})
 
 beforeEach(() => {
   vi.resetModules()

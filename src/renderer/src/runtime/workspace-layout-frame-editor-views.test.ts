@@ -1,5 +1,4 @@
-// A diff tab main holds, drawn by a window that lacks its open file: the frame's view rebuilds it,
-// both from a records frame and from the snapshot a reloaded window starts with.
+// Frame views reconstruct main-owned diff tabs after window reload, from both records frames and initial snapshots.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

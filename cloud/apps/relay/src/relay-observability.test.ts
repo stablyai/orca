@@ -27,10 +27,7 @@ const counts: RelayProcessCounts = {
   databasePoolWaitMsMax: 1_250
 }
 
-// Two schema keys legitimately spell a policed word: the abandoned-accept bucket
-// is keyed by stage name and one stage is `credential`. Rename those exact keys in
-// a clone instead of rewriting the JSON, so a stray raw field or value anywhere
-// else still trips the guard below.
+// Alias only legitimate credential schema keys in a clone so raw secret fields/values elsewhere still trip the guard.
 const SCHEMA_KEY_ALIASES: Record<string, string> = {
   clientAcceptCredentialMsP95: 'clientAcceptStageTwoMsP95'
 }
@@ -244,7 +241,6 @@ describe('relay observability', () => {
     for (let index = 0; index < 40; index++) {
       observability.recordAssignmentUnavailable('drain-return-deferred')
     }
-    // A drained reserve host's intake pace is scheduled by the drain too.
     observability.recordAssignmentUnavailable('reserve-paced-drained')
     observability.recordAssignmentUnavailable('sticky-lane')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
@@ -615,7 +611,6 @@ describe('relay observability', () => {
       controlRttMsP95: 240,
       controlRttMsMax: 240
     })
-    // Only-add: the pre-existing fields still read the same after the extension.
     expect(entries[0]).toMatchObject({
       event: 'orca_relay_runtime_metrics',
       metricVersion: 2,
@@ -623,8 +618,7 @@ describe('relay observability', () => {
       clientAcceptAbandonedMsMax: 0
     })
     expect(entries[0]).toMatchObject({ clientAcceptsByPhonePathDelta: {} })
-    // An empty window publishes counts only: a zero percentile point is
-    // indistinguishable from a real zero once Cloud Logging aggregates it.
+    // Omit empty percentiles: aggregated zeros are indistinguishable from actual zero-latency samples.
     expect(entries[1]).toMatchObject({ clientAcceptCompletedDelta: 0, controlRttSamplesDelta: 0 })
     for (const omitted of [
       'clientAcceptTotalMsP50',
@@ -657,12 +651,10 @@ describe('relay observability', () => {
     }
     observability.flush(counts)
 
-    // Dropped is observed minus retained, so this pins the retained window at the cap.
     expect(entries[0]).toMatchObject({
       controlRttSamplesDelta: flooded,
       controlRttSamplesDroppedDelta: flooded - CONTROL_RTT_RESERVOIR_LIMIT
     })
-    // The kept samples are real observations, not a truncated or synthesised window.
     expect(entries[0]!.controlRttMsP50 as number).toBeGreaterThanOrEqual(10)
     expect(entries[0]!.controlRttMsMax as number).toBeLessThanOrEqual(49)
 
@@ -765,7 +757,6 @@ describe('relay observability', () => {
         }
       }
     })
-    // The window resets, and an empty window publishes counts only.
     expect(entries[1]!.preAuthLatencyMs).toEqual({ beforeCheck: none, db: none, reserve: none })
   })
 

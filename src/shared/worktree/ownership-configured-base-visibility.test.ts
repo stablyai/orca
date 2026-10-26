@@ -111,8 +111,7 @@ describe('a configured worktree base that collides with a built-in visibility so
       worktreeVisibilitySourcePreferences: { builtIn: { claude: 'show' } }
     })
 
-    // The built-in source no longer covers this directory, so its preference
-    // stops applying here and the ordinary external-worktree policy governs.
+    // Outside the built-in source, ordinary external-worktree policy applies.
     expect(detect(repo, configuredBaseWorktree)).toMatchObject({
       ownership: 'external',
       visible: false

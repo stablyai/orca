@@ -135,8 +135,7 @@ describe('launchAgentSessionContinuation', () => {
   })
 
   it('hedges instead of claiming success when the paste went out unconfirmed', async () => {
-    // Regression (#22479): on Windows the composer-ready signal can never fire, so the paste
-    // is written blind. Reporting that as a delivered handoff hid a prompt that never arrived.
+    // Windows may force blind paste; do not report a handoff delivered when its composer was never observed (#22479).
     launchAgentInNewTab.mockImplementation(
       (args: {
         onPromptDelivered?: () => void

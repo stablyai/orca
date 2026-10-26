@@ -30,8 +30,7 @@ function collectLinks(provider: ILinkProvider, bufferLineNumber = 1): ILink[] | 
 
 describe('guardLinkProvider', () => {
   it('reproduces the xterm web-links RangeError without letting it escape', () => {
-    // Why: this is the F0BDKBHDAUE crash — LinkComputer._getWindowedLineStrings
-    // allocates an array of invalid length on a pathological wrapped line.
+    // Reproduce F0BDKBHDAUE: pathological wrapped lines make LinkComputer allocate an invalid array length.
     const provider: ILinkProvider = {
       provideLinks: () => {
         throw new RangeError('Invalid array length')
@@ -93,7 +92,6 @@ describe('installGuardedLinkProviderRegistration', () => {
 
     installGuardedLinkProviderRegistration(terminal)
 
-    // Simulate the web-links addon's loadAddon -> registerLinkProvider path.
     terminal.registerLinkProvider({
       provideLinks: () => {
         throw new RangeError('Invalid array length')

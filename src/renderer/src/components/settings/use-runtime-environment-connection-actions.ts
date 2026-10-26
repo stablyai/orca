@@ -38,8 +38,7 @@ export function useRuntimeEnvironmentConnectionActions({
     setSwitchError(null)
     try {
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
-      // Why: disconnect is non-destructive; keep the saved server but show the
-      // user that this live client is no longer attached to it.
+      // Disconnect retains the saved server; refresh attachment status only.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
@@ -87,8 +86,7 @@ export function useRuntimeEnvironmentConnectionActions({
       })
       const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
       const compatibility = evaluateHostDetails(runtimeStatus)
-      // Why: row Connect is reachability only. The Advanced selector is the
-      // explicit default-host control and should be the only active-server path.
+      // Connect verifies reachability; only the Advanced selector changes the default host.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
@@ -111,8 +109,7 @@ export function useRuntimeEnvironmentConnectionActions({
         return false
       }
       const store = useAppStore.getState()
-      // Why: Connect is not the Active Server selector anymore, but connected
-      // hosts should still contribute their projects/workspaces to the sidebar.
+      // Connected hosts contribute projects even when they are not the default server.
       const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
       await refreshRuntimeProjectWorktreesAndLineage(
         environment.id,

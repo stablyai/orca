@@ -179,7 +179,6 @@ describe('MobileNativeChatQuestion', () => {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatQuestion, {
-          // Pi's `input` dialog: a declared input that names no `multiline`.
           question: { ...question, freeTextInput: { allowEmpty: true } },
           onAnswer
         })

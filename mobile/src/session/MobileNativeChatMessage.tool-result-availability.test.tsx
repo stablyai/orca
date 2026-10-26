@@ -93,7 +93,6 @@ function button(root: ReactTestInstance, label: string): ReactTestInstance {
   return root.find((node) => String(node.type) === 'Pressable' && textIn(node).includes(label))
 }
 
-/** A run's own rows: the presses inside its opened box. */
 function toolLines(root: ReactTestInstance): ReactTestInstance[] {
   return root
     .findAll((node) => String(node.type) === 'ScrollView')
@@ -115,7 +114,6 @@ describe('mobile tool result availability', () => {
     vi.restoreAllMocks()
   })
 
-  /** The row with its run opened by its header, its lines left closed. */
   function render(row: NativeChatMessage, openRun = true): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message: row }))
@@ -215,7 +213,6 @@ describe('mobile tool result availability', () => {
     press(button(tree.root, 'command 17'))
     expect(textIn(tree.root)).toContain('late named output')
     press(button(tree.root, 'command 17'))
-    // A call with no result has nothing to open.
     expect(button(tree.root, 'command 0').props.disabled).toBe(true)
   })
 
@@ -326,7 +323,6 @@ describe('mobile tool result availability', () => {
         renderer = create(createElement(Phone, { journal: items }))
       })
       const tree = renderer!
-      // Open every run, then every line in it, as a reader would.
       const headers = () =>
         tree.root.findAll(
           (node) =>

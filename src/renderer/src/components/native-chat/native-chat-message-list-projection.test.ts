@@ -96,8 +96,7 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
   expect(project([prose, call, result])[0]).not.toBe(initial[0])
 })
 
-// A reused row aliases producer-owned block objects (a journal item's `body.blocks`),
-// so an in-place rewrite here would freeze what the transcript renders.
+// Reused blocks belong to producers; mutating them would freeze transcript output.
 it('leaves producer-owned messages and blocks untouched', () => {
   const projectList = createNativeChatMessageListProjection()
   const project = (messages: NativeChatMessage[]) => projectList(messages).conversation
@@ -120,8 +119,7 @@ it('leaves producer-owned messages and blocks untouched', () => {
   expect(prose.blocks).toHaveLength(1)
 })
 
-// The list orders subagent rows once per change to them; the parent streaming must
-// not hand it a new map.
+// Parent streaming must retain the unchanged subagent map to avoid reordering it every frame.
 it("keeps the subagent rows when only the conversation changes, and replaces them when a subagent's do", () => {
   const projectList = createNativeChatMessageListProjection()
   const child = (id: string, timestamp: number, text: string): NativeChatMessage => ({

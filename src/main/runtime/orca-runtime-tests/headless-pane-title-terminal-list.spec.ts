@@ -7,7 +7,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 
-// #30329: a client's pane rename lands in the host's saved layout; host readers must report it.
+// #30329: host listings must expose client-renamed panes persisted in host layout.
 async function headlessRuntimeWithLivePane() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()

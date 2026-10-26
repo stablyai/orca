@@ -10,7 +10,7 @@ const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerS
 # Restore managed ownership before the shell-integration compatibility guard.
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 ${MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE}
-if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
+if ($env:ORCA_MIMOCODE_CONFIG_DIR) { $env:MIMOCODE_CONFIG_DIR = $env:ORCA_MIMOCODE_CONFIG_DIR }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
 if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
@@ -59,6 +59,19 @@ ${getPowerShellAgentWrappers()}
         $result
     }
 
+    # Local ConPTY delivers real Alt+Left/Right (#29177); mirror Alt+B/F so Emacs-mode word motion survives.
+    if ($Global:__OrcaOsc133State.HasPSReadLine) {
+        & {
+            $bound = Get-PSReadLineKeyHandler -Bound -ErrorAction SilentlyContinue
+            foreach ($pair in ('LeftArrow', 'b'), ('RightArrow', 'f')) {
+                $source = $bound | Where-Object Key -ceq "Alt+$($pair[1])" | Select-Object -First 1
+                if ($source -and -not ($bound | Where-Object Key -eq "Alt+$($pair[0])")) {
+                    try { Set-PSReadLineKeyHandler -Chord "Alt+$($pair[0])" -Function $source.Function } catch {}
+                }
+            }
+        }
+    }
+
     if ($Global:__OrcaOsc133State.HasPSReadLine -and
         $null -ne $Global:__OrcaOsc133State.OriginalReadLine) {
         function Global:PSConsoleHostReadLine {
@@ -70,11 +83,11 @@ ${getPowerShellAgentWrappers()}
 }
 `
 
-// Strip source comments to leave command-line space for appended startup commands.
+// Strip comments and indentation to leave command-line space for appended startup commands (no multi-line strings).
 const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
   /^[ \t]*#.*\n/gm,
   ''
-)
+).replace(/^[ \t]+/gm, '')
 
 export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD

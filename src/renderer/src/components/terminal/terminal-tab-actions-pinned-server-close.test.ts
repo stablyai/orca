@@ -1,4 +1,3 @@
-// A pinned terminal tab of a server workspace: only the confirmed close asks the server to force it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

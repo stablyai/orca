@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * Compile native/windows-security for an orcad Windows slot.
- *
- * orcad runs under its own pinned Node with no node_modules, and its secure-file writes and
- * data-root privacy check need this addon: without it the privacy check fails closed and orcad
- * refuses to start. N-API, so one build serves every Node. Arm64 cross-compiles from x64.
- *
- * Builds in a copy of the sources so the desktop's own build/Release (the host arch) survives.
- *
- *   node config/scripts/build-windows-security-addon.mjs --arch=arm64
- */
+// Compile N-API privacy addon for pinned-Node orcad; missing addon fails startup closed.
+// Build a private copy to preserve desktop host addon; Windows x64 cross-compiles arm64. Usage: --arch=arm64.
 import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { isAbsolute, join, resolve } from 'node:path'

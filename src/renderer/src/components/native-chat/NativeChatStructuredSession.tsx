@@ -105,8 +105,7 @@ export function NativeChatStructuredSession(
     terminalTabId: props.tabId,
     agent: props.agent,
     messages: controller.messages,
-    // Why: the controller starts at `idle`, before any read; like the legacy view's unsettled
-    // phases, that empty list must not become the draft's turn baseline.
+    // Pre-read idle/loading states cannot establish a launch draft baseline from an empty transcript.
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
   const { composerError, reportComposerError } = useNativeChatComposerError(
@@ -151,8 +150,7 @@ export function NativeChatStructuredSession(
     controller.status === 'error' && !(hostOutage && !controller.readRefusal)
       ? structuredAgentSessionReadFailureNotice(controller.readRefusal)
       : null
-  // A read no retry gets past (damage, a newer Orca's chat) takes the whole pane, whatever was
-  // already on screen: nothing in it can act, and its words say why once.
+  // Final read refusal replaces the pane because no existing action can succeed.
   const readFailedFinally = readFailure?.final === true
   const viewState = selectNativeChatViewState(session, { readRetries: !readFailedFinally })
   const paneActive = props.isVisible && props.isFocusedGroup
@@ -183,8 +181,7 @@ export function NativeChatStructuredSession(
     onFind: find.open
   })
   const prompt = controller.prompts[0] ?? null
-  // Prompts this build cannot answer leave the composer open: a send starts a turn, whose card
-  // cancel then works.
+  // Unknown prompts leave the composer usable; a send starts a turn whose cancel can resolve them.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
   const composerShown = (prompt === null || promptsUnanswerable) && !readFailedFinally
   // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
@@ -336,7 +333,7 @@ export function NativeChatStructuredSession(
       </NativeChatContextClearFade>
       {readFailedFinally ? null : (
         <>
-          {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
+          {/* Keep queued drafts outside the transcript and above the background-task dock. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
             chatWorktreeId={ownerWorktreeId ?? null}
@@ -364,7 +361,6 @@ export function NativeChatStructuredSession(
               workingStartedAt={controller.workingStartedAt}
             />
           )}
-          {/* Prompt cards take the composer's slot, below the background-task dock. */}
           {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
           {prompt && approval ? (
             <NativeChatApprovalCard

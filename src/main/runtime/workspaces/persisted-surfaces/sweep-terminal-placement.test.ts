@@ -17,9 +17,7 @@ import { FIRST_SURFACE_PLACEMENT_WAIT_MS } from './restored-terminal-placement'
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 
-// Layout-owner build: a window's sweep (first visit, an empty or sleeping activation, a phone
-// wake) asks main to show the swept workspace's unshown live terminals before it reads the host's
-// listing, so main, not the window, gives each one its tab.
+// A window sweep must let main place only that workspace's unshown live terminals before listing them.
 
 const SWEPT = FIXTURE_GIT_WORKTREE_ID
 const OTHER = 'repo-local::/fixture/other'
@@ -164,8 +162,7 @@ describe('a terminal created by the CLI, across a restart, layout-owner build', 
     await runtime.placeUnshownLiveTerminals()
     expect(boundPtyIds(store, SWEPT)).toEqual([])
 
-    // Quit and relaunch: ownership by the old run is not saved, so the window-owned build's sweep
-    // would give the live terminal no pane shows a new tab, and so does main.
+    // Run ownership is not saved; after restart, main must place the surviving unshown terminal as the window-owned sweep would.
     const relaunched = await reopenTopologyStore(store, directory)
     const restarted = runtimeOn(relaunched, live)
     await restarted.placeUnshownLiveTerminals()

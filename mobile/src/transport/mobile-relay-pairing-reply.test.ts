@@ -6,9 +6,7 @@ import {
 } from './mobile-relay-pairing-operations'
 import type { RpcResponse } from './types'
 
-// The two pairing readers are the shared credential contract, moved off four call sites that each
-// ran `.parse()` on the interpreted value. These pin that the move kept the contract exactly and
-// changed only where the refusal is raised.
+// Pin shared credential readers so centralizing interpretation preserves the shipped strict pairing contract.
 
 function success(result: unknown): RpcResponse {
   return { id: 'reply-1', ok: true, result }
@@ -37,7 +35,7 @@ describe('the provision reader is the install contract', () => {
     expect(() => relayCredentialProvision.interpret(success({ ...installed, v: 2 }))).toThrow(
       RpcIncompatibleReplyError
     )
-    // `.strict()` is main's shipped rule for this released pairing surface, not a new one.
+    // Preserve the released native pairing surface’s strict contract.
     expect(() => relayCredentialProvision.interpret(success({ ...installed, extra: 1 }))).toThrow(
       RpcIncompatibleReplyError
     )

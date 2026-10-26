@@ -1,7 +1,4 @@
-/**
- * Finds Claude terminal sessions to move onto a newly selected account. Why resume suffices: each
- * launch reads the selected account's folder, so `claude --resume <id>` lands there intact.
- */
+/** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import {
@@ -42,16 +39,12 @@ export type ClaudeSessionMoveCandidate = {
   leafId: string
 }
 
-// Why not a bare node or python: after Claude exits, the pane can run the user's own program; the
-// fresh read names an npm Claude `claude` from its command line.
+// Match npm Claude by its fresh command line: generic node/python may now run user programs.
 function isClaudeProcess(processName: string | null): boolean {
   return recognizeAgentProcess(processName)?.agent === 'claude'
 }
 
-/**
- * Whether Claude holds the pane's foreground. Why confirm: cached names flap to the shell, and
- * the native macOS install reads as its version folder (`2.1.x`).
- */
+/** Confirm foreground identity: cached names flap to shells and native macOS binaries report version-folder names. */
 async function isClaudeInForeground(
   ptyId: string,
   inspection: RuntimeTerminalProcessInspection
@@ -81,11 +74,7 @@ function normalizeFolder(path: string): string {
   return getRendererAppPlatform() === 'win32' ? slashed.toLowerCase() : slashed
 }
 
-/**
- * The Claude account a session runs on, read from where Claude writes its transcript
- * (`<CLAUDE_CONFIG_DIR>/projects/...`): a managed account's folder, else System default
- * (null). Undefined when the hook reported no transcript, so the caller cannot know.
- */
+/** Infer account from transcript config directory: managed folder or null/System default; undefined means no hook evidence. */
 export function resolveClaudeSessionAccountId(
   transcriptPath: string | undefined,
   accounts: readonly ClaudeManagedAccount[]
@@ -104,10 +93,7 @@ export function resolveClaudeSessionAccountId(
   return account ? account.id : null
 }
 
-/**
- * The account a launch under `accountId` runs on, as a session's transcript reports it: System
- * default (null) for an account with no login of its own that System default covers.
- */
+/** Resolve the account actually used at launch; an account without its own login may use System default (null). */
 export function claudeLaunchAccountId(
   state: Pick<ClaudeRateLimitAccountsState, 'accounts'>,
   accountId: string | null
@@ -121,11 +107,9 @@ type LocalClaudePane = {
   tab: TerminalTab
   leafId: string
   ptyId: string
-  /** See resolveClaudeSessionAccountId. */
   accountId: string | null | undefined
 }
 
-/** Local terminal panes with a terminal (not structured) Claude session in the switch's lane. */
 function* localClaudePanesInLane(
   state: AppState,
   owner: RuntimeClientTarget,
@@ -162,7 +146,6 @@ function* localClaudePanesInLane(
   }
 }
 
-/** Queued Claude restarts in the switch's lane whose session already runs on `accountId`. */
 export function findQueuedClaudeRestartsOnAccount(args: {
   owner: RuntimeClientTarget
   target: CodexAccountSelectionTarget
@@ -181,10 +164,7 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   return ptyIds
 }
 
-/**
- * Local panes running a resumable Claude session in the switched lane. Why none for remote
- * owners: a relay or SSH machine keeps its own Claude login.
- */
+/** Find local resumable sessions in the switch’s lane; SSH/relay machines keep independent logins. */
 export async function findMovableClaudeSessions(args: {
   owner: RuntimeClientTarget
   target: CodexAccountSelectionTarget

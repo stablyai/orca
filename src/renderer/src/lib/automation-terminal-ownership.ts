@@ -3,7 +3,8 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { collectSleepingAgentSessionRecordsForWorktree } from '@/store/slices/agent-status'
+import '@/store/slices/agent-status'
+import { collectSleepingAgentSessionRecordsForWorktree } from '@/store/slices/agent-status/agent-status-recovery-collection'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { readLastTerminalInputAt } from './terminal-input-activity-coalescing'
 
@@ -96,8 +97,7 @@ export function createAutomationTerminalOwnership(
 ): AutomationTerminalOwnership {
   let consumed = false
   let userTookOver = false
-  // Why: input stamps are coalesced, so compare the freshest value (including a
-  // pending keystroke) or a take-over inside the coalescing window is missed.
+  // Include coalesced pending keystrokes or a recent user takeover can be missed.
   const inputAtLaunch = readLastTerminalInputAt(
     args.store.getState().lastTerminalInputAtByPaneKey,
     args.paneKey
@@ -130,8 +130,7 @@ export function createAutomationTerminalOwnership(
       if (consumed) {
         return null
       }
-      // Why: completion and exit can race; consume before any identity check so
-      // only the first successful-result path can retire this exact session.
+      // Consume before identity checks: completion and exit can race to retire the same session.
       consumed = true
       unsubscribe()
       observeTakeover()
@@ -153,20 +152,17 @@ export function createAutomationTerminalOwnership(
             ptyId: args.ptyId
           })
         } catch (error) {
-          // Why: a failed stop rolls itself back with the agent still running; closing
-          // now would throw away the session the stop just kept.
+          // Failed stop rolls back to a live agent; closing would discard the session it preserved.
           console.error('[automations] Failed to hibernate owned automation terminal:', error)
           return null
         }
         return 'hibernated'
       }
       try {
-        // Why: closeTab centrally owns provider shutdown and pane removal; a
-        // direct kill here would create a second teardown authority.
+        // Use closeTab’s provider/pane teardown authority rather than adding a second direct-kill path.
         state.closeTab(args.tabId, { recordInteraction: false, reason: 'cleanup' })
       } catch (error) {
-        // Why: a throwing close leaves the terminal alive; report not-closed so
-        // the run keeps its (still-valid) terminal identity and no stale clear runs.
+        // A throwing close leaves the terminal live; retain its valid identity and report not-closed.
         console.error('[automations] Failed to close owned automation terminal:', error)
         return null
       }

@@ -1,4 +1,3 @@
-/** What a WSL host's connection change writes to its records, and how the UI sees its status. */
 import { refreshWslHostPairing } from '../../shared/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
@@ -33,8 +32,7 @@ export function toWslHostStatus(
     distro: record.distro,
     state: status.state,
     detail: status.state === 'failed' || status.state === 'unverifiable' ? status.reason : null,
-    // A ready host serves the incumbent the deferral describes; a deferred connect serves nothing,
-    // and its deferral is what offers Update or Force.
+    // Ready serves the incumbent; deferred serves nothing, so retain its Update/Force explanation.
     deferredUpdate:
       status.state === 'ready'
         ? (connection?.deferredUpdate ?? null)

@@ -9,9 +9,7 @@ import {
   type SqlRow
 } from './database.js'
 
-// The sweep's host query walked every assignment by primary key to return nothing while stale
-// existing-only cells sat in the fleet. These pin that a fleet with nothing to evacuate never
-// reaches it, and that a cell the sweep can act on still does, on both dialects.
+// Both dialects must skip host scans with no actionable cells; stale existing-only rows previously scanned every assignment for nothing.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const schema = 'relay_dead_cell_precheck_test'
 const HOST_QUERY = 'FROM relay_assignments assignment'

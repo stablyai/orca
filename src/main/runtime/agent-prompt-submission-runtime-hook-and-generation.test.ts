@@ -59,7 +59,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
           prompt: '',
           agentType: launchAgent,
           connectionId: null,
-          // Why: every hook ping refreshes receivedAt, including same-state tool pings.
+          // receivedAt changes even on same-state tool pings.
           receivedAt: Date.now(),
           stateStartedAt: hook.stateStartedAt
         }
@@ -149,8 +149,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why: same-state pings keep refreshing receivedAt on a turn that started before the prompt;
-  // only the pinned stateStartedAt separates that from a turn this prompt started.
+  // Same-state pings refresh receivedAt; only stateStartedAt proves a new working turn.
   it('does not accept a hook row refreshed without a new working turn', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -511,15 +510,14 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
-    // Why compute it: the submit delay now follows the payload size and the executing host,
-    // so a hardcoded number aborts before the Enter on some lanes.
+    // Derive delay from executing host/payload so abort cannot precede Enter on slower lanes.
     await vi.advanceTimersByTimeAsync(
       getAgentPromptSubmitDelayMs(
         process.platform,
         Buffer.byteLength(buildAgentPromptPasteBytes('review this'), 'utf8')
       )
     )
-    // Why: pin the phase boundary so drift fails here instead of as an empty post-abort array.
+    // Establish Enter delivery before testing the post-submit abort boundary.
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     controller.abort()
     await vi.runAllTimersAsync()

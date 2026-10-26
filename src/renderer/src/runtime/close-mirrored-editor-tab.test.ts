@@ -68,8 +68,7 @@ describe('notifyHostOfMirroredEditorClose', () => {
 
   it('records the host close intent SYNCHRONOUSLY (before the async close resolves)', () => {
     const now = Date.now()
-    // No await: the intent must be pending the instant the call returns, so a
-    // host snapshot in the dynamic-import gap can't flash the old-path tab back.
+    // Intent must exist synchronously or a snapshot during dynamic import can flash the old path back.
     notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
 
     expect(

@@ -1,8 +1,7 @@
 import type { AppState } from '@/store/types'
 import { group, mainWt, repo, wt } from './sidebar-list-golden-factories.test-fixture'
 
-// A group ahead of every other holding a git project and a folder project, a child group of it holding
-// only a folder project, and an empty group: the phone must file each project under its group, in order.
+// Exercise ordered Git/folder projects in parent, child and empty groups on the phone.
 const lake = repo('lake', 'Lake', { projectGroupId: 'pg-school', projectGroupOrder: 1 })
 const capstone = repo('capstone', 'capstone', {
   kind: 'folder',

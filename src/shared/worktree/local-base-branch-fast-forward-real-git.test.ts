@@ -145,8 +145,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(existsSync(marker)).toBe(true)
   })
 
-  // Why: each setting is live (the control shows a plain `merge --ff-only` obeying it), yet the owner
-  // update must still land main exactly on the target as a fast-forward.
+  // Control commands prove each merge setting is active; Orca must still fast-forward exactly to the target.
   it.each([
     ['merge.verifySignatures', 'true', 'refuses'],
     ['branch.main.mergeOptions', '--verify-signatures', 'refuses'],
@@ -177,7 +176,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
       }
       plainMerge()
       if (control === 'merge-commit') {
-        // A merge commit that keeps local's tree and drops upstream's changes.
+        // This merge commit keeps the local tree and drops upstream changes.
         expect(fixture.git(['rev-list', '--parents', '-1', 'main'])).toMatch(
           new RegExp(` ${fixture.localOid} ${fixture.remoteOid}$`)
         )
@@ -234,7 +233,6 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(fixture.git(['reflog', 'show', '--format=%gs', '-1', 'main'])).toBe(
       'orca: fast-forward to refs/remotes/origin/main'
     )
-    // The checked-out branch and its files are untouched.
     expect(fixture.git(['symbolic-ref', 'HEAD'])).toBe('refs/heads/develop')
     expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('one\n')
   })

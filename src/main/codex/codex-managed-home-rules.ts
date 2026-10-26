@@ -25,10 +25,7 @@ function readRuleFiles(dir: string): Map<string, string> | null {
   return files
 }
 
-/**
- * Copies global rules beside the account's own files so Codex still persists
- * approvals to the account's default.rules instead of the user's ~/.codex.
- */
+/** Keep account approvals in its own default.rules when importing global rules. */
 export function syncSystemCodexRulesIntoManagedHome(
   systemHomePath: string,
   managedHomePath: string

@@ -76,9 +76,8 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
   )
 }
 
-/** Runs workspace sleeps for one runtime: what each part needs, and which ones were reopened. */
 export class WorkspaceSleepCoordinator {
-  /** Bumped when a workspace is reopened; a sleep compares it before suspending the VM. */
+  /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
@@ -87,10 +86,7 @@ export class WorkspaceSleepCoordinator {
     return sleepWorkspaces(this.deps(), this.queue(), request)
   }
 
-  /**
-   * This host's own workspace, its chats included. A phone is answered once the sleep is accepted:
-   * it never reads the reply, and a chat stop can outlast its request timeout.
-   */
+  /** A phone is answered on acceptance: it ignores the result and chat stops can outlast its request timeout. */
   async sleepOwnWorktree(
     worktreeId: string,
     opts: { replyOnAcceptance?: boolean; markChatsAsleep?: boolean }
@@ -100,7 +96,7 @@ export class WorkspaceSleepCoordinator {
       targets: [{ worktreeId, terminalHost: self, chatHosts: [self] }],
       markChatsAsleep: opts.markChatsAsleep !== false
     }).then((outcomes) => {
-      // Why: the phone shows no sleep failure, so the desktop does, as for its own Sleep.
+      // The phone cannot report sleep failures, so notify the desktop.
       for (const outcome of outcomes.filter(needsWindowToast)) {
         this.runtime.notifyWorkspaceSleep({ worktreeId, phase: 'failed', outcome })
       }
@@ -120,15 +116,11 @@ export class WorkspaceSleepCoordinator {
     return slept ?? { worktreeId }
   }
 
-  /** The window or a phone opened the workspace; a sleep still running leaves its VM up. */
   noteReopened(worktreeId: string): void {
     this.reopenings.set(worktreeId, (this.reopenings.get(worktreeId) ?? 0) + 1)
   }
 
-  /**
-   * A phone opened the workspace: main resumes the agents its sleep left running, behind any sleep
-   * still queued, and finishes only once they started, so a later sleep or delete waits for them.
-   */
+  /** Queue wake behind sleep and await agent starts so later sleep/delete cannot overtake it. */
   wake(worktreeId: string): Promise<void> {
     this.noteReopened(worktreeId)
     return queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {

@@ -47,10 +47,7 @@ function sleepHostOf(target: RuntimeClientTarget): WorkspaceSleepHost {
     : { kind: 'environment', environmentId: target.environmentId }
 }
 
-/**
- * Where main must sleep a workspace, as this window resolves it: the one host that runs its
- * terminals, and every host that may run its chats. Refused when its terminals' host is unknown.
- */
+/** Resolve the terminal host and every chat host; refuse sleep if terminal ownership is unknown. */
 export function workspaceSleepTarget(
   state: AppState,
   worktreeId: string

@@ -13,7 +13,6 @@ export type MobileNativeChatRunPresentation = {
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
 }
 
-/** Describe the runs the existing presentation draws, sharing physical-row source attribution. */
 export function mobileNativeChatRunDescriptors(
   { rows, workRuns, turnKeys, receipts }: MobileNativeChatRunPresentation,
   sourceOf: (row: NativeChatMessage) => MobileNativeChatRowSources

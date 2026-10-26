@@ -9,7 +9,7 @@ import { agentLaunchWorkspaceFactory } from './rpc/methods/agent-launch-worktree
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-// Why twins: a project copied between hosts keeps its repo id (Codex review 6 #6).
+// Projects copied between hosts retain their repo id.
 const REPOS: Repo[] = [
   {
     id: 'dup',

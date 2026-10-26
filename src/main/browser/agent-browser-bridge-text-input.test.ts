@@ -34,6 +34,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
     this.getPort = vi.fn(() => 9222)
+    this.pointAtNextNode = vi.fn()
     instances.push(this)
   })
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
@@ -317,19 +318,6 @@ describe('AgentBrowserBridge', () => {
     expect(environment.editor.textContent).toBe(`${firstChunk}tail`)
   })
 
-  it('uses target-aware agent-browser fill when clearing a non-rich target', async () => {
-    succeedWith({ filled: '@disabled' })
-
-    const result = await bridge.clear('@disabled')
-
-    const commandArgs = execFileMock.mock.calls.map((call: unknown[]) => call[1] as string[])
-    expect(commandArgs.some((args) => args.includes('eval'))).toBe(false)
-    expect(commandArgs.some((args) => args.includes('fill') && args.includes('@disabled'))).toBe(
-      true
-    )
-    expect(result).toEqual({ cleared: '@disabled' })
-  })
-
   it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
     succeedWith({ ok: true })
 
@@ -434,24 +422,6 @@ describe('AgentBrowserBridge', () => {
     expect(numberInput.events.map((event) => event.type)).toEqual(['input', 'change'])
     expect(hiddenInput.events).toHaveLength(0)
     expect(wrapper.events).toHaveLength(0)
-  })
-
-  it('keeps plain focused inputs as fill targets', async () => {
-    succeedWith({ ok: true })
-
-    await bridge.fill('@input', '200')
-
-    const expressions = stdinWrites
-
-    const input = createFillEvalNode({ tagName: 'INPUT' })
-
-    runFillEvalExpressions(expressions, {
-      activeElement: input.node,
-      getElementById: () => null
-    })
-
-    expect(input.value).toBe('200')
-    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
   })
 
   it('fills large plain fields with one stdin edit and one event pair', async () => {

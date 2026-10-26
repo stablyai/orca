@@ -13,7 +13,6 @@ export type HarnessStoreState = {
   [key: string]: unknown
 }
 
-/** Store surface useIpcEvents touches at mount plus the terminal-reveal path. */
 export function createHarnessStoreState(
   overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
 ): HarnessStoreState {

@@ -199,18 +199,15 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
 
     const content = container.querySelector('[data-testid="hover-card-content"]')?.textContent ?? ''
 
-    // Workspace & Host info
     expect(content).toContain('Workspace')
     expect(content).toContain('m4air-audit')
     expect(content).toContain('feat/m4air-performance')
     expect(content).toContain('/Users/test/projects/orca/worktrees/m4air-audit')
 
-    // Agent & Task details
     expect(content).toContain('Claude')
     expect(content).toContain('Audit current HEAD on m4air environment')
     expect(content).toContain('Auditing terminal PTY and IME bug categories...')
 
-    // Notes
     expect(content).toContain('Notes')
     expect(content).toContain('Performance investigation notes')
   })

@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../shared/skills'
 import { sortDiscoveredSkills, sortSkillDiscoverySources } from './skill-discovery-sources'
 
-// Scripts and case/accent/numeric shapes whose collation differs between locales
-// and ICU builds, so a reused collator that drifted from `localeCompare` shows up.
+// Exercise locale/ICU-sensitive scripts, case, accents and numeric shapes to detect collator drift.
 const COLLATION_CORPUS = [
   '',
   ' ',
@@ -63,7 +62,7 @@ function skill(index: number): DiscoveredSkill {
   }
 }
 
-// Preserve the original comparator as the ordering and operation-count oracle.
+// Keep the old comparator as parity and operation-count oracle.
 function compareOriginal(a: DiscoveredSkill, b: DiscoveredSkill): number {
   return (
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||

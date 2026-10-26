@@ -2,18 +2,8 @@ import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchest
 import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
-/**
- * Turn-start verdict for a dispatched worker prompt, in the execution-boundary vocabulary:
- *
- * - 'observed': the provider proved a turn started for this request. Positive liveness.
- * - 'permission': the agent rendered an approval prompt after the write. Positive liveness,
- *   but the turn is blocked on a human.
- * - 'unsupported': this provider exposes no turn-start signal; the accepted write is the
- *   strongest receipt that can exist. Never treated as failure.
- * - 'unobserved': observation IS supported and no turn started within the window. This is
- *   `unverifiable`, never evidence of death — the bytes were written, but the agent may be
- *   wedged at startup or holding the spec unsent in its composer.
- */
+/** Observed/permission prove live input handling; unsupported keeps accepted-write evidence.
+ * Unobserved means supported observation timed out after write: unverifiable, never dead, and no safe blind resend. */
 export type WorkerTurnStartVerdict = 'observed' | 'permission' | 'unsupported' | 'unobserved'
 
 export type WorkerTurnStartObservation = {
@@ -37,14 +27,7 @@ function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTu
   return 'unsupported'
 }
 
-/**
- * Second-stage turn-start observation for a worker prompt that was accepted without waiting on
- * provider hooks. Reuses the same observer that terminal.send receipts replay through, so the
- * evidence rules (lifecycle edge or hook turn-start, never output bytes) stay in one place.
- *
- * The observation window is `AGENT_PROMPT_EFFECT_TIMEOUT_MS`, which worker-start's client RPC
- * grace already budgets for (see orchestration-worker-start-prompt-budget.ts).
- */
+/** Reuse terminal.send's lifecycle/hook observer, never output bytes; client grace already includes AGENT_PROMPT_EFFECT_TIMEOUT_MS. */
 export async function observeWorkerTurnStart(args: {
   runtime: OrcaRuntimeService
   terminalHandle: string

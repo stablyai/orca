@@ -10,11 +10,11 @@ import {
   type HostAccountSignInStatus
 } from '../../shared/host-account-sign-in-types'
 
-// Why under typical RPC timeouts: a long poll that outlives the client's own deadline reads as a failure.
+// Keep long polls inside typical RPC deadlines.
 const WAIT_MS = 20_000
-// Why: a client that stopped polling (closed, slept, lost its link) must not hold the account queue.
+// Disconnected/nonpolling owners must not hold the host's account queue indefinitely.
 const OWNER_SILENCE_MS = 90_000
-// Why bounded: a cancel answers with what it knows; the client keeps waiting for the real outcome.
+// Bound cancel response time; final login outcome remains authoritative.
 const CANCEL_WAIT_MS = 10_000
 const MAX_ERROR_CHARS = 600
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
@@ -34,7 +34,6 @@ type Flow = {
   owner: string
   status: HostAccountSignInStatus
   ended: AbortController
-  /** Why the flow was told to stop; the login's own outcome still decides how it settles. */
   stop: 'cancelled' | 'silent' | null
   done: Promise<void>
   code: PromiseWithResolvers<string>
@@ -45,16 +44,10 @@ type Flow = {
 
 const settled = (flow: Flow): boolean => HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES.has(flow.status.phase)
 
-/**
- * Account sign-ins this host runs for a client on another device: one at a time per host, which
- * only the client that started it can read, answer or cancel. The login and its credentials stay
- * on this host; the client sees only the page to open and relays the code that page shows.
- * A flow settles only when its login does, so a cancel the login refused (it had already signed
- * in) still reports the account it added.
- */
+/** Serialize host-local sign-ins; only the initiating client may inspect/answer/cancel.
+ * Credentials stay here. Settle with the login's outcome even if it refused cancellation. */
 export class HostAccountSignInFlows {
   private active: Flow | null = null
-  /** Each owner's latest flow, so its final status stays readable after it ends. */
   private readonly latest = new Map<string, Flow>()
 
   constructor(
@@ -81,7 +74,7 @@ export class HostAccountSignInFlows {
       )
     }
     const code = Promise.withResolvers<string>()
-    // Why: a flow that ends before a code arrives rejects this, and nobody may be listening.
+    // Startup failure may reject code before any listener attaches.
     code.promise.catch(() => {})
     const flow: Flow = {
       owner,
@@ -134,7 +127,6 @@ export class HostAccountSignInFlows {
     }
   }
 
-  /** The owner's flow once its revision passes `afterRevision`, it settles, or the wait times out. */
   async wait(
     owner: string,
     flowId: string,
@@ -175,7 +167,6 @@ export class HostAccountSignInFlows {
     return flow.status
   }
 
-  /** Stops the login, then answers with its outcome once it has one (or what it knows by then). */
   async cancel(owner: string, flowId: string): Promise<HostAccountSignInStatus> {
     const flow = this.own(owner, flowId)
     if (!settled(flow)) {
@@ -237,8 +228,7 @@ function failureMessage(flow: Flow, raw: string): string {
     return SILENT_OWNER
   }
   const message = stripAnsiEscapeSequences(raw).trim()
-  // Why: nobody here cancelled, so the login's "cancelled" means an account action on this host
-  // superseded it, and the client would otherwise read it as its own cancel and say nothing.
+  // Without our cancel, login cancellation means another host account action superseded this flow.
   if (LOGIN_CANCELLED_MESSAGES.has(message)) {
     return SUPERSEDED
   }

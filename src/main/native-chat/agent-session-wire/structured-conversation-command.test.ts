@@ -246,11 +246,13 @@ describe('same-conversation clear', () => {
     const params = commandParams('clear')
     await clearCommits(params)
     const first = store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary
+    await store.setConversationName(HOST_TEST_SESSION, 'New context name')
     expect(await host.conversationCommand(caller, params)).toMatchObject({
       ok: true,
       replayed: true
     })
     expect(await clearRows()).toHaveLength(1)
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('New context name')
     await clearCommits()
     expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).not.toEqual(first)
     expect(await clearRows()).toHaveLength(2)

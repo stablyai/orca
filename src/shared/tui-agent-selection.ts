@@ -2,8 +2,7 @@ import type { TuiAgent } from './tui-agent'
 import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 
-// Keep this order in sync with the desktop agent catalog. It defines the
-// automatic fallback priority when the user has not chosen a default agent.
+// Match desktop catalog order: this determines fallback priority without a selected default.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
   'claude-agent-teams',
@@ -52,8 +51,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'jcode'
 ] as const satisfies readonly TuiAgent[]
 
-// Why: fresh installs should expose Claude Agent Teams in agent pickers; the
-// persistence migration separately preserves the old hidden default for legacy profiles.
+// Fresh installs show Agent Teams; the migration separately preserves legacy hidden defaults.
 export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAgent[]
 
 export function pickTuiAgent(

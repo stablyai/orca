@@ -29,7 +29,7 @@ export function createStaticWebClientHandler(staticRoot: string): RequestListene
   try {
     files = readBundledWebClientFiles(resolvedRoot)
   } catch (error) {
-    // Why: a damaged install must disable only the browser client, not the runtime server.
+    // Damaged web installs must not disable the runtime server.
     console.warn(`[ws-transport] browser client disabled: ${String(error)}`)
     return answerWithoutWebClient
   }
@@ -159,8 +159,7 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
     -1
   )
   if (prefixIndex !== -1) {
-    // Why: reverse proxies may forward the external path prefix through to
-    // Orca. Only the bundled /assets subtree is served after the prefix.
+    // Proxies may forward an external prefix; serve only the bundled assets subtree after it.
     return pathname.slice(prefixIndex)
   }
   return pathname

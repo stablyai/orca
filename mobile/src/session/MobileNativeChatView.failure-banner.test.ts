@@ -43,8 +43,6 @@ vi.mock('./MobileNativeChatComposer', async () => {
 describe('MobileNativeChatView: send and read failure banners', () => {
   installChatViewHooks()
 
-  // A read no retry gets past takes the whole pane, even over a transcript already on screen: its
-  // words alone, and nothing that could only be refused again.
   it('leaves only the words of a read that failed for good, over a loaded transcript', async () => {
     const loaded = [assistantTurn('m1', 'earlier reply')]
     const words = 'This chat was saved by a newer Orca. Update Orca to open it.'
@@ -59,7 +57,6 @@ describe('MobileNativeChatView: send and read failure banners', () => {
       error: words,
       canStop: true,
       permission: { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] },
-      // A resend answered unknown says nothing beside the read's words.
       sendErrorMessage: 'Message unconfirmed — check chat before retrying'
     }
     await render({ ...failure, readFailedFinally: true })
@@ -69,7 +66,6 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     expect(banners()).toHaveLength(0)
     expect(root().findAllByProps({ accessibilityLabel: 'Stop the agent' })).toHaveLength(0)
 
-    // A failure that can clear keeps the transcript and the composer.
     await update({ ...failure, error: "Orca couldn't open this chat's history right now." })
     expect(listIds()).toEqual(['m1'])
     expect(composers()).toHaveLength(1)

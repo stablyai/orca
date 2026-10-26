@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { nodeDistArchiveName, windowsImportLibFile } from './node-dist-archive-name.mjs'
 import { lockedVersion, lockfileRootImporter } from './pnpm-lockfile-root-importer.mjs'
 
-// Why require: an ESM import of a .ts file under a typeless package.json prints MODULE_TYPELESS_PACKAGE_JSON.
+// require avoids MODULE_TYPELESS_PACKAGE_JSON from ESM-importing TS under typeless package.json.
 const {
   COMPAT_SERVER_TARGETS,
   NODE_RUNTIME_ASSETS,
@@ -83,8 +83,7 @@ export function findNodeRuntimePinProblems({
       `pnpm-lock.yaml resolves electron ${lockedElectron}, but NODE_RUNTIME_PIN.electron is ${pin.electron}`
     )
   }
-  // Only the major is gated here; whether the pin may differ from Electron's Node is design D1
-  // (docs/reference/node-runtime-design.html).
+  // Gate only major; Electron/Node pin divergence is design D1 (docs/reference/node-runtime-design.html).
   const engineMajor = majorOf(packageJson.engines?.node)
   if (majorOf(pin.version) !== engineMajor) {
     problems.push(

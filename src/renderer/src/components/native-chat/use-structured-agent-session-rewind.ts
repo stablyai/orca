@@ -27,8 +27,7 @@ export function useStructuredAgentSessionRewind(
     target,
     write
   } = args
-  // An in-doubt rewind returns the prompt for the next send to settle; only a host that settles it
-  // on a send may offer one. Unknown hides it, as unresolved support does.
+  // Offer rewind only when the host can settle an uncertain result on the next send; unknown capability must hide it.
   const support = useStructuredAgentSessionHostRecoversRewindOnSend(target)
     ? args.support
     : undefined

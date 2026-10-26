@@ -158,8 +158,7 @@ describe('bucket-count work reuse', () => {
     const cache = createDashboardBucketCountsCache()
     const state = largeState()
 
-    // Five recomputes driven by agent traffic: prompt streaming on one pane,
-    // which is what actually invalidates the counts memo in the sidebar.
+    // Prompt streaming invalidates one worktree’s inputs while the rest retain their rows.
     for (let pass = 0; pass < 5; pass += 1) {
       const next: SnapshotState = {
         ...state,

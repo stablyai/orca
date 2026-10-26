@@ -6,19 +6,10 @@ import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
-/**
- * The offered chats, arranged the way the sidebar arranges workspaces: project/repo, then workspace,
- * then the agent sessions inside it.
- *
- * Pure. Every identity the rows need is resolved here or supplied by the host, so the components
- * stay presentational and this can be tested without a store.
- */
-
 export type ResumeCandidate = {
   sessionId: string
   workspaceId: string
-  /** Any agent the host registered; a client without the registered-agents capability gets
-   *  only Claude's and Codex's offers. */
+  /** Older clients without registered-agent support receive only Claude/Codex offers. */
   agent: StructuredAgentId
   trigger: 'quit' | 'update'
   latestPrompt: string
@@ -31,13 +22,11 @@ export type ResumeCandidate = {
   activity?: AgentSessionRestartActivity
 }
 
-/** An offer that was acted on and did not end with the agent carrying on. The host keeps it until
- *  the user sends in the chat, retries successfully, dismisses it, or closes the chat. */
+/** Keep refused/unconfirmed offers until manual continuation, successful retry, dismissal or chat closure. */
 export type ResumeFailure = ResumeCandidate & {
   failedAt: number
   outcome: 'refused' | 'unconfirmed'
-  /** The host's or provider's refusal code, verbatim; or, for a resume request lost before the
-   *  host reserved anything, this side's own `agent_session_restart_request_failed`. */
+  /** Preserve host/provider reason codes; use agent_session_restart_request_failed for locally lost requests. */
   reason: string
   /** Whether a retry would run at all; an older host omits it and the reason decides alone. */
   retryable?: boolean
@@ -49,25 +38,16 @@ export type ResumeWorkspaceGroup = {
 }
 
 export type ResumeRepoGroup = {
-  /** The repo these workspaces belong to, or null for workspaces with no repo (folder workspaces). */
+  /** Repository id, synthetic folder-workspace:<projectGroupId>, or null when no owner is known. */
   repoId: string | null
   workspaces: ResumeWorkspaceGroup[]
 }
 
-/**
- * The same id space automation dispatch resolves: a folder workspace by its full `folder:<uuid>`
- * key, a git worktree by its bare `repoId::path` id.
- */
 function isFolderWorkspaceId(workspaceId: string): boolean {
   return parseWorkspaceKey(workspaceId)?.type === 'folder'
 }
 
-/**
- * The workspace kind, preferring what the HOST recorded.
- *
- * The host read it off the durable record, which is authoritative; the id shape is the fallback for
- * an older host that sent no kind. Never inferred from a display name.
- */
+/** Prefer the host’s durable workspace kind; only older metadata needs an id-namespace fallback. */
 export function resumeWorkspaceKind(candidate: ResumeCandidate): AgentSessionWorkspaceKind {
   return (
     candidate.workspaceKind ??
@@ -113,12 +93,7 @@ export function groupResumeCandidates(
   return [...groups].map(([workspaceId, entries]) => ({ workspaceId, candidates: entries }))
 }
 
-/**
- * Groups the workspaces under the repo each belongs to, in first-seen order.
- *
- * `repoIdFor` comes from the store; workspaces it cannot place collapse into a single `null` group
- * rather than each inventing a header of its own.
- */
+/** Group by owner in first-seen order; unresolved workspaces share one null group. */
 export function groupResumeWorkspacesByRepo(
   workspaces: readonly ResumeWorkspaceGroup[],
   repoIdFor: (workspaceId: string) => string | null
@@ -142,12 +117,7 @@ export type ResumeWorkspaceNode = {
   children: ResumeWorkspaceNode[]
 }
 
-/**
- * Nests each workspace under its nearest LISTED ancestor, as the sidebar nests child workspaces.
- *
- * `ancestorsOf` is nearest-first; an ancestor with nothing to resume is skipped, so its listed
- * descendants attach to the next listed one up, or stay at the top. Offer order is kept.
- */
+/** Nest under the nearest listed ancestor, skipping ancestors without offers and preserving offer order. */
 export function nestResumeWorkspaces(
   workspaces: readonly ResumeWorkspaceGroup[],
   ancestorsOf: (workspaceId: string) => readonly string[]
@@ -165,8 +135,7 @@ export function nestResumeWorkspaces(
       parentOf.set(node, parent)
     }
   }
-  // Why: a loop in the parent chain would leave its members under no root, and a ticked chat that
-  // renders nowhere would still be resumed; the loop is cut where the walk first comes back.
+  // Cut lineage cycles so selected chats cannot hide beneath a tree with no root and resume unseen.
   for (const node of nodes.values()) {
     const seen = new Set([node])
     let up = parentOf.get(node)
@@ -190,7 +159,6 @@ export function nestResumeWorkspaces(
   return roots
 }
 
-/** A workspace's chats followed by those of every workspace nested under it, in list order. */
 export function resumeWorkspaceCandidates(node: ResumeWorkspaceNode): ResumeCandidate[] {
   return [...node.group.candidates, ...node.children.flatMap(resumeWorkspaceCandidates)]
 }
@@ -201,7 +169,6 @@ export type ResumeSelectionState = {
   total: number
 }
 
-/** A group checkbox's state over the selectable chats it covers. */
 export function resumeSelectionState(
   sessionIds: readonly string[],
   selected: ReadonlySet<string>
@@ -213,7 +180,6 @@ export function resumeSelectionState(
   return { checked, selectedCount, total }
 }
 
-/** Ticks every chat a group covers unless all already are, then unticks them. */
 export function toggleResumeSelection(
   sessionIds: readonly string[],
   state: ResumeSelectionState,
@@ -229,14 +195,7 @@ export type ResumeGroupHeader =
   | { kind: 'repo'; name: string; repoIcon: RepoIcon | null }
   | { kind: 'project'; name: string }
 
-/**
- * What the top tier of a group is called, and which glyph it takes.
- *
- * A folder workspace's synthetic worktree carries a `repoId` of `folder-workspace:<projectGroupId>`
- * — NEVER null — so "has no git repo" cannot be detected by testing for absence. Unwrapping the id
- * is the only thing that separates the two, and a project group is then titled by its own name, as
- * the sidebar titles it. Falling back to the raw id would print a uuid at the user.
- */
+/** Resolve synthetic folder repoIds through project-group names; non-null repoId does not prove a git repository. */
 export function resolveResumeGroupHeader(
   repoId: string | null,
   repos: readonly { id: string; displayName: string; repoIcon?: RepoIcon | null }[],
@@ -255,7 +214,6 @@ export function resolveResumeGroupHeader(
   }
 }
 
-/** Every offered session id, which is what an unselective action names. */
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
 }

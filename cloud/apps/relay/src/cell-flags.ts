@@ -71,8 +71,7 @@ export type SupportedCellFlag =
 // Parsed, never offered: ticketCheck=enforce has no step that turns it on yet.
 const UNOFFERED_FLAG_VALUES: Record<string, string[]> = { ticketCheck: ['enforce'] }
 
-// What this image accepts, read from the schema itself: the flag tool refuses a key or value
-// the cell would drop or void before it writes.
+// Derive supported flags from schema so tooling refuses values the cell would drop or invalidate before writing.
 export function supportedCellFlags(): Record<string, SupportedCellFlag> {
   const supported: Record<string, SupportedCellFlag> = {}
   for (const [key, field] of Object.entries(CellFlagsSchema.shape)) {

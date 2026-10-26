@@ -171,8 +171,7 @@ export const CLIPBOARD_METHODS = [
         }
         return path
       } finally {
-        // Why: failed SSH or filesystem commits must not leave bounded upload
-        // memory pinned until TTL cleanup.
+        // Release upload memory after failed SSH/filesystem commits rather than waiting for TTL.
         deleteUpload(params.uploadId)
       }
     }

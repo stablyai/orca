@@ -1,4 +1,4 @@
-// Runs on plain Node, as orcad does: a server with no window pushes its phones from its own hooks.
+// Exercise windowless phone pushes under Node, as orcad runs them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
@@ -15,7 +15,7 @@ import {
   type PartialRuntimeStore
 } from './runtime-store-partial-fixture'
 
-// Switched on, as it ships next: that build's host reads hookless agents' titles itself.
+// Main-owned sidebar status reads hookless agent titles.
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const WT = 'repo-1::/tmp/worktree-a'
@@ -131,7 +131,7 @@ describe('terminal agent phone push on a headless host', () => {
     expect(agentAlerts()).toEqual(['done'])
   })
 
-  // The detector holds one phase per pane, so the title's turn is the one the hook row finishes.
+  // One detector phase per pane lets a hook finish the title-started turn.
   it('pushes the finish of a turn a hookless title started and the first hook row ends', () => {
     const { runtime, report, agentAlerts } = createHost()
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {

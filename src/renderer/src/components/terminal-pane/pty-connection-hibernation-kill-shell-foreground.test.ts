@@ -118,7 +118,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {

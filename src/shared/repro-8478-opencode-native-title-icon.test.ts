@@ -1,23 +1,5 @@
-/**
- * Issue #8478 — OpenCode logo / icon not coming up well (Claude glyph on
- * OpenCode tabs).
- *
- * Root cause (pre-fix): OpenCode's native OSC tab title format is `OC | <task>`.
- * Title classifiers only recognized OpenCode when the token "opencode" appeared.
- * Native `OC | …` titles fell through, so AgentIcon rendered Claude/"?".
- *
- * OpenCode source (packages/tui/src/app.tsx) sets titles as:
- *   - "OpenCode" on home / default session titles
- *   - `OC | ${title}` for named sessions (title truncated at 40 chars)
- *   - `OC | ${pluginId}` on plugin routes
- *
- * Related: #8940 (OpenCode activity frames mislabeled Claude Code — separate
- * braille-without-token path; not fully solved here).
- *
- * Re-run:
- *   pnpm exec vitest run --config config/vitest.config.ts \
- *     src/shared/repro-8478-opencode-native-title-icon.test.ts
- */
+/** OpenCode’s native OC | task/plugin titles lack “opencode” and previously selected Claude/? icons (#8478).
+ * Bare OpenCode remains the home/default title; tokenless braille frames are a separate case (#8940). */
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel, isClaudeAgent } from './agent-detection'
 import {
@@ -34,15 +16,12 @@ describe('#8478 OpenCode native OC | titles map to OpenCode icon', () => {
     expect(isClaudeAgent(native)).toBe(false)
   })
 
-  // Why: bare "OpenCode" is what the TUI sets on home/default sessions; keep it
-  // classified so the icon path stays OpenCode without the OC | abbreviation.
   it('keeps bare OpenCode home titles and Claude-style frames classified correctly', () => {
     expect(getAgentLabel('OpenCode')).toBe('OpenCode')
     expect(resolveTerminalTitleAgentType('OpenCode')).toBe('opencode')
     expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
     expect(resolveTerminalTitleAgentType('OpenCode ready')).toBe('opencode')
-    // Same family as #8940: braille/task frames without "opencode" still become Claude
-    // when they lack the native OC marker — documented, out of scope for this fix.
+    // Tokenless braille frames still select Claude (#8940); separate from native OC markers.
     expect(isClaudeAgent('⠋ implementing the feature')).toBe(true)
     expect(getAgentLabel('⠋ implementing the feature')).toBe('Claude Code')
   })

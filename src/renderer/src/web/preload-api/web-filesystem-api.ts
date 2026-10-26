@@ -125,7 +125,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       return result.files.map((entry) => entry.relativePath)
     },
     cancelListFiles: async () => {
-      // Why: paired-web lists files over runtime RPC with its own timeout; there's no host-side scan to abort here.
+      // Runtime RPC owns its timeout; no host-side search cancellation exists here.
     },
     cancelSearch: async ({ requestToken }) => {
       searches.get(requestToken)?.abort()

@@ -10,9 +10,7 @@ import { translate } from '@/i18n/i18n'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
-  // `fromCollapsedSection` tells the controller whether the click happened
-  // under the `<details>` disclosure so `onboarding_agent_picked` can carry
-  // it without re-deriving from props at the emit site.
+  // Record whether the click came from the details disclosure for onboarding_agent_picked telemetry.
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
@@ -38,14 +36,9 @@ export function AgentStep({
     selectedAgent && !detectedSet.has(selectedAgent)
       ? agentCatalog.find((a) => a.id === selectedAgent)
       : undefined
-  // Why: keep the collapsed bucket open when the selected agent lives there, so
-  // the active card is visible without forcing the user to expand the disclosure.
   const selectedEntryIsCollapsed =
     selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
-  // Why: one-way latch: auto-open when selection lands in the fallback bucket,
-  // but never force-close. The user can freely toggle via the native <details>
-  // disclosure once it's open; controlling `open` directly off the prop would
-  // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
+  // Auto-open when selection enters the fallback bucket; never force-close a disclosure the user can toggle.
   const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
   const [previousSelectedEntryIsCollapsed, setPreviousSelectedEntryIsCollapsed] =
     useState(selectedEntryIsCollapsed)

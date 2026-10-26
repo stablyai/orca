@@ -55,7 +55,6 @@ describe('orchestration worker release incarnation fallback', () => {
     }
   }
 
-  /** Fresh in-memory db and a fully-stubbed runtime for one worker-release scenario. */
   function setup(): void {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
@@ -132,7 +131,6 @@ describe('orchestration worker release incarnation fallback', () => {
     vi.restoreAllMocks()
   })
 
-  /** Look up a registered orchestration RPC method by name. */
   function findMethod(name: string) {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
     if (!method) {
@@ -141,14 +139,12 @@ describe('orchestration worker release incarnation fallback', () => {
     return method
   }
 
-  /** Parse a method's params and invoke its handler against the shared ctx. */
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
     return method.handler(parsed, ctx)
   }
 
-  /** Start a ready worker on a fresh task off the coordinator terminal. */
   async function startWorker(options: { terminal?: string } = {}): Promise<{
     taskId: string
     dispatchId: string
@@ -176,7 +172,6 @@ describe('orchestration worker release incarnation fallback', () => {
     expect(settlement.action).toBe('settled')
   }
 
-  /** Start a worker and settle its report, the state a release acts on. */
   async function startSettledWorker(
     outcome: 'succeeded' | 'failed' = 'succeeded',
     options: { terminal?: string } = {}
@@ -298,8 +293,7 @@ describe('orchestration worker release incarnation fallback', () => {
   })
 
   it('reaches settleDead before the lease check when a gone worker is exited with no live authority', async () => {
-    // Without a committed archive settleDead retains; lease must not run first and force
-    // retained/identity_unproven. Disposition is release_unknown (interactive) after the retain.
+    // Without a committed archive settleDead retains first; lease fallback must not replace its release_unknown with identity_unproven.
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
@@ -327,8 +321,7 @@ describe('orchestration worker release incarnation fallback', () => {
       resolveByIncarnation
     )
     vi.mocked(runtime.getOrchestrationDispatchAuthority).mockReturnValue(null)
-    // Liveness is unresolvable/not-exited: the process may have been re-homed, so concede rather
-    // than retain or guess at a live process.
+    // Unresolvable liveness may mean re-homing; concede rather than guess which process is live.
     inspectProcessLiveness.mockResolvedValue('live')
 
     const receipt = await call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -356,8 +349,7 @@ describe('orchestration worker release incarnation fallback', () => {
     const receipt = await call('orchestration.workerStop', { dispatch: dispatchId })
 
     expect(receipt).toMatchObject({ processAction: 'closed_agent_terminal' })
-    // The kill targeted exactly the reminted live handle, never the stale durable one — closing
-    // the stale handle would throw terminal_handle_stale and leak the PTY.
+    // Close the reminted handle, not the stale durable one that would throw and leak the PTY.
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
     expect(runtime.closeTerminal).toHaveBeenCalledWith('term_reminted')
   })
@@ -389,8 +381,7 @@ describe('orchestration worker release incarnation fallback', () => {
   })
 
   it('recovery-mode: defers when exited missing has no archive rather than plain-settling', async () => {
-    // Proof of death still runs settleDead first; when it retains (no archive), recovery must
-    // stay release_pending — not plain-settle, not unknown.
+    // After proven death with no archive, recovery retains release_pending rather than plain-settling.
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))

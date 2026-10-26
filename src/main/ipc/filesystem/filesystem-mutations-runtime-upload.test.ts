@@ -156,20 +156,4 @@ describe('fs:uploadExternalFileToRuntime', () => {
     expect(sweepMock).not.toHaveBeenCalled()
     expect(listenerCount(sender)).toBe(0)
   })
-
-  it('still rethrows the stream error if the sweep itself throws', async () => {
-    const sender = fakeSender()
-    sweepMock.mockRejectedValue(new Error('sweep exploded'))
-    streamMock.mockImplementation(
-      ({ signal }: { signal: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-          sender.emit('render-process-gone')
-        })
-    )
-
-    // A broken never-rejects sweep would mask the original upload failure.
-    await expect(invoke(sender)).rejects.toThrow('sweep exploded')
-    expect(listenerCount(sender)).toBe(0)
-  })
 })

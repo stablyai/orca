@@ -24,7 +24,6 @@ const prompt = item('u', 1, {
   role: 'user',
   blocks: [{ type: 'text', text: 'go' }]
 })
-// A command that printed nothing leaves no result, so it stays unanswered.
 const quiet = item('cmd', 2, {
   kind: 'tool-call',
   name: 'shell',
@@ -52,12 +51,10 @@ const diff = (id: string, sequence: number, file: string) =>
     }
   })
 
-/** As the transcript list gets them: projected, then adjacent tool rows folded. */
 function messagesOf(items: AgentJournalRenderItem[]): NativeChatMessage[] {
   return foldToolMessages(projectStructuredAgentSessionMessages(items, [], []))
 }
 
-/** Each edit card's call input and the files it draws. */
 function cards(blocks: NativeChatMessage['blocks']): [unknown, string[]][] {
   return [...buildEditCards(blocks).editCards].map(([call, card]) => [
     call.type === 'tool-call' ? call.input : undefined,
@@ -66,7 +63,7 @@ function cards(blocks: NativeChatMessage['blocks']): [unknown, string[]][] {
 }
 
 describe('tool results inside a work run', () => {
-  // Diff results carry no provider call id; across rows they went to the quiet command.
+  // Diff results lack provider call ids; cross-row pairing must not hand them to an unrelated quiet call.
   it("keeps each row's result with its own call", () => {
     const messages = messagesOf([
       prompt,
@@ -95,7 +92,6 @@ describe('tool results inside a work run', () => {
       [{ path: 'src/a.ts' }, ['src/a.ts']],
       [{ path: 'src/b.ts' }, ['src/b.ts']]
     ])
-    // The rollup's reveal for a.ts lands on a.ts's card.
     const key = nativeChatWorkRunEditKey(members, blocks, { messageId: 'da', editKey: 'Diff:0' })
     const target = [...buildEditCards(blocks).editCards.values()].find((card) => card.key === key)
     expect(target?.files[0]?.path).toBe('src/a.ts')

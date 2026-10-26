@@ -25,9 +25,7 @@ type Params = {
   origin: string
   embedded: boolean
   onRequestClose?: () => void
-  // Fired synchronously at tap time (before the openDiff RPC) so the session can
-  // snapshot the active tab then — capturing it post-await would misread a tab
-  // the user switched to during the RPC window as the tap-time tab.
+  // Capture the active tab synchronously at tap time; after-await capture could mistake a later tab pick for the original.
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
   branchCompareState: MobileBranchCompareState
@@ -36,8 +34,6 @@ type Params = {
   setActionError: (message: string | null) => void
 }
 
-// Owns opening a changed file (diff or session replace) and previewing a
-// committed branch diff, plus the in-flight openingPath/openingBranchPath state.
 export function useMobileSourceControlOpeners(params: Params) {
   const {
     client,
@@ -55,8 +51,7 @@ export function useMobileSourceControlOpeners(params: Params) {
     busyActionRef,
     setActionError
   } = params
-  // The seam, not expo-router's own: inside the shell's page a push to a route the page does not
-  // render has to be handed back to the app, and only this knows which targets those are.
+  // Use the handoff seam: routes the embedded page cannot render belong to the native app.
   const router = useWorkspaceRouteHandoff()
   const [openingPath, setOpeningPath] = useState<string | null>(null)
   const openingPathRef = useRef<string | null>(null)
@@ -79,9 +74,7 @@ export function useMobileSourceControlOpeners(params: Params) {
 
   const openFile = useCallback(
     async (entry: MobileGitStatusEntry) => {
-      // Deletions are openable (pre-delete text/image via git.diff); only block
-      // unresolved conflicts, matching canOpenMobileGitStatusEntry / row UI.
-      // An entry with no area is in no section, so no row can reach this anyway.
+      // Deletions can open pre-delete diffs; only unresolved conflicts are blocked, matching row capabilities.
       if (!canOpenMobileGitStatusEntry(entry) || entry.area === undefined) {
         return
       }
@@ -103,24 +96,20 @@ export function useMobileSourceControlOpeners(params: Params) {
           openReviewScreen(entry.path, entry.area)
           return
         }
-        // Snapshot the active tab now, at tap time, before the openDiff RPC —
-        // the session uses it to avoid stealing focus if the user switches tabs
-        // during the RPC window.
         onFileOpenStart?.()
         const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
           staged: entry.area === 'staged'
         })
-        // Why: a host with no desktop window opens no editor tabs; its diff still reads through git.diff on the review screen.
+        // Headless hosts have no editor tabs; use git.diff on the review screen.
         if (isRendererUnavailableReply(diffReply)) {
           if (mountedRef.current) {
             openReviewScreen(entry.path, entry.area)
           }
           return
         }
-        // Why the raw refusal: a host too old to open a diff tab is a capability gap this flow
-        // falls back from, and no acceptance policy carries the code and message through.
+        // Inspect refusal code to fall back when older hosts cannot open diff tabs.
         const fallbackToEdit = isMobileGitUnavailableReply(diffReply)
         const openedTabMode: 'diff' | 'edit' = fallbackToEdit ? 'edit' : 'diff'
         const editReply = fallbackToEdit
@@ -157,12 +146,7 @@ export function useMobileSourceControlOpeners(params: Params) {
           throw new Error("The file opened, but its tab isn't ready yet. Try again.")
         }
         triggerSelection()
-        // Why: when launched from the session screen, opening a file dismisses
-        // this surface back to the session. In embedded mode there is nothing
-        // to pop (the panel docks beside the terminal), so close the dock
-        // instead of calling router.back() — falling back to router.back() when
-        // no close handler is wired, mirroring MobileSourceControlPanel, so the
-        // panel never sits on top of the activated diff tab.
+        // Embedded panels dismiss their dock; route panels pop back to the activated diff, with Back as the unwired-dock fallback.
         if (embedded) {
           ;(onRequestClose ?? (() => router.back()))()
         } else {

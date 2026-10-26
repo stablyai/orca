@@ -1,15 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Benchmark harness for the terminal performance initiative: measures the
-// scheduler-imposed drain ceiling in isolation. A mock terminal parses
-// instantly, so the measured rate is pure scheduler drip (writes-per-tick x
-// chunk size / reschedule interval). Baseline-jul02 measured agent-tui at
-// 2.0 MB/s end-to-end while bare xterm parses the same bytes at ~103 MB/s;
-// this pins how much of that ceiling the drain loop itself imposes.
-// Run with:
-//   ORCA_TERMINAL_PERF_BENCH=1 pnpm vitest run \
-//     src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-throughput.bench.test.ts \
-//     --config config/vitest.config.ts
+// Measure scheduler ceiling with instant mock parsing (writes/tick × chunk size ÷ interval); real end-to-end throughput was 2MB/s versus ~103MB/s bare xterm. Run with ORCA_TERMINAL_PERF_BENCH=1 pnpm vitest run src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-throughput.bench.test.ts --config config/vitest.config.ts.
 const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
 
 vi.mock('@/lib/e2e-config', () => ({
@@ -51,9 +42,7 @@ async function measure(options: { foreground: boolean }): Promise<number> {
   const scheduler = await loadScheduler()
   const terminal = createInstantParseTerminal()
   const payload = 'x'.repeat(FEED_CHUNK_CHARS)
-  // Why paced feeding: dumping the whole payload trips the backlog cap
-  // (replaceBacklogWithWarning). Real sources are paced by main's 512KB
-  // delivery watermark; keep in-flight below a 256KB window like a live PTY.
+  // Pace below 256KB in-flight to avoid backlog replacement, matching sources bounded by main’s 512KB delivery watermark.
   const IN_FLIGHT_WINDOW_CHARS = 256 * 1024
   let fed = 0
   let elapsed = 0
@@ -61,9 +50,7 @@ async function measure(options: { foreground: boolean }): Promise<number> {
     while (fed < TOTAL_CHARS && fed - terminal.written < IN_FLIGHT_WINDOW_CHARS) {
       scheduler.writeTerminalOutput(terminal as never, payload, {
         foreground: options.foreground,
-        // Why false: floods are classified latency-insensitive by
-        // pty-connection's isLatencySensitiveForegroundOutput once the
-        // immediate budget is spent — this is the sustained-throughput path.
+        // Model sustained floods, classified latency-insensitive after the immediate budget is spent.
         latencySensitive: false
       })
       fed += FEED_CHUNK_CHARS
@@ -94,8 +81,7 @@ describe.skipIf(!benchEnabled)('scheduler drain ceiling', () => {
   })
 })
 
-// Real-timer smoke: the MessageChannel drain path must actually drain a
-// high-priority backlog without any timer advancing (the clamp-dodge works).
+// Real timers prove MessageChannel drains high-priority output without virtual-clock advancement.
 import { setUseMessageChannelDrainForTesting } from './pane-terminal-output-scheduler'
 
 describe('message-channel drain path', () => {

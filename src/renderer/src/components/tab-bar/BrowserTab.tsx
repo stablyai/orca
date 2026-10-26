@@ -31,6 +31,8 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
+import { useBrowserAgentDrivesAnyPage } from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store'
@@ -97,8 +99,7 @@ export default function BrowserTab({
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
-  // Why: no transform/transition/isDragging styling — the drag design is
-  // that tabs stay visually anchored; only the blue insertion bar moves.
+  // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
     data: dragData
@@ -106,9 +107,7 @@ export default function BrowserTab({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
-  // Why: about:blank and other non-http URLs should not be sent to the
-  // system browser. Disable the context menu item instead of silently
-  // calling shell.openUrl with an unsupported URL.
+  // Only HTTP(S) URLs can open in the system browser; disable unsupported or malformed destinations.
   const openInBrowserUrl = redactKagiSessionToken(getLiveBrowserUrl(tab.id) ?? tab.url)
   let isHttpUrl = false
   try {
@@ -128,6 +127,8 @@ export default function BrowserTab({
   const toggleAudioMutedLabel = audioMuted
     ? translate('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
     : translate('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
+  const agentDriving = useBrowserAgentDrivesAnyPage(tab.pageIds ?? [tab.activePageId])
+  const agentDrivingLabel = translate('browserTab.agentDriving', 'An agent is using this page')
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -135,11 +136,7 @@ export default function BrowserTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches a pointerdown on the renderer document. Radix
-  // DropdownMenu relies on document pointerdown for outside-click detection,
-  // so it misses webview clicks. Listening for window blur catches the moment
-  // focus leaves the renderer (including into a webview).
+  // Webview clicks bypass renderer pointerdown, so window blur dismisses menus Radix cannot detect as outside clicks.
   useEffect(() => {
     if (!menuOpen) {
       return
@@ -149,8 +146,7 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
-  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
-  // another pane / split) does not switch the active tab mid-gesture.
+  // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
   const slotProps = useTabStripSlotProps(tab.id, isActive)
 
@@ -187,19 +183,25 @@ export default function BrowserTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {/* Why: the browser tab icon is the only non-terminal, non-editor
-          surface in the tab strip. Coloring the Globe blue (matching the
-          in-app browser's identity and the default tab insertion bar)
-          gives it a distinct, recognizable anchor so users can spot
-          browser tabs at a glance even when the strip is saturated. We
-          keep full color on both active and inactive tabs — dimming to
-          muted-foreground made the icon read as "disabled" in practice. */}
-      <BrowserFavicon
-        faviconUrl={tab.faviconUrl}
-        loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
-        className="size-3 mr-1"
-        fallbackClassName="text-blue-500"
-      />
+      {/* Keep browser identity distinct on inactive tabs too; muted icons look disabled. */}
+      {agentDriving ? (
+        // Why: the dimmed favicon keeps the site recognizable under the agent's arrow.
+        <span role="img" aria-label={agentDrivingLabel} className="relative mr-1 size-3 shrink-0">
+          <BrowserFavicon
+            faviconUrl={tab.faviconUrl}
+            className="size-3 opacity-30"
+            fallbackClassName="text-blue-500"
+          />
+          <AgentCursorGlyph className="pointer-events-none absolute inset-0 size-3" />
+        </span>
+      ) : (
+        <BrowserFavicon
+          faviconUrl={tab.faviconUrl}
+          loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+          className="size-3 mr-1"
+          fallbackClassName="text-blue-500"
+        />
+      )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {showAudioControl && (
@@ -254,9 +256,11 @@ export default function BrowserTab({
             title={tabLabel}
             icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
             programName={
-              isBlankBrowserTab(tab)
-                ? translate('tabHoverCard.browser', 'Browser')
-                : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
+              agentDriving
+                ? agentDrivingLabel
+                : isBlankBrowserTab(tab)
+                  ? translate('tabHoverCard.browser', 'Browser')
+                  : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
             }
           >
             {tabRoot}

@@ -1,16 +1,6 @@
-/**
- * A managed orcad that stops is started again by the client, on a real host:
- *
- * 1. Idle: quit the client, the server exits and records an idle stop; a relaunched client
- *    reconnects and the server is running again with that record consumed.
- * 2. Killed, then a reboot: a killed server comes back on the next call and adopts the daemon
- *    that kept its terminal; once both are gone, the next connect starts fresh.
- * 3. A new desktop on the same build finds the server it would deploy recorded active but gone
- *    (#27284): its first connect starts it instead of failing on the stale record.
- *
- * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build, and the
- * client forwards a short test-only quiet period to the server it launches.
- */
+// Recover real managed orcad after idle exit, kill/reboot and stale active-slot records on a fresh desktop (#27284).
+// Reuse surviving daemon PTYs after kill; start fresh after reboot and consume idle-stop records.
+// Docker only: ORCA_E2E_ORCAD_CONVERT_TEMPLATE must be linux-x64-glibc; forward a short test quiet period.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'

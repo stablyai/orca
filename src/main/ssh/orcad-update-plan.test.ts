@@ -195,7 +195,6 @@ describe('assessOrcadRollback', () => {
     expect(safety).toMatchObject({ safety: 'lossy' })
   })
 
-  // The point past which rollback is unsafe: the first terminal created after activation.
   it('refuses once a terminal started after activation, because restoring would orphan it', () => {
     const safety = assessOrcadRollback({
       targetDaemonProtocol: PROTOCOL,

@@ -25,8 +25,7 @@ export type CommentMarkdownLinkClickHandler = (
 export type DocumentCodeBlockRenderer = (props: {
   children?: React.ReactNode
   language?: string
-  /** The line the fence starts on in the whole document. Streaming fixes only escape characters
-   *  within a line or append at the end, so it holds while the text grows and when it finishes. */
+  /** Whole-document fence line stays stable while streaming only escapes within lines or appends text. */
   sourceLine?: number
 }) => React.JSX.Element
 
@@ -47,8 +46,7 @@ function handleMarkdownAnchorClick(
   href: string | undefined,
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
 ): void {
-  // Why: link clicks should not also trigger an outer row/card click handler;
-  // images only claim the click when an image handler is wired below.
+  // Link clicks must not activate outer cards; images consume clicks only with a wired handler.
   event.stopPropagation()
   const trimmedHref = href?.trim()
   if (
@@ -87,9 +85,8 @@ export function createCompactCommentMarkdownComponents(
   expandImages = false
 ): Components {
   return {
-    // Strip <p> wrappers to avoid double margins in the tight card layout.
+    // Avoid paragraph margins in dense cards.
     p: ({ children }) => <span className="comment-md-p">{children}</span>,
-    // Open links externally — sidebar is not a navigation context.
     a: ({ href, children }) => (
       <a
         href={href || undefined}
@@ -102,42 +99,29 @@ export function createCompactCommentMarkdownComponents(
         {children}
       </a>
     ),
-    // Why: react-markdown calls the `code` component for both inline `code`
-    // and the <code> inside fenced blocks (<pre><code>…</code></pre>). We
-    // always apply inline-code styling here; the wrapper div uses a CSS
-    // descendant selector ([&_pre_code]) at higher specificity to strip
-    // the pill background/padding when code is inside a <pre>. This is
-    // more reliable than checking `className` — which is only set when
-    // the fenced block specifies a language (```js), not for bare ```.
-    // Why: compact comment previews live in dense cards; keep diagram fences as
-    // bounded source blocks so async SVG renders do not reshape sidebar lists.
+    // Bare fences have no language class; style all code inline, then use higher-specificity pre/code overrides for blocks.
+    // Keep compact diagrams as bounded source so async SVG cannot reshape sidebar lists.
     code: ({ children }) => (
       <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
         {children}
       </code>
     ),
-    // Compact pre blocks — no syntax highlighting needed for short comments.
     pre: ({ children }) => (
       <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
         {children}
       </pre>
     ),
-    // Compact lists
     ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
     ol: ({ children, start }) => (
       <ol start={start} className="my-0.5 ml-3 list-decimal space-y-0">
         {children}
       </ol>
     ),
-    // Why: GFM task list checkboxes are non-functional in a read-only comment
-    // card (clicking them would just open the edit modal via the parent's
-    // onClick). Rendering them disabled avoids a misleading interactive
-    // affordance.
+    // Task checkboxes are read-only; pointer input would otherwise activate card editing.
     li: ({ children }) => (
       <li className="leading-normal [&>input]:pointer-events-none">{children}</li>
     ),
-    // Spans preserve compact flow on shared surfaces; roles keep the source
-    // heading hierarchy navigable when the PR sidebar promotes them visually.
+    // Preserve compact span flow while heading roles retain navigable hierarchy.
     h1: ({ children }) => (
       <span className="comment-md-h comment-md-h1 font-bold" role="heading" aria-level={1}>
         {children}
@@ -168,9 +152,7 @@ export function createCompactCommentMarkdownComponents(
         {children}
       </span>
     ),
-    // Horizontal rules as a subtle divider
     hr: () => <hr className="my-1 border-border/50" />,
-    // Compact blockquotes
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
       return calloutKind ? (
@@ -183,9 +165,7 @@ export function createCompactCommentMarkdownComponents(
         </blockquote>
       )
     },
-    // Why: agent replies and workspace notes often carry screenshot markdown
-    // like "Image #1"; compact cards inline app-managed thumbnails without
-    // auto-fetching arbitrary remote image URLs.
+    // Inline only app-managed screenshots; avoid fetching arbitrary remote images in compact cards.
     img: ({ alt, src }) => {
       if (!isTrustedCompactImageSrc(src)) {
         if (!src) {
@@ -237,9 +217,7 @@ export function createCompactCommentMarkdownComponents(
         image
       )
     },
-    // Why: GFM tables in a ~200px sidebar would overflow badly. Wrapping in an
-    // overflow container keeps the card layout stable while still letting the
-    // user scroll to see the full table.
+    // Contain GFM tables with scrolling so wide content cannot expand narrow sidebar cards.
     table: ({ children }) => (
       <div className="my-1 max-w-full overflow-x-auto">
         <table className="text-[10px] border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-border/40 [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-semibold [&_th]:text-left">
@@ -258,8 +236,7 @@ export function createDocumentCommentMarkdownComponents(
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
     a: ({ href, children }) =>
       isGitHubUserAttachmentVideoLink(href, children) ? (
-        // Why: GitHub's API returns uploaded videos as bare attachment links;
-        // GitHub.com upgrades them to media embeds in its own renderer.
+        // GitHub APIs return uploaded videos as links; embed them as GitHub’s renderer does.
         <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
       ) : (
         <a
@@ -318,16 +295,13 @@ export function createDocumentCommentMarkdownComponents(
     },
     img: ({ alt, src }) => {
       if (isGitHubUserAttachmentUrl(src)) {
-        // Why: private-repo attachment images fail as cross-origin loads; a
-        // top-level link opens them in a GitHub-authenticated tab, and falls
-        // back to a text link when the image itself can't render.
+        // Private attachments need GitHub session cookies; top-level links reach authenticated tabs when inline loads fail.
         return <GitHubUserAttachmentImage src={src} alt={alt} />
       }
       if (!src) {
         return alt ? <span>{alt}</span> : null
       }
-      // Why: Jira/Linear/GitHub document bodies often embed screenshots; open a
-      // viewport-centered lightbox so the preview is not trapped in the drawer.
+      // Show document screenshots in a viewport lightbox rather than constraining them to the drawer.
       if (onLinkClick) {
         const imageClassName = [
           'my-3 max-h-96 max-w-full rounded-md object-contain',
@@ -351,8 +325,7 @@ export function createDocumentCommentMarkdownComponents(
         />
       )
     },
-    // Why: GitHub issue/PR bodies commonly contain GFM tables. The dashboard
-    // dialog is wide enough to show them, but still needs overflow containment.
+    // Contain document GFM tables even in wider dashboard dialogs.
     table: ({ children }) => (
       <div className="my-3 max-w-full overflow-x-auto rounded-md border border-border/60">
         <table className="min-w-full border-collapse text-[13px] [&_td]:border [&_td]:border-border/50 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-border/50 [&_th]:bg-muted/60 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold">

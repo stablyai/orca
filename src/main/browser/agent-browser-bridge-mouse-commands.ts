@@ -38,6 +38,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         const lease = acquireElectronDebugger(wc)
         let releaseFocusGuard = (): void => {}
         try {
+          await this.browserManager.showAgentPointer(wc, { type: 'mouseMoved', x, y })
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
           // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
@@ -47,6 +48,11 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
           // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
+          await this.browserManager.showAgentPointer(wc, {
+            type: 'mousePressed',
+            x: point.x,
+            y: point.y
+          })
           if (!point.handled) {
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',

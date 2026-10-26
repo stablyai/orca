@@ -124,7 +124,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
         )
-        // One-shot: a second reveal asks again for nothing.
         binding.noteVisibilityResume()
         await flushAsyncTicks()
         expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
@@ -137,15 +136,13 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(resumeConnectOptions?.command).toContain('--resume')
       expect(resumeConnectOptions?.command).toContain('sess-hibernated-1')
 
-      // The wake is one-shot: a second reveal must not spawn again.
       const connectCallsAfterWake = transport.connect.mock.calls.length
       binding.noteVisibilityResume()
       await flushAsyncTicks()
       expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
     })
 
-    // Why: pins #16308's incidental effect. Hibernation writes a worktree-sleep note, yet any
-    // suppressed exit over a finished turn's live idle anchor now arms a resume on reveal.
+    // A suppressed exit over a finished turn’s live anchor still arms reveal resume despite its worktree-sleep note (#16308).
     it('arms an in-place resume from a finished turn idle anchor on a suppressed exit', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
@@ -190,7 +187,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The wake asks main to start the pane; the window attaches to what main binds.
         await expectWindowStartAskedMain(transport, paneKey)
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
@@ -204,7 +200,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     })
 
     it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
-      // Mobile wake fanout drives wakeHibernatedAgentIfArmed on a still-hidden pane (no isVisible flip): the armed --resume must fire exactly once even if delivered twice (INV-1).
+      // Mobile wakes hidden panes without visibility changes; duplicate wake events must resume exactly once (INV-1).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -258,12 +254,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The wake asks main to start the pane; the window attaches to what main binds.
         await expectWindowStartAskedMain(transport, paneKey)
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
         )
-        // One-shot: a second wake asks again for nothing.
         binding.wakeHibernatedAgentIfArmed()
         await flushAsyncTicks()
         expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
@@ -276,7 +270,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(resumeConnectOptions?.command).toContain('--resume')
       expect(resumeConnectOptions?.command).toContain('sess-hibernated-bg')
 
-      // A second navigation-free wake must not spawn again (one-pane/one-PTY).
       const connectCallsAfterWake = transport.connect.mock.calls.length
       binding.wakeHibernatedAgentIfArmed()
       await flushAsyncTicks()
@@ -413,7 +406,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     })
 
     it('latches a navigation-free wake that lands before the hibernation kill arms the pane', async () => {
-      // Race (#7906): the edge-triggered wake can land after the sleeping record but before the kill sets hibernatedWakePtyId; without a latch it'd be dropped, leaving a frozen terminal.
+      // Latch wake events between recording sleep and arming the kill’s PTY ID, or the frozen pane remains stranded (#7906).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -448,7 +441,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
-      // Wake arrives mid-kill: nothing is armed yet, but the pane must claim the session (suppressing the generic resume) and latch the request.
+      // Claim and latch mid-kill wakes before arming so generic resume cannot duplicate the session.
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-race'
       expect(binding.wakeHibernatedAgentIfArmed(new Set([claimKey]))).toBeNull()
       const claimedProviderSessions = new Set<string>()
@@ -463,7 +456,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The wake asks main to start the pane; the window attaches to what main binds.
         await expectWindowStartAskedMain(transport, paneKey)
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
@@ -513,8 +505,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The pane claims its session while main's start runs, asks main once, and leaves the
-        // record to main once the start settles.
+        // Claim while main starts, ask once, and leave record consumption to main.
         const layoutApply = await mainLayoutApplyTransport()
         layoutApply.answerWith('pending')
         const claim = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
@@ -628,7 +619,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     })
 
     it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
-      // Race: reveal's noteVisibilityResume runs before onExit arms the wake, so the arm-time foreground check must resume the pane instead of stranding a disarmed-but-dead frame.
+      // If reveal precedes wake arming, the arm-time visibility check must resume the pane immediately.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -672,18 +663,15 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The wake asks main to start the pane; the window attaches to what main binds.
         await expectWindowStartAskedMain(transport, paneKey)
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
         )
-        // One-shot: a later reveal asks again for nothing.
         binding.noteVisibilityResume()
         await flushAsyncTicks()
         expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(1)
         return
       }
-      // No second reveal was needed: the foreground pane resumed its recorded session directly from the arm-time wake.
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
       const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
         | { command?: string }
@@ -691,7 +679,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(resumeConnectOptions?.command).toContain('--resume')
       expect(resumeConnectOptions?.command).toContain('sess-hibernated-2')
 
-      // Still one-shot: a later reveal must not spawn again.
       const connectCallsAfterWake = transport.connect.mock.calls.length
       binding.noteVisibilityResume()
       await flushAsyncTicks()
@@ -699,7 +686,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     })
 
     it('invalidates the hibernation wake when another flow rebinds the pane before reveal', async () => {
-      // Why: intentional restarts share hibernation's exit suppression; a rebind while hidden owns the pane, so the armed wake must be discarded on reveal — permanently, not revived by a later death.
+      // A hidden restart’s rebind permanently invalidates the old armed wake, including after a later PTY death.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)

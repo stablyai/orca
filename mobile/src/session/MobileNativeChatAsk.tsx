@@ -9,23 +9,16 @@ import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-
 
 type Props = {
   prompt: AskPrompt
-  /** Deliver the chosen answer (per-question option indices + free text) —
-   *  index-based so Claude's arrow-navigate selector can be driven by the
-   *  option's stable number instead of pasted label text (STA-1860). */
+  // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
-  /** Fold the card to a strip and free Send, writing nothing. */
+  // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
 const OTHER = -1
 
-/** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
- *  question per step with tabs across the top, a Next button that advances (Send
- *  on the last step), and a Cancel that dismisses the prompt. A single-select pick
- *  moves on by itself, as on desktop. Neutral styling
- *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({
   prompt,
   onAnswer,
@@ -39,10 +32,9 @@ export function MobileNativeChatAsk({
   const submittingRef = useRef(false)
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
 
-  // A single-select option answers the question, so the card moves on after a beat that shows
-  // it chosen; "Other…" still needs its text.
+  // Delay single-select advance to show the choice; Other still needs text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
-    // The ref, not `submitting`: a tap can land before the render that disables the rows.
+    // Block same-frame taps before disabled state renders.
     if (submittingRef.current) {
       return
     }
@@ -69,7 +61,7 @@ export function MobileNativeChatAsk({
     })
   }
 
-  // `sel` is an explicit snapshot so a just-made pick isn't lost to the async setState.
+  // Pass the new selection explicitly because setState has not committed it yet.
   const selectionFor = (qi: number, sel = selections): AskAnswerSelection => {
     const picked = (sel[qi] ?? []).filter((i) => i !== OTHER)
     const other = (sel[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''

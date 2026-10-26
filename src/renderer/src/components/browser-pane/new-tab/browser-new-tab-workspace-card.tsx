@@ -16,7 +16,6 @@ import { BrowserNewTabRow } from './browser-new-tab-row'
 import { BrowserNewTabServerRow } from './browser-new-tab-server-row'
 import type { BrowserNewTabServers } from './use-browser-new-tab-servers'
 
-/** This workspace's running servers and linked reviews and tasks, then servers elsewhere on its host. */
 export function BrowserNewTabWorkspaceCard({
   servers,
   linkedItems,

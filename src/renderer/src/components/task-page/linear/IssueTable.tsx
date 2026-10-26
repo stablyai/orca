@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'

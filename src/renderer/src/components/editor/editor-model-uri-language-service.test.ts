@@ -1,5 +1,4 @@
-// Why: Monaco's TypeScript worker names each file by its model URI, so the owner part of that
-// URI decides whether imports between open tabs resolve and whether `.tsx` parses as TSX.
+// The TypeScript worker uses model URIs as filenames, determining import isolation and TSX detection.
 import { describe, expect, it } from 'vitest'
 import { URI } from 'monaco-editor/esm/vs/base/common/uri.js'
 import { TypeScriptWorker } from 'monaco-editor/esm/vs/language/typescript/tsWorker.js'

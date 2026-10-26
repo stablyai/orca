@@ -26,22 +26,13 @@ export class StarNagService {
   private store: Store
   private stats: StatsCollector
   private disposeStatsListener: (() => void) | null = null
-  // Why: once we broadcast the card, the renderer owns the UI until the user
-  // dismisses or stars. Without this in-memory guard, every subsequent
-  // agent_start past the threshold would re-enter maybeShow() and spawn a new
-  // `gh api` subprocess on each spawn — cheap individually, but a power user
-  // at 40 agents with threshold 35 would fork gh on every spawn until they
-  // act on the card.
+  // After broadcast, renderer owns dismissal/star; suppress repeated gh probes on every above-threshold agent spawn.
   private promptVisible = false
-  // Why: prevent concurrent gh invocations if agents spawn rapidly during the
-  // tiny window between crossing the threshold and the first gh check
-  // resolving.
+  // Serialize evaluation across rapid spawns while the first gh check is pending.
   private evaluating = false
   private pendingForceShow = false
   private pendingOnboardingCompleted = false
-  // Why: dismissal backoff and action telemetry must use the prompt context
-  // that was delivered, not whatever threshold/source happens to be current
-  // when the renderer later reports a user action.
+  // Dismissal backoff/telemetry must use delivered prompt context, not later thresholds or sources.
   private promptSession: StarNagPromptSession | null = null
   private agentValueMoment: StarNagAgentValueMoment
 
@@ -87,8 +78,6 @@ export class StarNagService {
     ipcMain.handle('star-nag:onboardingCompleted', () => this.onboardingCompleted())
   }
 
-  // ── State helpers ─────────────────────────────────────────────────
-
   private handleAgentSpawned(total: number): void {
     if (
       !shouldShowStarNagThresholdPrompt({
@@ -114,10 +103,7 @@ export class StarNagService {
     }
     this.setEvaluating(true)
     try {
-      // Why: checkOrcaStarred lets us skip users who already starred outside
-      // the app. When gh cannot tell us, keep the prompt available but route
-      // the renderer to the browser fallback instead of a dead direct-star
-      // button.
+      // Skip externally starred users; unknown gh state must retain browser fallback rather than a broken direct action.
       const starred = await checkOrcaStarred()
       if (this.store.getUI().starNagCompleted) {
         this.pendingForceShow = false
@@ -128,8 +114,7 @@ export class StarNagService {
       }
       if (starred) {
         this.trackAlreadyStarredSuppressed(source)
-        // Already starred somewhere — lock in the permanent suppression so we
-        // stop recomputing thresholds on every spawn.
+        // Persist permanent suppression for externally verified stars.
         this.markCompleted()
         return false
       }
@@ -215,15 +200,12 @@ export class StarNagService {
     })
   }
 
-  // ── Public actions (invoked from IPC) ─────────────────────────────
-
   private async prepareAgentValueMoment(): Promise<AgentValueMomentPreparation> {
     return this.agentValueMoment.prepare()
   }
 
   private showPreparedAgentValueMoment(): void {
-    // Why: renderer re-confirms "not typing / no active agent" after the slow
-    // gh check before invoking this show step.
+    // Renderer rechecks idle/not-typing after the slow gh probe before showing.
     this.agentValueMoment.showPrepared()
   }
 
@@ -242,19 +224,14 @@ export class StarNagService {
   }
 
   private clearVisiblePromptForOnboarding(): void {
-    // Why: onboarding completion is a stronger app-level value moment than a
-    // threshold card that may have fired behind the wizard.
+    // Onboarding completion outranks a threshold prompt potentially hidden behind the wizard.
     this.promptVisible = false
     this.promptSession = null
     this.agentValueMoment.clear()
     this.broadcastHide()
   }
 
-  /**
-   * User closed the notification without starring → defer threshold prompts
-   * for a substantial cross-version cooldown. We still maintain the legacy
-   * threshold fields so historical dashboards and old builds remain coherent.
-   */
+  /** Keep legacy threshold fields coherent for old builds/dashboards while applying cross-version dismissal cooldown. */
   private dismiss(): void {
     this.defer('dismissed')
   }
@@ -297,8 +274,7 @@ export class StarNagService {
     }
     session.openedRepoTracked = true
     trackStarNagSessionOutcome(session, 'opened_repo', { mode: 'web' })
-    // Why: opening GitHub is only a handoff, not verified star success. Keep the
-    // ask quiet for the normal cooldown, but do not set starNagCompleted.
+    // Browser handoff is not verified success; apply cooldown without marking completed.
     deferAfterStarNagWebHandoff(this.store, this.stats, STAR_NAG_COOLDOWN_MS)
     this.promptVisible = false
     this.promptSession = null
@@ -331,7 +307,6 @@ export class StarNagService {
     return starred
   }
 
-  /** User successfully starred or opted out → never nag again. */
   private markCompleted(): void {
     this.store.updateUI({ starNagCompleted: true, starNagDeferredUntil: null })
     this.promptVisible = false
@@ -345,7 +320,6 @@ export class StarNagService {
     return typeof deferredUntil === 'number' && deferredUntil > Date.now()
   }
 
-  /** Dev-only entry point: skip all gating and fire the notification. */
   private forceShow(): void {
     if (this.promptVisible) {
       return

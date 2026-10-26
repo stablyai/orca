@@ -48,8 +48,7 @@ export function TerminalAdvancedSection({
   const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
   if (scrollbackRows !== prevScrollbackRows) {
-    // Why: settings can update outside this pane, so the draft follows the
-    // persisted source once it changes instead of clobbering active edits.
+    // Adopt external settings changes without replacing drafts during active edits.
     setPrevScrollbackRows(scrollbackRows)
     setScrollbackRowsDraft(String(scrollbackRows))
   }

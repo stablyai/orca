@@ -25,9 +25,7 @@ import {
 } from './launched-agent-composer-readiness'
 import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readiness'
 
-// Why a full Record: adding a TuiAgent fails to compile here until someone decides whether its
-// worker start waits for a captured input-box marker, and a row that gains or loses evidence
-// shows up in review.
+// Exhaustive Record forces an evidence-lane decision whenever a TuiAgent is added.
 const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   zcode: 'composer-marker',
   opencode: 'composer-marker',
@@ -98,11 +96,9 @@ function readSignal(agent: string) {
   if (!TUI_AGENT_CONFIG[agent].draftPasteReadySignal) {
     throw new Error(`${agent} cites composer-ready captures but has no draftPasteReadySignal`)
   }
-  // Worker start always presses Enter after its paste.
   return resolvePasteReadySignal(TUI_AGENT_CONFIG[agent], true)
 }
 
-/** Index of the first read the scanner reports ready on, or -1. */
 function firstReadyRead(agent: string, reads: readonly string[]): number {
   const scanner = createDraftPasteReadyScanner(readSignal(agent))
   return reads.findIndex((read) => scanner.observe(read).ready)
@@ -179,15 +175,13 @@ describe('every capture a row cites proves its input-box marker', () => {
       let rowRead = -1
       let read = 0
       for await (const frame of replayTranscript(chunks, meta.cols, meta.rows)) {
-        // A brief pasted before the row replaces the placeholder in the box.
         const box = frame.screenLines.findIndex(
           (line) => line.includes(OPENCODE_PLACEHOLDER) || line.includes('[Pasted ~')
         )
         if (box !== -1 && boxRead === -1) {
           boxRead = read
         }
-        // The row inside the box's last line reads `<agent> · <model>`; a read can paint the
-        // separator and model before the agent.
+        // Separator/model can paint before the agent name; require the completed row inside the box.
         const corner = frame.screenLines.findIndex((line) => line.includes(BOX_BOTTOM_LEFT))
         if (box !== -1 && corner > box && AGENT_ROW.test(frame.screenLines[corner - 1])) {
           rowRead = read
@@ -197,7 +191,6 @@ describe('every capture a row cites proves its input-box marker', () => {
       }
       expect(boxRead).toBeGreaterThanOrEqual(0)
       expect(rowRead).toBeGreaterThanOrEqual(boxRead)
-      // OpenCode 1 paints the row just before the box's cursor in one frame; 2 paints it later.
       const cursorRead = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       const boxCursorRead = chunks.findIndex((chunk) => cursorRead.observe(chunk).ready)
       expect(firstReadyRead(agent, chunks)).toBe(Math.max(rowRead, boxCursorRead))
@@ -213,7 +206,6 @@ const READY: RuntimeTerminalWait = {
   exitCode: null
 }
 
-/** The runtime's composer wait over a replayed PTY stream, with its defaults. */
 function replayRuntime() {
   let listener = (_data: string): void => {}
   const waitForFreshWorkerComposer = vi.fn(
@@ -246,7 +238,6 @@ function replayRuntime() {
       return READY
     }
   )
-  /** The `tui-idle` fallback: pending until a test settles it. */
   let settleIdle = (_wait: RuntimeTerminalWait): void => {}
   const waitForTerminal = vi.fn(
     (): Promise<RuntimeTerminalWait> =>
@@ -287,8 +278,7 @@ describe('launched grok composer readiness', () => {
   })
 
   it('still opens in inline mode, which never switches to the alternate screen', async () => {
-    // `grok --no-alt-screen` / `screen_mode = "minimal"` paints its `❯` without the anchor the
-    // marker needs, so the quiet window after bracketed paste is its only readiness.
+    // Grok inline/minimal mode lacks the marker anchor; use bracketed-paste quiescence.
     vi.useFakeTimers()
     const h = replayRuntime()
     const ready = waitForLaunchedAgentComposer(h.runtime, 'term-1', 'grok', 60_000)
@@ -332,7 +322,6 @@ describe('launched composer readiness for agents the idle evidence can also read
     vi.useFakeTimers()
     const h = replayRuntime()
     const ready = waitForLaunchedAgentComposer(h.runtime, 'term-1', 'claude', 60_000)
-    // Output, but bracketed paste never turns on, so the composer signal cannot fire.
     h.feed('\x1b[?25l welcome to claude code \x1b[?25h')
 
     await vi.advanceTimersByTimeAsync(7_900)

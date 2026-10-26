@@ -44,8 +44,7 @@ function liveRecord(): SleepingAgentSessionRecord {
   }
 }
 
-// The host renderer restarted while its daemon PTY survived: the tab and its persisted layout are
-// there, but nothing reattached the pane, and the user is looking at another worktree.
+// After renderer restart, daemon PTYs can survive behind persisted layouts while another workspace is active and no pane reattached.
 function unmountedLivePaneState(): Partial<AppState> {
   return {
     workspaceSessionReady: true,

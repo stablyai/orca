@@ -11,10 +11,7 @@ import {
   recordForwardStarted
 } from './ssh-port-forward-unrestored'
 
-/**
- * Saves the live forwards plus every saved one not live, so a forward a restart left unrestored
- * survives a later add or edit (#32484). `dropped` names the one forward the user removed or edited away.
- */
+/** Retain inactive saved forwards across edits; dropped excludes the removed/replaced mapping (#32484). */
 export function persistPortForwards(
   targetId: string,
   dropped?: Pick<SavedPortForward, 'localPort' | 'remoteHost' | 'remotePort'>

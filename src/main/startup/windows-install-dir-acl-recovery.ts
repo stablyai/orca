@@ -20,11 +20,7 @@ import {
   type WindowsInstallDirAclRepairResult
 } from './windows-install-dir-package-acl-repair'
 
-/**
- * Joins the read-only install-DACL probe to the repair, and keeps the verdict so
- * the renderer-recovery dialog can say what is actually wrong instead of blaming
- * the graphics driver. See `windows-install-dir-package-acl-repair.ts`.
- */
+/** Retain install-DACL diagnosis for renderer recovery instead of mislabeling it as a driver fault. */
 
 export type InstallDirAclPoisonDiagnosis = {
   /** Dialog copy; ends with the commands when the user has to run them. */
@@ -53,7 +49,7 @@ let blockingRepairInFlight = false
 const verdictWaiters = new Set<() => void>()
 
 function settleVerdictWaiters(): void {
-  // `wake` deletes only itself, which is safe to do on the entry being visited.
+  // Each wake removes only itself; deleting the visited entry is safe.
   for (const wake of verdictWaiters) {
     wake()
   }
@@ -75,10 +71,7 @@ export function noteWindowsInstallDirAclProbePending(): void {
   probePendingSince = Date.now()
 }
 
-/**
- * Resolves when the probe's verdict lands, or when its grace window runs out.
- * For callers that must not act on a suspicion the probe is about to withdraw.
- */
+/** Wait for verdict/grace expiry before acting on suspicion the probe may withdraw. */
 export function waitForInstallDirAclVerdict(now: number = Date.now()): Promise<void> {
   const remainingMs =
     probePendingSince === null ? 0 : PROBE_VERDICT_GRACE_MS - (now - probePendingSince)
@@ -97,12 +90,7 @@ export function waitForInstallDirAclVerdict(now: number = Date.now()): Promise<v
   })
 }
 
-/**
- * True while a sandboxed-child death could be the install DACL rather than the
- * graphics driver. Safe graphics does not rescue a poisoned tree — it still kills
- * the renderer — and it removes the GPU child, erasing the sibling-death evidence
- * that is the only way to recognise the shape in a crash report.
- */
+/** Suspect DACL can mimic driver death; safe graphics still loses the renderer and hides GPU sibling-death evidence. */
 export function isInstallDirAclSuspect(now: number = Date.now()): boolean {
   if (installDirReadClean) {
     return false
@@ -110,42 +98,25 @@ export function isInstallDirAclSuspect(now: number = Date.now()): boolean {
   if (poison && poison.stage !== 'repaired') {
     return true
   }
-  // A 'repaired' stage is the grant's own claim, not a reading of the tree — and the GPU
-  // children die 48-1373ms after window creation while the probe answers 0.9-3.0s in. So
-  // the claim stays provisional while this launch's probe is still out: the grace check
-  // below keeps the suspicion until the reading corroborates it or the window lapses.
+  // Repair success stays provisional until this probe answers or grace expires; child deaths can precede its 0.9-3s reading.
   return probePendingSince !== null && now - probePendingSince < PROBE_VERDICT_GRACE_MS
 }
 
-/**
- * True while a repair for this tree is dispatched and has not reported yet.
- *
- * Why it is not the same question as `isInstallDirAclSuspect`: a suspect tree we are
- * actively repairing is one a *future* launch can still be rescued on, so the safe-graphics
- * marker earns its keep there — a launch Chromium FATALs mid-repair comes back software
- * rendered, stops spawning the GPU children that trigger the FATAL, and lets the next gate
- * run to completion. A terminal verdict has no such next step.
- */
+/** Keep safe-graphics markers while repair is pending so a fatal relaunch stops the GPU crash loop and lets the next gate finish. */
 export function isInstallDirAclRepairPending(): boolean {
   return poison?.stage === 'pending'
 }
 
-/**
- * True once the repair has nothing left to try for this install and version: `marker-hit`
- * is reachable only through the spent attempt budget. The suspicion itself stands — the
- * dialog still names the cause and the admin commands — but a caller that was *withholding*
- * a recovery to give the repair first go has nothing left to wait for.
- */
+/** Spent repair budget leaves diagnosis/admin commands but no future repair to wait for before offering other recovery. */
 export function isInstallDirAclRepairExhausted(): boolean {
   return poison?.stage === 'marker-hit'
 }
 
-/** True while the pre-window gate is rewriting the very files a new renderer would load. */
 export function isBlockingInstallDirAclRepairInFlight(): boolean {
   return blockingRepairInFlight
 }
 
-/** False when the once-per-process repair had already been dispatched, so no `onDone` is coming. */
+/** False means the process latch prevented dispatch; no onDone will follow. */
 function startRepair(
   installDir: string,
   options: WindowsInstallDirAclRecoveryOptions,
@@ -155,32 +126,23 @@ function startRepair(
   const started = repairWindowsInstallDirPackageAcl({
     ...options,
     installDir,
-    // Every caller here holds outstanding poison evidence — this launch's probe reading, or
-    // the persisted marker that armed the gate — so a marker recording a completed repair
-    // describes a re-poisoned tree, or a grant that silently no-opped. It must not
-    // stand in for a repair. `marker-hit` therefore only ever means the budget is spent.
+    // Outstanding probe/persisted poison outranks prior success; marker-hit can mean exhausted budget only.
     poisonEvidenceOutstanding: true,
     onDone: (result) => {
-      // A tree read poisoned AFTER this repair was dispatched disproves its success claim,
-      // whatever the grant reported: the gate's budget can expire while the grant runs on under
-      // its own, so the probe's reading is the later evidence. A clean reading since then
-      // retires it — there was nothing left to repair.
+      // Post-dispatch poison disproves grant success even if the gate timed out first; subsequent clean evidence retires it.
       const claimDisproved =
         result.mode === 'repaired' && installDirReadPoisonedMidRepair && !installDirReadClean
-      // A clean reading of the tree outranks this: there was nothing left to repair.
+      // Positive clean evidence outranks any later repair verdict.
       if (!installDirReadClean) {
         poison = { installDir, stage: claimDisproved ? 'failed' : result.mode }
       }
       logStartupMilestone('install-dir-acl-repair-done', { mode: result.mode })
       if (result.mode === 'repaired' && !claimDisproved) {
         clearInstallDirAclPoisonMarker(options.userDataPath)
-        // The GPU child deaths were never a driver fault, so safe graphics — and the
-        // --in-process-gpu launch that hides the next crash's evidence — must not outlive the repair.
-        // Never a user-confirmed marker: "keep safe graphics" is a choice, not Orca's latch.
+        // Retire only automatic safe graphics after repair; user-confirmed choice survives.
         const gpuMarker = readGpuFallbackMarker(options.userDataPath)
         if (gpuMarker?.userConfirmed === false) {
-          // Kept: a probe reading that later disproves this claim restores the marker,
-          // or the next launch relaunches hardware accelerated into the re-armed gate.
+          // Retain the cleared marker so later disproof can restore safe launch through the re-armed gate.
           gpuMarkerClearedByRepairClaim = gpuMarker
           clearGpuFallbackMarker(options.userDataPath)
         }
@@ -197,19 +159,17 @@ function startRepair(
   return started
 }
 
-/** The probe's `onDone`: no-op unless the machine is in the reproduced state. */
+/** Apply clean/unknown/poison evidence; only poison dispatches repair. */
 export function startWindowsInstallDirAclRepairIfPoisoned(
   data: CrashReportBreadcrumbData,
   options: WindowsInstallDirAclRecoveryOptions
 ): void {
-  // Cleared for every verdict, including an unreadable one that proves nothing: that
-  // releases a provisional 'repaired' claim early, but holding it would only move the
-  // same release to the grace-window expiry — an unreadable probe can never corroborate.
+  // Every verdict ends pending wait; unreadable evidence cannot corroborate provisional repair and grace would release it anyway.
   probePendingSince = null
   try {
     applyInstallDirAclProbeVerdict(data, options)
   } finally {
-    // Only after the verdict is applied: a waiter wakes to re-read `isInstallDirAclSuspect()`.
+    // Apply verdict before waking callers that recheck suspicion.
     settleVerdictWaiters()
   }
 }
@@ -219,33 +179,28 @@ function applyInstallDirAclProbeVerdict(
   options: WindowsInstallDirAclRecoveryOptions
 ): void {
   if (!isInstallDirAclPoisonVerdict(data)) {
-    // Only a positive clean reading retires the verdict; an unreadable DACL proves nothing.
+    // Only positive clean evidence retires poison; unreadable DACL proves nothing.
     if (data.matchesPoisonSignature === false) {
       clearInstallDirAclPoisonMarker(options.userDataPath)
       installDirReadClean = true
-      // The reading corroborates any repair claim, so its marker clear stands.
+      // Clean evidence corroborates the repair marker clear.
       gpuMarkerClearedByRepairClaim = null
-      // Keeping 'repaired' costs nothing and is what tells the user to reload; anything
-      // else would go on suppressing the driver fallback and accusing a healthy folder.
+      // Retain repaired status for reload advice; other stages would keep accusing healthy trees and suppressing driver fallback.
       if (poison?.stage !== 'repaired') {
         poison = null
       }
     }
     return
   }
-  // The blocking pre-window gate still owns this launch's repair; restarting it would
-  // reset the verdict to 'pending' against a repair that can no longer report. The reading
-  // is kept, not dropped: it is later evidence than the repair's own exit code.
+  // Keep the running gate's ownership; replacing pending loses its callback. Retain the later poison reading to judge its eventual result.
   if (poison?.stage === 'pending') {
     installDirReadPoisonedMidRepair = true
     return
   }
-  // This reading was taken after the gate finished, so it outranks the gate's own verdict:
-  // a tree that still matches the signature was never repaired, whatever the grant reported.
+  // Post-gate poison outranks the grant's claimed success.
   if (poison?.stage === 'repaired') {
     poison = { installDir: poison.installDir, stage: 'failed' }
-    // The claim also cleared the safe-graphics marker; disproved, it owes that back, or
-    // the next launch relaunches hardware accelerated and FATALs before its gate can win.
+    // Restore safe graphics cleared by the disproved claim or hardware relaunch can abort before the next gate finishes.
     const cleared = gpuMarkerClearedByRepairClaim
     gpuMarkerClearedByRepairClaim = null
     if (cleared) {
@@ -256,20 +211,11 @@ function applyInstallDirAclProbeVerdict(
       }
     }
   }
-  // Re-writes the poison marker — re-arming the next launch's gate — even when the
-  // once-per-process latch means no grant can run again this launch.
+  // Re-arm next-launch poison even when the process latch prevents another grant now.
   startRepair(options.installDir ?? dirname(process.execPath), options)
 }
 
-/**
- * Pre-window gate for a machine a previous launch already found poisoned.
- *
- * Why blocking, and why only here: the probe is `setImmediate`-deferred and takes
- * 0.9-3.0s on the affected hosts, while the renderer it has to save is spawned
- * synchronously by `createMainWindow` and dies at init 48-1373ms in. The
- * persisted verdict is what buys that knowledge for free — a healthy machine
- * reads one absent file and pays nothing.
- */
+/** Gate known poison before renderer creation: deferred probes take 0.9-3s while renderer init can fail in 48-1373ms. Healthy launches pay only an absent-marker read. */
 export async function repairKnownPoisonedInstallDirBeforeWindow(
   options: WindowsInstallDirAclRecoveryOptions & { timeoutMs?: number }
 ): Promise<'not-marked' | 'skipped' | WindowsInstallDirAclRepairResult['mode'] | 'timeout'> {
@@ -289,20 +235,19 @@ export async function repairKnownPoisonedInstallDirBeforeWindow(
         options.timeoutMs ?? BLOCKING_REPAIR_BUDGET_MS
       )
       timer.unref?.()
-      // The marker is an earlier launch's DACL reading that nothing has retired, so a
-      // repair marker claiming success cannot stand in for the repair this launch owes.
+      // Persisted poison is unretired evidence; old repair success cannot replace this launch's grant.
       const started = startRepair(installDir, options, (result) => {
         clearTimeout(timer)
         resolve(result.mode)
       })
-      // No dispatch means no `onDone`, so waiting out the whole budget would buy nothing.
+      // No dispatch means no callback; do not wait the full budget.
       if (!started) {
         clearTimeout(timer)
         resolve('skipped')
       }
     })
   } catch (error) {
-    // This sits in the critical path ahead of window creation; it must never throw into it.
+    // Never throw from this window-creation gate.
     console.warn('[win32-acl] blocking install dir ACL repair faulted:', error)
     return 'skipped'
   } finally {
@@ -313,7 +258,7 @@ export async function repairKnownPoisonedInstallDirBeforeWindow(
 const CAUSE =
   "Windows permissions on Orca's install folder are blocking its own sandboxed processes from reading the files it shipped with."
 
-// Why the exact commands: the window is blank, so the dialog is the only place a user can be told what to run.
+// The blank-window recovery dialog is the only place to deliver exact admin commands.
 export function describeInstallDirAclPoison(): InstallDirAclPoisonDiagnosis | null {
   if (!poison) {
     return null

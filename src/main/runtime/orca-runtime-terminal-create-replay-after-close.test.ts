@@ -6,13 +6,11 @@ import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-// A paired desktop's terminal.create resends its pane's own tab and leaf ids on every retry
-// (remote-runtime-pty-transport.ts), so main's record of the closed tab refuses a late replay.
+// Paired desktops replay stable tab/leaf ids; durable closed-tab records must reject late retries.
 function pairedDesktopCreate() {
   const fixture = setupLayoutOwnerRuntime()
   const live: PtyProcessInfo[] = []
   fixture.runtime.setPtyController({
-    // As the PTY host's spawn commit: the pane is bound before the terminal registers.
     spawn: committingSpawn(fixture.runtime, fixture.spawn),
     write: () => true,
     kill: () => true,

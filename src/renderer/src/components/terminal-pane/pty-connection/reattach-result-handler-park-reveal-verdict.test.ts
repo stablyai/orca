@@ -7,25 +7,17 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
-/**
- * A park-reveal of a remote-runtime pty arrives with `replay: ''`, so the host
- * snapshot probe is the ONLY structural paint. The probe has three answers and
- * the handler must keep them apart (docs/reference/ssh-execution-boundary.md):
- *
- *   host image            → paint it (the structural clear + repaint)
- *   unverifiable          → paint nothing AND re-ask the host, bounded
- *   no host image         → paint nothing, ask nothing
- *
- * These tests assert on the decision the handler hands to the payload and the
- * retry it arms, not on what the pane looks like: a live host also pushes a
- * retained tail at subscribe time, so the rendered pane can look right whether
- * or not the decision was.
- */
+/** Probe decisions must distinguish image, bounded unverifiable retry and permanent unavailability; subscribe-time tail paint could hide a wrong decision in visual assertions (docs/reference/ssh-execution-boundary.md). */
 const REMOTE_PTY_ID = 'remote:env-1@@pty-1'
 const HOST_IMAGE = { data: 'PROMPT $ ', cols: 80, rows: 24, seq: 7, source: 'headless' as const }
 
 const mocks = vi.hoisted(() => {
-  const state: Record<string, unknown> = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  const state: Record<string, unknown> = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
   const capturedContexts: ReattachPayloadContext[] = []
   const callOrder: string[] = []
   return { state, capturedContexts, callOrder }
@@ -39,8 +31,7 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
 // Main's resume banner has its own tests (main-pane-resume-banner.test.ts).
 vi.mock('./main-pane-resume-banner', () => ({ showMainPaneResumeOutcome: vi.fn() }))
-// Why: the payload handlers need a mounted xterm; what matters here is the
-// context the handler decided on, so capture it and report the payload applied.
+// Capture payload context without mounting xterm; these cases assert the handler’s decision.
 vi.mock('./apply-reattach-payload', () => ({
   createReattachPayloadHandlers: (_session: unknown, ctx: ReattachPayloadContext) => {
     mocks.capturedContexts.push(ctx)
@@ -155,7 +146,12 @@ function decidedContext(): ReattachPayloadContext {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
   mocks.capturedContexts = []
   mocks.callOrder = []
 })
@@ -175,8 +171,7 @@ describe('handleReattachResult park-reveal snapshot verdict', () => {
     expect(bag.retryUnverifiableParkRevealSnapshot).not.toHaveBeenCalled()
   })
 
-  // The defect: a host that stayed silent past the request timeout used to
-  // collapse to the same null as "nothing to paint" and was never asked again.
+  // Timeout must retain bounded retry rather than collapse into a final nothing-to-paint result.
   it('does not paint blank when the host stayed silent, and re-asks it', async () => {
     const bag = buildParkRevealSession({
       serializeHiddenOutputSnapshot: probeAnswers({ kind: 'retry-worthy', source: 'host' })
@@ -219,8 +214,7 @@ describe('handleReattachResult park-reveal snapshot verdict', () => {
     )
   })
 
-  // Through the real serializer: the host answered `unavailable: 'no-serializable-buffer'`,
-  // whose own host-side comment reads "not proof the pane is empty".
+  // Exercise real serializer classification of no-serializable-buffer, which does not prove emptiness.
   it("re-asks a host that answered 'no-serializable-buffer' instead of painting blank", async () => {
     const bag = buildParkRevealSession({
       canUseMainBufferSnapshot: () => false,
@@ -275,8 +269,7 @@ describe('handleReattachResult park-reveal snapshot verdict', () => {
     )
   })
 
-  // Unavoidable loss, made visible: the host answered and cannot produce the buffer, so the
-  // pane must say so rather than pass for an empty terminal — and never ask again.
+  // Permanent no-image verdict must disclose loss and stop retrying, rather than look like an empty terminal.
   it.each(['permanently-unavailable', 'unavailable'] as const)(
     'paints nothing, asks nothing, and banners the loss when the host answered %s',
     async (kind) => {
@@ -334,8 +327,7 @@ describe('handleReattachResult park-reveal snapshot verdict', () => {
   })
 })
 
-// Retiring an empty reattach converges only locally: a remote disconnect() closes this viewer's
-// stream, so the resume would re-land on the same live host PTY and loop.
+// Only local empty-reattach retirement converges; remote disconnect merely closes this view and would reattach the same live PTY forever.
 describe('handleReattachResult empty reattach under a hibernation note', () => {
   const record = {
     paneKey: 'tab-1:leaf-1',
@@ -351,6 +343,7 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
   const startup: ColdRestoreAgentResumeStartup = {
     command: 'codex resume conv-1',
     agent: 'codex',
+    resumeOrigin: 'saved',
     resumeProviderSession: record.providerSession,
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',

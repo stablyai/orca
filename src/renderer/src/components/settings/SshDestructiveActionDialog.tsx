@@ -10,7 +10,6 @@ import {
 } from '../ui/dialog'
 import { translate } from '@/i18n/i18n'
 
-// Up to ten names show in full; a longer list shows the first eight and a count.
 const MAX_FULL_TARGET_LABELS = 10
 const COLLAPSED_TARGET_LABELS = 8
 

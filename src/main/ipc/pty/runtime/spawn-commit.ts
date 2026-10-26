@@ -1,4 +1,4 @@
-import { runtimeSpawnJoinPayload } from './spawn-commit-response'
+import { provenSpawnResponse } from '../spawn-outcome'
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
 import { normalizeValidPaneKey } from '../pane/key-state'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -35,13 +35,15 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       preAllocatedHandle: args.preAllocatedHandle,
       // Runtime spawns bypass renderer IPC; publish reverse pane lookup for hooks and cleanup.
       paneKey: normalizeValidPaneKey(ctx.env?.ORCA_PANE_KEY),
-      memorySessionId: ctx.sessionId ?? null,
       resumeArgvDropped: ctx.codexResumeArgvDropped,
       codexLaunchEnv: ctx.env,
       initiallyHidden: args.initiallyHidden === true,
       hiddenDelivery: 'runtime-owned',
-      earlyExit: 'throw',
-      joinPayload: runtimeSpawnJoinPayload(ctx, startupCwdFallback, correctStartupCwd)
+      response: {
+        ...provenSpawnResponse(ctx.result, ctx.provedSnapshotSeq),
+        savedStartupCwd: correctStartupCwd ?? ctx.requestedCwd,
+        ...(startupCwdFallback ? { startupCwdFallback } : {})
+      }
     })
   })
 }

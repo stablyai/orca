@@ -132,9 +132,13 @@ export function getInheritedAgentHookEnvKeysToDelete(
   // Providers later merge ambient env; delete stale hooks without removing freshly injected coordinates.
   return [
     ...AGENT_HOOK_RUNTIME_ENV_KEYS,
+    'ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR',
+    'ORCA_CLAUDE_CONFIG_DIR',
     'ORCA_OPENCODE_AGENT',
     'ORCA_OPENCODE_CONFIG_DIR',
-    'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+    'ORCA_MIMOCODE_CONFIG_DIR',
+    'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
   ].filter((key) => env[key] === undefined)
 }
 
@@ -153,17 +157,19 @@ export function isMimoLaunchCommand(launchCommand: string | undefined): boolean 
   return getAgentLaunchExecutableName(launchCommand) === 'mimo'
 }
 
-export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
-  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
-  if (sourceHome) {
-    return sourceHome
+/** Call after the overlay env is restored: an explicit pane value wins over inherited markers. */
+export function resolveMimocodeSourceConfigDir(
+  baseEnv: Record<string, string>,
+  inheritedEnv: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  if (baseEnv.MIMOCODE_CONFIG_DIR) {
+    return baseEnv.MIMOCODE_CONFIG_DIR
   }
-  const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
-  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
-  if (configHome && orcaHome && configHome === orcaHome) {
-    return undefined
+  if (inheritedEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR) {
+    return inheritedEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
   }
-  return configHome
+  const configDir = inheritedEnv.MIMOCODE_CONFIG_DIR
+  return configDir && configDir === inheritedEnv.ORCA_MIMOCODE_CONFIG_DIR ? undefined : configDir
 }
 
 export function resolveOpenCodeSourceConfigDir(

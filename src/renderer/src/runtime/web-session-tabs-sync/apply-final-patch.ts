@@ -13,7 +13,6 @@ import { editorBufferIdForFile } from '../../store/slices/editor/buffers/editor-
 
 type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
 
-/** Build the minimal store patch after all reconciliation stages have completed. */
 export function buildWebSessionTabsFinalPatch(
   context: FinalPatchContext
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
@@ -100,8 +99,7 @@ export function buildWebSessionTabsFinalPatch(
       : adoptMirroredEditorBuffers(
           state.editorBuffers,
           nextOpenFiles,
-          // Why the live index for existing views: it holds sticky detachments. New views take the
-          // resolver the record middleware uses (host views of one file share a record).
+          // Live view index preserves sticky detachments; resolve new views like record middleware so same-file host views share records.
           buildEditorBufferViewIndex(
             nextOpenFiles,
             (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)

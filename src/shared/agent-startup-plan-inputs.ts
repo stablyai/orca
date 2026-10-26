@@ -33,16 +33,7 @@ export type AgentStartupPlanInputs = {
   suppressStartupUpdatePrompt?: boolean
 }
 
-/**
- * Assembles the settings-derived half of a startup plan's inputs.
- *
- * `buildAgentStartupPlan` was already one shared implementation, but every host re-derived its
- * argument object by hand from the same four settings, and the copies had drifted — one dropped
- * `sessionOptionsOverrideAgentArgs` and so let configured `agentDefaultArgs` silently defeat an
- * explicit model pick. What varies between launches is the host (`platform`, `isRemote`), the
- * shell this PTY will actually be, and the per-launch overrides; those stay parameters. What does
- * not vary is how settings become inputs, which is this function.
- */
+/** Share settings-to-launch mapping so hosts cannot omit precedence flags and let configured args override explicit model picks. Keep host, actual PTY shell and launch overrides as parameters. */
 export function resolveAgentStartupPlanInputs(args: {
   agent: TuiAgent
   settings: AgentStartupSettings
@@ -52,16 +43,14 @@ export function resolveAgentStartupPlanInputs(args: {
   agentArgs?: string | null
   /** An automation's saved extras, merged over the resolved args; invalid extras throw. */
   extraAgentArgs?: string
-  /** The shell family this PTY will be; `undefined` reads it from the Settings shell, which is
-   *  right only where the Settings shell is the one the PTY gets. */
+  /** Pass the actual PTY shell; omission is valid only when the Settings shell is what the PTY receives. */
   shell: AgentStartupShell | undefined
   sessionOptions?: Record<string, SessionOptionValue> | undefined
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
-  // A per-launch override wins over the Settings default; `null` is "no arguments", so this
-  // tests for absence rather than falsiness.
+  // Test absence: launch overrides win and null explicitly means no arguments.
   let agentArgs =
     args.agentArgs !== undefined ? args.agentArgs : resolveTuiAgentLaunchArgs(agent, settings)
   const shell =
@@ -92,8 +81,7 @@ export function resolveAgentStartupPlanInputs(args: {
     shell,
     isRemote,
     ...(sessionOptions ? { sessionOptions } : {}),
-    // Why: session options are an explicit per-launch pick, so they outrank configured args —
-    // without this the two spellings of the same flag both reach argv and the last one wins.
+    // Explicit session picks outrank configured args; duplicate flag spellings would otherwise let argv order decide.
     sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
     ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
   }

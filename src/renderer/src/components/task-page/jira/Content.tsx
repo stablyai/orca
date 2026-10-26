@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'

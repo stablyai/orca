@@ -163,7 +163,7 @@ describe('xterm caret rendering oracle', () => {
         rendered: container.querySelector('.xterm-cursor') !== null
       }).toEqual({ hidden: true, rendered: false })
     } finally {
-      // Why: teardown only — an assertion here would mask the body failure and strand the container.
+      // Teardown only: assertions here could mask the body failure and strand the container.
       terminal.dispose()
       container.remove()
     }

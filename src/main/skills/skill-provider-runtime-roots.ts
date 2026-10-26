@@ -25,11 +25,7 @@ const WSL_PROVIDER_HOMES_PROBE = buildWslCapturedLoginShellCommand(
 
 type HomePathApi = Pick<typeof posix, 'dirname' | 'isAbsolute' | 'relative' | 'sep'>
 
-/**
- * Kiro documents ignoring a `KIRO_HOME` at the filesystem root, the user home or
- * an ancestor of it; Orca applies that rule to every `homeEnv` on purpose, since
- * `<home>/skills` there would be an unrelated folder.
- */
+/** Apply Kiro's root/home/ancestor rejection to every provider override so unrelated top-level folders cannot become skill roots. */
 function isUsableProviderHome(candidate: string, userHome: string, pathApi: HomePathApi): boolean {
   if (pathApi.dirname(candidate) === candidate) {
     return false
@@ -69,9 +65,7 @@ export function resolveEnvironmentSkillProviderRoots(
   return roots
 }
 
-// Why: `HERMES_HOME` relocates a whole Hermes profile tree (`hermes -p coder`),
-// and the rest of Orca already treats it as authoritative. Hermes is not an
-// install provider, so it stays out of `SkillProviderRootOverrides`.
+// HERMES_HOME relocates profile trees; honor it without adding Hermes to install-provider overrides.
 export function resolveEnvironmentHermesSkillsRoot(
   env: NodeJS.ProcessEnv = process.env
 ): string | null {
@@ -91,14 +85,12 @@ export function withClaudeSkillProviderRoot(
   return configDirectory ? { ...roots, claude: join(configDirectory, 'skills') } : roots
 }
 
-/** The fenced payload, or null when the probe failed or the fence was lost. */
 type WslEnvironmentProbe = (distro: string) => Promise<string | null>
 
 async function probeWslProviderHomes(distro: string): Promise<string | null> {
   const result = await runWslProcess({
     distro,
-    // 'none': the fenced command runs its own login shell, so a runner probe
-    // would buy a second one out of the same 8s budget.
+    // The fenced command starts its own login shell; avoid a second probe within the 8s budget.
     loginPath: 'none',
     script: WSL_PROVIDER_HOMES_PROBE.command,
     shell: 'sh',
@@ -111,7 +103,6 @@ async function probeWslProviderHomes(distro: string): Promise<string | null> {
   return WSL_PROVIDER_HOMES_PROBE.readStdout(result.stdout)
 }
 
-/** A clean absolute guest path, or null. */
 function cleanWslPath(value: string): string | null {
   const candidate = value.trim()
   if (
@@ -129,7 +120,7 @@ function cleanWslPath(value: string): string | null {
   return posix.resolve(candidate)
 }
 
-/** Every table `homeEnv` as the WSL login shell sees it, read in one probe. */
+/** Read every table homeEnv in one guest login-shell probe. */
 export async function resolveWslSkillProviderRoots(
   distro: string,
   probe: WslEnvironmentProbe = probeWslProviderHomes

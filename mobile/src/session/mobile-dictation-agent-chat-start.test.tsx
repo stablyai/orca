@@ -39,7 +39,7 @@ vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => true
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },

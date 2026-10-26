@@ -9,8 +9,7 @@ import {
 } from '@/runtime/runtime-bundled-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 
-// Why: window focus fires on every alt-tab, and each plan re-reads and re-hashes every
-// target; a just-completed plan stays authoritative briefly.
+// Alt-tab fires focus repeatedly; briefly reuse a completed plan to avoid re-reading and re-hashing every target.
 const FOCUS_RESCAN_COOLDOWN_MS = 15_000
 // Why one target: every surface derives it from the same store, so they all plan one host.
 let activeTarget: BundledSkillTarget | null = null
@@ -102,8 +101,7 @@ async function loadPlan(
   }
 }
 
-/** Re-plan without going through the hook, for surfaces whose explicit refresh affordance
- *  must move the shared verdict. */
+/** Explicit refreshes update the shared verdict without mounting the hook. */
 export function refreshSkillFreshness(force = true): Promise<void> {
   return refreshPlan(force)
 }
@@ -119,8 +117,7 @@ async function refreshPlan(force: boolean): Promise<void> {
   }
   const targetKey = bundledSkillTargetKey(target)
   const sequence = ++refreshSequence
-  // Why: the plan's digest is what Update executes. Once invalidated, a stale plan must
-  // stop authorizing UI even if the replacement plan fails.
+  // An invalidated digest must stop authorizing Update even if its replacement fails.
   publishSnapshot({ ...IDLE, targetKey, loading: true })
   try {
     const result = await loadPlan(target, force)
@@ -165,8 +162,7 @@ function onWindowFocus(): void {
   ) {
     return
   }
-  // Why: a focus event can follow an external edit. Retract stale update
-  // authority immediately, but keep rapid alt-tabs to one trailing disk scan.
+  // Retract potentially stale update authority immediately, but coalesce rapid alt-tabs into one trailing scan.
   publishSnapshot({ ...IDLE, targetKey: snapshot.targetKey, loading: true })
   scheduledFocusRescan = window.setTimeout(
     () => {
@@ -184,8 +180,7 @@ function onInstalledSkillsChanged(): void {
 function subscribe(subscriber: () => void): () => void {
   subscribers.add(subscriber)
   if (subscribers.size === 1) {
-    // Why: every consumer reads one external snapshot, so focus/install events
-    // install one listener and trigger one shared plan regardless of UI count.
+    // Share one listener and plan across consumers, regardless of UI count.
     window.addEventListener('focus', onWindowFocus)
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
   }

@@ -1,4 +1,4 @@
-import type { TaskPageGlobalEffectsModel } from '../../use-task-page-global-effects'
+import type { TaskPageGlobalEffectsModel } from '../use-task-page-global-effects'
 import { useEffect } from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import { saveLinearIssueView } from '../../linear-issue-view-storage'
@@ -118,7 +118,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     setLinearIssuePage
   ])
 
-  // Why: fetch Linear issues when the tab is active and connected; empty search uses the `all` list with server-side filters.
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -298,7 +297,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     setLinearLoading
   ])
 
-  // Why: Has Worktree loads Linear tickets linked on local worktrees, not a Linear list/search query.
   return model
 }
 export type TaskPageLinearListEffectsModel = ReturnType<typeof useTaskPageLinearListEffects>

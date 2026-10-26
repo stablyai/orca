@@ -75,8 +75,6 @@ describe('deriveIntegrationStepStates', () => {
   })
 
   it('completes the task step from a connected code host without a tracker', () => {
-    // GitHub/GitLab issues double as a task source, so a connected code host
-    // resolves step 2 outright instead of asking for an extra acknowledgement.
     expect(
       deriveIntegrationStepStates({
         reviewConnected: true,
@@ -87,8 +85,6 @@ describe('deriveIntegrationStepStates', () => {
   })
 
   it('ignores the code host for tasks until review is connected', () => {
-    // Step 2 is unreachable until step 1 is done, so the code host alone must
-    // not resolve tasks or complete the flow.
     expect(
       deriveIntegrationStepStates({
         reviewConnected: false,
@@ -99,8 +95,6 @@ describe('deriveIntegrationStepStates', () => {
   })
 
   it('marks tasks done if a tracker is already connected before a code host', () => {
-    // A pre-existing Linear/Jira connection is a real, truthful task source even
-    // if the user has not yet connected a code host for review.
     expect(
       deriveIntegrationStepStates({
         reviewConnected: false,
@@ -242,8 +236,6 @@ describe('deriveIntegrationConnectionStatus', () => {
       codeHostTaskProviderName: 'GitHub',
       trackerConnected: true,
       trackerProviderName: 'Linear',
-      // Trackers lead, but the code host stays listed so task summaries do not
-      // under-report what is usable.
       taskSourceNames: ['Linear', 'GitHub'],
       checking: false
     })

@@ -6,11 +6,7 @@ export const WslDistroNameSchema = z
   .max(255)
   .regex(/^[A-Za-z0-9._-]+$/)
 
-/**
- * The distro's registration GUID (the key under HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss),
- * lowercase and unbraced. Names are case-insensitive and can be reused by a different install;
- * the GUID lasts as long as the registration (an unregister or export/import mints a new one).
- */
+/** Lowercase unbraced Lxss registration GUID. Distro names can be reused; unregister/import changes this identity. */
 export const WslDistroIdSchema = z
   .string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)

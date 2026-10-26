@@ -152,9 +152,7 @@ describe('materializeCachedNodeRuntime', () => {
     expect(await readdir(runtimeDirFor())).toEqual([])
   })
 
-  // Both cases spawn for real, so the assertion is against the errno Node actually reports:
-  // a missing program rejects asynchronously with ENOENT, while a program path whose parent is a
-  // regular file throws ENOTDIR synchronously out of `spawn` itself.
+  // Exercise real errno paths: absent programs reject with ENOENT; file parents throw ENOTDIR synchronously.
   it.each([
     ['absent', (): string => join(cacheRoot, 'absent-extractor')],
     ['unreachable through a file', (): string => join(cacheRoot, 'plain-file', 'unzip')]

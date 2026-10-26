@@ -71,10 +71,7 @@ export function restoreManagedHostPortForwards(
   })
 }
 
-/**
- * Runs one change to a host's forwards after every earlier one. Restores and user edits share it,
- * so a restore can't bind a saved port twice or reopen a mapping an edit is replacing.
- */
+/** Serialize restores and edits so a restore cannot bind a port twice or reopen a mapping being replaced. */
 export function serializePortForwardChange<T>(
   targetId: string,
   change: () => Promise<T>

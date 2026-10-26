@@ -54,8 +54,7 @@ describe('terminal rename before renderer graph hydration', () => {
 
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
       expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
-      // Switch-on, main closes a tab whose last terminal exits, so there the PTY is replaced by a
-      // restart: a new runtime over the same saved session.
+      // Main-owned last-pane exit closes its tab; model restart with a fresh runtime over the saved session instead.
       if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
         runtime.onPtyExit('omp-initial-pty', 0)
       }
@@ -99,7 +98,6 @@ describe('terminal rename before renderer graph hydration', () => {
   })
 })
 
-// The name is display only (#20626): every reader that shows the terminal still shows it.
 describe('terminal rename display', () => {
   it('reveals a renamed background terminal under its name', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
@@ -259,8 +257,7 @@ describe('terminal view rename characterization', () => {
 })
 
 describe('terminal query erased boundary regressions', () => {
-  // paneOfPty reads the record's pane once, so a value that changes between reads cannot split one
-  // summary (L80); a plain record never does that.
+  // Pane getter changes per read to catch internally inconsistent summaries (L80); ordinary records do not.
   it('summarizes from one read of the pane, though a later read would differ', () => {
     class SummaryRuntime extends OrcaRuntimeService {
       summarize() {

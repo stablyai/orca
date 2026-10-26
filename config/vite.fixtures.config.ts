@@ -12,8 +12,7 @@ export default mergeConfig(webConfig, {
       clientFiles: ['./src/component-fixtures/component-fixture-explorer.tsx']
     }
   },
-  // Why: crawl fixtures up front so a lazily loaded fixture never triggers a dep
-  // re-optimization, which would leave the warm page with two React copies.
+  // Pre-crawl fixtures to prevent lazy dependency re-optimization from loading two React copies.
   optimizeDeps: {
     entries: ['fixtures.html', 'src/**/*.fixture.tsx']
   },

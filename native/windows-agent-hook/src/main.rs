@@ -29,9 +29,8 @@ fn agent(name: &str) -> Option<Agent> {
     match name {
         "claude" => Some(Agent {
             source: "claude",
-            // CLAUDE_JOB_DIR: a backgrounded session inherited the dispatching pane's env (#9236).
-            // Grok and Devin import .claude hooks; only their own hooks report those events, and
-            // a drain-to-EOF would hang on a caller that holds stdin open (#24907).
+            // Background sessions inherit pane env (#9236); Grok/Devin replay Claude hooks.
+            // Exit before draining: callers may hold stdin open indefinitely (#24907).
             exit_vars: &["CLAUDE_JOB_DIR", "GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR"],
         }),
         _ => None,

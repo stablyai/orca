@@ -286,8 +286,7 @@ describe('what a user message says about its delivery', () => {
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
   })
 
-  // Muted, in the time's place, and shown without hover: a message nothing confirmed yet never
-  // looks like one that went through. Copy keeps its hover reveal, and the row its height.
+  // Delivery status replaces the timestamp without changing row height or copy-button reveal.
   it('says quietly that it is still sending in place of its time, with no Retry', () => {
     renderUser({ sending: true })
 

@@ -27,14 +27,10 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 
-// Why: keeps the native splash screen visible until the React tree is mounted
-// and ready to render. Without this the user sees a blank white/black frame
-// between the native splash and the first React paint.
+// Keep splash visible until React content is ready to avoid a blank frame.
 SplashScreen.preventAutoHideAsync()
 
-// Why at boot and not only on subscribe: the gateway's FCM payload targets the
-// 'orca-desktop' channel, and a background push can land before any socket has
-// connected. Android drops a notification whose channel does not exist yet.
+// Create orca-desktop channel at boot: background FCM can arrive before socket subscription, and Android drops unknown-channel pushes.
 void ensureDesktopNotificationChannel().catch(() => {})
 void registerPushDismissalTask().catch(() => {})
 
@@ -63,30 +59,22 @@ export default function RootLayout() {
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    // Why: pairing publication is journaled across process death; startup must
-    // reconcile the server result before another scan can replace that journal.
+    // Reconcile the crash-persistent pairing journal before another scan can replace it.
     void recoverMobileRelayPairing()
   }, [])
 
-  // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
-  // has to be re-registered with the new one as soon as the provider hands it over.
+  // Re-register rolled APNs/FCM tokens with every paired host or delivery silently stops.
   useEffect(() => startPushTokenSync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
 
-  // Why: route `orca://pair?...` deep links to the confirm screen so
-  // the same pairing flow runs whether the link arrived via QR scan,
-  // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
-  // covers cold-start (link tapped while app was closed); the listener
-  // covers warm-start (link tapped while app is in memory).
+  // Route pair links through confirmation; getInitialURL covers cold starts and the listener covers warm starts.
   useEffect(() => {
     function handleUrl(url: string) {
       const code = extractPairingCodeFromUrl(url)
       if (code) {
-        // Why: Android camera launches can leave Expo Router's unmatched
-        // `orca://pair` route underneath this screen; replacing keeps cancel
-        // and edge-back from revealing the router error page.
+        // Replace Android camera’s unmatched orca://pair route so Cancel/Back cannot reveal the router error.
         router.replace({ pathname: '/pair-confirm', params: { code } })
       }
     }
@@ -101,10 +89,7 @@ export default function RootLayout() {
     return () => sub.remove()
   }, [router])
 
-  // ─── Notification tap routing ───
-  // Why: iOS delivers local notification taps through expo-notifications,
-  // not Linking. Route both cold-start and warm-start responses to the host
-  // and worktree that scheduled the notification.
+  // Notification taps arrive through expo-notifications, not Linking; route both cold and warm responses to their host/worktree.
   useEffect(() => {
     let disposed = false
 
@@ -112,8 +97,7 @@ export default function RootLayout() {
       try {
         Notifications.clearLastNotificationResponse()
       } catch {
-        // Older native shells may not expose the clear API; duplicate guards
-        // still protect the current JS runtime.
+        // Older native shells may lack clear API; duplicate guards still protect this JS runtime.
       }
     }
 
@@ -128,9 +112,7 @@ export default function RootLayout() {
     async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
       const data = readNativeNotificationData(notification.request)
-      // A gateway push names its host by key fingerprint, not by this device's hostId.
-      // With no catalog to resolve against, such a push stays unrouted instead of
-      // falling back to whatever hostId its raw data carries.
+      // Gateway pushes identify hosts by key fingerprint; without catalog resolution, never fall back to their raw hostId.
       const routeData = pushNotificationRouteData(
         data,
         hosts ?? [],
@@ -155,8 +137,7 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
-      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
-      // than letting it grow one id per notification tapped for the app's life.
+      // RootLayout never unmounts; bound tap dedup with FIFO eviction.
       if (handledNotificationIdsRef.current.size > 256) {
         const oldest = handledNotificationIdsRef.current.values().next().value
         if (oldest !== undefined) {
@@ -187,12 +168,8 @@ export default function RootLayout() {
       sub.remove()
     }
   }, [openNotificationRoute])
-  // ─── End notification tap routing ───
 
-  // Why: hide the native splash only once the navigation Stack has been laid
-  // out — this is the earliest moment the user will see actual app content.
-  // Previously the splash hid when a placeholder View rendered, leaving a
-  // grey gap before the real screen appeared.
+  // Hide splash only after Stack layout; a placeholder render can precede real screen content and expose a grey gap.
   const onNavigatorLayout = useCallback(async () => {
     await SplashScreen.hideAsync()
   }, [])
@@ -209,11 +186,7 @@ export default function RootLayout() {
               headerTitleStyle: { fontSize: 16, fontWeight: '600' },
               contentStyle: { backgroundColor: colors.bgBase },
               headerShadowVisible: false
-              // Why: deliberately no `orientation` screenOption. react-native-screens
-              // has no value that respects the device rotation lock — even 'default'
-              // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
-              // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
-              // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
+              // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
             }}
           >
             <Stack.Screen

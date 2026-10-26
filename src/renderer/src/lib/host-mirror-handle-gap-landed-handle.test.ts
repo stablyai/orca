@@ -13,24 +13,7 @@ import {
 } from './host-mirror-handle-gap-wait'
 import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
-/**
- * The fourth eviction trigger: a PUBLISHED HANDLE ends the gap episode its verdict measured.
- *
- * Why none of the other three reach it. The generation rule cannot: the #19647 change in this same
- * stack stops recording `status: null` for an unreachable host, so `connectionChanged` no longer
- * fires across an outage on one runtime. The tab-death rule cannot: the row stays published the
- * whole time — it is the HANDLE that comes and goes, which is the definition of the gap. Teardown
- * cannot: the environment is still here. And the read-time pane-identity check cannot, because the
- * pane that reattaches to the SAME PTY is deliberately the same pane
- * (`host-mirror-handle-gap-verdict-union.test.ts`, "answers for a genuine reattach").
- *
- * So a verdict outlives the gap it was about, and the NEXT gap on that pane gets no wait at all —
- * #19735 with the bounded wait removed rather than merely shortened.
- *
- * Why this does not reopen the park/expire/replay loop the verdict exists to break: that loop is
- * a handle that NEVER lands. A landed handle between two gaps is positive host evidence, and each
- * wait is still individually bounded by the deadline.
- */
+/** A published handle ends this gap and permits a fresh wait on the next gap of the same pane/connection; generation, row death, teardown and pane identity cannot detect that transition. Never-landed handles still have bounded waits. */
 
 const ENV_ID = 'env-landed-handle'
 const WORKTREE = 'repo-1::wt-landed'
@@ -76,8 +59,7 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS + 1)
     expect(hasHostMirrorHandleWaitExpired(ENV_ID, TAB_ID)).toBe(true)
 
-    // Same connection, same pane, same layout binding — only the handle is new. The verdict's
-    // subject has answered, so the verdict is spent.
+    // Only the handle changed; it ends the gap the verdict measured.
     publishRow({ handleLanded: true })
     expect(hasHostMirrorHandleWaitExpired(ENV_ID, TAB_ID)).toBe(false)
   })

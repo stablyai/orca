@@ -37,8 +37,7 @@ function makeAttempt(
   }
 }
 
-// error code 5 == ERROR_ACCESS_DENIED from CreateProcessW inside ConPTY when a
-// bare/alias pwsh.exe is handed to node-pty.
+// ConPTY CreateProcessW rejects bare/alias pwsh.exe with ERROR_ACCESS_DENIED (5).
 const ACCESS_DENIED_5 = 'Cannot create process, error code: 5'
 
 describe('spawnShellWithFallback on Windows', () => {
@@ -70,7 +69,6 @@ describe('spawnShellWithFallback on Windows', () => {
       windowsFallbackAttempts: attempts
     })
 
-    // Falls back to the next real absolute executable instead of throwing.
     expect(result.shellPath).toBe(WINDOWS_POWERSHELL)
     expect(ptySpawn).toHaveBeenNthCalledWith(
       1,

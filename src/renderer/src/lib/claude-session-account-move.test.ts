@@ -274,8 +274,7 @@ describe('findMovableClaudeSessions', () => {
     ])
   })
 
-  // Why these shapes: registration saves the UNC read path and the guest CLAUDE_CONFIG_DIR, the guest
-  // hook reports the guest transcript, and a Windows host sees only wsl.exe in a WSL pane's process tree.
+  // WSL stores UNC and guest config paths, hooks report guest transcripts, and Windows sees only wsl.exe in the pane tree.
   it('finds WSL panes from the guest hook evidence the Windows process table cannot see', async () => {
     const guestHome = (id: string): string =>
       `/home/dev/.local/share/orca/claude-profiles/${id}/home`

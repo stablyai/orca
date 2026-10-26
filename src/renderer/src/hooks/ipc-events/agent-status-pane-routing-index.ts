@@ -53,8 +53,7 @@ export function resetAgentStatusPaneRoutingIndexCounters(): void {
   agentStatusPaneRoutingIndexCounters.leafSetBuilds = 0
 }
 
-// Why: layout roots are immutable snapshots, so leaf membership keyed on the root node stays
-// correct across commits and never has to be rewalked once seen.
+// Immutable layout roots keep cached leaf membership valid without rewalking each commit.
 const leafIdsByRoot = new WeakMap<TerminalPaneLayoutNode, Set<string>>()
 const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], Map<string, IndexedAgentStatusTab>>()
 const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, string | undefined>>>()
@@ -130,11 +129,7 @@ function resolveUnifiedLabel(
   return labelsByTabId.get(tabId)
 }
 
-/**
- * Ownership index for agent-status routing, memoized on the identity of the slices it reads.
- * A status commit replaces none of them, so a dense burst reuses one index instead of rebuilding
- * a per-worktree tab and label map for every event.
- */
+/** Memoize ownership by relevant slice identity so status-only bursts reuse tab/label indexes. */
 export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusPaneRoutingIndex {
   const worktreesById = getWorktreeMapFromState(store)
   const reposById = getRepoMapFromState(store)

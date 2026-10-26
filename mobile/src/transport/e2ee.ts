@@ -1,24 +1,15 @@
-// Why: E2EE primitives for the mobile side. Uses tweetnacl for Curve25519 ECDH
-// key exchange and XSalsa20-Poly1305 authenticated encryption. JSON RPC uses
-// base64([24-byte nonce][ciphertext]) over WebSocket text frames; terminal
-// stream frames use the raw byte bundle.
+// Legacy NaCl framing prefixes ciphertext with a 24-byte nonce; text messages base64-encode that bundle.
 import nacl from 'tweetnacl'
 import * as ExpoCrypto from 'expo-crypto'
 import { decodeBase64Bytes, encodeBase64Bytes } from './base64-byte-codec'
 
-// Why: Hermes (React Native's JS engine) lacks crypto.getRandomValues,
-// which tweetnacl requires. expo-crypto provides a native secure RNG
-// that works in Expo Go without a custom dev build.
+// Provide native secure randomness for Hermes environments without crypto.getRandomValues.
 nacl.setPRNG((_x: Uint8Array, n: number) => {
   const bytes = ExpoCrypto.getRandomBytes(n)
   _x.set(bytes)
 })
 
-// Why: tweetnacl uses `instanceof Uint8Array` checks internally. On Hermes,
-// values from native modules (expo-crypto), TextEncoder, or typed array
-// operations can return objects that fail this check despite being
-// functionally identical. Wrapping with `new Uint8Array(x)` guarantees
-// the correct prototype chain.
+// Normalize Hermes/native typed-array prototypes for tweetnacl’s instanceof checks.
 function u8(x: Uint8Array): Uint8Array {
   return new Uint8Array(x)
 }

@@ -40,8 +40,7 @@ export const BG_MIRROR_TAB_ID = toWebTerminalSurfaceTabId('host-tab-2')
 export const FLOATING_HOST_PARENT_TAB_ID = 'host-tab-floating'
 export const FLOATING_HOST_SURFACE_ID = `${FLOATING_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 
-// A host tab that is NOT the parked mirror: publishing it retracts MIRROR_TAB_ID,
-// which is the host answering "that pane is gone" rather than staying silent.
+// Publishing another host tab retracts MIRROR_TAB_ID, proving its pane gone rather than unanswered.
 export const OTHER_HOST_PARENT_TAB_ID = 'host-tab-9'
 export const OTHER_HOST_SURFACE_ID = `${OTHER_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 

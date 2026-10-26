@@ -9,16 +9,8 @@ import type {
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
-  /**
-   * Closing a tab is not a handover to a new publisher.
-   *
-   * Every other headless writer carries the stored `publicationEpoch` forward and mints one only when
-   * there is no snapshot to inherit from. The close minted unconditionally, so an ordinary close
-   * published a stranger's epoch for a worktree the renderer generation still owns. A paired client
-   * retires the epoch it displaces, and the web mirror's retirement is final — so the renderer's next
-   * publication, carrying the epoch the close had just retired, was rejected forever. The user
-   * emptied a workspace, created a terminal, and watched it never arrive.
-   */
+  /** Closing is not publisher handover: retain the stored epoch.
+   * A fresh close epoch retires the renderer's epoch in clients, causing all its later frames to be rejected. */
   const WORKTREE_ID = 'repo-1::/tmp/headless-close'
   const LEAF_ID = '11111111-1111-4111-8111-111111111111'
   const LIVE_EPOCH = 'renderer-generation-1'
@@ -58,7 +50,6 @@ export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
     }
   }
 
-  /** A worktree the live renderer generation published, holding two terminals. */
   function storedSnapshot(
     tabs: RuntimeMobileSessionTerminalTab[]
   ): RuntimeMobileSessionTabsSnapshot {

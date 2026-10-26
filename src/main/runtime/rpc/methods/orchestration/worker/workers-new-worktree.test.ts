@@ -454,8 +454,7 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
-  // Why: a first dispatch the composer signal settles must record setup exactly as one the idle
-  // wait settles; the composer lane once returned nothing and skipped this record.
+  // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
   it('settles a fresh worker start on main’s idle wait, not the launch paste’s signal', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
     const composerSignal = vi.spyOn(runtime, 'waitForFreshWorkerComposer')

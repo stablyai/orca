@@ -11,7 +11,7 @@ import {
   type StructuredAgentSessionChildWorkReads
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
@@ -68,7 +68,7 @@ function owesWakeUp(
 /** Compare the actual launch mode so replacement cannot loop. */
 async function launchedWithOtherPermissionMode(
   child: OutgrownChildReading['child'],
-  current: (() => Promise<AgentChatPermissionMode | null>) | undefined
+  current: (() => Promise<AgentChatPermissionChoice | null>) | undefined
 ): Promise<boolean> {
   if (!child || child.phase === 'starting' || child.close || !child.permissionMode || !current) {
     return false
@@ -86,7 +86,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
     work: StructuredAgentSessionChildWorkReads & {
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
-    launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }

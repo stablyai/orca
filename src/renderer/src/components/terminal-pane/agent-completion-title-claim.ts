@@ -16,12 +16,7 @@ type TitleClaimDeps = {
   dispatchTitle: (title: string) => void
 }
 
-/**
- * The title lane's claim on a pane's turn ends. Where the hook lane owns an identified end, a
- * title working edge keeps the hook's receipt (a /btw or quit spin ends no hook turn) and the idle
- * edge is not claimed; it settles after main's max wait unless the host meanwhile calls the end
- * ambiguous (a turn whose opening hook was lost), which main's title completion then announces.
- */
+/** Keep hook receipts across title spins for identified ends; settle idle titles after max wait, announcing only if the host marks the end ambiguous. */
 export function createTitleCompletionClaim(deps: TitleClaimDeps) {
   const { options, state, identityScope } = deps
   let keptHookReceipt: LastCompletionIdentity | undefined

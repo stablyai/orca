@@ -89,7 +89,6 @@ export function confirmTaskPageGitHubWorkItemMutation(
   if (!pending || pending.generation !== generation) {
     return 'stale'
   }
-  // K20: capture before delete.
   const { skipMeQualifiers, listOp, next } = pending
   if (listOp) {
     const snapshot =
@@ -99,8 +98,7 @@ export function confirmTaskPageGitHubWorkItemMutation(
           ? (opts.item.assignees ?? [])
           : (opts.item.reviewRequests ?? [])
       )
-    // K10: apply confirmed op into snapshot immediately. List authority lives in
-    // confirmedSnapshots; lastConfirmedClientValue is scalar-only (state/autoMerge).
+    // Confirm list ops into snapshots immediately; lastConfirmedClientValue stores scalar authority only.
     const applied = applyTaskPageGitHubListOps(snapshot, [listOp])
     setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, listOp.family, applied)
   } else {

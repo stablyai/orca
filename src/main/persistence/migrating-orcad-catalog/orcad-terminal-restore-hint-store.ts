@@ -1,8 +1,4 @@
-/**
- * Installed restore hints on the destination, keyed by paneKey, until the pane's first spawn
- * consumes its hint. A small fsync'd JSON file beside the received blobs rather than profile state:
- * it is host-local, never synced or sent anywhere, and every change must be durable on its own.
- */
+// Host-local hints need independent durable writes until each pane's first spawn consumes them.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -18,11 +14,10 @@ import { ensureOrcadMigrationDirectory } from './orcad-migration-staged-file'
 const STORE_VERSION = 2
 const INSTALLED_DIRECTORY = 'installed'
 const STORE_FILE = 'terminal-restore-hints.json'
-// A pane not reopened within a month is not coming back through this migration.
+// Bound retention for panes never reopened after migration.
 export const ORCAD_TERMINAL_RESTORE_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_INSTALLED_MIGRATIONS = 256
 
-/** A received hint placed in the worktree that owns its pane on this host. */
 export type OrcadTerminalRestoreHintPlacement = OrcadMigrationTerminalRestoreHint & {
   worktreeId: string
 }
@@ -38,7 +33,7 @@ type InstalledTerminalRestoreHint = OrcadTerminalRestoreHintPlacement &
 type TerminalRestoreHintStoreDocument = {
   version: typeof STORE_VERSION
   hints: InstalledTerminalRestoreHint[]
-  /** Migrations already installed, so a commit retry never revives a hint a pane consumed. */
+  /** Prevent commit retries from reviving already-consumed hints. */
   installedMigrationKeys: string[]
 }
 
@@ -73,7 +68,6 @@ export class OrcadTerminalRestoreHintStore {
     return this.load().installedMigrationKeys.includes(migrationKey)
   }
 
-  /** Newer hints replace older ones for the same pane; the oldest drop past the count cap. */
   install(
     migration: OrcadTerminalRestoreHintMigration,
     hints: readonly OrcadTerminalRestoreHintPlacement[],
@@ -107,7 +101,7 @@ export class OrcadTerminalRestoreHintStore {
     )
   }
 
-  /** The pane's hinted cwd if it was moved into `worktreeId`; never removes it. */
+  /** Read without consuming. */
   peek(paneKey: string, worktreeId: string, now: number): string | null {
     const hint = this.load().hints.find((entry) => entry.paneKey === paneKey)
     if (!hint || hint.worktreeId !== worktreeId) {
@@ -116,12 +110,11 @@ export class OrcadTerminalRestoreHintStore {
     return now - hint.installedAt > ORCAD_TERMINAL_RESTORE_HINT_TTL_MS ? null : hint.cwd
   }
 
-  /** Durably removes the pane's hint, whichever worktree it named; a no-op when it has none. */
+  /** Durably consume regardless of the hint's worktree. */
   consume(paneKey: string, now: number): void {
     this.dropWhere((hint) => hint.paneKey === paneKey, now)
   }
 
-  /** Drops hints for panes of worktrees this host no longer owns. */
   dropForWorktrees(matchesWorktreeId: (worktreeId: string) => boolean, now: number): void {
     this.dropWhere((hint) => matchesWorktreeId(hint.worktreeId), now)
   }
@@ -160,10 +153,7 @@ export class OrcadTerminalRestoreHintStore {
   }
 }
 
-/**
- * For project removal: a removed project's panes never come back by these keys unless a later
- * migration brings them, and that migration carries its own hints. Never blocks the removal.
- */
+/** Project removal is best-effort; any later migration supplies fresh hints. */
 export function dropOrcadTerminalRestoreHintsForWorktrees(
   store: OrcadTerminalRestoreHintStore,
   matchesWorktreeId: (worktreeId: string) => boolean
@@ -196,7 +186,7 @@ function readStoreDocument(path: string): TerminalRestoreHintStoreDocument {
       }
     }
   } catch {
-    // Falls through: a torn or foreign file only costs panes their old folder.
+    // Corrupt hints only lose old cwd restoration.
   }
   console.warn('[orcad-migration] ignoring an unreadable terminal restore hint store')
   return emptyDocument()

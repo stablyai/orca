@@ -28,9 +28,7 @@ export function useTerminalWebViewEngineErrorState(onEngineError?: (message: str
       onEngineError?.(message)
       console.warn('[terminal-webview] engine error', message)
       if (fatal) {
-        // Why: the first fatal report is the root cause; later cascades (e.g. the
-        // web-ready watchdog firing after a process-crash report) must not
-        // overwrite its more specific diagnostics. clearEngineError resets.
+        // Keep the first fatal cause; later watchdog/cascade reports are less specific until clearEngineError resets it.
         setEngineError((previous) => previous ?? message)
       }
     },

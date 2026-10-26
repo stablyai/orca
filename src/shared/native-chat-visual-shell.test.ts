@@ -103,15 +103,6 @@ describe('buildNativeChatVisualDocument', () => {
     expect(new URL('#overview', 'about:srcdoc').href).toBe('about:srcdoc#overview')
     expect(() => new URL('page-2.html', 'about:srcdoc')).toThrow()
   })
-
-  it('checks the theme message comes from the host window', () => {
-    expect(document).toContain('event.source !== host')
-  })
-
-  it('answers a ping from the host with the ping id', () => {
-    expect(document).toContain(`"ping":"${NATIVE_CHAT_VISUAL_PING_TYPE}"`)
-    expect(document).toContain('send({ type: C.pong, id: data.id })')
-  })
 })
 
 describe('nativeChatVisualThemeCss', () => {

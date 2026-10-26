@@ -1,5 +1,4 @@
-// A removed server can never take a held close, so its closes go with it instead of waiting out
-// the 30-day bound in the saved session, including a server removed while the app was closed.
+// Removed servers can never receive held closes; discard them immediately, including removals while app was closed, rather than waiting 30 days.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'

@@ -88,8 +88,7 @@ describe('sendMobileTerminalQueryReply', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
-  // Why: hosts without terminal.query-reply-input.v1 strip inputKind (zod drops
-  // unknown keys) and would treat the reply as floor-taking shell input.
+  // Older hosts strip inputKind and would treat query replies as floor-taking user input.
   it('does not send to a host that has not advertised query-reply input support', async () => {
     const client = createClient()
 

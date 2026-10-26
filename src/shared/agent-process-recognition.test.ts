@@ -195,8 +195,7 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/Users/dev/.ante/bin/ante', 'ante')).toBe(true)
     expect(isRecognizedAgentType('ante')).toBe(true)
-    // Why: 'ante' is a common token in directory and binary names; only the
-    // exact normalized basename may classify as the agent.
+    // Ante occurs in ordinary names; require its exact normalized basename.
     expect(recognizeAgentProcess('ante-obsidian')).toBeNull()
     expect(recognizeAgentProcess('antechamber')).toBeNull()
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
@@ -346,6 +345,19 @@ describe('agent process recognition', () => {
       agent: 'hermes',
       processName: 'hermes'
     })
+    // Hermes' installed launcher, as macOS ps prints its multi-line -c source.
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`/home/u/.hermes/tools/python-3.14.9/bin/python3 -I -c import os, re, sys\012sys.path.insert(0, '/home/u/.hermes/hermes-agent')\012try:\012    import hermes_bootstrap\012except Exception:\012    raise\012from hermes_cli.main import main\012sys.exit(main()) chat --tui`
+      )
+    ).toEqual({ agent: 'hermes', processName: 'hermes' })
+    for (const notHermes of [
+      'python3 -I -c import hermes_bootstrap_tests',
+      'python3 tool.py -c "import hermes_bootstrap"',
+      'python3 -m pytest -c x.ini -k "import hermes_bootstrap"'
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(notHermes)).toBeNull()
+    }
     expect(recognizeAgentProcessFromCommandLine('python -m aider')).toEqual({
       agent: 'aider',
       processName: 'aider'
@@ -502,8 +514,7 @@ describe('agent process recognition', () => {
       agent: 'prime-agent',
       processName: 'prime-agent'
     })
-    // Why: the CLI only parses `--mode <value>` as separate tokens, so `--mode=json`
-    // is ignored by it and still starts the interactive mode.
+    // This CLI parses only --mode VALUE; joined --mode=json is ignored and remains interactive.
     expect(recognizeAgentProcessFromCommandLine('prime-agent --mode=json')).toEqual({
       agent: 'prime-agent',
       processName: 'prime-agent'
@@ -641,8 +652,7 @@ describe('agent process recognition', () => {
         '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
       )
     ).toBeNull()
-    // Why: `exec` past any position is never the TUI — `muse exec` dispatches headless
-    // while `muse <flags> exec` fails fast with an arg error (verified on Muse 1.3.0).
+    // Muse1.3.0 exec is headless; exec after flags/-- fails fast instead of hosting a TUI.
     expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse --yolo exec "hi"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({

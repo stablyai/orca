@@ -8,7 +8,6 @@ export type DelegatedMobileDeviceEntry = DeviceEntry & {
   token: string
 }
 
-/** The registry after making `parent`'s children cover `phones`, and those children in `phones` order. */
 export function planDelegatedMobileDevices(
   devices: DeviceEntry[],
   parent: DeviceEntry,
@@ -34,7 +33,7 @@ export function planDelegatedMobileDevices(
       name: phone.name,
       scope: 'mobile',
       pairedAt: now,
-      // Why: never pending — the QR lookups select lastSeenAt === 0 and must not hand out or rotate a child.
+      // QR rotation targets lastSeenAt === 0; delegated children must never be pending offers.
       lastSeenAt: now,
       pairingReach: parent.pairingReach ?? 'network',
       parentDeviceId: parent.deviceId,

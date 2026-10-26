@@ -1,5 +1,4 @@
-// Whether automatic restores may run after the terminal host starts, from what its
-// previous run left behind. Pure; the host owns the file and the clock.
+// Use the prior terminal-host marker to admit automatic restores; the host owns persistence and clocks.
 import { z } from 'zod'
 import type { AutomaticWorkMode } from './host-spawn-admission'
 
@@ -30,11 +29,7 @@ export function isSameBoot(a: BootIdentity, b: BootIdentity): boolean {
   return Math.abs(a.bootTimeMs - b.bootTimeMs) <= BOOT_TIME_TOLERANCE_MS
 }
 
-/**
- * A host that died with automatic work running, while the machine stayed up, pauses
- * automatic restores until someone resumes them; a new boot goes through the normal
- * budget instead. A pause already on record survives until an explicit resume.
- */
+/** An unclean host exit during the same boot pauses automatic restores until explicit resume; a new boot uses normal budget. Existing pauses survive reboot. */
 export function decideStartupAutomaticWorkMode(
   previous: AutomaticWorkRunMarker | null,
   current: BootIdentity,

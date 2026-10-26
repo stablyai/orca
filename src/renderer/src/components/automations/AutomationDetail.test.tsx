@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A record Orca switched off used to be indistinguishable from one the user
- * switched off — same "Paused", no reason, no next step. These pin the one new
- * state to the migration's own stamp, and pin the other two to reading exactly
- * as they did before it existed.
- */
+/** Distinguish migration-paused records using their stamp while preserving user-paused and enabled states. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

@@ -2,20 +2,10 @@ const { readdirSync, openSync, readSync, closeSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
 const { join, relative } = require('node:path')
 
-// Why: v1.4.150 shipped a Linux build whose node-pty pty.node required
-// GLIBC_2.34 (openpty/forkpty were relocated into libc by glibc's
-// libutil/libpthread merge), so the app crashed on startup on Ubuntu 20.04
-// (glibc 2.31) — the runner image silently bumped the build-host glibc. This
-// gate fails Linux packaging if any bundled native binary requires a glibc (or
-// libstdc++) symbol version newer than stock Ubuntu 20.04 ships, so a future
-// runner bump or dependency change cannot reintroduce the regression unnoticed.
-// See docs/reference/linux-glibc-compatibility.md.
+// Gate bundled Linux binaries against Ubuntu 20.04 symbol floors to prevent native load crashes (#9902); see docs/reference/linux-glibc-compatibility.md.
 const MIN_GLIBC = Object.freeze([2, 31])
 
-// The symbol-version families this gate checks, each with the highest version
-// node stock Ubuntu 20.04 provides. glibc is the #9902 launch-crash axis;
-// libstdc++ (GLIBCXX_/CXXABI_) is the same crash class for C++ native modules
-// against the system libstdc++ (Orca does not bundle one).
+// Gate glibc plus system libstdc++ ABI families; Orca bundles no C++ runtime for desktop.
 const VERSION_FLOORS = Object.freeze([
   Object.freeze({ prefix: 'GLIBC_', floor: MIN_GLIBC }),
   Object.freeze({ prefix: 'GLIBCXX_', floor: Object.freeze([3, 4, 28]) }),
@@ -37,9 +27,7 @@ function glibcFloorProfile(label, glibc, glibcxx, cxxabi) {
 /** The packaged desktop app's floor; the default for every check here. */
 const DESKTOP_GLIBC_FLOOR = Object.freeze({ label: FLOOR_LABEL, families: VERSION_FLOORS })
 
-// Why lower than the desktop: orcad's glibc slots ship to SSH hosts the pinned Node 24 already
-// runs on (glibc 2.28), and a 2.31 slot left 2.28-2.30 hosts with a runtime but no terminal
-// (design D6). RHEL 8 / Debian 10 ship GCC 8's libstdc++.
+// Server slots target pinned Node’s glibc 2.28 hosts, including RHEL8/Debian10 GCC8; desktop’s 2.31 floor would leave older hosts without terminals (D6).
 const SERVER_SLOT_GLIBC_FLOOR = glibcFloorProfile(
   'glibc 2.28 (RHEL 8 / Debian 10, libstdc++ GLIBCXX_3.4.25)',
   [2, 28],
@@ -55,17 +43,10 @@ const COMPAT_SLOT_GLIBC_FLOOR = glibcFloorProfile(
   [1, 3, 7]
 )
 
-// Why: the sherpa-onnx speech prebuilt is a third-party manylinux binary that
-// already requires GLIBCXX_3.4.29 (GCC 11 / Ubuntu 21.10+, 22.04 LTS). It loads
-// lazily in the speech worker (src/main/speech/stt-worker.ts), never at app
-// launch, so it cannot cause the #9902 startup crash. Exempt it from the
-// libstdc++ floor (its glibc is still gated) rather than fail the release on a
-// pre-existing, non-launch condition — speech needs libstdc++ >= GCC 11.
+// Lazy speech-worker sherpa prebuilt requires GCC11 GLIBCXX_3.4.29; exempt C++ floor only, retain glibc gate because it is not launch-critical.
 const LIBSTDCXX_FLOOR_EXEMPT = /(?:^|[/\\])sherpa-onnx/
 
-// VER_FLG_WEAK: a version need whose references are all weak. The loader
-// tolerates its absence (resolves to null and the caller's fallback runs)
-// instead of refusing to load, so a weak need must not count as a requirement.
+// VER_FLG_WEAK needs may resolve null and use fallback; they must not raise required floor.
 const VER_FLG_WEAK = 0x2
 
 /** Parse a "2.34" / "3.4.28" version string into a numeric tuple. */
@@ -85,14 +66,7 @@ function compareGlibcVersions(a, b) {
   return 0
 }
 
-/**
- * Parse `objdump -p` "Version References" (the ELF `.gnu.version_r` section)
- * into the version nodes this binary requires from each shared library. This is
- * the authoritative load-time requirement list: unlike the dynamic symbol table
- * (`objdump -T`), it also captures symbol-less ABI markers such as
- * `GLIBC_ABI_DT_RELR` (packed relative relocations, glibc 2.36+) that still
- * block loading on an older glibc. Each entry: `0xHASH 0xFLAGS <n> <NAME>`.
- */
+// Read objdump -p Version References, not just symbols: symbol-less ABI markers (DT_RELR/glibc2.36) still block loader. Rows are 0xHASH 0xFLAGS <n> <NAME>.
 function parseVersionNeeds(objdumpOutput) {
   const needs = []
   let library = null
@@ -124,16 +98,7 @@ function parseVersionNeeds(objdumpOutput) {
   return needs
 }
 
-/**
- * Whether a version node is newer than the floor Ubuntu 20.04 provides. Numeric
- * nodes (`GLIBC_2.34`, `GLIBCXX_3.4.29`) compare by version. Any non-numeric
- * glibc node is rejected: `GLIBC_ABI_DT_RELR` is a 2.36+ marker, and
- * `GLIBC_PRIVATE` is not a stable ABI contract — its symbols differ across
- * glibc releases, so a binary needing one can fail to load on the floor even
- * though the version node itself exists (a well-formed addon needs neither).
- * Named libstdc++ nodes (`CXXABI_TM_1`, `GLIBCXX_LDBL_*`) ship on 20.04.
- * Families we do not gate (`GCC_`, `NSS_`) return false.
- */
+// Compare numeric GLIBC/GLIBCXX/CXXABI versions; reject all nonnumeric GLIBC markers/private ABI. Named C++ ABI nodes ship on floor; unrelated families remain ungated.
 function isVersionNodeAboveFloor(name, glibcFloor = DESKTOP_GLIBC_FLOOR) {
   for (const { prefix, floor } of glibcFloor.families) {
     if (!name.startsWith(prefix)) {
@@ -153,11 +118,7 @@ function isLibstdcxxNode(name) {
   return name.startsWith('GLIBCXX_') || name.startsWith('CXXABI_')
 }
 
-/**
- * Version needs from `filePath` that would prevent loading on the floor OS.
- * `sherpa-onnx` is exempt from the libstdc++ floor (see LIBSTDCXX_FLOOR_EXEMPT)
- * but its glibc needs are still checked.
- */
+// Gate load-time requirements; exempt sherpa C++ needs only, never its glibc needs.
 function findFloorViolations(needs, filePath = '', glibcFloor = DESKTOP_GLIBC_FLOOR) {
   const exemptLibstdcxx = LIBSTDCXX_FLOOR_EXEMPT.test(filePath)
   return needs.filter(
@@ -168,24 +129,14 @@ function findFloorViolations(needs, filePath = '', glibcFloor = DESKTOP_GLIBC_FL
   )
 }
 
-// On stock Ubuntu 20.04 (glibc 2.31) these symbols live ONLY in these DSOs —
-// glibc kept openpty/forkpty in libutil until the 2.34 merge. A binary that
-// imports them must keep the DSO in DT_NEEDED or they will not resolve on the
-// floor. This guards config/patches/node-pty@1.1.0.patch's forced
-// `-l:libutil.so.1`: if a toolchain change ever dropped that ldflag, the pinned
-// openpty@GLIBC_2.2.5 would still resolve from libc's compat alias at build time
-// (so the version-floor check passes) yet fail to load on 20.04. libpthread
-// (pthread_sigmask) is intentionally omitted — the Node/Electron host always
-// loads it, so it resolves regardless of this addon's DT_NEEDED.
+// Ubuntu20.04 keeps openpty/forkpty in libutil until glibc2.34 merge: require DT_NEEDED even when newer libc compat aliases satisfy link-time floor.
+// Pins node-pty’s -l:libutil.so.1; omit pthread_sigmask because Node/Electron already loads libpthread.
 const RELOCATED_SYMBOL_PROVIDERS = Object.freeze({
   openpty: 'libutil.so.1',
   forkpty: 'libutil.so.1'
 })
 
-/**
- * Relocated symbols the binary imports whose providing DSO is absent from
- * DT_NEEDED — meaning they resolve at build time but not on the floor OS.
- */
+// Require providing DSO in DT_NEEDED for relocated imports that newer build host could resolve from libc alias.
 function findMissingProviderDeps(importedSymbols, neededLibraries) {
   const missing = []
   for (const [symbol, library] of Object.entries(RELOCATED_SYMBOL_PROVIDERS)) {
@@ -200,15 +151,7 @@ function findMissingProviderDeps(importedSymbols, neededLibraries) {
 const ELF_MACHINE_BY_ARCH = Object.freeze({ x64: 0x3e, arm64: 0xb7 })
 const ARCH_BY_ELF_MACHINE = Object.freeze({ 0x3e: 'x64', 0xb7: 'arm64' })
 
-/**
- * ELF `e_machine`, or null when the file is not a readable little-endian ELF.
- *
- * Why this is checked at all: cross-building an arm64 package on an x64 host can silently pack an
- * x86-64 `pty.node` into the arm64 slice — the rebuild logs a forced arm64 rebuild and still ships
- * the host's binary. Every other gate here inspects symbol versions, which are perfectly valid on
- * the wrong architecture, so nothing noticed. Observed on a Raspberry Pi 5: the app loaded, then
- * failed with "Failed to load native module: pty.node".
- */
+// Read little-endian ELF machine separately: cross-build can ship host-arch addon whose symbol floors pass but target cannot load.
 function readElfMachine(filePath) {
   let fd
   try {
@@ -235,22 +178,14 @@ function readElfMachine(filePath) {
 const ARCH_TOKEN_PATTERN = /(?:^|[^a-z0-9])(arm64|aarch64|x64|x86_64)(?:[^a-z0-9]|$)/i
 const ARCH_BY_TOKEN = Object.freeze({ arm64: 'arm64', aarch64: 'arm64', x64: 'x64', x86_64: 'x64' })
 
-/**
- * The architecture a path advertises, or null when it advertises none.
- *
- * Why this matters: some dependencies ship every architecture and let their loader pick
- * (`@parcel/watcher-linux-arm64-glibc/watcher.node` is arm64 on purpose inside an x64 build). Those
- * must be judged against the arch their own path declares, not against the slice.
- */
+// Judge multi-arch vendored binaries by declared path architecture; valid arm64 watcher may intentionally ship inside x64 slice.
 function declaredArchFromPath(filePath) {
   const match = ARCH_TOKEN_PATTERN.exec(filePath)
   return match ? ARCH_BY_TOKEN[match[1].toLowerCase()] : null
 }
 
 function findArchViolation(filePath, targetArch, rootDir) {
-  // A path that names an architecture is judged against that name, so a per-arch vendored package
-  // is fine while `bin/linux-arm64-.../node-pty.node` holding an x86-64 binary is still caught.
-  // Why relative: the arm64 slice's own dir (`linux-arm64-unpacked`) must not declare every file arm64.
+  // Judge declared payload arch, not slice; use relative paths so outer linux-arm64-unpacked directory cannot label every file arm64.
   const declared = declaredArchFromPath(rootDir ? relative(rootDir, filePath) : filePath)
   const expectedArch = declared ?? targetArch
   const expected = ELF_MACHINE_BY_ARCH[expectedArch]
@@ -307,9 +242,7 @@ function collectNativeBinaries(rootDir) {
       if (!entry.isFile()) {
         continue
       }
-      // Why: .node/.so are always native; extensionless files (the Electron
-      // executable, chrome-sandbox) are checked via the ELF magic so we cover
-      // every launch-critical binary without objdump-ing app.asar or assets.
+      // Inspect .node/.so and ELF-magic executables; skip asar/assets without invoking objdump.
       const looksNative = entry.name.endsWith('.node') || /\.so(\.\d+)*$/.test(entry.name)
       if (looksNative || !entry.name.includes('.')) {
         if (isElfFile(fullPath)) {
@@ -333,20 +266,12 @@ function resolveObjdump(explicitPath) {
   return null
 }
 
-// Why: GNU objdump localizes its section headers ("Version References:") via
-// gettext, and the parser anchors on the English text. Force the C locale so
-// output stays deterministic on non-English packaging hosts (LC_ALL=C also
-// disables LANGUAGE-based message translation).
+// Force C locale/LC_ALL to keep objdump’s gettext-translated section headers parseable, including hosts with LANGUAGE set.
 function cLocaleEnv() {
   return { ...process.env, LC_ALL: 'C', LANG: 'C' }
 }
 
-/**
- * Run objdump with one flag on `filePath`. Fail-closed: a spawn error, non-zero
- * exit, or signal throws, because a silently-unreadable binary (truncated,
- * corrupt, or an objdump that cannot decode its format) would let a too-new
- * binary slip past the gate.
- */
+// Fail closed on objdump spawn/exit/signal errors: unreadable/truncated/unsupported binary must not pass floor check.
 function runObjdump(objdumpPath, flag, filePath) {
   const result = spawnSync(objdumpPath, [flag, filePath], {
     encoding: 'utf8',
@@ -432,13 +357,7 @@ function readImportedSymbols(filePath, objdumpPath) {
   return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
 }
 
-/**
- * Fail Linux packaging if any bundled native binary under `rootDir` requires a
- * glibc/libstdc++ symbol version newer than the floor OS. No-op is not allowed
- * on Linux: a missing objdump throws, because a silent skip would defeat the
- * regression gate on exactly the host where it matters. `options.glibcFloor`
- * selects a floor profile; the default is the desktop's.
- */
+// Gate all native binaries under root with selected/default desktop floor; missing objdump on Linux must throw rather than silently skip.
 function verifyLinuxGlibcFloor(rootDir, options = {}) {
   const binaries = collectNativeBinaries(rootDir)
   const targetArch = options.targetArch
@@ -448,8 +367,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     return
   }
 
-  // Why: resolve objdump only once there is something to inspect, so a fixture
-  // with no ELF binaries does not fail on a host that lacks binutils.
+  // Resolve objdump only when ELF files exist so empty fixtures work without binutils.
   const objdumpPath = resolveObjdump(options.objdumpPath)
   if (!objdumpPath) {
     throw new Error(
@@ -458,8 +376,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     )
   }
 
-  // Why before the glibc pass: a wrong-architecture binary's symbol versions are valid but
-  // meaningless, so reporting a floor violation for it would send the reader down the wrong path.
+  // Reject wrong architecture before version inspection; its valid symbol versions cannot establish target compatibility.
   const archOffenders = binaries
     .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch, rootDir) }))
     .filter(({ violation }) => violation !== null)
@@ -488,8 +405,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     const floorViolations = findFloorViolations(versionNeeds, filePath, glibcFloor).filter(
       (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
     )
-    // Only pay for `objdump -T` when a relocated-symbol provider is not already
-    // in DT_NEEDED (the common, healthy case short-circuits without it).
+    // Inspect dynamic symbols only if relocated provider is absent from DT_NEEDED; healthy case avoids extra objdump.
     const providerViolations =
       !isStatic &&
       !isMuslTarget &&

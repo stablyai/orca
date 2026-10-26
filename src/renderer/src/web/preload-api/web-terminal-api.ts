@@ -127,7 +127,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
+    // Paired host owns SSH; route state/reconnect through runtime RPC, leaving target management to desktop (STA-1468).
     listTargets: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return []

@@ -1,17 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-/**
- * The one write path every mirrored key goes through, driven against the page's own store.
- *
- * The adapter is what can refuse — `not-allowed` for a key this route was never given,
- * `too-large` for a value past the frame cap — and ruling 35 puts the mirror note behind that
- * decision. Before it, every writer noted the mirror first and two of them rolled it back by
- * hand: twelve did not, so a refused page write left the app's mirror holding a value the store
- * had never taken, and the next `init` handed the page exactly that.
- *
- * Driven through the real page adapter rather than a stub, because the refusals under test are
- * its own and a stub would be a second opinion about them.
- */
+// Use the real page adapter: its resolved refusals must not put rejected values into the next shell init’s mirror.
 vi.mock('@react-native-async-storage/async-storage', async () => ({
   default: (await import('../mobile-web-shell/bridge/page-async-storage')).default
 }))
@@ -26,7 +15,6 @@ const ROUTE = '/h/host-1/session/wt-1'
 const DOCK_WIDTH = 'orca:hostDockWidth'
 const OTHER_HOST_PIN = 'orca:pins:host-2'
 
-/** What the shell would put in the next `init` for this route, which is the mirror's one reader. */
 function initStorage(): Readonly<Record<string, string>> {
   return pageStorageEntriesForInit(readMirroredStorage(pageStorageKeysForRoute(HOST_ID, ROUTE)))
     .entries
@@ -34,7 +22,6 @@ function initStorage(): Readonly<Record<string, string>> {
 
 beforeEach(() => {
   publishPageStorage({ [DOCK_WIDTH]: '320' }, () => true, HOST_ID, ROUTE)
-  // The app's side of the same key, which is what a refused write must leave standing.
   return persistMirrored(DOCK_WIDTH, '320')
 })
 
@@ -50,7 +37,7 @@ describe('the mirrored write path', () => {
 
   it('leaves them alone for a key this route was never given, and logs the drop', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    // Resolves rather than rejects: a page-closure writer of an unlisted key awaits with no catch.
+    // Unlisted-key writes resolve because page callers may await them without a catch.
     await expect(persistMirrored(OTHER_HOST_PIN, '["a"]')).resolves.toBeUndefined()
     expect(readMirroredStorage([OTHER_HOST_PIN])[OTHER_HOST_PIN]).toBeUndefined()
     expect(warned).toHaveBeenCalledWith(

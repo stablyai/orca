@@ -12,8 +12,7 @@ import {
   type TerminalOutputTarget,
   type WriteTerminalOutputOptions
 } from './pane-terminal-output-queue-registry'
-// Why this bare import: pane-terminal-output-drain registers the drain runner that the registry's
-// scheduleDrain invokes, and this facade is every consumer's entry point into the scheduler graph.
+// Import for registration: drain installs the runner used by scheduleDrain; this facade is every consumer’s graph entry point.
 import './pane-terminal-output-drain'
 
 export {

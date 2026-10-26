@@ -397,7 +397,6 @@ afterEach(() => {
 
 describe('completed background-worker retirement resume matrix', () => {
   it('does not cold-resume an explicitly completed and retired worker on first activation', async () => {
-    // Case 1: task completion alone keeps the still-owned provider session recoverable in place.
     const ownedRecord = recordCompletedWorker()
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expect(useAppStore.getState().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
@@ -405,7 +404,6 @@ describe('completed background-worker retirement resume matrix', () => {
       ownedRecord
     )
 
-    // Case 2: the renderer boundary used by an explicit Orca close retires the exact authority.
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
@@ -416,7 +414,6 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expectCanaryUnchanged()
 
-    // Case 3: both running and PTY-exit-first release retire exact resume authority.
     seedWorkspace()
     recordCompletedWorker()
     await releaseCompletedWorker('running')
@@ -442,9 +439,7 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(retiredRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
 
-    // Case 4: legacy rollback preserves the settled worker's record as an ordinary sleeping
-    // record; with its tab gone it is passive completed evidence that wake clears, and an exited
-    // resolution clears it too. No fence: a finished worker follows the same rule as any agent pane.
+    // Rollback keeps the settled record as passive sleeping evidence after tab removal; wake or exited resolution clears it without a fence.
     seedWorkspace()
     recordCompletedWorker()
     const legacyAction = resolveLegacyWorkerTerminalRecoveryAction({
@@ -472,7 +467,6 @@ describe('completed background-worker retirement resume matrix', () => {
     })
     expect(exitedAction).toEqual({ kind: 'clear-sleeping', paneKey: ORIGINAL_PANE_KEY })
 
-    // Case 6: normal Codex exit leaves the shell pane; helper close retires only the helper.
     seedWorkspace({ helper: true })
     recordCompletedWorker()
     useAppStore.setState({
@@ -510,7 +504,6 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectCanaryUnchanged()
 
-    // Case 7: restart preserves owned panes, while post-retirement restart keeps authority absent.
     seedWorkspace()
     const workingProviderSession = recordWorkingWorker()
     const beforeCompletion = persistAndParseCurrentSession()
@@ -552,7 +545,6 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
@@ -571,7 +563,6 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expectCanaryUnchanged()
-    // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
     expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(0)
     expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })

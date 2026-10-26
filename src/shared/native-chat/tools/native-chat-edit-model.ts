@@ -1,7 +1,4 @@
-/** One rendered diff row. Numbers are per side: a removed row has no new-side
- *  number and an added row has no old-side number. `gap` marks the break
- *  between two regions of the file, which are otherwise concatenated and read
- *  as one continuous block even as the gutter jumps hundreds of lines. */
+/** Per-side diff rows: del lacks new number, add lacks old. gap marks skipped regions so concatenated snippets do not imply continuity. */
 export type NativeChatEditLineKind = 'context' | 'add' | 'del' | 'gap'
 
 export type NativeChatEditLine = {
@@ -21,8 +18,7 @@ export type NativeChatEditFile = {
   lines: NativeChatEditLine[]
   added: number
   removed: number
-  /** False when the numbers locate a row inside a snippet rather than the file,
-   *  which is the case whenever the provider gave us no resolved hunk ranges. */
+  /** False for snippet-relative positions without resolved file hunk ranges. */
   lineNumbersKnown: boolean
   truncated: boolean
 }
@@ -35,9 +31,7 @@ export const MAX_EDIT_DIFF_CELLS = 200_000
 /** Rows of a source string, plus whether it was clipped before splitting. */
 export type EditContentLines = { lines: string[]; truncated: boolean }
 
-/** The one row splitter for every edit shape. Splits on both newline forms so a
- *  CRLF file never carries a trailing `\r` into a row, where it would render as
- *  a stray character, defeat the phantom-row guard, and reach the clipboard. */
+/** Share CRLF-aware splitting so stray CR never reaches rendered rows, phantom-row checks or clipboard text. */
 export function splitEditContent(content: string): EditContentLines {
   if (content.length === 0) {
     return { lines: [], truncated: false }
@@ -45,8 +39,7 @@ export function splitEditContent(content: string): EditContentLines {
   const truncated = content.length > MAX_EDIT_CHARS
   const body = truncated ? content.slice(0, MAX_EDIT_CHARS) : content
   const lines = body.split(/\r?\n/)
-  // Tested against the clipped body: on the un-clipped string this popped a
-  // real line whenever the slice fired.
+  // Check the clipped body; testing the original removed real partial lines after clipping.
   if (body.endsWith('\n')) {
     lines.pop()
   }
@@ -81,16 +74,13 @@ export function finalizeEditFile(
   const overLineCap = input.lines.length > MAX_EDIT_LINES
   const truncated = overLineCap || input.truncated === true
   const capped = overLineCap ? input.lines.slice(0, MAX_EDIT_LINES) : input.lines
-  // A gap marks a break between regions, so one at the end marks nothing. The
-  // row cap can leave one behind even when the source did not.
+  // Strip trailing gaps left by the row cap; a gap after the final region marks nothing.
   let end = capped.length
   while (end > 0 && capped[end - 1]?.kind === 'gap') {
     end -= 1
   }
   const trimmed = end === capped.length ? capped : capped.slice(0, end)
-  // Without resolved ranges the numbers locate a row inside a snippet; dropping
-  // them keeps a plausible-looking wrong position out of the gutter, the copy
-  // text, and the row keys.
+  // Unresolved snippet numbers look like file positions; suppress them in gutters, copied text and keys.
   const lines = input.lineNumbersKnown
     ? trimmed
     : trimmed.map((line) => ({ ...line, oldLineNumber: null, newLineNumber: null }))

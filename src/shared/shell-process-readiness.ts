@@ -114,9 +114,7 @@ export async function resolveShellExecutablePath(
   return null
 }
 
-/** Every canonical executable `shellName` names on `pathEnv` — the installations a
- *  startup profile could legitimately `exec` into, and nothing a dropped-in binary
- *  outside the search path can reach. `shellName` must be a bare name. */
+/** Resolve all PATH-installed canonical shell executables a startup profile could exec into; reject non-bare shellName inputs. */
 export async function resolveInstalledShellExecutablePaths(
   shellName: string,
   cwd: string,

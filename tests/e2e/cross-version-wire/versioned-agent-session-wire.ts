@@ -8,12 +8,7 @@ import {
   type ReleaseCheckout
 } from './release-checkout'
 
-/**
- * The two things that decide whether a structured agent session exists for a given
- * pairing: the capability strings a build can name, and the RPC methods it
- * registers. Both are read per build, so "the old side does not have it" is a fact
- * about a real release rather than a hand-written list.
- */
+// Read capability strings and registered methods from each real build rather than assuming what the older peer knows.
 
 export const WORKING_TREE = 'working-tree' as const
 
@@ -24,8 +19,7 @@ export type AgentSessionClientProjection = Pick<
   Pick<typeof ClientProjection, 'projectStructuredItemsToNativeChat'> &
   Pick<typeof ClientSchemas, 'AgentJournalRenderItemSchema'>
 
-/** Each build owns its own copy of the module-level host slot, so a host installed
- *  in current source is invisible to a release checkout's dispatcher. */
+// Each module graph owns its host slot; installing into current source cannot populate a release dispatcher.
 const STRUCTURED_HOST_REGISTRY =
   '/src/main/native-chat/agent-session-wire/structured-agent-session-registry.ts'
 const MUTATION_PLANS =
@@ -247,10 +241,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
   }
 }
 
-/**
- * Load the structured-session wire surface for one build. `WORKING_TREE` imports
- * current source; any other value is a git ref extracted into a cached checkout.
- */
+// Import current source for WORKING_TREE; extract any other git ref into the cached checkout.
 export async function loadAgentSessionWireBuild(ref: string): Promise<AgentSessionWireBuild> {
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()

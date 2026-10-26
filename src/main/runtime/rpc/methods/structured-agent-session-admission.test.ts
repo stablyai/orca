@@ -1,6 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// The host's own structured-chat setting is its user's launch preference, not admission control:
-// a paired client that can read structured sessions reaches every method whatever that setting says.
+// Host structured-chat preference controls launch defaults, not admission for capable paired clients.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -76,8 +75,7 @@ describe('a host with structured chat turned off', () => {
     const response = await call(entry.method, entry.params, MODE_CHOOSING_CLIENT, SETTING_OFF)
 
     expect(response).toMatchObject({ ok: true })
-    // `unsubscribe` retires runtime-owned subscriptions and `release` is a no-op, so neither
-    // calls the host: the result payload is the observable effect.
+    // unsubscribe/release may avoid host calls; verify their observable result payload.
     if (entry.hostCall === null) {
       expect(response).toMatchObject({ result: entry.result })
     } else {
@@ -128,8 +126,7 @@ describe('a host with structured chat turned off', () => {
         SETTING_ON
       )
 
-      // Asserting the gate's own code, not merely `ok: false`: a params-validation failure would
-      // pass a bare falsy check and hide a gate that had stopped refusing.
+      // Assert the gate's exact code so unrelated parameter refusal cannot mask a missing gate.
       expect(response).toMatchObject({ ok: false, error: UNSUPPORTED })
     }
   )

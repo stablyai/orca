@@ -65,11 +65,10 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
     useAppStore((s) => s.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID]) ?? NO_PROFILES
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const [selectedProfileId, setSelectedProfileId] = useState('default')
-  // Why: a deleted profile falls back to Default rather than listing nothing.
   const profileId = profiles.some((profile) => profile.id === selectedProfileId)
     ? selectedProfileId
     : 'default'
-  // Why: tagged with their profile so rows from the previous profile are never shown or edited.
+  // Tag rows by profile so previous-profile permissions cannot be shown or edited.
   const [loaded, setLoaded] = useState<{
     profileId: string
     entries: BrowserSitePermissionEntry[]
@@ -77,7 +76,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
   const entries = loaded?.profileId === profileId ? loaded.entries : null
   const searchEntry = getBrowserSitePermissionsSearchEntry()
 
-  // Why: startup loads only the host Browser settings shows, which may be a server.
+  // Startup may load server profiles; this computer’s permissions need local profiles explicitly.
   useEffect(() => {
     void fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
   }, [fetchBrowserSessionProfiles])
@@ -107,7 +106,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
         decision: isBrowserSitePermissionDecision(value) ? value : null
       })
       .then((nextEntries) =>
-        // Why: a reply that lands after switching profiles must not replace the new profile's rows.
+        // Late writes must not replace the newly selected profile’s rows.
         setLoaded((current) =>
           current?.profileId === writtenProfileId
             ? { profileId: writtenProfileId, entries: nextEntries }

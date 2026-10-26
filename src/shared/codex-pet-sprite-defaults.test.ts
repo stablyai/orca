@@ -106,8 +106,7 @@ describe('applyCodexSpriteTimingDefaults', () => {
 
   it('does not throw on a corrupted animation entry that matches the outer fingerprint', () => {
     const sprite = legacyCodexSprite()
-    // Persisted data is untrusted: a null value under a matching key must be a
-    // non-match, not a crash.
+    // Corrupt persisted entries must fail fingerprint matching without throwing.
     sprite.animations = { ...sprite.animations, idle: null as never }
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
   })

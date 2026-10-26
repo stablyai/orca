@@ -1,6 +1,4 @@
-// A chat's saved model rides the launch unchecked. A missing-model reply retires the live child's
-// choice; provider reports leave the saved pick alone. Against the production runtime, adapter,
-// record store and host, with only the CLI process scripted.
+// Missing-model replies retire the live choice; provider reports must preserve the saved user pick.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -26,7 +24,6 @@ afterEach(async () => {
   claude = createScriptedClaudeRuntime([SESSION])
 })
 
-/** The reply Claude Code 2.1.280 sends when its `--model` names a model that does not exist. */
 function modelNotFoundReply(uuid: string, parentToolUseId: string | null = null) {
   return {
     type: 'assistant',
@@ -77,7 +74,6 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
       fence: host.deps.store.getRecord(SESSION)!.lease.runtimeFence
     })
     expect(live).toMatchObject({ current: { model: undefined } })
-    // The displayed replacement overrides the saved retired model on the next Send.
     const answer = await vi.waitFor(async () => {
       const read = await host.readOptions(SESSION, { readsWithoutModel: true })
       expect(read.current.model).not.toBe(RETIRED)
@@ -137,7 +133,7 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     expect(claude.child(SESSION).calls).not.toContain('set_model')
   })
 
-  // The CLI's word is about the model it was launched with; a pick made since is the user's.
+  // A concurrent user pick outranks the launch model's failure.
   it('keeps a model the user picked while the heal was on its way', async () => {
     const host = await startedWith({ model: RETIRED })
     const record = () => host.deps.store.getRecord(SESSION)
@@ -162,7 +158,6 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     expect(record()?.options?.model).toBe('opus')
   })
 
-  // A slow settings readback can report the retired live model after the error.
   it('leaves the saved pick alone when that settings report arrives late', async () => {
     claude.behave(SESSION, {
       sendsNoStartFrame: true,
@@ -187,7 +182,6 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     await host.flushStreamedEvents(SESSION)
     expect(host.deps.store.getRecord(SESSION)?.options?.model).toBe(RETIRED)
 
-    // The settings read gives up at its deadline and reports what the child showed.
     await vi.waitFor(
       () => expect(reports.mock.calls.map(([event]) => event.type)).toContain('options-reported'),
       { timeout: 5_000 }

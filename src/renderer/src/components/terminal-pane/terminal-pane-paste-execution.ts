@@ -103,8 +103,7 @@ export function createTerminalPanePasteExecution(
     }
   }
 
-  // Why: resolved per pane and PTY host; split siblings and remote hosts can need
-  // different multiline paste protocols (Windows Codex needs input-record newlines).
+  // Resolve per pane/PTY host: Windows Codex needs input-record newlines even beside other protocols.
   const resolvePaneProtectedMultilinePasteOptions = (
     pane: ManagedPane
   ): TerminalPasteTextOptions | undefined => {

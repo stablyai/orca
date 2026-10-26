@@ -66,8 +66,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
           state.browserPagesByWorkspace,
           hasLiveBrowserGuest
         ),
-      // Why a shared veto: destroying a guest must respect every paint-retention signal (including
-      // remote viewers) as well as active downloads, matching the overlay's mount predicate.
+      // Guest destruction must honor every paint-retention signal, including remote viewers, and active downloads just like the overlay.
       isEvictable: (worktreeId) =>
         !browserTabsVetoGuestEviction(state.browserTabsByWorktree[worktreeId] ?? [])
     })

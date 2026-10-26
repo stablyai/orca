@@ -48,8 +48,7 @@ export function createLinearIssueDetailActions(
       if (isFresh(cached)) {
         return cached.data
       }
-      // Why: cards and sub-issue reads treat an unreadable issue as missing; only the
-      // composer's URL lookup asks to see the credential failure.
+      // Only composer URL lookups expose credential failures; cards/subissues treat unreadable issues as missing.
       const settle = (request: Promise<LinearIssue | null>): Promise<LinearIssue | null> =>
         options?.rejectCredentialError ? request : request.catch(() => null)
 

@@ -188,8 +188,7 @@ describe('pre-profile pairing coordinator', () => {
   })
 
   it('reuses the existing host id and name when re-pairing the same desktop key (no duplicate)', async () => {
-    // STA-1840: re-pairing a desktop already stored under a different id must
-    // merge into that card, not mint a new host-${now} and duplicate the row.
+    // Re-pair by preserved identity so a different id cannot create a duplicate host card (STA-1840).
     const events: string[] = []
     const client = fakeClient([success({ version: '1.0.0' })])
     const deps = dependencies(client, events)
@@ -366,11 +365,7 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
-  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
-  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
-  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
-  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
-  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  // Even a relay-advertising host may omit probe allowlisting; forbidden must still allow LAN-only pairing.
   it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
     const events: string[] = []
     const entries: ConnectionLogEntry[] = []
@@ -442,8 +437,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.saveJournal.mockImplementation(async (value) => {
       journal = value
     })
-    // Why: stands in for the physical client's own dial line, proving the sink
-    // actually reaches connectMobileRelayForPairing and not just the candidate.
+    // Emit through the physical connection sink to prove log attribution reaches beyond the candidate.
     deps.connectRelay.mockImplementation((connectArgs) => {
       connectArgs.onLog?.({
         id: 'relay-dial',
@@ -482,8 +476,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.saveJournal.mockImplementation(async (value) => {
       journal = value
     })
-    // Why: the reconnect lines the direct client emits carry the LAN address
-    // and no path label — the exact shape that was misread as relay retrying.
+    // Model unlabeled direct reconnect logs whose LAN addresses were mistaken for relay retries.
     deps.connectDirect.mockImplementation((...args) => {
       const options = args[3]
       if (options && typeof options !== 'function') {

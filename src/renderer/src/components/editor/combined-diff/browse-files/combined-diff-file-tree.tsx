@@ -24,9 +24,7 @@ import {
   type CombinedDiffTreeNode
 } from './combined-diff-file-tree-model'
 
-// Why: a collapsed tree renders nothing, so every memo below short-circuits to one of these instead
-// of building and flattening the whole tree behind a hidden panel. Expanding rebuilds them, which
-// an expand already costs today.
+// Collapsed panels use stable empty inputs to skip hidden tree construction and flattening.
 const EMPTY_TREE_ENTRIES: readonly CombinedDiffFileTreeEntry[] = Object.freeze([])
 const EMPTY_TREE_EXTENSIONS: readonly string[] = Object.freeze([])
 const EMPTY_UNCOMMITTED_TREE_GROUPS: CombinedDiffTreeGroup[] = []
@@ -62,7 +60,7 @@ export function CombinedDiffFileTree({
   const [query, setQuery] = React.useState('')
   const [excludedExtensions, setExcludedExtensions] = React.useState<Set<string>>(() => new Set())
   const [includeViewed, setIncludeViewed] = React.useState(true)
-  // Why: state, not a ref — the virtualized row lists need the scroller on their own mount pass.
+  // Use state so virtualized lists receive the scroller on their first mount.
   const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
   const { handleResizeKeyDown, handleResizeStart, maxWidth, minWidth, treeRef, width } =
     useCombinedDiffFileTreeResize(collapsed)
@@ -85,8 +83,7 @@ export function CombinedDiffFileTree({
         : Array.from(new Set(entries.map(getEntryExtension))).sort(),
     [collapsed, entries]
   )
-  // Why: viewed/loading state changes for one section must not invalidate the path filter or tree
-  // construction. It is applied below as a visibility overlay.
+  // Apply viewed/loading changes as an overlay without rebuilding path filters or tree structure.
   const structurallyFilteredEntries = React.useMemo(
     () =>
       collapsed
@@ -131,8 +128,7 @@ export function CombinedDiffFileTree({
         : EMPTY_TREE_ROOTS,
     [collapsed, mode, structurallyFilteredEntries]
   )
-  // Why: the viewed overlay below replaces these rows entirely when viewed files are hidden, so
-  // flattening the unfiltered tree there is pure dead work.
+  // When viewed files are hidden, the visibility overlay replaces these rows; skip unused flattening.
   const uncommittedRowsByArea = React.useMemo(() => {
     const rowsByArea = new Map<string, CombinedDiffTreeNode[]>()
     if (collapsed || !includeViewed) {
@@ -212,9 +208,7 @@ export function CombinedDiffFileTree({
   }
 
   return (
-    // Why: this column must be height-bounded so the file list, not the page,
-    // owns overflow when review diffs have more files than fit on screen.
-    // Why: useSidebarResize owns the inline width so a rerender mid-drag can't snap it back.
+    // Bound height so the file list owns overflow; useSidebarResize owns width to prevent rerenders snapping an active drag.
     <aside
       ref={treeRef}
       className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"

@@ -143,8 +143,7 @@ function createRuntimeClosePath(
 }> {
   const pendingShutdowns: Promise<void>[] = []
   const surfaces = config.sessions.map((session, index) => {
-    // Why: app relaunch must target the same persisted mirror incarnation, not
-    // accidentally mint a different tab identity that weakens the repetition proof.
+    // Reuse mirror incarnation ids across relaunch so minting new tabs cannot weaken the repeated-close proof.
     const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
     return { session, leafId, mobileTabId: `${PARENT_TAB_ID}::${leafId}` }
   })

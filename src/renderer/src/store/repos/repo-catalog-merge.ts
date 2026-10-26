@@ -82,8 +82,7 @@ export function filterSetupsForPrunedRepoRows(
       .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
       .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )
-  // Why: this result feeds the compat merge as `previous`, so an unconditional copy would discard
-  // the identity that merge is about to try to preserve.
+  // Compat merge receives this as previous; unconditional copying defeats the identity it tries to retain.
   if (prunedOwners.size === 0) {
     return setups
   }

@@ -147,7 +147,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                   ]
                 : []
 
-  // Panel-icon taps route through the dock-vs-push decision (U1): dock-capable rows dock, constrained rows push.
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {
     const width = Math.round(event.nativeEvent.layout.width)
     setSessionContentRowWidth((prev) => (prev === width ? prev : width))
@@ -166,9 +165,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         hostId,
         worktreeId,
         name: worktreeName || '',
-        // SC + PR both land on the source-control hub with origin:'session' for post-diff-open dismissal (U2); Files opts out.
+        // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
         ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
-        // The PR panel routes into the hub's Pull Request segment via descriptor params.
         ...descriptor.params,
         ...workspaceRouteParams(executionHost)
       }

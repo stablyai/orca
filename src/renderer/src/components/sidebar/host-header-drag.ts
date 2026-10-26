@@ -88,8 +88,7 @@ export function useHostHeaderDrag({
       if (!session || !container) {
         return null
       }
-      // Why: dragging host headers temporarily collapses their sections, so
-      // live rects are the source of truth after the first promoted move.
+      // Promotion collapses host sections, so recompute their live geometry.
       const rects = readHostHeaderRects(container)
       if (rects.length === 0 || rects.length < orderedIdsRef.current.length) {
         return null

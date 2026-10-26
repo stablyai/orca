@@ -1,3 +1,4 @@
+import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -131,8 +132,7 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
-  // agent. Outside a chat that knows its machine it keeps the host's own words.
+  // Name Orca and its host as the stop cause; without host context, preserve the original words.
   const { orcaStop } = block
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   // A paired server with no name to show is still a remote server; its id is not a name.
@@ -146,9 +146,6 @@ export function NativeChatNoticeRow({
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
   const antigravitySignInContent = nativeChatAntigravitySignInContent(failure?.kind, agentName)
-  const usageLimitContinue =
-    block.usageLimitTurnItemId !== undefined &&
-    block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
@@ -164,7 +161,6 @@ export function NativeChatNoticeRow({
           'row',
           {
             agentName,
-            retryControl: usageLimitContinue,
             usageLimitReset: formatUsageLimitResetClock
           },
           sayAgentSessionFailureTranslated
@@ -176,7 +172,7 @@ export function NativeChatNoticeRow({
             { agentName },
             sayAgentSessionFailureTranslated
           )
-        : block.text
+        : agentSessionGoalControlWords(block.text)
   const detail =
     failure?.detail?.audience === 'person' && failure.detail.text.trim() !== text.trim()
       ? failure.detail.text
@@ -207,15 +203,6 @@ export function NativeChatNoticeRow({
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
-        ) : usageLimitContinue ? (
-          <NativeChatInterruptedContinueButton
-            onContinue={orcaStopView.continueUsageLimit}
-            disabled={orcaStopView.usageLimitContinueDisabled}
-            explanation={translate(
-              'components.native-chat.interruptedContinue.usageLimitExplanation',
-              'Asks the agent to continue where it left off. Use it once the limit resets.'
-            )}
-          />
         ) : null}
       </div>
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (

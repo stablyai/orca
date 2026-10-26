@@ -8,8 +8,7 @@ type Props = {
   group: ProjectGroup
   expanded: boolean
   onToggle: () => void
-  /** Total band width for horizontally scrolling surfaces (the roadmap). The
-   *  label pins to the viewport so it stays readable when scrolled off. */
+  /** Set the roadmap band width while pinning its label within the visible viewport. */
   bandWidth?: number
 }
 
@@ -30,8 +29,7 @@ export default function ProjectGroupHeader({
       className={cn(
         'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
         'hover:bg-muted/60',
-        // Why: min-w-full lets the band keep painting to the pane's right
-        // edge when the pane is wider than the timeline grid.
+        // Keep the band painted to the pane’s edge when the timeline is narrower.
         bandWidth == null ? 'w-full' : 'min-w-full'
       )}
       style={bandWidth == null ? undefined : { width: bandWidth }}

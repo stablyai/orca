@@ -22,6 +22,8 @@ import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from './wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
+  desktopCreatedChatIds: (): Promise<string[]> =>
+    ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {

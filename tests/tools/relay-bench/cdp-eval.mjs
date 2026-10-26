@@ -15,8 +15,7 @@ function describePages(list) {
   return list.length ? list.map((p) => `${p.type} ${p.url}`).join(', ') : 'none'
 }
 const [rawPort, expr] = process.argv.slice(2)
-// Why not interpolate directly: URL parsing reads '80@attacker.example' as userinfo, so the
-// fetch would leave the loopback DevTools endpoint for an attacker-named host.
+// Validate ports: URL parsing treats 80@attacker.example as userinfo and would leave loopback.
 const port = requirePort(rawPort, 'devtools port', USAGE)
 const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
 const page = findRendererPage(list)
