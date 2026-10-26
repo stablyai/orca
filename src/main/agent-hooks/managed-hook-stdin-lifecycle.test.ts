@@ -246,9 +246,12 @@ function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promis
   return runHookProcess('/bin/sh', ['-c', command], hookEnvironment(extraEnv))
 }
 
-async function generatePosixScripts(): Promise<Map<string, string>> {
+async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, string>> {
   const scripts = new Map<string, string>()
   for (const entry of REMOTE_INSTALLERS) {
+    if (onlyAgent && entry.agent !== onlyAgent) {
+      continue
+    }
     const memory = createAgentHookMemorySftp()
     const status = await entry.install(memory.sftp)
     expect(status.state, `${entry.agent} install status`).toBe('installed')
@@ -412,13 +415,13 @@ describe('Windows managed hook stdin structure', () => {
               : [scriptPath]
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          // Only missing-context Windows paths permit broken writers; in-pane hooks must drain.
+          // Missing-context guards exit before reading stdin, so writers may see a broken pipe.
           for (const error of result.stdinErrors) {
             expect(WRITER_BROKEN_BY_EARLY_EXIT, `${fileName} stdin error`).toContain(error.code)
           }
         }
 
-        // In-pane vendor-replay skips must not wait for stdin EOF from a caller that holds it open (#24907).
+        // In-pane skips must not wait for stdin EOF from a caller that holds it open (#24907).
         const paneEnv = {
           ORCA_AGENT_HOOK_PORT: '59999',
           ORCA_AGENT_HOOK_TOKEN: 'token',
@@ -428,7 +431,8 @@ describe('Windows managed hook stdin structure', () => {
           ['claude-hook-impl.cmd', { DEVIN_PROJECT_DIR: home }],
           ['claude-hook-impl.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
           ['claude-hook-impl.cmd', { CURSOR_VERSION: '1.0', CURSOR_PROJECT_DIR: home }],
-          ['cursor-hook.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }]
+          ['cursor-hook.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
+          ['codex-hook.cmd', { CLAUDE_JOB_DIR: home }]
         ] as const) {
           const skipped = await runHookProcess(
             'cmd.exe',
@@ -657,9 +661,17 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   })
 
   it('drains before Claude skips hooks imported by Devin', async () => {
-    const script = (await generatePosixScripts()).get('claude claude-hook.sh')
+    const script = (await generatePosixScripts('claude')).get('claude claude-hook.sh')
     expect(script).toBeDefined()
     const result = await runPosixHook(script!, { DEVIN_PROJECT_DIR: '/tmp/devin-project' })
+    expect(result.exitCode).toBe(0)
+    expect(result.stdinErrors).toHaveLength(0)
+  })
+
+  it('drains before Codex skips hooks under a Claude background job', async () => {
+    const script = (await generatePosixScripts('codex')).get('codex codex-hook.sh')
+    expect(script).toBeDefined()
+    const result = await runPosixHook(script!, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
     expect(result.exitCode).toBe(0)
     expect(result.stdinErrors).toHaveLength(0)
   })

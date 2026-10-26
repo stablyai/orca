@@ -30,6 +30,7 @@ import {
   useRemoteBrowserPageInputQueue
 } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chrome-chords'
+import { useRemoteBrowserPagePointerHistory } from './use-remote-browser-page-pointer-history'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
 import {
   RemoteBrowserPageContextMenu,
@@ -209,6 +210,7 @@ export function RemoteBrowserPagePane({
     runRemoteNavigation,
     setPaneNotice
   })
+  useRemoteBrowserPagePointerHistory({ isActive, remoteViewportRef, runRemoteNavigation })
 
   // Transfer viewport focus to the first image, which owns remote key input.
   const hasStreamFrame = frameUrl !== null

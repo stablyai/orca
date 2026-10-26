@@ -8,6 +8,8 @@ export const REMOTE_NODE_RUNTIME_NOEXEC = 'ORCA_NODE_RUNTIME_NOEXEC'
 export const REMOTE_NODE_RUNTIME_SECURITY_MODIFIED = 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED'
 export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
 export const REMOTE_NODE_RUNTIME_VERIFIED_MARKER = '.verified'
+export const REMOTE_WINDOWS_BUILD_UNSUPPORTED = 'ORCA_WINDOWS_BUILD_UNSUPPORTED'
+export const REMOTE_NODE_RUNTIME_NO_EXTRACTOR = 'ORCA_NODE_RUNTIME_NO_EXTRACTOR'
 
 /** A failed version self-test is positive host evidence, not an unanswered transport probe. */
 export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
@@ -47,6 +49,39 @@ export function assertRemoteNodeRuntimeStoreExecutable(probe: string, storeDir: 
   // Our own 0700 shell script makes exit 126 an exec refusal; diagnostic text may be localized.
   if (report.exitStatus === 126) {
     throw new RemoteNodeRuntimeNoexecError(report.output, storeDir)
+  }
+}
+
+export class RemoteWindowsBuildUnsupportedError extends RelayHostAnsweredError {
+  constructor(readonly build: string) {
+    super(
+      `The host runs Windows build ${build}, older than the Windows 10 / Server 2016 Orca's Node runtime needs.`
+    )
+    this.name = 'RemoteWindowsBuildUnsupportedError'
+  }
+}
+
+export class RemoteNodeRuntimeNoExtractorError extends RelayHostAnsweredError {
+  constructor() {
+    super(
+      "The host has neither System32\\tar.exe nor PowerShell's Expand-Archive to unpack Orca's Node runtime."
+    )
+    this.name = 'RemoteNodeRuntimeNoExtractorError'
+  }
+}
+
+/** Windows hosts that can't run or unpack the runtime fail before anything is staged or uploaded. */
+export function assertWindowsHostCanInstallNodeRuntime(probe: string): void {
+  for (const line of probe.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith(`${REMOTE_WINDOWS_BUILD_UNSUPPORTED} `)) {
+      throw new RemoteWindowsBuildUnsupportedError(
+        trimmed.slice(REMOTE_WINDOWS_BUILD_UNSUPPORTED.length + 1).slice(0, 32)
+      )
+    }
+    if (trimmed === REMOTE_NODE_RUNTIME_NO_EXTRACTOR) {
+      throw new RemoteNodeRuntimeNoExtractorError()
+    }
   }
 }
 

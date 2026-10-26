@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   recheckUnconfirmedLaunches: vi.fn()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck', () => ({
   recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
 }))
 

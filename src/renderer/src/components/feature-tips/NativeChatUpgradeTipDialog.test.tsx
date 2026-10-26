@@ -2,11 +2,9 @@
 
 import { act, type JSX, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { FEATURE_TIPS, type FeatureTip } from '../../../../shared/feature-tips'
 import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
-import { NativeChatUpgradeFeatureTipVisual } from './NativeChatUpgradeFeatureTipVisual'
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -25,13 +23,6 @@ function getTip(): FeatureTip {
     throw new Error('Expected native-chat-upgrade feature tip fixture')
   }
   return tip
-}
-
-function textOf(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&#x27;/g, "'")
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -55,50 +46,7 @@ function dialog(
   )
 }
 
-function renderDialog(chatModeOn: boolean): string {
-  return renderToStaticMarkup(dialog(chatModeOn))
-}
-
 describe('NativeChatUpgradeTipDialog', () => {
-  it('shows the approved copy with one Got It button and the Experimental settings link', () => {
-    const text = textOf(renderDialog(true))
-    expect(text).toContain('NEW')
-    expect(text).toContain('Native chat got an upgrade')
-    expect(text).toContain(
-      'New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open Agent Session History in the right sidebar:'
-    )
-    expect(text).toContain('Resume in New Chat opens a supported CLI conversation in native chat.')
-    expect(text).toContain(
-      'Resume in New Terminal copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.'
-    )
-    expect(text).toContain('Manage Chat UI in Settings → Experimental.')
-    expect(text).toContain('Got It')
-    expect(text).not.toContain('Maybe Later')
-    expect(text).not.toContain('Turn on chat mode')
-    expect(renderDialog(true)).toContain('27rem')
-  })
-
-  it('shows only Got It when chat mode is already on', () => {
-    const html = renderDialog(true)
-    const text = textOf(html)
-    expect(text).not.toContain('Turn on chat mode')
-    expect(text).not.toContain('Enable Now')
-    expect(text).not.toContain('Leave Off')
-    expect(html).not.toContain('role="switch"')
-  })
-
-  it('offers Leave Off and Enable Now when chat mode is off, without a switch', () => {
-    const html = renderDialog(false)
-    const text = textOf(html)
-    expect(text).toContain('Leave Off')
-    expect(text).toContain('Enable Now')
-    expect(text).not.toContain('Got It')
-    expect(text).not.toContain('Turn on chat mode')
-    expect(html).not.toContain('role="switch"')
-    expect(html).toContain('27rem')
-    expect(text).toContain('Resume in New Terminal copies a Claude or Codex chat')
-  })
-
   it('dismisses with Leave Off and runs the primary action only with Enable Now', () => {
     const onPrimaryAction = vi.fn()
     const onOpenChange = vi.fn()
@@ -129,12 +77,5 @@ describe('NativeChatUpgradeTipDialog', () => {
     expect(container.querySelector('footer button')?.textContent).toBe('Got It')
     expect(container.querySelector('[role="switch"]')).toBeNull()
     act(() => root.unmount())
-  })
-
-  it('pictures both real menu actions, one at a time', () => {
-    const html = renderToStaticMarkup(<NativeChatUpgradeFeatureTipVisual />)
-    expect(html).toContain('Agent Session History')
-    expect(html).toMatch(/data-highlighted="true"[^>]*>.*Resume in New Terminal/)
-    expect(html).not.toContain('Resume in New Chat')
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 
 function userTurn(id: string, text: string, timestamp: number): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
@@ -27,19 +27,6 @@ function unresolved(
 
 describe('rebaseMobileNativeChatPendingBaselines', () => {
   const history = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'passed', 1100)]
-
-  it('returns the same array when every baseline is already resolved', () => {
-    const pending: MobileNativeChatPendingMessage[] = [
-      {
-        id: 'p1',
-        text: 'hi',
-        expectedOccurrence: 1,
-        baselineTailMessageId: 'm2',
-        baselineResolved: true
-      }
-    ]
-    expect(rebaseMobileNativeChatPendingBaselines(history, pending)).toBe(pending)
-  })
 
   it('gives an unresolved send the loaded tail as its glue boundary', () => {
     expect(

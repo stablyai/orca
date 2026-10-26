@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import { createAgentStatusRuntime } from './agent-status-runtime'
 import { createAgentStatusAuthorityActions } from './agent-status-authority-actions'
 import { createAgentStatusCleanupActions } from './agent-status-cleanup-actions'
@@ -15,53 +15,12 @@ import { createAgentStatusRecoveryActions } from './agent-status-recovery-action
 import { createAgentStatusRetentionActions } from './agent-status-retention-actions'
 
 // Keep this path as the public contract for callers while implementation details live beside it.
-export type {
-  AgentLaunchConfigRegistryEntry,
-  AgentLaunchConfigRegistrationMetadata,
-  AgentProviderSessionRecordMetadata,
-  AgentProviderSessionRouting,
-  AgentProviderSessionTiming,
-  AgentStatusBatchTransaction,
-  AgentStatusBatchUpdate,
-  AgentStatusMetadata,
-  AgentStatusPayload,
-  AgentStatusRouting,
-  AgentStatusTiming,
-  AgentStatusUpdate,
-  AgentProviderSessionUpdate,
-  AgentProgramStatusUpdate,
-  AgentStatusWorktreeShutdownReason,
-  AllAgentSessionCaptureMode,
-  DropAgentStatusByTabPrefixOptions,
-  DropAgentStatusByWorktreeOptions,
-  DropHibernatedAgentPaneOptions,
-  RetainedAgentEntry,
-  AgentStateHistoryEntry,
-  AgentStatusEntry,
-  AgentStatusOrchestrationContext,
-  AgentType,
-  MigrationUnsupportedPtyEntry,
-  ParsedAgentStatusPayload,
-  AgentProviderSessionMetadata,
-  ResumableTuiAgent,
-  SleepingAgentLaunchConfig,
-  SleepingAgentSessionRecord
-} from './agent-status-contract'
-export type { AgentStatusSlice } from './agent-status-slice-contract'
-export {
-  collectSleepingAgentSessionRecordsForWorktree,
-  collectHibernatedCompletionEvidenceForWorktree
-} from './agent-status-recovery-collection'
-export { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-sleeping-records'
-export {
-  buildAgentStatusTabPrefixDropPatch,
-  type AgentStatusTabPrefixDropState
-} from './agent-status-drop-reducer'
-export { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-export {
-  RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX,
-  RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX
-} from './agent-status-pane-keyed-records'
+
+import './agent-status/agent-status-recovery-collection'
+import './agent-status/agent-status-sleeping-records'
+import './agent-status/agent-status-drop-reducer'
+import './agent-status/agent-status-capacity-eviction'
+import './agent-status/agent-status-pane-keyed-records'
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   storeSet,

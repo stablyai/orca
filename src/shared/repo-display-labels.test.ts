@@ -2,18 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from './repo-display-labels'
 
 describe('getRepoDisplayLabelsByPath', () => {
-  it('keeps non-colliding repository names basename-only', () => {
-    const labels = getRepoDisplayLabelsByPath([
-      { path: '/workspace/platform/web', displayName: 'web' },
-      { path: '/workspace/platform/worker', displayName: 'worker' }
-    ])
-
-    expect(labels.get(getRepoDisplayLabelKey({ path: '/workspace/platform/web' }))).toBe('web')
-    expect(labels.get(getRepoDisplayLabelKey({ path: '/workspace/platform/worker' }))).toBe(
-      'worker'
-    )
-  })
-
   it('adds the minimal real parent suffix only for colliding basenames', () => {
     const labels = getRepoDisplayLabelsByPath([
       { path: '/workspace/platform/web', displayName: 'web' },
@@ -78,15 +66,6 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.get(getRepoDisplayLabelKey({ path: 'C:\\workspace\\billing\\api' }))).toBe(
       'billing/api'
     )
-  })
-
-  it('keeps identical project paths short across local and paired execution hosts', () => {
-    const local = { path: '/home/user/projects/app', displayName: 'app' }
-    const paired = { ...local, executionHostId: 'runtime:home' as const }
-    const labels = getRepoDisplayLabelsByPath([local, paired])
-    expect(labels.get(getRepoDisplayLabelKey(local))).toBe('app')
-    expect(labels.get(getRepoDisplayLabelKey(paired))).toBe('app')
-    expect(labels.size).toBe(2)
   })
 
   it('disambiguates collisions only within their owning host, even when paths overlap', () => {

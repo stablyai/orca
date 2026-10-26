@@ -164,7 +164,8 @@ export function BrowserPagePane({
     isActive,
     chromeShortcutScope,
     addressBarInputRef,
-    guestFocus
+    guestFocus,
+    inputLocked
   })
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,

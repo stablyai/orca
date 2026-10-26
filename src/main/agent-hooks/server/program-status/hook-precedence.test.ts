@@ -70,6 +70,16 @@ describe('programStatusHookYieldEndsAt', () => {
     }
   })
 
+  it("never lets a program's child roster reopen a turn the hooks settled", () => {
+    const hook = row({ state: 'done', agentType: 'pi' })
+    const heldOpen = report({
+      state: 'working',
+      agentType: 'pi',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: NOW }
+    })
+    expect(programStatusHookYieldEndsAt(hook, heldOpen, NOW + 1)).toBe(Infinity)
+  })
+
   it('keeps a question the hooks raised only from a working report that began before it', () => {
     for (const state of ['waiting', 'blocked'] as const) {
       const hook = row({ state, agentType: 'pi' })

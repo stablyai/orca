@@ -170,17 +170,16 @@ describe("Claude's trust dialog under a shell auto-title", () => {
     })
   })
 
-  // Command-line titles classify as permission, whose idle transition reaches waiters only on poll.
   it.each([
-    ['oh-my-zsh', OH_MY_ZSH_TITLES, false],
-    ['fish', [FISH_TITLE], true]
+    ['oh-my-zsh', OH_MY_ZSH_TITLES],
+    ['fish', [FISH_TITLE]]
   ])(
     'does not settle ready when the %s title arrives before the dialog paints',
-    async (_, titles, offered) => {
+    async (_, titles) => {
       const pane = await createPane()
       const { promise, settled } = pane.wait()
       titles.forEach(pane.write)
-      expect(pane.titleResolveCount() > 0).toBe(offered)
+      expect(pane.titleResolveCount()).toBeGreaterThan(0)
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       expect(settled).not.toHaveBeenCalled()
 

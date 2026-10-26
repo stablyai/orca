@@ -32,6 +32,11 @@ export function browserSitePermissionLabel(permission: BrowserSitePermission): s
         'auto.components.browserPane.sitePermission.label.idleDetection',
         'Device use'
       )
+    case 'local-network':
+      return translate(
+        'auto.components.browserPane.sitePermission.label.localNetwork',
+        'Local network'
+      )
   }
 }
 
@@ -74,6 +79,11 @@ export function browserSitePermissionRequestLine(permission: BrowserSitePermissi
       return translate(
         'auto.components.browserPane.sitePermission.ask.idleDetection',
         'Know when you are actively using this device'
+      )
+    case 'local-network':
+      return translate(
+        'auto.components.browserPane.sitePermission.ask.localNetwork',
+        'Access apps on this device and devices on your local network'
       )
   }
 }

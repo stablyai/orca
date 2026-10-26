@@ -24,7 +24,10 @@ import type { StructuredAgentSessionAtRestCommands } from './structured-agent-se
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { StructuredAgentSessionAdapterStop } from './structured-agent-session-adapter-stop'
+import type {
+  AgentSessionCloseObserver,
+  StructuredAgentSessionAdapterStop
+} from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -224,6 +227,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     change: AgentSessionThreadGoalChange
     /** Existing recorded goals require set to create a new objective, never rewrite the old one. */
     replacesGoal: boolean
+    executionOptions?: AgentSessionExecutionOptions
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
@@ -276,11 +280,11 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     accountHome: AgentSessionAccountHome
   }): Promise<AiVaultConversationCopy>
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
-  closeSession?(sessionId: string): Promise<boolean>
+  closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string): Promise<boolean>
+  disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(
     sessionId: string,

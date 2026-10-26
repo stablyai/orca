@@ -1,3 +1,4 @@
+import type { TerminalLaunchResult } from '../../shared/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
@@ -5,7 +6,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
-export type PtySpawnResult = {
+export type PtySpawnResult = TerminalLaunchResult & {
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult

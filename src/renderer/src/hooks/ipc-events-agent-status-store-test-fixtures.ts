@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate
-} from '../store/slices/agent-status'
+} from '../store/slices/agent-status/agent-status-contract'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
@@ -184,6 +184,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     suppressedPtyExitIds: {},
     markAgentAttentionUnread: vi.fn(),
     agentStatusByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
     setAgentProgramStatus: vi.fn(() => true),

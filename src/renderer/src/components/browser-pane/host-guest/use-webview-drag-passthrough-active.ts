@@ -9,6 +9,14 @@ function subscribe(onStoreChange: () => void): () => void {
 }
 
 /** Guest focus blurs the embedder and aborts renderer drags; panes use this state to defer guest effects. */
-export function useWebviewDragPassthroughActive(): boolean {
-  return useSyncExternalStore(subscribe, isWebviewDragPassthroughActive, () => false)
+export function useWebviewDragPassthroughActive(enabled = true): boolean {
+  // Inactive panes have nothing to defer, so they skip the per-drag re-render.
+  return useSyncExternalStore(
+    enabled ? subscribe : subscribeNever,
+    enabled ? isWebviewDragPassthroughActive : readInactive,
+    () => false
+  )
 }
+
+const subscribeNever = (): (() => void) => () => {}
+const readInactive = (): boolean => false

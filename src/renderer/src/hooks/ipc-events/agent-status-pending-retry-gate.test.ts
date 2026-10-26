@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusBatchUpdate } from '../../store/slices/agent-status'
+import type { AgentStatusBatchUpdate } from '../../store/slices/agent-status/agent-status-contract'
 import {
   buildStoreState,
   FUTURE_LEAF_ID,

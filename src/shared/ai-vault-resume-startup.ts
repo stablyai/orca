@@ -31,6 +31,7 @@ import { assertOpenCodeCopyUsesLocalStore } from './opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from './structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from './global-settings-types'
 import { parseWslUncPath } from './wsl-paths'
+import { managedDataAccountResumeEnv } from './managed-data-account-resume'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -135,7 +136,10 @@ export function buildAiVaultLocalResumeStartup(
       platform,
       shell: liveShell,
       agentArgs: args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings),
-      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(session.agent, settings, platform),
+        ...managedDataAccountResumeEnv(session)
+      },
       resumeInLaunchCwd: true,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })

@@ -14,6 +14,10 @@ export function isAntigravityFeedbackTool(toolName: string | undefined): boolean
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+function isAntigravitySubagentTool(toolName: string | undefined): boolean {
+  return toolName === 'invoke_subagent' || toolName === 'send_message'
+}
+
 export function normalizeAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -22,6 +26,23 @@ export function normalizeAntigravityEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
+  const subagentParent = state.antigravitySubagentParentByPaneKey.get(paneKey)
+  if (subagentParent && conversationId && conversationId !== subagentParent) {
+    // Subagents run inside the parent agy under their own conversationId and never carry user input.
+    if (!readFirstString(hookPayload, ['lastUserInput'])) {
+      return null
+    }
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+  }
+  const toolName = readAntigravityToolCall(hookPayload).toolName
+  if (
+    conversationId &&
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
+    isAntigravitySubagentTool(toolName)
+  ) {
+    state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
+  }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
@@ -33,7 +54,6 @@ export function normalizeAntigravityEvent(
     return null
   }
 
-  const toolName = readAntigravityToolCall(hookPayload).toolName
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
@@ -78,8 +98,11 @@ export function normalizeAntigravityEvent(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
   // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
-  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
-    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+  if (eventName === 'Stop' && !stopStillBusy) {
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+    if (transcriptPath) {
+      state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+    }
   }
   return payload
 }

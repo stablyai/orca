@@ -9,6 +9,14 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 import { electronMocks, OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
+import { RpcDispatcher } from './rpc/dispatcher'
+import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
+import {
+  clearStructuredHostStub,
+  hostCalls,
+  installStructuredHostStub
+} from './rpc/methods/structured-agent-session-rpc.test-fixture'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-session-contracts'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 
 const SPLIT_ROOT: TerminalPaneLayoutNode = {
@@ -44,7 +52,7 @@ function desktopHostRuntime() {
       ...(titlesByLeafId ? { titlesByLeafId } : {}),
       renamedLeafIds
     })
-  return { setPaneTitle, renameTerminal, renamePanes, savedLayout, before }
+  return { runtime, setPaneTitle, renameTerminal, renamePanes, savedLayout, before }
 }
 
 describe('client pane names on a host with its own desktop window', () => {
@@ -104,4 +112,71 @@ describe('client pane names on a host with its own desktop window', () => {
     expect(setPaneTitle).not.toHaveBeenCalled()
     expect(renameTerminal).not.toHaveBeenCalled()
   })
+})
+
+it('routes old-client chat tab renames to the owning record with or without an attached window', async () => {
+  installStructuredHostStub()
+  hostCalls.setUserConversationName = vi.fn(async () => ({
+    name: 'Saved through tab props',
+    applied: true
+  }))
+  try {
+    for (const attached of [true, false]) {
+      const desktop = desktopHostRuntime()
+      const runtime = attached ? desktop.runtime : new OrcaRuntimeService(null)
+      vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+      vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
+        ...desktop.runtime.getClientSettings(),
+        experimentalNativeChat: true
+      })
+      const snapshot: RuntimeMobileSessionTabsSnapshot = {
+        worktree: TEST_WORKTREE_ID,
+        publicationEpoch: 'chat-rename',
+        snapshotVersion: 1,
+        activeGroupId: 'group',
+        activeTabId: 'agent-session:session-alpha',
+        activeTabType: 'agent-session',
+        tabs: [
+          {
+            type: 'agent-session',
+            id: 'agent-session:session-alpha',
+            sessionId: 'session-alpha',
+            agent: 'codex',
+            title: 'Codex Chat',
+            isActive: true
+          }
+        ]
+      }
+      runtime['storeMobileSessionSnapshot'](TEST_WORKTREE_ID, snapshot)
+      const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+      const replies: string[] = []
+      await dispatcher.dispatchStreaming(
+        {
+          id: 'rename',
+          authToken: 'token',
+          method: 'session.tabs.setTabProps',
+          params: {
+            worktree: `id:${TEST_WORKTREE_ID}`,
+            tabId: snapshot.activeTabId,
+            customTitle: 'Saved through tab props'
+          }
+        },
+        (reply) => replies.push(reply),
+        { clientKind: 'mobile', clientCapabilities: [] }
+      )
+      expect(JSON.parse(replies[0]), replies[0]).toMatchObject({
+        ok: true,
+        result: { updated: true }
+      })
+      expect(hostCalls.setUserConversationName).toHaveBeenLastCalledWith(
+        'session-alpha',
+        'Saved through tab props',
+        'rename'
+      )
+      expect(desktop.renameTerminal).not.toHaveBeenCalled()
+    }
+    expect(hostCalls.setUserConversationName).toHaveBeenCalledTimes(2)
+  } finally {
+    clearStructuredHostStub()
+  }
 })

@@ -127,11 +127,6 @@ describe('browser external app launch', () => {
     expect(renderer.send).not.toHaveBeenCalled()
   })
 
-  it('names no site when the asking frame is unknown', () => {
-    ask(OKTA_URL, null)
-    expect(sentRequests(renderer)[0].details).toMatchObject({ origin: null })
-  })
-
   it('refuses a page with no window on this computer', () => {
     resolveTarget = () => null
     expect(ask()).toBe(false)

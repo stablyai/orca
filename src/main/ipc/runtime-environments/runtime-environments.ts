@@ -1,3 +1,5 @@
+import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -42,6 +44,7 @@ import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-en
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
 
@@ -114,7 +117,11 @@ let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
   stopPreferenceWatch?.()
-  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath())
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(
+    store,
+    getUserDataPath(),
+    publishRuntimeEnvironmentCatalogChanged
+  )
   for (const pending of pendingSubscriptions.values()) {
     pending.close()
   }
@@ -175,6 +182,8 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     store
   })
   registerRuntimeEnvironmentSubscriptionHandlers({
+    createAssociationObserver: (environmentId, identity) =>
+      createAiVaultAssociationObserver(environmentId, identity, invalidateAiVaultHostLegCache),
     getUserDataPath,
     remoteRuntimeSubscriptions,
     pendingSubscriptions,

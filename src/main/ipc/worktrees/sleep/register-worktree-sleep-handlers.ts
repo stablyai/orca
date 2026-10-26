@@ -34,4 +34,13 @@ export function registerWorktreeSleepHandlers(context: WorktreeIpcContext): void
     }
     return context.runtime.resumeSleptPane(pane)
   })
+  ipcMain.handle(
+    'worktrees:retireStrandedSleepRecord',
+    (_event, args: { worktreeId?: unknown; paneKey?: unknown } | undefined) => {
+      if (typeof args?.worktreeId !== 'string' || typeof args.paneKey !== 'string') {
+        throw new Error('invalid_sleep_record')
+      }
+      return context.runtime.retireStrandedSleepRecord(args.worktreeId, args.paneKey)
+    }
+  )
 }

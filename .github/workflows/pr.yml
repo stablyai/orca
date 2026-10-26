@@ -220,6 +220,22 @@ jobs:
         with:
           bun-version-file: config/.bun-version
 
+      # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
+      - name: Plan unit selection
+        if: '!cancelled()'
+        id: unit-plan
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          # Five shards use fewer runner minutes; the repository variable can request 2 to 10.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/ci-unit-plan.mjs
+
       # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
         if: '!cancelled()'
@@ -271,7 +287,7 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
           node_modules/.bin/ast-grep test --config config/sgconfig.yml --skip-snapshot-tests
-          node_modules/.bin/ast-grep scan --config config/sgconfig.yml --min-severity warning --format github src config tests mobile
+          node config/scripts/ast-grep-gates.mjs --format=github
 
       # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
       - name: Check formatting
@@ -343,6 +359,27 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           pnpm run typecheck:ci --bun-concurrency=2 --bun-threads=2
 
+      # Starts with the compiler so its ~16s pass overlaps the serial checks below.
+      # Extract sorted evidence to isolated temp paths with one normalized platform-independent AST pass; use preflight’s pinned Bun.
+      - name: Verify localization extraction
+        if: '!cancelled()'
+        id: localization-extraction
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          # Detection failures run the full check; renames retain the removed input path.
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
+            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            echo "Localization extraction inputs are unchanged."
+          else
+            bun config/scripts/verify-localization-extraction.mjs
+          fi
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
@@ -388,33 +425,21 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-node-runtime-pin.mjs
 
+      # A ~7s single-threaded tree walk; it overlaps the remaining checks.
       - name: Check every test file has a runner
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-test-file-runners.mjs
-
-      - name: Check root and mobile lock the same shared dependencies
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
-
-      # Extract sorted evidence to isolated temp paths with one normalized platform-independent AST pass; use preflight’s pinned Bun.
-      - name: Verify localization extraction
         if: '!cancelled()'
-        id: localization-extraction
+        id: test-file-runners
         background: true
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          # Detection failures run the full check; renames retain the removed input path.
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
-          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
-            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
-            echo "Localization extraction inputs are unchanged."
-          else
-            bun config/scripts/verify-localization-extraction.mjs
-          fi
+          node config/scripts/check-test-file-runners.mjs
+
+      - name: Check root and mobile lock the same shared dependencies
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
 
       - name: Decide whether the orcad terminal smoke runs
         id: orcad-smoke-scope
@@ -498,22 +523,6 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/verify-macos-entitlements.mjs
 
-      # Planning shares setup and stays off the compiler's critical path.
-      - name: Plan unit selection
-        if: '!cancelled()'
-        id: unit-plan
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Five shards use fewer runner minutes; the repository variable can still request ten.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/ci-unit-plan.mjs
-
       - wait: typecheck
 
       - wait: process-host-imports
@@ -523,6 +532,8 @@ jobs:
       - wait: js-plugin-lint
 
       - wait: unit-plan
+
+      - wait: test-file-runners
 
       - uses: actions/upload-artifact@v7
         if: needs.code_paths.outputs.typecheck == 'true'

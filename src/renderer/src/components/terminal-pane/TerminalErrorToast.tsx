@@ -99,6 +99,11 @@ export function isExplainedTerminalError(error: string): boolean {
     )
 }
 
+/** The host no longer has this pane's terminal, so nothing can come back into it. */
+export function isRemoteTerminalClosedError(error: string): boolean {
+  return error.includes(REMOTE_TERMINAL_CLOSED_MARKER)
+}
+
 export function isPaneOwnerUnverifiedError(error: string): boolean {
   const lines = error.split('\n').filter((line) => line.length > 0)
   return lines.length > 0 && lines.every((line) => line.includes(PANE_OWNER_UNVERIFIED_MARKER))
@@ -221,7 +226,8 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
-  onOpenNewTerminal
+  onOpenNewTerminal,
+  onClosePane
 }: {
   error: string
   agentId?: string | null
@@ -232,6 +238,8 @@ export function TerminalErrorToast({
   onRetry?: () => Promise<boolean>
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
+  /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
+  onClosePane?: () => void
 }): React.JSX.Element {
   const ssh = isSshHostStateTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
@@ -401,6 +409,14 @@ export function TerminalErrorToast({
             {translate(
               'auto.components.terminal.pane.TerminalErrorToast.openNewTerminal',
               'Open new terminal'
+            )}
+          </Button>
+        ) : null}
+        {onClosePane && isRemoteTerminalClosedError(error) ? (
+          <Button variant="outline" size="xs" onClick={onClosePane} className="ml-3">
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
+              'Close Pane'
             )}
           </Button>
         ) : null}

@@ -87,8 +87,10 @@ export function codexStructuredLaunchPart(
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-        // Omitted policy fields would inherit the resumed thread's previous permissions.
-        permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask'),
+        // Own settings leaves a new thread to config and a resumed thread to its saved policy.
+        ...(basis.permissionMode === 'own'
+          ? {}
+          : { permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask') }),
         ...(model ? { model } : {}),
         ...(visuals ? { visuals } : {})
       },

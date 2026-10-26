@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { WatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
@@ -42,8 +42,8 @@ vi.mock('./file-watcher-host', () => ({
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
 
-vi.mock('../ipc/filesystem-auth', async () => {
-  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+vi.mock('../ipc/filesystem/filesystem-auth', async () => {
+  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -210,6 +210,27 @@ describe('RuntimeFileCommands file watching', () => {
     commands.forgetFileExplorerWatchersAfterRemoval('C:\\repo')
     expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('closes Windows removal watchers without reauthorizing a path Git already unregistered', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const rootPath = 'C:\\projects\\repo-feature'
+    const watcher = createWindowsWatcher(() => {
+      queueMicrotask(() => watcher.emit('close'))
+    })
+    watchMock.mockReturnValue(watcher)
+    resolveAuthorizedPathMock.mockResolvedValue(rootPath)
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const { commands } = createRuntimeFileCommands(rootPath)
+    await commands.watchFileExplorer('id:wt-1', vi.fn())
+    resolveAuthorizedPathMock.mockRejectedValue(
+      new Error('Access denied: path resolves outside allowed directories')
+    )
+
+    await expect(commands.closeFileExplorerWatchersForPath(rootPath)).resolves.toBeUndefined()
+
+    expect(watcher.close).toHaveBeenCalledTimes(1)
+    expect(closeWatcherInWatcherProcessMock).not.toHaveBeenCalled()
   })
 
   it('retains Windows close ownership until late physical exit without retry leaks', async () => {

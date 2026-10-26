@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { Check, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { mobileNativeChatInputStyles } from './native-chat/composer/mobile-native-chat-input-styles'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
 import { useTextInputContentHeight } from '../platform/text-input-content-height'
 

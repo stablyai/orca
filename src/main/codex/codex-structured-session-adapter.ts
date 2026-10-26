@@ -39,7 +39,7 @@ import * as turnEnd from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
-import { changeCodexThreadGoal } from './codex-structured-thread-goal'
+import { changeCodexThreadGoalWithSettings } from './codex-structured-thread-goal'
 import { startCodexTerminalStopProbe } from './codex-background-terminals'
 import { codexBackgroundTaskStops, stopCodexBackgroundTasks } from './codex-background-task-stops'
 import {
@@ -293,14 +293,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
   }
 
-  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
-    changeCodexThreadGoal(
-      this.session(input.sessionId),
-      input.change,
-      input.replacesGoal,
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) => {
+    const session = this.session(input.sessionId)
+    return changeCodexThreadGoalWithSettings(
+      session,
+      input,
       this.deps.requestTimeoutMs,
-      input.signal
+      () => this.sessions.get(input.sessionId) === session
     )
+  }
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })
@@ -324,11 +325,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (sessionId) =>
-    this.teardown.close(sessionId)
+  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
+    this.teardown.close(...args)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (sessionId) =>
-    this.teardown.close(sessionId)
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (...args) =>
+    this.teardown.close(...args)
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

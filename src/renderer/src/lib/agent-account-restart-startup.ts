@@ -109,7 +109,11 @@ export function resolveAgentAccountRestartResumeStartup(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    // Both restart executors spawn in the tab's start folder.
+    launchCwd:
+      state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd ??
+      worktree?.path
   })
   if (!startupPlan) {
     return null

@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { AgentStatusBatchTransaction, AgentStatusBatchUpdate } from './agent-status-contract'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type {
+  AgentStatusBatchTransaction,
+  AgentStatusBatchUpdate
+} from './agent-status/agent-status-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 

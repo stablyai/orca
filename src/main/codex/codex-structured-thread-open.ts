@@ -1,3 +1,5 @@
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
@@ -6,11 +8,12 @@ import { readCodexThreadId } from './codex-structured-thread-facts'
 
 export type CodexOpenedThread = {
   threadId: string
+  reportedPermissionMode?: string | null
   supersededThreadId?: string
   thread?: Record<string, unknown>
   historyMode?: 'legacy' | 'paginated'
   model?: string
-  effort?: string
+  effort?: string | null
   /** Present, including null, only when this app-server reports the effective tier. */
   serviceTier?: string | null
 }
@@ -88,6 +91,21 @@ export async function openCodexThread(
       )
     } catch (error) {
       throwIfSignalAborted(signal)
+      if (
+        isCodexAppServerRequestError(error) &&
+        error.method === 'thread/resume' &&
+        error.code === -32600 &&
+        /\bthread\s+(\S+)\s+already has an active writer\b/i.exec(error.message)?.[1] ===
+          resumeThreadId
+      ) {
+        throw withProviderDiagnostic(
+          Object.assign(
+            new AgentSessionAcquisitionRefusal(error.message, 'conversationOpenElsewhere'),
+            { cause: error }
+          ),
+          providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+        )
+      }
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
@@ -113,13 +131,39 @@ export async function openCodexThread(
   const serviceTier = nonEmptyString(result.serviceTier)
   return {
     threadId,
+    reportedPermissionMode: reportedCodexPermissionMode(result),
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
     thread,
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }
       : {}),
     ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
+    ...(effort || result.reasoningEffort === null ? { effort } : {}),
     ...(serviceTierKnown ? { serviceTier } : {})
   }
+}
+
+/** Unrecognized policies remain the agent's settings rather than a guessed Orca mode. */
+function reportedCodexPermissionMode(reply: Record<string, unknown>): string | null {
+  const approval = reply.approvalPolicy ?? reply.approval_policy
+  const reviewer = reply.approvalsReviewer ?? reply.approvals_reviewer
+  const sandbox = reply.sandbox
+  const sandboxType =
+    typeof sandbox === 'object' && sandbox !== null && 'type' in sandbox ? sandbox.type : sandbox
+  if (sandboxType === 'readOnly' || sandboxType === 'read-only') {
+    return 'read-only'
+  }
+  if (
+    (sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access') &&
+    approval === 'never'
+  ) {
+    return 'full-access'
+  }
+  if (
+    (sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write') &&
+    approval === 'on-request'
+  ) {
+    return reviewer === 'auto_review' ? 'auto' : reviewer === 'user' ? 'ask' : null
+  }
+  return null
 }

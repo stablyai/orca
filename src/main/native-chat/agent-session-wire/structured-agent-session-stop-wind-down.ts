@@ -1,3 +1,4 @@
+import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -17,6 +18,10 @@ import { structuredAgentSessionNamedTurnScope } from './structured-agent-session
 
 /** Queued immediately behind Stop, so no later turn can intervene; wait only for an accepted interrupt. */
 export type StructuredAgentSessionStopWindDown = {
+  outcome?: AgentSessionStopOutcome
+  operationId: string
+  feedbackId?: string
+  noteFence?: () => number
   waitsForProvider: boolean
   stoppedAt: number
   stopNote: AgentJournalItemIdentity
@@ -36,20 +41,74 @@ export async function endStoppedStructuredAgentSession(
   let failedOn: JournalStopFailedOn | undefined
   try {
     if (windDown.waitsForProvider) {
-      await ctx.adapter.awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
+      await ctx.adapter
+        .awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
+        .catch((error: unknown) => {
+          if (windDown.outcome?.errors.length === 0) {
+            windDown.outcome.errors.push(error)
+          }
+          onError(error)
+        })
     }
     await stopChild()
     await windDown.stopNoteWrite?.catch(onError)
   } catch (error) {
     onError(error)
+    if (windDown.outcome?.errors.length === 0) {
+      windDown.outcome.errors.push(error)
+    }
     failedOn = structuredAgentSessionFailedStopMark(
       contextStructuredAgentSessionCurrentWork(ctx),
       ctx.journal
     )
     await windDown.stopNoteWrite?.catch(onError)
-    await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)
+    if (!windDown.outcome) {
+      await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)
+    }
   } finally {
     windDown.settled?.(failedOn)
+  }
+  const outcome = windDown.outcome
+  if (
+    outcome &&
+    (outcome.errors.length > 0 ||
+      outcome.pause === 'unconfirmed' ||
+      outcome.interrupt === 'unconfirmed' ||
+      outcome.root !== 'exited' ||
+      outcome.workload !== 'exited')
+  ) {
+    // Thread-scoped operation feedback survives generic turn-end rekeying and turnless shutdown.
+    const identity = structuredAgentSessionStopNoteIdentity(
+      windDown.feedbackId ?? windDown.operationId
+    )
+    await ctx.journal.appendLifecycleBatch({
+      settlementId: `stop-outcome:${windDown.operationId}`,
+      fence: Math.max(ctx.fence, windDown.noteFence?.() ?? ctx.fence),
+      mutations: [
+        ...(agentJournalItemKey(identity) === agentJournalItemKey(windDown.stopNote)
+          ? []
+          : [{ kind: 'tombstone' as const, identity: windDown.stopNote }]),
+        {
+          kind: 'item',
+          identity,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+          body: {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+              surface: 'row',
+              stopNotice:
+                outcome.pause === 'unconfirmed' &&
+                outcome.interrupt !== 'unconfirmed' &&
+                outcome.root === 'exited' &&
+                outcome.workload === 'exited'
+                  ? 'pauseUnconfirmed'
+                  : 'stopUnconfirmed'
+            })
+          }
+        }
+      ]
+    })
   }
 }
 

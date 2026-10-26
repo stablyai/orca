@@ -5,6 +5,7 @@ import {
   type BrowserSitePermission,
   type BrowserSitePermissionDecision
 } from '../../shared/browser-site-permission'
+import { isEligibleLocalCertificateHost } from '../../shared/browser-url'
 import { browserManager } from './browser-manager'
 import { browserPagePromptOrigin, openBrowserPagePrompt } from './browser-page-prompts'
 import {
@@ -19,7 +20,11 @@ const SITE_PERMISSION_BY_ELECTRON_PERMISSION: Partial<Record<string, BrowserSite
   midi: 'midi',
   midiSysex: 'midi',
   'window-management': 'window-management',
-  'idle-detection': 'idle-detection'
+  'idle-detection': 'idle-detection',
+  // Chromium 150 asks loopback-network for 127.0.0.1; local-network-access is the legacy name.
+  'local-network-access': 'local-network',
+  'local-network': 'local-network',
+  'loopback-network': 'local-network'
 }
 
 const SITE_PERMISSION_BY_MEDIA_TYPE: Partial<Record<string, BrowserSitePermission>> = {
@@ -181,4 +186,42 @@ export function decideBrowserSitePermissions(args: {
       resolve(false)
     }
   })
+}
+
+function isLoopbackPage(pageUrl: string | null): boolean {
+  try {
+    return pageUrl !== null && isEligibleLocalCertificateHost(new URL(pageUrl).hostname)
+  } catch {
+    return false
+  }
+}
+
+const LOCAL_NETWORK = ['local-network'] as const
+
+// Electron turns off Chromium's Local Network Access checks, so no request ever arrives;
+// a page's permission query is the only moment to ask.
+export function answerBrowserLocalNetworkCheck(args: {
+  requester: Electron.WebContents | null
+  source: SitePermissionSource
+  memory: BrowserSitePermissionMemory
+}): boolean {
+  const { requester, source, memory } = args
+  // Chrome never gates pages served from loopback, such as localhost dev servers.
+  if (
+    isLoopbackPage(source.pageUrl) ||
+    isBrowserSitePermissionAllowed({ source, memory, permissions: LOCAL_NETWORK })
+  ) {
+    return true
+  }
+  if (requester) {
+    decideBrowserSitePermissions({
+      requester,
+      frameOrigin: source.frameOrigin,
+      memory,
+      permissions: LOCAL_NETWORK
+    }).catch((error: unknown) => {
+      console.error('[permissions] Local network prompt failed:', error)
+    })
+  }
+  return false
 }

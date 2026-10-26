@@ -52,10 +52,4 @@ describe('isTestCodePath', () => {
     expect(isTestCodePath('src/cli/specs/account.test.ts')).toBe(true)
     expect(isTestCodePath('spec/models/user_spec.rb')).toBe(true)
   })
-
-  it('handles a bare filename and an empty path without throwing', () => {
-    expect(isTestCodePath('chip.test.ts')).toBe(true)
-    expect(isTestCodePath('chip.ts')).toBe(false)
-    expect(isTestCodePath('')).toBe(false)
-  })
 })

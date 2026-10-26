@@ -124,6 +124,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       hasActionablePromptNow: () => false,
+      isWorkingNow: () => false,
       currentFence: () => 1,
       currentContextClearOperationId: () => undefined,
       send: async (input) => {

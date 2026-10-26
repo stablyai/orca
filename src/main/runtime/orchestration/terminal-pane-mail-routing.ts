@@ -1,6 +1,6 @@
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   detectAgentStatusFromTitle,
@@ -15,6 +15,7 @@ import {
   resolveStructuredWorkerIdentityForSession
 } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
+import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
   chatDispatchMailTarget,
   handleLessCoordinatorSessionId,
@@ -333,7 +334,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  protected deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
+  protected deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void {
     this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 }

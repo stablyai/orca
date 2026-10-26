@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TaskPageJiraFilters } from './task-page/jira/Filters'
-import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from './task-page/use-task-page-composer-actions'
 import type { JiraSavedFilter } from '../../../shared/jira/jira-saved-filters'
 import { TooltipProvider } from './ui/tooltip'
 

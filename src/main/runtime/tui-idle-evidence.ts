@@ -196,12 +196,20 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
   }
-  // Qoder publishes "Ready" before its trust dialog is dismissed; only its composer proves input is live.
-  if (input.agent === 'qoder' || input.agent === 'qoder-cn') {
+  // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
+  if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
     if (
       hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) ||
       input.record.lastAgentStatus === 'working'
     ) {
+      // Hermes' blocked/waiting hooks leave the decision to the screen.
+      if (
+        input.agent === 'hermes' &&
+        input.firstPartyStatus?.state !== 'working' &&
+        input.record.lastAgentStatus !== 'working'
+      ) {
+        return { kind: 'pending', quietForeground: 'closed' }
+      }
       return WORKING
     }
     return input.readPositiveBodyEvidence()

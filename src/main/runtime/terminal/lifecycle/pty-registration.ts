@@ -195,6 +195,20 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
   }
 
+  protected assertCreatedPtyRegistrationAllowed(
+    ptyId: string,
+    incarnationId?: PtyIncarnationId
+  ): void {
+    try {
+      this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
+    } catch (error) {
+      if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
+        this.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
+      }
+      throw error
+    }
+  }
+
   releaseRejectedPtyRegistrationFence(
     ptyId: string,
     candidateIncarnation?: PtyIncarnationId

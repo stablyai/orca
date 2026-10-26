@@ -95,6 +95,19 @@ describe('MiMo title detection', () => {
   )
 })
 
+describe('permission keywords in agent titles', () => {
+  it.each([
+    ['Antigravity - fix permission bug', 'idle'],
+    ['agy waiting for CI', 'idle'],
+    ['codex permission-check', 'idle'],
+    ['claude awaiting', 'idle'],
+    ['agy | claude - action required', 'permission'],
+    ['Codex - waiting for approval', 'permission']
+  ])('classifies %j as %s', (title, status) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+})
+
 describe('OpenCode native title detection', () => {
   // OC | names no agent token; native OpenCode titles need separate runtime corroboration.
   it.each(['OC | Implement the Kitty IME preview', 'tmux | OC | Implement the Kitty IME preview'])(

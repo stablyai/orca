@@ -178,41 +178,6 @@ describe('production link bridge, store and mounted guest', () => {
     expect(receipts.some((receipt) => receipt.path === '/removed-page')).toBe(false)
   })
 
-  // These assertions capture unsafe baseline behavior pending claim handoff repair.
-  it.each(['remove-tab', 'profile-switch', 'delete-profile'])(
-    'records unsafe stale-source baseline through the real mount: %s',
-    async (transition) => {
-      rendererErrors.length = 0
-      await page.reload()
-      await ready()
-      const path = `/baseline-${transition}`
-      await open(false, path, true)
-      await page.evaluate(`window.linkProbe.mutate(${JSON.stringify(transition)})`)
-      await page.evaluate('window.probeApi.fixture.release()')
-      await page.evaluate('window.linkProbe.mountTabs()')
-      await expect
-        .poll(() => receipts.some((receipt) => receipt.path === path), { timeout: 10_000 })
-        .toBe(true)
-      const state = await page.evaluate<LinkSnapshot>('window.linkProbe.snapshot()')
-      const replacement = state.tabs.find((tab) => tab.id !== state.sourceWorkspaceId)
-      expect(replacement).toBeDefined()
-      const expectedProfile = transition === 'delete-profile' ? 'isolated' : 'other'
-      expect(receipts.filter((receipt) => receipt.path === path)).toEqual([
-        { path, cookie: `synthetic_profile=${expectedProfile}` }
-      ])
-      await expect
-        .poll(() => page.evaluate('window.probeApi.fixture.guests()'), { timeout: 10_000 })
-        .toEqual([
-          expect.objectContaining({
-            url: `${origin}${path}`,
-            isolated: expectedProfile === 'isolated',
-            other: expectedProfile === 'other'
-          })
-        ])
-    },
-    25_000
-  )
-
   it.todo(
     'rejects removed source tabs, profile switches and deleted profiles without a tab, mount, default fallback or destination request'
   )

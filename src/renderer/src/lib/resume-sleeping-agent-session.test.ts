@@ -498,16 +498,16 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[second.paneKey]).toBeUndefined()
   })
 
-  it("leaves a workspace sleep's records to main: no fresh tab, record kept", () => {
+  it("leaves a workspace sleep's records to main while their tab remains", () => {
     const record = makeRecord({ origin: 'worktree-sleep' })
     useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     const state = useAppStore.getState()
-    expect(state.tabsByWorktree['wt-1']).toEqual([])
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 

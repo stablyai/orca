@@ -1,6 +1,11 @@
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import { createPaneBindingStore, launchRacePane } from '../pty-launch-race-test-fixture'
+import { clearProviderPtyState } from './provider/state-cleanup'
 import { describe, expect, it, vi } from 'vitest'
 import { openCodeClearPtyMock, piBuildPtyEnvMock, piClearPtyMock } from '../pty-ipc-mock-registry'
-import { awaitExplicitPiOmpGuestReadiness } from '../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from '../pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './register-handlers'
@@ -54,13 +59,165 @@ vi.mock('../../codex/codex-pane-account-registry', () =>
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-vi.mock('../../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
-  awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
+vi.mock('../../agent-hooks/wsl-agent-plugin-readiness', () => ({
+  awaitExplicitAgentPluginGuestReadiness: vi.fn(async () => true)
 }))
 
-describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, recoveredAgentClaim, recoveredAgentSurface } = setupPtyIpcSuite()
+class ProducerRuntime extends OrcaRuntimeService {
+  publishedTabs(worktreeId: string) {
+    return this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs
+  }
 
+  publishedPty(ptyId: string) {
+    return this.ptysById.get(ptyId)
+  }
+
+  override assertPtyDidNotExitBeforeRegistration(ptyId: string, incarnationId?: string): void {
+    super.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
+  }
+}
+
+describe('registerPtyHandlers', () => {
+  const {
+    handlers,
+    mainWindow,
+    recoveredAgentClaim,
+    recoveredAgentSurface,
+    installDaemonTestProvider
+  } = setupPtyIpcSuite()
+
+  it.each([
+    { mode: 'reconnect', rejectProducerRegistration: false },
+    { mode: 'claim', rejectProducerRegistration: false },
+    { mode: 'reconnect', rejectProducerRegistration: true },
+    { mode: 'claim', rejectProducerRegistration: true }
+  ] as const)(
+    'preserves producer registration without publishing a reconnect as a new launch for $mode (reject=$rejectProducerRegistration)',
+    async ({ mode, rejectProducerRegistration }) => {
+      const pane = launchRacePane(`producer-${mode}`, '96969696-9696-4696-8696-969696969696')
+      const store = Object.assign(createPaneBindingStore(), { getSettings: () => ({}) })
+      const runtime = new ProducerRuntime()
+      Object.assign(runtime, {
+        store,
+        resolveTerminalWorkspaceLaunchScope: async () => ({
+          id: pane.worktreeId,
+          path: pane.args.cwd,
+          connectionId: null
+        }),
+        resolveAgentTerminalCreateOptions: async (
+          _workspace: unknown,
+          opts: TerminalCreateOptions
+        ) => opts,
+        resolveWorkspaceTerminalStartupCwd: () => pane.args.cwd
+      })
+      const claim = recoveredAgentClaim
+      const surface = { ...recoveredAgentSurface, worktreeId: pane.worktreeId }
+      const id = `producer-${mode}`
+      const incarnationId = `${id}-inc`
+      const spawn = vi.fn(async () => ({
+        id,
+        incarnationId,
+        isReattach: true,
+        ...(mode === 'claim'
+          ? {
+              agentSessionEnsure: {
+                disposition: 'adopted' as const,
+                owner: {
+                  claim,
+                  surface,
+                  ptyId: id,
+                  generation: 'claim-generation',
+                  phase: 'live' as const
+                }
+              }
+            }
+          : {})
+      }))
+      installDaemonTestProvider({
+        spawn,
+        listProcesses: vi.fn(async () => [
+          { id, incarnationId, cwd: pane.args.cwd, title: 'Codex' }
+        ]),
+        providesAgentSessionOwnerListings: () => false
+      })
+      // SAFETY: the shared fixture supplies the durable store interface used by the real producer.
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const register = vi.spyOn(runtime, 'registerPty')
+      const originalAssert = runtime.assertPtyDidNotExitBeforeRegistration.bind(runtime)
+      const producerAssert = vi.fn()
+      const releaseFence = vi.spyOn(runtime, 'releaseRejectedPtyRegistrationFence')
+      vi.spyOn(runtime, 'assertPtyDidNotExitBeforeRegistration').mockImplementation(
+        (id, incarnation) => {
+          if (register.mock.calls.length === 1 && register.mock.results[0]?.type === 'return') {
+            producerAssert(id, incarnation)
+            if (rejectProducerRegistration) {
+              throw new Error('agent_session_exited_during_start')
+            }
+          }
+          originalAssert(id, incarnation)
+        }
+      )
+      const expected = mode === 'claim' ? surface : { ...pane, terminalHandle: 'producer-handle' }
+      const launchConfig = { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+      const creating = runtime.createTerminal(`id:${pane.worktreeId}`, {
+        tabId: pane.tabId,
+        leafId: pane.leafId,
+        preAllocatedHandle: 'producer-handle',
+        sessionId: id,
+        title: 'Requested title',
+        launchAgent: 'codex',
+        launchConfig,
+        launchToken: 'producer-launch-token',
+        presentation: 'background',
+        ...(mode === 'claim' ? { agentSessionClaim: claim } : {})
+      })
+      if (rejectProducerRegistration) {
+        await expect(creating).rejects.toThrow('agent_session_exited_during_start')
+        expect(producerAssert).toHaveBeenCalledExactlyOnceWith(id, incarnationId)
+        expect(releaseFence).toHaveBeenCalledExactlyOnceWith(id, incarnationId)
+        expect(register).toHaveBeenCalledOnce()
+        expect(spawn).toHaveBeenCalledOnce()
+        clearProviderPtyState(id)
+        return
+      }
+      const created = await creating
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(created).toMatchObject({
+        ptyId: id,
+        tabId: expected.tabId,
+        paneKey: makePaneKey(expected.tabId, expected.leafId),
+        title: null,
+        isReattach: true
+      })
+      expect(created.launchConfig).toBeUndefined()
+      expect(created.launchToken).toBeUndefined()
+      expect(created.launchAgent).toBeUndefined()
+      expect(producerAssert).toHaveBeenCalledExactlyOnceWith(id, incarnationId)
+      expect(releaseFence).not.toHaveBeenCalled()
+      expect(register).toHaveBeenCalledTimes(2)
+      expect(register).toHaveBeenLastCalledWith(id, pane.worktreeId, null, {
+        tabId: expected.tabId,
+        leafId: expected.leafId,
+        terminalHandle: expected.terminalHandle,
+        incarnationId
+      })
+      expect(runtime.publishedPty(id)).toMatchObject({
+        title: null,
+        launchConfig: null,
+        launchToken: null,
+        launchAgent: null
+      })
+      expect(runtime.publishedTabs(pane.worktreeId)).toBeUndefined()
+      clearProviderPtyState(id)
+    }
+  )
   describe('spawn environment', () => {
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
       const { setupDaemonAdapter, daemonSpawnAndGetEnv } = createDaemonActiveProviderFixtures({
@@ -384,24 +541,26 @@ describe('registerPtyHandlers', () => {
       expect(piClearPtyMock).toHaveBeenCalledTimes(c.swept ? 1 : 0)
     })
 
-    // Current host/window difference: the host accepts an empty ID without host env; the window rejects it.
-    it('an empty session id: the window refuses it; the host spawns without host env', async () => {
-      const lanes = startLanes()
-      await expect(lanes.spawn('window', { env: {}, sessionId: '' })).rejects.toThrow(
-        /Invalid PTY session id/
-      )
-      await lanes.spawn('host', { env: {}, sessionId: '' })
-      expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
-    })
+    it.each(['', '   '])(
+      'normalizes a blank id %j before building either host env',
+      async (sessionId) => {
+        const lanes = startLanes()
+        for (const lane of ['window', 'host'] as const) {
+          await lanes.spawn(lane, { env: {}, sessionId })
+          expect(lanes.daemonSpawn.mock.calls.at(-1)![0].sessionId).toBeTruthy()
+          expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.ORCA_AGENT_HOOK_PORT).toBeDefined()
+        }
+        expect(piBuildPtyEnvMock).toHaveBeenCalled()
+      }
+    )
 
     it('both daemon lanes run the WSL Pi/OMP guest readiness wait once', async () => {
       const lanes = startLanes()
-      vi.mocked(awaitExplicitPiOmpGuestReadiness).mockClear()
+      vi.mocked(awaitExplicitAgentPluginGuestReadiness).mockClear()
       await lanes.spawn('window', { env: {}, command: 'pi' })
-      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledOnce()
+      expect(vi.mocked(awaitExplicitAgentPluginGuestReadiness)).toHaveBeenCalledOnce()
       await lanes.spawn('host', { env: {}, command: 'pi' })
-      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(awaitExplicitAgentPluginGuestReadiness)).toHaveBeenCalledTimes(2)
     })
 
     it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {

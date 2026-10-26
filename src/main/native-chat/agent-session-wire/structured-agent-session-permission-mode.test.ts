@@ -184,7 +184,7 @@ describe('a chat permission mode', () => {
 
     expect((await rig.host.send(CALLER, restTestSend('after the change', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
     expect(rig.adapter.acquire).toHaveBeenLastCalledWith(
       expect.objectContaining({ permissionMode: 'auto' })

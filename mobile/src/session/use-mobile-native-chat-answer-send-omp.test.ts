@@ -9,8 +9,8 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 
 vi.mock('../terminal/worker-terminal-takeover-report', () => ({
   reportWorkerTerminalUserInput: vi.fn()

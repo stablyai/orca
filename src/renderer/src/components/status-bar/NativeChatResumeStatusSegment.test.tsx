@@ -11,7 +11,10 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
 } from '../native-chat-resume-on-restart-dialog'
-import { _resetNativeChatRestartOffer } from '../native-chat-resume-on-restart-store'
+import {
+  _resetNativeChatRestartOffer,
+  localNativeChatRestartStore
+} from '../native-chat-resume-on-restart-store'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
@@ -246,5 +249,29 @@ describe('NativeChatResumeStatusSegment', () => {
 
     expect(screen.getByRole('button').textContent).toContain('2')
     expect(screen.queryByText('2 chats to resume')).toBeNull()
+  })
+
+  it('keeps run-only uncertainty reachable until its viewed summary is closed', async () => {
+    rpc.mockResolvedValue({ sessions: [candidates[0]], failed: [] })
+    await mount()
+    rpc.mockImplementation(async (_target, method) => {
+      if (method === 'agentSession.restartContinue') {
+        throw new Error('accepted reply lost')
+      }
+      return { sessions: [], failed: [] }
+    })
+    await act(async () => localNativeChatRestartStore.continueNativeChatRestartOffer(['a']))
+    const entry = screen.getByRole('button', {
+      name: '1 chat to check after resuming. Click for details.'
+    })
+    expect(screen.queryByText(/failed to resume/)).toBeNull()
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    const run = localNativeChatRestartStore.getNativeChatRestartRun()!
+    act(() => {
+      localNativeChatRestartStore.markFinishedNativeChatRestartRunShown(run)
+      localNativeChatRestartStore.releaseFinishedNativeChatRestartRun()
+    })
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })

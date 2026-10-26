@@ -39,7 +39,8 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
 
 const { RUNTIME_UPLOAD_SLICE_BYTES, streamExternalFileToRuntime } =
   await import('./runtime-upload-file-stream')
-const { stageOneSourceForRuntimeUpload } = await import('./filesystem-runtime-upload-staging')
+const { stageOneSourceForRuntimeUpload } =
+  await import('./filesystem/filesystem-runtime-upload-staging')
 const { REMOTE_IMPORT_MAX_FILE_BYTES, REMOTE_IMPORT_MAX_TOTAL_BYTES, formatByteCeiling } =
   await import('./runtime-import-limits')
 

@@ -38,6 +38,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../shared/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import { dropStrandedSleepRecord } from '../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
@@ -263,6 +264,14 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   /** The window opened a slept pane; main resumes it and the window attaches. */
   resumeSleptPane(pane: RestoredPane): Promise<boolean> {
     return this.workspaceSleep.resumePane(pane)
+  }
+
+  /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */
+  async retireStrandedSleepRecord(worktreeId: string, paneKey: string): Promise<void> {
+    await this.commitWorkspaceSessionEdit(
+      this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+      (session) => dropStrandedSleepRecord(session, worktreeId, paneKey)
+    )
   }
 
   wakeWindowHibernatedAgents(worktreeId: string): void {

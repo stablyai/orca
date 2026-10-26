@@ -1,18 +1,12 @@
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab,
-  RuntimeTerminalPresentation
+  RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
+import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
@@ -26,34 +20,6 @@ import {
 } from '../../mobile-session-layout-projection'
 
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
-
-export type OwnedMobileTerminalCreateOptions = {
-  command?: string
-  shellOverride?: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-  identity?: { tabId: string; leafId: string; sessionId?: string }
-  createMutation?: { clientIdentity: string; id: string }
-  launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
-  targetGroupId?: string
-  afterDesktopTabId?: string
-  presentation?: RuntimeTerminalPresentation
-  supportsSplitGroupPlacement?: boolean
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
-  spawnIntent?: SpawnIntent
-  launchRuntime?: AgentLaunchRuntime
-  signal?: AbortSignal
-  refuseSleptWorktree?: boolean
-  resumesSleepingRecord?: true
-  /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
-  onPtySpawnDispatched?: () => void
-  /** The PTY this create produced, reported before publication can fail. */
-  onPtyCreated?: (ptyId: string) => void
-}
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
   private readonly ownedMobileDispatchRecipes = new Map<
@@ -132,6 +98,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           ? { resumeProviderSession: opts.resumeProviderSession }
           : {}),
         ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {}),
+        ...(opts.resumeOrigin ? { resumeOrigin: opts.resumeOrigin } : {}),
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
@@ -164,7 +131,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         )
       : await create()
     if (terminal.ptyId) {
-      opts.onPtyCreated?.(terminal.ptyId)
+      opts.onPtyCreated?.(terminal.ptyId, terminal)
     }
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
@@ -236,8 +203,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       ...((terminal.savedStartupCwd ?? cwd) && (terminal.savedStartupCwd ?? cwd) !== workspace.path
         ? { startupCwd: terminal.savedStartupCwd ?? cwd }
         : {}),
-      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      ...(livePty.pty.launchAgent ? { launchAgent: livePty.pty.launchAgent } : {}),
+      ...(!terminal.agentResumeRefused && opts.viewMode ? { viewMode: opts.viewMode } : {}),
       parentLayout,
       isActive: activate
     }

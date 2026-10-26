@@ -2,7 +2,7 @@ import { structuredAgentSessionCreateFingerprint } from '../../../shared/structu
 import {
   setStructuredLaunchState,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 
 // Joiners without the source terminal survive its close: hand off unsent create to conversation-ID resume, as History does.
 export function releaseStructuredLaunchSource(state: StructuredLaunchState): void {

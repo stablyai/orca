@@ -270,7 +270,7 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
   })
 
-  it('never installs on this machine for a paired host', async () => {
+  it('plans the named skills for a paired host', async () => {
     mocks.target = { kind: 'environment', environmentId: 'env-1' }
     await renderInteractivePanel()
 
@@ -458,18 +458,6 @@ describe('AgentSkillSetupPanel', () => {
 
     expect(mocks.execute).not.toHaveBeenCalled()
     expect(mocks.plan).toHaveBeenCalledTimes(1)
-  })
-
-  it('installs for an SSH workspace once its managed server is the target', async () => {
-    mocks.target = { kind: 'environment', environmentId: 'managed-ssh' }
-    await renderInteractivePanel()
-
-    await clickButton('Install')
-
-    expect(mocks.plan).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'managed-ssh' },
-      { names: ['orca-cli'] }
-    )
   })
 
   it('asks to connect an SSH host no server serves yet, writing nothing here', async () => {

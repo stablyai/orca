@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
@@ -150,20 +151,42 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 vi.mock('../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
   class StructuredAgentSessionHostDeclinedError extends StructuredAgentSessionCreateRefusalError {}
   class StructuredAgentSessionHostUnreachableError extends StructuredAgentSessionCreateRefusalError {}
   class StructuredAgentSessionOwnerUnresolvedError extends Error {}
   return {
-    createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
-    abandonStructuredAgentSessionLaunchIntent: mockAbandonStructuredAgentSessionLaunchIntent,
-    retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
-    launchStructuredAgentSession: mockLaunchStructuredCodexSession,
     StructuredAgentSessionCreateRefusalError,
     StructuredAgentSessionHostDeclinedError,
     StructuredAgentSessionHostUnreachableError,
     StructuredAgentSessionOwnerUnresolvedError
+  }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mockLaunchStructuredCodexSession
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
+  return {
+    createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
+    abandonStructuredAgentSessionLaunchIntent: mockAbandonStructuredAgentSessionLaunchIntent,
+    retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
+    launchStructuredAgentSession: mockLaunchStructuredCodexSession,
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError,
+    StructuredAgentSessionHostDeclinedError:
+      launchErrorMocks.StructuredAgentSessionHostDeclinedError,
+    StructuredAgentSessionHostUnreachableError:
+      launchErrorMocks.StructuredAgentSessionHostUnreachableError,
+    StructuredAgentSessionOwnerUnresolvedError:
+      launchErrorMocks.StructuredAgentSessionOwnerUnresolvedError
   }
 })
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({

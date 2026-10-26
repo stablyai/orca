@@ -22,10 +22,7 @@ import {
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { resolveImportedFolderProjectLink } from '../../shared/imported-folder-project-identity'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import {
-  SshHostNotServedError,
-  sshTargetNotConnectedMessage
-} from '../providers/ssh-host-not-served-error'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
@@ -44,6 +41,7 @@ import {
 import { runtimeVisibleProjectHostSetups } from './runtime-visible-catalog'
 import {
   findProjectHostSetup,
+  SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   type ProjectHostSetupTarget
 } from '../../shared/project-host-setup-target'
 
@@ -68,11 +66,8 @@ function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined):
   )
 }
 
-export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
-  "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
-
 function sshTargetNotServedError(connectionId: string): SshHostNotServedError {
-  return new SshHostNotServedError(connectionId, sshTargetNotConnectedMessage(connectionId))
+  return new SshHostNotServedError(connectionId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
 }
 
 export class RuntimeProjectHostSetupController {

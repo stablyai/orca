@@ -1,4 +1,4 @@
-import type { TaskPageWorkspaceActionsModel } from '../../use-task-page-workspace-actions'
+import type { TaskPageWorkspaceActionsModel } from '../use-task-page-workspace-actions'
 import { useCallback } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toast } from 'sonner'

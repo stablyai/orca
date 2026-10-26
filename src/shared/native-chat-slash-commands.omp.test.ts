@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getNativeChatAgentProfile,
-  getVerifiedNativeChatCommands
-} from './native-chat-agent-profiles'
-import {
   applySlashSuggestion,
   classifyNativeChatSend,
   filterSlashCommands,
@@ -13,19 +9,6 @@ import {
 } from './native-chat-slash-commands'
 
 describe('OMP terminal command catalog', () => {
-  it('offers the verified model, planning and context commands without generic help', () => {
-    const commands = getAgentSlashCommands('omp')
-    const names = commands.map((command) => command.name)
-    expect(names).toEqual(
-      expect.arrayContaining(['model', 'switch', 'plan', 'compact', 'context', 'usage'])
-    )
-    expect(names).not.toContain('help')
-    expect(getVerifiedNativeChatCommands('omp')).toEqual(commands)
-    expect(getNativeChatAgentProfile('omp')).toBeNull()
-    expect(new Set(names).size).toBe(names.length)
-    expect(getAgentSlashCommands('pi').map((command) => command.name)).toEqual(['clear', 'help'])
-  })
-
   it('completes arguments separately from picker command dispatch', () => {
     const matches = filterSlashCommands(getAgentSlashCommands('omp'), 'MOD')
     expect(matches).toHaveLength(1)

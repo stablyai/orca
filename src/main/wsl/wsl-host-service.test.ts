@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import {
   addEnvironmentFromPairingCode,
   listEnvironments
 } from '../../shared/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../shared/runtime-environment-store-file'
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-types'
@@ -127,6 +128,18 @@ describe('WslHostService', () => {
     await expect(service.listDistros()).resolves.toEqual([
       { name: 'Ubuntu', state: 'running', version: 2, environmentId: 'wsl:ubuntu' }
     ])
+  })
+
+  it('adds a distro over a server list a crash left NUL-filled (#18766)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    writeFileSync(getEnvironmentStorePath(userDataPath), Buffer.alloc(640))
+    const service = makeService(makeConnector([UBUNTU]))
+
+    await expect(service.add({ distro: 'ubuntu' })).resolves.toEqual({
+      ok: true,
+      environmentId: 'wsl:ubuntu'
+    })
+    expect(listEnvironments(userDataPath)).toMatchObject([{ id: 'wsl:ubuntu' }])
   })
 
   it('refuses WSL 1, an added distro, and a stopped distro the user did not ask to start', async () => {

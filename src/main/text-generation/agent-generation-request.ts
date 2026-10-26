@@ -36,6 +36,7 @@ export async function runGenerationRequest(input: {
   emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
   const params = { ...input.params, backslash: commandBackslashMode(input.target) }
   const planned = planCommitMessageGeneration(params, input.prompt)
@@ -57,7 +58,8 @@ export async function runGenerationRequest(input: {
           target: input.target,
           emptyResultName: input.emptyResultName,
           operation: input.operation,
-          spawnAgent: input.spawnAgent
+          spawnAgent: input.spawnAgent,
+          shouldExecute: input.shouldExecute
         })
   let result = await runClaudeBackgroundAttempts({
     agentId: input.params.agentId,

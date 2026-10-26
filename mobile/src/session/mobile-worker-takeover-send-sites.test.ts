@@ -11,7 +11,7 @@ import { routeDictationTranscript } from '../terminal/terminal-live-dictation-ro
 import {
   sendMobileNativeChatMessageWithOutcome,
   clearMobileNativeChatInput
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 import { pasteMobileNativeChatImagePaths } from './native-chat/composer/mobile-native-chat-image-send'

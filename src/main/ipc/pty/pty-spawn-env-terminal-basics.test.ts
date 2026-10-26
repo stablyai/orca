@@ -486,6 +486,10 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
       expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
     })
+    it('strips an inherited Claude background job dir so pane agent hooks keep reporting', async () => {
+      const env = await spawnAndGetEnv(undefined, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
+      expect(env.CLAUDE_JOB_DIR).toBeUndefined()
+    })
     it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
       const env = await spawnAndGetEnv(
         { CLAUDE_CODE_CHILD_SESSION: '1' },

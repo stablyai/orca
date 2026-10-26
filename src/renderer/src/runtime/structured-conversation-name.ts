@@ -3,7 +3,7 @@ import type { Tab } from '../../../shared/tab-types'
 import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
-  AgentSessionStatusSummary
+  AgentSessionConversationName
 } from '../../../shared/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
@@ -52,7 +52,7 @@ export function useStructuredConversationNamingError(
 function useStructuredSessionSummaryField<T>(
   executionHostId: string | null | undefined,
   sessionId: string | null | undefined,
-  read: (summary: AgentSessionStatusSummary | undefined) => T | null
+  read: (summary: AgentSessionConversationName | undefined) => T | null
 ): T | null {
   const feed = useMemo(() => {
     const target = structuredAgentSessionTargetForHost(executionHostId)
@@ -62,7 +62,7 @@ function useStructuredSessionSummaryField<T>(
   useEffect(() => watched?.activate(), [watched])
   return useSyncExternalStore(
     watched?.subscribe ?? noSubscription,
-    () => read(sessionId ? watched?.getSnapshot().get(sessionId) : undefined),
+    () => read(sessionId ? watched?.getNamingSnapshot().get(sessionId) : undefined),
     () => null
   )
 }

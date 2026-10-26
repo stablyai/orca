@@ -25,14 +25,23 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
   getUserDataPath: () => string
   remoteRuntimeSubscriptions: Map<string, RetainedRemoteRuntimeSubscription>
   pendingSubscriptions: Map<string, PendingRuntimeSubscription>
+  createAssociationObserver?: (
+    environmentId: string,
+    identity: string
+  ) => { observe: (frame: unknown) => void; dispose: () => void }
   recordLayoutFrame: (
     environmentId: string,
     method: string,
     response: RuntimeRpcResponse<unknown>
   ) => void
 }): void {
-  const { getUserDataPath, remoteRuntimeSubscriptions, pendingSubscriptions, recordLayoutFrame } =
-    args
+  const {
+    getUserDataPath,
+    remoteRuntimeSubscriptions,
+    pendingSubscriptions,
+    recordLayoutFrame,
+    createAssociationObserver
+  } = args
   ipcMain.handle(
     'runtimeEnvironments:subscribe',
     async (
@@ -80,10 +89,21 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       const sender = event.sender
       const ownerWebContentsId = sender.id
       const setupController = new AbortController()
+      const associationObserver =
+        args.method === 'agentSession.subscribeStatus'
+          ? createAssociationObserver?.(
+              environment.id,
+              JSON.stringify([
+                environment.runtimeId,
+                environment.pairingRevision ?? environment.createdAt
+              ])
+            )
+          : undefined
       let rendererGone = sender.isDestroyed()
       let subscription: RemoteRuntimeSubscription | null = null
       const rendererLifetime = abortWhenRendererGone(sender)
       const disposeRendererLifetime = (): void => {
+        associationObserver?.dispose()
         rendererLifetime.dispose()
         rendererLifetime.signal.removeEventListener('abort', closeSubscription)
       }
@@ -151,7 +171,14 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
                   subscriptionId,
                   ...payload
                 })
-                // Record after sending so snapshots cannot delay window delivery.
+                if (payload.type === 'response' && payload.response.ok) {
+                  try {
+                    associationObserver?.observe(payload.response.result)
+                  } catch (error) {
+                    console.warn('[ai-vault] association observation failed', error)
+                  }
+                }
+                // After the send, so recording never delays or changes what the window gets.
                 if (payload.type === 'response') {
                   recordLayoutFrame(environment.id, args.method, payload.response)
                 }

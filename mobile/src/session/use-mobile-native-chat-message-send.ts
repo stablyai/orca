@@ -6,18 +6,18 @@ import {
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
+import { classifyMobileNativeChatSend } from './native-chat/mobile-native-chat-send-classification'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
-import { UNCONFIRMED_SEND_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
-import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
+import { UNCONFIRMED_SEND_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+import type { MobileNativeChatLaunchDraftSeed } from './native-chat/composer/use-mobile-native-chat-launch-draft-seed'
 import {
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText

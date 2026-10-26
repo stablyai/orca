@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import {
@@ -7,7 +7,7 @@ import {
   GITHUB_TASK_STICKY_TITLE_HEADER_CLASS,
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'

@@ -8,7 +8,7 @@ import type { AppState } from '../types'
 import { agentMeta, agentTitle } from '@/components/activity/activity-thread-presentation'
 import { activationTreatsNoteAsFinished } from '@/lib/sleeping-agent-pane-ownership'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
-import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { deriveAgentStatusLiveFacts } from './agent-status/agent-status-live-facts'
 import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
@@ -17,7 +17,7 @@ import {
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
   sleepingRecordFromEntry
-} from './agent-status-sleeping-records'
+} from './agent-status/agent-status-sleeping-records'
 
 // Every copy of a row's verdict carries it: history, sleep records and their equality checks.
 // A copy that kept only `interrupted` would read a failure as a clean finish.

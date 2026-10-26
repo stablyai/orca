@@ -21,6 +21,7 @@ import {
 } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
+import { holdLaunchReconnectOptOuts } from '../ipc/ssh/ssh-host-user-disconnect'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -61,6 +62,8 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+  // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
+  holdLaunchReconnectOptOuts(store.getSshTargets())
   registerCoreHandlers(
     store,
     runtime,

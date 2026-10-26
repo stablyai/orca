@@ -185,14 +185,54 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
 
+  apps/connector:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^2.1.5
+        version: 2.1.5(hono@4.13.13)
+      '@orca-cloud/cloud-database':
+        specifier: workspace:*
+        version: link:../../packages/cloud-database
+      '@orca-cloud/connector-contract':
+        specifier: workspace:*
+        version: link:../../packages/connector-contract
+      hono:
+        specifier: ^4.13.13
+        version: 4.13.13
+      jose:
+        specifier: ^6.2.13
+        version: 6.2.13
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
+
   apps/push:
     dependencies:
       '@hono/node-server':
         specifier: ^2.1.5
         version: 2.1.5(hono@4.13.13)
-      '@orca-cloud/postgres-schema':
+      '@orca-cloud/cloud-database':
         specifier: workspace:*
-        version: link:../../packages/postgres-schema
+        version: link:../../packages/cloud-database
       '@orca-cloud/push-contract':
         specifier: workspace:*
         version: link:../../packages/push-contract
@@ -202,12 +242,6 @@ importers:
       hono:
         specifier: ^4.13.13
         version: 4.13.13
-      pg:
-        specifier: ^8.23.1
-        version: 8.23.1
-      pg-connection-string:
-        specifier: 2.14.1
-        version: 2.14.1
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
@@ -219,6 +253,9 @@ importers:
         specifier: ^24.19.2
         version: 24.19.2
       '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
         specifier: ^8.23.1
         version: 8.23.1
       tsx:
@@ -301,6 +338,50 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
+
+  packages/cloud-database:
+    dependencies:
+      '@orca-cloud/postgres-schema':
+        specifier: workspace:*
+        version: link:../postgres-schema
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg-connection-string:
+        specifier: 2.14.1
+        version: 2.14.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
+
+  packages/connector-contract:
+    dependencies:
+      '@orca-cloud/push-contract':
+        specifier: workspace:*
+        version: link:../push-contract
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

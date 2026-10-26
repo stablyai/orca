@@ -1,5 +1,7 @@
 // Give each press its own operation ID; join pending targeted Stops only for older hosts. Command settlement survives provider changes; late pane presentation does not.
 
+import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared/agent-session-goal-control-copy'
+import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
@@ -65,7 +67,7 @@ function notDone(
   fingerprintMethod: string,
   fields: Record<string, unknown>,
   agentName: string | undefined
-): ExecutionResult<never> {
+): Extract<ExecutionResult<never>, { kind: 'not-done' }> {
   return {
     kind: 'not-done',
     notice: agentSessionWriteFailureText(
@@ -141,12 +143,20 @@ export function useStructuredAgentSessionMutate(args: {
         )
       }
       if (!result.ok) {
-        return notDone(
+        const outcome = notDone(
           agentSessionRefusalFailure(result.refusal),
           fingerprintMethod,
           fields,
           agentName
         )
+        const message = result.refusal.message
+        if (
+          fingerprintMethod === 'agentSession.threadGoal' &&
+          (message === GOAL_COPY.settingsRejected || message === GOAL_COPY.settingsUnconfirmed)
+        ) {
+          outcome.notice = agentSessionGoalControlWords(message)
+        }
+        return outcome
       }
       return { kind: 'done', value: result.value }
     },

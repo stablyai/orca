@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
-import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
+import './agent-status'
+import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status/agent-status-recovery-collection'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 function makeAgentEntry(overrides: {

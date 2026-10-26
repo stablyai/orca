@@ -122,7 +122,7 @@ function received(events: AgentSessionSubscribeEvent[]) {
 }
 
 describe('a send whose restarted Claude child dies before it proves its start', () => {
-  it('settles rejected with the diagnostic, keeps one failure row, and a Retry is one new attempt', async () => {
+  it('settles rejected with the diagnostic, keeps one failure row, and a new send can start after exhaustion', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
@@ -137,7 +137,10 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     await eventually(() => expect(claude.child(SESSION).initializing).toBe(true))
     expect(await submission(host, sent)).toMatchObject({ dispatchState: 'pending' })
     expect(claude.child(SESSION).calls).not.toContain('send')
-    await failLatestStart(host, 2)
+    for (let count = 2; count <= 6; count++) {
+      expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+      await failLatestStart(host, count)
+    }
 
     await eventually(async () =>
       expect(await submission(host, sent)).toMatchObject({
@@ -147,12 +150,12 @@ describe('a send whose restarted Claude child dies before it proves its start', 
       })
     )
     expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
-    expect(fence(host)).toBe(releasedFence + 2)
-    expect(claude.children(SESSION)).toHaveLength(2)
+    expect(fence(host)).toBe(releasedFence + 10)
+    expect(claude.children(SESSION)).toHaveLength(6)
 
     claude.behave(SESSION, {})
     await send(host, 'hello again')
-    await eventually(() => expect(claude.children(SESSION)).toHaveLength(3))
+    await eventually(() => expect(claude.children(SESSION)).toHaveLength(7))
     await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
     expect(claude.child(SESSION).calls.filter((call) => call === 'send')).toHaveLength(1)
     expect(await statusRows(host)).toHaveLength(2)
@@ -200,7 +203,10 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     try {
       await failLatestStart(host, 1)
       const sent = await send(host, 'hello?')
-      await failLatestStart(host, 2)
+      for (let count = 2; count <= 6; count++) {
+        expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+        await failLatestStart(host, count)
+      }
 
       await eventually(() => {
         const seen = received(events)
@@ -234,7 +240,7 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     return rows
   }
 
-  it('shows one row naming the cause per failed attempt, however the start died, and none once the CLI is fixed', async () => {
+  it('shows one row naming the cause per exhausted start, however the start died, and none once the CLI is fixed', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     const events: AgentSessionSubscribeEvent[] = []
@@ -253,7 +259,10 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
       await eventually(() => expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE]))
 
       const sent = await send(host, 'hello?')
-      await failLatestStart(host, 2)
+      for (let count = 2; count <= 6; count++) {
+        expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+        await failLatestStart(host, count)
+      }
       await eventually(async () =>
         expect(await submission(host, sent)).toMatchObject({
           dispatchState: 'rejected',

@@ -17,6 +17,8 @@ import {
   pickerExecutionHosts
 } from '../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 export function useAddRepoHostSelection({
@@ -197,29 +199,23 @@ export function useAddRepoHostSelection({
         setStep('add')
         setHostSelectorOpen(false)
       } catch (err) {
-        setSshConnectionState(
-          parsed.targetId,
-          previousState ?? {
+        const fallback = translate(
+          'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
+          'SSH connection failed.'
+        )
+        // Main publishes the failure and its reason; only replace our own optimistic row.
+        if (
+          useAppStore.getState().sshConnectionStates.get(parsed.targetId)?.status === 'connecting'
+        ) {
+          setSshConnectionState(parsed.targetId, {
             targetId: parsed.targetId,
-            status: 'disconnected',
-            error:
-              err instanceof Error
-                ? err.message
-                : translate(
-                    'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
-                    'SSH connection failed.'
-                  ),
-            reconnectAttempt: 0
-          }
-        )
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate(
-                'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
-                'SSH connection failed.'
-              )
-        )
+            status: 'error',
+            error: extractIpcErrorMessage(err, fallback),
+            reconnectAttempt: previousState?.reconnectAttempt ?? 0,
+            remotePlatform: previousState?.remotePlatform
+          })
+        }
+        toastSshConnectFailure(parsed.targetId, err, fallback)
       }
     },
     [selectableHostOptions, setSshConnectionState, setStep, sshConnectionStates]

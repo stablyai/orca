@@ -1,12 +1,12 @@
 import { resolvePaneKey } from '../../lib/agent-status-pane-ownership'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
   AgentStatusMetadata,
   AgentStatusPayload,
   AgentStatusRouting,
   AgentStatusTiming
-} from './agent-status-contract'
+} from './agent-status/agent-status-contract'
 import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
@@ -15,8 +15,8 @@ import {
   buildAgentStatusLiveEntry,
   type AgentStatusLiveEntryBuild,
   type AgentStatusLiveEntryRejection
-} from './agent-status-live-entry-builder'
-import { reduceAgentStatusLiveUpdate } from './agent-status-live-reducer'
+} from './agent-status/agent-status-live-entry-builder'
+import { reduceAgentStatusLiveUpdate } from './agent-status/agent-status-live-reducer'
 import type { FreshnessLiveEntryDelta } from './agent-status-freshness-scheduler'
 import {
   agentStatusTabAlreadyHasProtectedOrGeneratedTitle,

@@ -54,7 +54,6 @@ src/main/git/wsl-git-read-environment.ts
 src/main/github/gh-utils.ts
 src/main/hooks.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem-list-files.ts
 src/main/ipc/filesystem/filesystem-handler-context.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-cancellation-restart.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-cancellation-tracker.ts

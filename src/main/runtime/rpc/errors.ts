@@ -14,6 +14,7 @@ import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
+import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../shared/sharing-unavailable-on-host'
 import {
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
@@ -143,6 +144,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  'worker_cannot_coordinate_own_run',
+  'worker_cannot_take_over_run',
   'request_mismatch',
   'mutation_ledger_full',
   'legacy_read_only',
@@ -152,7 +155,6 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'question_not_found',
   'answer_conflict',
   'stale_delivery',
-  'waiter_exists',
   'invalid_argument',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
@@ -163,6 +165,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
+  SHARING_UNAVAILABLE_ON_HOST_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
 import { resolveDropdownItems } from './source-control-dropdown-items'
 import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
 import {
@@ -644,6 +646,37 @@ describe('resolveDropdownItems', () => {
     expect(divergedByKind.fast_forward.title).toBe(
       'Try a fast-forward pull; git may reject local commits'
     )
+  })
+
+  it('routes Commit & Sync, Rebase, and Create PR blocked copy through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const loading = resolveDropdownItems(inputs({ rebaseBaseRef: 'origin/main' }))
+      const blocked = resolveDropdownItems(
+        inputs({
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: false,
+            blockedReason: 'dirty',
+            nextAction: 'commit',
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      const blockedByKind = Object.fromEntries(
+        blocked.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(loadingByKind.commit_sync.title).toBe('[Checking branch status…]')
+      expect(loadingByKind.rebase_base.label).toBe('[Rebase from origin/main]')
+      expect(blockedByKind.create_pr.hint).toBe('[Commit changes first]')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })
 

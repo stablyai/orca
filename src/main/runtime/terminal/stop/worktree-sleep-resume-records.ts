@@ -10,6 +10,7 @@ import type { AgentProcessVerdict } from '../../../../shared/agent-process-prese
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -157,4 +158,22 @@ export function clearClosedWorktreeResumeRecords(
   return hasChanges
     ? { ...session, sleepingAgentSessionsByPaneKey, terminalPtyIncarnationsByPaneKey }
     : null
+}
+
+/** The session without a workspace-sleep record whose tab it no longer lists, or null when the record is still placed. */
+export function dropStrandedSleepRecord(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  paneKey: string
+): WorkspaceSessionState | null {
+  const record = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+  const tabId = record?.tabId ?? parsePaneKey(paneKey)?.tabId
+  const tabListed = Object.values(session.tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => tab.id === tabId)
+  )
+  if (!record || record.worktreeId !== worktreeId || !isWorkspaceSleepRecord(record) || tabListed) {
+    return null
+  }
+  const { [paneKey]: _dropped, ...rest } = session.sleepingAgentSessionsByPaneKey ?? {}
+  return { ...session, sleepingAgentSessionsByPaneKey: rest }
 }

@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
+  retire: vi.fn(),
   remove: vi.fn(),
   removeManaged: vi.fn(),
   closeTunnel: vi.fn(async () => {})
+}))
+
+vi.mock('../runtime/desktop-chat-creation-history', () => ({
+  desktopChatCreationHistory: () => ({ removeEnvironment: mocks.retire })
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -39,6 +44,10 @@ describe('releaseEphemeralVmRuntimeEnvironments', () => {
     expect(mocks.removeManaged).toHaveBeenCalledTimes(1)
     expect(mocks.removeManaged).toHaveBeenCalledWith('/user-data', 'env-vm')
     expect(mocks.remove).not.toHaveBeenCalled()
+    expect(mocks.retire).toHaveBeenCalledWith('env-vm')
+    expect(mocks.removeManaged.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.retire.mock.invocationCallOrder[0]
+    )
   })
 
   it('finds the server of a relay-era VM that converted without recording it', async () => {
@@ -55,6 +64,10 @@ describe('releaseEphemeralVmRuntimeEnvironments', () => {
       runtimeEnvironmentId: 'env-paired'
     })
     expect(mocks.remove).toHaveBeenCalledWith('/user-data', 'env-paired')
+    expect(mocks.retire).toHaveBeenCalledWith('env-paired')
+    expect(mocks.remove.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.retire.mock.invocationCallOrder[0]
+    )
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
   })
 
@@ -63,5 +76,6 @@ describe('releaseEphemeralVmRuntimeEnvironments', () => {
     await releaseEphemeralVmRuntimeEnvironments('/user-data', { runtimeEnvironmentId: 'env-gone' })
     expect(mocks.remove).not.toHaveBeenCalled()
     expect(mocks.removeManaged).not.toHaveBeenCalled()
+    expect(mocks.retire).not.toHaveBeenCalled()
   })
 })

@@ -23,6 +23,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "设置 → 智能体",
       "permissionsTitle": "新聊天的权限",
       "permissionsDescription": "仅适用于新聊天。各智能体的默认设置位于设置 → 智能体。",
       "description": "选择聊天的外观和行为方式。",
@@ -132,6 +133,11 @@
         }
       },
       "chat": {
+        "fontFamily": "字体",
+        "fontFamilyDescription": "用于消息、活动和消息输入框的字体。",
+        "inheritFont": "与 IDE 字体相同",
+        "fontPreviewLabel": "聊天字体预览",
+        "fontPreview": "这段文字用于预览聊天字体。",
         "title": "聊天",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
@@ -209,7 +215,8 @@
           "microphone": "麦克风",
           "location": "位置",
           "notifications": "通知",
-          "clipboard": "剪贴板"
+          "clipboard": "剪贴板",
+          "localNetwork": "本地网络"
         },
         "title": "站点权限",
         "empty": "尚未允许或阻止任何网站。",
@@ -4281,6 +4288,7 @@
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和：当前驻留在 RAM 中的页。共享页可能会出现在多个进程中，被 Windows 换出到页面文件的内存不计入其中。",
                 "privateBytesDescription": "专用字节的总和：这些进程已提交的内存，无论驻留还是已换出都会计入。这是主机计入提交限制的数值，因此在分页导致上方工作集缩小时它仍会继续上升。",
+                "footprintDescription": "内存占用的总和，与“活动监视器”显示的数值相同：每个进程自身占用的内存，包括图形内存。进程之间共享的页不会被重复计算。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
               }
             },
@@ -5537,7 +5545,9 @@
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
           "00c4235c10": "没有匹配“{{value0}}”",
-          "largeInputNoMatches": "没有匹配此长输入的结果"
+          "largeInputNoMatches": "没有匹配此长输入的结果",
+          "entriesLabel": "文件夹条目",
+          "inputLabel": "筛选或路径"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -6033,16 +6043,16 @@
           "sshTargetNotFoundDetail": "请刷新工作区或重新连接主机，然后重试。",
           "sshTargetInvalid": "SSH 主机配置不完整。",
           "sshTargetInvalidDetail": "请编辑或重新连接 SSH 主机，然后重试。",
-          "sshAliasRequired": "VS Code 需要此主机的 SSH 配置别名。",
+          "sshAliasRequired": "此编辑器需要此主机的 SSH 配置别名。",
           "sshAliasRequiredDetail": "请在本地 SSH 配置中为 {{host}}:{{port}} 添加 Host 别名，重新连接工作区，然后重试。",
           "remoteEditorUnsupported": "此应用无法打开 SSH 工作区。",
-          "remoteEditorUnsupportedDetail": "请选择 VS Code 或在本地使用该应用。",
+          "remoteEditorUnsupportedDetail": "请选择 VS Code、Cursor 或 Zed，或在本地使用该应用。",
           "remotePathInvalid": "路径对此 SSH 主机无效。",
           "remotePathInvalidDetail": "请先刷新工作区，再重试。",
-          "remoteLaunchFailed": "无法在 VS Code 中打开此路径。",
-          "remoteLaunchFailedDetail": "请检查此机器上配置的 VS Code 命令。",
+          "remoteLaunchFailed": "无法在编辑器中打开此路径。",
+          "remoteLaunchFailedDetail": "请检查此计算机上配置的编辑器命令。",
           "wsl": "WSL",
-          "remoteEditorHint": "只有 VS Code 可以打开 SSH 主机上的文件夹。",
+          "remoteEditorHint": "只有 VS Code、Cursor 和 Zed 可以打开 SSH 主机上的文件夹。",
           "remoteRuntimeEditorHint": "只有当 Orca 通过 SSH 连接到此服务器时，本机应用才能打开服务器上的文件。"
         },
         "WorktreeTitleInlineRename": {
@@ -8901,6 +8911,8 @@
           "editDescription": "更新此机器的连接详情。更改将在下次连接时生效。",
           "addDescription": "添加一台可通过 SSH 登录的持久机器。",
           "editingPrefix": "正在编辑",
+          "reconnectOnLaunch": "启动时重新连接",
+          "reconnectOnLaunchHelp": "关闭后，Orca 启动时会让此主机及通过它访问的 Orca 服务器保持断开，直到你手动连接。",
           "allowRemoteCliControl": "允许此主机的 orca CLI 控制 Orca",
           "allowRemoteCliControlHelp": "新主机默认开启。允许在此主机上运行的 orca 命令打开并操作此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间；并允许此主机上由旧版 Orca 启动的终端为其自身受监督的工作运行编排命令（check、inbox、send、ask、reply）。它们无法读取你的文件、剪贴板或 Cookie。关闭时，它们只能访问此主机自身的 Orca 服务器。",
           "addHost": "添加主机"
@@ -14306,6 +14318,7 @@
             "prepareSessionResumeFailed": "无法为恢复准备此会话。",
             "sessionDeleted": "会话已删除",
             "sessionDeleteFailed": "无法删除会话",
+            "sessionDeleteCheckingHost": "正在检查 {{value0}}…",
             "resumeInChatConflict": "另一个聊天室已经在进行此对话。",
             "resumeInChatTranscriptMissing": "无法加载此对话的历史记录，因此无法在聊天中恢复。",
             "resumeInChatFailed": "无法在新聊天中恢复此会话。",
@@ -14447,6 +14460,7 @@
             "subagentCountPlural": "{{value0}} 个子智能体",
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
+            "deleteReasonHostUpdateRequired": "请更新 {{value0}}，以便从这里删除其会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
             "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
             "resumeInNewNativeChat": "在新聊天中恢复",
@@ -14457,6 +14471,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",
             "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
+            "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复。",
             "confirm": "删除"
           },
           "FileExplorerNameFilter": {
@@ -18364,6 +18379,7 @@
             "clipboard": "剪贴板",
             "midi": "MIDI 设备",
             "idleDetection": "设备使用",
+            "localNetwork": "本地网络",
             "windowManagement": "窗口管理"
           },
           "allow": "允许",
@@ -18376,7 +18392,8 @@
             "midi": "使用 MIDI 设备",
             "clipboard": "查看复制到剪贴板的文本和图像",
             "windowManagement": "管理所有显示器上的窗口",
-            "idleDetection": "检测您是否正在使用此设备"
+            "idleDetection": "检测您是否正在使用此设备",
+            "localNetwork": "访问此设备上的应用和本地网络中的设备"
           },
           "localFiles": "本地文件",
           "title": "{{site}} 请求执行以下操作",
@@ -18633,6 +18650,9 @@
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装。",
+        "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天。",
+        "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端。",
+        "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
         "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送您的消息。",
@@ -18717,7 +18737,6 @@
         "notDoneAnswer": "您的回答未发送。",
         "notDoneOption": "设置未更改。",
         "notDoneCommand": "命令未运行。",
-        "notDoneGoal": "目标未更改。",
         "notDoneQueuedEdit": "你的编辑未保存。",
         "restartFailed": "智能体无法重新启动。",
         "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
@@ -18963,6 +18982,8 @@
         "runFileChangeMany": "编辑 {{value0}} 文件",
         "runWebSearchOne": "网上搜索了1次",
         "runWebSearchMany": "网络搜索 {{value0}} 次",
+        "runBrowserOne": "使用了浏览器",
+        "runBrowserMany": "使用了浏览器 {{value0}} 次",
         "runIntegrationOne": "使用 1 集成",
         "runIntegrationMany": "使用 {{value0}} 集成",
         "runAgentOne": "然 1 智能体",
@@ -18985,6 +19006,8 @@
         "runLiveFileChangeMany": "编辑 {{value0}} 文件",
         "runLiveWebSearchOne": "网上搜索1次",
         "runLiveWebSearchMany": "搜索网络 {{value0}} 次",
+        "runLiveBrowserOne": "正在使用浏览器",
+        "runLiveBrowserMany": "正在使用浏览器 {{value0}} 次",
         "runLiveIntegrationOne": "使用 1 集成",
         "runLiveIntegrationMany": "使用 {{value0}} 集成",
         "runLiveAgentOne": "运行 1 个智能体",
@@ -18992,7 +19015,9 @@
         "runLivePlanOne": "更新计划",
         "runLivePlanMany": "更新计划 {{value0}} 次",
         "runLiveToolOne": "使用 1 个工具",
-        "runLiveToolMany": "使用 {{value0}} 工具"
+        "runLiveToolMany": "使用 {{value0}} 工具",
+        "showBrowserPage": "显示",
+        "showBrowserPageLabel": "显示 {{value0}}"
       },
       "status": {
         "responding": "智能体正在回复",
@@ -19022,10 +19047,11 @@
         "showTerminal": "显示终端"
       },
       "resumeInNewChat": {
+        "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
         "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
         "cannotResume": "此 {{agent}} 对话无法在本机聊天中恢复。",
-        "exitUnconfirmed": "Orca 无法确认 {{agent}} 已在其终端中退出。停止那里正在运行的程序或关闭终端，然后重试。",
-        "exitUnconfirmedFromTerminal": "Orca 无法确认 {{agent}} 已在其终端中退出。停止那里正在运行的程序或关闭终端，然后从会话历史记录中打开此对话。"
+        "exitUnconfirmed": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。",
+        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。"
       },
       "state": {
         "loading": {
@@ -19331,8 +19357,7 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。",
-        "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
+        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。"
       },
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息。",
@@ -19382,7 +19407,13 @@
       "explicitChatSsh": "无法通过 SSH 进行聊天。请改为在终端中打开智能体。",
       "explicitChatWsl": "WSL 中无法使用聊天功能。请改为在终端中打开智能体。",
       "explicitChatUnavailable": "此工作区无法运行聊天。检查智能体安装或在终端中打开它。",
-      "structuredSessionTerminalNotVisible": "Orca 已在终端中打开 {{value0}}，但启动完成后无法在此处显示。您的聊天草稿已保留。"
+      "structuredSessionTerminalNotVisible": "Orca 已在终端中打开 {{value0}}，但启动完成后无法在此处显示。您的聊天草稿已保留。",
+      "goalControl": {
+        "settingsRejected": "Codex 无法应用所选模型和推理强度。此目标更改尚未发送。请检查选择后重试。",
+        "settingsUnconfirmed": "Codex 未确认所选模型和推理强度。此目标更改尚未发送。请检查聊天后重试。",
+        "pauseUnconfirmed": "Codex 已停止运行，但尚未确认目标已暂停。请在继续前检查目标。",
+        "stopUnconfirmed": "Codex 无法确认停止。请在继续前检查聊天。"
+      }
     },
     "tab": {
       "bar": {
@@ -19410,6 +19441,10 @@
           "editors": "关闭所有编辑器标签页？",
           "description": "选中的标签页将关闭。固定的标签页将保持打开。",
           "confirm": "关闭标签页"
+        },
+        "chatRename": {
+          "empty": "聊天名称不能为空",
+          "failed": "无法重命名此聊天"
         }
       }
     },
@@ -21178,5 +21213,8 @@
       "unavailable": "该工作区受保护或不可用。"
     },
     "rowActions": "{{name}} 的操作"
+  },
+  "browserTab": {
+    "agentDriving": "智能体正在使用此页面"
   }
 }

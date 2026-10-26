@@ -79,3 +79,7 @@ it('records Agent Dashboard enablement only for a real setting transition', asyn
   await handler({ sender: { id: 1 } }, { experimentalAgentDashboardPopout: true })
   expect(trackMock).not.toHaveBeenCalled()
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

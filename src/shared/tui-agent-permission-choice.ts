@@ -117,16 +117,16 @@ export function normalizeAgentPermissionOverrides(
   )
 }
 
-/** Apply globally, preserving unsupported agents during Auto as the toggle always did; falling to own could change their permissions. */
+/** Global writes own the default; explicit agent choices keep their scope. */
 export function applyAllAgentsPermission(
   settings: AgentPermissionSettings,
   choice: AgentPermissionChoice
 ): Required<AgentPermissionSettings> {
-  const overrides: Partial<Record<TuiAgent, AgentPermissionChoice>> = {}
+  const overrides = { ...settings.agentPermissionOverrides }
   if (choice === 'auto') {
     for (const agent of PERMISSION_CHOICE_AGENTS) {
       const previous = resolveAgentPermission(agent, settings).choice
-      if (!supportsChoice(agent, 'auto')) {
+      if (overrides[agent] === undefined && previous !== 'auto' && !supportsChoice(agent, 'auto')) {
         overrides[agent] = previous
       }
     }

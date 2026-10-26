@@ -12,7 +12,7 @@ import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { resolveAuthorizedPath } from '../../../ipc/filesystem-auth'
+import { resolveAuthorizedPath } from '../../../ipc/filesystem/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
 import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
@@ -94,7 +94,8 @@ export class RuntimeFileWatches {
     if (leases) {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
-    if (!connectionId) {
+    // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
+    if (!connectionId && process.platform !== 'win32') {
       // Failed setup may still own a child without having published a lease-release callback.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)

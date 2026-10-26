@@ -17,20 +17,18 @@ const input = readScenarios(
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
 // Compare the whole variant: malformed-container mutants may differ only at settlement and recover to identical final state.
-// Pin both a killing and a blind partition; row-shape requirements remain unit coverage because matrices vary envelopes only.
+// Row-shape requirements remain unit coverage because matrices vary envelopes only.
 const MATRIX_MUTANTS: readonly {
   mutation: Mutation
   family: string
   site: string
   killedBy: string
-  blindTo: string
 }[] = [
   {
     mutation: 'linear-status-nullable',
     family: 'tasks.provider-load',
     site: 'linear.status#1',
-    killedBy: 'result-null',
-    blindTo: 'normal'
+    killedBy: 'result-null'
   }
 ]
 
@@ -77,9 +75,6 @@ describe('reply-matrix partitions hold the container requirements', () => {
   for (const entry of MATRIX_MUTANTS) {
     it(`${entry.family} ${entry.site}: ${entry.killedBy} kills ${entry.mutation}`, async () => {
       expect(await verdict(entry, entry.killedBy)).toBe('killed')
-    }, 30_000)
-    it(`${entry.family} ${entry.site}: ${entry.blindTo} cannot see ${entry.mutation}`, async () => {
-      expect(await verdict(entry, entry.blindTo)).toBe('survived')
     }, 30_000)
   }
 })

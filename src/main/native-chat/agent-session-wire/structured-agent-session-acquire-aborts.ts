@@ -1,7 +1,7 @@
 export class StructuredAgentSessionAcquireAborts {
   private readonly inFlight = new Map<
     string,
-    Set<{ controller: AbortController; handover: boolean; goal: boolean }>
+    Set<{ controller: AbortController; handover: boolean; goal: boolean; opening: boolean }>
   >()
   /** Starts admitted after quit must begin aborted. */
   private quitReason: Error | null = null
@@ -10,7 +10,8 @@ export class StructuredAgentSessionAcquireAborts {
   begin(
     sessionId: string,
     handover = false,
-    goal = false
+    goal = false,
+    opening = false
   ): { signal: AbortSignal; abort: () => void; end: () => void } {
     const controller = new AbortController()
     if (this.quitReason) {
@@ -18,8 +19,8 @@ export class StructuredAgentSessionAcquireAborts {
     }
     const waits =
       this.inFlight.get(sessionId) ??
-      new Set<{ controller: AbortController; handover: boolean; goal: boolean }>()
-    const active = { controller, handover, goal }
+      new Set<{ controller: AbortController; handover: boolean; goal: boolean; opening: boolean }>()
+    const active = { controller, handover, goal, opening }
     waits.add(active)
     this.inFlight.set(sessionId, waits)
     return {
@@ -53,6 +54,14 @@ export class StructuredAgentSessionAcquireAborts {
       controller.abort(typeof reason === 'string' ? new Error(reason) : reason)
     }
     return { reached, handedOver }
+  }
+
+  abortOpen(sessionId: string): void {
+    for (const wait of this.inFlight.get(sessionId) ?? []) {
+      if (wait.opening) {
+        wait.controller.abort(new Error('provider exited while opening'))
+      }
+    }
   }
 
   /** Abort all waits, including queued attach-drain work. */

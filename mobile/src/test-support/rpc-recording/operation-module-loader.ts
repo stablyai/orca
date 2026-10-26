@@ -141,12 +141,13 @@ export function operationModuleLoader(
       return cached
     }
     let source = readFileSync(file, 'utf8')
+    const sourceIdentity = file.replaceAll('\\', '/')
     if (/mobile-tasks-(dependencies|legacy-foundation)\.tsx?$/.test(file)) {
       const result = barrel(file, source)
       cache.set(file, result)
       return result
     }
-    if (mutation && file.endsWith(mutation.file)) {
+    if (mutation && sourceIdentity.endsWith(mutation.file.replaceAll('\\', '/'))) {
       // Require exactly one anchor occurrence; replace alone would silently ignore duplicates.
       const occurrences = source.split(mutation.before).length - 1
       if (occurrences !== 1) {
@@ -157,10 +158,11 @@ export function operationModuleLoader(
     }
     const exports: OperationModule = {}
     cache.set(file, exports)
-    const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
+    const exposure =
+      exposures.find(([suffix]) => sourceIdentity.endsWith(suffix.replaceAll('\\', '/')))?.[1] ?? ''
     const evaluate = compiledOperationModule(file, source, exposure)
     evaluate((name: string) => imported(file, name), exports)
-    observeSalvagedReads(file, exports)
+    observeSalvagedReads(sourceIdentity, exports)
     return exports
   }
   return {

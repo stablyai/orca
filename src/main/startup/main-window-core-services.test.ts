@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   attachMainWindowServicesMock,
+  holdLaunchReconnectOptOutsMock,
   initTccPromptNoticeMock,
   preserveAgentAuthBeforeRestartMock,
   registerCoreHandlersMock,
@@ -11,10 +12,12 @@ const {
   const store = {
     flushPendingOrThrowAsync: vi.fn(async () => {}),
     writeLatestProfileStateJsonExportAsync: vi.fn(async () => {}),
-    getSettings: vi.fn(() => ({}))
+    getSettings: vi.fn(() => ({})),
+    getSshTargets: vi.fn(() => [{ id: 'ssh-1', reconnectOnLaunch: false }])
   }
   return {
     attachMainWindowServicesMock: vi.fn(),
+    holdLaunchReconnectOptOutsMock: vi.fn(),
     initTccPromptNoticeMock: vi.fn(),
     preserveAgentAuthBeforeRestartMock: vi.fn(() => Promise.resolve()),
     registerCoreHandlersMock: vi.fn(),
@@ -53,6 +56,9 @@ vi.mock('../ipc/register-core-handlers/register-core-handlers', () => ({
 vi.mock('../window/attach-main-window-services', () => ({
   attachMainWindowServices: attachMainWindowServicesMock
 }))
+vi.mock('../ipc/ssh/ssh-host-user-disconnect', () => ({
+  holdLaunchReconnectOptOuts: holdLaunchReconnectOptOutsMock
+}))
 vi.mock('../macos-tcc-prompt-notice', () => ({ initTccPromptNotice: initTccPromptNoticeMock }))
 vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
@@ -75,6 +81,24 @@ vi.mock('./codex-session-resume-launch', () => ({ prepareCodexSessionResumeForLa
 vi.mock('./main-window-lifecycle-flags', () => ({ isRecoveryReloadInFlight: vi.fn() }))
 
 const { attachMainWindowCoreServices } = await import('./main-window-core-services')
+
+describe('main window launch reconnect opt-outs', () => {
+  it('holds opted-out SSH hosts before core handlers start server status probes', () => {
+    vi.clearAllMocks()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents for this composition-root wiring test.
+    attachMainWindowCoreServices({ webContents: { id: 17 } } as never, {
+      markExpectedRendererReload: vi.fn(),
+      recordRendererReload: vi.fn()
+    })
+
+    expect(holdLaunchReconnectOptOutsMock).toHaveBeenCalledWith([
+      { id: 'ssh-1', reconnectOnLaunch: false }
+    ])
+    expect(holdLaunchReconnectOptOutsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      registerCoreHandlersMock.mock.invocationCallOrder[0]
+    )
+  })
+})
 
 describe('main window profile-state update preparation', () => {
   beforeEach(() => {

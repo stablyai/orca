@@ -64,23 +64,23 @@ export function sendTerminalInputAfterComposition(
 
 export type TerminalImeDeferredNewlineSender = {
   defer: (
-    enter: TerminalImeEnterIdentity,
+    enter: TerminalImeKeyIdentity,
     terminalElement: HTMLElement | null | undefined,
     send: () => void
   ) => void
-  absorbRedispatchedEnter: (enter: TerminalImeEnterIdentity) => boolean
+  absorbRedispatchedEnter: (enter: TerminalImeKeyIdentity) => boolean
   releaseRedispatchedEnter: (
-    enter: TerminalImeEnterIdentity,
-    originatingEnter?: TerminalImeEnterIdentity
+    enter: TerminalImeKeyIdentity,
+    originatingEnter?: TerminalImeKeyIdentity
   ) => void
   clearRedispatchedEnters: () => void
 }
 
-export type TerminalImeEnterIdentity = Pick<KeyboardEvent, 'code' | 'timeStamp'>
+export type TerminalImeKeyIdentity = Pick<KeyboardEvent, 'code' | 'timeStamp'>
 
 export type TerminalImeModifiedEnterKind = 'shift' | 'ctrl'
 
-export type TerminalImeModifiedEnterChord = TerminalImeEnterIdentity & {
+export type TerminalImeModifiedEnterChord = TerminalImeKeyIdentity & {
   kind: TerminalImeModifiedEnterKind
   terminalModifierKeyDownObserved?: boolean
 }
@@ -168,7 +168,7 @@ type DeferredNewlineState = {
 export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNewlineSender {
   const statesByEnterCode = new Map<string, Map<number, DeferredNewlineState>>()
 
-  const cleanUpIfSettled = (enter: TerminalImeEnterIdentity, state: DeferredNewlineState): void => {
+  const cleanUpIfSettled = (enter: TerminalImeKeyIdentity, state: DeferredNewlineState): void => {
     if (state.inFlightSends <= 0 && state.absorbCredits <= 0) {
       const statesByTimeStamp = statesByEnterCode.get(enter.code)
       statesByTimeStamp?.delete(enter.timeStamp)
