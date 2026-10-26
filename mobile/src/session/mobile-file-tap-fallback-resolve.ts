@@ -57,13 +57,20 @@ export async function resolveMissingTerminalFileTap<T extends FileTapSessionTab>
     }
   }
 
+  const matchingTabPaths = new Set<string>()
   for (const tab of options.getSessionTabs()) {
     if (
       tab.relativePath &&
       tab.relativePath !== options.pathText &&
       pathMatchesSuffixCaseInsensitive(tab.relativePath, options.pathText)
     ) {
-      const fromTab = await tryResolveCandidatePath(options, worktree, tab.relativePath)
+      matchingTabPaths.add(tab.relativePath)
+    }
+  }
+  if (matchingTabPaths.size === 1) {
+    const [uniqueTabPath] = matchingTabPaths
+    if (uniqueTabPath) {
+      const fromTab = await tryResolveCandidatePath(options, worktree, uniqueTabPath)
       if (fromTab) {
         return fromTab
       }
@@ -117,7 +124,7 @@ export async function resolveMissingTerminalFileTap<T extends FileTapSessionTab>
         if (!msg) {
           continue
         }
-        const matches = msg.match(/file:\/\/\/[^\s)"'\]>]+/gi) ?? []
+        const matches = msg.match(/file:\/\/[^\s)"'\]>]+/gi) ?? []
         for (const rawUri of matches) {
           const hashIdx = rawUri.indexOf('#')
           const baseUri = hashIdx !== -1 ? rawUri.slice(0, hashIdx) : rawUri

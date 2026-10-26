@@ -211,11 +211,16 @@ const WINDOWS_DRIVE_PATH = /^[a-zA-Z]:[\\/]/
 
 // Why: Windows accepts both separators. Compare only drive-letter paths so POSIX
 // names containing a backslash never match a different file.
+function normalizeWindowsDriveComparisonPath(filePath: string): string {
+  const normalized = win32.normalize(filePath)
+  return `${normalized.slice(0, 1).toLowerCase()}${normalized.slice(1)}`
+}
+
 function sameWindowsDrivePath(left: string, right: string): boolean {
   return (
     WINDOWS_DRIVE_PATH.test(left) &&
     WINDOWS_DRIVE_PATH.test(right) &&
-    win32.normalize(left) === win32.normalize(right)
+    normalizeWindowsDriveComparisonPath(left) === normalizeWindowsDriveComparisonPath(right)
   )
 }
 
