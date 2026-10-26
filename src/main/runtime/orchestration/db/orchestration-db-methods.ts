@@ -34,6 +34,7 @@ import type { MessageInboxMethods } from './messages/message-inbox'
 import type { MessageInsertMethods } from './messages/message-insert'
 import type { RoleMailboxDeliveryMethods } from './messages/role-mailbox-delivery'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
+import type { RoomStoreMethods } from './rooms/room-store'
 import type { LifecycleTransitionMethods } from './lifecycle-transition'
 import type { QuestionThreadsMethods } from './questions/question-threads'
 import type { OrchestrationResetMethods } from './reset/orchestration-reset'
@@ -132,4 +133,5 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
   CoordinatorRunStoreMethods &
+  RoomStoreMethods &
   OrchestrationResetMethods

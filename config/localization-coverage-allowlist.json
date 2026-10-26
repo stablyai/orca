@@ -91,6 +91,62 @@
     "count": 1
   },
   {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "Codex",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "Claude",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "Pi",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "Grok",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "OpenCode",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "OpenCode 2",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "OMP",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/rooms/room-types.ts",
+    "kind": "object-property:label",
+    "text": "Antigravity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
     "kind": "jsx-text",
     "text": "fixtures · files named *.fixture.tsx under src/renderer/src",

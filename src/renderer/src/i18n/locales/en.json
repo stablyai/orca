@@ -6077,7 +6077,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "rooms": "Bots"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -18909,11 +18910,139 @@
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
       },
-      "ClaudeAgentViewIndicator": {
-        "viewing": "Currently viewing",
-        "viewingChild": "Viewing subagent {{name}}",
-        "returnHint": "Click the parent row to return. Esc stops this subagent. Enter sends your draft to this subagent."
-      }
+      "rooms": {
+        "pool": {
+          "untitledSession": "(untitled session)"
+        },
+        "useRooms": {
+          "listFailed": "Failed to list Bots",
+          "adminReady": "Orca Admin is ready in Orca HQ",
+          "seatMainBotFailed": "Failed to seat the Main Bot"
+        },
+        "useRoomLog": {
+          "readFailed": "Failed to read room log"
+        },
+        "spawnBot": {
+          "needsName": "Bot needs a name",
+          "pickWorkspace": "Pick a workspace for the bot",
+          "joined": "Bot \"{{name}}\" joined the room",
+          "failed": "Failed to spawn bot",
+          "title": "New bot",
+          "namePlaceholder": "Name (e.g. reviewer, planner)",
+          "noWorkspace": "(no workspace)",
+          "instructionsPlaceholder": "Role / instructions (optional)",
+          "cancel": "Cancel",
+          "spawn": "Create",
+          "advanced": "Advanced",
+          "modelPlaceholder": "Model (optional, e.g. gpt-5.2-codex / opus)",
+          "modelDefault": "(agent default)",
+          "effortDefault": "(default thinking)"
+        },
+        "createRoom": {
+          "nameRequired": "Name is required",
+          "adminFailed": "Room created, but its admin bot failed",
+          "created": "Room \"{{name}}\" created",
+          "failed": "Failed to create room",
+          "newRoom": "New group",
+          "title": "New group",
+          "description": "A leader bot is added automatically. You can also ask Orca Admin to do this in chat.",
+          "namePlaceholder": "Group name",
+          "briefPlaceholder": "What should this group do? (optional)",
+          "advanced": "Advanced",
+          "membersLabel": "Members (first pick becomes admin):",
+          "noSessions": "No agent sessions open — a fresh admin bot will lead the room.",
+          "modeAdmin": "admin (admin answers first)",
+          "modeEveryone": "everyone (all members speak)",
+          "seedAdmin": "Spawn an admin bot (Codex) to lead the room",
+          "cancel": "Cancel",
+          "create": "Create",
+          "modelPlaceholder": "Admin model (optional, e.g. gpt-5.2-codex / opus)",
+          "modelDefault": "(agent default)",
+          "effortDefault": "(default thinking)"
+        },
+        "hero": {
+          "adminLeads": "{{name}} is the admin here. ",
+          "subtitle": "Talk in plain words — the admin calls the right bot for you.",
+          "howTitle": "How rooms work",
+          "howAdmin": "· Your message goes to the admin first.",
+          "howMention": "· Type @Name to call one member directly.",
+          "howCreate": "· Say “create a bot / start a group” and the admin does it.",
+          "sayHi": "Say hi",
+          "spawnBot": "Create a bot",
+          "howTo": "Build a review team",
+          "docBot": "Create a document bot",
+          "sayHiPrompt": "Hi! What can you help me with?",
+          "spawnBotPrompt": "Create a code review bot and start a small group chat.",
+          "howToPrompt": "Build a team with a planning bot, an implementation bot, and a review bot.",
+          "docBotPrompt": "Create a documentation bot and ask it to list what it can organize automatically."
+        },
+        "page": {
+          "title": "Bots",
+          "backToApp": "Back to app",
+          "refresh": "Refresh rooms",
+          "close": "Close",
+          "loading": "Loading…",
+          "noRooms": "No rooms yet.",
+          "memberCount": "{{count}} members",
+          "tip": "Tip: talk to Orca Admin in Orca HQ — just say what group or bot you want.",
+          "adminLabel": "admin: {{name}}",
+          "spawnBot": "Spawn a bot into this room",
+          "addMember": "Turn an open session into a bot",
+          "deleteRoom": "Delete room",
+          "noMembers": "No members yet.",
+          "removeMember": "Remove {{name}}",
+          "allSessionsAdded": "Every open agent session is already represented here.",
+          "add": "Create",
+          "addAsAdmin": "Admin",
+          "composerPlaceholder": "Message… @Name to call one, @all (admin only) for everyone",
+          "directPlaceholder": "Message {{name}}…",
+          "backToRoom": "Back to room",
+          "directRoomHint": "Focused chat in {{room}}",
+          "directEmptyTitle": "Message {{name}} in this room",
+          "directEmptyHint": "This is a focused room conversation. Other members do not join it unless mentioned.",
+          "send": "Send",
+          "pickRoom": "Pick a room, or create one on the left.",
+          "deleted": "Room deleted",
+          "deleteFailed": "Failed to delete",
+          "memberAdded": "Member added",
+          "addMemberFailed": "Failed to add member",
+          "removeMemberFailed": "Failed to remove member",
+          "sendFailed": "Failed to send",
+          "botFailed": "Bot reply failed",
+          "adminRole": "Admin",
+          "adminLeads": "{{name}} leads this team",
+          "memberCountOnly": "{{count}} members",
+          "homeHint": "Ask in plain language to create bots or group chats",
+          "actions": "Room actions",
+          "manageMembers": "Manage members",
+          "memberWorking": "Working…",
+          "memberWaiting": "Waiting for approval…",
+          "memberFailed": "Failed",
+          "retry": "Retry",
+          "unsupportedSessionAgent": "Unknown agent type"
+        },
+        "roster": {
+          "title": "Team members",
+          "description": "Create a bot, turn an open session into a fresh bot, or clean up this team.",
+          "current": "Current members",
+          "modelUpdated": "Model updated",
+          "modelUpdateFailed": "Model update failed",
+          "modelUnknown": "(unknown)"
+        },
+        "sidebar": {
+          "chiefReady": "Ready — ask it to build a team",
+          "chiefStarting": "Starting the chief…",
+          "you": "You",
+          "working": "Working…",
+          "waiting": "Waiting approval…",
+          "emptyTeam": "No members yet",
+          "noMembers": "No members yet",
+          "more": "More actions",
+          "chief": "Chief",
+          "teams": "Teams",
+          "noTeams": "Ask the chief to create one.",
+          "tip": "Tell the chief what team you need — it will create the bots."
+        }      }
     },
     "i18n": {
       "hostedReview": {

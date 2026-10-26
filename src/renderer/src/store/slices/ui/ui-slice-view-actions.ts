@@ -96,6 +96,19 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
+    openRoomsPage: () => {
+      get().recordViewVisit('rooms')
+      set((state) => ({
+        activeView: 'rooms',
+        previousViewBeforeRooms:
+          state.activeView === 'rooms' ? state.previousViewBeforeRooms : state.activeView
+      }))
+    },
+    closeRoomsPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeRooms,
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'rooms')
+      })),
     openMobilePage: () =>
       set((state) => ({
         activeView: 'mobile',

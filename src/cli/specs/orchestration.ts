@@ -1,3 +1,5 @@
+import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
+import { ORCHESTRATION_ROOM_COMMAND_SPECS } from './orchestration-room-specs'
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
@@ -44,6 +46,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca orchestration run-show --id <run_id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
+  ...ORCHESTRATION_ROOM_COMMAND_SPECS,
   {
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
@@ -265,31 +268,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.'
     ]
   },
-  {
-    path: ['orchestration', 'gate-create'],
-    summary: 'Create a decision gate blocking a task',
-    usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-resolve'],
-    summary: 'Resolve a pending decision gate',
-    usage:
-      'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-list'],
-    summary: 'List decision gates',
-    usage:
-      'orca orchestration gate-list [--task <task_id>] [--status <status>] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
-    identityFlagRoles: { from: 'caller' },
-    notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
-  },
+  ...ORCHESTRATION_GATE_COMMAND_SPECS,
   {
     path: ['orchestration', 'reset'],
     destructive: true,

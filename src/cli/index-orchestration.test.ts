@@ -140,6 +140,41 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
+  it('keeps the full Orca session address in room-create member specs', async () => {
+    callMock.mockResolvedValueOnce(
+      okFixture('req_room_create', {
+        room: {
+          id: 'room_1',
+          name: 'Bots',
+          mode: 'admin',
+          adminMemberId: 'orca_session_id:codex_abc',
+          notice: '',
+          members: [{ memberId: 'orca_session_id:codex_abc', name: 'Alice', isAdmin: true }]
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'orchestration',
+        'room-create',
+        '--name',
+        'Bots',
+        '--member',
+        'orca_session_id:codex_abc:Alice:admin'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('orchestration.roomCreate', {
+      name: 'Bots',
+      mode: undefined,
+      notice: undefined,
+      members: [{ memberId: 'orca_session_id:codex_abc', name: 'Alice', isAdmin: true }]
+    })
+  })
+
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'f7a1c0de-1111-4222-8333-444455556666')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

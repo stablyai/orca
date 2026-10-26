@@ -6,15 +6,17 @@ import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 // Why: find-state renders must not rebuild the full remark/rehype pipeline.
 export const MarkdownPreviewBody = memo(function MarkdownPreviewBody({
   content,
-  components
+  components,
+  urlTransform
 }: {
   content: string
   components: Components
+  urlTransform?: typeof markdownPreviewUrlTransform
 }) {
   return (
     <Markdown
       components={components}
-      urlTransform={markdownPreviewUrlTransform}
+      urlTransform={urlTransform ?? markdownPreviewUrlTransform}
       remarkPlugins={MARKDOWN_REMARK_PLUGINS}
       rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
     >

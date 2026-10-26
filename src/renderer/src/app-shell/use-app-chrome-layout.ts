@@ -73,11 +73,13 @@ export function useAppChromeLayout() {
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const hasTabBar = tabCount >= 2
-  // Activity/Space own full pages and hide the workspace sidebar.
+  // Rooms are chat-first; Bots owns its own sidebar and IDE chrome stays hidden.
   const showSidebar =
-    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
-  // Tasks/Landing keep sidebar-width chrome when open; creation suppresses stacked chrome.
-  const stackedSidebarOpen =
+    activeView !== 'settings' &&
+    activeView !== 'activity' &&
+    activeView !== 'space' &&
+    activeView !== 'rooms'
+  // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).  const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
   // Creation retains only top-left chrome; workspaceChromeActive gates tabs/right controls.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({

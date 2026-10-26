@@ -4,6 +4,7 @@ import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../pane-key-match'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
+import { ROOM_SCHEMA_SQL } from './migrate-v44'
 
 // Additive tables outlive v30 writers, so legacy parent deletes must clean their rows too.
 export const ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL = `
@@ -216,5 +217,7 @@ CREATE TABLE IF NOT EXISTS coordinator_runs (
   completed_at        TEXT,
   scheduler_lost_at   TEXT
 );
+
+${ROOM_SCHEMA_SQL}
   `
 }

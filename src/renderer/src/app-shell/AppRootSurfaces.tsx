@@ -121,8 +121,10 @@ export function AppRootSurfaces(props: {
   const voiceEnabled = useAppStore(selectAppRootSurfaceVoiceEnabled)
   const petEnabled = useAppStore(selectAppRootSurfacePetEnabled)
   const telemetryOptedIn = useAppStore(selectAppRootSurfaceTelemetryOptedIn)
-  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const statusBarSettingVisible = useAppStore((s) => s.statusBarVisible)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  // Why: rooms are chat-first and should not inherit IDE status chrome.
+  const statusBarVisible = statusBarSettingVisible && activeView !== 'rooms'
   const petVisible = useAppStore((s) => s.petVisible)
   const dictationState = useAppStore((s) => s.dictationState)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -132,7 +134,9 @@ export function AppRootSurfaces(props: {
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
-  const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
+  // Why: the dedicated Bots chat is already persona-led; the desktop pet is visual noise there.
+  const renderPetOverlay =
+    activeView !== 'rooms' && shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
   return (
     <>

@@ -26,6 +26,14 @@ export type {
   MailboxRoutingPage
 } from './db/messages/mailbox-routing-page'
 export type { MessageInsert } from './db/messages/message-insert'
+export type {
+  RoomLogKind,
+  RoomLogRow,
+  RoomMemberRow,
+  RoomMode,
+  RoomRow,
+  RoomWithMembers
+} from './db/rooms/room-store'
 export type { LegacyAdoptedMailboxOwner } from './db/runs/run-lookup'
 
 export type {

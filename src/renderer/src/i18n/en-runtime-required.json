@@ -1087,6 +1087,49 @@
           "label": "Workspaces"
         }
       },
+      "rooms": {
+        "createRoom": {
+          "adminFailed": "Room created, but its admin bot failed",
+          "membersLabel": "Members (first pick becomes admin):",
+          "modeAdmin": "admin (admin answers first)",
+          "modeEveryone": "everyone (all members speak)",
+          "modelPlaceholder": "Admin model (optional, e.g. gpt-5.2-codex / opus)",
+          "noSessions": "No agent sessions open — a fresh admin bot will lead the room.",
+          "seedAdmin": "Spawn an admin bot (Codex) to lead the room"
+        },
+        "hero": {
+          "howAdmin": "· Your message goes to the admin first.",
+          "howCreate": "· Say “create a bot / start a group” and the admin does it.",
+          "howMention": "· Type @Name to call one member directly.",
+          "howTitle": "How rooms work",
+          "subtitle": "Talk in plain words — the admin calls the right bot for you."
+        },
+        "page": {
+          "adminLabel": "admin: {{name}}",
+          "botFailed": "Bot reply failed",
+          "close": "Close",
+          "composerPlaceholder": "Message… @Name to call one, @all (admin only) for everyone",
+          "memberCount": "{{count}} members",
+          "memberWorking": "Working…",
+          "noMembers": "No members yet.",
+          "noRooms": "No rooms yet.",
+          "refresh": "Refresh rooms",
+          "spawnBot": "Spawn a bot into this room",
+          "tip": "Tip: talk to Orca Admin in Orca HQ — just say what group or bot you want.",
+          "title": "Bots"
+        },
+        "sidebar": {
+          "tip": "Tell the chief what team you need — it will create the bots."
+        },
+        "spawnBot": {
+          "instructionsPlaceholder": "Role / instructions (optional)",
+          "modelPlaceholder": "Model (optional, e.g. gpt-5.2-codex / opus)",
+          "spawn": "Create"
+        },
+        "useRooms": {
+          "listFailed": "Failed to list Bots"
+        }
+      },
       "settings": {
         "AccountsPane": {
           "0023cc336e": "Paste either the raw token value (e.g.",

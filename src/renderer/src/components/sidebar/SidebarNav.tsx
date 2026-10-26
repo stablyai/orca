@@ -1,5 +1,5 @@
 import React from 'react'
-import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
+import { BookOpen, CalendarClock, EyeOff, Files, Bot, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -55,6 +55,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
+  const openRoomsPage = useAppStore((s) => s.openRoomsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -67,6 +68,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const automationsActive = activeView === 'automations'
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
+  const roomsActive = activeView === 'rooms'
   const skillsActive = activeView === 'skills'
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
@@ -147,6 +149,25 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideArtifactsButton} />
         </ContextMenu>
       ) : null}
+      <button
+        type="button"
+        onClick={openRoomsPage}
+        aria-current={roomsActive ? 'page' : undefined}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+          roomsActive
+            ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+            : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+        )}
+      >
+        <Bot
+          className={cn('size-4 shrink-0', !roomsActive && 'text-worktree-sidebar-foreground/30')}
+          strokeWidth={roomsActive ? 2.25 : 1.75}
+        />
+        <span className="flex-1">
+          {translate('auto.components.sidebar.SidebarNav.rooms', 'Bots')}
+        </span>
+      </button>
       {showSkillsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
