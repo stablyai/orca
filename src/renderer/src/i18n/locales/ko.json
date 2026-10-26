@@ -159,7 +159,13 @@
         "softer": "부드럽게",
         "sharper": "선명하게",
         "terminalControlledHint": "터미널 인터페이스 설정을 따릅니다.",
-        "terminalControlledTooltip": "터미널 모양에 맞추는 중입니다. 변경하려면 터미널 모양에 맞추기를 끄세요."
+        "terminalControlledTooltip": "터미널 모양에 맞추는 중입니다. 변경하려면 터미널 모양에 맞추기를 끄세요.",
+        "keywords": {
+          "font": "글꼴",
+          "family": "패밀리",
+          "typeface": "서체",
+          "typography": "타이포그래피"
+        }
       }
     },
     "browser": {

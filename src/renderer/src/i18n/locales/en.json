@@ -386,7 +386,13 @@
         "softer": "Softer",
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
-        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this.",
+        "keywords": {
+          "font": "font",
+          "family": "family",
+          "typeface": "typeface",
+          "typography": "typography"
+        }
       }
     },
     "browser": {

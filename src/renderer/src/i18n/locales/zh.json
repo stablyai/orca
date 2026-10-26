@@ -159,7 +159,13 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置。",
-        "terminalControlledTooltip": "正在匹配终端外观。要更改此项，请关闭“匹配终端外观”。"
+        "terminalControlledTooltip": "正在匹配终端外观。要更改此项，请关闭“匹配终端外观”。",
+        "keywords": {
+          "font": "字体",
+          "family": "字体系列",
+          "typeface": "字型",
+          "typography": "排版"
+        }
       }
     },
     "browser": {

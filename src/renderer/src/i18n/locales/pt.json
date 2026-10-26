@@ -698,7 +698,13 @@
         "softer": "Mais suave",
         "sharper": "Mais nítido",
         "terminalControlledHint": "Definido pela interface do terminal.",
-        "terminalControlledTooltip": "Usando a aparência da interface do terminal. Desative Usar aparência da interface do terminal para alterar isto."
+        "terminalControlledTooltip": "Usando a aparência da interface do terminal. Desative Usar aparência da interface do terminal para alterar isto.",
+        "keywords": {
+          "font": "fonte",
+          "family": "família",
+          "typeface": "tipo de letra",
+          "typography": "tipografia"
+        }
       }
     },
     "browser": {

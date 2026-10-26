@@ -159,7 +159,13 @@
         "softer": "柔らかく",
         "sharper": "くっきり",
         "terminalControlledHint": "ターミナルの外観設定に従います。",
-        "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。"
+        "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。",
+        "keywords": {
+          "font": "フォント",
+          "family": "ファミリー",
+          "typeface": "書体",
+          "typography": "タイポグラフィ"
+        }
       }
     },
     "browser": {

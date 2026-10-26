@@ -159,7 +159,13 @@
         "softer": "Más suave",
         "sharper": "Más nítido",
         "terminalControlledHint": "Lo controla la interfaz del terminal.",
-        "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo."
+        "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo.",
+        "keywords": {
+          "font": "fuente",
+          "family": "familia",
+          "typeface": "tipo de letra",
+          "typography": "tipografía"
+        }
       }
     },
     "browser": {
