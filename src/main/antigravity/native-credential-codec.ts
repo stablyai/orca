@@ -88,6 +88,7 @@ export type AntigravityNativeCredential = {
   contents: string
   authMethod: string
   identity: AntigravityCredentialIdentity | null
+  refreshToken: string | null
 }
 
 export function parseAntigravityNativeCredential(contents: string): AntigravityNativeCredential {
@@ -114,6 +115,10 @@ export function parseAntigravityNativeCredential(contents: string): AntigravityN
     // Preserve unknown fields for CLI compatibility.
     contents,
     authMethod: value.auth_method,
-    identity: readIdentity(value.id_token ?? value.token.id_token)
+    identity: readIdentity(value.id_token ?? value.token.id_token),
+    refreshToken:
+      typeof value.token.refresh_token === 'string' && value.token.refresh_token
+        ? value.token.refresh_token
+        : null
   }
 }

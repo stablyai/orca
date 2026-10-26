@@ -88,7 +88,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     ).toEqual({})
   })
 
-  it('skips compatibility options for WSL cwd terminals', () => {
+  // ConPTY hosts local WSL shells too, so their emulator needs its resize model (awin verify-14).
+  it('uses the ConPTY model for local WSL cwd terminals', () => {
     for (const cwd of [
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
       '\\\\wsl$\\Debian\\home\\me\\repo',
@@ -104,11 +105,11 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
           shellOverride: null,
           executionHostId: 'local'
         })
-      ).toEqual({})
+      ).toEqual({ windowsPty: { backend: 'conpty', buildNumber: 26100 } })
     }
   })
 
-  it('skips compatibility options when the shell override launches WSL', () => {
+  it('uses the ConPTY model when the shell override launches WSL', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -118,7 +119,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         shellOverride: 'C:\\Windows\\System32\\wsl.exe',
         executionHostId: 'local'
       })
-    ).toEqual({})
+    ).toEqual({ windowsPty: { backend: 'conpty', buildNumber: 26100 } })
   })
 
   it('returns no options outside Windows', () => {

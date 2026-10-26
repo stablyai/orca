@@ -129,8 +129,13 @@ export type AgentSessionRecord = {
   permissionMode?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
-  /** The name Orca gave this conversation, so a later acquisition need not name it again. */
+  /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
+   *  tabs, sidebars and phones all read this field. */
   conversationName?: string
+  /** `'user'` once the user renamed the conversation; absent means Orca named it. Automatic naming
+   *  never replaces a user's name, and a window's pre-upgrade tab rename only fills a name Orca
+   *  chose. */
+  conversationNameSource?: 'user'
   /** When the user's Sleep stopped this chat; the next admitted send clears it. */
   sleptAt?: number
   launchArgs?: AgentSessionLaunchArgs
@@ -324,6 +329,7 @@ export function isPersistedAgentSessionRecord(
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
+    (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&

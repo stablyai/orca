@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isDarwinTerminalNodeSource } from './pr-darwin-terminal-node-route.mjs'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import {
   isCloudTestRunnerInput,
@@ -38,7 +37,6 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
-  'darwin_terminal_node',
   'layout_oracle',
   'dependency_isolation'
 ]
@@ -559,26 +557,10 @@ export function classifyPrJobs(
   }
 }
 
-const FILE_ROUTED_JOBS = new Map([
-  ['git_compatibility', (file) => matchesPrefix(file, GIT_COMPAT_PREFIXES)],
-  ['xterm_patch_sync', (file) => matchesPrefix(file, XTERM_PREFIXES)],
-  ['shell_contracts', (file) => matchesPrefix(file, SHELL_PREFIXES)],
-  ['orcad_browser', (file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES)],
-  ['cross-version-wire', (file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES)],
-  ['managed_hook_node18', (file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES)],
-  ['package', isLinuxPackagePath],
-  ['package_windows', isWindowsPackagePath],
-  ['layout_oracle', isLayoutOracleSource],
-  ['dependency_isolation', (file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES)],
-  ['darwin_terminal_node', isDarwinTerminalNodeSource]
-])
-
 function jobDetector(job) {
-  const routesFile = FILE_ROUTED_JOBS.get(job)
-  if (routesFile) {
-    return (files) => files.some(routesFile)
-  }
   switch (job) {
+    case 'git_compatibility':
+      return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
     case 'codex_index_heal_contract':
       return (files) =>
         files.some(
@@ -586,9 +568,27 @@ function jobDetector(job) {
             !/^src\/main\/codex\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(file) &&
             matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
         )
+    case 'xterm_patch_sync':
+      return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
+    case 'shell_contracts':
+      return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
+    case 'orcad_browser':
+      return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
     // Handle inside map too: default detector otherwise runs this job on every desktop-relevant PR.
     case 'mobile_web_app':
       return changesMobileWebApp
+    case 'cross-version-wire':
+      return (files) => files.some((file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES))
+    case 'managed_hook_node18':
+      return (files) => files.some((file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES))
+    case 'package':
+      return (files) => files.some(isLinuxPackagePath)
+    case 'package_windows':
+      return (files) => files.some(isWindowsPackagePath)
+    case 'layout_oracle':
+      return (files) => files.some(isLayoutOracleSource)
+    case 'dependency_isolation':
+      return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:
       return () => true
   }

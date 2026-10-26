@@ -164,6 +164,13 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'regenerateConversationName',
     result: { accepted: true }
   },
+  // Save the user's chat name. Clients call it only on a host advertising
+  // `agent-session.structured.rename.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.rename',
+    hostMethod: 'setUserConversationName',
+    result: { name: 'Release notes', applied: true }
+  },
   { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',

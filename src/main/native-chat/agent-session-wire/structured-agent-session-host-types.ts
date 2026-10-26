@@ -10,6 +10,7 @@ import type {
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
@@ -161,6 +162,8 @@ export type StructuredAgentSessionHostDeps = {
   conversationNaming?: StructuredAgentSessionConversationNaming
 }
 
+export type SetUserConversationName = StructuredAgentSessionConversationNaming['setUserName']
+
 /** Published only while the chat is still named forName. */
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
@@ -171,4 +174,11 @@ export type StructuredAgentSessionConversationNaming = {
   failureOutput: (sessionId: string) => string | null
   /** Start or join naming; false if the host has no such chat. */
   regenerate: (sessionId: string) => boolean
+  /** Saves the user's name for the chat; null when the host has no such chat. `name` is what the
+   *  chat is called afterwards, which differs from the request when a legacy alias was refused. */
+  setUserName: (
+    sessionId: string,
+    name: string,
+    write: AgentSessionUserNameWrite
+  ) => Promise<{ name: string | null; applied: boolean } | null>
 }

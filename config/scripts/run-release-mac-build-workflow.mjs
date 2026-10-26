@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 const DEFAULT_API_VERSION = '2026-03-10'
-const DEFAULT_TIMEOUT_MINUTES = 390
+const DEFAULT_TIMEOUT_MINUTES = 90
 const DEFAULT_POLL_SECONDS = 30
 const RUN_DISCOVERY_TIMEOUT_SECONDS = 120
 
@@ -100,11 +100,6 @@ export async function finishReleaseMacBuildWorkflow(options, workflowRunId, deps
   const api = createGitHubApiClient(options, deps)
   const completedRun = await waitForReleaseMacBuildRun(api, workflowRunId, options, deps)
 
-  if (completedRun.status !== 'completed' && deps.observationDeadlineMs != null) {
-    console.log(`Mac release build workflow remains pending: ${completedRun.html_url}`)
-    return completedRun
-  }
-
   if (completedRun.conclusion !== 'success') {
     throw new Error(
       `Mac release build workflow ${completedRun.html_url ?? completedRun.id} concluded ${
@@ -195,12 +190,8 @@ export async function waitForReleaseMacBuildRun(api, workflowRunId, options, dep
       }
       return run
     }
-    const observedAtMs = now()
-    if (observedAtMs > deadlineMs) {
+    if (now() > deadlineMs) {
       break
-    }
-    if (deps.observationDeadlineMs != null && observedAtMs >= deps.observationDeadlineMs) {
-      return run
     }
 
     console.log(
@@ -319,15 +310,6 @@ export async function executeReleaseMacBuildMode(mode, env = process.env, deps =
       output,
       `run_id=${run.id}\nworkflow_sha=${run.head_sha}\nrun_attempt=${run.run_attempt}\nwait_deadline_ms=${deadlineMs}\n`
     )
-    if (env.RELEASE_MAC_BUILD_OBSERVE_MINUTES) {
-      const observationMinutes = readPositiveInteger(env.RELEASE_MAC_BUILD_OBSERVE_MINUTES, 180)
-      return await finishReleaseMacBuildWorkflow(options, run.id, {
-        ...deps,
-        deadlineMs,
-        observationDeadlineMs: now() + observationMinutes * 60 * 1000,
-        expectedIdentity: { id: run.id, headSha: run.head_sha, attempt: run.run_attempt }
-      })
-    }
     return run
   }
   if (mode === 'wait') {

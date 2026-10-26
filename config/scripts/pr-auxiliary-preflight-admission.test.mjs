@@ -383,7 +383,6 @@ function createMobileCiScopeRepository(
   for (const file of [
     'package.json',
     'config/scripts/pr-code-change-scope.mjs',
-    'config/scripts/pr-darwin-terminal-node-route.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',

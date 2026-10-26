@@ -1,7 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { MountAdapter, MountContext } from '../recording-scenario'
+import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'
@@ -14,11 +16,12 @@ const WORKTREES = [
 const UNLOADED_WORKTREES: typeof WORKTREES = []
 
 // Expose the real context provider so recordings observe acquisition/reconnect policy rather than reimplementing useHostClient.
-export const agentHistoryMountExposures: readonly OperationExposure[] = [
-  ['transport/client-context.tsx', '\nexports.RecordingHostClientContext = Ctx;']
-]
+export const agentHistoryMountExposures: readonly OperationExposure[] = [hostClientContextExposure]
 
-function hostClientContext(client: MountContext['client'], effect: MountContext['effect']) {
+function hostClientContext(
+  client: MountContext['client'],
+  effect: MountContext['effect']
+): RpcClientContextValue {
   return {
     acquire: () => client,
     release: () => {},
@@ -55,9 +58,7 @@ export function agentHistoryMountAdapters(
       const useHistory = modules.load<
         typeof import('../../../agent-history/use-mobile-agent-history-state')
       >('mobile/src/agent-history/use-mobile-agent-history-state.ts').useMobileAgentHistoryState
-      const { RecordingHostClientContext } = modules.load<{
-        RecordingHostClientContext: React.Context<unknown>
-      }>('mobile/src/transport/client-context.tsx')
+      const RecordingHostClientContext = loadHostClientContext(modules)
       const context = hostClientContext(client, effect)
       // Use a holder because the component cannot assign an external bare binding.
       const observed: { history?: ReturnType<typeof useHistory> } = {}

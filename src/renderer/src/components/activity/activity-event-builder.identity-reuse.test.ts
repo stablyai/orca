@@ -50,6 +50,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const repo = makeRepo()
     const worktree = makeWorktree()
     return {
+      chatNames: new Map(),
       agentStatusByPaneKey: {
         [PANE_A]: entry(PANE_A),
         [PANE_B]: entry(PANE_B, { state: 'working', stateStartedAt: NOW - 1_000 })
@@ -298,6 +299,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const worktree = makeWorktree()
     const tab = makeTab()
     return buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: args.entries ?? {},
       retainedAgentsByPaneKey: {},
       tabsByWorktree: { [worktree.id]: [tab] },
@@ -422,6 +424,7 @@ import type { Tab } from '../../../../shared/tab-types'
         })
       )
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: entries,
         retainedAgentsByPaneKey: {},
         tabsByWorktree: { [worktree.id]: tabs },
@@ -451,6 +454,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const repo = makeRepo()
     const worktree = makeWorktree()
     return buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: { [PANE_KEY]: args.entry },
       retainedAgentsByPaneKey: {},
       tabsByWorktree: { [worktree.id]: [] },
@@ -539,6 +543,7 @@ import type { Tab } from '../../../../shared/tab-types'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: { ...makeWorkingEntryWithoutHistory(), connectionId: null }
         },
@@ -576,6 +581,7 @@ import type { Tab } from '../../../../shared/tab-types'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: {
             ...makeWorkingEntryWithoutHistory(),

@@ -31,7 +31,7 @@ import { StructuredAgentSessionConversations } from './structured-agent-session-
 import * as resume from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
-import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
+import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -53,9 +53,7 @@ export class StructuredAgentSessionHost {
     onOpened: (sessionId) => this.queued.onOpened(sessionId),
     now: () => this.now()
   })
-  private readonly queued = wireStructuredAgentSessionQueuedMessages(this.sessions, () =>
-    this.mutationContext()
-  )
+  private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(
     this.sessions,
@@ -341,6 +339,8 @@ export class StructuredAgentSessionHost {
   publishConversationName = this.clientDelivery.publishConversationName
   regenerateConversationName = (sessionId: string): boolean =>
     this.deps.conversationNaming?.regenerate(sessionId) ?? false
+  setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
+    this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 
   /** Live-only completion/prompt events; missed events are never replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions

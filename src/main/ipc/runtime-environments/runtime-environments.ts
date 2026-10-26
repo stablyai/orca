@@ -1,3 +1,5 @@
+import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -175,6 +177,8 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     store
   })
   registerRuntimeEnvironmentSubscriptionHandlers({
+    createAssociationObserver: (environmentId, identity) =>
+      createAiVaultAssociationObserver(environmentId, identity, invalidateAiVaultHostLegCache),
     getUserDataPath,
     remoteRuntimeSubscriptions,
     pendingSubscriptions,

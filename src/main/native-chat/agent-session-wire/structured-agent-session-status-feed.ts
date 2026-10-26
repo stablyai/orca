@@ -19,9 +19,10 @@ import {
 } from './structured-agent-session-status-feed-deps'
 import {
   renamedStructuredStatusSummary,
+  retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
-import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
+import { structuredStatusChildWorkFields } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
@@ -48,7 +49,7 @@ export class StructuredAgentSessionStatusFeed {
     this.deps.statusSink?.()
   )
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
-  // Retain closed-chat names for naming jobs and AI Vault.
+  // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
   private readonly projections = new StructuredAgentSessionJournalProjections((sessionId) =>
@@ -61,9 +62,10 @@ export class StructuredAgentSessionStatusFeed {
     this.deps.logger.warn(message, { scope, sessionId, error })
   }
 
+  /** Opens with every session this host has projected, live ones re-read, then only changes. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
-    // Naming must stay observable even without a readable journal.
-    if (this.deps.namingActiveSessionIds) {
+    // Naming completion must be observable even if a held journal cannot be read.
+    if (this.deps.namingActiveSessionIds || this.deps.listRecords) {
       this.emit(subscriber, structuredAgentSessionNamingSnapshot(this.deps))
     }
     // Reproject before registering: existing readers get changes; the new reader gets one snapshot.
@@ -73,7 +75,7 @@ export class StructuredAgentSessionStatusFeed {
     this.subscribers.set(subscriber.id, subscriber)
     this.emit(subscriber, {
       type: 'snapshot',
-      sessions: [...this.published.values()].map(({ summary }) => summary)
+      sessions: retainedStructuredStatusSummaries(this.published.values(), this.deps)
     })
     return () => this.unsubscribe(subscriber.id)
   }
@@ -140,8 +142,9 @@ export class StructuredAgentSessionStatusFeed {
     this.broadcast({ type: 'status', session: retained })
   }
 
+  /** Naming activity is published even when the chat has no retained status row. */
   publishConversationName(sessionId: string): void {
-    this.broadcast(structuredAgentSessionNamingSnapshot(this.deps))
+    this.broadcast(structuredAgentSessionNamingSnapshot(this.deps, sessionId))
     this.publishRecordNotes(sessionId)
   }
 
@@ -241,16 +244,7 @@ export class StructuredAgentSessionStatusFeed {
     sessionId: string,
     provider: StatusFeedSession['params']['provider']
   ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
-    }
+    return structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
   }
 
   /** Publish evidence then refold parent/summary; sink failure must not block other publications. */

@@ -19773,6 +19773,10 @@
           "editors": "Close all editor tabs?",
           "description": "The selected tabs will be closed. Pinned tabs will stay open.",
           "confirm": "Close tabs"
+        },
+        "chatRename": {
+          "empty": "A chat name can't be empty",
+          "failed": "Couldn't rename this chat"
         }
       }
     },

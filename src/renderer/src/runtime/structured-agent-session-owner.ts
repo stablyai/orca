@@ -7,7 +7,14 @@ import {
 import type { Tab } from '../../../shared/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { isTwinWorkspace, namedHostForOwnerRef } from '@/lib/resolve-owner'
+import type { AppState } from '@/store/types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
+import { isTwinWorkspace, namedHostForOwnerRef, resolveOwner } from '@/lib/resolve-owner'
+import { authorityKey } from '../../../shared/host-authority'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -61,6 +68,52 @@ export function structuredAgentSessionOwnerForTab(
   tab: Pick<Tab, 'worktreeId' | 'executionHostId'>
 ): ExecutionHostId | null {
   return tab.executionHostId ?? resolveStructuredAgentSessionOwner(state, tab.worktreeId)
+}
+
+/** Automatic transfer cannot treat a selected twin or the routing default as ownership evidence. */
+export function legacyStructuredChatRenameOwner(
+  state: WorktreeRuntimeOwnerState,
+  tab: Pick<Tab, 'worktreeId' | 'executionHostId'>
+): ExecutionHostId | null {
+  if (tab.executionHostId) {
+    return tab.executionHostId
+  }
+  const owner = resolveOwner(
+    {
+      ...state,
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      restoredRuntimeHostIdByWorkspaceSessionKey: undefined
+    },
+    { workspaceId: tab.worktreeId }
+  )
+  const host = owner.kind === 'resolved' ? parseExecutionHostId(authorityKey(owner.owner)) : null
+  return host && structuredAgentSessionTargetForHost(host.id) ? host.id : null
+}
+
+/** Catalog inputs independent of the user's current workspace selection. */
+export function structuredAgentSessionCatalogOwnerInputs(state: AppState): unknown[] {
+  return [
+    state.repos,
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
+    selectFolderWorkspaces(state),
+    state.projectGroups,
+    state.runtimeEnvironments,
+    state.runtimeEnvironmentCatalogHydrated
+  ]
+}
+
+/** Inputs to the legacy workspace-owner resolver, compared before scanning chat tabs. */
+export function structuredAgentSessionOwnerInputs(state: AppState): unknown[] {
+  return [
+    ...structuredAgentSessionCatalogOwnerInputs(state),
+    state.settings,
+    state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    state.removedRuntimeEnvironmentIds,
+    state.activeWorktreeId,
+    state.activeWorkspaceExecutionHostId
+  ]
 }
 
 /** The host a runtime target serves, for bookkeeping keyed by host. */
