@@ -11,6 +11,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { ACP_REOPEN_FAILED } from './acp-session-reopen-failure'
+import { DEVIN_ACP_DIALECT } from './acp-dialects/devin-dialect'
 import {
   GROK,
   GROK_CONFIG_OPTIONS,
@@ -364,6 +365,32 @@ describe('reattaching a Grok chat the journal holds', () => {
     expect(await notRestoredRows(rig)).toEqual([])
   })
 
+  it('starts a new session in place of a Devin chat that never sent its first prompt', async () => {
+    const rig = await openAcpAdapterRig({
+      spec: { ...GROK, dialect: DEVIN_ACP_DIALECT },
+      launch: {
+        resume: {
+          sessionId: 'never-saved',
+          key: 'acp:devin:never-saved',
+          mayBeUnsaved: () => true,
+          unannouncedLosses: () => []
+        }
+      },
+      initialize: RESUMES,
+      // Recorded from Devin 3000.11.205, which saves a session only on its first prompt.
+      script: (agent) =>
+        agent.on('session/load', (frame) =>
+          agent.fail(frame, -32016, 'Session not found', {
+            'cognition.ai/errorKind': 'session_not_found',
+            'cognition.ai/retryable': false
+          })
+        )
+    })
+    await rig.acquire()
+    expect(rig.started().link).toMatchObject({ supersedesKey: 'acp:devin:never-saved' })
+    expect(await notRestoredRows(rig)).toEqual([])
+  })
+
   it.each([
     ['a saved session', false, -32603, 'session file is corrupt'],
     ['a created session that fails for another reason', true, -32603, 'session file is corrupt'],
@@ -416,6 +443,38 @@ describe('reattaching a Grok chat the journal holds', () => {
     })
     await rig.acquire()
     expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(rig.sent('session/new')).toEqual([])
+  })
+
+  it('fails a reopen while another Devin process holds the session rather than replacing it', async () => {
+    const rig = await openAcpAdapterRig({
+      spec: { ...GROK, dialect: DEVIN_ACP_DIALECT },
+      launch: {
+        resume: {
+          sessionId: 'saved-1',
+          key: 'acp-key-saved-1',
+          mayBeUnsaved: () => false,
+          unannouncedLosses: () => []
+        }
+      },
+      initialize: RESUMES,
+      // Recorded from Devin 3000.11.205 while its terminal held the session.
+      script: (agent) =>
+        agent.on('session/load', (frame) =>
+          agent.fail(
+            frame,
+            -32015,
+            "Session 'saved-1' is already open in another process (PID 79007). Close the other instance before opening it here.",
+            {
+              'cognition.ai/errorKind': 'session_locked',
+              'cognition.ai/retryable': true,
+              'cognition.ai/lockHolderPid': 79007
+            }
+          )
+        )
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toBeDefined()
     expect(rig.sent('session/new')).toEqual([])
   })
 

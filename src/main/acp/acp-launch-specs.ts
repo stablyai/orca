@@ -4,6 +4,12 @@ import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+import { DEVIN_ACP_DIALECT } from './acp-dialects/devin-dialect'
+import {
+  devinAcpAccountBinding,
+  scrubDevinAcpEnvironment
+} from '../devin/devin-acp-account-binding'
+import { DEVIN_SESSION_HISTORY } from '../devin/devin-session-history'
 import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
@@ -251,6 +257,31 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: OMP_SESSION_HISTORY
 }
 
+const DEVIN_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'devin',
+  command: 'devin',
+  args: () => ['acp'],
+  env: {},
+  scrubEnvironment: scrubDevinAcpEnvironment,
+  dialect: DEVIN_ACP_DIALECT,
+  loginCommand: agentSessionSignInFor('devin')?.loginCommand ?? [],
+  // No authMethod: Devin's only sign-in opens a browser.
+  account: devinAcpAccountBinding(),
+  installDirectories: ({ env, homePath }) => [
+    join(homePath, '.local', 'bin'),
+    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, 'devin', 'cli', 'bin')] : [])
+  ],
+  minimumVersions: ['3000.11.205'],
+  // Devin's `ask` and `plan` change what it does, not what it may do unasked.
+  permissionModeConfig: {
+    values: { ask: 'accept-edits', auto: 'smart', 'full-access': 'bypass' }
+  },
+  // A listing session leaves nothing: Devin saves only on the first prompt.
+  modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  transcriptImport: null,
+  sessionHistory: DEVIN_SESSION_HISTORY
+}
+
 // agy conversations are separate from the ACP server's and cannot resume these sessions.
 const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['antigravity'],
@@ -299,6 +330,7 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
+  DEVIN_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC
 ]
 
