@@ -26,7 +26,10 @@ import {
   nativeChatClaudeSignInLabel,
   useNativeChatClaudeSignInView
 } from './native-chat-claude-sign-in'
-import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import {
+  agentSessionFailureDetailText,
+  readWholeAgentSessionFailureFact
+} from '../../../../shared/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
@@ -173,10 +176,8 @@ export function NativeChatNoticeRow({
             sayAgentSessionFailureTranslated
           )
         : agentSessionGoalControlWords(block.text)
-  const detail =
-    failure?.detail?.audience === 'person' && failure.detail.text.trim() !== text.trim()
-      ? failure.detail.text
-      : undefined
+  const failureDetail = agentSessionFailureDetailText(failure)
+  const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null
   const Icon =
     tone === 'warning'

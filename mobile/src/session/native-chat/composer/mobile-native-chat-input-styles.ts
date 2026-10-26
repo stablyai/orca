@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { typography } from '../theme/mobile-theme'
+import { typography } from '../../../theme/mobile-theme'
 import { mobileNativeChatInputBase } from './mobile-native-chat-input-base-styles'
 
 // Native sizes need no zoom guard; the web sibling applies the iOS focus-zoom floor.

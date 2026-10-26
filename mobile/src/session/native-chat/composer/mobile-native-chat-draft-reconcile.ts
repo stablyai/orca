@@ -1,11 +1,14 @@
-import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  isImageRefBlock,
+  type NativeChatMessage
+} from '../../../../../src/shared/native-chat-types'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../src/shared/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat-image-transcript-markers'
 
 export type UnconfirmedSend = {
   draftKey: string

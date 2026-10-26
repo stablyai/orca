@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc-client'
 
 const transport = vi.hoisted(() => ({
   heal: vi.fn<() => Promise<boolean>>(),
@@ -11,10 +11,10 @@ const transport = vi.hoisted(() => ({
   error: vi.fn()
 }))
 
-vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
+vi.mock('../mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: transport.heal
 }))
-vi.mock('./native-chat/mobile-native-chat-send', () => ({
+vi.mock('../mobile-native-chat-send', () => ({
   healMobileNativeChatStaleInput: transport.heal,
   clearMobileNativeChatInput: transport.clearInput,
   sendMobileNativeChatMessageWithOutcome: transport.send,
@@ -25,7 +25,7 @@ vi.mock('./native-chat/mobile-native-chat-send', () => ({
 }))
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
+import { useMobileNativeChatMessageSend } from '../../use-mobile-native-chat-message-send'
 import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 function deferred<T>() {

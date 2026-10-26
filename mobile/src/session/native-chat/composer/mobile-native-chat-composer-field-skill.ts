@@ -1,5 +1,5 @@
 import { StyleSheet, type TextInput, type TextInputProps } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors } from '../../../theme/mobile-theme'
 
 export type MobileNativeChatComposerFieldProps = Omit<
   TextInputProps,

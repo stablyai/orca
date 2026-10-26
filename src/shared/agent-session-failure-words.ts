@@ -4,7 +4,6 @@ import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
   type AgentSessionFailureKind,
-  type ProviderDiagnostic,
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
@@ -14,7 +13,6 @@ import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
-  type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from './agent-session-goal-control-copy'
@@ -27,6 +25,7 @@ import {
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from './sentence-joining'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -70,9 +69,6 @@ export type AgentSessionFailureWordsContext = {
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
 
-/** Person-facing provider text is quoted, but bounded so the sentence stays one. */
-const MAX_QUOTED_DETAIL_CHARS = 512
-
 type Sentence = (
   context: AgentSessionFailureWordsContext,
   fact: AgentSessionFailureFact,
@@ -82,23 +78,6 @@ type Sentence = (
 
 function namingAgent(id: AgentSessionFailureCopyId): Sentence {
   return (context, _fact, _surface, say) => say(id, agent(say, context))
-}
-
-function quotingPersonDetail(
-  say: AgentSessionFailureSay,
-  lead: AgentSessionFailureCopyId,
-  quotedLead: AgentSessionFailureCopyId,
-  detail: ProviderDiagnostic | undefined,
-  values: AgentSessionFailureCopyValues = {}
-): string {
-  const quoted =
-    detail?.audience === 'person'
-      ? detail.text
-          .slice(0, MAX_QUOTED_DETAIL_CHARS)
-          .trim()
-          .replace(/[.\s]+$/, '')
-      : ''
-  return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -186,6 +165,7 @@ const FAILURE_SENTENCES = {
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
   agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
+  fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
   conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>

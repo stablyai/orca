@@ -40,6 +40,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  /** The agent refuses Full access while it runs as root. */
+  'fullAccessAsRoot',
   'conversationOpenInTerminal',
   'conversationOpenElsewhere',
   'providerExited',
@@ -362,4 +364,15 @@ export function withProviderDiagnostic<TError extends Error>(
   diagnostic: ProviderDiagnostic | undefined
 ): TError {
   return diagnostic ? Object.assign(error, { providerDiagnostic: diagnostic }) : error
+}
+
+/** The detail behind a failure's Details: provider words, or a log tail such as a CLI's startup stderr.
+ *  A retry's log is the raw frame its row already shows. */
+export function agentSessionFailureDetailText(
+  fact: AgentSessionFailureFact | undefined
+): string | undefined {
+  const detail = fact?.detail
+  return detail && !(detail.audience === 'log' && fact.kind === 'providerRetrying')
+    ? detail.text
+    : undefined
 }

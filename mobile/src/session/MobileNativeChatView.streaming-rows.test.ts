@@ -174,7 +174,9 @@ vi.mock('./MobileNativeChatImageViewer', () => ({ MobileNativeChatImageViewer: '
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'ActionsSheet'
 }))
-vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
+vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
+  MobileNativeChatComposer: 'Composer'
+}))
 
 const stable = {
   onSend: async () => true,

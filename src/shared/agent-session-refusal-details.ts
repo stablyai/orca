@@ -85,6 +85,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */
     'runtimeNotInstalled',
+    /** The agent refuses Full access while it runs as root. */
+    'fullAccessAsRoot',
     /** A terminal may still be writing the chat's conversation, so its agent did not start. */
     'conversationOpenInTerminal',
     'conversationOpenElsewhere',

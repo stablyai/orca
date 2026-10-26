@@ -1,12 +1,12 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from './MobileNativeChatBackgroundTasks'
+import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
-} from './MobileNativeChatQueuedMessages'
-import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
-import { useMobileNativeChatQueuedEditFocus } from './use-mobile-native-chat-queued-edit-focus'
+} from '../../MobileNativeChatQueuedMessages'
+import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import { useMobileNativeChatQueuedEditFocus } from '../../use-mobile-native-chat-queued-edit-focus'
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode

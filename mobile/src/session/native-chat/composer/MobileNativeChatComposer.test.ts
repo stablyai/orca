@@ -2,9 +2,12 @@ import { createElement, createRef, StrictMode, type ComponentProps, type ReactNo
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard, type TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing } from '../../../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
-import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+import {
+  findAllByHostType,
+  findByHostType
+} from '../../../test-support/react-test-renderer-host-nodes'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -54,8 +57,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../components/mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'BottomDrawer' }))
-vi.mock('../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../../../components/mounted-bottom-drawer', () => ({
+  MountedBottomDrawer: 'BottomDrawer'
+}))
+vi.mock('../../../components/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 

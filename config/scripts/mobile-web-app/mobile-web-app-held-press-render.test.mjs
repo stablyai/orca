@@ -65,7 +65,7 @@ beforeAll(async () => {
     join(routeDir, 'hold-dictation-probe.tsx'),
     holdDictationProbeRouteSource({
       terminalActionsModule: join(sessionDir, 'MobileTerminalInputActions'),
-      chatComposerModule: join(sessionDir, 'MobileNativeChatComposer')
+      chatComposerModule: join(sessionDir, 'native-chat', 'composer', 'MobileNativeChatComposer')
     })
   )
   await writeFile(
