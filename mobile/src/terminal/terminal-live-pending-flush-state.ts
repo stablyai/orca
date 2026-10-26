@@ -96,7 +96,6 @@ export function queueTerminalLiveMirrorSend(
   return queueTerminalLiveSend(state, handle, payload, sender, false)
 }
 
-// A control starts its own batch so it can be skipped when earlier text failed to arrive.
 export function queueTerminalLiveControlSend(
   state: TerminalLivePendingFlushState,
   handle: string,
@@ -119,10 +118,11 @@ function queueTerminalLiveSend(
   })
   const byteLength = getTerminalInputByteLength(payload)
   const pendingTail = state.pendingBatches.at(-1)
+  // A control never joins a text batch, so it can be skipped when that text fails to arrive.
   if (
-    !control &&
     pendingTail?.handle === handle &&
     pendingTail.sender === sender &&
+    (!control || pendingTail.control) &&
     pendingTail.byteLength + byteLength <= TERMINAL_LIVE_INPUT_MAX_BYTES
   ) {
     pendingTail.payload += payload

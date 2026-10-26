@@ -263,9 +263,13 @@ describe('keyboard controls through the live pending-text queue', () => {
     act(() => renderer?.unmount())
   })
 
-  it.each(['terminal switch', 'disconnect and reconnect'] as const)(
-    'drops a queued control after %s even when the original terminal returns',
-    async (change) => {
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, change: 'terminal switch' },
+    { key: 'Ctrl-C', press: pressControl, change: 'disconnect and reconnect' },
+    { key: 'Enter', press: pressEnter, change: 'terminal switch' }
+  ] as const)(
+    'drops a queued $key after $change even when the original terminal returns',
+    async ({ press, change }) => {
       mocks.sent.length = 0
       const release = holdAcknowledgement()
       let renderer: ReactTestRenderer | null = null
@@ -274,7 +278,7 @@ describe('keyboard controls through the live pending-text queue', () => {
       })
       await act(async () => {
         changeLiveText('hello')
-        pressControl()
+        press()
       })
       const changed =
         change === 'terminal switch' ? { ...READY, activeHandle: 'terminal-b' } : OFFLINE

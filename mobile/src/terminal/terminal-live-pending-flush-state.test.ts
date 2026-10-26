@@ -6,6 +6,7 @@ import {
 import {
   cancelTerminalLivePendingFlush,
   createTerminalLivePendingFlushState,
+  queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
@@ -136,6 +137,31 @@ describe('terminal live mirror send queue', () => {
 
     await expect(first).resolves.toBe(false)
     await expect(second).resolves.toBe(true)
+  })
+
+  it('batches repeated controls behind an in-flight send, apart from the text before them', async () => {
+    const state = createTerminalLivePendingFlushState()
+    const writes: string[] = []
+    let release = (): void => {}
+    const sender = (_handle: string, payload: string): Promise<boolean> => {
+      writes.push(payload)
+      return writes.length === 1
+        ? new Promise<boolean>((resolve) => {
+            release = () => resolve(true)
+          })
+        : Promise.resolve(true)
+    }
+    const text = queueTerminalLiveMirrorSend(state, 'terminal-1', 'ls', sender)
+    void queueTerminalLiveMirrorSend(state, 'terminal-1', ' -la', sender)
+    const controls = ['\x1b[A', '\x1b[A', '\r'].map((bytes) =>
+      queueTerminalLiveControlSend(state, 'terminal-1', bytes, sender)
+    )
+
+    release()
+
+    await expect(text).resolves.toBe(true)
+    await expect(Promise.all(controls)).resolves.toEqual([true, true, true])
+    expect(writes).toEqual(['ls', ' -la', '\x1b[A\x1b[A\r'])
   })
 
   it('Given a settled mirror send When it was the newest Then the state resets to null', async () => {

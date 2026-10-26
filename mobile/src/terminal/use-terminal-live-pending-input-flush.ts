@@ -117,7 +117,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       heldLiveInputTextRef.current = step.heldText
       liveInputComposingRef.current = composing
       pendingLiveInputHandleRef.current =
-        step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
+        step.heldText.length > 0 ||
+        step.nextSentText.length > 0 ||
+        pendingLiveInputFlushRef.current.current
+          ? handle
+          : null
 
       clearHeldCommitTimer()
       // Reported preedit must never idle-commit; only unreported heuristic holds may settle on a timer.
@@ -187,13 +191,16 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
 
   // Queue at key time; waiting for the drain would let text typed meanwhile go first.
   const queueLiveInputControl = useCallback(
-    (handle: string, bytes: string): Promise<boolean> =>
-      queueTerminalLiveControlSend(
+    (handle: string, bytes: string): Promise<boolean> => {
+      // Own the queued bytes so a terminal switch retires them even with an empty field.
+      pendingLiveInputHandleRef.current = handle
+      return queueTerminalLiveControlSend(
         pendingLiveInputFlushRef.current,
         handle,
         bytes,
         sendQueuedMirrorPayload
-      ),
+      )
+    },
     [sendQueuedMirrorPayload]
   )
 
@@ -221,7 +228,6 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       heldLiveInputTextRef.current = ''
       liveInputComposingRef.current = undefined
       sentLiveInputTextRef.current = ''
-      pendingLiveInputHandleRef.current = null
       setLiveInputCapture('')
       writeTerminalLiveInputText(liveInputRef, '')
       return sent
