@@ -2,8 +2,9 @@
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveAcpTempRoot } from '../acp/acp-temp-root'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -506,7 +507,12 @@ function postureOf(launch: unknown): Record<string, unknown> {
 
 /** Paths under the run's temp root and this process's own binary read the same on every run. */
 function normalized(value: string): string {
-  return value
+  // A root too long for a socket moves to /tmp/oacp-<uid>/<hash>; it reads as the data-folder root.
+  const inDataRoot = value.replace(
+    /\/tmp\/oacp-\d+\/[0-9a-f]{6}\/(\w+)\/run-\w+/,
+    '<root>/state/acp-temp/$1/run-<random>'
+  )
+  return inDataRoot
     .split(root)
     .join('<root>')
     .split(process.execPath)
@@ -623,6 +629,12 @@ beforeEach(() => {
 
 afterAll(async () => {
   process.env = savedEnv
+  // Antigravity's run folder may live in /tmp/oacp-<uid>/<hash>, outside root.
+  const antigravityRoot = await resolveAcpTempRoot({
+    dataDirectory: join(root, 'state'),
+    agent: 'antigravity'
+  })
+  await rm(dirname(antigravityRoot), { recursive: true, force: true })
   await rm(root, { recursive: true, force: true })
 })
 

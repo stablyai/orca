@@ -3,30 +3,37 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { resolveAcpTempRoot } from './acp-temp-root'
 import type { AcpStructuredConnection, ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const wipes = new Map<string, Promise<void>>()
 
+function removeFolder(path: string, logger?: StructuredAgentSessionLogger): Promise<void> {
+  return rm(path, { recursive: true, force: true }).catch((error: unknown) =>
+    logger?.warn('ACP agent temp folder not removed', { scope: 'acp-temp', path, error })
+  )
+}
+
+function wipeRootOnce(root: string, logger?: StructuredAgentSessionLogger): Promise<void> {
+  let wipe = wipes.get(root)
+  if (!wipe) {
+    wipe = removeFolder(root, logger)
+    wipes.set(root, wipe)
+  }
+  return wipe
+}
+
 /** Clear crash leftovers on first use of a root, then isolate each process in a new folder. */
 export async function acpRunFolder(
   root: string,
   logger?: StructuredAgentSessionLogger
 ): Promise<{ path: string; remove(): Promise<void> }> {
-  const remove = (path: string): Promise<void> =>
-    rm(path, { recursive: true, force: true }).catch((error: unknown) =>
-      logger?.warn('ACP agent temp folder not removed', { scope: 'acp-temp', path, error })
-    )
-  let wipe = wipes.get(root)
-  if (!wipe) {
-    wipe = remove(root)
-    wipes.set(root, wipe)
-  }
-  await wipe
+  await wipeRootOnce(root, logger)
   await mkdir(root, { recursive: true })
   const path = await mkdtemp(join(root, 'run-'))
-  return { path, remove: () => remove(path) }
+  return { path, remove: () => removeFolder(path, logger) }
 }
 
 export async function acpPrivateTempConnect<
@@ -37,10 +44,17 @@ export async function acpPrivateTempConnect<
   },
   closedBeforeSpawn: () => void
 ): Promise<ConnectAcpAgent<Connection>> {
-  const folder = await acpRunFolder(
-    join(deps.dataDirectory, 'acp-temp', deps.spec.agent),
-    deps.logger
-  ).catch((error: unknown) => {
+  const dataRoot = join(deps.dataDirectory, 'acp-temp', deps.spec.agent)
+  const root = await resolveAcpTempRoot({
+    dataDirectory: deps.dataDirectory,
+    agent: deps.spec.agent,
+    logger: deps.logger
+  })
+  if (root !== dataRoot) {
+    // Why: runs before the short root existed left their folders (about 1 GB each) in the data folder.
+    await wipeRootOnce(dataRoot, deps.logger)
+  }
+  const folder = await acpRunFolder(root, deps.logger).catch((error: unknown) => {
     throw new AgentSessionPreSpawnError(error)
   })
   return (launch, options) => {

@@ -85,7 +85,10 @@ async function signInAgainst(
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
   vi.spyOn(browserHelper, 'antigravityBrowserHelperWorks').mockResolvedValue(true)
-  const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
+  // Short on POSIX so the private temp root stays in this folder, not /tmp/oacp-*.
+  const stateDirectory = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
+  )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
   const agent = new AcpScriptedAgent()
@@ -488,7 +491,9 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
 
 it('fails without downloading anything while the server is not installed', async () => {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
-  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
+  const dataDirectory = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
+  )
   folders.push(dataDirectory)
   const connect = vi.fn<ConnectAcpAgent<AcpAgentConnection>>()
   const { flowId } = startAntigravityChatSignIn(

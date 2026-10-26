@@ -150,7 +150,9 @@ export async function openAcpAdapterRig(
       return child
     },
     readProcessStartTime: async () => 1_700_000_000_000,
-    dataDirectory: join(tmpdir(), 'orca-acp-adapter-rig'),
+    // Short on POSIX so a private temp root stays in this folder instead of moving to /tmp/oacp-*.
+    dataDirectory:
+      process.platform === 'win32' ? join(tmpdir(), 'orca-acp-adapter-rig') : '/tmp/oa-rig',
     onDispatchSettledLate: (settlement) => settled.push(settlement),
     mintGeneration: () => 'gen-acp',
     now: () => 5_000,
