@@ -59,6 +59,7 @@ export type RuntimeWorktreePsSummary = {
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
+  priorWorktreeIds?: string[]
   branch: string
   isArchived: boolean
   isMainWorktree: boolean

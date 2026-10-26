@@ -1,13 +1,10 @@
-import {
-  isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
-import type { Worktree } from '../../../../shared/worktree/types'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { isRuntimePathAbsolute, normalizeRuntimePathForComparison } from './cross-platform-path'
+import type { ProjectHostSetupProjection } from './project-host-setup-projection'
+import type { ProjectHostSetup } from './project-types'
+import type { AiVaultScope } from './ai-vault-types'
+import type { Worktree } from './worktree/types'
+import { splitWorktreeIdForFilesystem } from './worktree/id'
+import { toAiVaultProjectKey } from './ai-vault-project-key'
 
 export function deriveAiVaultWorkspaceScopePaths(
   activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,

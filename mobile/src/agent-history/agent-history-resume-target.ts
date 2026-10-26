@@ -12,9 +12,10 @@ import type {
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
-  canResumeInMobileSessionWorktree,
-  resolveMobileAgentHistorySessionWorktree
-} from './agent-history-session-worktree'
+  canJumpToAiVaultSessionWorktree,
+  resolveAiVaultSessionWorktreeInfo,
+  type AiVaultSessionOwnerWorkspace
+} from '../../../src/shared/ai-vault-session-worktree'
 
 /** The host catalog a resume target is resolved against: the same lists desktop reads from its store. */
 export type MobileAiVaultResumeCatalog = FolderHostCatalog<FolderHostRepo & { id: string }>
@@ -60,12 +61,13 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   catalog: MobileAiVaultResumeCatalog
   hostPlatform: NodeJS.Platform | null
 }): MobileAiVaultSessionResumeTarget {
-  const sessionWorktree = resolveMobileAgentHistorySessionWorktree({
+  const sessionWorktree = resolveAiVaultSessionWorktreeInfo({
     session: args.session,
-    worktrees: args.worktrees,
+    repos: args.catalog.repos,
+    worktrees: args.worktrees.map(toAiVaultSessionOwnerWorkspace),
     activeWorktreeId: args.activeWorktreeId
   })
-  const sessionWorktreeId = canResumeInMobileSessionWorktree(sessionWorktree)
+  const sessionWorktreeId = canJumpToAiVaultSessionWorktree(sessionWorktree)
     ? sessionWorktree?.worktreeId
     : null
   const candidateWorktreeIds = [
@@ -118,5 +120,17 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   return {
     status: 'blocked',
     message: mobileAiVaultResumeTargetBlockMessage(blockedStatus ?? 'unknown')
+  }
+}
+
+function toAiVaultSessionOwnerWorkspace(worktree: Worktree): AiVaultSessionOwnerWorkspace {
+  return {
+    id: worktree.worktreeId,
+    path: worktree.path,
+    repoId: worktree.repoId,
+    displayName: worktree.displayName,
+    hostId: worktree.hostId,
+    isArchived: worktree.isArchived,
+    priorWorktreeIds: worktree.priorWorktreeIds
   }
 }

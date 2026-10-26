@@ -35,6 +35,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedPR = { number: meta.linkedPR, state: 'unknown' }
     }
     const lineage = worktree.lineage
+    const priorWorktreeIds = meta?.priorWorktreeIds ?? worktree.priorWorktreeIds
     summaries.set(worktree.id, {
       workspaceKind: 'git',
       worktreeId: worktree.id,
@@ -43,6 +44,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       terminalPlatform: args.platformByRepoId.get(worktree.repoId) ?? process.platform,
       repo: repo?.displayName ?? worktree.repoId,
       path: worktree.path,
+      // Session history follows a renamed or moved workspace to its older paths.
+      ...(priorWorktreeIds?.length ? { priorWorktreeIds } : {}),
       branch: worktree.branch,
       isArchived: worktree.isArchived,
       isMainWorktree: worktree.isMainWorktree,

@@ -362,4 +362,17 @@ describe('mobile AI Vault resume target guards', () => {
     })
     expect(target.status).toBe('blocked')
   })
+
+  it('attaches a session to the workspace on the host that recorded it when paths collide', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:builder', cwd: '/srv/app/src' }),
+      activeWorktreeId: null,
+      worktrees: [
+        worktree({ worktreeId: 'local-app', path: '/srv/app' }),
+        worktree({ worktreeId: 'ssh-app', repoId: 'ssh-repo', path: '/srv/app' })
+      ],
+      repos
+    })
+    expect(target.status === 'ready' ? target.worktreeId : target.message).toBe('ssh-app')
+  })
 })
