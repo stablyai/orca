@@ -223,14 +223,7 @@ function getAiVaultResumeFolderExecutionHostId<R extends FolderHostRepo>(
 function getAiVaultResumeExecutionHostTargetStatus(
   hostId: string | null | undefined
 ): AiVaultResumeTargetStatus {
-  const parsed = parseExecutionHostId(hostId)
-  if (!parsed) {
-    return 'unknown'
-  }
-  if (parsed.kind === 'local') {
-    return 'local'
-  }
-  return parsed.kind
+  return parseExecutionHostId(hostId)?.kind ?? 'unknown'
 }
 
 function mergeAiVaultResumeExecutionHostTargetStatuses(

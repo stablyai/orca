@@ -134,8 +134,7 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
       resolveAiVaultResumeStartupShell({
         state: args.state,
         worktreeId: args.worktreeId,
-        platform,
-        isLocalSession: true
+        platform
       })
   })
 }

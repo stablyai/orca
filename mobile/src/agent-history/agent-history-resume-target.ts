@@ -9,6 +9,7 @@ import type {
   FolderHostCatalog,
   FolderHostRepo
 } from '../../../src/shared/folder-workspace-execution-host'
+import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   canResumeInMobileSessionWorktree,
@@ -38,15 +39,18 @@ function mobileAiVaultResumeTargetBlockMessage(status: AiVaultResumeTargetStatus
   return 'Open a workspace before resuming a session.'
 }
 
-/** The host's terminal platform already reflects the project runtime: native Windows or no WSL proves null; a WSL runtime proves no distro. */
+/** Desktop's namespace rule from what the phone sees: the host's terminal platform already reflects the project runtime. */
 function mobileResumeTargetWslDistro(
   worktree: Worktree,
   hostPlatform: NodeJS.Platform | null
 ): string | null | undefined {
-  if (hostPlatform && hostPlatform !== 'win32') {
+  if (hostPlatform !== 'win32') {
+    return hostPlatform ? null : undefined
+  }
+  if (worktree.terminalPlatform === 'win32') {
     return null
   }
-  return hostPlatform === 'win32' && worktree.terminalPlatform === 'win32' ? null : undefined
+  return parseWslUncPath(worktree.path)?.distro
 }
 
 export function resolveMobileAiVaultSessionResumeTarget(args: {

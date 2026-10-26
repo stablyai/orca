@@ -63,15 +63,13 @@ export function buildMobileAiVaultResumeLaunch(args: {
       commandOverride,
       embedCwd: true
     })
+  const { providerSession, ...launch } = startup
   return {
-    command: startup.command,
-    ...(startup.env ? { env: startup.env } : {}),
-    ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),
-    ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+    ...launch,
     ...(startup.launchConfig && isTuiAgent(args.session.agent)
       ? { launchAgent: args.session.agent }
       : {}),
-    ...(startup.providerSession ? { resumeProviderSession: startup.providerSession } : {})
+    ...(providerSession ? { resumeProviderSession: providerSession } : {})
   }
 }
 
