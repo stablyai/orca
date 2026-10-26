@@ -221,7 +221,7 @@ function getAiVaultResumeFolderExecutionHostId<R extends FolderHostRepo>(
 }
 
 function getAiVaultResumeExecutionHostTargetStatus(
-  hostId: ExecutionHostId | null | undefined
+  hostId: string | null | undefined
 ): AiVaultResumeTargetStatus {
   const parsed = parseExecutionHostId(hostId)
   if (!parsed) {

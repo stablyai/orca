@@ -406,7 +406,9 @@ describe('mobile AI Vault resume target guards', () => {
     const target = resolve({
       session: session({ cwd: 'C:\\repo\\src', filePath: WSL_TRANSCRIPT }),
       activeWorktreeId: 'route-wt',
-      worktrees: [worktree({ worktreeId: 'route-wt', path: 'C:\\repo' })],
+      worktrees: [
+        worktree({ worktreeId: 'route-wt', path: 'C:\\repo', terminalPlatform: 'win32' })
+      ],
       repos,
       hostPlatform: 'win32'
     })
