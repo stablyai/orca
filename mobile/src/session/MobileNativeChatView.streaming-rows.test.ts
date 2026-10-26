@@ -617,7 +617,7 @@ it.each([false, true])(
         name: 'Bash',
         input: {},
         state: 'completed',
-        output: { head, byteLength: 1000, truncated: false }
+        output: { head, byteLength: 1000, digest: 'fixture', truncated: false }
       }
     })
     await act(async () => {
