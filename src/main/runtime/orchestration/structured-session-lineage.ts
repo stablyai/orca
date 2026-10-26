@@ -1,4 +1,8 @@
-/** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
+/**
+ * A structured session's `/clear` lineage, read off the durable session records. `/clear` continues
+ * a chat in a new session; the committed clear on the old record names the session that replaced it.
+ * Derived from published records; nothing is rewritten at a clear.
+ */
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -7,6 +11,7 @@ import { structuredWorkerHostScope } from '../structured-worker-identity'
 export type AgentSessionRecordReader = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   listRecords: () => AgentSessionRecord[]
+  getRecordSnapshot?: () => ReadonlyMap<string, AgentSessionRecord>
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
 }

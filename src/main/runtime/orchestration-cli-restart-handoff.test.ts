@@ -72,10 +72,15 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   const predecessor = 'term_predecessor'
   const predecessorTab = '55555555-5555-4555-8555-555555555555'
   const predecessorLeaf = '66666666-6666-4666-8666-666666666666'
+  const predecessorPane = `${predecessorTab}:${predecessorLeaf}`
+  let predecessorPresence: 'live' | 'exited' = 'live'
   let db = new OrchestrationDb(join(home, 'orchestration.db'))
 
   function runtimeForDatabase() {
-    const { runtime } = fixture.createRuntime(db)
+    const { runtime } = fixture.createRuntime(db, {
+      checkHookAgentPresence: async (pane) =>
+        pane === predecessorPane ? predecessorPresence : 'live'
+    })
     fixture.registerSecondPane(runtime)
     registerBoundPty(runtime, 'pty-predecessor', fixture.WORKTREE_ID, null, {
       tabId: predecessorTab,
@@ -183,6 +188,15 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
     expect(await cli(coord, ['check', '--ack', retainedBatch.deliveryId])).toMatchObject({
       result: { acknowledged: retainedBatch.deliveryId, count: 0 }
     })
+    expect(await cli(worker, ['run-use', '--id', separate], 1)).toMatchObject({
+      error: { code: 'run_ownership_required', data: { effectsApplied: false } }
+    })
+    predecessorPresence = 'exited'
+    expect(await cli(worker, ['run-use', '--id', separate], 1)).toMatchObject({
+      error: { code: 'run_ownership_required', data: { effectsApplied: false } }
+    })
+    await cli(predecessor, ['run-handover', '--id', separate, '--to-task', task])
+    predecessorPresence = 'live'
     expect(await cli(worker, ['run-use', '--id', separate])).toMatchObject({
       result: { run: { id: separate } }
     })

@@ -88,6 +88,13 @@ const CALLER_VERBS: Verb[] = [
     method: 'runCurrent',
     callerParam: 'from'
   },
+  {
+    command: 'run-handover',
+    flags: { id: 'run_1', 'to-task': 'task_1' },
+    callerFlag: 'from',
+    method: 'runHandover',
+    callerParam: 'from'
+  },
   { command: 'check', flags: {}, callerFlag: 'terminal', method: 'check', callerParam: 'terminal' },
   {
     command: 'send',
@@ -586,5 +593,52 @@ describe('which flag names the caller, declared on every spec', () => {
     expect(callMock.mock.calls.flatMap(([, params]) => Object.values(params ?? {}))).toContain(
       'term_sibling'
     )
+  })
+})
+
+describe('every orchestration verb, enumerated', () => {
+  /** Runs every verb once; returns the ones that guessed an implicit terminal. */
+  async function verbsThatGuess(): Promise<string[]> {
+    const guessed: string[] = []
+    for (const command of Object.keys(ORCHESTRATION_HANDLERS)) {
+      const verb = command.replace('orchestration ', '')
+      getTerminalHandleMock.mockClear()
+      callMock.mockClear()
+      await invoke(verb, flagMap(EVERY_REQUIRED_FLAG)).catch(() => undefined)
+      if (getTerminalHandleMock.mock.calls.length > 0) {
+        guessed.push(verb)
+      }
+    }
+    return guessed.sort()
+  }
+
+  it('guesses a terminal for no verb when the session id is present', async () => {
+    // Positive control first: with no identity at all the same harness sees the guess, so an empty
+    // result below is about the id, not a harness that cannot observe a guess.
+    setEnv({})
+    const population = await verbsThatGuess()
+    expect(population).toEqual([
+      'ask',
+      'check',
+      'dispatch',
+      'dispatch-show',
+      'gate-create',
+      'gate-list',
+      'gate-resolve',
+      'reply',
+      'run-create',
+      'run-current',
+      'run-handover',
+      'run-use',
+      'send',
+      'task-create',
+      'task-list',
+      'task-update',
+      'worker-list',
+      'worker-start'
+    ])
+
+    asSessionWithInheritedPane()
+    expect(await verbsThatGuess()).toEqual([])
   })
 })

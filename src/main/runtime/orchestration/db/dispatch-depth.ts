@@ -1,3 +1,4 @@
+import { canonicalOrcaSessionId } from '../canonical-orca-session-id'
 import {
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS,
@@ -55,6 +56,12 @@ export function recordedCreatorIdentity(creator: DispatchCreator): {
 
 /** Self-dispatch is bookkeeping; pre-v37 rows lack creator identity and conservatively count as parents. */
 export function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+  if (row.creator_orca_session_id && row.assignee_orca_session_id) {
+    return (
+      canonicalOrcaSessionId(row.creator_orca_session_id) ===
+      canonicalOrcaSessionId(row.assignee_orca_session_id)
+    )
+  }
   if (row.creator_pane_key && row.assignee_pane_key) {
     return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
   }

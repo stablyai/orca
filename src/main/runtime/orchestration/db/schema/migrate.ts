@@ -13,13 +13,18 @@ import { migrateV39 } from './migrate-v39'
 import { migrateV40 } from './migrate-v40'
 import { DERIVED_DELIVERY_SCHEMA_SQL, migrateV41 } from './migrate-v41'
 import { migrateV42 } from './migrate-v42'
+import { migrateV44 } from './run-authority-schema'
 import { migrateV43 } from './migrate-v43'
 
 // CREATE TABLE IF NOT EXISTS won't alter existing tables; migrate atomically before bumping user_version.
 export function migrate(this: OrchestrationDb): void {
   const storedVersion = this.db.pragma('user_version', { simple: true }) as number
   const current = resolveOrchestrationMigrationStartVersion(this.db, storedVersion, SCHEMA_VERSION)
-  if (current >= SCHEMA_VERSION) {
+  if (
+    current >= SCHEMA_VERSION &&
+    this.hasColumn('run_authority', 'last_process_incarnation') &&
+    this.hasColumn('run_handovers', 'target_caller_key')
+  ) {
     return
   }
 
@@ -42,6 +47,7 @@ export function migrate(this: OrchestrationDb): void {
     migrateV41.call(this, current)
     migrateV42.call(this, current)
     migrateV43.call(this, current)
+    migrateV44.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
     // Recreate derived objects after table rebuilds; existing views would prevent RENAME.
     this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)

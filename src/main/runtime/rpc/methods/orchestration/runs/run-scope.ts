@@ -14,12 +14,9 @@ import {
   type OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDeclaredCallerParty } from '../../../../orchestration/orchestration-party'
-import {
-  findCallerWorkerDispatches,
-  unboundWorkerMessage,
-  workerRunBindingRefusal
-} from '../../../../orchestration/db/runs/worker-run-binding'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { resolveRunActor, type RunActor } from '../../../../orchestration/db/runs/run-actor'
+import { assertActorCanCoordinate } from '../../../../orchestration/db/runs/run-lineage'
+import { resolveRunCallerKey } from './run-caller-key'
 
 export type RunScopeParams = {
   runId?: string
@@ -121,11 +118,7 @@ const COORDINATOR_RUN_REQUIRED =
   'No Run is bound. A coordinator creates one with `orchestration run-create`, or resumes its own with `orchestration run-use --id <run_id>`.'
 
 // Why: a worker is told where its own mail is, never to bind a Run.
-function unboundCallerError(
-  db: OrchestrationDb,
-  caller: OrchestrationCallerIdentity,
-  explicit: RunRow | undefined
-): OrchestrationError {
+function unboundCallerError(actor: RunActor, explicit: RunRow | undefined): OrchestrationError {
   if (explicit) {
     // Why: consumer_fenced, since a reader that lost this Run mid-check must stop, worker or not.
     const holder = mailboxAddressOf(runCoordinatorKey(explicit))
@@ -136,10 +129,12 @@ function unboundCallerError(
         : `This caller does not coordinate Run ${explicit.id}, which has no coordinator now. Nothing changed.`
     )
   }
-  const worked = findCallerWorkerDispatches(db, caller)[0]
+  const worked = actor.kind === 'local' ? actor.dispatch : null
   return new OrchestrationError(
     'run_required',
-    worked ? unboundWorkerMessage(worked) : `${COORDINATOR_RUN_REQUIRED} No effects were applied.`,
+    worked
+      ? `You work Dispatch ${worked.id} in Run ${worked.run_id} and are not bound to a Run. Your mail arrives through plain \`orchestration check\` (no --run); report with \`orchestration send\`. No effects were applied.`
+      : `${COORDINATOR_RUN_REQUIRED} No effects were applied.`,
     orchestrationSkillRecoveryData()
   )
 }
@@ -181,16 +176,15 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
     )
   }
   const current = db.getCurrentRunForCoordinator(caller)
-  // A worker naming its own or ancestor Run needs its Dispatch mailbox, not a binding change.
-  const workerRefusal =
-    explicit && current?.id !== explicit.id
-      ? workerRunBindingRefusal(db, caller, explicit.id, { takeover: false, bind: false })
-      : null
-  if (workerRefusal) {
-    throw workerRefusal
-  }
-  if (!current) {
-    throw unboundCallerError(db, caller, explicit)
+  if (!current || (explicit && current.id !== explicit.id)) {
+    const actor = resolveRunActor(db, resolveRunCallerKey(runtime, caller))
+    // Reading another Run never grants coordination; remote readers retain the ordinary fence.
+    if (explicit && actor.kind === 'local') {
+      assertActorCanCoordinate(db, actor, explicit.id)
+    }
+    if (!current) {
+      throw unboundCallerError(actor, explicit)
+    }
   }
   if (explicit && current.id !== explicit.id) {
     throw new OrchestrationError(

@@ -239,7 +239,9 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
       run: runId
     })
 
-    expect(await as(SESSION_Y, 'orchestration.runUse', { id: runId })).toMatchObject({
+    expect(
+      await as(SESSION_Y, 'orchestration.runUse', { id: runId, takeover: true })
+    ).toMatchObject({
       run: { id: runId }
     })
 
@@ -276,7 +278,7 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
     const deliver = vi.spyOn(h.db, 'getOrCreateRunDelivery')
     const acknowledge = vi.spyOn(h.db, 'acknowledgeRunDelivery')
 
-    await as(SESSION_Y, 'orchestration.runUse', { id: runId })
+    await as(SESSION_Y, 'orchestration.runUse', { id: runId, takeover: true })
 
     const fenced = await waiting
     expect(fenced).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
@@ -534,7 +536,11 @@ describe('a structured worker that names itself by session id', () => {
     // A chat takes the Run over; the worker's addresses stay remembered as a former coordinator's.
     resultOf(
       await h.dispatch(
-        orchestrationRequest('orchestration.runUse', { id: runId }, { sessionId: SESSION_X })
+        orchestrationRequest(
+          'orchestration.runUse',
+          { id: runId, takeover: true },
+          { sessionId: SESSION_X }
+        )
       )
     )
     expect(h.db.getRunMailboxOwnerIdsForHandle(ADDRESS_Y)).toEqual([runId])

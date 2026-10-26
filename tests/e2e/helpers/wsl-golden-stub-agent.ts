@@ -131,6 +131,40 @@ export function removeWslGoldenStubAgent(distro: string, stage: WslGoldenStubAge
   }
 }
 
+export function observeWslAgentDetection(page: Page) {
+  return page.evaluateHandle(() => {
+    const store = window.__store!
+    const transitions: unknown[] = []
+    let last = '',
+      total = 0
+    const capture = () => {
+      const state = store.getState()
+      const snapshot = JSON.stringify({
+        worktreeId: state.activeWorktreeId,
+        ids: state.detectedAgentIds,
+        pending: state.isDetectingAgents,
+        refreshing: state.isRefreshingAgents,
+        contexts: state.localDetectedAgentIdsByContext,
+        pendingContexts: state.isDetectingLocalAgentsByContext,
+        refreshingContexts: state.isRefreshingLocalAgentsByContext
+      })
+      if (snapshot !== last) {
+        last = snapshot
+        total++
+        transitions.push({ atMs: performance.now(), snapshot })
+        transitions.splice(1, transitions.length > 32 ? 1 : 0)
+      }
+    }
+    capture()
+    const unsubscribe = store.subscribe(capture)
+    return () => {
+      unsubscribe()
+      capture()
+      return { transitions, total, stoppedAtMs: performance.now() }
+    }
+  })
+}
+
 /** Retargets project agent detection and terminal spawning to WSL. */
 export async function useWslRuntimeForActiveProject(page: Page, distro: string): Promise<void> {
   await page.evaluate(async (wslDistro) => {

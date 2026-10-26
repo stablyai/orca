@@ -28,9 +28,31 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     }>(client, flags, 'orchestration.runUse', {
       id: getRequiredStringFlag(flags, 'id'),
       from,
+      ...(flags.has('takeover') ? { takeover: true } : {}),
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
+  },
+
+  'orchestration run-handover': async ({ flags, client, cwd, json }) => {
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callOrchestrationMutation<{ runId: string; expiresAt: number }>(
+      client,
+      flags,
+      'orchestration.runHandover',
+      {
+        id: getRequiredStringFlag(flags, 'id'),
+        from,
+        toTask: getOptionalStringFlag(flags, 'to-task'),
+        to: getOptionalStringFlag(flags, 'to')
+      }
+    )
+    printResult(
+      result,
+      json,
+      (r) =>
+        `Hand-over for Run ${r.runId} is available until ${new Date(r.expiresAt).toISOString()}.`
+    )
   },
 
   'orchestration run-current': async ({ flags, client, cwd, json }) => {

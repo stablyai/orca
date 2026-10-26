@@ -58,6 +58,15 @@ export async function countChatFailureOperations(
   })
   const store = await openTestAgentSessionRecordStore(stateDirectory)
   const counts = emptyCounts()
+  const records = store.getRecordSnapshot()
+  const values = records.values.bind(records)
+  vi.spyOn(records, 'values').mockImplementation(function* () {
+    for (const record of values()) {
+      counts.lineageVisits++
+      yield record
+    }
+    return undefined
+  })
   const runningTurns: (string | null)[] = []
   const runningTurn = liveTurn.runningStructuredAgentSessionTurnItemBySequence
   vi.spyOn(liveTurn, 'runningStructuredAgentSessionTurnItemBySequence').mockImplementation(

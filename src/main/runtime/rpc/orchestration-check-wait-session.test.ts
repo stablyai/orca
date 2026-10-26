@@ -74,7 +74,7 @@ describe('check --wait from an agent session', () => {
     await as(SESSION_X, 'orchestration.check', { run: runId, ack: first.deliveryId })
 
     const fenced = await parkTwoWaits()
-    await as(SESSION_Y, 'orchestration.runUse', { id: runId })
+    resultOf(await as(SESSION_Y, 'orchestration.runUse', { id: runId, takeover: true }))
     const fencedError = { ok: false, error: expect.objectContaining({ code: 'consumer_fenced' }) }
     expect(await fenced.settled).toEqual([
       expect.objectContaining(fencedError),
