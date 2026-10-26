@@ -22,6 +22,7 @@ import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { useHostClient } from '../transport/host-client-hooks'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellPageBack } from './use-shell-page-back'
@@ -170,7 +171,11 @@ export function MobileWebShellScreen({
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
     usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; its staged files must belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
+  const { client } = useHostClient(hostId)
+  const serveDeviceVerb = useNativeDeviceVerbs(
+    state.kind === 'ready' ? state.sessionId : null,
+    client
+  )
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))

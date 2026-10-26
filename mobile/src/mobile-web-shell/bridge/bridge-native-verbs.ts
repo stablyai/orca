@@ -26,6 +26,7 @@ export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
 export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
   'native.clipboard.read',
+  'native.file.share',
   'native.media.pick',
   'native.media.read',
   'native.media.release',
@@ -60,6 +61,24 @@ export const clipboardReadParamsSchema = z.strictObject({ mime: mimeSchema })
 export const clipboardWriteResultSchema = z.strictObject({ written: z.boolean() })
 export const clipboardReadResultSchema = z.strictObject({ value: z.string() })
 
+// The shell pulls the bytes itself: a PDF cannot ride a page frame, and the page cannot write a file the OS will open.
+// Keep page params to the file's identity so mixed versions cannot disagree about payload shape.
+export const BRIDGE_FILE_SHARE_PATH_MAX_CHARS = 4096
+export const BRIDGE_FILE_SHARE_TITLE_MAX_CHARS = 255
+const SHARE_MIME_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i
+
+export const fileShareParamsSchema = z.strictObject({
+  worktreeId: z.string().min(1).max(256),
+  relativePath: z.string().min(1).max(BRIDGE_FILE_SHARE_PATH_MAX_CHARS),
+  mimeType: z.string().max(128).regex(SHARE_MIME_PATTERN),
+  title: z.string().min(1).max(BRIDGE_FILE_SHARE_TITLE_MAX_CHARS)
+})
+
+export type BridgeFileShareParams = z.infer<typeof fileShareParamsSchema>
+
+// Sharing is a hand-off, not a download the page can observe past the viewer opening.
+export const fileShareResultSchema = z.strictObject({ shared: z.boolean() })
+
 export const storageReadParamsSchema = z.strictObject({
   key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
 })
@@ -73,6 +92,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.clipboard.read': {
     params: clipboardReadParamsSchema,
     result: clipboardReadResultSchema
+  },
+  'native.file.share': {
+    params: fileShareParamsSchema,
+    result: fileShareResultSchema
   },
   'native.media.pick': {
     params: mediaPickParamsSchema,

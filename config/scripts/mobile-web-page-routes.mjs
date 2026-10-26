@@ -37,7 +37,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // Preview itself uses Markdown externalLink and Source Copy clipboard; explorer inherits same grants for in-document hop.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
+    optionalGrants: ['native.file.share']
   },
   // Hub grants cover Back/review navigation, shared storage, PR link openers and conflict-command Copy.
   // Keep pr/history Redirects native: listing them would leave page session bound to pathname redirect already left; native replaces into hub once.

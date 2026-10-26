@@ -38,7 +38,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       relativePath: options.relativePath,
       mimeType: 'application/pdf'
     }
-    return <MobilePdfHandoff media={media} client={options.client ?? null} title={options.title} />
+    return <MobilePdfHandoff media={media} title={options.title} />
   }
   if (preview.status === 'loading') {
     return (

@@ -200,6 +200,16 @@ describe('MobileFileExplorerPanel', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
   })
 
+  it('opens a PDF row instead of marking it unavailable on mobile', async () => {
+    mockTransport.client = createMockClient({ '': [entry('Quarterly Report.pdf')] })
+
+    const renderer = await renderExplorer()
+
+    expect(renderedText(renderer)).toContain('Quarterly Report.pdf')
+    expect(renderedText(renderer)).not.toContain('Unavailable on mobile')
+    await pressByLabel(renderer, 'Preview file Quarterly Report.pdf')
+  })
+
   it('keeps the loaded tree visible during a transient disconnect', async () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]

@@ -1,149 +1,70 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
-import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import type { MobileFileMedia } from './mobile-file-media'
-import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { useNativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
+import { colors } from '../theme/mobile-theme'
+import type { MobileFileMedia } from './mobile-file-media'
+import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
-type State =
-  | { status: 'idle' }
-  | { status: 'downloading'; bytes: number; total: number }
-  | { status: 'ready'; uri: string }
-  | { status: 'error'; message: string }
+type Props = { media: MobileFileMedia; title: string }
 
-type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
+type State = { status: 'idle' | 'opening' | 'opened' } | { status: 'error' }
 
-export function MobilePdfHandoff(props: Props) {
-  // Downloaded PDF bytes are written to a temporary file before sharing.
-  const { media: propMedia, client, title } = props
-  const { worktreeId, relativePath, mimeType } = propMedia
+export function MobilePdfHandoff({ media, title }: Props) {
+  const verbs = useNativeVerbs()
   const [state, setState] = useState<State>({ status: 'idle' })
-  const [attempt, setAttempt] = useState(0)
 
-  useEffect(() => {
-    if (!client) {
-      return
-    }
-    const controller = new AbortController()
-    const media: MobileFileMedia = { worktreeId, relativePath, mimeType }
-    const parts: Uint8Array[] = []
-    const sink: MobileMediaSink = {
-      append: (bytes) => {
-        parts.push(new Uint8Array(bytes))
-      },
-      finish: () => 'pending',
-      dispose: () => {
-        parts.length = 0
-      }
-    }
-    let fileUri: string | null = null
-    setState({ status: 'downloading', bytes: 0, total: 0 })
-    void (async () => {
-      try {
-        await downloadMobileFileMedia(client, media, sink, controller.signal, (bytes, total) =>
-          setState({ status: 'downloading', bytes, total })
-        )
-        if (controller.signal.aborted) {
-          return
-        }
-        const total = parts.reduce((sum, part) => sum + part.byteLength, 0)
-        const bytes = new Uint8Array(total)
-        let offset = 0
-        for (const part of parts) {
-          bytes.set(part, offset)
-          offset += part.byteLength
-        }
-        parts.length = 0
-        const FileSystem = await import('expo-file-system')
-        if (controller.signal.aborted) {
-          return
-        }
-        const rawName = (relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
-          /[^a-zA-Z0-9._-]/g,
-          '_'
-        )
-        const ext = rawName.toLowerCase().endsWith('.pdf') ? '.pdf' : ''
-        const stem = ext ? rawName.slice(0, -ext.length) : rawName
-        const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        const prefix = `orca-pdf-handoff-${unique}-`
-        const maxStemLength = Math.max(1, 255 - prefix.length - ext.length)
-        const safeName = `${stem.slice(0, maxStemLength)}${ext}`
-        const file = new FileSystem.File(FileSystem.Paths.cache, `${prefix}${safeName}`)
-        file.create({ overwrite: true })
-        file.write(bytes)
-        fileUri = file.uri
-        if (!controller.signal.aborted) {
-          setState({ status: 'ready', uri: fileUri })
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setState({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'Unable to load PDF'
-          })
-        }
-      }
-    })()
-    return () => {
-      controller.abort()
-      sink.dispose()
-      if (fileUri) {
-        try {
-          const FileSystem = require('expo-file-system')
-          new FileSystem.File(fileUri).delete()
-        } catch {
-          // Best effort cleanup.
-        }
-      }
-    }
-  }, [client, worktreeId, relativePath, mimeType, attempt])
-
-  if (!client) {
+  // Older shells have no hand-off verb; say so instead of failing after a download the page cannot finish.
+  if (!verbs.canShareFile) {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>Waiting for desktop...</Text>
+        <Text style={styles.stateText}>Update the Orca app to open PDFs on this device.</Text>
       </View>
     )
   }
-  if (state.status === 'downloading') {
+
+  function openPdf(): void {
+    setState({ status: 'opening' })
+    void verbs
+      .shareFile({
+        worktreeId: media.worktreeId,
+        relativePath: media.relativePath,
+        mimeType: media.mimeType,
+        title
+      })
+      .then(() => setState({ status: 'opened' }))
+      .catch(() => setState({ status: 'error' }))
+  }
+
+  if (state.status === 'error') {
+    return (
+      <MobileLoadErrorState
+        message="This PDF could not be opened. Check the desktop connection and try again."
+        onRetry={openPdf}
+      />
+    )
+  }
+  if (state.status === 'opening') {
     return (
       <View style={styles.state}>
         <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>
-          {state.total
-            ? `Downloading ${formatPreviewByteLength(state.bytes)} of ${formatPreviewByteLength(state.total)}`
-            : 'Loading PDF...'}
-        </Text>
+        <Text style={styles.stateText}>Opening PDF...</Text>
       </View>
     )
   }
-  if (state.status === 'error') {
-    return <MobileLoadErrorState message={state.message} onRetry={() => setAttempt(attempt + 1)} />
-  }
-  if (state.status === 'ready') {
-    return (
-      <View style={styles.state}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => {
-            void (async () => {
-              const Sharing = await import('expo-sharing')
-              await Sharing.shareAsync(state.uri, {
-                mimeType: mimeType,
-                dialogTitle: `Open ${title}`
-              })
-            })()
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Open PDF"
-        >
-          <Text style={styles.stateText}>Open PDF</Text>
-        </Pressable>
-      </View>
-    )
-  }
-  return null
+  return (
+    <View style={styles.state}>
+      {state.status === 'opened' ? (
+        <Text style={styles.stateText}>Opened in your PDF viewer.</Text>
+      ) : null}
+      <Pressable
+        style={styles.pdfOpenButton}
+        onPress={openPdf}
+        accessibilityRole="button"
+        accessibilityLabel="Open PDF"
+      >
+        <Text style={styles.stateText}>Open PDF</Text>
+      </Pressable>
+    </View>
+  )
 }

@@ -49,4 +49,10 @@ describe('mobile-file-preview-navigation', () => {
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'assets/logo.webp' })).toBe(true)
     expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'archive.zip' })).toBe(false)
   })
+
+  it('opens PDFs while leaving a dotfile the shell cannot hand off disabled', () => {
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/report.pdf' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/report.PDF' })).toBe(true)
+    expect(canPreviewMobileFileRow({ kind: 'binary', relativePath: 'docs/.pdf' })).toBe(false)
+  })
 })
