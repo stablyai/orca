@@ -25,6 +25,11 @@ export type SaveClipboardImageAsTempFileArgs = {
   forStructuredChat?: boolean
 }
 
+// The path is typed into terminals, so keep no character a shell would expand.
+function shellInertFileName(name: string): string {
+  return sanitizeAgentSessionAttachmentName(name).replace(/[^\p{L}\p{M}\p{N} ._-]/gu, '_')
+}
+
 export async function saveClipboardImageBufferAsTempFile(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
@@ -43,11 +48,7 @@ export async function saveClipboardImageBufferAsTempFile(
   }
   // A picked file keeps its own name, so the paste gets a folder to stay unique.
   const tempPath = args?.fileName
-    ? path.join(
-        folder,
-        `orca-paste-${randomUUID()}`,
-        sanitizeAgentSessionAttachmentName(args.fileName)
-      )
+    ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
     : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
   if (args?.fileName) {
     await fs.mkdir(path.dirname(tempPath), { recursive: true })

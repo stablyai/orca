@@ -47,15 +47,15 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
-  it('saves a phone-picked file under its own leaf name in a folder of its own', async () => {
+  it('saves a phone-picked file under its shell-inert leaf name in a folder of its own', async () => {
     const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
-      fileName: '../dir/柴静-看见.txt'
+      fileName: '../dir/柴静-看见 $(id).txt'
     })
 
     expect(mkdirMock).toHaveBeenCalledWith(dirname(savedPath), { recursive: true })
     expect(dirname(dirname(savedPath))).toBe(join('/os/temp'))
     expect(basename(dirname(savedPath))).toBe('orca-paste-uuid-1')
-    expect(basename(savedPath)).toBe('柴静-看见.txt')
+    expect(basename(savedPath)).toBe('柴静-看见 __id_.txt')
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from('hello'))
   })
 })
