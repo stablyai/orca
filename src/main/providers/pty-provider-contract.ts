@@ -221,6 +221,8 @@ export type IPtyProvider = {
       cause?: TerminalExitCause
       /** Main ended the session to restart the daemon; the pane stays for its next process. */
       replacedByRestart?: true
+      /** The emitting provider already reported this exit to the runtime through configure().onExit. */
+      runtimeFed?: true
     }) => void
   ): () => void
 }

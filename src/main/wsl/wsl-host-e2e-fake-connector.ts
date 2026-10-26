@@ -86,6 +86,9 @@ export function createFakeWslHostConnector(
     },
     get: (distro) => active.get(key(distro)) ?? null,
     isReachable: async (distro) => active.has(key(distro)),
+    isSettling: () => false,
+    // The fake distro always runs, so a missing server is reachable by a reconnect.
+    reachability: async (distro) => (active.has(key(distro)) ? 'available' : 'unreachable'),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })

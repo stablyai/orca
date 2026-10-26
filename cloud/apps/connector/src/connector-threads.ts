@@ -1,5 +1,5 @@
 import type { CloudDatabase } from '@orca-cloud/cloud-database'
-import type { ConnectorEvent } from '@orca-cloud/connector-contract'
+import type { ConnectorConversation, ConnectorEvent } from '@orca-cloud/connector-contract'
 
 // Linked and snapshot (re)bind a conversation's pane. Moving to another pane forgets the old pane's
 // turn and its verdict; one it left open (working or unverifiable) stays unverifiable, never done.
@@ -11,6 +11,20 @@ const REBIND_PANE = `pane_key = ?,
 const rebindParams = (paneKey: string) => [paneKey, paneKey, paneKey, paneKey]
 // Other events only touch the pane the conversation is bound to.
 const ON_BOUND_PANE = 'host_id = ? AND external_id = ? AND (pane_key IS NULL OR pane_key = ?)'
+
+// Only Slack threads are stored so far; another source's conversation never names one of them.
+export const isStored = (conversation: ConnectorConversation) => conversation.source === 'slack'
+
+// A batch narrowed to stored conversations; a snapshot keeps only its stored entries.
+export function storedEvents(events: ConnectorEvent[]): ConnectorEvent[] {
+  return events.flatMap((event): ConnectorEvent[] => {
+    if (event.kind === 'snapshot') {
+      const conversations = event.conversations.filter((entry) => isStored(entry.conversation))
+      return [{ ...event, conversations }]
+    }
+    return isStored(event.conversation) ? [event] : []
+  })
+}
 
 export type NewThread = {
   externalId: string
@@ -62,7 +76,7 @@ export class ConnectorThreads {
     for (const event of events) {
       if (event.kind === 'snapshot') {
         // Not working never means done: an open turn the snapshot doesn't show working (or doesn't
-        // list; it lists every linked conversation) is unverifiable, and an unlisted one has no prompt.
+        // list; it lists recently active linked conversations) is unverifiable, and an unlisted one has no prompt.
         const notIn = (ids: string[]) =>
           ids.length > 0 ? ` AND external_id NOT IN (${ids.map(() => '?').join(', ')})` : ''
         const working = event.conversations
@@ -90,6 +104,25 @@ export class ConnectorThreads {
               entry.conversation.externalId
             ]
           )
+          // A newer turn than the cloud knows: older starts and ends still queued behind this snapshot
+          // then change nothing. Its own end, if it ended, follows and settles it. The same turn seen
+          // working again (say, an answered approval) is working, but an ended turn never reopens.
+          if (entry.turnId !== undefined) {
+            const resumed = entry.working ? " OR (open_turn_id = ? AND turn_state = 'unverifiable')" : ''
+            await transaction.query(
+              `UPDATE connector_threads SET open_turn_id = ?, turn_state = ?, turn_stop_reason = NULL
+               WHERE ${ON_BOUND_PANE} AND (open_turn_id IS NULL OR open_turn_id < ?${resumed})`,
+              [
+                entry.turnId,
+                entry.working ? 'working' : 'unverifiable',
+                hostId,
+                entry.conversation.externalId,
+                entry.paneKey,
+                entry.turnId,
+                ...(entry.working ? [entry.turnId] : [])
+              ]
+            )
+          }
         }
         continue
       }

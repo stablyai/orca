@@ -1,7 +1,7 @@
 import { View, StyleSheet } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
-import type { ConnectionVerdict } from '../transport/connection-health'
+import { isConnectionDialing, type ConnectionVerdict } from '../transport/connection-health'
 
 const stateColors: Record<ConnectionState, string> = {
   connected: colors.statusGreen,
@@ -16,7 +16,7 @@ export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdi
   if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
     return colors.statusRed
   }
-  if (verdict?.kind === 'warning' || (verdict?.kind === 'normal' && verdict.label.endsWith('…'))) {
+  if (verdict?.kind === 'warning' || (verdict && isConnectionDialing(verdict))) {
     return colors.statusAmber
   }
   return stateColors[state] ?? colors.textMuted

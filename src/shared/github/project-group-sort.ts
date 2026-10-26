@@ -101,7 +101,13 @@ function getFieldValueForGrouping(
     }
   }
   const label = deriveStringValue(value)
-  return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
+  return {
+    key: `raw:${label}`,
+    label,
+    // Why: number labels sort as text (10 before 2, -10 between -1 and -2).
+    orderHint: value.kind === 'number' ? value.number : UNKNOWN_INDEX_SENTINEL - 1,
+    iteration: null
+  }
 }
 
 function labelForEmpty(field: GitHubProjectField): string {
@@ -176,6 +182,9 @@ export function groupRowsByField(
     }
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
+    }
+    if (groupField.dataType === 'NUMBER') {
+      return a[1].orderHint - b[1].orderHint || a[1].label.localeCompare(b[1].label)
     }
     return a[1].label.localeCompare(b[1].label)
   })

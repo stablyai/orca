@@ -16,6 +16,8 @@ import {
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
 import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
+import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
+import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
   // Load managed-server deploy/migration/tunnel dependencies only when connecting.
@@ -59,7 +61,7 @@ export function publishHostServerDecisionFailure(targetId: string, error: unknow
   broadcastSshState(getCurrentMainWindow, targetId, {
     targetId,
     status: isAuthError(failure) ? 'auth-failed' : 'error',
-    error: failure.message,
+    error: isSshSessionStartFailure(failure) ? describeSshConnectFailure(failure) : failure.message,
     reconnectAttempt: 0
   })
 }

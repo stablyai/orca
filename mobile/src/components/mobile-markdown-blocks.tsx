@@ -21,6 +21,7 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MobileSourceCopyButton } from './MobileSourceCopyButton'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -54,13 +55,18 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
   }
   return (
     <View key={key} style={styles.codeBlock}>
-      {node.lang ? <NativeText style={styles.codeLanguage}>{node.lang}</NativeText> : null}
-      <MarkdownText
-        selectable
-        style={[styles.codeText, scaledMarkdownText(styles.codeText, ctx.textScale)]}
-      >
-        {node.value}
-      </MarkdownText>
+      <View style={styles.codeBody}>
+        {node.lang ? <NativeText style={styles.codeLanguage}>{node.lang}</NativeText> : null}
+        <MarkdownText
+          selectable
+          style={[styles.codeText, scaledMarkdownText(styles.codeText, ctx.textScale)]}
+        >
+          {node.value}
+        </MarkdownText>
+      </View>
+      {node.value ? (
+        <MobileSourceCopyButton text={node.value} accessibilityLabel="Copy code" />
+      ) : null}
     </View>
   )
 }

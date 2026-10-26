@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { openCloudNotifications, type CloudDatabase } from '@orca-cloud/cloud-database'
-import { CONNECTOR_PATHS } from '@orca-cloud/connector-contract'
+import { CONNECTOR_PATHS, ConnectorHelloResponseSchema } from '@orca-cloud/connector-contract'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose'
 import pg from 'pg'
 import type { ConnectorConfig } from './config.js'
@@ -33,6 +33,21 @@ export async function cleanupConnectorHarnesses(): Promise<void> {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
 }
 
+// Advisory locks are database-wide and parallel harnesses share one test database, so each scopes
+// its lock keys to its schema; production has one database per service, which does this by itself.
+function schemaLocks(inner: CloudDatabase, schema: string): CloudDatabase {
+  const scoped = (key: string) => `${schema}:${key}`
+  return {
+    dialect: inner.dialect,
+    query: (sql, params) => inner.query(sql, params),
+    transaction: (run) => inner.transaction((transaction) => run(schemaLocks(transaction, schema))),
+    lockQuotaScope: (key) => inner.lockQuotaScope(scoped(key)),
+    tryLockScope: (key) => inner.tryLockScope(scoped(key)),
+    tryLockSharedScope: (key) => inner.tryLockSharedScope(scoped(key)),
+    close: () => inner.close()
+  }
+}
+
 async function openTestDatabase(): Promise<{ database: CloudDatabase; databaseUrl?: string }> {
   if (!testDatabaseUrl) {
     const database = await openInMemoryConnectorDatabase()
@@ -45,7 +60,10 @@ async function openTestDatabase(): Promise<{ database: CloudDatabase; databaseUr
   await admin.query(`CREATE SCHEMA ${schema}`)
   const url = new URL(testDatabaseUrl)
   url.searchParams.set('options', `-c search_path=${schema}`)
-  const database = await openConnectorDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax: 4 })
+  const database = schemaLocks(
+    await openConnectorDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax: 4 }),
+    schema
+  )
   cleanups.push(async () => {
     await database.close()
     await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
@@ -149,12 +167,12 @@ export async function createConnectorHarness(
       machineId,
       expiresAt,
       call,
-      hello: (helloRev = 1) =>
-        call(
+      // The status, and the revision the cloud assigned when it took the hello.
+      hello: async () => {
+        const response = await call(
           CONNECTOR_PATHS.hello,
           {
             v: 1,
-            helloRev,
             contract: 1,
             hostName: 'build-box',
             platform: 'linux',
@@ -163,10 +181,17 @@ export async function createConnectorHarness(
             agents: ['claude'],
             promptKinds: ['approval'],
             features: ['answer', 'cancel'],
+            sources: ['slack'],
             projects: []
           },
           'PUT'
-        ),
+        )
+        const helloRev =
+          response.status === 200
+            ? ConnectorHelloResponseSchema.parse(await response.json()).helloRev
+            : null
+        return { status: response.status, helloRev }
+      },
       poll: async (helloRev = 1) => {
         const response = await call(CONNECTOR_PATHS.poll, { v: 1, helloRev })
         const body: unknown = await response.json()

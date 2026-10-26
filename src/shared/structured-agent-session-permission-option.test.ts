@@ -87,7 +87,7 @@ describe('the permission mode picker', () => {
       {
         value: 'ask',
         label: 'Ask for approval',
-        description: 'Edits files and runs commands in this workspace; asks before anything else'
+        description: "Asks before edits or commands it isn't already allowed to make"
       },
       { value: 'auto', label: 'Approve for me', description: 'Reviews approval requests for you' },
       {

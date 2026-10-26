@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as AppServerSession from './codex-app-server-session'
@@ -9,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   runProcess: vi.fn()
 }))
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return { ...actual, rm: vi.fn(actual.rm) }
+})
 vi.mock('./codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: mocks.runCodexAppServerSession
@@ -264,6 +270,7 @@ describe('deriveCodexHookHashes', () => {
 
     expect(await probeCodexVersion('/bin/codex')).toBe('codex-cli 0.150.1')
     expect(existsSync(versionHome)).toBe(false)
+    expect(rm).toHaveBeenLastCalledWith(versionHome, { recursive: true, force: true })
   })
 })
 

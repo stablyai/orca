@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/agent-session-resume'
 import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import { findTabForAgentEntry } from '../agent-status-pane-key-tab-binding'
+import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function sleepingRecordFromEntry(args: {
   state: AppState

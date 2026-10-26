@@ -41,7 +41,7 @@ export function structuredAgentSessionChildRan(
   return childRuns.get(child)?.reported
 }
 
-/** The current child's descriptive report; never a saved or applied permission. */
+/** The current child's startup report or applied evidence; never saved intent or send authority. */
 export function structuredAgentSessionRuntimePermission(
   child: StructuredAgentSessionProviderChild | undefined
 ): { fence: number; mode: string | null } | null {

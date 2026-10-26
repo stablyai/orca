@@ -1,3 +1,10 @@
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../../shared/agent-session-record'
 /** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +34,7 @@ const SESSION = 'session-1'
 const HANDLE = 'structworker_11111111-1111-4111-a111-111111111111'
 const HOST_SCOPE = { kind: 'local', hostId: 'local' } as const
 
-function installHost(options: { closeThrows?: boolean; lease?: Record<string, unknown> } = {}) {
+function installHost(options: { closeThrows?: boolean; lease?: Partial<AgentSessionLease> } = {}) {
   let attached = true
   const setSessionTabVisibility = vi.fn(async () => {})
   const close = vi.fn(async () => {
@@ -36,29 +43,27 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
     }
     attached = false
   })
-  setStructuredAgentSessionHost({
-    setSessionTabVisibility,
-    close,
-    hasSession: () => attached,
-    hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: options.lease ?? {
-            runtimeKind: 'native',
-            claimStatus: attached ? 'live' : 'released',
-            deathEvidence: attached
-              ? null
-              : { kind: 'exit-observed', detail: 'closed', observedAt: 1 },
-            runtimeFence: 2
-          }
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(setSessionTabVisibility)
+  vi.spyOn(host, 'close').mockImplementation(close)
+  vi.spyOn(host, 'hasSession').mockImplementation(() => attached)
+  vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
+  vi.spyOn(store, 'getConversation').mockImplementation(() =>
+    agentSessionConversationView(
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: SESSION,
+          claimStatus: attached ? 'live' : 'released',
+          deathEvidence: attached
+            ? null
+            : { kind: 'exit-observed', detail: 'closed', observedAt: 1 },
+          runtimeFence: 2,
+          ...options.lease
         })
-      }
-    }
-  } as never)
+      )
+    )
+  )
+  setStructuredAgentSessionHost(host)
   return { close, setSessionTabVisibility }
 }
 
@@ -231,6 +236,9 @@ describe('structured worker release retires the chat tab', () => {
         runtimeFence: 2
       }
     })
+    vi.spyOn(hostTestState().host, 'history').mockRejectedValue(
+      new Error('The closed chat journal is unavailable')
+    )
     const identity = registerIdentity()
     const resource = {
       id: 'resource-2',

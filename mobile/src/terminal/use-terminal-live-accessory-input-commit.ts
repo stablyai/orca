@@ -6,8 +6,6 @@ import {
   terminalLiveAccessoryInputEndsLine
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 
 export type TerminalLiveAccessoryInputCommitResult =
@@ -29,15 +27,15 @@ type TerminalLiveAccessoryInputCommitOptions = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  readonly endLiveInputSessionThenSend: (handle: string, bytes: string) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly onInteraction: () => void
   readonly pendingLiveInputHandleRef: RefObject<string | null>
+  readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
   readonly sentLiveInputTextRef: RefObject<string>
-  readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -46,15 +44,15 @@ export function useTerminalLiveAccessoryInputCommit({
   activeHandle,
   applyLiveInputMirror,
   clearPendingLiveInputCommit,
-  flushPendingLiveInputText,
+  endLiveInputSessionThenSend,
   heldLiveInputTextRef,
   liveInputComposingRef,
   liveInputRef,
   liveInputTerminalHandles,
   onInteraction,
   pendingLiveInputHandleRef,
+  queueLiveInputControl,
   sentLiveInputTextRef,
-  sendLiveTerminalInputRef,
   setLiveInputCapture,
   waitForPendingLiveInputFlush
 }: TerminalLiveAccessoryInputCommitOptions): (
@@ -78,11 +76,11 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
       switch (decision.kind) {
         case 'send-now': {
-          // Order controls behind mirror sends; line-ending controls also end the field session so later input cannot reuse stale text.
-          const ready = terminalLiveAccessoryInputEndsLine(input.bytes)
-            ? await flushPendingLiveInputText(activeHandle)
-            : await waitForPendingLiveInputFlush()
-          return ready ? { kind: 'allow-raw' } : { kind: 'suppress-raw' }
+          // Line-ending controls also end the field session so later input cannot reuse stale text.
+          const sent = await (terminalLiveAccessoryInputEndsLine(input.bytes)
+            ? endLiveInputSessionThenSend(activeHandle, input.bytes)
+            : queueLiveInputControl(activeHandle, input.bytes))
+          return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
@@ -101,10 +99,7 @@ export function useTerminalLiveAccessoryInputCommit({
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
         case 'commit-held-then-send': {
-          const sent = await sendTerminalLiveControlAfterPendingFlush(
-            () => flushPendingLiveInputText(activeHandle),
-            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+          const sent = await endLiveInputSessionThenSend(activeHandle, decision.bytes)
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
         default:
@@ -116,15 +111,15 @@ export function useTerminalLiveAccessoryInputCommit({
       activeHandle,
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
-      flushPendingLiveInputText,
+      endLiveInputSessionThenSend,
       heldLiveInputTextRef,
       liveInputComposingRef,
       liveInputRef,
       liveInputTerminalHandles,
       onInteraction,
       pendingLiveInputHandleRef,
+      queueLiveInputControl,
       sentLiveInputTextRef,
-      sendLiveTerminalInputRef,
       setLiveInputCapture,
       waitForPendingLiveInputFlush
     ]

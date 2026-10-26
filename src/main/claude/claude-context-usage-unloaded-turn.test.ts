@@ -1,4 +1,8 @@
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -92,6 +96,10 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
     child: { fence: 1, generation: 'generation-1' },
     params: { provider: 'claude' }
   }
+  const record = {
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 1 })),
+    options: { model: 'opus' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
@@ -100,12 +108,8 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
       },
       agents,
       store: {
-        getRecord: () => ({
-          ...agentSessionRecordFixture(),
-          sessionId: SESSION,
-          provider: 'claude',
-          options: { model: 'opus' }
-        })
+        requireWritableRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
       }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),

@@ -1,6 +1,11 @@
+import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session-surface-tab-id'
+import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import type { AgentSessionStoreState } from '../agent-session-store-state'
+import {
+  hasAgentSessionConversation,
+  type AgentSessionStoreState
+} from '../agent-session-store-state'
 
 /** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
 export class AgentSessionTabTable {
@@ -76,7 +81,9 @@ export class AgentSessionTabTable {
 }
 
 export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
-  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) => state.records.has(sessionId))
+  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+    hasAgentSessionConversation(state, sessionId)
+  )
 }
 
 export function agentSessionVisibleTabIndex(state: AgentSessionStoreState): {
@@ -92,7 +99,7 @@ export function setAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string
 ): void {
-  if (visible && !state.records.has(sessionId)) {
+  if (visible && !hasAgentSessionConversation(state, sessionId)) {
     throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }
   state.sessionTabs ??= new AgentSessionTabTable()
@@ -108,10 +115,29 @@ export function showAgentSessionTabs(
   sessionIds: readonly string[]
 ): void {
   for (const sessionId of sessionIds) {
-    if (state.records.has(sessionId)) {
+    if (hasAgentSessionConversation(state, sessionId)) {
       setAgentSessionTabVisibility(state, sessionId, true)
     }
   }
 }
 
 export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
+
+/** Check tab-id conflicts before spawn; claim only on publication so failed creates leave no restorable tab. */
+export function assertReservedTabUnheld(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  if (request.surfaceTabId === undefined) {
+    return
+  }
+  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
+  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
+  if (holder !== undefined && holder !== request.sessionId) {
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
+  }
+}

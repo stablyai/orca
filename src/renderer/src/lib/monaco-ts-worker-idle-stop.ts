@@ -3,7 +3,8 @@ export const TS_WORKER_IDLE_STOP_MS = 60_000
 
 const TS_LANGUAGE_IDS = new Set(['typescript', 'javascript'])
 
-type ModelEvent = (listener: () => void) => { dispose(): void }
+type Model = { getLanguageId(): string }
+type ModelEvent<Event> = (listener: (event: Event) => void) => { dispose(): void }
 type LanguageDefaults<Options> = {
   getCompilerOptions(): Options
   setCompilerOptions(options: Options): void
@@ -11,9 +12,9 @@ type LanguageDefaults<Options> = {
 /** The slice of the monaco namespace this reads; the real namespace satisfies it structurally. */
 export type MonacoTsWorkerHost<Options> = {
   editor: {
-    getModels(): readonly { getLanguageId(): string }[]
-    onWillDisposeModel: ModelEvent
-    onDidChangeModelLanguage: ModelEvent
+    getModels(): readonly Model[]
+    onWillDisposeModel: ModelEvent<Model>
+    onDidChangeModelLanguage: ModelEvent<{ model: Model; oldLanguage: string }>
   }
   typescript: {
     typescriptDefaults: LanguageDefaults<Options>
@@ -49,8 +50,16 @@ export function installMonacoTsWorkerIdleStop<Options>(
   }
 
   const subscriptions = [
-    monaco.editor.onWillDisposeModel(schedule),
-    monaco.editor.onDidChangeModelLanguage(schedule)
+    monaco.editor.onWillDisposeModel((model) => {
+      if (TS_LANGUAGE_IDS.has(model.getLanguageId())) {
+        schedule()
+      }
+    }),
+    monaco.editor.onDidChangeModelLanguage(({ model, oldLanguage }) => {
+      if (TS_LANGUAGE_IDS.has(oldLanguage) && !TS_LANGUAGE_IDS.has(model.getLanguageId())) {
+        schedule()
+      }
+    })
   ]
   return () => {
     if (timer !== null) {

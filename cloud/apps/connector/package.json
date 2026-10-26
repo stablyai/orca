@@ -9,6 +9,7 @@
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
+    "slack-operator": "node dist/slack-operator-cli.js",
     "pretest": "pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/push-contract build && pnpm --filter @orca-cloud/connector-contract build && pnpm --filter @orca-cloud/cloud-database build",
     "start": "node dist/index.js",
     "test": "vitest run",

@@ -10,7 +10,7 @@ import {
   findAgentPaneWorktreeId,
   findTabForAgentEntry,
   isAgentCompletionState
-} from '../agent-status-pane-key-tab-binding'
+} from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { liveResumeRecord } from '../../../../../shared/agent-resume-record-from-status'
 import { agentMainAgentVerdict } from '../../../../../shared/agent-main-agent-verdict'

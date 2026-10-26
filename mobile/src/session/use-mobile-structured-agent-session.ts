@@ -191,6 +191,7 @@ export function useMobileStructuredAgentSession(
     hold: sends.hold,
     commandPending: commandPendingRef,
     controller: sendController,
+    sessionCommands: args.sessionCommands,
     onSendError,
     sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined
   })

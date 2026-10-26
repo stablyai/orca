@@ -80,23 +80,37 @@ function unitsOf(
   return lines.length > 0 ? lines : [shown[0] ?? self]
 }
 
+// Binary-search ordered row bottoms to avoid measuring thousands of offscreen rows.
+function firstRowEndingBelow(rows: readonly { node: Tagged }[], y: number): number {
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    if (rows[middle]!.node.getBoundingClientRect().bottom <= y) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+  return low
+}
+
+// The nearest row wholly more than `distance` above the view; it ends at or above that line.
+export function mobileNativeChatRowAbove(
+  scroller: MobileNativeChatScrollNode,
+  distance: number
+): string | undefined {
+  const rows = tagged(scroller, ROW)
+  return rows[firstRowEndingBelow(rows, scroller.getBoundingClientRect().top - distance) - 1]?.id
+}
+
 export function mobileNativeChatReadingPlace(
   scroller: MobileNativeChatScrollNode,
   { placement }: Keys
 ): MobileNativeChatReadingUnit[] {
   const view = scroller.getBoundingClientRect()
   const rows = tagged(scroller, ROW)
-  // Binary-search ordered row bottoms to avoid measuring thousands of offscreen rows.
-  let low = 0
-  let high = rows.length
-  while (low < high) {
-    const middle = low + Math.floor((high - low) / 2)
-    if (rows[middle]!.node.getBoundingClientRect().bottom <= view.top) {
-      low = middle + 1
-    } else {
-      high = middle
-    }
-  }
+  const low = firstRowEndingBelow(rows, view.top)
   let end = low
   while (end < rows.length && rows[end]!.node.getBoundingClientRect().top < view.bottom) {
     end += 1

@@ -42,6 +42,8 @@ Structured chat tabs have no in-place terminal view; use **Continue with Termina
 
 A terminal-backed chat is a view over a running terminal agent, so switching it does not create a new session. Use the pane header's **Show terminal** button, or **Continue with Terminal Agent** in its tab menu, to return to the terminal. Right-clicking inside a supported terminal pane offers **Continue in Chat UI**, which shows that same terminal session as a transcript instead of creating a structured chat.
 
+You can also switch the same terminal-backed session with **Switch between Chat UI and terminal** in **Settings → Shortcuts** (`Cmd+Shift+J` by default on macOS, `Ctrl+Shift+J` on Windows/Linux). On Windows/Linux, **Switch worktree** takes precedence when it uses the same chord. Remap either shortcut to remove the overlap, or use the terminal-first shortcut policy while terminal input is focused. Terminal-first does not free the chord in native-chat input.
+
 ## Composer
 
 - Type a message and send (or stop a working turn). Attach files/images when the host supports it. Unsent draft text and attachments stay with the pane across disconnect/reconnect when the host can restore them. A settled transcript also stays on screen while the same session reconnects, instead of blanking until the fresh load finishes (desktop and mobile share that retention).

@@ -55,6 +55,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     router: {
       accountHome: home,
       userConfigDir: () => join(root, 'personal'),
+      systemDefaultHome: () => join(root, 'personal'),
       copiedLoginIntoSystemDefault: () => existsSync(join(root, 'claude-runtime-auth')),
       coveredBySystemDefault: (id: string) => covered.has(id)
     },
@@ -142,10 +143,14 @@ describe('ClaudeAccountService', () => {
     mkdirSync(join(f.root, 'personal'))
     writeFileSync(
       join(f.root, 'personal', '.claude.json'),
-      JSON.stringify({ oauthAccount: { emailAddress: 'me@example.test' } })
+      JSON.stringify({
+        oauthAccount: { emailAddress: 'me@example.test', organizationUuid: 'me-org' }
+      })
     )
     expect(f.service.listAccounts()).toMatchObject({
-      systemDefaultEmail: 'me@example.test'
+      systemDefaultEmail: 'me@example.test',
+      systemDefaultOrganizationUuid: 'me-org',
+      systemDefaultHome: join(f.root, 'personal')
     })
     expect(f.service.listAccounts()).not.toHaveProperty('userClaudeConfigDir')
     expect(f.service.listAccounts().systemDefaultMayBeCopied).toBeUndefined()

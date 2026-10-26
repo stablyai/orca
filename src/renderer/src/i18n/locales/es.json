@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "updateRequired": "Esta versión de OpenCode no puede iniciarse de forma segura con el modelo elegido. Actualiza OpenCode a una versión compatible u omite la selección de modelo.",
+      "invalidConfig": "OpenCode no pudo aplicar este modelo a la configuración de inicio. Revisa la configuración de inicio de OpenCode y vuelve a intentarlo, u omite la selección de modelo.",
+      "unsupportedLaunch": "OpenCode no puede aplicar este modelo a este inicio. Abre un terminal local nuevo con argumentos de inicio compatibles u omite la selección de modelo."
+    }
+  },
   "app": {
     "saving": {
       "delayedTitle": "El almacenamiento del perfil está tardando más de lo habitual",
@@ -1487,7 +1494,6 @@
         "aba792c8b3": "No se pudo hacer merge del pull request",
         "dbe5e2448e": "Pull request mergeado",
         "a27ee5ca1a": "Esto actualizará el pull request en GitHub.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "e9b7cb7d17": "No se pudo {{value0}} PR",
         "bd3b4492a0": "Pull request reabierto",
         "9f88657c4e": "Pull request cerrado",
@@ -1933,6 +1939,16 @@
         "createWorktree": "Crear worktree",
         "createWorkspace": "Crear espacio de trabajo"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "¿Cerrar PR #{{number}}?",
+        "mergeLabel": "Crear commit de merge",
+        "mergeTitle": "¿Hacer merge de PR #{{number}} con un commit de merge?",
+        "rebaseLabel": "Rebase y merge",
+        "rebaseTitle": "¿Hacer rebase y merge de PR #{{number}}?",
+        "reopenTitle": "¿Reabrir PR #{{number}}?",
+        "squashLabel": "Squash y merge",
+        "squashTitle": "¿Hacer squash y merge de PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "No se pudo solicitar el revisor",
         "3450247584": "Comentario",
@@ -2002,7 +2018,6 @@
         "aae645d36d": "No se pudo hacer merge del pull request",
         "c57873d721": "Pull request mergeado",
         "a63b3c159c": "Esto actualizará el pull request en GitHub.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "710e47aa06": "Pull request reabierto",
         "7aa3b5f706": "Pull request cerrado",
         "3d77438c92": "Esto reabrirá el pull request en GitHub.",
@@ -2331,7 +2346,6 @@
         "88f478cdef": "No se pudo hacer merge del pull request",
         "a161925adc": "Pull request mergeado",
         "0506a78337": "Esto actualizará el pull request en GitHub.",
-        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "995dd6af9b": "Abrir checks del PR",
         "8a22eb3f7b": "No hay revisores que coincidan.",
         "67755a83a1": "Todos los demás",
@@ -12845,6 +12859,8 @@
           "behindMigrating": "Ejecuta el servidor de Orca, que se actualizará cuando termine el traslado de sus proyectos.",
           "behindCheckFailed": "Ejecuta el servidor de Orca; Orca no pudo comprobar si está por detrás de esta app.",
           "refusedBlockedReason": "Orca aún no está configurado en este host. {{reason}}",
+          "refusedLeaveBehind": "Algunos elementos guardados de este host no se pueden mover a su servidor de Orca: {{items}}. «Mover de todos modos» conecta el host y los conserva en este equipo.",
+          "refusedLeaveBehindUnnamed": "Algunos elementos guardados de este host no se pueden mover a su servidor de Orca. «Mover de todos modos» conecta el host y los conserva en este equipo.",
           "runtimeNoexec": "Este host no permite ejecutar programas desde ~/.orca-remote, por lo que Orca no puede iniciar su servidor allí. Esto normalmente significa que la carpeta de inicio está montada con noexec. Pídale al administrador del host que permita la ejecución de programas allí y luego conéctese nuevamente.",
           "setupContactLost": "Orca perdió contacto con este host mientras configuraba su servidor. No se detuvo nada en el host. Conéctese nuevamente para continuar."
         },
@@ -13128,6 +13144,16 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS no mostró la notificación",
+              "macFailureDescription": "Activa Permitir notificaciones para Orca en Ajustes del Sistema.",
+              "windowsFailureTitle": "Windows no mostró la notificación",
+              "windowsFailureDescription": "Activa las notificaciones para Orca en Configuración de Windows."
+            }
+          }
         }
       },
       "right": {
@@ -15688,6 +15714,9 @@
             "0d6efe9cf4": "Recomendado en macOS cuando los proyectos o worktrees están en carpetas protegidas.",
             "dac08ec03e": "Abriendo...",
             "6e3d62b816": "Abrir Acceso total al disco"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Vuelve a abrirlo cuando quieras desde Ayuda > Explorar Orca."
           }
         },
         "tips": {
@@ -15714,7 +15743,8 @@
             "53905bd076": "Vista previa de desarrollo: abriendo la terminal de configuración de skills.",
             "1da82af45b": "Orca CLI necesita atención",
             "ce13a742d0": "`orca` registrado en PATH.",
-            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI."
+            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI.",
+            "cliInstallFailed": "No se pudo instalar la CLI de Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Crear worktree \"{{value0}}\"",
@@ -16719,6 +16749,17 @@
           },
           "copy": {
             "copyFailed": "No se pudieron copiar los detalles del informe de fallo."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Informar de un fallo",
+            "uiErrorTitle": "Orca encontró un error de interfaz recuperable",
+            "closedTitle": "Orca se cerró inesperadamente",
+            "reportDescription": "Envía un informe de fallo que protege tu privacidad. Cuando están disponibles, se incluyen registros de diagnóstico recientes sin datos sensibles.",
+            "uiErrorDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender la parte de la interfaz que falló.",
+            "closedDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender qué pasó.",
+            "reportNotesPlaceholder": "Opcional: ¿qué pasó?",
+            "uiErrorNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de este error de interfaz?",
+            "closedNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de que Orca se cerrara?"
           }
         }
       },
@@ -18902,7 +18943,6 @@
         "permissions": "Permisos",
         "permissionAsk": "Pedir aprobación",
         "permissionAskDescription": "Pregunta antes de ediciones y comandos que tu configuración no permite",
-        "permissionAskCodexDescription": "Edita archivos y ejecuta comandos en este espacio de trabajo; pregunta antes de cualquier otra cosa",
         "permissionAskSharedDescription": "Pregunta antes de ediciones o comandos que aún no tiene permitidos",
         "permissionAcceptEdits": "Aceptar ediciones",
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
@@ -20467,7 +20507,6 @@
       "signInLinkCopied": "Enlace de inicio de sesión copiado. Ábrelo en una ventana privada para iniciar sesión con otra cuenta.",
       "signInLinkCopyFailed": "No se pudo copiar el enlace.",
       "switchSessions": {
-        "selectAll": "Seleccionar todo",
         "busy": "Trabajando",
         "idle": "Inactivo",
         "keyword": {
@@ -20481,19 +20520,29 @@
         "restartOne": "Reiniciar sesión",
         "title": "Cambiado a {{account}}",
         "keep": "Mantener como está",
-        "selectAllSessions": "Seleccionar todas las sesiones",
         "restartOther": "Reiniciar {{count}} sesiones",
         "listLabel": "Sesiones de Claude que se reiniciarán",
-        "selectedCount": "{{selected}} de {{total}} seleccionadas",
         "dontAskAgainHint": "Puede desactivar esto en Configuración → Cuentas de proveedores de IA.",
-        "selectWorkspace": "Seleccionar todas las sesiones en {{workspace}}",
         "session": "Sesión de Claude",
         "settingKeep": "Nunca reiniciar",
         "settingRestart": "Reiniciar siempre",
         "settingTitle": "Cuando cambias de cuenta mientras Claude se está ejecutando",
         "settingDescription": "El reinicio continúa con cada conversación en ejecución en la nueva cuenta.",
         "restartingOther": "Reiniciando {{count}} sesiones de Claude con {{account}}",
-        "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}"
+        "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}",
+        "groupOnAccount": "En ejecución con {{account}}",
+        "groupElsewhere": "No está con {{account}}",
+        "groupCantMove": "No se pueden mover",
+        "selectGroup": "Seleccionar todas las sesiones de {{group}}",
+        "reasonWsl": "Terminal de WSL",
+        "reasonOwnFolder": "Usa tu propia carpeta de Claude",
+        "reasonUnknownAccount": "Cuenta desconocida",
+        "reasonNoSession": "No se puede reanudar",
+        "reviewBodyOne": "Otra sesión de Claude no se movió a {{next}}.",
+        "reviewBodyOther": "Otras {{count}} sesiones de Claude no se movieron a {{next}}.",
+        "notMovedOne": "Otra sesión no se movió.",
+        "notMovedOther": "Otras {{count}} sesiones no se movieron.",
+        "review": "Revisar"
       }
     },
     "hostSignIn": {

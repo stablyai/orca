@@ -92,15 +92,7 @@ describe('local worktree filesystem runtime access', () => {
       await removeLocalWorktreePath(longPath)
 
       expect(toHostRemovalPath(longPath)).toBe(`\\\\?\\${longPath}`)
-      expect(rmMock).toHaveBeenCalledWith(
-        `\\\\?\\${longPath}`,
-        expect.objectContaining({
-          recursive: true,
-          force: true,
-          maxRetries: expect.any(Number),
-          retryDelay: expect.any(Number)
-        })
-      )
+      expect(rmMock).toHaveBeenCalledWith(`\\\\?\\${longPath}`, { recursive: true, force: true })
     })
   })
 
@@ -125,7 +117,7 @@ describe('local worktree filesystem runtime access', () => {
     })
   })
 
-  it('retries transient host removal failures on Windows', async () => {
+  it('retries a transient Windows lock as a whole pass, never per entry', async () => {
     vi.useFakeTimers()
     await withPlatform('win32', async () => {
       const error = Object.assign(new Error('Directory not empty'), { code: 'ENOTEMPTY' })
@@ -135,27 +127,34 @@ describe('local worktree filesystem runtime access', () => {
       await vi.advanceTimersByTimeAsync(250)
 
       await expect(removal).resolves.toBeUndefined()
-      expect(rmMock).toHaveBeenCalledTimes(2)
-      expect(rmMock).toHaveBeenNthCalledWith(
-        1,
-        toHostRemovalPath('C:\\repo\\feature'),
-        expect.objectContaining({
-          recursive: true,
-          force: true,
-          maxRetries: expect.any(Number),
-          retryDelay: expect.any(Number)
+      // Async rm's maxRetries multiplies per directory level when a file stays open.
+      expect(rmMock.mock.calls).toEqual([
+        [toHostRemovalPath('C:\\repo\\feature'), { recursive: true, force: true }],
+        [toHostRemovalPath('C:\\repo\\feature'), { recursive: true, force: true }]
+      ])
+    })
+  })
+
+  it('names the file another program holds open once the retries run out', async () => {
+    vi.useFakeTimers()
+    await withPlatform('win32', async () => {
+      const held = toHostRemovalPath('C:\\repo\\feature\\profile\\lockfile')
+      rmMock.mockRejectedValue(
+        Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${held}'`), {
+          code: 'EBUSY',
+          path: held
         })
       )
-      expect(rmMock).toHaveBeenNthCalledWith(
-        2,
-        toHostRemovalPath('C:\\repo\\feature'),
-        expect.objectContaining({
-          recursive: true,
-          force: true,
-          maxRetries: expect.any(Number),
-          retryDelay: expect.any(Number)
-        })
-      )
+
+      const removal = removeLocalWorktreePath('C:\\repo\\feature').catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(3_750)
+
+      expect(await removal).toMatchObject({
+        code: 'EBUSY',
+        message:
+          'C:\\repo\\feature\\profile\\lockfile is open in another program. Close that program and delete again.'
+      })
+      expect(rmMock).toHaveBeenCalledTimes(5)
     })
   })
 

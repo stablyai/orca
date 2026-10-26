@@ -112,7 +112,8 @@ export async function resolveCurrentWorktreeSelection(
   const selection = selectEnclosingWorktreeSelectionOnHost(
     worktrees.result.worktrees,
     cwd,
-    getCallerExecutionHostId()
+    getCallerExecutionHostId(),
+    process.env.ORCA_WORKTREE_ID
   )
   if (!selection) {
     throw new RuntimeClientError(

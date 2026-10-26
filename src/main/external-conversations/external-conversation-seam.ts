@@ -150,6 +150,11 @@ export class ExternalConversationSeam {
     )
   }
 
+  /** What an earlier process's received delivery came to, from its receipt; never runs it again. */
+  recorded(key: ConversationKey, deliveryId: string): Promise<Delivery | null> {
+    return this.deps.receipts.recorded(key, deliveryId)
+  }
+
   /** A snapshot of every linked conversation first, then its events; returns the release. */
   watch(host: ExternalConversationHost, listener: ConversationWatchListener): () => void {
     if (this.abort.signal.aborted) {

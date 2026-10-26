@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "updateRequired": "このバージョンの OpenCode では、選択したモデルで安全に起動できません。OpenCode を対応バージョンに更新するか、モデルの指定を省略してください。",
+      "invalidConfig": "OpenCode は選択したモデルを起動設定に適用できませんでした。OpenCode の起動設定を確認して再試行するか、モデルの指定を省略してください。",
+      "unsupportedLaunch": "OpenCode はこの起動に選択したモデルを適用できません。対応する起動引数で新しいローカルターミナルを開くか、モデルの指定を省略してください。"
+    }
+  },
   "app": {
     "saving": {
       "delayedTitle": "プロファイルのストレージ処理に通常より時間がかかっています",
@@ -1472,7 +1479,6 @@
         "aba792c8b3": "PR のマージに失敗しました",
         "dbe5e2448e": "PR がマージされました",
         "a27ee5ca1a": "これにより、GitHub 上の PR が更新されます。",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "e9b7cb7d17": "{{value0}} PR に失敗しました",
         "bd3b4492a0": "PR が再オープンされました",
         "9f88657c4e": "PR がクローズされました",
@@ -1918,6 +1924,16 @@
         "createWorktree": "ワークツリーを作成する",
         "createWorkspace": "ワークスペースを作成"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "PR #{{number}} を閉じますか？",
+        "mergeLabel": "マージコミットを作成",
+        "mergeTitle": "マージコミットを作成して PR #{{number}} をマージしますか？",
+        "rebaseLabel": "リベースしてマージ",
+        "rebaseTitle": "PR #{{number}} をリベースしてマージしますか？",
+        "reopenTitle": "PR #{{number}} を再度開きますか？",
+        "squashLabel": "スカッシュしてマージ",
+        "squashTitle": "PR #{{number}} をスカッシュしてマージしますか？"
+      },
       "PullRequestPage": {
         "2560588245": "レビュアーのリクエストに失敗しました",
         "3450247584": "コメント",
@@ -1987,7 +2003,6 @@
         "aae645d36d": "PR のマージに失敗しました",
         "c57873d721": "PR がマージされました",
         "a63b3c159c": "これにより、GitHub 上の PR が更新されます。",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "710e47aa06": "PR が再オープンされました",
         "7aa3b5f706": "PR がクローズされました",
         "3d77438c92": "これにより、GitHub で PR が再開されます。",
@@ -2316,7 +2331,6 @@
         "88f478cdef": "PR のマージに失敗しました",
         "a161925adc": "PR がマージされました",
         "0506a78337": "これにより、GitHub 上の PR が更新されます。",
-        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "995dd6af9b": "PR チェックを開く",
         "8a22eb3f7b": "一致するレビュアーがいません。",
         "67755a83a1": "他のみんな",
@@ -12829,6 +12843,8 @@
           "behindMigrating": "Orca サーバーを実行しています。プロジェクトの移動が完了した後に更新されます。",
           "behindCheckFailed": "Orca サーバーを実行しています。Orca はこのアプリより古いかどうかを確認できませんでした。",
           "refusedBlockedReason": "このホストにはまだ Orca がセットアップされていません。{{reason}}",
+          "refusedLeaveBehind": "このホストの保存済み項目の一部は Orca サーバーに移動できません: {{items}}。「それでも移行」を選ぶとホストに接続し、これらはこのコンピューターに残ります。",
+          "refusedLeaveBehindUnnamed": "このホストの保存済み項目の一部は Orca サーバーに移動できません。「それでも移行」を選ぶとホストに接続し、これらはこのコンピューターに残ります。",
           "setupContactLost": "Orca はサーバーのセットアップ中にこのホストとの接続を失いました。ホスト上では何も停止されませんでした。続行するには再度接続してください。",
           "runtimeNoexec": "このホストでは ~/.orca-remote からのプログラムの実行が許可されていないため、Orca はそこでサーバーを起動できません。これは通常、ホームフォルダーが noexec でマウントされていることを意味します。ホストの管理者にそこでプログラムの実行を許可するよう依頼してから、再度接続してください。"
         },
@@ -13112,6 +13128,16 @@
           "searchLabel": "ビルドの検索",
           "searchPlaceholder": "ビルドを検索…",
           "noMatches": "一致するビルドはありません。"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS で通知が表示されませんでした",
+              "macFailureDescription": "システム設定で Orca の「通知を許可」をオンにしてください。",
+              "windowsFailureTitle": "Windows で通知が表示されませんでした",
+              "windowsFailureDescription": "Windows の設定で Orca の通知をオンにしてください。"
+            }
+          }
         }
       },
       "right": {
@@ -15672,6 +15698,9 @@
             "0d6efe9cf4": "プロジェクトやワークツリーが保護されたフォルダーにある場合、macOS で推奨されます。",
             "dac08ec03e": "開いています…",
             "6e3d62b816": "フルディスクアクセスを開く"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "ヘルプ > Orca を探索 からいつでも再度開けます。"
           }
         },
         "tips": {
@@ -15698,7 +15727,8 @@
             "53905bd076": "開発プレビュー: スキル設定ターミナルを開きます。",
             "1da82af45b": "Orca CLI には注意が必要です",
             "ce13a742d0": "orcaをPATHに登録しました。",
-            "d1a86c7eb5": "[設定] を開いて CLI セットアップを完了します。"
+            "d1a86c7eb5": "[設定] を開いて CLI セットアップを完了します。",
+            "cliInstallFailed": "Orca CLI をインストールできませんでした。"
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "ワークツリー「{{value0}}」を作成する",
@@ -16703,6 +16733,17 @@
           },
           "copy": {
             "copyFailed": "クラッシュレポートの詳細をコピーできませんでした。"
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "クラッシュを報告",
+            "uiErrorTitle": "Orca で回復可能な UI エラーが発生しました",
+            "closedTitle": "Orca が予期せず終了しました",
+            "reportDescription": "プライバシーに配慮したクラッシュレポートを送信します。利用可能な場合は、機密情報を除去した最近の診断ログが含まれます。",
+            "uiErrorDescription": "プライバシーに配慮した診断レポートを送信して、失敗した UI の把握にご協力ください。",
+            "closedDescription": "プライバシーに配慮した診断レポートを送信して、何が起きたかの把握にご協力ください。",
+            "reportNotesPlaceholder": "任意: 何が起きましたか？",
+            "uiErrorNotesPlaceholder": "任意: この UI エラーの前に何をしていましたか？",
+            "closedNotesPlaceholder": "任意: Orca が終了する前に何をしていましたか？"
           }
         }
       },
@@ -18931,7 +18972,6 @@
         "permissions": "権限",
         "permissionAsk": "承認を求める",
         "permissionAskDescription": "設定で許可されていない編集やコマンドの前に確認します",
-        "permissionAskCodexDescription": "このワークスペース内でファイルを編集しコマンドを実行します。それ以外の操作の前に確認します",
         "permissionAskSharedDescription": "まだ許可されていない編集やコマンドの前に確認します",
         "permissionAcceptEdits": "編集を許可",
         "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
@@ -19032,6 +19072,7 @@
         "runToolMany": "使用した{{value0}}ツール",
         "runPair": "{{value0}} および {{value1}}",
         "runList": "{{value0}}、{{value1}}",
+        "runListSeparator": "、",
         "runLiveReadOne": "1ファイルを読み込んでいます",
         "runLiveReadMany": "{{value0}} ファイルの読み取り",
         "runLiveSearchOne": "1回検索中",
@@ -19273,10 +19314,10 @@
           "stoppedCount": "{{value0}} が停止しました",
           "unverifiableCount": "{{value0}} 件は状態を取得できません"
         },
-        "startedOne": "1 人のサブ Agent を解雇しました",
-        "startedN": "{{value0}} サブ Agent をキックオフしました",
-        "ranOne": "1 人のサブ Agent を実行しました",
-        "ranN": "{{value0}} サブ Agent を実行しました",
+        "startedOne": "1 個のサブ Agent を起動しました",
+        "startedN": "{{value0}} 個のサブ Agent を起動しました",
+        "ranOne": "1 個のサブ Agent を実行しました",
+        "ranN": "{{value0}} 個のサブ Agent を実行しました",
         "tokens": "{{value0}} トークン",
         "unnamed": "サブ Agent"
       },
@@ -20616,7 +20657,6 @@
       "signInLinkCopied": "サインインリンクをコピーしました。別のアカウントでサインインするには、プライベートウィンドウで開いてください。",
       "signInLinkCopyFailed": "リンクをコピーできませんでした。",
       "switchSessions": {
-        "selectAll": "すべて選択",
         "busy": "作業中",
         "idle": "アイドル",
         "keyword": {
@@ -20630,10 +20670,7 @@
         "bodyOne": "{{previous}} で Claude セッションが 1 件まだ実行中です。再起動すると、{{next}} で会話が続きます。作業中のセッションは、アイドル状態になってから再起動します。",
         "dontAskAgain": "今後は確認しない（自動で再起動する）",
         "listLabel": "再起動する Claude セッション",
-        "selectWorkspace": "{{workspace}} のすべてのセッションを選択します",
-        "selectedCount": "{{selected}}/{{total}} が選択されました",
         "restartOne": "セッションを再起動",
-        "selectAllSessions": "すべてのセッションを選択します",
         "keep": "そのままにする",
         "session": "Claude セッション",
         "restartOther": "{{count}} 件のセッションを再起動",
@@ -20642,7 +20679,20 @@
         "restartingOne": "{{account}} で Claude セッションを 1 件再起動中",
         "restartingOther": "{{account}} で Claude セッションを {{count}} 件再起動中",
         "settingRestart": "常に再起動する",
-        "settingKeep": "再起動しない"
+        "settingKeep": "再起動しない",
+        "groupOnAccount": "{{account}} で実行中",
+        "groupElsewhere": "{{account}} 以外",
+        "groupCantMove": "移動できません",
+        "selectGroup": "{{group}} のセッションをすべて選択",
+        "reasonWsl": "WSL ターミナル",
+        "reasonOwnFolder": "独自の Claude フォルダーを使用",
+        "reasonUnknownAccount": "アカウント不明",
+        "reasonNoSession": "再開できません",
+        "reviewBodyOne": "他の Claude セッション 1 件は {{next}} に移動されませんでした。",
+        "reviewBodyOther": "他の Claude セッション {{count}} 件は {{next}} に移動されませんでした。",
+        "notMovedOne": "他の 1 件のセッションは移動されませんでした。",
+        "notMovedOther": "他の {{count}} 件のセッションは移動されませんでした。",
+        "review": "確認"
       }
     },
     "hostSignIn": {

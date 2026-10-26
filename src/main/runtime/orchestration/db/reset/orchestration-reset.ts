@@ -1,11 +1,20 @@
 import { LEGACY_RUN_ID } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { ResetRemovedWork } from '../../../../../shared/orchestration-removed-work'
+import {
+  readRemovedWorkWatermark,
+  summarizeRemovedWorkSince
+} from './removed-orchestration-work-read'
 
-export function runResetTransaction(this: OrchestrationDb, statements: string): void {
+/** Returns the removed-work watermark, read inside the transaction so the reply counts only this reset. */
+export function runResetTransaction(this: OrchestrationDb, statements: string): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    // Why unguarded: an error that ends the transaction must roll the whole reset back, not let the deletes autocommit.
+    const watermark = readRemovedWorkWatermark(this.db)
     this.db.exec(statements)
     this.db.exec('COMMIT')
+    return watermark
   } catch (error) {
     try {
       this.db.exec('ROLLBACK')
@@ -41,15 +50,16 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM messages;
     DELETE FROM run_coordinator_handles;
     DELETE FROM runs;
+    DELETE FROM removed_orchestration_work;
     INSERT INTO runs (id, objective, home_database, consumer_generation, legacy)
       VALUES ('${LEGACY_RUN_ID}', 'Legacy orchestration state (inspect only)', 'this_database', 0, 1);
   `)
   this.hasAnyDispatchContextsCache = undefined
 }
 
-export function resetTasks(this: OrchestrationDb): void {
+export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined {
   // Messages survive; close threads so orphaned questions cannot masquerade as generic replies.
-  this.runResetTransaction(`
+  const watermark = this.runResetTransaction(`
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
@@ -72,6 +82,7 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM tasks;
   `)
   this.hasAnyDispatchContextsCache = undefined
+  return summarizeRemovedWorkSince(this.db, watermark)
 }
 
 export function resetMessages(this: OrchestrationDb): void {
