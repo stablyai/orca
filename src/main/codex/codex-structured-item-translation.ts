@@ -127,6 +127,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
   return {
     body: {
       kind: 'diff',
+      state: codexItemRunState(item),
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
       patch: journalPayload(patch)
     },

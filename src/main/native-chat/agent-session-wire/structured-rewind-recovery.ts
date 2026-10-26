@@ -1,3 +1,4 @@
+import { applyRecordedFileRewind, undoRecordedFileRewind } from './rewind-recorded-files'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
@@ -201,6 +202,9 @@ export async function applyStructuredRewindRecovery(
     if (!recovered?.ok) {
       // Keep both histories until revert is proven, even after provider acknowledgement.
       if (recovered?.reason === 'provider-refused') {
+        if (rewind.filePlan) {
+          await undoRecordedFileRewind(rewind.filePlan)
+        }
         await persistRewindRecord(store, sessionId, fence, {
           ...rewind,
           phase: 'refused',
@@ -215,6 +219,11 @@ export async function applyStructuredRewindRecovery(
   }
   if (rewind.phase !== 'provider-succeeded') {
     return
+  }
+  if (rewind.filePlan && !rewind.filesApplied) {
+    await applyRecordedFileRewind(rewind.filePlan, true)
+    rewind = { ...rewind, filesApplied: true }
+    await persistRewindRecord(store, sessionId, fence, rewind)
   }
   if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
     const completed = rewind

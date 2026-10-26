@@ -19642,7 +19642,12 @@
         "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
         "confirm": "Rewind",
         "cancel": "Cancel",
-        "action": "Rewind to here"
+        "action": "Rewind to here",
+        "scope": "What to rewind",
+        "conversationOnly": "Conversation only",
+        "withFiles": "Conversation and recorded file changes",
+        "keepFiles": "Keep file changes on disk.",
+        "confirmationScope": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it."
       },
       "drop": {
         "messageTitle": "Drop to attach to this message",

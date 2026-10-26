@@ -1,7 +1,11 @@
+import type {
+  AgentSessionRewindMode,
+  RewindFilesPreview
+} from '../../../../shared/agent-session-rewind-files'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { confirmNativeChatRewind } from './confirm-native-chat-rewind'
 import {
   savedRewindKeys,
   isAgentSessionRewindTarget,
@@ -9,7 +13,6 @@ import {
   type AgentSessionRewindResult,
   type AgentSessionRewindSupport
 } from '../../../../shared/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import {
@@ -24,12 +27,14 @@ import type {
   StructuredAgentSessionWriteOutcome
 } from './use-structured-agent-session-mutate'
 import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
-import { nativeChatRewindOffered } from './native-chat-rewind-eligibility'
-import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
 import {
-  agentSessionContextFloorSequence,
-  latestAgentSessionContextClearSequence
-} from '../../../../shared/agent-session-context-clear'
+  nativeChatRewindOffered,
+  isRewindTarget,
+  turnOpeners,
+  rewindContextFloor
+} from './native-chat-rewind-eligibility'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
+
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */
@@ -51,9 +56,12 @@ export type RewindInput = {
   /** The host's in-doubt latch: disables the action, never sending. */
   hostBlockedReason?: AgentSessionRewindReason
   blocked: boolean
+  previewFiles?: (fields: { itemId: string; expectedEpoch: string }) => Promise<RewindFilesPreview>
   send: (fields: {
     itemId: string
     expectedEpoch: string
+    mode?: AgentSessionRewindMode
+    filesFingerprint?: string
   }) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>
 }
 
@@ -74,36 +82,6 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
   return failure.details && 'rewindReason' in failure.details
     ? failure.details.rewindReason
     : undefined
-}
-
-function isRewindTarget(input: RewindInput, itemId: string): boolean {
-  const opener = turnOpeners(input.state.items)
-  const keys = savedRewindKeys(input.state.submissions)
-  return input.state.items.some(
-    (item) =>
-      item.itemId === itemId &&
-      item.sequence > rewindContextFloor(input) &&
-      (keys.nativeIdentity(itemId) !== null || !keys.hasSubmission(itemId)) &&
-      isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
-  )
-}
-
-function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, string> {
-  const openers = new Map<string, string>()
-  for (const item of items) {
-    const opener = readAgentJournalTurn(item.body)?.userItemId
-    if (opener) {
-      openers.set(item.itemId, opener)
-    }
-  }
-  return openers
-}
-
-function rewindContextFloor(input: RewindInput): number {
-  return Math.max(
-    latestAgentSessionContextClearSequence(input.state.items),
-    agentSessionContextFloorSequence(input.contextFloor, input.state.epoch)
-  )
 }
 
 function blockedReason(input: RewindInput): string | null {
@@ -194,17 +172,17 @@ export function useNativeChatRewind(input: RewindInput) {
     inFlight.current = true
     let keepBlocked = false
     try {
-      const confirmed = await confirm({
-        title: translate('components.native-chat.rewind.title', 'Rewind to here?'),
-        description: translate(
-          'components.native-chat.rewind.confirmation',
-          'Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.'
-        ),
-        confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
-        cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
-        confirmVariant: 'destructive',
-        cancelVariant: 'ghost'
-      })
+      const selection = await confirmNativeChatRewind(
+        {
+          itemId,
+          expectedEpoch,
+          previewFiles: captured.previewFiles,
+          isCurrent: () =>
+            active.current && isCurrent() && latest.current.sessionId === captured.sessionId
+        },
+        confirm
+      )
+      const confirmed = selection?.confirmed === true
       const current = latest.current
       if (
         !confirmed ||
@@ -228,7 +206,13 @@ export function useNativeChatRewind(input: RewindInput) {
       }
       blockedRef.current = true
       setSending(true)
-      const outcome = await current.send({ itemId, expectedEpoch })
+      const outcome = await current.send({
+        itemId,
+        expectedEpoch,
+        ...(selection?.mode === 'conversation-and-files' && selection.filesFingerprint
+          ? { mode: selection.mode, filesFingerprint: selection.filesFingerprint }
+          : {})
+      })
       const reason = outcome.kind === 'not-done' ? rewindFailureReason(outcome.failure) : undefined
       // Captured content belongs to the conversation even after its pane closes.
       const returned =

@@ -1,3 +1,9 @@
+import { prepareStructuredRewindFiles } from './structured-rewind-file-plan'
+import {
+  applyRecordedFileRewind,
+  undoRecordedFileRewind,
+  rewindFilePlanFingerprint
+} from './rewind-recorded-files'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
@@ -39,7 +45,12 @@ export async function rewindStructuredAgentSession(
     childWorkOpen,
     deps: { store }
   } = context
-  const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
+  const fields = {
+    itemId: params.itemId,
+    expectedEpoch: params.expectedEpoch,
+    ...(params.mode ? { mode: params.mode } : {}),
+    ...(params.filesFingerprint ? { filesFingerprint: params.filesFingerprint } : {})
+  }
   const operation = { method: 'agentSession.rewind', fields }
   // Forks need only conversation access; native rewinds require the provider.
   const agent = store.getRecord(sessionId)?.provider
@@ -118,6 +129,21 @@ export async function rewindStructuredAgentSession(
           if (!cut) {
             return rewindRefusal('invalid-target')
           }
+          let filePlan
+          if (params.mode === 'conversation-and-files') {
+            try {
+              filePlan = await prepareStructuredRewindFiles(context, {
+                sessionId,
+                itemId: params.itemId,
+                expectedEpoch: params.expectedEpoch
+              })
+            } catch {
+              return rewindRefusal('files-unavailable')
+            }
+            if (rewindFilePlanFingerprint(filePlan) !== params.filesFingerprint) {
+              return rewindRefusal('files-conflict')
+            }
+          }
           const fork =
             'beforeMessage' in cut
               ? await ctx.adapter.forkForRewind?.({
@@ -130,13 +156,14 @@ export async function rewindStructuredAgentSession(
             return rewindRefusal(fork.reason)
           }
           const contextFloor = ctx.journal.context.floor()
-          const prepared: AgentSessionRewindRecord = {
+          let prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
             itemId: params.itemId,
             providerItemId: providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
+            ...(filePlan ? { filePlan } : {}),
             ...(fork?.ok ? { providerFork: fork.fork } : {}),
             ...(contextFloor && record.providerContextBoundary
               ? {
@@ -147,6 +174,21 @@ export async function rewindStructuredAgentSession(
           }
           await persistRewindRecord(store, sessionId, ctx.fence, prepared)
           ctx.publish()
+          if (filePlan) {
+            try {
+              await applyRecordedFileRewind(filePlan)
+              prepared = { ...prepared, filesApplied: true }
+              await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+            } catch {
+              await undoRecordedFileRewind(filePlan)
+              await persistRewindRecord(store, sessionId, ctx.fence, {
+                ...prepared,
+                phase: 'refused',
+                reason: 'files-conflict'
+              })
+              return rewindRefusal('files-conflict')
+            }
+          }
           const provider =
             'beforeTurnId' in cut
               ? await ctx.adapter.rewind!({
@@ -159,6 +201,9 @@ export async function rewindStructuredAgentSession(
           if (!provider.ok) {
             const reason = provider.reason
             if (reason !== 'outcome-unknown') {
+              if (filePlan) {
+                await undoRecordedFileRewind(filePlan)
+              }
               await persistRewindRecord(store, sessionId, fence, {
                 ...prepared,
                 phase: 'refused',
@@ -233,4 +278,16 @@ async function stopForFork(
 ): Promise<{ ok: true }> {
   await context.stopAgent(sessionId, { cause: 'evict', resting: true })
   return { ok: true }
+}
+
+export function createSessionRewind(
+  contexts: () => readonly [
+    StructuredAgentSessionMutationContext,
+    StructuredAgentSessionAttachContext
+  ]
+) {
+  return (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) => {
+    const [context, attachContext] = contexts()
+    return rewindStructuredAgentSession(context, attachContext, caller, params)
+  }
 }

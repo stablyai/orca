@@ -34,6 +34,12 @@ export type ConfirmationDialogOptions = {
     onConfirmed: (values: Record<string, string>) => void
   }
   /** Aborting dismisses the prompt, queued or showing, and resolves it as cancelled. */
+  choices?: {
+    label: string
+    defaultValue: string
+    items: { value: string; label: string; description?: string; disabled?: boolean }[]
+    onConfirmed: (value: string) => void
+  }
   signal?: AbortSignal
 }
 

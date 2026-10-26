@@ -1,3 +1,10 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -35,6 +42,7 @@ export function ConfirmationDialogProvider({
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
+  const [choiceValue, setChoiceValue] = useState<string | null>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const activeRequest = queue[0] ?? null
@@ -84,6 +92,7 @@ export function ConfirmationDialogProvider({
         'abort',
         () => {
           if (activeRequestRef.current?.id === request.id) {
+            setChoiceValue(null)
             setDontAskAgain(false)
             setFieldValues({})
           }
@@ -110,8 +119,12 @@ export function ConfirmationDialogProvider({
       }
       if (confirmed) {
         request.options.fields?.onConfirmed(fieldValues)
+        if (request.options.choices) {
+          request.options.choices.onConfirmed(choiceValue ?? request.options.choices.defaultValue)
+        }
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
+      setChoiceValue(null)
       setDontAskAgain(false)
       setFieldValues({})
       request.resolve(confirmed)
@@ -122,7 +135,7 @@ export function ConfirmationDialogProvider({
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },
-    [dontAskAgain, fieldValues]
+    [dontAskAgain, fieldValues, choiceValue]
   )
 
   return (
@@ -172,6 +185,44 @@ export function ConfirmationDialogProvider({
               ) : null}
             </DialogHeader>
           </div>
+          {displayedRequest?.options.choices ? (
+            <div className="space-y-2">
+              <Label htmlFor="confirmation-dialog-choice">
+                {displayedRequest.options.choices.label}
+              </Label>
+              <Select
+                value={choiceValue ?? displayedRequest.options.choices.defaultValue}
+                onValueChange={setChoiceValue}
+              >
+                <SelectTrigger id="confirmation-dialog-choice">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {displayedRequest.options.choices.items.map((item) => (
+                    <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {displayedRequest.options.choices.items
+                .filter(
+                  (item) =>
+                    item.disabled ||
+                    item.value === (choiceValue ?? displayedRequest.options.choices?.defaultValue)
+                )
+                .map((item) =>
+                  item.description ? (
+                    <p
+                      key={item.value}
+                      className="max-h-40 overflow-y-auto scrollbar-sleek whitespace-pre-wrap text-sm text-muted-foreground"
+                    >
+                      {item.description}
+                    </p>
+                  ) : null
+                )}
+            </div>
+          ) : null}
           {displayedRequest?.options.fields ? (
             <div className="space-y-3">
               {displayedRequest.options.fields.inputs.map((field) => (

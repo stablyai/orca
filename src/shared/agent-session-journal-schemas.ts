@@ -206,7 +206,12 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     endedAs: z.string().min(1).optional(),
     output: BoundedPayload.optional()
   }),
-  z.object({ kind: z.literal('diff'), path: z.string(), patch: BoundedPayload }),
+  z.object({
+    kind: z.literal('diff'),
+    path: z.string(),
+    patch: BoundedPayload,
+    state: z.string().optional()
+  }),
   z.object({
     kind: z.literal('approval'),
     title: z.string(),

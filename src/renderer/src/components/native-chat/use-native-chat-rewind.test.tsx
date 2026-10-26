@@ -1,3 +1,4 @@
+import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -545,4 +546,38 @@ describe('which rows offer rewind', () => {
   ] as const)('never offers %s', (_label, row, slot, notice) => {
     expect(nativeChatRowOffersRewind(row, slot, notice)).toBe(false)
   })
+})
+
+it('previews files and binds the selected restore mode to the confirmed fingerprint', async () => {
+  const props = input()
+  const previewFiles = vi.fn(async () => ({
+    available: true as const,
+    fingerprint: 'proof',
+    files: ['example.ts']
+  }))
+  const confirm: ConfirmationDialogContextValue = async (options) => {
+    expect(options.choices?.items[1]).toMatchObject({ disabled: false, description: 'example.ts' })
+    options.choices?.onConfirmed('conversation-and-files')
+    return true
+  }
+  const view = render({ ...props, previewFiles })
+  await act(() => view.result.current.request('user', confirm))
+  expect(props.send).toHaveBeenCalledWith({
+    itemId: 'user',
+    expectedEpoch: 'old',
+    mode: 'conversation-and-files',
+    filesFingerprint: 'proof'
+  })
+})
+
+it('retains conversation-only rewind when the host cannot restore files', async () => {
+  const props = input()
+  const previewFiles = vi.fn(async () => ({ available: false as const, reason: 'File changed' }))
+  const confirm: ConfirmationDialogContextValue = async (options) => {
+    expect(options.choices?.items[1]).toMatchObject({ disabled: true, description: 'File changed' })
+    return true
+  }
+  const view = render({ ...props, previewFiles })
+  await act(() => view.result.current.request('user', confirm))
+  expect(props.send).toHaveBeenCalledWith({ itemId: 'user', expectedEpoch: 'old' })
 })

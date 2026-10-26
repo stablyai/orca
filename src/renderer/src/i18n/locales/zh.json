@@ -19372,7 +19372,12 @@
         "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留。",
         "confirm": "回溯",
         "cancel": "取消",
-        "action": "回溯到此处"
+        "action": "回溯到此处",
+        "scope": "回退范围",
+        "conversationOnly": "仅回退对话",
+        "withFiles": "回退对话并恢复记录的文件改动",
+        "keepFiles": "保留磁盘上的文件改动。",
+        "confirmationScope": "移除此消息及其后的对话？原消息将放回输入框，供你修改后重新发送。"
       },
       "visualUnavailable": "可视化不可用",
       "visualLoading": "正在加载可视化",

@@ -1,3 +1,5 @@
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RewindFilesPreview } from '../../../../shared/agent-session-rewind-files'
 import { useMemo } from 'react'
 import type { AgentSessionRewindResult } from '../../../../shared/agent-session-rewind'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -11,7 +13,7 @@ import {
 
 /** The rewind a structured session's user rows offer, sent through the session's own writes. */
 export function useStructuredAgentSessionRewind(
-  args: Omit<RewindInput, keyof NativeChatRewindHost | 'send'> &
+  args: Omit<RewindInput, keyof NativeChatRewindHost | 'send' | 'previewFiles'> &
     NativeChatRewindHost & { target: RuntimeClientTarget; write: StructuredAgentSessionWrite }
 ) {
   const {
@@ -43,6 +45,11 @@ export function useStructuredAgentSessionRewind(
       state,
       support,
       blocked,
+      previewFiles: (fields) =>
+        callRuntimeRpc<RewindFilesPreview>(target, 'agentSession.rewindFilesPreview', {
+          sessionId,
+          ...fields
+        }),
       send: (fields) =>
         write<AgentSessionRewindResult>('agentSession.rewind', 'agentSession.rewind', fields)
     }),
@@ -57,6 +64,7 @@ export function useStructuredAgentSessionRewind(
       sessionId,
       state,
       support,
+      target,
       write
     ]
   )

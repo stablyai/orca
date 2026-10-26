@@ -1,3 +1,4 @@
+export { RewindParams } from '../../../../shared/rpc-contract/agent-session-rewind-params'
 // Use strict wire objects: silently stripping a newer client's key could change its requested effect.
 export {
   AcknowledgeAttentionParams,
@@ -22,7 +23,6 @@ export {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
-  RewindParams,
   SendParams,
   SleepWorkspaceParams,
   SessionId,

@@ -1,3 +1,4 @@
+import { RewindFilePlanSchema, type AgentSessionRewindMode } from './agent-session-rewind-files'
 import { z } from 'zod'
 import {
   AgentJournalItemBodySchema,
@@ -21,7 +22,9 @@ export const AGENT_SESSION_REWIND_REASONS = [
   'history-limit',
   'provider-refused',
   'proof-mismatch',
-  'outcome-unknown'
+  'outcome-unknown',
+  'files-unavailable',
+  'files-conflict'
 ] as const
 export type AgentSessionRewindReason = (typeof AGENT_SESSION_REWIND_REASONS)[number]
 export type AgentSessionRewindSupport =
@@ -31,6 +34,8 @@ export type AgentSessionRewindParams = {
   envelope: AgentSessionMutationEnvelope
   itemId: string
   expectedEpoch: string
+  mode?: AgentSessionRewindMode
+  filesFingerprint?: string
 }
 export type AgentSessionRewindResult = {
   itemId: string
@@ -45,6 +50,8 @@ export const AgentSessionRewindRecordSchema = z.object({
   itemId: Key,
   providerItemId: Key.optional(),
   expectedEpoch: Key,
+  filePlan: RewindFilePlanSchema.optional(),
+  filesApplied: z.boolean().optional(),
   contextClearOperationId: Key.optional(),
   contextClearSequence: z.number().int().positive().optional(),
   phase: z.enum(['prepared', 'provider-succeeded', 'completed', 'refused']),

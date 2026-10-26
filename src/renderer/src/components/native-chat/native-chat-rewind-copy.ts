@@ -5,6 +5,10 @@ import {
 } from '../../../../shared/agent-session-rewind'
 
 const reasonCopy = {
+  'files-unavailable': () =>
+    'The recorded file changes cannot be restored. Try conversation-only rewind.',
+  'files-conflict': () =>
+    'Files changed since the preview. Nothing was rewound. Review the files and try again.',
   unsupported: () =>
     translate(
       'components.native-chat.rewind.unsupported',

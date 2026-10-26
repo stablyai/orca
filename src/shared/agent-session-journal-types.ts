@@ -1,3 +1,4 @@
+import type { AgentJournalDiffItem } from './agent-session-diff-item'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
@@ -141,11 +142,7 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   output?: AgentJournalBoundedPayload
 }
 
-export type AgentJournalDiffItem = {
-  kind: 'diff'
-  path: string
-  patch: AgentJournalBoundedPayload
-}
+export type { AgentJournalDiffItem } from './agent-session-diff-item'
 
 export const AGENT_JOURNAL_RESOLUTION_STATES = ['pending', 'resolved', 'cancelled'] as const
 export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATES)[number]

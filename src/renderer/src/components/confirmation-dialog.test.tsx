@@ -237,3 +237,28 @@ describe('ConfirmationDialogProvider', () => {
     expect(onConfirmed).toHaveBeenCalledTimes(1)
   })
 })
+
+it('returns the selected scope only after confirmation', async () => {
+  const onConfirmed = vi.fn()
+  renderDialog({
+    title: 'Rewind',
+    confirmLabel: 'Confirm rewind',
+    choices: {
+      label: 'Scope',
+      defaultValue: 'conversation',
+      onConfirmed,
+      items: [
+        { value: 'conversation', label: 'Conversation only' },
+        { value: 'files', label: 'Conversation and files' }
+      ]
+    }
+  })
+  await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+  const select = screen.getByRole('combobox')
+  select.focus()
+  await userEvent.keyboard('{ArrowDown}')
+  await userEvent.click(screen.getByRole('option', { name: 'Conversation and files' }))
+  expect(onConfirmed).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'Confirm rewind' }))
+  expect(onConfirmed).toHaveBeenCalledWith('files')
+})

@@ -1,5 +1,5 @@
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
-import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
+import { rewindFilesPreview } from './structured-rewind-file-plan'
+import { createSessionRewind } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
@@ -302,8 +302,9 @@ export class StructuredAgentSessionHost {
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
-    rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
+  previewRewindFiles = rewindFilesPreview(() => this.mutationContext())
+
+  rewind = createSessionRewind(() => [this.mutationContext(), this.attachContext()])
 
   conversationCommand = this.conversationCommands.run
   /** Undefined means unavailable; an empty array is an authoritative catalog. */

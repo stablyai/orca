@@ -1,3 +1,4 @@
+import { registerRewindFileTests } from './structured-rewind-files.test-fixture'
 import {
   expectSupersededRewindReplay,
   expectRetainedPrefixRewindReplay
@@ -827,3 +828,5 @@ describe('host rewind', () => {
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
   })
 })
+
+registerRewindFileTests(() => ({ host, directory, sink, rewind }), { seed, params })

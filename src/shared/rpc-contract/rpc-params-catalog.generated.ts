@@ -69,6 +69,7 @@ import {
 } from './agent-session-attachment-params'
 import { CurrentRequestsParams } from './agent-session-current-requests-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
+import { RewindFilesPreviewParams, RewindParams } from './agent-session-rewind-params'
 import { ReadVisualParams } from './agent-session-visual-params'
 import {
   AiVaultListSessionsParams,
@@ -571,7 +572,6 @@ import {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
-  RewindParams,
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
@@ -757,6 +757,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResume': RestartResumeParams,
   'agentSession.reveal': OptionsParams,
   'agentSession.rewind': RewindParams,
+  'agentSession.rewindFilesPreview': RewindFilesPreviewParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,

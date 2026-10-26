@@ -564,6 +564,7 @@ describe('codex item bodies', () => {
     ).toMatchObject({
       kind: 'diff',
       path: '2 files',
+      state: 'completed',
       patch: { head: '@@ a @@\n@@ b @@', truncated: false }
     })
   })
