@@ -196,6 +196,7 @@ ORCA terminal list --worktree id:<repoId>::<worktreePath> --json
 ORCA terminal show --terminal <handle> --json
 ORCA terminal read --terminal <handle> --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
+ORCA terminal read --terminal <handle> --screen --json
 ORCA terminal read --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --wait-submit 10 --json
@@ -223,6 +224,8 @@ Terminal rules:
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
+- `--screen` and `--cursor` are mutually exclusive: a screen read is the current frame and has no history to page.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
 - A text-plus-Enter agent prompt is refused with `agent_prompt_blocked` while the agent shows a permission or trust menu. To answer the menu, send `--text` and `--enter` as separate commands.
