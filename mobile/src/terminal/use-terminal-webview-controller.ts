@@ -113,9 +113,8 @@ export function useTerminalWebViewController(
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
       sendToDocument({ type: 'set-theme', terminalTheme })
-      if (terminalFont) {
-        sendToDocument({ type: 'set-font', font: terminalFont })
-      }
+      // Also when null: a font reset made while a recovery ping was pending was never sent.
+      sendToDocument({ type: 'set-font', font: terminalFont })
       flushPendingMessages()
     },
     [
