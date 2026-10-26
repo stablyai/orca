@@ -4291,6 +4291,7 @@
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和：当前驻留在 RAM 中的页。共享页可能会出现在多个进程中，被 Windows 换出到页面文件的内存不计入其中。",
                 "privateBytesDescription": "专用字节的总和：这些进程已提交的内存，无论驻留还是已换出都会计入。这是主机计入提交限制的数值，因此在分页导致上方工作集缩小时它仍会继续上升。",
+                "footprintDescription": "内存占用的总和，与“活动监视器”显示的数值相同：每个进程自身占用的内存，包括图形内存。进程之间共享的页不会被重复计算。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
               }
             },
@@ -5547,7 +5548,9 @@
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
           "00c4235c10": "没有匹配“{{value0}}”",
-          "largeInputNoMatches": "没有匹配此长输入的结果"
+          "largeInputNoMatches": "没有匹配此长输入的结果",
+          "entriesLabel": "文件夹条目",
+          "inputLabel": "筛选或路径"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -8911,6 +8914,8 @@
           "editDescription": "更新此机器的连接详情。更改将在下次连接时生效。",
           "addDescription": "添加一台可通过 SSH 登录的持久机器。",
           "editingPrefix": "正在编辑",
+          "reconnectOnLaunch": "启动时重新连接",
+          "reconnectOnLaunchHelp": "关闭后，Orca 启动时会让此主机及通过它访问的 Orca 服务器保持断开，直到你手动连接。",
           "allowRemoteCliControl": "允许此主机的 orca CLI 控制 Orca",
           "allowRemoteCliControlHelp": "新主机默认开启。允许在此主机上运行的 orca 命令打开并操作此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间；并允许此主机上由旧版 Orca 启动的终端为其自身受监督的工作运行编排命令（check、inbox、send、ask、reply）。它们无法读取你的文件、剪贴板或 Cookie。关闭时，它们只能访问此主机自身的 Orca 服务器。",
           "addHost": "添加主机"
@@ -14316,6 +14321,7 @@
             "prepareSessionResumeFailed": "无法为恢复准备此会话。",
             "sessionDeleted": "会话已删除",
             "sessionDeleteFailed": "无法删除会话",
+            "sessionDeleteCheckingHost": "正在检查 {{value0}}…",
             "resumeInChatConflict": "另一个聊天室已经在进行此对话。",
             "resumeInChatTranscriptMissing": "无法加载此对话的历史记录，因此无法在聊天中恢复。",
             "resumeInChatFailed": "无法在新聊天中恢复此会话。",
@@ -14457,6 +14463,7 @@
             "subagentCountPlural": "{{value0}} 个子智能体",
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
+            "deleteReasonHostUpdateRequired": "请更新 {{value0}}，以便从这里删除其会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
             "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
             "resumeInNewNativeChat": "在新聊天中恢复",
@@ -14467,6 +14474,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",
             "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
+            "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复。",
             "confirm": "删除"
           },
           "FileExplorerNameFilter": {
@@ -18645,6 +18653,7 @@
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装。",
+        "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天。",
         "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端。",
         "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",

@@ -93,6 +93,11 @@ export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD
 }
 
+// Startup commands run before the first prompt, which suppresses 133;D; mark them like typed commands.
+export function getPowerShellOsc133StartupCommandMark(): string {
+  return 'if (Test-Path variable:global:__OrcaOsc133State) { [Console]::Write("$([char]27)]133;C$([char]7)"); $Global:__OrcaOsc133State.HasSeenPrompt = $true }'
+}
+
 export function isPowerShellExecutableName(shellName: string): boolean {
   const normalized = shellName.toLowerCase()
   return (

@@ -4655,6 +4655,7 @@
               "metric": {
                 "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
                 "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
+                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             },
@@ -5943,7 +5944,9 @@
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'",
-          "largeInputNoMatches": "No matches for this long input"
+          "largeInputNoMatches": "No matches for this long input",
+          "entriesLabel": "Folder entries",
+          "inputLabel": "Filter or path"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -9326,6 +9329,8 @@
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
           "proxyConnectionReuse": "Reuse one proxy connection",
           "proxyConnectionReuseHelp": "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules.",
+          "reconnectOnLaunch": "Reconnect on launch",
+          "reconnectOnLaunchHelp": "When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.",
           "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
           "allowRemoteCliControlHelp": "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server.",
           "editTitle": "Edit SSH host",
@@ -14713,6 +14718,7 @@
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
             "sessionDeleteFailed": "Couldn't delete the session",
+            "sessionDeleteCheckingHost": "Checking {{value0}}…",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
             "resumeInChatFailed": "Could not resume this session in a new chat.",
@@ -14854,6 +14860,7 @@
             "subagentCountPlural": "{{value0}} subagents",
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
+            "deleteReasonHostUpdateRequired": "Update {{value0}} to delete its sessions from here.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
             "resumeInNewNativeChat": "Resume in New Chat",
@@ -14864,6 +14871,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
+            "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
           },
           "FileExplorerNameFilter": {
@@ -19038,6 +19046,7 @@
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",

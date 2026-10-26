@@ -104,7 +104,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     invokeStructuredOption: structuredInvokeOption
   })
 }))
-vi.mock('./use-mobile-native-chat-drafts', () => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => {
     return {
       composerText: '',

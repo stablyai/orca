@@ -116,6 +116,7 @@ const REASON_WORDS = {
     claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
+    fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
     attachFailed: codeWords('retry')

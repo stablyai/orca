@@ -69,7 +69,7 @@ vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'Ch
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 
-vi.mock('./MobileNativeChatComposer', async () => {
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const React = await import('react')
   const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
   return {

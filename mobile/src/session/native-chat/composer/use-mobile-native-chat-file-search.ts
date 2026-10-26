@@ -8,7 +8,7 @@ import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
 } from '../../mobile-session-read-operations'
-import { rankSuggestions } from '../../mobile-native-chat-autocomplete'
+import { rankSuggestions } from './mobile-native-chat-autocomplete'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16

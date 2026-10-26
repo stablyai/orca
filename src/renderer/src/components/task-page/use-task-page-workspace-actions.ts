@@ -13,7 +13,7 @@ import {
   getGitHubWorkItemWorkspaceSeed,
   getGitLabWorkItemWorkspaceSeed,
   getTaskPageRepoSourceContext
-} from '../task-page-source-context'
+} from './task-page-source-context'
 export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
   const { repos, openModal } = model
   const openComposerForItem = useCallback(

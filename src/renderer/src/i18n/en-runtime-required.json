@@ -3188,6 +3188,7 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",

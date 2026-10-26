@@ -11,7 +11,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { PreflightStatus } from '../../../../preload/api/preflight-api'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from './task-page-source-context'
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   const {
     settings,

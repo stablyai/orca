@@ -5,7 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   getTaskPageRepoSourceContext,
   getTaskSourceHostAvailabilityForHost
-} from '../task-page-source-context'
+} from './task-page-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'

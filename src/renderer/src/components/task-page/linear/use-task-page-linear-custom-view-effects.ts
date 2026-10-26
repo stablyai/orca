@@ -4,7 +4,7 @@ import {
   LINEAR_CUSTOM_VIEW_MODELS,
   mergeLinearCollectionResults
 } from './task-page-linear-issue-model'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {

@@ -38,6 +38,10 @@ import {
   isRuntimeEnvironmentManuallyDisconnected
 } from '../runtime-environments/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
+import {
+  holdLaunchReconnectOptOuts,
+  resetLaunchReconnectOptOutsForTests
+} from './ssh-host-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
 const { mockSshStore, mockConnectionManager } = mocks
@@ -150,5 +154,41 @@ describe('a user Disconnect of an SSH host', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { probe: true })
     expect(isSshUserDisconnected(target.id)).toBe(true)
     expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
+  })
+})
+
+describe('a host opted out of reconnect on launch', () => {
+  const harness = createSshIpcHarness(mocks)
+  const { handlers } = harness
+
+  beforeEach(async () => {
+    await harness.reset()
+    runtime.environments = [managedServer, otherServer]
+    runtime.getStatusOwner.mockReset().mockReturnValue({ activate: runtime.activate })
+    runtime.activate.mockReset()
+    mockSshStore.getTarget.mockReturnValue({ ...target, reconnectOnLaunch: false })
+  })
+
+  afterEach(() => {
+    clearRuntimeEnvironmentManualDisconnect(managedServer.id)
+  })
+
+  it('is not dialed at launch, nor is its managed server, until the user connects it', async () => {
+    // Handler registration already took this process's hold with no hosts; take it again here.
+    resetLaunchReconnectOptOutsForTests()
+    holdLaunchReconnectOptOuts([{ ...target, reconnectOnLaunch: false }, { id: 'ssh-2' }], '/tmp')
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
+    ).rejects.toThrow('Server was disconnected. Connect to use it again.')
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
+    expect(isSshUserDisconnected('ssh-2')).toBe(false)
+
+    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
+      () => {}
+    )
+    expect(isSshUserDisconnected(target.id)).toBe(false)
+    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(false)
   })
 })

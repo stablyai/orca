@@ -4291,6 +4291,7 @@
               "metric": {
                 "workingSetDescription": "합산된 워킹 세트(WS): 지금 RAM에 상주 중인 페이지입니다. 공유 페이지가 둘 이상의 프로세스에 나타날 수 있으며, Windows가 페이지 아웃한 메모리는 여기에 포함되지 않습니다.",
                 "privateBytesDescription": "합산된 프라이빗 바이트: 이 프로세스들이 커밋한 메모리로, 상주 여부와 관계없이 계산됩니다. 호스트가 커밋 한도에 반영하는 값이므로, 페이징으로 위의 워킹 세트가 줄어드는 동안에도 계속 늘어납니다.",
+                "footprintDescription": "합산된 메모리 사용 공간으로, 활성 상태 보기에 표시되는 값과 같습니다. 그래픽 메모리를 포함해 각 프로세스가 소유한 메모리이며, 프로세스 간에 공유되는 페이지는 중복으로 계산되지 않습니다.",
                 "rssDescription": "합산된 레지던트 세트 크기(RSS). 공유 또는 별칭된 페이지가 둘 이상의 프로세스에 나타날 수 있습니다."
               }
             },
@@ -5547,7 +5548,9 @@
           "51001182e3": "빈 디렉터리",
           "971d85cc84": "이 호스트에서 프로젝트로 열립니다 · {{value0}}",
           "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다.",
-          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음"
+          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음",
+          "entriesLabel": "폴더 항목",
+          "inputLabel": "필터 또는 경로"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -8911,6 +8914,8 @@
           "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
           "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
           "editingPrefix": "편집 중",
+          "reconnectOnLaunch": "시작 시 다시 연결",
+          "reconnectOnLaunchHelp": "끄면 Orca가 시작될 때 이 호스트와 이 호스트를 통해 연결되는 Orca 서버를 직접 연결할 때까지 연결하지 않습니다.",
           "allowRemoteCliControl": "이 호스트의 orca CLI가 Orca를 제어하도록 허용",
           "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다.",
           "addHost": "호스트 추가"
@@ -14316,6 +14321,7 @@
             "prepareSessionResumeFailed": "재개를 위해 이 세션을 준비할 수 없습니다.",
             "sessionDeleted": "세션이 삭제되었습니다",
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
+            "sessionDeleteCheckingHost": "{{value0}} 확인 중…",
             "resumeInChatConflict": "다른 채팅에서 이미 이 대화를 진행 중입니다.",
             "resumeInChatTranscriptMissing": "이 대화 기록을 로드할 수 없어 채팅에서 재개할 수 없습니다.",
             "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다.",
@@ -14457,6 +14463,7 @@
             "subagentCountPlural": "서브에이전트 {{value0}}개",
             "delete": "삭제",
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
+            "deleteReasonHostUpdateRequired": "여기에서 세션을 삭제하려면 {{value0}}을(를) 업데이트하세요.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
             "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
             "resumeInNewNativeChat": "새 채팅에서 재개",
@@ -14467,6 +14474,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
+            "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
           },
           "FileExplorerNameFilter": {
@@ -18680,6 +18688,7 @@
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
+        "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
         "conversationOpenElsewhere": "Codex가 아직 이 대화를 열어 두고 있습니다. 잠시 후 다시 시도하거나 다른 Codex 터미널을 닫으세요.",
         "conversationOpenInTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 후 여기서 계속하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",

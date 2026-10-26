@@ -4306,6 +4306,7 @@
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
                 "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
+                "footprintDescription": "Suma de la huella de memoria, la misma cifra que muestra el Monitor de Actividad: la memoria propia de cada proceso, incluida la memoria gráfica. Las páginas compartidas entre procesos no se cuentan dos veces.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
               }
             },
@@ -5581,7 +5582,9 @@
           "51001182e3": "Directorio vacío",
           "971d85cc84": "Se abre como proyecto en este host · {{value0}}",
           "00c4235c10": "No hay coincidencias para '{{value0}}'",
-          "largeInputNoMatches": "No hay coincidencias para esta entrada larga"
+          "largeInputNoMatches": "No hay coincidencias para esta entrada larga",
+          "entriesLabel": "Entradas de la carpeta",
+          "inputLabel": "Filtro o ruta"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -8942,6 +8945,8 @@
           "editDescription": "Actualiza los detalles de conexión de esta máquina. Los cambios se aplican en la próxima conexión.",
           "addDescription": "Agrega una máquina persistente en la que puedas iniciar sesión por SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar al iniciar",
+          "reconnectOnLaunchHelp": "Si está desactivado, Orca deja este host, y cualquier servidor de Orca al que se llegue a través de él, desconectado al iniciarse hasta que lo conectes.",
           "allowRemoteCliControl": "Permitir que la orca CLI de este host controle Orca",
           "allowRemoteCliControlHelp": "Activado de forma predeterminada en los hosts nuevos. Permite que los comandos orca ejecutados en este host abran y controlen pestañas del navegador de Orca en este escritorio, solo en los espacios de trabajo de este host y solo mientras esté conectado, y que las terminales iniciadas por una versión anterior de Orca en este host ejecuten comandos de orquestación (check, inbox, send, ask, reply) para su propio trabajo supervisado. No pueden leer tus archivos, tu portapapeles ni tus cookies. Cuando está desactivado, solo llegan al propio servidor de Orca de este host.",
           "addHost": "Añadir host"
@@ -14349,6 +14354,7 @@
             "prepareSessionResumeFailed": "No se pudo preparar esta sesión para reanudarla.",
             "sessionDeleted": "Sesión eliminada",
             "sessionDeleteFailed": "No se pudo eliminar la sesión",
+            "sessionDeleteCheckingHost": "Comprobando {{value0}}…",
             "resumeInChatConflict": "Otro chat ya está manteniendo esta conversación.",
             "resumeInChatTranscriptMissing": "El historial de esta conversación no se pudo cargar, por lo que no se puede reanudar en el chat.",
             "resumeInChatFailed": "No se pudo reanudar esta sesión en un chat nuevo.",
@@ -14490,6 +14496,7 @@
             "subagentCountPlural": "{{value0}} subagentes",
             "delete": "Eliminar",
             "deleteReasonNonLocalHost": "Solo se pueden eliminar las sesiones de este dispositivo.",
+            "deleteReasonHostUpdateRequired": "Actualiza {{value0}} para eliminar sus sesiones desde aquí.",
             "deleteReasonSyntheticPath": "Esta sesión no se puede eliminar desde Orca.",
             "deleteReasonUnsupportedAgent": "Las sesiones de {{value0}} no se pueden eliminar desde Orca.",
             "resumeInNewNativeChat": "Reanudar en un nuevo chat",
@@ -14500,6 +14507,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "¿Eliminar esta sesión?",
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
+            "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
           },
           "FileExplorerNameFilter": {
@@ -18650,6 +18658,7 @@
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
+        "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
         "conversationOpenElsewhere": "Codex sigue manteniendo abierta esta conversación. Inténtalo de nuevo en un momento o cierra otras terminales de Codex.",
         "conversationOpenInTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal para continuar aquí.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",

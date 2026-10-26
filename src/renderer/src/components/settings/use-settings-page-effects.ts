@@ -184,9 +184,7 @@ export function useSettingsPageEffects(
         setSettingsProjectHostSelection(
           hostSelection.selectionKey,
           hostSelection.hostId,
-          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
-            ? hostSelection.setupId
-            : undefined
+          hostSelection.setupId
         )
       }
     }

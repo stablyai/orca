@@ -2575,6 +2575,7 @@
               "metric": {
                 "workingSetDescription": "Working set somado (WS): páginas residentes na RAM agora. Páginas compartilhadas podem aparecer em mais de um processo, e a memória que o Windows paginou para o disco não é contada aqui.",
                 "privateBytesDescription": "Bytes privados somados: memória que esses processos comprometeram, contada esteja ela residente ou paginada para o disco. É isso que o host cobra contra seu limite de comprometimento, então continua subindo enquanto o working set acima diminui sob paginação.",
+                "footprintDescription": "Pegada de memória somada, o mesmo valor que o Monitor de Atividade mostra: a memória de cada processo, incluindo memória gráfica. Páginas compartilhadas entre processos não são contadas duas vezes.",
                 "rssDescription": "Tamanho do conjunto residente somado (RSS). Páginas compartilhadas ou com alias podem aparecer em mais de um processo."
               }
             },
@@ -5591,6 +5592,8 @@
           "editDescription": "Atualize os detalhes de conexão desta máquina. As alterações se aplicam na próxima conexão.",
           "addDescription": "Adicione uma máquina persistente na qual você pode entrar via SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar ao iniciar",
+          "reconnectOnLaunchHelp": "Quando desativado, o Orca deixa este host, e qualquer servidor Orca acessado por ele, desconectado ao iniciar até você conectá-lo.",
           "allowRemoteCliControl": "Permitir que a CLI orca deste host controle o Orca",
           "allowRemoteCliControlHelp": "Ativado por padrão para novos hosts. Permite que comandos orca executados neste host abram e controlem abas do navegador Orca neste computador, apenas nos espaços de trabalho deste host e enquanto ele estiver conectado. Também permite que terminais iniciados por um Orca mais antigo neste host executem comandos de orquestração (check, inbox, send, ask, reply) para seu próprio trabalho supervisionado. Eles não podem ler seus arquivos, área de transferência ou cookies. Quando desativado, eles acessam apenas o próprio servidor Orca deste host.",
           "addHost": "Adicionar host"
@@ -9891,6 +9894,7 @@
             "prepareSessionResumeFailed": "Não foi possível preparar esta sessão para retomada.",
             "sessionDeleted": "Sessão excluída",
             "sessionDeleteFailed": "Não foi possível excluir a sessão",
+            "sessionDeleteCheckingHost": "Verificando {{value0}}…",
             "resumeInChatConflict": "Outro chat já está mantendo esta conversa.",
             "resumeInChatTranscriptMissing": "O histórico desta conversa não pôde ser carregado, então ela não pode ser retomada no chat.",
             "resumeInChatFailed": "Não foi possível retomar esta sessão em um novo chat.",
@@ -9928,6 +9932,7 @@
             "subagentCountPlural": "{{value0}} subagentes",
             "delete": "Excluir",
             "deleteReasonNonLocalHost": "Somente sessões neste dispositivo podem ser excluídas.",
+            "deleteReasonHostUpdateRequired": "Atualize {{value0}} para excluir as sessões dele daqui.",
             "deleteReasonSyntheticPath": "Esta sessão não pode ser excluída do Orca.",
             "deleteReasonUnsupportedAgent": "Sessões de {{value0}} não podem ser excluídas do Orca.",
             "resumeInNewNativeChat": "Retomar em novo chat",
@@ -10375,6 +10380,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Excluir esta sessão?",
             "description": "\"{{value0}}\" será excluída. Depois de excluída, ela também não poderá mais ser retomada pela própria linha de comando de {{value1}}.",
+            "remoteDescription": "\"{{value0}}\" será excluída de {{value2}}. Depois de excluída, também não poderá mais ser retomada pela linha de comando do {{value1}}.",
             "confirm": "Excluir"
           },
           "FileExplorerNameFilter": {
@@ -19629,6 +19635,7 @@
         "claudeAccountSetupFailed": "Não foi possível configurar a conta do Claude selecionada. Tente novamente ou escolha outra conta.",
         "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
+        "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
         "chooseClaudeAccount": "Escolha ou adicione uma nas configurações de Contas do Claude.",
         "chooseClaudeAccountThenRunCommand": "Escolha ou adicione uma nas configurações de Contas do Claude e execute /{{command}} novamente.",
         "chooseClaudeAccountThenSend": "Escolha ou adicione uma nas configurações de Contas do Claude e envie sua mensagem novamente.",

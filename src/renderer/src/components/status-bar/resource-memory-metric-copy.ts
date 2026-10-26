@@ -9,6 +9,16 @@ export type ResourceMemoryMetricCopy = {
 }
 
 export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): ResourceMemoryMetricCopy {
+  if (metric === 'footprint') {
+    return {
+      columnLabel: 'Mem',
+      summaryLabel: 'Σ Memory',
+      description: translate(
+        'auto.components.status.bar.resource.memory.metric.footprintDescription',
+        'Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.'
+      )
+    }
+  }
   if (metric === 'working-set') {
     return {
       columnLabel: 'WS',

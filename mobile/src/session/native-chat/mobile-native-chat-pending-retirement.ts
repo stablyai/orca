@@ -3,7 +3,7 @@ import type { NativeChatMessage } from '../../../../src/shared/native-chat-types
 import {
   countImageSourceTurnsAfter,
   normalizedUserText
-} from '../mobile-native-chat-draft-reconcile'
+} from './composer/mobile-native-chat-draft-reconcile'
 import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
