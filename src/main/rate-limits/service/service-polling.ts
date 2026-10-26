@@ -101,16 +101,65 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     return provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
   }
 
-  /** Whether a failing provider's backoff allows another automatic read now. */
-  protected failureRetryDue(provider: ActiveRateLimitProvider, now: number): boolean {
-    const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+  private failureRetryThrottleMs(provider: ActiveRateLimitProvider): number {
+    return INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
       ? Math.min(
           ACTIVE_FAILURE_REFETCH_MS *
             2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
           MAX_ACTIVE_FAILURE_REFETCH_MS
         )
       : MIN_REFETCH_MS
-    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
+  }
+
+  /** Whether a failing provider's backoff allows another automatic read now. */
+  protected failureRetryDue(provider: ActiveRateLimitProvider, now: number): boolean {
+    return (
+      now - this.lastActiveFailureRetryAtByProvider[provider] >=
+      this.failureRetryThrottleMs(provider)
+    )
+  }
+
+  protected trackActiveFailureStreak(
+    provider: ActiveRateLimitProvider,
+    fresh: ProviderRateLimits
+  ): void {
+    super.trackActiveFailureStreak(provider, fresh)
+    if (provider === 'claude') {
+      this.scheduleStaleClaudeTokenRetry(fresh)
+    }
+  }
+
+  // Why: a focused window fires no focus event, so a Claude token its CLI renewed would wait for the next poll.
+  private scheduleStaleClaudeTokenRetry(claude: ProviderRateLimits): void {
+    this.clearStaleClaudeTokenRetry()
+    if (!this.timer || claude.usageMetadata?.failureKind !== 'stale-token') {
+      return
+    }
+    this.staleClaudeTokenRetryTimer = setTimeout(() => {
+      this.staleClaudeTokenRetryTimer = null
+      void this.retryStaleClaudeTokenIfWatched()
+    }, this.failureRetryThrottleMs('claude'))
+  }
+
+  protected clearStaleClaudeTokenRetry(): void {
+    if (this.staleClaudeTokenRetryTimer) {
+      clearTimeout(this.staleClaudeTokenRetryTimer)
+      this.staleClaudeTokenRetryTimer = null
+    }
+  }
+
+  // Unwatched windows stop the chain; activation picks the retry back up.
+  private async retryStaleClaudeTokenIfWatched(): Promise<void> {
+    const claude = this.state.claude
+    if (
+      !this.shouldBackgroundPoll() ||
+      claude?.status !== 'error' ||
+      claude.usageMetadata?.failureKind !== 'stale-token' ||
+      !this.failureRetryDue('claude', Date.now())
+    ) {
+      return
+    }
+    await this.runActiveWindowRefreshPlan({ kind: 'providers', providers: ['claude'] })
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
