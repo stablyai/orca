@@ -208,3 +208,34 @@ describe('orca cli cookie set and set credentials preserve an empty value', () =
     process.exitCode = priorExitCode
   })
 })
+
+describe('orca cli fill and select preserve an empty value', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['fill', 'browser.fill', { filled: 'ref_1' }],
+    ['select', 'browser.select', { selected: 'ref_1' }]
+  ])('passes an empty --value through %s to %s', async (command, method, result) => {
+    queueFixtures(callMock, okFixture(`req_${command}`, result))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [command, '--element', 'ref_1', '--value', '', '--worktree', 'all', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith(method, {
+      element: 'ref_1',
+      value: '',
+      worktree: undefined
+    })
+  })
+})
