@@ -1,4 +1,5 @@
 import type { UserConfig } from 'electron-vite'
+import { createDevRolldownRuntimeEnvPlugin } from './dev-rolldown-runtime-env'
 import { withBundledRendererDev } from './renderer-bundled-dev'
 
 /** Development-server overrides; Electron Vite also uses Vite's build command for the dev main process. */
@@ -11,13 +12,13 @@ export function createDevServeConfig(
   return withBundledRendererDev(
     {
       ...config,
-      renderer:
-        Number.isInteger(rendererPort) && config.renderer
-          ? {
-              ...config.renderer,
-              server: { ...config.renderer.server, port: rendererPort, strictPort: true }
-            }
-          : config.renderer,
+      renderer: config.renderer && {
+        ...config.renderer,
+        ...(Number.isInteger(rendererPort)
+          ? { server: { ...config.renderer.server, port: rendererPort, strictPort: true } }
+          : {}),
+        plugins: [...(config.renderer.plugins ?? []), createDevRolldownRuntimeEnvPlugin()]
+      },
       main: {
         ...config.main,
         build: {

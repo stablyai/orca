@@ -39,6 +39,7 @@ import {
   recordDevWebClientInputs
 } from './dev-web-client-freshness.mjs'
 import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
+import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
@@ -584,7 +585,7 @@ if (!isHelpOrVersion) {
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
-  env: process.env,
+  env: withDevRolldownRuntimeEnv(process.env),
   // Own process group so Ctrl+C terminates electron-vite’s Electron descendants on macOS too.
   detached: process.platform !== 'win32'
 })
