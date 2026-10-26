@@ -771,7 +771,6 @@
 2 test-no-wall-clock:src/main/codex/config-settings-promotion.test.ts
 1 test-no-wall-clock:src/main/crash-reporting/self-initiated-tree-kill-log.test.ts
 1 test-no-wall-clock:src/main/daemon/daemon-automatic-work-resume.test.ts
-1 test-no-wall-clock:src/main/daemon/daemon-health.test.ts
 1 test-no-wall-clock:src/main/daemon/daemon-host-relocation.test.ts
 2 test-no-wall-clock:src/main/daemon/daemon-idle-shutdown.test.ts
 1 test-no-wall-clock:src/main/daemon/daemon-pty-adapter-cold-restore-reanchor.test.ts
