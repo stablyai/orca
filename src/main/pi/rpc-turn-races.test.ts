@@ -285,6 +285,22 @@ describe('Pi turn settlement races', () => {
       expect((await h.rig.turns())[0]?.outcome).toBe(succeeded ? 'success' : 'failure')
     }
   })
+
+  it('keeps an exhausted retry a failure when its records exceed the line limit', async () => {
+    const h = await setup()
+    await h.start()
+    h.turns.skipped(
+      'message_end',
+      '{"type":"message_end","message":{"role":"assistant","content":['
+    )
+    h.turns.skipped(
+      'auto_retry_end',
+      '{"type":"auto_retry_end","success":false,"attempt":3,"finalError":"'
+    )
+    h.turns.receive({ type: 'agent_settled' })
+    await h.flush()
+    expect((await h.rig.turns())[0]?.outcome).toBe('failure')
+  })
 })
 
 describe('Pi prompt acknowledgement retries', () => {

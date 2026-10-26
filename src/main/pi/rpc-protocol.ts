@@ -72,6 +72,7 @@ const LIFECYCLE_ONLY_EVENTS: ReadonlySet<string> = new Set([
 const SKIPPED_TOOL_HEAD =
   /^\{"type":"tool_execution_(?:start|update|end)","toolCallId":"([^"\\]+)","toolName":"([^"\\]+)"/
 const SKIPPED_MESSAGE_HEAD = /^\{"type":"message_(?:start|end)","message":\{"role":"([A-Za-z]+)"/
+const SKIPPED_RETRY_END_HEAD = /^\{"type":"auto_retry_end","success":(true|false)[,}]/
 
 /** What an event over the line limit still applies without its payload, and whether the chat lost content. */
 export function piRpcSkippedEvent(
@@ -83,14 +84,17 @@ export function piRpcSkippedEvent(
   }
   const tool = SKIPPED_TOOL_HEAD.exec(prefix)
   const role = SKIPPED_MESSAGE_HEAD.exec(prefix)?.[1]
+  const retry = SKIPPED_RETRY_END_HEAD.exec(prefix)?.[1]
   // An oversized tool result is content, not a short error, so an ended call closes as completed.
   const head = tool
     ? { type, toolCallId: tool[1], toolName: tool[2] }
     : role
       ? { type, message: { role, content: [] } }
-      : type === 'message_update'
-        ? { type }
-        : null
+      : retry
+        ? { type, success: retry === 'true' }
+        : type === 'message_update' || type === 'auto_retry_start'
+          ? { type }
+          : null
   return { head, contentLost: true }
 }
 
