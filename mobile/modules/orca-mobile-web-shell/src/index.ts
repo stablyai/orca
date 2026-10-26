@@ -31,6 +31,11 @@ export type OrcaMobileWebShellViewHandle = {
   // Post raw JSON; reject over-cap messages or unavailable receivers (no page handshake, navigation, load failure, renderer gone) so host requests cannot silently hang.
   // Resolve does not prove delivery: iOS reports callAsyncJavaScript failures, Android’s void postMessage only proves enqueue. Require a page acknowledgment for delivery.
   postBridgeMessage: (json: string) => Promise<void>
+  /**
+   * Hands the page's last `ready` to `onBridgeMessage` again when the view adopted a spare and the
+   * shell has not spoken to it since. Absent in a binary built before spares existed.
+   */
+  replayPageReady?: () => Promise<void>
 }
 
 // Render activated generation at private origin; retry by remounting under a new key to reinstall fences. postBridgeMessage cannot report load success.
@@ -47,3 +52,5 @@ export {
   type MobileWebShellLoadState,
   type MobileWebShellLoadStatePayload
 } from './load-state'
+
+export { OrcaMobileWebShellSpares, type OrcaMobileWebShellSparesModule } from './spares'

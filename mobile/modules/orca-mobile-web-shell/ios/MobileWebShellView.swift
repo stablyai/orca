@@ -1,7 +1,8 @@
 import ExpoModulesCore
 import WebKit
 
-/// React Native's handle on one page, which is built on the first prop commit.
+/// React Native's handle on one page. The page is built on the first prop commit rather than in
+/// `init`, because that is when the session id says whether a spare was booted for it.
 final class OrcaMobileWebShellView: ExpoView, MobileWebShellPageSink {
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
@@ -11,6 +12,9 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellPageSink {
   private var sessionId = ""
   private var bridgeEnabled = false
   private var page: MobileWebShellPage?
+  /// The adopted spare's `ready`, kept until the shell first speaks to the page: the host that
+  /// answers it can be built after the adoption replayed it into nothing.
+  private var adoptedReady: String?
 
   func setGenerationDirectory(_ value: String) {
     generationDirectory = value
@@ -36,13 +40,24 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellPageSink {
   }
 
   private func hostPage() -> MobileWebShellPage {
-    let page = MobileWebShellPage()
+    let pool = MobileWebShellSparePool.shared
+    let spare = pool.adopt(sessionId: sessionId)
+    // An id the pool issued whose page is gone must not get a second WebView; the page reports a
+    // dead content process, and the remount mints a fresh id.
+    let page = spare?.page ?? MobileWebShellPage(dead: !pool.reserve(sessionId: sessionId))
     host(page.webView)
     page.sink = self
+    if let spare {
+      spare.parked.replay(into: self)
+      adoptedReady = spare.parked.lastFrame
+    }
     return page
   }
 
   private func host(_ webView: WKWebView) {
+    webView.removeFromSuperview()
+    webView.isUserInteractionEnabled = true
+    webView.accessibilityElementsHidden = false
     webView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(webView)
     NSLayoutConstraint.activate([
@@ -53,9 +68,17 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellPageSink {
     ])
   }
 
+  /// Hands the adopted spare's `ready` to the shell again, until the shell has answered it.
+  func replayPageReady() {
+    if let adoptedReady {
+      pageBridgeMessage(adoptedReady)
+    }
+  }
+
   func postBridgeMessage(_ json: String, promise: Promise) throws {
     guard let page else { throw MobileWebShellBridgeUnavailableException() }
     try page.postBridgeMessage(json, promise: promise)
+    adoptedReady = nil
   }
 
   func pageLoadState(_ payload: [String: Any]) {

@@ -15,7 +15,7 @@ struct MobileWebShellLoadEmission: Equatable {
 
 /// Failure is terminal and duplicate reports are dropped: late error-document/rule-list callbacks must never restore ready.
 final class MobileWebShellLoadStateMachine {
-  private var isTerminal = false
+  private(set) var isTerminal = false
   private var last: MobileWebShellLoadEmission?
 
   /// Accept messages only after the current props’ document commits; the replaced same-origin document can still speak before then.

@@ -44,7 +44,7 @@ internal interface MobileWebShellPageSink {
 
 /** One WebView and every fence on it. The view hosts it; nothing here knows about React. */
 @SuppressLint("SetJavaScriptEnabled")
-internal class MobileWebShellPage(private val context: Context) {
+internal class MobileWebShellPage(private val context: Context, withWebView: Boolean = true) {
   var sink: MobileWebShellPageSink? = null
 
   private val mainHandler = Handler(Looper.getMainLooper())
@@ -60,7 +60,7 @@ internal class MobileWebShellPage(private val context: Context) {
   private var blocker: ScriptHandler? = null
 
   /** Null once the renderer died or the page was destroyed. */
-  var webView: WebView? = createWebView()
+  var webView: WebView? = if (withWebView) createWebView() else null
     private set
 
   /** Identical triples do not retry. Recovery requires a remount, which is a new page. */
@@ -105,6 +105,9 @@ internal class MobileWebShellPage(private val context: Context) {
     view.visibility = View.VISIBLE
     view.loadUrl("$origin/")
   }
+
+  /** A page that can still be shown: its renderer is alive and no load failure was reported. */
+  val isUsable: Boolean get() = webView != null && !loadState.isTerminal
 
   /** Retire the old visible generation even when the replacement fails. */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
@@ -174,7 +177,7 @@ internal class MobileWebShellPage(private val context: Context) {
     proxy.postMessage(json)
   }
 
-  /** Called when React Native is done with the view, and by onRenderProcessGone. */
+  /** Called when React Native is done with the view, by onRenderProcessGone, and by the spare pool. */
   fun destroyWebView() {
     val view = webView ?: return
     removeBridgeListener()

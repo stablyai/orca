@@ -6,7 +6,10 @@ import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
-/** React Native's handle on one page, which is built on the first prop commit. */
+/**
+ * React Native's handle on one page. The page is built on the first prop commit rather than in the
+ * constructor, because that is when the session id says whether a spare was booted for it.
+ */
 @SuppressLint("ViewConstructor")
 internal class OrcaMobileWebShellView(
   context: Context,
@@ -20,6 +23,9 @@ internal class OrcaMobileWebShellView(
   private var sessionId = ""
   private var bridgeEnabled = false
   private var page: MobileWebShellPage? = null
+  // The adopted spare's `ready`, kept until the shell first speaks to the page: the host that answers
+  // it can be built after the adoption replayed it into nothing.
+  private var adoptedReady: String? = null
 
   private val sink = object : MobileWebShellPageSink {
     override fun pageLoadState(payload: Map<String, Any>) =
@@ -49,15 +55,29 @@ internal class OrcaMobileWebShellView(
   }
 
   private fun hostPage(): MobileWebShellPage {
-    val page = MobileWebShellPage(context)
+    val spare = MobileWebShellSparePool.adopt(sessionId)
+    // An id the pool issued whose page is gone has no WebView to show and must not get a second
+    // one; the page reports a dead renderer, and the remount mints a fresh id.
+    val page = spare?.page
+      ?: MobileWebShellPage(context, withWebView = MobileWebShellSparePool.reserve(sessionId))
     page.webView?.let { addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
     page.sink = sink
+    if (spare != null) {
+      spare.parked.replayInto(sink)
+      adoptedReady = spare.parked.lastFrame
+    }
     return page
+  }
+
+  /** Hands the adopted spare's `ready` to the shell again, until the shell has answered it. */
+  fun replayPageReady() {
+    adoptedReady?.let(sink::pageBridgeMessage)
   }
 
   fun postBridgeMessage(json: String) {
     val current = page ?: throw MobileWebShellBridgeUnavailableException()
     current.postBridgeMessage(json)
+    adoptedReady = null
   }
 
   /** Expo calls this once React Native is done with the view. */
