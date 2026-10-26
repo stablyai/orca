@@ -5,6 +5,7 @@ import type {
   JiraAuthType,
   JiraConnectionStatus,
   JiraIssue,
+  JiraIssueSuggestions,
   JiraIssueFilter,
   JiraIssueListFilters,
   JiraSiteSelection,
@@ -21,7 +22,10 @@ export type JiraCollectionReadOptions = JiraReadOptions & {
   force?: boolean
   filters?: JiraIssueListFilters
 }
-export type JiraSearchOptions = JiraCollectionReadOptions & { signal?: AbortSignal }
+export type JiraSearchOptions = JiraCollectionReadOptions & {
+  signal?: AbortSignal
+  suggestions?: JiraIssueSuggestions
+}
 export type JiraPatchOptions = {
   sourceContext?: TaskSourceContext | null
   siteId?: string | null
