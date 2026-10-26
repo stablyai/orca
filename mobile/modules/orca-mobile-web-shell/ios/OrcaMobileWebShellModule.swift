@@ -4,6 +4,13 @@ public class OrcaMobileWebShellModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
 
+    OnCreate {
+      // A second after creation keeps the warm-up off the launch's first frames.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MobileWebShellWarmUp.start()
+      }
+    }
+
     View(OrcaMobileWebShellView.self) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation")
 

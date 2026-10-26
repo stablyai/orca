@@ -487,6 +487,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   /// history.replaceState changes the path before finish; finished() uses commit state instead of URL equality.
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    MobileWebShellWarmUp.release()
     emit(loadState.finished())
   }
 
