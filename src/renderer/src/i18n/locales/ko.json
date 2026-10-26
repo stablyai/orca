@@ -14317,6 +14317,7 @@
             "prepareSessionResumeFailed": "재개를 위해 이 세션을 준비할 수 없습니다.",
             "sessionDeleted": "세션이 삭제되었습니다",
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
+            "sessionDeleteCheckingHost": "{{value0}} 확인 중…",
             "resumeInChatConflict": "다른 채팅에서 이미 이 대화를 진행 중입니다.",
             "resumeInChatTranscriptMissing": "이 대화 기록을 로드할 수 없어 채팅에서 재개할 수 없습니다.",
             "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다.",
@@ -14458,6 +14459,7 @@
             "subagentCountPlural": "서브에이전트 {{value0}}개",
             "delete": "삭제",
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
+            "deleteReasonHostUpdateRequired": "여기에서 세션을 삭제하려면 {{value0}}을(를) 업데이트하세요.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
             "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
             "resumeInNewNativeChat": "새 채팅에서 재개",
@@ -14468,6 +14470,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
+            "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
           },
           "FileExplorerNameFilter": {

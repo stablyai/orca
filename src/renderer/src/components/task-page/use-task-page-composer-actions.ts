@@ -12,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { bindTaskPageJiraItemSourceContext } from '../task-page-jira-item-source-context'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldHideTaskPageListChrome } from './task-page-list-chrome-visibility'
-import { getJiraIssueWorkspaceSeed } from '../task-page-source-context'
+import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
 import { findJiraIssueDefaultRepo } from '../../../../shared/jira/jira-project-reference'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {

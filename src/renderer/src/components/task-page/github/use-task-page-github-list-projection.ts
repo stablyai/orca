@@ -4,13 +4,13 @@ import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
-import { deriveAdvertisedTotalPages } from '@/components/task-page-work-item-pagination'
+import { deriveAdvertisedTotalPages } from '@/components/task-page/task-page-work-item-pagination'
 import {
   GITHUB_PR_TASK_GRID_CLASS,
   GITHUB_TASK_GRID_CLASS,
   PR_CHECKS_EAGER_PREFETCH_LIMIT,
   getTaskPageRepoSourceContext
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {

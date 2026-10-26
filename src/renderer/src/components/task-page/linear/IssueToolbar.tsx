@@ -18,7 +18,7 @@ import type {
   LinearViewMode,
   LinearGroupBy,
   LinearOrderBy
-} from '@/components/task-page-localized-options'
+} from '../../../../../shared/linear/issue-view-resume-state'
 export function TaskPageLinearIssueToolbar({
   model
 }: {

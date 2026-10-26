@@ -14317,6 +14317,7 @@
             "prepareSessionResumeFailed": "无法为恢复准备此会话。",
             "sessionDeleted": "会话已删除",
             "sessionDeleteFailed": "无法删除会话",
+            "sessionDeleteCheckingHost": "正在检查 {{value0}}…",
             "resumeInChatConflict": "另一个聊天室已经在进行此对话。",
             "resumeInChatTranscriptMissing": "无法加载此对话的历史记录，因此无法在聊天中恢复。",
             "resumeInChatFailed": "无法在新聊天中恢复此会话。",
@@ -14458,6 +14459,7 @@
             "subagentCountPlural": "{{value0}} 个子智能体",
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
+            "deleteReasonHostUpdateRequired": "请更新 {{value0}}，以便从这里删除其会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
             "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
             "resumeInNewNativeChat": "在新聊天中恢复",
@@ -14468,6 +14470,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",
             "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
+            "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复。",
             "confirm": "删除"
           },
           "FileExplorerNameFilter": {

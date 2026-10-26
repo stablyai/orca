@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
 import {
   getGitHubProjectSourceSummary,
   getTaskSourceHostAvailabilityForHost

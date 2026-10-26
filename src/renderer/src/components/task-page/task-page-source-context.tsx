@@ -1,24 +1,27 @@
-import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page-localized-options'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../shared/jira/jira-types'
-import type { Repo } from '../../../shared/repo-types'
+import type {
+  GitLabTaskFilter,
+  GitLabIssueFilter
+} from '@/components/task-page/task-page-localized-options'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitLabProjectRef, GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   normalizeTaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../shared/task-source-context'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+} from '../../../../shared/task-source-context'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
 import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
-} from './task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+} from '../task-source-context-summary'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 export function isGitLabMRFilter(

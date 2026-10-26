@@ -1,6 +1,6 @@
 import type { TaskPageDetailRoutingModel } from '../use-task-page-detail-routing'
 import { useState, useMemo, useRef } from 'react'
-import type { LinearMode } from '@/components/task-page-localized-options'
+import type { LinearMode } from '@/components/task-page/task-page-localized-options'
 import {
   type LinearViewMode,
   type LinearGroupBy,
@@ -18,7 +18,7 @@ import type {
   LinearProjectSummary,
   LinearProjectDetail
 } from '../../../../../shared/linear/project-types'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/issue-attribute-filter'
 import type {
   LinearIssueListFilterRead,

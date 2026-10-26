@@ -6,7 +6,7 @@ import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
-import { getGitHubProjectSourceSummary } from '../task-page-source-context'
+import { getGitHubProjectSourceSummary } from './task-page-source-context'
 import {
   Select,
   SelectTrigger,

@@ -1,5 +1,5 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 /** Inclusive updatedAt cursors preserve timestamp ties; dedup boundary rows and backfill full display pages, flushing partials on exhaustion/stall. */
 

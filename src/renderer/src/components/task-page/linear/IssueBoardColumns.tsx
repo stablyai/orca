@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { LinearStateCell } from './task-page-linear-issue-model'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { formatRelativeTime } from '../task-page-source-context'
 export function TaskPageLinearIssueBoardColumns({
   model
 }: {

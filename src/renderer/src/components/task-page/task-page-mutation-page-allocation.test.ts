@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import { patchTaskPageGitHubWorkItemPages } from './task-page/github/task-page-github-work-item-mutation-pages'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { patchTaskPageGitHubWorkItemPages } from './github/task-page-github-work-item-mutation-pages'
 
 function item(id: string): GitHubWorkItem {
   return {

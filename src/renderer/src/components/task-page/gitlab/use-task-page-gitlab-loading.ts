@@ -10,7 +10,7 @@ import {
   getTaskPageRepoSourceContext,
   isGitLabIssueFilter,
   isGitLabMRFilter
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6

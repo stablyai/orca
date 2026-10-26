@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
-import { selectTaskPageWorkItemsCacheEntries } from '../../components/task-page-cache-selectors'
+import { selectTaskPageWorkItemsCacheEntries } from '../../components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
 
