@@ -32,6 +32,9 @@ type RuntimeHostAccessFormProps = {
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onCancel: () => void
+  edgeAuthFields?: React.ReactNode
+  edgeAuthValid?: boolean
+  retryCredentials?: boolean
   onSubmit: (allowLoopback: boolean) => void
 }
 
@@ -44,6 +47,9 @@ export function RuntimeHostAccessForm({
   onNameChange,
   onAccessLinkChange,
   onCancel,
+  edgeAuthFields,
+  edgeAuthValid = true,
+  retryCredentials = false,
   onSubmit
 }: RuntimeHostAccessFormProps): React.JSX.Element {
   const [allowLoopback, setAllowLoopback] = useState(false)
@@ -60,7 +66,7 @@ export function RuntimeHostAccessForm({
       : loopbackBlocked
         ? 'runtime-server-loopback-error'
         : 'runtime-server-access-link-help'
-  const canSubmit = parsed.ok && !loopbackBlocked && !busy
+  const canSubmit = parsed.ok && !loopbackBlocked && !busy && edgeAuthValid
   const defaultName = defaultServerNameForAccessLink(accessLink, takenNames)
 
   return (
@@ -201,6 +207,8 @@ export function RuntimeHostAccessForm({
         />
       </div>
 
+      {edgeAuthFields}
+
       {failure ? (
         <RuntimeHostAccessFailureAlert
           id="runtime-server-verification-error"
@@ -225,12 +233,14 @@ export function RuntimeHostAccessForm({
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-          {tunnelOverrideEnabled
-            ? translate(
-                'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',
-                'Add server using tunnel'
-              )
-            : translate('auto.components.settings.RuntimeHostAccessForm.addServer', 'Add server')}
+          {retryCredentials
+            ? translate('settings.edgeAuth.retry', 'Save credentials')
+            : tunnelOverrideEnabled
+              ? translate(
+                  'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',
+                  'Add server using tunnel'
+                )
+              : translate('auto.components.settings.RuntimeHostAccessForm.addServer', 'Add server')}
         </Button>
       </div>
     </form>

@@ -8,6 +8,8 @@ import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
+vi.mock('./endpoint-auth-headers-store', () => ({ primeEndpointAuthHeaders: async () => null }))
+
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
 
 // Descriptor status probes need RPC stubs these clients do not provide.

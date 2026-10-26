@@ -5,7 +5,15 @@ const mocks = vi.hoisted(() => {
   const snapshots: Record<string, unknown>[] = []
   const sshTargets: { id: string; label: string }[] = []
   const sshStates = new Map<string, Record<string, unknown>>()
-  return { environments, snapshots, sshTargets, sshStates, resolveManaged: vi.fn(), call: vi.fn() }
+  return {
+    environments,
+    snapshots,
+    sshTargets,
+    sshStates,
+    resolveManaged: vi.fn(),
+    call: vi.fn(),
+    connection: vi.fn()
+  }
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
@@ -17,6 +25,9 @@ vi.mock('../../../shared/runtime-environments', async (importOriginal) => ({
   getPreferredPairingOffer: (environment: { endpoint: string }) => ({
     endpoint: environment.endpoint
   })
+}))
+vi.mock('../../runtime/runtime-environment-edge-auth', () => ({
+  resolveRuntimeEnvironmentConnection: mocks.connection
 }))
 vi.mock('./runtime-environment-managed-tunnel', () => ({
   resolveManagedRuntimeEnvironment: mocks.resolveManaged
@@ -47,6 +58,11 @@ describe('runtime environment mobile relay hosts', () => {
       createdAt: 1,
       runtimeId: 'runtime-a'
     })
+    mocks.connection
+      .mockReset()
+      .mockImplementation((_profile: string, environment: { endpoint: string }) => ({
+        endpoint: environment.endpoint
+      }))
     mocks.call.mockReset()
     mocks.snapshots = []
   })
@@ -166,6 +182,22 @@ describe('runtime environment mobile relay hosts', () => {
       pairing: { endpoint: 'ws://vm:6768' }
     })
     expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'env-1')
+  })
+
+  it('keeps edge credentials in the desktop-owned dial data and out of the phone catalog', async () => {
+    const edgeAuth = {
+      origin: 'wss://orca.example',
+      hostPublicKeyB64: 'k',
+      headers: { 'X-Token': 'synthetic-secret' }
+    }
+    mocks.connection.mockReturnValue({ endpoint: 'wss://orca.example', edgeAuth })
+    const hosts = createRuntimeEnvironmentMobileRelayHosts()
+    await expect(hosts.resolve('env-1')).resolves.toMatchObject({ edgeAuth })
+    expect(mocks.connection).toHaveBeenCalledWith(
+      '/user-data',
+      expect.objectContaining({ id: 'env-1' })
+    )
+    expect(JSON.stringify(hosts.list())).not.toContain('synthetic-secret')
   })
 
   it('answers null for a name, an unknown id or a removed server, without resolving it', async () => {

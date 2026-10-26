@@ -126,7 +126,8 @@ function createSocket(
         connection.endpoint,
         remoteRuntimeConnectOptions(
           { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES },
-          connectTimeoutMs
+          connectTimeoutMs,
+          connection
         )
       ),
       handshake

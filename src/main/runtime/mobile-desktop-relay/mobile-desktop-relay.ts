@@ -225,6 +225,7 @@ export class MobileDesktopRelay {
       const socket = await openRemoteRuntimePassthroughSocket(
         {
           ...pairedRuntimeConnectionFromOffer(host.pairing),
+          ...(host.edgeAuth ? { edgeAuth: host.edgeAuth } : {}),
           credential: { kind: 'token', deviceToken: grant.token },
           pairedDeviceId: grant.deviceId
         },

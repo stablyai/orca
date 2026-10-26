@@ -1,6 +1,9 @@
 export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:list',
   'runtimeEnvironments:desktopCreatedChatIds',
+  'runtimeEnvironments:getEdgeAuthStatus',
+  'runtimeEnvironments:saveEdgeAuth',
+  'runtimeEnvironments:clearEdgeAuth',
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:verifyAndAddFromPairingCode',
   'runtimeEnvironments:repairFromPairingCode',

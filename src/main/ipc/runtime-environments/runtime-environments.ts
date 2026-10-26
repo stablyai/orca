@@ -1,5 +1,7 @@
 import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
 import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
+import { registerRuntimeEnvironmentEdgeAuthHandlers } from './runtime-environment-edge-auth-handlers'
+import { forgetRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -79,6 +81,7 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 }
 /** Returns once the environment's client-hosted browser pages have been released. */
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
+  forgetRuntimeEdgeAuth(environmentId)
   // Same-ID re-pairing must retire every transport authenticated as the former peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
@@ -145,6 +148,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentRepairHandler({
+    getUserDataPath,
+    invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
+  registerRuntimeEnvironmentEdgeAuthHandlers({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })

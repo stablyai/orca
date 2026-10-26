@@ -3,6 +3,9 @@ allowBuilds:
   # Its postinstall unpacks the prebuilt libsodium the native builds link.
   react-native-libsodium: true
 
+# Prefab treats '=' in patched-package paths as an option delimiter.
+virtualStoreDirMaxLength: 32
+
 minimumReleaseAge: 4320
 
 overrides:

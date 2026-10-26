@@ -3,6 +3,8 @@ import {
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import type { RuntimeEdgeAuthHeader } from '../../../shared/runtime-edge-auth-types'
+import { clearRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -90,7 +92,15 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+    async (
+      _event,
+      args: {
+        name: string
+        pairingCode: string
+        allowLoopback?: boolean
+        edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
+      }
+    ) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         await publishVerifiedPairing(
@@ -98,6 +108,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           result,
           result.updatedExisting ? { invalidateTransport } : null
         )
+      }
+      if (!result.ok && result.savedEnvironmentId) {
+        await invalidateTransport(result.savedEnvironmentId)
       }
       return result
     }
@@ -133,6 +146,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
         getUserDataPath()
       )
       closeLegacySelectorTransport(args.selector, removed.id)
+      clearRuntimeEdgeAuth(getUserDataPath(), removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

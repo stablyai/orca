@@ -20,6 +20,10 @@ on:
 jobs:
   android-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
 
     # Grant contents:write for gh release create; build success alone does not authorize publication.
     permissions:
@@ -68,7 +72,8 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        run: cd android && ./gradlew assembleRelease
+        # Compiling patched React Native exceeds Expo's default 512 MiB metaspace.
+        run: cd android && ./gradlew --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError' --stacktrace assembleRelease
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK

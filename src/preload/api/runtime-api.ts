@@ -1,3 +1,8 @@
+import type {
+  RuntimeEdgeAuthHeader,
+  RuntimeEdgeAuthStatus,
+  RuntimeEdgeAuthMutation
+} from '../../shared/runtime-edge-auth-types'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
 import type { WslHostsPreloadApi } from './wsl-hosts-api'
 import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
@@ -83,6 +88,11 @@ export type RuntimeApi = {
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>
+    getEdgeAuthStatus?: (args: { environmentId: string }) => Promise<RuntimeEdgeAuthStatus>
+    saveEdgeAuth?: (
+      args: RuntimeEdgeAuthMutation & { headers: RuntimeEdgeAuthHeader[] }
+    ) => Promise<RuntimeEdgeAuthStatus>
+    clearEdgeAuth?: (args: RuntimeEdgeAuthMutation) => Promise<RuntimeEdgeAuthStatus>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.
@@ -96,6 +106,7 @@ export type RuntimeApi = {
       name: string
       pairingCode: string
       allowLoopback?: boolean
+      edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     /** Replaces a revoked pairing in place; refuses a link for a different server. */
     repairFromPairingCode: (args: {

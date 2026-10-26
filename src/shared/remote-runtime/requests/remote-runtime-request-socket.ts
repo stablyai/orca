@@ -180,9 +180,13 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     try {
-      const connectOptions = remoteRuntimeConnectOptions({
-        maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
-      })
+      const connectOptions = remoteRuntimeConnectOptions(
+        {
+          maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
+        },
+        undefined,
+        connection
+      )
       ws = new WebSocket(connection.endpoint, connectOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

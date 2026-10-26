@@ -5,6 +5,10 @@ import {
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { forgetHostDescriptor } from './host-descriptor-store'
 import { removeHost } from './host-store'
+import {
+  clearEndpointAuthHeadersCache,
+  noteEndpointAuthHeadersChanged
+} from './endpoint-auth-headers'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -20,6 +24,8 @@ export async function removeHostAndCloseClient(
     throw error
   }
   forgetHostClient(hostId)
+  noteEndpointAuthHeadersChanged(hostId)
+  clearEndpointAuthHeadersCache(hostId)
   forgetHostDescriptor(hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)

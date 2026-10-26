@@ -1,3 +1,8 @@
+import type {
+  RuntimeEdgeAuthHeader,
+  RuntimeEdgeAuthStatus,
+  RuntimeEdgeAuthMutation
+} from '../../shared/runtime-edge-auth-types'
 import { ipcRenderer } from 'electron'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
@@ -25,6 +30,13 @@ import { getWslHostsApi } from './wsl-hosts-api'
 export const runtimeEnvironmentsApi = {
   desktopCreatedChatIds: (): Promise<string[]> =>
     ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
+  getEdgeAuthStatus: (args: { environmentId: string }): Promise<RuntimeEdgeAuthStatus> =>
+    ipcRenderer.invoke('runtimeEnvironments:getEdgeAuthStatus', args),
+  saveEdgeAuth: (
+    args: RuntimeEdgeAuthMutation & { headers: RuntimeEdgeAuthHeader[] }
+  ): Promise<RuntimeEdgeAuthStatus> => ipcRenderer.invoke('runtimeEnvironments:saveEdgeAuth', args),
+  clearEdgeAuth: (args: RuntimeEdgeAuthMutation): Promise<RuntimeEdgeAuthStatus> =>
+    ipcRenderer.invoke('runtimeEnvironments:clearEdgeAuth', args),
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {
@@ -51,6 +63,7 @@ export const runtimeEnvironmentsApi = {
     name: string
     pairingCode: string
     allowLoopback?: boolean
+    edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
   }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
     ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
   repairFromPairingCode: (args: {
