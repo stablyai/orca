@@ -167,7 +167,10 @@ const debElectronRuntimeDependencies = [
   'xdg-utils',
   'libatspi2.0-0',
   'libuuid1',
-  'libsecret-1-0'
+  'libsecret-1-0',
+  // Electron links these but electron-builder's defaults omit them; t64 is Ubuntu 24.04+/Debian 13.
+  'libasound2t64 | libasound2',
+  'libgbm1'
 ]
 const rpmElectronRuntimeDependencies = [
   'gtk3',
@@ -177,7 +180,8 @@ const rpmElectronRuntimeDependencies = [
   '(libXtst or libXtst6)',
   'xdg-utils',
   'at-spi2-core',
-  '(libuuid or libuuid1)'
+  '(libuuid or libuuid1)',
+  'alsa-lib'
 ]
 
 // Mirror OS document extensions: CJS packager cannot import TS; keep startup/os-opened-documents.ts and NSIS hooks aligned.
