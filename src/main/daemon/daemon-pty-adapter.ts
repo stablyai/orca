@@ -215,6 +215,16 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
+        // Why: a daemon answers a write or resize for an id it has not created yet with an unnamed
+        // exit; for a session this adapter never published, that ends nothing a pending spawn owns.
+        if (
+          event.payload.incarnationId === undefined &&
+          currentIncarnationId === undefined &&
+          !this.activeSessionIds.has(event.sessionId) &&
+          !this.sessionsAwaitingDaemonRecovery.has(event.sessionId)
+        ) {
+          return
+        }
         this.clearExitedSessionState(
           event.sessionId,
           event.payload.code,

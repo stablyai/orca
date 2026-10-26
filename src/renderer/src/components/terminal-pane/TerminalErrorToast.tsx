@@ -59,6 +59,10 @@ const SOURCE_RESTORE_REQUIRED = tokenPattern(
 )
 // The pane's saved session is owned by another host connection, e.g. an older build's relay tab.
 const OWNER_HOST_MISMATCH = tokenPattern('terminal_pane_owner_host_mismatch')
+// Main refused a spawn whose process ended before it could register it; plain shells hit it too.
+const EXITED_DURING_START = tokenPattern(
+  '(^|[^a-z0-9_])agent_session_exited_during_start(?=$|[^a-z0-9_])'
+)
 
 /** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
 export function isSshReconnectOwnedTerminalError(error: string): boolean {
@@ -187,6 +191,14 @@ export function humanizeTerminalError(error: string, agentId?: string | null): s
     translate(
       'auto.components.terminal.pane.TerminalErrorToast.ownerHostMismatch',
       "This terminal's saved session belongs to another host connection, so Orca can't reattach it here. Open a new terminal to continue."
+    )
+  )
+  humanized = humanized.replace(EXITED_DURING_START.replaceAll, (_match, prefix: string) =>
+    prefix.concat(
+      translate(
+        'auto.components.terminal.pane.TerminalErrorToast.exitedDuringStart',
+        "This terminal's process ended while Orca was starting it. If the terminal doesn't respond, open a new one."
+      )
     )
   )
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {

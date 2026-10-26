@@ -15584,7 +15584,8 @@
             "ownerHostMismatch": "A sessão salva deste terminal pertence a outra conexão de host, então o Orca não pode reconectá-la aqui. Abra um novo terminal para continuar.",
             "ptyAllocationLimit": "Seu sistema não consegue alocar mais dispositivos pty. Feche alguns terminais que você não está usando, no Orca ou em outro programa, e tente novamente.",
             "terminalProcessLimit": "Seu sistema não consegue iniciar outro processo de terminal. Feche terminais ou processos sem uso e tente novamente.",
-            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente."
+            "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente.",
+            "exitedDuringStart": "O processo deste terminal terminou enquanto o Orca o iniciava. Se o terminal não responder, abra um novo."
           },
           "CloseTerminalDialog": {
             "automatic_resume_warning": "Este terminal não vai retomar automaticamente. Cancele e coloque o espaço de trabalho em suspensão para retomá-lo depois.",

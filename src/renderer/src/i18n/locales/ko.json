@@ -3372,7 +3372,8 @@
             "ptyAllocationLimit": "시스템에서 더 이상 pty 장치를 할당할 수 없습니다. Orca 또는 다른 프로그램에서 사용하지 않는 터미널을 몇 개 닫은 후 다시 시도하세요.",
             "terminalProcessLimit": "시스템에서 터미널 프로세스를 더 시작할 수 없습니다. 사용하지 않는 터미널을 닫거나 불필요한 프로세스를 종료한 후 다시 시도하세요.",
             "hostTerminalCap": "호스트에서 이미 Orca가 허용하는 최대 개수의 터미널이 실행 중입니다. 더 이상 필요 없는 터미널을 닫은 후 다시 시도하세요.",
-            "ownerHostMismatch": "이 터미널의 저장된 세션은 다른 호스트 연결에 속해 있어 Orca가 여기에서 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요."
+            "ownerHostMismatch": "이 터미널의 저장된 세션은 다른 호스트 연결에 속해 있어 Orca가 여기에서 다시 연결할 수 없습니다. 계속하려면 새 터미널을 여세요.",
+            "exitedDuringStart": "Orca가 이 터미널을 시작하는 동안 터미널 프로세스가 종료되었습니다. 터미널이 응답하지 않으면 새 터미널을 여세요."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
