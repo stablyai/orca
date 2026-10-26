@@ -18,6 +18,8 @@ import {
 } from './wsl-orcad-liveness-monitor'
 import {
   disarmSupervised,
+  isSupervisedSettling,
+  noteSupervisedExit,
   newSupervised,
   WSL_ORCAD_HEARTBEAT_MS,
   type Supervised,
@@ -106,6 +108,11 @@ export class WslOrcadLivenessSupervisor {
     await Promise.all([...this.supervised.values()].map((entry) => this.stop(entry.distro)))
   }
 
+  /** E9: a poll must wait for this distro's verdict rather than reconnect (see the helper). */
+  isSettling(distro: string): boolean {
+    return isSupervisedSettling(this.supervised.get(wslDistroHolderKey(distro)), this.now())
+  }
+
   private entryFor(distro: string): Supervised {
     const key = wslDistroHolderKey(distro)
     const existing = this.supervised.get(key)
@@ -186,6 +193,7 @@ export class WslOrcadLivenessSupervisor {
     if (this.supervised.get(entry.key) !== entry || (this.suspended && trigger === 'heartbeat')) {
       return
     }
+    noteSupervisedExit(entry, trigger, this.now())
     if (entry.busy) {
       // An exit or a re-verify outranks a heartbeat.
       if (entry.pending === null || trigger !== 'heartbeat') {
@@ -289,15 +297,11 @@ export class WslOrcadLivenessSupervisor {
 
   private async onDistroStopped(entry: Supervised): Promise<void> {
     disarmSupervised(entry)
-    const recovering = this.deps.hasUserVisibleWork(entry.distro)
     // Holder and watch exit together; publish distro-stop once.
-    if (recovering || entry.state !== 'distro-stopped') {
-      this.publish(entry, { state: 'distro-stopped', terminals: 'exited', recovering })
+    if (entry.state !== 'distro-stopped') {
+      this.publish(entry, { state: 'distro-stopped', terminals: 'exited', recovering: false })
     }
-    if (recovering) {
-      return this.recover(entry, 'distro-stopped')
-    }
-    // Background recovery waits until another actor starts the distro.
+    // A confirmed stop stays down, even with visible work, until the user or a running distro (E9).
     const generation = entry.generation
     this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${entry.key}`, () => {
       if (entry.generation === generation) {
@@ -319,7 +323,6 @@ export class WslOrcadLivenessSupervisor {
         ensure: (options) => this.deps.manager.ensure(entry.distro, options),
         collectCensus: this.deps.collectCensus,
         arm: (connection) => this.arm(entry, connection),
-        hasUserVisibleWork: () => this.deps.hasUserVisibleWork(entry.distro),
         readRunning: this.deps.readRunning
       },
       reason

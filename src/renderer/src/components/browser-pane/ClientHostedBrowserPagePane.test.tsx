@@ -112,7 +112,7 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(detach).toHaveBeenCalledTimes(1)
   })
 
-  it('updates local chrome from guest navigation without remote stream work', () => {
+  it('updates local chrome from the retained guest navigation', () => {
     const { webview, setUrl, setTitle } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const onUpdatePageState = vi.fn()
@@ -277,6 +277,10 @@ describe('ClientHostedBrowserPagePane', () => {
     )
 
     expect(mocks.attach).toHaveBeenCalledTimes(1)
+    expect(mocks.attach).toHaveBeenCalledWith(
+      { browserPageId: 'page-a', pageHostGeneration: 8 },
+      expect.any(HTMLElement)
+    )
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
     expect(document.querySelector('webview')).toBeNull()
   })
@@ -314,6 +318,7 @@ describe('ClientHostedBrowserPagePane', () => {
   })
 
   it('requests the one-time intro tour on the first active client-hosted page', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -348,15 +353,17 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBe('client-hosted-browser')
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 
   it('never re-requests the intro tour once it has been seen', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -391,11 +398,12 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBeNull()
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 

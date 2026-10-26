@@ -1,3 +1,4 @@
+import { EXIT_SETTLE_MS, failedExit } from './wsl-orcad-liveness-evidence'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
@@ -48,6 +49,8 @@ export type Supervised = {
   pending: Trigger | null
   state: WslOrcadConnectionStatus['state'] | null
   lastBeatMs: number
+  /** When a watch or holder last exited; a running list read soon after may still be stale. */
+  lastExitMs: number | null
 }
 
 export function newSupervised(
@@ -69,7 +72,8 @@ export function newSupervised(
     busy: false,
     pending: null,
     state: null,
-    lastBeatMs: nowMs
+    lastBeatMs: nowMs,
+    lastExitMs: null
   }
 }
 
@@ -81,4 +85,28 @@ export function disarmSupervised(entry: Supervised): void {
   entry.wakeWait = null
   entry.watch?.close()
   entry.watch = null
+}
+
+// Covers the exit settle and the re-read after it, with room for a slow running-list read.
+const EXIT_VERDICT_WINDOW_MS = EXIT_SETTLE_MS * 10
+
+/**
+ * A verdict is in progress, or the watch or holder just exited: a stopping distro can still be
+ * listed as running, so a reconnect now could boot it again.
+ */
+export function isSupervisedSettling(entry: Supervised | undefined, nowMs: number): boolean {
+  if (!entry) {
+    return false
+  }
+  return (
+    entry.busy ||
+    entry.pending !== null ||
+    (entry.lastExitMs !== null && nowMs - entry.lastExitMs < EXIT_VERDICT_WINDOW_MS)
+  )
+}
+
+export function noteSupervisedExit(entry: Supervised, trigger: Trigger, nowMs: number): void {
+  if (failedExit(trigger)) {
+    entry.lastExitMs = nowMs
+  }
 }

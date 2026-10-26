@@ -1,5 +1,6 @@
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import { refuse, AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
@@ -27,10 +28,7 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
-import {
-  resolveUncommittedStructuredCreate,
-  type StructuredCreateRefused
-} from './structured-agent-session-precommit-refusal'
+import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
@@ -297,6 +295,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true
+  firstMessage?: StructuredAgentSessionFirstMessage
+  signal?: AbortSignal
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
@@ -305,13 +305,13 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
-    await resolveUncommittedStructuredCreate(() =>
-      prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
-    )
+  const prepared = await resolveUncommittedStructuredCreate(() =>
+    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
+  assertAgentPromptRequestActive(args.signal)
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,

@@ -260,6 +260,20 @@ describe('getOpenFilesForExternalFileChange', () => {
       }).map((file) => file.id)
     ).toEqual(['runtime-edit', 'runtime-diff'])
   })
+
+  it('matches Windows edit tabs across separator and drive spellings, but not tail case', () => {
+    const tab = makeOpenFile({ id: 'tab', filePath: 'c:\\Repo\\File.ts' })
+    const otherCase = makeOpenFile({ id: 'other-case', filePath: 'c:\\Repo\\file.ts' })
+
+    expect(
+      getOpenFilesForExternalFileChange([tab, otherCase], {
+        worktreeId: 'wt-1',
+        worktreePath: 'C:/Repo',
+        relativePath: 'File.ts'
+      })
+    ).toEqual([tab])
+  })
+
   it('matches restored WSL aliases only for a proven local Windows watcher', () => {
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     const terminalLinkTab = makeOpenFile({

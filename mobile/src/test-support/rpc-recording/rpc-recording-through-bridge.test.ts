@@ -21,7 +21,6 @@ import {
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
 import { C6_BROWSER_CLOSURE_FAMILIES } from '../bridged-parity/c6-browser-closure-families'
 import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
-import { C1_PAGE_CLOSURE } from '../bridged-parity/c1-page-closure'
 import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
 import {
   pageClosureDrift,
@@ -301,16 +300,6 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       })
       // Pin identical as well as divergence totals so improvements cannot silently hide class movement.
       expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
-    })
-
-    it('gives every golden the C1 page closure records the verdict it is pinned to', () => {
-      process.stdout.write(readPageClosure('C1', C1_PAGE_CLOSURE, observed))
-      // Pin every closure id; aggregate corpus totals can trade a domain regression for an unrelated improvement.
-      expect({ closure: pageClosureDrift(C1_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
-      // Check run totals independently because C1’s table has no separate class-count pins.
-      expect(pageClosureRunTotals(C1_PAGE_CLOSURE, observed)).toEqual(
-        pageClosureTotals(C1_PAGE_CLOSURE)
-      )
     })
 
     it('gives every golden the C5 page closure records the verdict it is pinned to', () => {

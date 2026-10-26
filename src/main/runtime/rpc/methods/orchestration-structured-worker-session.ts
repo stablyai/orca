@@ -106,6 +106,7 @@ export async function createStructuredWorkerSession(args: {
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
       // Dispatching a worker is background work; it must not pull the surface away from the user.
+      atRest: true,
       activate: false
     })
     if (!created.ok) {

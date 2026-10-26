@@ -13,6 +13,7 @@ export async function persistVisibilityAwareSettings(args: {
   supportedRuntimeEnvironmentId: string | null
   sourceDefaultsSupportedRuntimeEnvironmentId?: string | null
   shouldPublish?: () => boolean
+  onAcknowledged?: (settings: GlobalSettings) => void
   set: (updater: (state: AppState) => Partial<AppState>) => void
 }): Promise<void> {
   const {
@@ -21,6 +22,7 @@ export async function persistVisibilityAwareSettings(args: {
     supportedRuntimeEnvironmentId,
     sourceDefaultsSupportedRuntimeEnvironmentId = null,
     shouldPublish = () => true,
+    onAcknowledged,
     set
   } = args
   // Why: the write lands on the default scope host whose defaults the store mirrors.
@@ -78,6 +80,9 @@ export async function persistVisibilityAwareSettings(args: {
         worktreeVisibilityDefaults: result.settings.worktreeVisibilityDefaults
       } as GlobalSettings
     }
+    if (nextSettings) {
+      onAcknowledged?.(nextSettings)
+    }
     if (!shouldPublish()) {
       return
     }
@@ -101,6 +106,7 @@ export async function persistVisibilityAwareSettings(args: {
     return
   }
   const nextSettings = await window.api.settings.set(normalizedUpdates)
+  onAcknowledged?.(nextSettings)
   if (!shouldPublish()) {
     return
   }

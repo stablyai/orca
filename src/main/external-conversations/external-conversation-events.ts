@@ -30,6 +30,8 @@ export type ConversationEvent =
   | (ConversationPane & { kind: 'turn-started'; at: number })
   | (ConversationPane & {
       kind: 'turn-ended'
+      /** The ended turn's turn-started `at`; null when its start predates this watch and the row kept none. */
+      turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null
       lastAssistantMessage?: string
@@ -42,6 +44,10 @@ export type ConversationSnapshot = {
     agent: ConnectorAgent
     working: boolean
     prompt: PendingPrompt | null
+    /** The pane's latest turn, as its turn events name it; null before any. */
+    turnId: number | null
+    /** When the conversation last showed activity: its link, or its agent's latest hook report. */
+    activeAt: number
   })[]
 }
 
@@ -184,10 +190,10 @@ export class ConversationEvents {
       return
     }
     this.rejected.delete(paneKey)
-    this.turnStartedAt.delete(paneKey)
     this.emit({
       kind: 'turn-ended',
       ...pane(linked.link, linked.workspace.worktreeId),
+      turnId: this.takeTurnId(paneKey, row),
       stopReason: 'cancellation',
       at: activity.observedAt
     })
@@ -198,11 +204,18 @@ export class ConversationEvents {
       kind: 'snapshot',
       conversations: [...allLinks(this.deps.store)].map(({ workspace, link }) => {
         const row = this.deps.readHookRow(link.paneKey)
+        const working = row ? hookRowAgentPhase(row) === 'working' : false
         return {
           ...pane(link, workspace.worktreeId),
           agent: link.agent,
-          working: row ? hookRowAgentPhase(row) === 'working' : false,
-          prompt: this.deps.pendingPrompt(link)
+          working,
+          prompt: this.deps.pendingPrompt(link),
+          // The same id started() and takeTurnId() give this turn.
+          turnId:
+            this.turnStartedAt.get(link.paneKey) ??
+            row?.turnStartedAt ??
+            (row && working ? row.stateStartedAt : null),
+          activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0)
         }
       })
     }
@@ -250,15 +263,21 @@ export class ConversationEvents {
     if (!link) {
       return
     }
-    this.turnStartedAt.delete(item.paneKey)
     const message = item.row.lastAssistantMessage
     this.emit({
       kind: 'turn-ended',
       ...pane(link, item.worktreeId),
+      turnId: this.takeTurnId(item.paneKey, item.row),
       stopReason,
       ...(message ? { lastAssistantMessage: message } : {}),
       at: item.row.stateStartedAt
     })
+  }
+
+  private takeTurnId(paneKey: string, row: AgentStatusIpcPayload): number | null {
+    const turnId = this.turnStartedAt.get(paneKey) ?? row.turnStartedAt ?? null
+    this.turnStartedAt.delete(paneKey)
+    return turnId
   }
 
   private linkedFor(paneKey: string): LinkedConversation | null {

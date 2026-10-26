@@ -30,12 +30,6 @@ vi.mock('./orchestration/worker/worker-setup-gate', () => ({
   persistWorkerReadinessStage: () => {},
   persistWorkerSetupWaitOutcome: () => {}
 }))
-vi.mock('./orchestration/worker/worker-start-receipt', () => ({
-  failWorkerStartWithReceipt: (args: { failedStage: string }) => ({
-    state: 'failed',
-    stage: args.failedStage
-  })
-}))
 vi.mock('./orchestration/runs/dispatch-creator', () => ({
   resolveDispatchCreator: () => ({ kind: 'terminal', handle: 'term_c' })
 }))
@@ -97,14 +91,22 @@ function fakes() {
     getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path calls only these three methods.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the failing start path calls only these methods.
   const db = {
     createStartingWorkerDispatch: () => ({
       dispatch: { id: 'd_fail', depth: 0 },
       task: { id: 't1', spec: 'do the thing' }
     }),
     recordWorkerStage: () => {},
-    prepareStartingWorkerAuthority: () => {}
+    prepareStartingWorkerAuthority: () => {},
+    getWorkerDispatch: () => undefined,
+    failWorkerStart: (_dispatchId: string, stage: string) => ({
+      state: 'failed',
+      stage,
+      effects: '[]',
+      residual_resources: '[]'
+    }),
+    getWorkerTerminalResourceByOwner: () => undefined
   } as unknown as OrchestrationDb
   return { runtime, db, retireStructuredAgentSessionTabFromSnapshot }
 }

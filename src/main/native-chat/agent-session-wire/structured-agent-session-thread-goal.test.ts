@@ -100,7 +100,9 @@ describe('performThreadGoalChange', () => {
       sessionId: 'session-1',
       fence: 1,
       change: { kind: 'set', objective: 'Ship the parser' },
-      replacesGoal: false
+      replacesGoal: false,
+      executionOptions: {},
+      signal: undefined
     })
     const expected = {
       kind: 'message',

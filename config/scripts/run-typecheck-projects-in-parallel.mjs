@@ -79,6 +79,7 @@ export function parseTypecheckOptions(args) {
     compiler: 'auto',
     bunConcurrency: 2,
     bunThreads: 4,
+    checkers: null,
     projects: TYPECHECK_PROJECTS
   }
   const selected = []
@@ -89,6 +90,8 @@ export function parseTypecheckOptions(args) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
     } else if (argument.startsWith('--bun-threads=')) {
       options.bunThreads = Number(argument.slice('--bun-threads='.length))
+    } else if (argument.startsWith('--checkers=')) {
+      options.checkers = Number(argument.slice('--checkers='.length))
     } else if (argument.startsWith('--project=')) {
       const config = argument.slice('--project='.length)
       const project = [...TYPECHECK_PROJECTS, ...MOBILE_TYPECHECK_PROJECTS].find(
@@ -106,6 +109,9 @@ export function parseTypecheckOptions(args) {
     if (!Number.isInteger(value) || value < 1 || value > 4) {
       throw new Error('Bun concurrency and threads must be integers from 1 to 4')
     }
+  }
+  if (options.checkers !== null && (!Number.isInteger(options.checkers) || options.checkers < 1)) {
+    throw new Error('Checkers must be a positive integer')
   }
   if (selected.length > 0) {
     options.projects = selected
@@ -152,9 +158,21 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
   )
 }
 
-export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+// Uncapped tsrs runs ~40 threads on 24 cores; 8 checkers matched its wall time with 16% less CPU under load.
+export const TSRS_DEFAULT_CHECKERS = 8
+
+const checkerArgs = (checkers) => (checkers ? ['--checkers', String(checkers)] : [])
+
+export function resolveTypecheckCommand(
+  config,
+  { compiler, bunExecutable, bunThreads, checkers = null, root }
+) {
   if (compiler === 'tsrs') {
-    return resolveTsrsTypecheckCommand(config, root)
+    const command = resolveTsrsTypecheckCommand(config, root)
+    return {
+      ...command,
+      args: [...command.args, ...checkerArgs(checkers ?? TSRS_DEFAULT_CHECKERS)]
+    }
   }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
@@ -162,20 +180,27 @@ export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunTh
       `Bun CI compiler targets TypeScript ${BUN_TYPESCRIPT_VERSION}, but ${config} resolves ${installedCompiler.version}`
     )
   }
+  if (compiler === 'bun') {
+    return {
+      program: bunExecutable,
+      args: ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all'],
+      cwd: root
+    }
+  }
   return {
-    program: compiler === 'bun' ? bunExecutable : process.execPath,
-    args:
-      compiler === 'bun'
-        ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
-        : [installedCompiler.program, '--noEmit', '-p', config],
+    program: process.execPath,
+    args: [installedCompiler.program, '--noEmit', '-p', config, ...checkerArgs(checkers)],
     cwd: root
   }
 }
 
-function checkProject(config, { compiler, bunExecutable, bunThreads, root, spawnCompiler }) {
+function checkProject(
+  config,
+  { compiler, bunExecutable, bunThreads, checkers, root, spawnCompiler }
+) {
   return new Promise((resolve, reject) => {
     const child = spawnCompiler({
-      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }),
+      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, checkers, root }),
       stdio: 'inherit'
     })
     child.on('error', reject)
@@ -196,6 +221,7 @@ export async function runTypecheckProjects({
   bunExecutable = 'bun',
   bunConcurrency = 1,
   bunThreads = 4,
+  checkers = null,
   root = repoRoot,
   projects = TYPECHECK_PROJECTS,
   spawnCompiler = spawnProcess,
@@ -217,6 +243,7 @@ export async function runTypecheckProjects({
               compiler,
               bunExecutable,
               bunThreads,
+              checkers,
               root,
               spawnCompiler
             })
@@ -233,7 +260,14 @@ export async function runTypecheckProjects({
   for (const batch of batches) {
     const results = await Promise.allSettled(
       batch.map((project) =>
-        checkProject(project.config, { compiler, bunExecutable, bunThreads, root, spawnCompiler })
+        checkProject(project.config, {
+          compiler,
+          bunExecutable,
+          bunThreads,
+          checkers,
+          root,
+          spawnCompiler
+        })
       )
     )
     for (const result of results) {

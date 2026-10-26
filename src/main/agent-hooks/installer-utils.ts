@@ -342,3 +342,5 @@ export function writeHooksJson(
     }
   }
 }
+
+export { writeHooksJsonAsync } from './hooks-json-write-async'

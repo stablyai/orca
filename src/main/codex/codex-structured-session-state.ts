@@ -1,3 +1,4 @@
+import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
@@ -30,6 +31,8 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
@@ -143,6 +146,16 @@ export type CodexSession = {
   acquisitionGeneration: string
   threadId: string
   historyMode?: 'legacy' | 'paginated'
+  /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
+  permissions?: {
+    acquiredMode: AgentChatPermissionChoice
+    acquiredSandbox?: CodexSandboxPolicy
+    launchSandboxIntact: boolean
+    cwd: string
+    visualsFolder?: string
+    preparedMode?: AgentChatPermissionChoice
+    preparedAuto?: CodexSandboxPolicy
+  }
   /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
   /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */
@@ -151,6 +164,7 @@ export type CodexSession = {
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
+  /** Startup reports and accepted fresh-turn policies describe this child, never saved intent. */
   reportedOptions: {
     reportedPermissionMode?: string | null
     model?: string
@@ -162,6 +176,7 @@ export type CodexSession = {
   nativeDefaults?: { personality?: string; serviceTier?: string }
   /** Overrides actually attempted on this child, independently of future saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
+  appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */
   catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes

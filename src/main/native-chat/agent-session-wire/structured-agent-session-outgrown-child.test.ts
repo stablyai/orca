@@ -54,7 +54,7 @@ describe('a send after the agent said it is not signed in', () => {
 
     expect((await rig.host.send(CALLER, restTestSend('signed in now', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
 
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
@@ -188,12 +188,14 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     input: Parameters<typeof conversation>[0],
     work: Partial<typeof idle> = {},
     stopAgent = vi.fn(async () => undefined),
-    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>,
+    permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
   ) => {
     const warn = vi.fn()
     await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
       work: { ...idle, ...work },
       ...(launchPermission ? { launchPermission } : {}),
+      ...(permissionRequiresAcquisition ? { permissionRequiresAcquisition } : {}),
       stopAgent,
       logger: { warn, error: vi.fn() }
     })
@@ -258,6 +260,19 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
         (await retire(askChild, {}, undefined, now('full-access'))).stopAgent
       ).toHaveBeenCalledWith('session')
       expect((await retire(askChild, {}, undefined, now('ask'))).stopAgent).not.toHaveBeenCalled()
+    })
+
+    it('keeps a child that can apply policy per turn, and acquires unknown Auto only when idle', async () => {
+      expect(
+        (await retire(askChild, {}, undefined, now('full-access'), () => false)).stopAgent
+      ).not.toHaveBeenCalled()
+      expect(
+        (await retire(askChild, { childWorkOpen: () => true }, undefined, now('auto'), () => true))
+          .stopAgent
+      ).not.toHaveBeenCalled()
+      expect(
+        (await retire(askChild, {}, undefined, now('auto'), () => true)).stopAgent
+      ).toHaveBeenCalledWith('session')
     })
 
     it('is kept while it owes work, as a signed-out one is', async () => {

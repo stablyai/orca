@@ -202,7 +202,7 @@ function structuredAgentLaunchState(
   agent: TuiAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
+  const identity = structuredLaunchIdentity(worktreeId, agent, options)
   const existing = getJoinableStructuredLaunchState(identity, options.requestId)
   const joined = existing && joinStructuredLaunchState(existing, agent, options)
   if (joined) {

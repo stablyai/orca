@@ -205,6 +205,23 @@ describe('TerminalContextMenu', () => {
     ).toBe(false)
   })
 
+  it('uses nominal primary toggle labels, including default and unbound', () => {
+    for (const [bindings, label] of [
+      [undefined, 'Ctrl+Shift+J'],
+      [['Mod+Alt+Y', 'Mod+Alt+K'], 'Ctrl+Alt+Y'],
+      [[], null]
+    ] as const) {
+      shortcuts.list = []
+      renderMenu({
+        canToggleNativeChat: true,
+        keybindings: bindings === undefined ? {} : { 'terminal.toggleNativeChat': [...bindings] }
+      })
+      expect(shortcuts.list.filter((value) => value.endsWith('J') || value.endsWith('Y'))).toEqual(
+        label ? [label] : []
+      )
+    }
+  })
+
   it('shows one shortcut per terminal menu action on Windows', () => {
     vi.stubGlobal('navigator', {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'

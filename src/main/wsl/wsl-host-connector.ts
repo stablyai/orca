@@ -7,7 +7,7 @@ import { resolveEnvironmentPairingOffer } from '../../shared/runtime-environment
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { listWslHostDistros } from './wsl-host-distro-list'
-import type { WslHostConnector } from './wsl-host-service'
+import type { WslHostConnector, WslHostReachability } from './wsl-host-service'
 import { readWslDistroOrcadPublicKey } from './wsl-host-ssh-orcad-conflict'
 import {
   WslOrcadConnectionManager,
@@ -36,7 +36,7 @@ function transportFor(distro: string) {
   return createWslOrcadHostTransport({ target: targetFor(distro) })
 }
 
-type Reachability = 'available' | 'unreachable' | 'stopped' | 'unavailable'
+type Reachability = WslHostReachability
 
 export function createWslHostConnector(options: {
   userDataPath: string
@@ -70,6 +70,8 @@ export function createWslHostConnector(options: {
       findWslHostDeployment(options.userDataPath, environmentId)
         ? resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
         : null,
+    recordedLocalPort: (environmentId) =>
+      findWslHostDeployment(options.userDataPath, environmentId)?.localPort ?? null,
     onChange: options.onChange,
     deployAndLaunch: (distro, deployOptions) =>
       options.isKnownDistro(distro)
@@ -148,6 +150,11 @@ export function createWslHostConnector(options: {
     isReachable: async (distro, environmentId) =>
       options.runtime.isReady?.(environmentId) ||
       (await coldReachability(distro, environmentId)) === 'available',
+    isSettling: (distro) => liveness.isSettling(distro),
+    reachability: async (distro, environmentId) =>
+      options.runtime.isReady?.(environmentId)
+        ? 'available'
+        : coldReachability(distro, environmentId),
     disconnect: (distro) => liveness.stop(distro),
     stopServer: async (distro, environmentId) => {
       const reachability = await coldReachability(distro, environmentId)

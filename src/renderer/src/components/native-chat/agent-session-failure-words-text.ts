@@ -149,6 +149,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
     conversationOpenElsewhere: () =>
       translate(
         'components.native-chat.failureWords.conversationOpenElsewhere',

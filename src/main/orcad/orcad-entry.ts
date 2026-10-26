@@ -1,14 +1,10 @@
 // Compose the Node-host runtime; paired desktop pages work even without a local browser engine.
-import { join } from 'node:path'
 import process from 'node:process'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
-import {
-  installOrcadHostAdapters,
-  prepareOrcadSecretStore,
-  runOrcadQuitHandlers
-} from './orcad-host-adapters'
+import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
+import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -61,18 +57,6 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
-}
-
-async function prepareOrcadSecretStoreAndMigrate(userDataPath: string): Promise<void> {
-  const { getSecretStore } = await import('../../shared/secret-store')
-  const { reportSecretProtectionGap } = await import('../host/secret-protection-report')
-  const { migratePlaintextCredentials, orcadCredentialRoot } =
-    await import('./orcad-plaintext-credential-migration')
-  // Keep sealing keys outside disposable ORCA_USER_DATA roots.
-  if (await prepareOrcadSecretStore(orcadCredentialRoot(), userDataPath)) {
-    migratePlaintextCredentials(getSecretStore())
-  }
-  reportSecretProtectionGap({ dataFile: join(userDataPath, 'orca-data.json') })
 }
 
 async function startOrcadRuntime(
@@ -143,6 +127,13 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
+  const { orcadSessionScannerIdleTimeoutMs } = await import('./orcad-session-scanner-idle')
+  const scannerIdleTimeoutMs = orcadSessionScannerIdleTimeoutMs()
+  if (scannerIdleTimeoutMs !== null) {
+    const { setAiVaultServiceIdleTimeoutMs } =
+      await import('../ai-vault/session-scanner-service-spawn')
+    setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
+  }
   // Initialize sealing before Store load unseals protected settings.
   await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
@@ -222,6 +213,8 @@ async function startOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
+  const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
+  installOrcadEmulatorBridge(runtime, registerCleanup)
 
   // Restore prior desktop-pushed account selection before automations or CLI launches.
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
@@ -335,6 +328,8 @@ async function startOrcadRuntime(
     agentStates: () => agentHookServer.getStatusSnapshot(),
     hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
     automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
+    emulatorsBusy: async () =>
+      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false,
     registerCleanup
   })
   return { readiness }

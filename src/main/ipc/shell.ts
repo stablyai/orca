@@ -13,10 +13,9 @@ import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
-  resolveExternalEditorLaunchSpec,
-  resolveVsCodeRemoteSshLaunchSpec
+  resolveExternalEditorLaunchSpec
 } from '../external-editor-launch'
-import { resolveVsCodeSshAuthority } from '../ssh/config/vscode-ssh-authority'
+import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -74,20 +73,12 @@ async function openInExternalEditor(
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
-    const authority = resolveVsCodeSshAuthority(sshTarget)
-    if (!authority.ok) {
-      return authority
-    }
-    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
-      request.command,
-      request.path,
-      authority.authority
-    )
-    if (!launchSpec) {
-      return { ok: false, reason: 'remote-editor-unsupported' }
+    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(request.command, request.path, sshTarget)
+    if (!remoteLaunch.ok) {
+      return remoteLaunch
     }
     try {
-      await launchExternalEditor(launchSpec)
+      await launchExternalEditor(remoteLaunch.launchSpec)
       return { ok: true }
     } catch {
       return { ok: false, reason: 'launch-failed' }

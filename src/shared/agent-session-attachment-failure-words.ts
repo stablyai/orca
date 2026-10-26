@@ -7,7 +7,8 @@ import type { AgentSessionFailureWordsContext } from './agent-session-failure-wo
 
 const BYTES_PER_MB = 1024 * 1024
 
-function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
+/** The explicit agent name or translated fallback used in failure sentence values. */
+export function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
   return { agent: agentName ?? say('theAgent') }
 }
 

@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -49,6 +50,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
+
+  permissionModeRequiresAcquisition = (
+    sessionId: string,
+    mode: AgentChatPermissionChoice
+  ): boolean | undefined =>
+    this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
   /** Session support may narrow the owner’s declared rewind, never widen it. */
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
@@ -176,17 +183,22 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return adapter.copyConversation(input)
   }
 
-  closeSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.closeSession?.(sessionId))
+  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (
+    sessionId,
+    observeClose
+  ) => this.stopSession(sessionId, (adapter) => adapter.closeSession?.(sessionId, observeClose))
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) =>
       (adapter.forceCloseSession ?? adapter.closeSession)?.call(adapter, sessionId)
     )
 
-  disposeSession = (sessionId: string): Promise<boolean> =>
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (
+    sessionId,
+    observeClose
+  ) =>
     this.stopSession(sessionId, (adapter) =>
-      (adapter.disposeSession ?? adapter.closeSession)?.call(adapter, sessionId)
+      (adapter.disposeSession ?? adapter.closeSession)?.call(adapter, sessionId, observeClose)
     )
 
   private async stopSession(

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { COMPOSER_INSET_TOP } from './mobile-native-chat-composer-styles'
+import { COMPOSER_INSET_TOP } from './native-chat/composer/mobile-native-chat-composer-styles'
 
 // Keep 44pt targets inside the parent row because Android drops outside touches.
 const MIN_TOUCH_TARGET = 44

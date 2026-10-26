@@ -3,6 +3,7 @@ import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../share
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { readFile, stat } from 'node:fs/promises'
 import { isENOENT } from '../filesystem/filesystem-path-containment'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -22,7 +23,7 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
 
       return inspectSetupScriptImportCandidates(
         async (relativePath) => {
-          const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+          const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
           try {
             return await readFile(filePath, 'utf-8')
           } catch (error) {
@@ -34,7 +35,7 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
         },
         {
           fileExists: async (relativePath) => {
-            const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+            const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
             try {
               const fileStat = await stat(filePath)
               return !fileStat.isDirectory()

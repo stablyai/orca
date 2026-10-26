@@ -128,7 +128,7 @@ export function SshHostMoveAnywayButton({
       <Button
         type="button"
         size="xs"
-        variant="outline"
+        variant="default"
         disabled={disabled}
         onClick={() => setOpen(true)}
       >

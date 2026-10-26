@@ -62,7 +62,7 @@ describe('unit support routing', () => {
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.next-test-harness.tsx',
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx',
         'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-        'src/main/browser/browser-route-tcp-egress.electron.test.ts'
+        'src/main/browser/browser-route-webrtc-egress.electron.test.ts'
       ]) {
         const result = classifyPrJobs([unitHarness, file])
         expect(result.should_run, file).toBe(true)

@@ -108,6 +108,19 @@ describe('mobile structured conversation commands', () => {
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  it('leaves a session-reported command such as OMP /fast to an ordinary send', async () => {
+    const { input, sendRequest } = setup()
+    input.text = '/fast'
+    input.controller.agent = 'omp'
+    await dispatchMobileStructuredCommand(input)
+    expect(input.onError).toHaveBeenCalledWith(
+      expect.stringContaining('/fast is not available'),
+      undefined
+    )
+    input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
   it('/clear is a plain command on every host: no withdrawal fields, nothing persisted', async () => {
     // The host carries cards to replacement sessions; client restoration would duplicate them.
     const { input, sendRequest } = setup()

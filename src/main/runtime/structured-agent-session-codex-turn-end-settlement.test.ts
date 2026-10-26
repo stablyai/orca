@@ -19,6 +19,7 @@ import type { AgentJournalSubmission } from '../../shared/agent-session-journal-
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -211,10 +212,19 @@ beforeEach(async () => {
   ) => {
     handlers = connectionHandlers
     connections += 1
+    let closed = false
     const connection: CodexAppServerConnection = {
       pid: 4321,
-      closed: false,
+      get closed() {
+        return closed
+      },
+      get closeResult(): CodexAppServerConnection['closeResult'] {
+        return closed ? { root: 'exited', tree: 'exited' } : null
+      },
       request: async (method, params) => {
+        if (method === 'thread/goal/get') {
+          return { goal: null }
+        }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD } }
         }
@@ -258,6 +268,7 @@ beforeEach(async () => {
           throw new Error('the kill timed out')
         }
         childCloses += 1
+        closed = true
         return true
       }
     }
@@ -769,7 +780,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await stopWhenItsTurnNeverOpens(release)
 
     expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toMatchObject({
       state: 'completed'
     })
@@ -821,7 +832,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
     expect(childCloses).toBe(1)
     expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
   })
 
   // Handed over once the stopped turn read ended, it started its own turn, however late that

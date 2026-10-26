@@ -264,6 +264,25 @@ describe('agent-implemented commands pass through to the agent', () => {
     expect(setThreadGoalObjective).not.toHaveBeenCalled()
   })
 
+  // OMP's ACP catalog advertises only commands it handles itself, e.g. /fast.
+  it('passes a session-reported command on to the session that advertised it', async () => {
+    const sessionCommands = [
+      { name: 'fast', kind: 'command' },
+      { name: 'compact', kind: 'command' }
+    ] as const
+    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp')).toBe(true)
+    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp', sessionCommands)).toBe(false)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/fast status', {
+        ...controller,
+        agent: 'omp',
+        sessionCommands
+      })
+    ).toEqual(PASSED_THROUGH)
+    // Orca still runs its own commands even when the session reports them.
+    expect(isStructuredAgentSessionComposerCommand('/compact', 'omp', sessionCommands)).toBe(true)
+  })
+
   it('keeps refusing a Codex command the model cannot carry out', async () => {
     expect(isStructuredAgentSessionComposerCommand('/permissions', 'codex')).toBe(true)
     expect(

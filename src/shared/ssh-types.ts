@@ -62,6 +62,8 @@ export type SshTarget = {
   allowRemoteCliControl?: boolean
   /** Retired: written by earlier builds and ignored now. Kept so a downgrade still finds its stamp. */
   allowRemoteCliControlConsent?: 'desktop-browser-bridge'
+  /** Undefined means on; false leaves this host disconnected at launch until the user connects it. */
+  reconnectOnLaunch?: boolean
   /** Persist prompted-auth history so startup defers credential-requiring hosts without attempting a connection. */
   lastRequiredPassphrase?: boolean
   portForwards?: SavedPortForward[]

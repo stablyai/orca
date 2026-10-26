@@ -181,11 +181,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
+            // The read's host-ownership fields are named as the hydration options it feeds.
             actions.hydrateWorkspaceSession(sessionRead.session, {
-              ...sessionHydrationOptions,
-              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey,
-              contestedHostWorkspaceSessions: sessionRead.contestedHostWorkspaceSessions,
-              contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey
+              ...sessionRead,
+              ...sessionHydrationOptions
             })
             actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)

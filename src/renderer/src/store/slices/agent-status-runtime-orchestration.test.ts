@@ -4,7 +4,7 @@ import {
   type AgentStatusState,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
 import { createTestStore, makeTab } from './store-test-helpers'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'

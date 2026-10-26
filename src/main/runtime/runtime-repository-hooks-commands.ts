@@ -1,5 +1,6 @@
 import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
+import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
 import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
@@ -68,7 +69,7 @@ export class RuntimeRepositoryHooksCommands {
       return []
     }
     return inspectSetupScriptImportCandidates(async (relativePath) => {
-      const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+      const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
       if (getRepoDialableSshTargetId(repo)) {
         return null
       }

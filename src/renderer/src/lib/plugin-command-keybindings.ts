@@ -3,10 +3,17 @@ import {
   getEffectiveKeybindingsForDefinition,
   keybindingMatchesInput,
   type KeybindingDefinition,
+  type KeybindingMatchOptions,
   type KeybindingInput,
   type KeybindingOverrides,
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
+import { fileSearchClaimsTextKey } from './file-search-shortcut-policy'
+import {
+  isFloatingWorkspacePanelFocused,
+  isFloatingWorkspaceTerminalInputTarget,
+  matchFloatingWorkspacePanelChord
+} from './floating-workspace-terminal-actions'
 import { translate } from '@/i18n/i18n'
 import { pluginCommandKeybindingActionId as sharedPluginCommandKeybindingActionId } from '../../../shared/plugins/plugin-command-actions'
 
@@ -72,4 +79,18 @@ export function findPluginCommandForKeybinding(
     }
   }
   return null
+}
+
+export function globalShortcutTargetYields(
+  input: KeybindingInput & Parameters<typeof fileSearchClaimsTextKey>[0],
+  platform: NodeJS.Platform,
+  overrides: KeybindingOverrides | undefined,
+  options: KeybindingMatchOptions
+): boolean {
+  return (
+    fileSearchClaimsTextKey(input) ||
+    isFloatingWorkspaceTerminalInputTarget(input.target) ||
+    (isFloatingWorkspacePanelFocused() &&
+      matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)
+  )
 }

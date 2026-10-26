@@ -216,6 +216,25 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['한']))
   })
 
+  it('Given a held syllable When an accessory Esc arrives Then commits the syllable before the Esc', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, '한')
+
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b' })
+
+    expect(sent).toEqual(['한', '\x1b'])
+  })
+
+  it('Given mirrored text When an accessory Enter arrives Then later typing starts a new line', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'ls')
+
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })
+    changeLiveInput(handlers, 'x')
+
+    await vi.waitFor(() => expect(sent).toEqual(['ls', '\r', 'x']))
+  })
+
   it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
     changeLiveInput(handlers, 'a', false)

@@ -32,6 +32,11 @@ import {
   sshTargetIdForWorkspaceSessionHost
 } from './workspace-session-terminal-binding-replay'
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
+import {
+  keepRuntimePartitionRevisions,
+  noteRuntimeTopologyChange,
+  runtimePartitionFencePrior
+} from './runtime-partition-topology-fence'
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -151,9 +156,17 @@ export function removeWorkspaceSessionOwnerInPartition(
     return
   }
   const current = owner.getWorkspaceSession(resolved)
+  const advanceTerminalTopologyRevision = options.advanceTerminalTopologyRevision ?? true
   const session = removeWorkspaceSessionOwner(current, worktreeId, {
-    advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
+    advanceTerminalTopologyRevision
   })
+  if (advanceTerminalTopologyRevision) {
+    noteRuntimeTopologyChange(
+      owner[sessionHostPartitionOperationsContext].runtime,
+      resolved,
+      worktreeId
+    )
+  }
   if (!session) {
     return
   }
@@ -207,8 +220,16 @@ export function setHostWorkspaceSession(
   session = withRequiredWorkspaceSessionMaps(session)
   // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
+  const { runtime } = owner[sessionHostPartitionOperationsContext]
   // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
-  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  session = keepRuntimePartitionRevisions(
+    hostId,
+    sanitizeWorkspaceSessionTerminalRetirements(
+      session,
+      runtimePartitionFencePrior(runtime, hostId, session, prior)
+    ),
+    prior
+  )
   session = preserveMissingWorkspaceSessionTerminalBindings(
     session,
     prior,

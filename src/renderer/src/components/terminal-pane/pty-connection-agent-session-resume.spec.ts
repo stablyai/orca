@@ -21,7 +21,7 @@ import {
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { AgentStatusSlice } from '@/store/slices/agent-status-slice-contract'
+import type { AgentStatusSlice } from '@/store/slices/agent-status/agent-status-slice-contract'
 import { normalizeLaunchConfigRegistrationMetadata } from '@/store/slices/agent-status-launch-config'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {

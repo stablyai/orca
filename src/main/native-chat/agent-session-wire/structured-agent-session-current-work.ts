@@ -17,7 +17,11 @@ import type { StructuredAgentSessionWorkScope } from '../../../shared/structured
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
-import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
+import {
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput,
+  structuredAgentSessionHandingOver
+} from './structured-agent-session-handing-over'
 
 export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
@@ -151,9 +155,12 @@ export class StructuredAgentSessionCurrentWork {
 
   private unanswered(submission: AgentJournalSubmission): boolean {
     return (
-      !isQueuedAgentJournalSubmission(submission) &&
-      this.liveFence !== null &&
-      isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence)
+      continuingStructuredAgentSessionInput(this.journal, submission.clientMessageId) ||
+      (submission.dispatchState === 'pending' &&
+        finalizingStructuredAgentSessionInput(this.journal, submission.clientMessageId)) ||
+      (!isQueuedAgentJournalSubmission(submission) &&
+        this.liveFence !== null &&
+        isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence))
     )
   }
 

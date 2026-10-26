@@ -13,6 +13,7 @@ import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-sc
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
+import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -20,6 +21,7 @@ export async function handleRelayHookRequest(
   options: {
     isCurrent: () => boolean
     token: string
+    forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
     env: string
     state: HookListenerState
     checkAgentPresence: (paneKey: string) => Promise<void>
@@ -55,6 +57,13 @@ export async function handleRelayHookRequest(
   })
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+      const body = await readRequestBody(req)
+      const reply = options.isCurrent() ? await options.forwardClaudeAgentView?.(body) : {}
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(reply ?? {}))
+      return
+    }
     const source = resolveHookSource(pathname)
     if (!source) {
       res.writeHead(404)

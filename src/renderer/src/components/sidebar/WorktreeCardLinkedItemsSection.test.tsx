@@ -212,6 +212,13 @@ describe('workspace linked references in hover details', () => {
     fireEvent.click(otherCard)
     expect(screen.queryByRole('button', { name: /System Browser/ })).toBeNull()
   })
+  it('lists the most recently linked references first', () => {
+    render(<Fixture onManage={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hover workspace' }))
+    const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(links.indexOf(attachments[1].url)).toBeLessThan(links.indexOf(attachments[0].url))
+    expect(links.indexOf(attachments[3].url)).toBeLessThan(links.indexOf(attachments[2].url))
+  })
   it('opens link management from either section header and dismisses hover', () => {
     const onManage = vi.fn()
     const { container } = render(<Fixture onManage={onManage} />)

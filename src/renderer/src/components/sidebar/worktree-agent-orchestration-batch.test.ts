@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext

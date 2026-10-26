@@ -112,6 +112,11 @@ const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+// The bundled agent-browser binary finds its version-matched catalog via the nearest skills/ above it (Resources/).
+const agentBrowserSkillResources = [
+  { from: 'node_modules/agent-browser/skills/agent-browser', to: 'skills/agent-browser' },
+  { from: 'node_modules/agent-browser/skill-data', to: 'skill-data' }
+]
 // Native agents load plugins by path and cannot read inside app.asar.
 const nativeChatVisualsResource = {
   from: 'resources/native-chat-visuals',
@@ -140,6 +145,7 @@ const commonExtraResources = [
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
+  ...agentBrowserSkillResources,
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
@@ -167,7 +173,10 @@ const debElectronRuntimeDependencies = [
   'xdg-utils',
   'libatspi2.0-0',
   'libuuid1',
-  'libsecret-1-0'
+  'libsecret-1-0',
+  // Electron links these but electron-builder's defaults omit them; t64 is Ubuntu 24.04+/Debian 13.
+  'libasound2t64 | libasound2',
+  'libgbm1'
 ]
 const rpmElectronRuntimeDependencies = [
   'gtk3',
@@ -177,7 +186,8 @@ const rpmElectronRuntimeDependencies = [
   '(libXtst or libXtst6)',
   'xdg-utils',
   'at-spi2-core',
-  '(libuuid or libuuid1)'
+  '(libuuid or libuuid1)',
+  'alsa-lib'
 ]
 
 // Mirror OS document extensions: CJS packager cannot import TS; keep startup/os-opened-documents.ts and NSIS hooks aligned.

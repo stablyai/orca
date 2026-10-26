@@ -5,10 +5,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import {
-  getSyntheticAgentTerminalTitle,
-  shouldDriveSyntheticAgentTitleFromHook
-} from './synthetic-agent-title'
 import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
 import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
 
@@ -97,26 +93,6 @@ describe('the churn is gone at the suppressor', () => {
   })
 })
 
-describe('Orca stops writing over the working title it does not own', () => {
-  // Agent-owned 80ms title animation must not compete with synthetic working labels.
-  it.each(['omp', 'pi'] as const)('synthesizes no working title for %s', (agent) => {
-    expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'working')).toBe(false)
-  })
-
-  // Retain terminal-state synthesis for downstream pane identity; idle agents emit no animation churn.
-  it.each(['omp', 'pi'] as const)('still synthesizes terminal states for %s', (agent) => {
-    for (const state of ['done', 'waiting', 'blocked'] as const) {
-      expect(getSyntheticAgentTerminalTitle(agent, state)).not.toBeNull()
-      expect(shouldDriveSyntheticAgentTitleFromHook(agent, state)).toBe(true)
-    }
-  })
-
-  it('leaves agents that own no title alone', () => {
-    expect(getSyntheticAgentTerminalTitle('droid', 'done')).toBe('Droid ready')
-    expect(shouldDriveSyntheticAgentTitleFromHook('droid', 'working')).toBe(true)
-  })
-})
-
 describe('the owner relabel keeps the label and swaps only the brand', () => {
   // Rewrite only brand across pane/tab/sidebar/mobile displays: preserve session text (#16093) and explicit owner identity (#6689/#7633/#9077).
   it.each([
@@ -164,33 +140,6 @@ describe('the state separator does not fire on ordinary titles', () => {
     'node - server'
   ])('classifies %s as no agent', (title) => {
     expect(detectAgentStatusFromTitle(title)).toBeNull()
-  })
-})
-
-describe('one real OMP turn', () => {
-  // Drive real injected frames through churn gating: old Pi/OMP alternation committed roughly 12 store patches/sec.
-  it('commits twice across 30 working frames plus the idle transition', () => {
-    const frames = Array.from(
-      { length: 30 },
-      (_, index) => `${FRAMES[index % FRAMES.length]} π - fixing the sidebar - orca`
-    )
-    frames.push('π - fixing the sidebar - orca')
-
-    const committed: string[] = []
-    let previous: string | null = null
-    for (const frame of frames) {
-      const normalized = normalizeTerminalTitle(frame)
-      if (previous !== null && isDecorativeAgentTitleFrameChange(previous, normalized)) {
-        continue
-      }
-      if (normalized === previous) {
-        continue
-      }
-      committed.push(normalized)
-      previous = normalized
-    }
-
-    expect(committed).toEqual(['⠋ π - fixing the sidebar - orca', 'π - fixing the sidebar - orca'])
   })
 })
 

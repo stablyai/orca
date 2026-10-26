@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { sleepingRecordFromEntry } from './agent-status/agent-status-sleeping-records'
 import { getAgentResumeArgv } from '../../../../shared/agent-session-resume'
 
 export function registerAgentStatusNestedResumeTests(): void {

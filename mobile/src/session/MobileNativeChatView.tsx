@@ -44,9 +44,12 @@ import type { PendingNativeChatImage } from './native-chat/composer/mobile-nativ
 import {
   MobileNativeChatComposer,
   type MobileNativeChatStructuredComposer
-} from './MobileNativeChatComposer'
+} from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { NO_COMPOSER_TRAY, type ComposerTrayProps } from './use-mobile-native-chat-composer-tray'
+import {
+  NO_COMPOSER_TRAY,
+  type ComposerTrayProps
+} from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
@@ -263,6 +266,7 @@ export function MobileNativeChatView({
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
+    scope: sendSurfaceId,
     rowKeyOf: rowKeys.keyOf,
     runOwners: rowKeys.runOwners,
     taskListPredecessors,

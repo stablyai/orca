@@ -95,7 +95,7 @@ export function getOpenInEntryAvailability(
         capability.reason === 'local-only-editor'
           ? translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorHint',
-              'Only VS Code can open folders on an SSH host.'
+              'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
             )
           : translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeEditorHint',

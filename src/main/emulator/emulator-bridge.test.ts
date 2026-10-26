@@ -22,7 +22,7 @@ const {
   netFetchMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+vi.mock('../network/http-client', () => ({ getMainHttpClient: () => ({ fetch: netFetchMock }) }))
 
 vi.mock('./serve-sim-execution', async (importOriginal) => ({
   execServeSimCommand: execServeSimCommandMock,

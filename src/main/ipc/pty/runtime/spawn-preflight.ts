@@ -45,7 +45,7 @@ export async function prepareRuntimePtySpawn(
   ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
-  ctx.callerRequestedSessionId = args.sessionId?.trim()
+  ctx.callerRequestedSessionId = args.sessionId
   ctx.requestedSessionId =
     ctx.callerRequestedSessionId ??
     (ctx.isDaemonHostSpawn && args.agentSessionCreateOperationId
@@ -55,7 +55,7 @@ export async function prepareRuntimePtySpawn(
     ctx.requestedSessionId ??
     (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
   ctx.effectiveSessionAppId = ctx.sessionId
-  ctx.isNewDaemonSession =
+  ctx.ownsNewIncarnation =
     !ctx.preAdoptedStablePane &&
     ctx.isDaemonHostSpawn &&
     (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)

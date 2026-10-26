@@ -4,7 +4,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
 
 export function revealCreatedTerminal(args: {
-  notifier: RuntimeNotifier | null
+  notifier: Pick<RuntimeNotifier, 'revealTerminalSession' | 'rememberLaunchRecipe'> | null
   workspace: Pick<TerminalWorkspaceLaunchScope, 'id' | 'path'>
   ptyId: string
   handle: string
@@ -12,6 +12,8 @@ export function revealCreatedTerminal(args: {
   launchOpts: dependencies.TerminalCreateOptions
   effectiveLaunchConfig: dependencies.TerminalCreateOptions['launchConfig']
   launchToken: string | undefined
+  /** An adopted pane already ran; its recipe and spent launch token must not be re-registered. */
+  adoptedStablePane: boolean
   presentation: RuntimeTerminalPresentation | undefined
   opts: dependencies.TerminalCreateOptions
   tabId: string
@@ -28,12 +30,24 @@ export function revealCreatedTerminal(args: {
     launchOpts,
     effectiveLaunchConfig,
     launchToken,
+    adoptedStablePane,
     presentation,
     opts,
     tabId,
     leafId
   } = args
   const reveal = notifier?.revealTerminalSession?.bind(notifier)
+  const rememberLaunchRecipe = (): void => {
+    if (effectiveLaunchConfig && !adoptedStablePane) {
+      notifier?.rememberLaunchRecipe?.({
+        tabId,
+        leafId,
+        launchConfig: effectiveLaunchConfig,
+        ...(launchToken ? { launchToken } : {}),
+        ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {})
+      })
+    }
+  }
   if (presentation !== 'background' && reveal) {
     return (async () => {
       try {
@@ -54,6 +68,7 @@ export function revealCreatedTerminal(args: {
         return { surface: 'visible' as const }
       } catch (err) {
         console.warn(`[terminal-create] failed to create inactive tab for ${ptyId}:`, err)
+        rememberLaunchRecipe()
         return {
           surface: 'background' as const,
           warning: dependencies.createTerminalRevealWarning(handle, err)
@@ -61,6 +76,7 @@ export function revealCreatedTerminal(args: {
       }
     })()
   }
+  rememberLaunchRecipe()
   return {
     surface: 'background',
     warning:

@@ -4,7 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './native-chat/mobile-native-chat-streaming-gate'
@@ -54,7 +54,6 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   } = args
   const {
-    activeChatAgent,
     activeChatAgentConfirmed,
     activeChatAgentRef,
     activeChatResolution,
@@ -75,22 +74,20 @@ export function useMobileNativeChatController(args: {
 
   // Fixed hook order mounts the lane before drafts; defer Edit’s append through a ref and delete nothing until copying succeeds.
   const appendComposerTextRef = useRef<(text: string) => boolean>(() => false)
-  const { structuredSession: structuredNativeChat, session: nativeChatSession } =
-    useMobileNativeChatSessionLane({
-      client,
-      structured: activeChatStructured,
-      agent: activeChatAgent,
-      resolvedAgent: activeChatResolution?.agent ?? null,
-      transcriptPath: activeChatResolution?.transcriptPath ?? null,
-      sessionId: activeChatSessionId,
-      sourceIdentity,
-      enabled: showNativeChat,
-      connState,
-      hostSupport: agentSessionHostSupport,
-      appendComposerTextRef,
-      onSendError,
-      onActionResolved: onSendResolved
-    })
+  const nativeChatLane = useMobileNativeChatSessionLane({
+    client,
+    hostId,
+    structured: activeChatStructured,
+    resolution: activeChatResolution,
+    sourceIdentity,
+    enabled: showNativeChat,
+    connState,
+    hostSupport: agentSessionHostSupport,
+    appendComposerTextRef,
+    onSendError,
+    onActionResolved: onSendResolved
+  })
+  const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
@@ -207,6 +204,7 @@ export function useMobileNativeChatController(args: {
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent,
+    sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -317,6 +315,7 @@ export function useMobileNativeChatController(args: {
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
+    nativeChatSessionCommands: nativeChatLane.sessionCommands,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
   }
 }

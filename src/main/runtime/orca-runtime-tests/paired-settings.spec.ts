@@ -6,8 +6,33 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { deferred, store } from '../orca-runtime-test-fixtures.spec'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import { reconcileClaudeAgentViewMock } from '../orca-runtime-test-mocks/setup.spec'
 
 describe('OrcaRuntimeService', () => {
+  it.each([true, false])(
+    'awaits navigation-only updates from paired clients (%s)',
+    async (enabled) => {
+      let settings = { ...store.getSettings(), claudeSubagentNavigationEnabled: !enabled }
+      const controller = new RuntimeClientSettingsController({
+        getSettings: () => settings,
+        updateSettings: (updates) => {
+          settings = { ...settings, ...updates }
+        }
+      })
+      const gate = deferred<void>()
+      reconcileClaudeAgentViewMock.mockImplementationOnce(() => gate.promise)
+      const complete = vi.fn()
+      const pending = controller.update({ claudeSubagentNavigationEnabled: enabled }).then(complete)
+      await vi.waitFor(() =>
+        expect(reconcileClaudeAgentViewMock).toHaveBeenLastCalledWith(settings)
+      )
+      expect(complete).not.toHaveBeenCalled()
+      gate.resolve()
+      await pending
+      expect(complete).toHaveBeenCalledOnce()
+    }
+  )
+
   it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
     const controller = new RuntimeClientSettingsController({
       getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),

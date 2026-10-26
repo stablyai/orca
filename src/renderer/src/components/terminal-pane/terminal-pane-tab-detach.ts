@@ -9,6 +9,16 @@ import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  isWebTerminalSurfaceTabId,
+  toWebTerminalSurfaceTabId
+} from '../../../../shared/terminal-surface-id'
+import {
+  moveWebRuntimeLeafToNewTab,
+  resolvePaneMoveHost,
+  settleHostPaneMove
+} from '@/runtime/web-runtime-leaf-move'
+import { resolveHostTabDropTarget } from '@/runtime/web-runtime-session-tab-move'
 export {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -133,13 +143,38 @@ async function moveLeafToNewTab(
     return null
   }
 
+  const livePtyId = args.livePtyId ?? persistedPtyId ?? null
+  const paneMoveHost =
+    !ORCA_LAYOUT_OWNER_IS_MAIN && livePtyId !== null && isWebTerminalSurfaceTabId(args.sourceTabId)
+      ? await resolvePaneMoveHost(args.worktreeId)
+      : null
   args.persistLayoutSnapshot()
   const request: TerminalLeafMoveRequest = {
     worktreeId: args.worktreeId,
     sourceTabId: args.sourceTabId,
-    targetTabId: createBrowserUuid(),
+    // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
+    targetTabId: paneMoveHost
+      ? toWebTerminalSurfaceTabId(createBrowserUuid())
+      : createBrowserUuid(),
     leafId,
-    ptyId: args.livePtyId ?? persistedPtyId ?? null
+    ptyId: livePtyId
+  }
+  if (paneMoveHost) {
+    const placement = await resolveHostTabDropTarget(paneMoveHost, {
+      worktreeId: args.worktreeId,
+      tabId: request.targetTabId,
+      targetGroupId: args.targetGroupId,
+      ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {})
+    })
+    // Why: the host's snapshot push can land before its reply and would leave nothing to detach, so
+    // the window moves first. The call is dispatched before the move's layout pushes, so the host
+    // sees the move first.
+    const hostMove = moveWebRuntimeLeafToNewTab(paneMoveHost, request, placement)
+    const applied = applyMove(args, request, false, request.ptyId)
+    void hostMove
+      .then((outcome) => settleHostPaneMove(paneMoveHost, request, outcome, applied !== null))
+      .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
+    return applied
   }
   // Switch point: main moves the pane and names the new tab.
   const answer = await (
@@ -216,6 +251,7 @@ function applyMove(
     frameDrawn ??
     latestStore.createTab(worktreeId, args.targetGroupId, sourceShellOverride, {
       id: targetTabId,
+      ...(isWebTerminalSurfaceTabId(targetTabId) ? { mirroredHostTab: true } : {}),
       activate: true,
       ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
       initialPtyId: ptyId ?? undefined,

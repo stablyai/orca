@@ -162,6 +162,7 @@ export async function loadIpcEventsHarness(
             createTerminalListener = listener
             return () => {}
           },
+          onLaunchRecipe: () => () => {},
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
             return () => {}

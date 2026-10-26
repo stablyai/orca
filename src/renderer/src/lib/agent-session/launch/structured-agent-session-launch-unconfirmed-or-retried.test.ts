@@ -343,4 +343,17 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     ).toBe(unconfirmed.sessionId)
     expect(mocks.createIntent).toHaveBeenCalledOnce()
   })
+
+  it('never joins a resume of the same conversation id running on another host', async () => {
+    await leaveFirstLaunchUnconfirmed({ resume: true })
+
+    const remote = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-9',
+      resumeFrom,
+      executionHostId: 'runtime:server-1'
+    })
+
+    expect(remote.sessionId).not.toBe(unconfirmed.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
+  })
 })

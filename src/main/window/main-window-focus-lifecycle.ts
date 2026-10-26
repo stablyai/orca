@@ -47,6 +47,8 @@ export function installMainWindowFocusLifecycle(args: {
   rendererWebContentsId: number
 }): MainWindowFocusLifecycle {
   const { isWindowClosing, mainWindow, opts, reloadMainWindow, rendererWebContentsId } = args
+  // Capture once: the BrowserWindow getter throws after close, but late IPC and webContents events can still arrive.
+  const rendererWebContents = mainWindow.webContents
   // Mirror TipTap focus before main shortcut resolution so bare Cmd/Ctrl+B remains bold (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
@@ -58,7 +60,7 @@ export function installMainWindowFocusLifecycle(args: {
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
   // Check sender and strict boolean so guests/malformed payloads cannot disable sidebar shortcuts.
   const onMarkdownEditorFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     markdownEditorFocused = focused === true
@@ -67,7 +69,7 @@ export function installMainWindowFocusLifecycle(args: {
   const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
   // Main resolves before renderer keydown; mirror xterm focus so Terminal-first leaves shell chords alone.
   const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     terminalInputFocused = focused === true
@@ -76,7 +78,7 @@ export function installMainWindowFocusLifecycle(args: {
   const floatingFocusChannel = 'ui:setFloatingFocus'
   // Publish both focus bits atomically; terminal selects keybinding context and implies panel routing ownership.
   const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     const payload = (state ?? {}) as { panelFocused?: unknown; terminalFocused?: unknown }
@@ -89,7 +91,7 @@ export function installMainWindowFocusLifecycle(args: {
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
   // Shortcut recording must receive the keys before main consumes their existing bindings.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     shortcutRecorderFocused = focused === true
@@ -98,7 +100,7 @@ export function installMainWindowFocusLifecycle(args: {
 
   let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
   const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
@@ -107,7 +109,7 @@ export function installMainWindowFocusLifecycle(args: {
   // Renderer sends this on the same frame pipe immediately before the next Chromium context menu.
   let pendingPlainTextContextMenuTarget = false
   const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent): void => {
-    if (event.sender === mainWindow.webContents) {
+    if (event.sender === rendererWebContents) {
       pendingPlainTextContextMenuTarget = true
     }
   }
@@ -120,7 +122,7 @@ export function installMainWindowFocusLifecycle(args: {
     const plainText = pendingPlainTextContextMenuTarget
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+    const template = buildEditableContextMenuTemplate(params, rendererWebContents, {
       tableTarget,
       plainText
     })
@@ -130,7 +132,7 @@ export function installMainWindowFocusLifecycle(args: {
     // Context menu may precede focus mirroring; trust Electron's editable params.
     Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
-  mainWindow.webContents.on('context-menu', onMainContextMenu)
+  rendererWebContents.on('context-menu', onMainContextMenu)
 
   // Dead renderers cannot clear focus mirrors; reset carve-outs so later lifecycles retain app shortcuts.
   const resetMarkdownEditorFocus = (): void => {
@@ -149,7 +151,6 @@ export function installMainWindowFocusLifecycle(args: {
     shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
-  const rendererWebContents = mainWindow.webContents
   registerRendererDocumentNavigation(rendererWebContents, () => {
     const frame = rendererWebContents.mainFrame
     retireBrowserClientPageRenderer(rendererWebContents)
@@ -256,7 +257,7 @@ export function installMainWindowFocusLifecycle(args: {
     }, launchRetryDelayMs ?? 250)
   }
   const rendererLiveness = trackRendererLivenessAtDeath(mainWindow)
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  rendererWebContents.on('render-process-gone', (_event, details) => {
     const liveness = rendererLiveness.takeAtRendererGone()
     rendererProcessGone = true
     retireBrowserClientPageRenderer(rendererWebContents)
@@ -275,14 +276,14 @@ export function installMainWindowFocusLifecycle(args: {
     }
     scheduleRendererRecovery(details)
   })
-  mainWindow.webContents.on('destroyed', () => {
+  rendererWebContents.on('destroyed', () => {
     retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
   })
-  mainWindow.webContents.on('did-finish-load', () => {
+  rendererWebContents.on('did-finish-load', () => {
     rendererProcessGone = false
     attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()

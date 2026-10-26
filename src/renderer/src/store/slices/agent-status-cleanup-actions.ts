@@ -1,8 +1,11 @@
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
-import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import { removePaneKeys, removePaneKeysByTabPrefix } from './agent-status-pane-keyed-records'
+import { pruneMigrationUnsupportedEntries } from './agent-status/agent-status-migration-unsupported-entries'
+import {
+  removePaneKeys,
+  removePaneKeysByTabPrefix
+} from './agent-status/agent-status-pane-keyed-records'
 
 /** Actions for removing transient rows and migration-era cache entries. */
 export function createAgentStatusCleanupActions(

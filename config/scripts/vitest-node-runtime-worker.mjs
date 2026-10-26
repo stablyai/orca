@@ -5,6 +5,10 @@ if (!process.send) {
   throw new Error('Node Vitest worker requires an IPC channel')
 }
 const send = process.send.bind(process)
+// Vitest replaces process.exit with a throwing guard once a file runs, and the error then spins on the dead channel.
+const exit = process.exit.bind(process)
+// The pool stops workers by signal, so a closed channel means Vitest died; don't outlive it mid-file.
+process.once('disconnect', () => exit(1))
 
 // Preserve RegExp filters and cyclic test results across Bun/Node's JSON-only IPC boundary.
 init({

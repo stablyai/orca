@@ -32,10 +32,20 @@ describe('getMarkdownRenderMode', () => {
     ).toBe('preview')
   })
 
-  it('falls back to source mode when rich editing is unsupported', () => {
+  it('renders a preview when rich editing cannot preserve the source', () => {
     expect(
       getMarkdownRenderMode({
         exceedsRichModeSizeLimit: false,
+        hasRichModeUnsupportedContent: true,
+        viewMode: 'rich'
+      })
+    ).toBe('preview')
+  })
+
+  it('keeps oversized unsupported documents in source mode', () => {
+    expect(
+      getMarkdownRenderMode({
+        exceedsRichModeSizeLimit: true,
         hasRichModeUnsupportedContent: true,
         viewMode: 'rich'
       })

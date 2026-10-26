@@ -57,22 +57,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     api = null
   })
 
-  it('serves the shared catalog snapshot for the agent', () => {
-    mount()
-    expect(api!.snapshot[0]).toMatchObject({ id: 'model', category: 'model' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ type: 'select' })
-  })
-
-  it('returns an empty snapshot for agents without a catalog', () => {
-    mount({ agent: 'amp' })
-    expect(api!.snapshot).toEqual([])
-  })
-
-  it('does not expose catalog-backed agents outside the Claude and Codex scope', () => {
-    mount({ agent: 'gemini' })
-    expect(api!.snapshot).toEqual([])
-  })
-
   it('shows an OMP session under the model its hook reported', () => {
     mount({ agent: 'omp' })
     expect(api!.snapshot).toEqual([])

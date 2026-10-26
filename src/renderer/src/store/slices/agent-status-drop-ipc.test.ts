@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status'
-import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status'
+import type { RetainedAgentEntry } from './agent-status/agent-status-contract'
+import './agent-status'
+import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status/agent-status-pane-keyed-records'
 import { createTestStore } from './store-test-helpers'
 
 // Propagate renderer dismissal to main’s persisted hook cache or restart resurrects dismissed paneKeys.

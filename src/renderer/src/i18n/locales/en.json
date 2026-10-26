@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
+      "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
+      "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice."
+    }
+  },
   "csv": {
     "detectingDelimiter": "Detecting delimiter…",
     "indexProgress": "Indexing CSV… {{percent}}%",
@@ -234,7 +241,8 @@
       "refreshFailed": "Preview update failed. Showing the previous version; open source view for current content."
     },
     "fileLoad": {
-      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip.",
+      "remoteTooLarge": "This file is too large to open from its host."
     }
   },
   "githubChecks": {
@@ -360,6 +368,13 @@
         }
       },
       "chat": {
+        "fontFamily": "Font family",
+        "fontFamilyDescription": "Font used for messages, activity, and the message box.",
+        "fontKeywordTypeface": "typeface",
+        "fontKeywordTypography": "typography",
+        "inheritFont": "Same as IDE font",
+        "fontPreviewLabel": "Chat font preview",
+        "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
@@ -463,7 +478,6 @@
     },
     "agents": {
       "permissionsTitle": "Permissions",
-      "permissionsResetExplanation": "Picking a mode here resets agents you set separately.",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
       "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",
@@ -526,7 +540,17 @@
       "permissionSameAsAll": "Same as all agents",
       "permissionChipRemove": "Remove {{flag}} and use {{agent}}'s own settings",
       "permissionChipTooltip": "Added by Permissions. Remove it to use {{agent}}’s own settings.",
-      "permissionResetsOwnChoices": "Choosing a mode here resets the agents marked as set separately."
+      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
+      "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
+      "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",
+      "permissionOverrideFollows": "{{agent}} now follows {{mode}}",
+      "permissionOverrideMore": "and {{count}} more",
+      "permissionOverrideMore_one": "and {{count}} more",
+      "permissionOverrideMore_other": "and {{count}} more",
+      "permissionOverridesUse": "Use {{mode}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1380,6 +1404,15 @@
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
       },
+      "dropFailureReason": {
+        "tooLarge": "Too large to upload to this host.",
+        "noSpace": "The host is out of disk space.",
+        "changed": "The file changed while it was uploading. Try again.",
+        "hostUnreachable": "The connection to the host changed or dropped. Try again.",
+        "disconnected": "The host is disconnected.",
+        "unknownOne": "Couldn't upload this file.",
+        "unknownMany": "Couldn't upload these files."
+      },
       "dropSkipReason": {
         "missing": "No longer at its original path.",
         "symlink": "Symbolic links cannot be attached.",
@@ -1441,6 +1474,13 @@
             }
           }
         }
+      },
+      "claudeAgentRowView": {
+        "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required.",
+        "permissionPrompt": "Answer Claude’s permission prompt before switching agents.",
+        "agentUnavailable": "Claude cannot open this agent. It may no longer be available.",
+        "closeDialog": "Claude did not switch views. Close any open dialog and try again.",
+        "hostUnavailable": "Subagent navigation is unavailable on this host. Update Orca and restart Claude in this pane."
       }
     },
     "hooks": {
@@ -1734,7 +1774,6 @@
         "aba792c8b3": "Failed to merge pull request",
         "dbe5e2448e": "Pull request merged",
         "a27ee5ca1a": "This will update the pull request on GitHub.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "e9b7cb7d17": "Failed to {{value0}} PR",
         "bd3b4492a0": "Pull request reopened",
         "9f88657c4e": "Pull request closed",
@@ -2180,6 +2219,16 @@
         "createWorktree": "Create worktree",
         "createWorkspace": "Create workspace"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "Close PR #{{number}}?",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Merge PR #{{number}} with a merge commit?",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge PR #{{number}}?",
+        "reopenTitle": "Reopen PR #{{number}}?",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "Failed to request reviewer",
         "3450247584": "Comment",
@@ -2253,7 +2302,6 @@
         "aae645d36d": "Failed to merge pull request",
         "c57873d721": "Pull request merged",
         "a63b3c159c": "This will update the pull request on GitHub.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "710e47aa06": "Pull request reopened",
         "7aa3b5f706": "Pull request closed",
         "3d77438c92": "This will reopen the pull request on GitHub.",
@@ -2628,7 +2676,6 @@
         "88f478cdef": "Failed to merge pull request",
         "a161925adc": "Pull request merged",
         "0506a78337": "This will update the pull request on GitHub.",
-        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "995dd6af9b": "Open PR checks",
         "8a22eb3f7b": "No matching reviewers.",
         "67755a83a1": "Everyone else",
@@ -2807,7 +2854,8 @@
         "cdc9ac4b2d": "editor",
         "e57db40c11": "Could not build launch command for {{value0}}.",
         "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
-        "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}})."
+        "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}}).",
+        "reloadSnapshotSaveFailed": "Reload canceled: the session snapshot could not be saved ({{value0}})."
       },
       "TerminalSearch": {
         "db234b7519": "Close",
@@ -4622,6 +4670,7 @@
               "metric": {
                 "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
                 "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
+                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             },
@@ -5910,7 +5959,9 @@
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'",
-          "largeInputNoMatches": "No matches for this long input"
+          "largeInputNoMatches": "No matches for this long input",
+          "entriesLabel": "Folder entries",
+          "inputLabel": "Filter or path"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -6406,16 +6457,16 @@
           "sshTargetNotFoundDetail": "Refresh workspaces or reconnect the host, then try again.",
           "sshTargetInvalid": "SSH host configuration is incomplete.",
           "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
-          "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
+          "sshAliasRequired": "This editor needs an SSH config alias for this host.",
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
           "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
-          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
-          "remoteEditorHint": "Only VS Code can open folders on an SSH host.",
+          "remoteEditorUnsupportedDetail": "Choose VS Code, Cursor, or Zed, or use the app locally.",
+          "remoteEditorHint": "Only VS Code, Cursor, and Zed can open folders on an SSH host.",
           "remoteRuntimeEditorHint": "Apps on this computer can open this server’s files only when Orca reaches it over SSH.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
-          "remoteLaunchFailed": "Could not open the path in VS Code.",
-          "remoteLaunchFailedDetail": "Check the VS Code command configured on this machine.",
+          "remoteLaunchFailed": "Could not open the path in the editor.",
+          "remoteLaunchFailedDetail": "Check the editor command configured on this machine.",
           "1417fd8380": "Customize apps...",
           "8009ab69a6": "Open in",
           "bd0e8159f8": "Check the editor command or file manager configuration on this machine.",
@@ -9293,6 +9344,8 @@
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
           "proxyConnectionReuse": "Reuse one proxy connection",
           "proxyConnectionReuseHelp": "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules.",
+          "reconnectOnLaunch": "Reconnect on launch",
+          "reconnectOnLaunchHelp": "When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.",
           "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
           "allowRemoteCliControlHelp": "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server.",
           "editTitle": "Edit SSH host",
@@ -13109,7 +13162,11 @@
           "nodeDownloadBlockedNoMirror": "Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.",
           "nodeDownloadBlockedMirrorTried": "Neither this computer nor this host could download Node.js, including from the Node.js download mirror. Check the mirror setting, then connect again.",
           "reassurance": "Runs on {{host}}, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to {{host}}.",
-          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}"
+          "refusedBlockedReason": "Orca isn’t set up on this host yet. {{reason}}",
+          "refusedLeaveBehind": "Some saved items for this host can’t move to its Orca server: {{items}}. Move anyway connects the host and keeps them on this computer.",
+          "refusedLeaveBehindUnnamed": "Some saved items for this host can’t move to its Orca server. Move anyway connects the host and keeps them on this computer.",
+          "windowsBuildUnsupported": "This host runs a version of Windows older than Windows 10 and Windows Server 2016, so it can’t run Orca’s server. Use a host with a newer version of Windows, or a Linux or macOS host.",
+          "windowsNoExtractor": "This Windows host has neither tar.exe nor PowerShell’s Expand-Archive, so Orca can’t unpack its server there. Install Windows PowerShell 5.1 on the host, then connect again."
         },
         "ZcodeCliSetupSection": {
           "title": "Use GLM with ZCode",
@@ -13458,6 +13515,17 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "claudeSubagentNavigation": {
+          "title": "Claude subagent navigation",
+          "description": "Open Claude subagents from the sidebar. Adds a shortcut to Claude’s keybindings.json and loads an Orca mod in new Orca panes. Requires Claude 2.1.300+ and status hooks. Turning off removes Orca’s shortcut; shortcuts you delete stay deleted.",
+          "search": {
+            "subagent": "subagent",
+            "navigation": "navigation",
+            "plugin": "plugin",
+            "mod": "mod",
+            "shortcut": "shortcut"
+          }
         }
       },
       "right": {
@@ -14453,7 +14521,32 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "checkingBranchStatus": "Checking branch status…",
+                  "titleCheckingPrStatus": "Checking PR status…",
+                  "titlePrAlreadyMerged": "PR is already merged",
+                  "titleCheckOutBranchToSync": "Check out a branch before syncing commits",
+                  "titlePublishBranchFirst": "Publish the branch first to sync commits",
+                  "titleUseForcePush": "Use Commit & Force Push — remote only has older copies of local commits",
+                  "titleCommitThenPullPush": "Commit, then pull and push",
+                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
+                  "rebaseFromBase": "Rebase from Base",
+                  "rebaseChooseRemoteBase": "Choose a remote base branch to rebase from",
+                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
+                  "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+                  "blockedCommitFirst": "Commit changes first",
+                  "blockedCheckOutBranchFirst": "Check out a branch first",
+                  "blockedSwitchToFeatureBranch": "Switch to a feature branch",
+                  "blockedPublishBranch": "Publish Branch",
+                  "blockedPushFirst": "Push first",
+                  "blockedForcePushFirst": "Force Push first",
+                  "blockedSyncFirst": "Sync first",
+                  "blockedAuthRequired": "{{authInstruction}} in this environment",
+                  "blockedUnsupportedProvider": "Unsupported provider",
+                  "blockedExistingReview": "A {{reviewLabel}} already exists",
+                  "blockedForkHeadUnsupported": "Fork head unsupported",
+                  "blockedBaseNotOnRemote": "Base branch is not on the remote",
+                  "blockedBranchNotReady": "Branch is not ready"
                 }
               },
               "primary": {
@@ -14667,6 +14760,7 @@
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
             "sessionDeleteFailed": "Couldn't delete the session",
+            "sessionDeleteCheckingHost": "Checking {{value0}}…",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
             "resumeInChatFailed": "Could not resume this session in a new chat.",
@@ -14808,6 +14902,7 @@
             "subagentCountPlural": "{{value0}} subagents",
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
+            "deleteReasonHostUpdateRequired": "Update {{value0}} to delete its sessions from here.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
             "resumeInNewNativeChat": "Resume in New Chat",
@@ -14818,6 +14913,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
+            "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
           },
           "FileExplorerNameFilter": {
@@ -18821,6 +18917,11 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "ClaudeAgentViewIndicator": {
+        "viewing": "Currently viewing",
+        "viewingChild": "Viewing subagent {{name}}",
+        "returnHint": "Click the parent row to return. Esc stops this subagent. Enter sends your draft to this subagent."
       }
     },
     "i18n": {
@@ -18987,6 +19088,7 @@
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
@@ -19283,7 +19385,6 @@
         "permissions": "Permissions",
         "permissionAsk": "Ask for approval",
         "permissionAskDescription": "Asks before edits and commands your settings don't allow",
-        "permissionAskCodexDescription": "Edits files and runs commands in this workspace; asks before anything else",
         "permissionAskSharedDescription": "Asks before edits or commands it isn't already allowed to make",
         "permissionAcceptEdits": "Accept edits",
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
@@ -19382,6 +19483,7 @@
         "runToolMany": "Used {{value0}} tools",
         "runPair": "{{value0}} and {{value1}}",
         "runList": "{{value0}}, and {{value1}}",
+        "runListSeparator": ", ",
         "runLiveReadOne": "Reading 1 file",
         "runLiveReadMany": "Reading {{value0}} files",
         "runLiveSearchOne": "Searching 1 time",
@@ -19484,6 +19586,7 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
+        "hostUpdateRequired": "Update Orca on this host to continue in Chat UI.",
         "exitUnconfirmedFromTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
         "exitUnconfirmed": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
@@ -19724,8 +19827,7 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
-        "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
+        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
@@ -19751,6 +19853,12 @@
       "imagePreview": {
         "fileActions": "File actions",
         "linkActions": "Link actions"
+      },
+      "goalControl": {
+        "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
+        "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
+        "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       }
     },
     "tab": {
@@ -20837,10 +20945,6 @@
         "restartOne": "Restart session",
         "restartOther": "Restart {{count}} sessions",
         "listLabel": "Claude sessions to restart",
-        "selectAll": "Select all",
-        "selectAllSessions": "Select all sessions",
-        "selectedCount": "{{selected}} of {{total}} selected",
-        "selectWorkspace": "Select all sessions in {{workspace}}",
         "session": "Claude session",
         "busy": "Working",
         "idle": "Idle",
@@ -20856,7 +20960,20 @@
         "restartingOne": "Restarting 1 Claude session on {{account}}",
         "restartingOther": "Restarting {{count}} Claude sessions on {{account}}",
         "uncheckedOne": "Couldn't check 1 terminal for Claude. If Claude is running there, it stays on {{previous}} until restarted.",
-        "uncheckedOther": "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted."
+        "uncheckedOther": "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted.",
+        "groupOnAccount": "Running on {{account}}",
+        "groupElsewhere": "Not on {{account}}",
+        "groupCantMove": "Can't move",
+        "selectGroup": "Select all sessions in {{group}}",
+        "reasonWsl": "WSL terminal",
+        "reasonOwnFolder": "Uses your own Claude folder",
+        "reasonUnknownAccount": "Account unknown",
+        "reasonNoSession": "Can't resume",
+        "reviewBodyOne": "1 other Claude session wasn't moved to {{next}}.",
+        "reviewBodyOther": "{{count}} other Claude sessions weren't moved to {{next}}.",
+        "notMovedOne": "1 other session wasn't moved.",
+        "notMovedOther": "{{count}} other sessions weren't moved.",
+        "review": "Review"
       }
     },
     "managedData": {
@@ -21306,5 +21423,10 @@
   },
   "browserTab": {
     "agentDriving": "An agent is using this page"
+  },
+  "nativeChat": {
+    "math": {
+      "scrollDisplayEquation": "Scroll display equation"
+    }
   }
 }

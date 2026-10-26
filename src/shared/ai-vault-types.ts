@@ -144,6 +144,8 @@ export type AiVaultSession = {
     sessionId: string
     workspaceId: string
   }
+  /** The client's pairing with the listing server when it listed this row; host mutations are fenced to it. */
+  hostPairingRevision?: number
 }
 
 export type AiVaultSubagentListArgs = {

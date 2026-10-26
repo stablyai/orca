@@ -1,3 +1,5 @@
+import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -27,7 +29,9 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   trackStart: <T>(start: Promise<T>) => Promise<T>
   startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
   /** Retire mismatched login/permission children under serialization. */
-  retireOutgrownChild: (sessionId: string) => Promise<void>
+  retireOutgrownChild: (sessionId: string, continuingId?: string) => Promise<void>
+  immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
+  retainedWork?: (sessionId: string, continuingId: string) => boolean
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -41,6 +45,13 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** Publish row-free changes in current work. */
   workChanged?: (sessionId: string) => void
+  holdClosedInput?: (
+    sessionId: string,
+    clientMessageId: string,
+    fence: number,
+    cause: UnsentSendHold['cause']
+  ) => Promise<void>
+  settleLeftovers?: (sessionId: string, owner: () => void) => Promise<void>
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
   stopping: (sessionId: string) => boolean

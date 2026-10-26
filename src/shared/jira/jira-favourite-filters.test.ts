@@ -61,7 +61,7 @@ describe('Jira favourite filter normalization', () => {
     ).toHaveLength(1)
   })
 
-  it('caps filter count and bounded scanning of malformed records', () => {
+  it('caps results and omits a valid filter beyond the candidate limit', () => {
     const filters = Array.from({ length: 101 }, (_, index) => ({ ...filter, id: String(index) }))
     const result = normalizeJiraFavouriteFilters(filters, 'site-1')
     expect(result.filters).toHaveLength(100)

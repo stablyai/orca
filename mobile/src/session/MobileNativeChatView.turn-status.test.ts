@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -12,9 +12,23 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
-    FlatList: React.forwardRef((props, ref) => {
+    FlatList: React.forwardRef<
+      unknown,
+      {
+        data: NativeChatMessage[]
+        renderItem: (row: { item: NativeChatMessage; index: number }) => ReactNode
+        ListFooterComponent: ReactNode
+      }
+    >((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd, scrollToOffset }), [])
-      return React.createElement('FlatList', props)
+      return React.createElement(
+        'FlatList',
+        props,
+        props.data.map((item, index) =>
+          React.createElement(React.Fragment, { key: item.id }, props.renderItem({ item, index }))
+        ),
+        props.ListFooterComponent
+      )
     }),
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
@@ -55,7 +69,7 @@ vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'Ch
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 
-vi.mock('./MobileNativeChatComposer', async () => {
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const React = await import('react')
   const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
   return {
@@ -157,10 +171,12 @@ describe('MobileNativeChatView', () => {
   }
 
   function renderedRow(id: string): ReturnType<typeof createElement> {
-    const listNode = list()
-    const data = listNode.props.data as NativeChatMessage[]
-    const index = data.findIndex((row) => row.id === id)
-    return listNode.props.renderItem({ item: data[index], index })
+    return createElement(
+      'Row',
+      renderer!.root.find(
+        (node) => String(node.type) === 'ChatMessage' && node.props.message.id === id
+      ).props
+    )
   }
 
   describe('structured turn status wiring', () => {

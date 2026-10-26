@@ -6,7 +6,7 @@ import {
   LINEAR_ISSUE_LIST_MAX
 } from '../../../../../shared/linear/issue-read-limits'
 import { compareLinearIssues } from './task-page-linear-jira-list-model'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskPageLinearListPresentation } from './use-task-page-linear-list-presentation'
 export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearListSelectionModel) {
   const {

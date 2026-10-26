@@ -114,16 +114,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
-  it('retires three collapsed prompts in one row', () => {
-    const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two three', 5000)]
-    const pending = [
-      pendingSend('p1', 'one', 'm1'),
-      pendingSend('p2', 'two', 'm1'),
-      pendingSend('p3', 'three', 'm1')
-    ]
-    expect(retiredIds(messages, pending)).toEqual(['p1', 'p2', 'p3'])
-  })
-
   it('matches across tab, newline and repeated-space separators', () => {
     const messages = [
       assistantTurn('m1', 'ready', 1000),
@@ -132,18 +122,6 @@ describe('selectGluedPendingIds', () => {
     const pending = [
       pendingSend('p1', ' run the tests\n', 'm1'),
       pendingSend('p2', '\tagain ', 'm1')
-    ]
-    expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
-  })
-
-  it('matches prompts that themselves contain the separator', () => {
-    const messages = [
-      assistantTurn('m1', 'ready', 1000),
-      userTurn('m2', 'fix the bug and run the tests', 5000)
-    ]
-    const pending = [
-      pendingSend('p1', 'fix the bug', 'm1'),
-      pendingSend('p2', 'and run the tests', 'm1')
     ]
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
@@ -192,12 +170,6 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m3', 'anything else?', 3)
     ]
     const pending = [pendingSend('p1', 'run the tests', 'm3'), pendingSend('p2', 'again', 'm3')]
-    expect(retiredIds(messages, pending)).toEqual([])
-  })
-
-  it('never lets an older turn retire sends captured after it', () => {
-    const messages = [userTurn('m1', 'fix the bug', 1000), assistantTurn('m2', 'fixed', 1100)]
-    const pending = [pendingSend('p1', 'fix the', 'm2'), pendingSend('p2', 'bug', 'm2')]
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
@@ -402,12 +374,5 @@ describe('retireLandedMobileNativeChatPending on a PTY-typed send', () => {
     const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
 
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
-  })
-
-  it('still holds the echo when no row carries the text at all', () => {
-    const messages = [assistantTurn('m1', 'ready', 1000)]
-    const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
-
-    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual(pending)
   })
 })

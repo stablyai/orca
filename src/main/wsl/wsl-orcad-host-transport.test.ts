@@ -6,6 +6,8 @@ import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/pro
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { isWslOrcadHostTarget } from '../ssh/orcad-host-transport'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
+import { orcadBashStdioBridgeCommand } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 
 type FakeChild = EventEmitter & {
   stdin: PassThrough
@@ -75,6 +77,22 @@ describe('createWslOrcadHostTransport', () => {
     expect(specs[0]?.program).toMatch(/wsl(\.exe)?$/i)
     expect(specs[0]?.args).toEqual(['-d', 'Ubuntu-24.04', '--exec', 'sh', '-c', 'echo $HOME'])
     expect(specs[0]?.env?.WSL_UTF8).toBe('1')
+    channel.close()
+  })
+
+  it('hands the bash bridge to sh through --exec, so wsl.exe never expands its $ words', async () => {
+    const child = fakeChild()
+    const { transport, specs } = transportWith([child])
+    const bridge = await resolveOrcadStdioBridge(transport, 6768)
+    const channel = await openOrcadStdioBridgeChannel(transport, bridge)
+    expect(specs[0]?.args).toEqual([
+      '-d',
+      'Ubuntu-24.04',
+      '--exec',
+      'sh',
+      '-c',
+      orcadBashStdioBridgeCommand(6768)
+    ])
     channel.close()
   })
 

@@ -97,7 +97,7 @@ function BrowserPageButton({
   return (
     <button
       type="button"
-      className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-chat-foreground-faint transition-colors hover:bg-accent hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={title}
       aria-label={translate('components.native-chat.tool.showBrowserPageLabel', 'Show {{value0}}', {
         value0: title

@@ -8,7 +8,7 @@ import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operat
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from '../../orca-runtime-create-terminal-desktop'
-import { buildRuntimeAgentTeamsLaunchPlan } from './agent-teams-launch-plan'
+import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
 import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
@@ -74,35 +74,29 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       })
       const releaseStablePaneCreate = createIdempotentCallback(claimedStablePaneCreate)
       const launchToken = agentLaunchTokenFor(launchOpts, dependencies.randomUUID)
+      const teamAllocation = terminalCreateTeamAllocation(this.claudeAgentTeams)
       let effectiveLaunchConfig = launchOpts.launchConfig
       let result!: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
       const spawnFresh = async (operation: PaneSpawnOperation) => {
         const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
-        let agentTeamsPlan: Awaited<ReturnType<typeof buildRuntimeAgentTeamsLaunchPlan>>['plan']
-        let sequencedStartupCommand: string | undefined
-        try {
-          const agentTeams = await buildRuntimeAgentTeamsLaunchPlan({
-            launchConfig: launchOpts.launchConfig,
-            command: launchOpts.command,
-            claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
-            claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
-            baseEnv: { ...process.env, ...baseEnv },
-            adoptedBeforeLaunch: null,
-            createTeamEnv: (shimDir, shimBin) =>
-              this.claudeAgentTeams.createLaunchEnv({
-                leaderHandle: preAllocatedHandle,
-                baseEnv: { ...process.env, ...baseEnv },
-                shimDir,
-                shimBin
-              }).env
+        const agentTeams = await teamAllocation
+          .prepare(
+            {
+              launchConfig: launchOpts.launchConfig,
+              command: launchOpts.command,
+              claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
+              claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
+              baseEnv: { ...process.env, ...baseEnv },
+              adoptedBeforeLaunch: null
+            },
+            preAllocatedHandle
+          )
+          .catch((error: unknown) => {
+            releaseStablePaneCreate()
+            throw error
           })
-          agentTeamsPlan = agentTeams.plan
-          sequencedStartupCommand = agentTeams.sequencedStartupCommand
-          effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
-        } catch (error) {
-          releaseStablePaneCreate?.()
-          throw error
-        }
+        const { plan: agentTeamsPlan, sequencedStartupCommand } = agentTeams
+        effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
         const env = this.buildTerminalWorkspaceEnv(
           workspace,
           {
@@ -199,6 +193,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           tabId,
           leafId,
           spawnFresh,
+          onOutcome: (outcome, operation) => {
+            claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
+            teamAllocation.acceptOutcome(outcome)
+          },
           signal: launchOpts.signal
         })
         if (adoptedBeforeLaunch) {
@@ -206,6 +204,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           Object.assign(result, this.getTerminalLaunchResult(result.id))
         } else if (!ptyController.adoptStablePane) {
           result = await spawnFresh({ mustExist: false })
+          teamAllocation.acceptFresh(result)
         }
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
@@ -279,6 +278,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           },
           effectiveLaunchConfig: pty?.launchConfig ?? undefined,
           launchToken: pty?.launchToken ?? undefined,
+          adoptedStablePane: launch.adoptedStablePane,
           presentation,
           opts,
           tabId,
@@ -300,6 +300,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...(warning ? { warning } : {})
         }
       } finally {
+        teamAllocation.release()
         releaseStablePaneCreate()
       }
     }

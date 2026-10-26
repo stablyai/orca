@@ -166,8 +166,8 @@ export class AgentSessionRecordStore {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)
+  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
+    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
 
   /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>

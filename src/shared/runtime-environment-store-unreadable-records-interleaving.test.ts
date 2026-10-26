@@ -251,7 +251,9 @@ describe('runtime environment store under interleaved writers and unreadable rec
   }
 
   it('never loses, duplicates, or exposes records across random interleavings', () => {
-    for (let seed = 1; seed <= 40; seed++) {
+    // Every store write fsyncs, so run only seeds that each break a guard when it is removed:
+    // 1 dropped unreadable records, 6 the newer-build id shadow, 8 foreign sidecar owners.
+    for (const seed of [1, 6, 8]) {
       rmSync(sidecarPath(), { force: true })
       runSeed(seed)
     }

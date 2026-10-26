@@ -212,7 +212,7 @@ describe('ClaudeSessionContinuationTracker', () => {
     expect(tracker.resolve(session(OLD, oldPath))).toEqual(session(FORK, forkPath))
   })
 
-  it('reads only the tail of a transcript larger than the first scan', () => {
+  it('finds a continuation near the end of a large transcript', () => {
     const { projectDir } = makeProject()
     const filler = turn(OLD, 'filler').repeat(Math.ceil((3 * 1024 * 1024) / 90))
     const oldPath = writeTranscript(projectDir, OLD, filler + pointer(OLD, FORK))
@@ -244,7 +244,7 @@ describe('ClaudeSessionContinuationTracker', () => {
     const oldPath = writeTranscript(projectDir, OLD, turn(OLD, 'u1') + pointer(OLD, FORK))
     const elsewhere = join(configDir, 'projects', '-other-repo')
     mkdirSync(elsewhere, { recursive: true })
-    const forkPath = writeTranscript(elsewhere, 'transcript-file-uuid', turn(FORK, 'u1'))
+    const forkPath = writeTranscript(elsewhere, FILE_ID, turn(FORK, 'u1'))
     const jobDir = join(configDir, 'jobs', FORK.slice(0, 8))
     mkdirSync(jobDir, { recursive: true })
     writeFileSync(

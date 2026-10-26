@@ -170,24 +170,39 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.watches).toHaveLength(1)
   })
 
-  it('marks terminals exited and recovers when a user-visible distro is confirmed stopped', async () => {
+  it('keeps a confirmed-stopped distro down even with visible work, until it runs again (E9)', async () => {
     const h = harness({ visible: true })
     await h.supervisor.connect('Ubuntu')
     h.state.running = { status: 'confirmed', distros: [] }
     h.lastWatch().exit(1)
-    await h.advance(0)
-    expect(h.statuses[0]).toEqual({
-      state: 'distro-stopped',
-      terminals: 'exited',
-      recovering: true
-    })
+    await h.advance(60_000)
+    expect(h.statuses).toEqual([
+      { state: 'distro-stopped', terminals: 'exited', recovering: false }
+    ])
     expect(h.readIdentity).toHaveBeenCalledTimes(1) // never exec'd into the stopped distro
+    expect(h.ensure).toHaveBeenCalledTimes(1)
+    expect(h.deferred).toHaveLength(1)
+    // Started by someone else: relaunch into the running distro.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
     h.state.identity = { distroInstance: 'boot:2', orcad: 'orcad:101' }
-    await h.advance(WSL_ORCAD_RECONNECT_DELAYS_MS[0] * 2)
+    h.deferred[0]()
+    await h.advance(5_000)
     expect(h.ensure).toHaveBeenCalledTimes(2)
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: CENSUS })
-    expect(h.watches).toHaveLength(2)
+  })
+
+  it('reports settling right after an exit, while the running list may be stale (E9)', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(false)
+    // WSL still lists the stopping distro as running.
+    h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
+    h.lastWatch().exit(1)
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(true)
+    h.state.running = { status: 'confirmed', distros: [] }
+    await h.advance(60_000)
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(false)
   })
 
   it('never boots a stopped distro for background work; the gate resumes it once running', async () => {

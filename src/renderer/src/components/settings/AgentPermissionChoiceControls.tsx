@@ -122,12 +122,6 @@ export function AllAgentsPermissionSetting({
           'What every agent may do without asking. You can set one agent differently below.'
         )}
       </p>
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'settings.agents.permissionsResetExplanation',
-          'Picking a mode here resets agents you set separately.'
-        )}
-      </p>
       <div className="min-h-6">
         {choice === 'auto' ? (
           <div className="flex items-center gap-2">

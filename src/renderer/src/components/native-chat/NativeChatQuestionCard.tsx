@@ -398,8 +398,10 @@ function OptionRow({
       aria-pressed={selected}
       data-native-chat-prompt-card-focus-target={initialFocus || undefined}
       className={cn(
-        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors focus:bg-accent focus:outline-none disabled:pointer-events-none',
-        selected ? 'bg-accent' : 'hover:bg-accent'
+        'group/option flex w-full items-start gap-3 px-3.5 py-2.5 text-left text-foreground transition-colors focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none',
+        selected
+          ? 'bg-accent text-accent-foreground'
+          : 'hover:bg-accent hover:text-accent-foreground'
       )}
     >
       <span
@@ -411,9 +413,18 @@ function OptionRow({
         {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
       </span>
       <span className="min-w-0">
-        <span className="block break-words text-sm text-foreground">{label}</span>
+        <span className="block break-words text-sm">{label}</span>
         {description ? (
-          <span className="block break-words text-xs text-muted-foreground">{description}</span>
+          <span
+            className={cn(
+              'block break-words text-xs',
+              selected
+                ? 'text-accent-foreground'
+                : 'text-muted-foreground group-hover/option:text-accent-foreground group-focus/option:text-accent-foreground'
+            )}
+          >
+            {description}
+          </span>
         ) : null}
       </span>
     </button>

@@ -10,7 +10,7 @@ import {
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 
 // Compose focused then sibling resolution exactly as useTabAgent does.
 function resolveTabAgent(

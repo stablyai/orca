@@ -3,12 +3,12 @@ import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation
 } from '@/lib/ai-vault-tab-title-requests'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { canPaneOfferResumeInNewChat } from './tab-session-history-switch'
+import { resolvePaneResumeInNewChatOffer } from './tab-session-history-switch'
 
 export type CliChatResumeSource = {
   tabId: string
@@ -17,6 +17,8 @@ export type CliChatResumeSource = {
   agent: CliConversationRowAgent
   providerSessionId: string
   executionHostId: ExecutionHostId
+  /** The host predates chat resume: show the action disabled and ask for an update. */
+  hostUpdateRequired?: true
 }
 
 export function resolveCliChatResumeSource(
@@ -32,15 +34,17 @@ export function resolveCliChatResumeSource(
     : collectAgentPaneConversations(state, adoptsCliConversations, {
         runningAgentsOnly: true
       }).find((candidate) => candidate.tabId === args.tab.id)
+  const offer = conversation
+    ? resolvePaneResumeInNewChatOffer(state, {
+        worktreeId: conversation.worktreeId,
+        paneKey: conversation.paneKey
+      })
+    : null
   if (
     !conversation ||
     conversation.tabId !== args.tab.id ||
     conversation.worktreeId !== args.tab.worktreeId ||
-    conversation.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    !canPaneOfferResumeInNewChat(state, {
-      worktreeId: conversation.worktreeId,
-      paneKey: conversation.paneKey
-    })
+    !offer
   ) {
     return null
   }
@@ -50,6 +54,7 @@ export function resolveCliChatResumeSource(
     paneKey: conversation.paneKey,
     agent: conversation.agent,
     providerSessionId: conversation.providerSession.id,
-    executionHostId: conversation.executionHostId
+    executionHostId: conversation.executionHostId,
+    ...(offer === 'host-update-required' ? { hostUpdateRequired: true as const } : {})
   }
 }
