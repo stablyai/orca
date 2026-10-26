@@ -1,6 +1,9 @@
 import type { QuickCreationExecutionInput } from './composer-model'
 
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import {
+  getLinkedWorkItemPromptTemplate,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -93,7 +96,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        resolveQuickCreateLinkedWorkItemPrompt(
+          promptLinkedWorkItem,
+          trimmedNote,
+          getLinkedWorkItemPromptTemplate(useAppStore.getState(), repoId)
+        )
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),

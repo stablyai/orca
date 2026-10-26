@@ -79,7 +79,16 @@ export const ProjectGroupSchema = z.object({
 
 export const ProjectSectionCatalogSchema = z.object({
   repos: salvagingArray(repoSchema),
-  projects: salvagingArray(z.object({ id: z.string(), displayName: z.string() })),
+  projects: salvagingArray(
+    z.object({
+      id: z.string(),
+      displayName: z.string(),
+      linkedWorkItemPromptTemplate: salvagedOptional(
+        'linkedWorkItemPromptTemplate',
+        z.string().nullable()
+      )
+    })
+  ),
   setups: salvagingArray(setupSchema),
   // Until the phone has read the shared UI value (projectOrderBy, ui.get), it orders by this.
   projectOrderBy: z.enum(PROJECT_ORDER_BY_ARMS).catch('manual'),

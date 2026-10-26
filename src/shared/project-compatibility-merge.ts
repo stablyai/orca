@@ -1,5 +1,7 @@
 import type { Project, ProjectHostSetup, ProjectUpdateArgs } from './project-types'
 import type { Repo } from './repo-types'
+import { normalizeLinkedWorkItemPromptTemplate } from './linked-work-item-prompt-settings'
+import { getProjectPromptTemplateOwner } from './project-prompt-template-owner'
 import {
   mergeCatalogCreatedAt,
   mergeCatalogUpdatedAt,
@@ -80,6 +82,14 @@ export function mergeUpdatedProjectCompatibilityProject(
       project.localWindowsRuntimePreference = localWindowsRuntimePreference
     }
   }
+  if ('linkedWorkItemPromptTemplate' in updates) {
+    const template = normalizeLinkedWorkItemPromptTemplate(updated.linkedWorkItemPromptTemplate)
+    if (template === undefined) {
+      delete project.linkedWorkItemPromptTemplate
+    } else {
+      project.linkedWorkItemPromptTemplate = template
+    }
+  }
   return project
 }
 
@@ -157,7 +167,8 @@ export function mergePreviousProjectMetadata(
   previous: Project,
   current: Project,
   reposById: ReadonlyMap<string, readonly Repo[]>,
-  hostId: string
+  hostId: string,
+  setups: readonly ProjectHostSetup[] = []
 ): Project {
   const project = mergeProjectCompatibilityProject(previous, current)
   const sourceRepoIds = getMergedSourceRepoIdsForHostRefresh(previous, current, reposById, hostId)
@@ -180,6 +191,26 @@ export function mergePreviousProjectMetadata(
   } else if (previous.localWindowsRuntimePreference !== undefined) {
     // Why: a remote runtime's local Windows preference must not overwrite the client-local project runtime setting.
     project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+  }
+  const templateOwner = getProjectPromptTemplateOwner(
+    {
+      id: project.id,
+      sourceRepoIds: [...new Set([...previous.sourceRepoIds, ...current.sourceRepoIds])]
+    },
+    setups,
+    [...reposById.values()].flat()
+  )
+  if (hostId === templateOwner) {
+    const template = normalizeLinkedWorkItemPromptTemplate(current.linkedWorkItemPromptTemplate)
+    if (template === undefined) {
+      delete project.linkedWorkItemPromptTemplate
+    } else {
+      project.linkedWorkItemPromptTemplate = template
+    }
+  } else if (previous.linkedWorkItemPromptTemplate !== undefined) {
+    project.linkedWorkItemPromptTemplate = previous.linkedWorkItemPromptTemplate
+  } else {
+    delete project.linkedWorkItemPromptTemplate
   }
   return {
     ...project,

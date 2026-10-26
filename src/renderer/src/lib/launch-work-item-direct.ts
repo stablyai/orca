@@ -18,6 +18,7 @@ import {
   getDirectWorkItemDraftContent,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/launch-work-item-direct-draft'
+import { getLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -124,7 +125,11 @@ export async function launchWorkItemDirect(
       return false
     }
     const requestId = newAgentLaunchRequestId()
-    const draftContent = await getDirectWorkItemDraftContent(item, context.repoConnectionId)
+    const draftContent = await getDirectWorkItemDraftContent(
+      item,
+      context.repoConnectionId,
+      getLinkedWorkItemPromptTemplate(store, repoId)
+    )
     if (args.signal?.aborted) {
       return 'cancelled'
     }

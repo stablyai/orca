@@ -24,6 +24,7 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  linkedWorkItemPromptTemplate?: string
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -31,7 +32,9 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>> & {
+    linkedWorkItemPromptTemplate?: string | null
+  }
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

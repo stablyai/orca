@@ -197,3 +197,19 @@ describe('row array normalization', () => {
     expect(normalizeProjectRows(notAnArray)).toEqual([])
   })
 })
+
+describe('project prompt template normalization', () => {
+  it('discards malformed persisted overrides without materializing missing settings', () => {
+    const valid = makeProject({ linkedWorkItemPromptTemplate: '{url} /engineer' })
+    expect(normalizeProjectRow(valid)).toBe(valid)
+    expect(
+      normalizeProjectRow(makeProject({ linkedWorkItemPromptTemplate: 12 }))
+        .linkedWorkItemPromptTemplate
+    ).toBeUndefined()
+    expect(
+      normalizeProjectRow(makeProject({ linkedWorkItemPromptTemplate: '  ' }))
+        .linkedWorkItemPromptTemplate
+    ).toBeUndefined()
+    expect('linkedWorkItemPromptTemplate' in normalizeProjectRow(makeProject())).toBe(false)
+  })
+})

@@ -11,6 +11,7 @@ import {
   getSettingsProjectRemovalScope
 } from '../navigation/settings-project-list'
 import { translate } from '@/i18n/i18n'
+import { getProjectPromptTemplateOwner } from '../../../../../shared/project-prompt-template-owner'
 import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderProjectSettingsSections(context: SettingsRenderContext): React.ReactNode {
@@ -75,9 +76,13 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
             wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
             wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
-            updateProject={(projectId, updates) =>
-              model.updateProject(projectId, updates, getRepoExecutionHostId(repo))
-            }
+            updateProject={async (projectId, updates) => {
+              const hostId =
+                'linkedWorkItemPromptTemplate' in updates
+                  ? getProjectPromptTemplateOwner(project, model.projectHostSetups, model.repos)
+                  : getRepoExecutionHostId(repo)
+              return hostId === undefined ? false : model.updateProject(projectId, updates, hostId)
+            }}
             writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
           />
         ) : null}

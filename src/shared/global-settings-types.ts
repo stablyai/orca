@@ -71,6 +71,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Jira key casing for newly generated Jira-linked workspace and branch names.
    *  Existing workspaces and user-typed names are never rewritten. */
   jiraIssueKeyCasing?: JiraIssueKeyCasing
+  linkedWorkItemPromptTemplate?: string
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
