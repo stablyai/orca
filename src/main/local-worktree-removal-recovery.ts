@@ -76,9 +76,8 @@ async function verifyGitWorktreeRegistrationRemoved(
   }
 }
 
-async function removeRequiredGitWorktreeRegistration(
-  args: StaleLocalWorktreeRegistrationArgs,
-  forceForError = true
+export async function removeStaleLocalWorktreeRegistration(
+  args: StaleLocalWorktreeRegistrationArgs
 ): Promise<RemoveWorktreeResult> {
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
@@ -97,11 +96,11 @@ async function removeRequiredGitWorktreeRegistration(
       args.repoPath,
       args.localWorktreeGitOptions,
       args.canonicalWorktreePath,
-      forceForError
+      true
     )
   } catch (verificationError) {
     throw removalError
-      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, forceForError)
+      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, true)
       : verificationError
   }
   // Preserve the branch when Git may have detached the row before reporting a filesystem error.
@@ -169,10 +168,4 @@ async function isRecoverablePartialRemovalFailure(
   } catch {
     return false
   }
-}
-
-export async function removeStaleLocalWorktreeRegistration(
-  args: StaleLocalWorktreeRegistrationArgs
-): Promise<RemoveWorktreeResult> {
-  return removeRequiredGitWorktreeRegistration(args)
 }

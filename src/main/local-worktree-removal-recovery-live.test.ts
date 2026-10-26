@@ -44,7 +44,7 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   }
 }
 
-describe('local Windows worktree removal recovery (live Git)', () => {
+describe('local partial worktree removal recovery (live Git)', () => {
   afterEach(async () => {
     await Promise.all(
       tempRoots
@@ -53,7 +53,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
     )
   })
 
-  it.runIf(process.platform === 'win32')(
+  it.runIf(process.platform === 'win32' || process.platform === 'darwin')(
     'finishes deletion when Git deregisters before a directory-not-empty failure',
     async () => {
       const root = await mkdtemp(path.join(tmpdir(), 'orca-worktree-enotempty-'))
@@ -70,7 +70,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
       git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/churn', worktreePath])
       const head = git(worktreePath, ['rev-parse', 'HEAD'])
 
-      // Race Git’s recursive deletion to reproduce Windows ENOTEMPTY deterministically.
+      // Race Git’s recursive deletion to reproduce ENOTEMPTY deterministically.
       const churn = spawn(
         process.execPath,
         [
