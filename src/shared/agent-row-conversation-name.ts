@@ -2,6 +2,7 @@
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
+import { isGeneratedTabTitleOwnedByPane } from './agent-tab-title'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
@@ -10,7 +11,13 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
+  | 'customTitle'
+  | 'quickCommandLabel'
+  | 'aiVaultTitle'
+  | 'generatedTitle'
+  | 'generatedTitlePaneKey'
+  | 'title'
+  | 'defaultTitle'
 >
 
 // Synthetic status labels describe state rather than a conversation name.
@@ -107,7 +114,8 @@ export function getAgentRowConversationName(
   generatedTitlesEnabled: boolean,
   // Tab live title names the focused pane; split callers supply their own title/null. Undefined retains single-pane behavior; tab-owned names still apply.
   paneLiveTitle?: string | null,
-  providerSessionId?: string
+  providerSessionId?: string,
+  paneKey?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -133,7 +141,10 @@ export function getAgentRowConversationName(
   ) {
     return providerTitle
   }
-  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
+  const generatedTitle =
+    generatedTitlesEnabled && isGeneratedTabTitleOwnedByPane(tab, paneKey)
+      ? tab.generatedTitle?.trim()
+      : ''
   if (generatedTitle) {
     return generatedTitle
   }

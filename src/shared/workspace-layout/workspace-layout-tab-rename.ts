@@ -1,3 +1,4 @@
+import { omitStoredFields } from './stored-record-fields'
 import { findTab, refuse, updateTab, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf } from './workspace-layout-command-types'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
@@ -27,5 +28,7 @@ export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renam
   if (tab.generatedTitle?.trim() && !command.replaceExisting) {
     return refuse('generated_title_kept')
   }
-  return updateTab(model, command.workspace, { ...tab, generatedTitle: command.title })
+  // A title set by command names no pane, so the pane that produced the old one must not keep it.
+  const untagged = tab.kind === 'terminal' ? omitStoredFields(tab, ['generatedTitlePaneKey']) : tab
+  return updateTab(model, command.workspace, { ...untagged, generatedTitle: command.title })
 }

@@ -74,6 +74,7 @@ export function localDesktopSession(): WorkspaceSessionState {
             viewMode: 'chat',
             launchAgent: 'claude',
             generatedTitle: 'Fix flaky test',
+            generatedTitlePaneKey: `term-agent:${leaf(3)}`,
             generation: 2
           },
           entry: {

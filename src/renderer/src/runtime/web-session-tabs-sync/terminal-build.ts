@@ -177,6 +177,10 @@ export function buildMirroredTerminalTabs(
         defaultTitle: existing?.defaultTitle ?? title,
         // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
+        // Why: the source pane key embeds the tab id, so a record found under another id would hide the title.
+        ...(existing?.generatedTitle && existing.id === localTabId && existing.generatedTitlePaneKey
+          ? { generatedTitlePaneKey: existing.generatedTitlePaneKey }
+          : {}),
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),

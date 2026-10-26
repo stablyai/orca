@@ -18,6 +18,7 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.quickCommandLabel === b.quickCommandLabel &&
     a.startupCwd === b.startupCwd &&
     a.generatedTitle === b.generatedTitle &&
+    a.generatedTitlePaneKey === b.generatedTitlePaneKey &&
     a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
     a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
     a.aiVaultTitle?.title === b.aiVaultTitle?.title &&

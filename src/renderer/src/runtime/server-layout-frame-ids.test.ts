@@ -175,6 +175,27 @@ describe('a server layout under desktop ids', () => {
     expect(serverLayoutForDesktop(boundServer, ENV, handleOfPtyId)).toEqual(desktop)
   })
 
+  it("names a generated title's source pane by its terminal's id on each side", () => {
+    const leaf = '5b6c3a1e-2f4d-4c8b-9a7e-1d2c3b4a5f60'
+    const sourced = (key: string): PublishedWorkspaceLayout => {
+      const layout = serverLayout()
+      const entry = layout.tabs[1]!
+      layout.tabs[1] = { ...entry, terminal: { ...entry.terminal!, generatedTitlePaneKey: key } }
+      return layout
+    }
+    const titleSource = (layout: PublishedWorkspaceLayout) =>
+      layout.tabs[1]!.terminal!.generatedTitlePaneKey
+    const onDesktop = serverLayoutForDesktop(sourced(`term-2:${leaf}`), ENV, handles)
+
+    expect(titleSource(onDesktop)).toBe(`${toWebTerminalSurfaceTabId('term-2')}:${leaf}`)
+    expect(titleSource(desktopLayoutForServer(onDesktop))).toBe(`term-2:${leaf}`)
+    // Unreadable: dropped, so the title shows tab-wide rather than on no pane.
+    expect(
+      'generatedTitlePaneKey' in
+        serverLayoutForDesktop(sourced('legacy'), ENV, handles).tabs[1]!.terminal!
+    ).toBe(false)
+  })
+
   it('refuses a tab kind it does not know rather than show it under raw ids', () => {
     const layout = serverLayout()
     // Through JSON, as the wire delivers it: no TabContentType names this kind.

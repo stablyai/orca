@@ -56,7 +56,8 @@ export function loadTerminalTab(
       'quickCommandLabel',
       'isPinned',
       'viewMode',
-      'generatedTitle'
+      'generatedTitle',
+      'generatedTitlePaneKey'
     ]),
     createdAt: row.createdAt,
     customTitle: row.customTitle,
