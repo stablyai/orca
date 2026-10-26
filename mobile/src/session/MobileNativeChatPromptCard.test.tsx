@@ -80,7 +80,9 @@ describe('MobileNativeChatPromptCard collapse', () => {
 
     await act(async () => tree!.update(render(true)))
     expect(tree!.root.findByProps({ testID: 'native-chat-prompt-strip' })).toBeTruthy()
-    const hidden = tree!.root.findAll((node) => node.props.style?.display === 'none')
+    const hidden = tree!.root.findAll(
+      (node) => Object.assign({}, ...[node.props.style].flat()).display === 'none'
+    )
     expect(hidden).toHaveLength(1)
     expect(textInput(hidden[0]!).props.value).toBe('turbo')
 

@@ -10,6 +10,10 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  conversation: {
+    flex: 1,
+    minHeight: 0
+  },
   inputLockStatus: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
@@ -36,6 +40,7 @@ export const styles = StyleSheet.create({
   },
   listWrap: {
     flex: 1,
+    minHeight: 0,
     position: 'relative'
   },
   listContent: {
