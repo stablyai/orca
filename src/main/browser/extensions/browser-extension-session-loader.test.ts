@@ -120,6 +120,10 @@ const installed = {
 }
 
 describe('browser extension session loader', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('registers only the frame preload, never a service-worker preload (electron#52310)', () => {
     setBrowserExtensionSupportEnabled(true)
     loader.attachBrowserExtensionsToProfileSession(
@@ -171,6 +175,7 @@ describe('browser extension session loader', () => {
   })
 
   it('raises lifecycle events only once Chromium has registered the dropped worker again', async () => {
+    vi.useFakeTimers()
     mocks.prepared.signature = 'v3'
     mocks.prepared.hasWorker = true
     loader.unloadBrowserExtensionFromProfile('default', ID)
@@ -178,8 +183,8 @@ describe('browser extension session loader', () => {
     const loading = loader
       .loadBrowserExtensionIntoProfile('default', installed, 'reload')
       .then(() => (settled = true))
-    await vi.waitFor(() => expect(mocks.session.extensions.loadExtension).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await vi.waitFor(() => expect(mocks.registrationListeners.size).toBe(1))
+    await vi.advanceTimersByTimeAsync(20)
     // Starting the worker now would fail: "Failed to start service worker."
     expect(settled).toBe(false)
     expect(mocks.emitWorkerStart).not.toHaveBeenCalled()
@@ -201,6 +206,7 @@ describe('browser extension session loader', () => {
   })
 
   it('waits for the worker to register again after an unload, even with unchanged scripts', async () => {
+    vi.useFakeTimers()
     mocks.prepared.hasWorker = true
     mocks.emitWorkerStart.mockClear()
     mocks.session.clearStorageData.mockClear()
@@ -210,7 +216,7 @@ describe('browser extension session loader', () => {
       .loadBrowserExtensionIntoProfile('default', installed, 'reload')
       .then(() => (settled = true))
     await vi.waitFor(() => expect(mocks.registrationListeners.size).toBe(1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await vi.advanceTimersByTimeAsync(20)
     expect(settled).toBe(false)
     expect(mocks.emitWorkerStart).not.toHaveBeenCalled()
     expect(mocks.session.clearStorageData).not.toHaveBeenCalled()

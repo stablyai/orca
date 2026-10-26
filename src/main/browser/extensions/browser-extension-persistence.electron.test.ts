@@ -167,6 +167,7 @@ afterAll(async () => {
 })
 
 describe('browser extension state across a restart', () => {
+  // Two Electron launches and native worker startup need separate readiness budgets.
   it('replays menus and persistAcrossSessions scripts; forwards webRequest and commands', async () => {
     const first = launch('first')
     const firstExited = new Promise((resolve) => first.once('exit', resolve))
@@ -208,6 +209,7 @@ describe('browser extension state across a restart', () => {
     ])
     // Command shortcuts typed into the tab reach the extension unless Orca owns the keys.
     await pollStatus('second', (current) => Boolean(current.commands))
+    // ast-grep-ignore: test-no-real-time-wait -- Observe late forbidden shortcut deliveries from the separate Electron worker.
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(readStatus('second').commands).toEqual([{ name: 'fill_login', hasTab: true }])
     expect(status.windowsHidden).toBe(true)

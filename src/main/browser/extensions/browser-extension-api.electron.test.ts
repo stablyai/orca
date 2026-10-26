@@ -293,6 +293,7 @@ afterAll(async () => {
 })
 
 describe('browser extension APIs in a real Electron session', () => {
+  // Native worker and popup startup can require extra time across renderers.
   it('gives an MV3 worker and extension page the added APIs on chrome and browser', async () => {
     await expect
       .poll(() => {

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ContentScriptMethod } from './browser-extension-content-scripts'
 
 type Script = Record<string, unknown> & { id: string }
 const mocks = vi.hoisted(() => ({
@@ -121,7 +122,8 @@ const session = {} as Electron.Session
 const store = getBrowserExtensionProfileStateStore()
 const stored = () => store.read('default', extension.id).contentScripts
 function context(fromWorker: boolean) {
-  const chrome = { runtime: { getManifest: () => extension.manifest }, scripting: {} }
+  const scripting: Partial<Record<ContentScriptMethod, unknown>> = {}
+  const chrome = { runtime: { getManifest: () => extension.manifest }, scripting }
   const bridge = {
     call: async (namespace: string, method: string, args: unknown[]) => ({
       ok: true,
@@ -142,8 +144,8 @@ function context(fromWorker: boolean) {
     console,
     surface: { scripting: BROWSER_EXTENSION_API_SURFACE.scripting }
   })
-  const call = async (method: string, ...args: unknown[]) => {
-    const fn: unknown = Reflect.get(chrome.scripting, method)
+  const call = async (method: ContentScriptMethod, ...args: unknown[]) => {
+    const fn = chrome.scripting[method]
     if (typeof fn !== 'function') {
       throw new Error('Missing scripting method')
     }

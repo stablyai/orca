@@ -30,10 +30,8 @@ function handlersOnPreviousPage() {
     lastKnownWebviewUrlRef: ref<string | null>(PREVIOUS),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
-    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     onUpdatePageStateRef: ref((_tabId: string, next: BrowserTabPageState) => updates.push(next)),
     onSetUrlRef: ref(vi.fn()),
-    setBrowserOverlayViewport: vi.fn(),
     setAddressBarValue: vi.fn(),
     focusAddressBarNow: () => false
   })

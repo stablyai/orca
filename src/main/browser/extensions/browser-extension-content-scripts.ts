@@ -10,6 +10,8 @@ export type ContentScriptMethod =
   | 'unregisterContentScripts'
   | 'getRegisteredContentScripts'
 
+type NativeContentScriptMethods = Partial<Record<ContentScriptMethod, unknown>>
+
 type ScriptState = {
   queue: Promise<unknown>
   controller: AbortController
@@ -39,9 +41,10 @@ async function runNativeScripts(
   if (!scripting || typeof scripting !== 'object') {
     throw new Error('Native scripting API is unavailable')
   }
-  const call = (name: string, input: unknown[]): Promise<unknown> =>
+  const methods: NativeContentScriptMethods = scripting
+  const call = (name: ContentScriptMethod, input: unknown[]): Promise<unknown> =>
     new Promise((resolve, reject) => {
-      const fn: unknown = Reflect.get(scripting, name)
+      const fn = methods[name]
       if (typeof fn !== 'function') {
         reject(new Error('Native scripting method is unavailable'))
         return

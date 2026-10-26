@@ -271,7 +271,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   installJiraImageProtocolHandler()
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
-  // Decide extension support before the session setup hook loads extensions.
+  // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
     enabled: store.getSettings().experimentalBrowserExtensions === true,
     savedBrowserTabs: store

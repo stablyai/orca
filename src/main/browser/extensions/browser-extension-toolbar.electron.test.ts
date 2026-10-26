@@ -178,6 +178,7 @@ afterAll(async () => {
 })
 
 describe('extension toolbar, action popup and tab activation in a real Electron session', () => {
+  // Native worker, popup startup and popup resizing run through separate renderers.
   it('keeps action state per tab, opens a sized popup under the button and activates tabs', async () => {
     await expect
       .poll(() => {

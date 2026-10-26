@@ -150,6 +150,7 @@ afterAll(async () => {
 })
 
 describe('runtime.onInstalled and onStartup across launches', () => {
+  // Three Electron launches exercise persisted events across install, restart and update.
   it('installs once, starts up on the next launch, and updates on a new version or reload', async () => {
     const install = { event: 'onInstalled', details: { reason: 'install' }, version: '1.0.0' }
     const startup = { event: 'onStartup', version: '1.0.0' }
