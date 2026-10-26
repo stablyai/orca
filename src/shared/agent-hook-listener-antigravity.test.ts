@@ -536,6 +536,8 @@ describe('shared agent-hook-listener', () => {
         null,
         'working'
       ])
+      // The parent's own turn ended at its busy Stop and restarted when it woke.
+      expect(state.antigravityMainAgentStatusByPaneKey.get(PANE_KEY)?.state).toBe('working')
 
       const done = normalizeHookPayload(
         state,
@@ -545,7 +547,8 @@ describe('shared agent-hook-listener', () => {
       )
       expect(done?.payload).toMatchObject({
         state: 'done',
-        lastAssistantMessage: 'Parent final report'
+        lastAssistantMessage: 'Parent final report',
+        mainAgent: { state: 'done' }
       })
       expect(
         send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })

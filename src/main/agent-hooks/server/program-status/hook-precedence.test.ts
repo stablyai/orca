@@ -80,6 +80,18 @@ describe('programStatusHookYieldEndsAt', () => {
     expect(programStatusHookYieldEndsAt(hook, heldOpen, NOW + 1)).toBe(Infinity)
   })
 
+  it("never lets a program's own done settle a turn the hooks hold open for children", () => {
+    const leadDone = { state: 'done' as const, outcome: 'success' as const, stateStartedAt: NOW }
+    const hook = row({ state: 'working', agentType: 'antigravity', mainAgent: leadDone })
+    const done = report({ state: 'done', agentType: 'antigravity', mainAgent: leadDone })
+    expect(programStatusHookYieldEndsAt(hook, done)).toBe(Infinity)
+    // A program that ended, or another app's report, keeps the silence fallback.
+    expect(
+      programStatusHookYieldEndsAt(hook, { ...done, mainAgent: undefined, sessionBoundary: true })
+    ).toBe(NOW + SILENCE)
+    expect(programStatusHookYieldEndsAt(hook, { ...done, agentType: 'claude' })).toBe(NOW + SILENCE)
+  })
+
   it('keeps a question the hooks raised only from a working report that began before it', () => {
     for (const state of ['waiting', 'blocked'] as const) {
       const hook = row({ state, agentType: 'pi' })

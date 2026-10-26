@@ -111,6 +111,33 @@ describe('OSC 7501 status beside hooks', () => {
     expect(paneRow()?.state).toBe('done')
   })
 
+  // #33973: agy reports its own turn over OSC 7501 but never the in-process subagents it waits on.
+  it('keeps an Antigravity parent working past the silence fallback while its subagents run', async () => {
+    const parent = { conversationId: 'parent', lastUserInput: 'translate' }
+    const antigravityHook = async (
+      hookEventName: string,
+      payload: Record<string, unknown>
+    ): Promise<void> => {
+      const body = Object.assign(buildBody(payload), { hook_event_name: hookEventName })
+      expect((await postHookEvent(server, body, '/hook/antigravity')).status).toBe(204)
+    }
+    await antigravityHook('PreInvocation', parent)
+    await antigravityHook('Stop', { ...parent, fullyIdle: false })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    programStatus({
+      state: 'done',
+      agentType: 'antigravity',
+      lastAssistantMessage: 'Launched the subagents; waiting for them',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: Date.now() }
+    })
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+    vi.useRealTimers()
+    await antigravityHook('PreInvocation', parent)
+    await antigravityHook('Stop', { ...parent, fullyIdle: true })
+    expect(paneRow()?.state).toBe('done')
+  })
+
   it('never settles a later hook turn with a report that yielded to an earlier one', async () => {
     await openCodeHook('SessionBusy')
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })

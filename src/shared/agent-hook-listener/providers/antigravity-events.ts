@@ -1,3 +1,4 @@
+import { continueMainAgentStatus, foldAgentLeadStatus } from '../../agent-lead-status-fold'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -55,13 +56,11 @@ export function normalizeAntigravityEvent(
   }
 
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
-  const stateName =
+  const leadState =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
       : eventName === 'Stop'
-        ? stopStillBusy
-          ? 'working'
-          : 'done'
+        ? 'done'
         : eventName === 'PreInvocation' ||
             eventName === 'PostInvocation' ||
             eventName === 'PreToolUse' ||
@@ -69,9 +68,20 @@ export function normalizeAntigravityEvent(
           ? 'working'
           : null
 
-  if (!stateName) {
+  if (!leadState) {
     return null
   }
+  // fullyIdle=false is agy's own word that background work, such as its subagents, outlives the lead's turn.
+  const { stateName } = foldAgentLeadStatus({
+    leadState,
+    childWorkLiveness: stopStillBusy ? 'working' : null
+  })
+  const mainAgent = continueMainAgentStatus(
+    state.antigravityMainAgentStatusByPaneKey.get(paneKey),
+    { state: leadState },
+    Date.now()
+  )
+  state.antigravityMainAgentStatusByPaneKey.set(paneKey, mainAgent)
 
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
   // Cache prompts per turn instead of rescanning large transcripts per hook.
@@ -95,7 +105,8 @@ export function normalizeAntigravityEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    mainAgent
   })
   // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
   if (eventName === 'Stop' && !stopStillBusy) {
