@@ -105,6 +105,25 @@ describe('a page calling a native verb', () => {
       expect.objectContaining({ type: 'request', method: 'native.clipboard.read' })
     ])
   })
+
+  it('asks the shell to hand a PDF to the device viewer', async () => {
+    // The page cannot write a file or reach the share sheet inside a WebView, so only the shell can finish this.
+    const serveNativeVerb = vi.fn(async () => ({ shared: true }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
+    const verbs = await mount(pair)
+    const params = {
+      worktreeId: 'worktree-a',
+      relativePath: 'docs/report.pdf',
+      mimeType: 'application/pdf',
+      title: 'report.pdf'
+    }
+    expect(verbs.canShareFile).toBe(true)
+    const shared = verbs.shareFile(params)
+    await pair.flush()
+    await expect(shared).resolves.toBe(true)
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.file.share', params)
+    expect(pair.rpc.requests).toEqual([])
+  })
 })
 
 describe('a shell that granted no native verbs', () => {
@@ -123,8 +142,17 @@ describe('a shell that granted no native verbs', () => {
       throw new Error('nothing mounted')
     }
     expect(verbs.granted).toBe(false)
+    expect(verbs.canShareFile).toBe(false)
     const before = page.sent.length
     await expect(verbs.readClipboardText()).rejects.toThrow(/did not grant/)
+    await expect(
+      verbs.shareFile({
+        worktreeId: 'worktree-a',
+        relativePath: 'docs/report.pdf',
+        mimeType: 'application/pdf',
+        title: 'report.pdf'
+      })
+    ).rejects.toMatchObject({ reason: 'ungranted' })
     // Inspect the wire to distinguish local refusal from an otherwise identical rejected round trip.
     expect(page.sent).toHaveLength(before)
   })
