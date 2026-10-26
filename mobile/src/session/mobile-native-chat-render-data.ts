@@ -29,10 +29,9 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // Missing history may mean new or unreadable; promise neither in the waiting copy.
+    // Same as desktop's empty pane: a chat with no rows yet invites the first message, whether or not its session or transcript has appeared.
     case 'waiting-session':
     case 'awaiting-transcript':
-      return formatNativeChatEmptyStateCopy('notFound', agentLabel)
     case 'ready':
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {

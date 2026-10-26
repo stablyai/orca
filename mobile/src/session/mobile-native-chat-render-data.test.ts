@@ -23,20 +23,12 @@ function user(id: string, text: string): NativeChatMessage {
 const fold = (messages: NativeChatMessage[]) => foldMobileNativeChatMessages(messages, 'claude')
 
 describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message into a loaded, empty chat, matching desktop copy', () => {
-    expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
-      title: 'Start a chat with Codex',
-      subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
-    })
-  })
-
-  it.each(['waiting-session', 'awaiting-transcript'] as const)(
-    'says the conversation is not found yet while %s, never that the chat is new',
+  it.each(['waiting-session', 'awaiting-transcript', 'ready'] as const)(
+    'invites a first message while %s, matching desktop copy',
     (status) => {
-      expect(mobileNativeChatEmptyState(status, 'claude')).toEqual({
-        title: "Can't find this conversation yet",
-        subtitle:
-          'Send a message to start one, or open the terminal view to see what Claude is doing.'
+      expect(mobileNativeChatEmptyState(status, 'codex')).toEqual({
+        title: 'Start a chat with Codex',
+        subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
       })
     }
   )
