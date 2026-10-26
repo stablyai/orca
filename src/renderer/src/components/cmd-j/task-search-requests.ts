@@ -246,8 +246,8 @@ async function searchJira(
     return []
   }
   const siteId = status.selectedSiteId ?? status.activeSiteId ?? undefined
-  const issues = await searchJiraIssuesByKeyOrText(query, (jql) =>
-    jiraSearchIssuesForTarget(target, jql, RESULT_LIMIT, siteId, signal)
+  const issues = await searchJiraIssuesByKeyOrText(query, (jql, suggestions) =>
+    jiraSearchIssuesForTarget(target, jql, RESULT_LIMIT, siteId, signal, suggestions)
   )
   return issues.flatMap((issue) => {
     const itemSource =

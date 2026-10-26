@@ -107,7 +107,21 @@ describe('jira RPC methods', () => {
       30,
       'all',
       undefined,
+      undefined,
       undefined
+    )
+    const suggestions = { query: '400', currentJql: 'sprint in openSprints()' }
+    await dispatcher.dispatch(
+      makeRequest('jira.searchIssues', { jql: 'text ~ "400*"', siteId: 'site-1', suggestions }),
+      { signal: summaryController.signal }
+    )
+    expect(runtime.jiraSearchIssues).toHaveBeenLastCalledWith(
+      'text ~ "400*"',
+      undefined,
+      'site-1',
+      summaryController.signal,
+      undefined,
+      suggestions
     )
     expect(runtime.jiraListIssues).toHaveBeenCalledWith(
       'assigned',

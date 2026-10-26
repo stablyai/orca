@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
     preflightStatusContextKey: 'test',
     refreshPreflightStatus: vi.fn(),
     listLinearIssues: vi.fn(async () => ({ items: [] })),
+    searchJiraIssues: vi.fn().mockResolvedValue([]),
     searchLinearIssues: vi.fn<
       (query: string, limit: number, options: { workspaceId?: string }) => Promise<LinearIssue[]>
     >(async () => [])
@@ -117,36 +118,67 @@ describe('smart workspace explicit source connection', () => {
     }
   })
 
-  it('uses the resolved runtime repository default when a local repository has the same ID', () => {
-    const localRepo: Repo = {
-      id: 'same-id',
-      path: '/local',
-      displayName: 'Local',
-      badgeColor: '',
-      addedAt: 0,
-      defaultJiraProject: { id: '10', key: 'LOC', name: 'Local', siteId: 'site-a' }
-    }
-    const selectedRepo: Repo = {
-      ...localRepo,
-      path: '/runtime',
-      executionHostId: 'runtime:remote',
-      defaultJiraProject: { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
-    }
-    const fieldProps = {
-      ...props(),
-      repos: [localRepo, selectedRepo],
-      repoId: 'same-id',
-      selectedRepo,
-      jiraSourceContext: normalizeTaskSourceContext({
-        provider: 'jira',
-        projectId: 'repo:same-id',
-        hostId: 'runtime:remote'
+  it.each([true, false])(
+    'searches a bare Jira number on its runtime owner with selected project=%s',
+    async (selected) => {
+      const localRepo: Repo = {
+        id: 'same-id',
+        path: '/local',
+        displayName: 'Local',
+        badgeColor: '',
+        addedAt: 0,
+        defaultJiraProject: { id: '10', key: 'LOC', name: 'Local', siteId: 'site-a' }
+      }
+      const selectedRepo: Repo = {
+        ...localRepo,
+        path: '/runtime',
+        executionHostId: 'runtime:remote',
+        defaultJiraProject: selected
+          ? { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
+          : undefined
+      }
+      const fieldProps = {
+        ...props(),
+        repos: [localRepo, selectedRepo],
+        repoId: 'same-id',
+        selectedRepo,
+        jiraSourceContext: normalizeTaskSourceContext({
+          provider: 'jira',
+          projectId: 'repo:same-id',
+          hostId: 'runtime:remote'
+        })
+      }
+      const { result } = renderHook(() => {
+        const foundation = useWorkItemSourceFoundation(fieldProps)
+        useSmartWorkspaceSecondarySearches({
+          foundation,
+          shouldQueryLinear: false,
+          linearQuery: '',
+          linearUrlIntent: null,
+          linearUrlIntentOwnsInput: false,
+          shouldQueryJira: true,
+          jiraSearchQuery: '400'
+        })
+        return foundation
       })
+      await waitFor(() => expect(result.current.jiraLoading).toBe(false))
+      expect(result.current.selectedRepo).toBe(selectedRepo)
+      expect(result.current.jiraProject).toEqual(selectedRepo.defaultJiraProject ?? null)
+      expect(mocks.state.searchJiraIssues).toHaveBeenNthCalledWith(
+        1,
+        selected ? 'project = "20" AND (key = "REM-400")' : 'text ~ "400*"',
+        12,
+        {
+          sourceContext: fieldProps.jiraSourceContext,
+          siteId: selected ? 'site-b' : null,
+          signal: expect.any(AbortSignal),
+          ...(selected
+            ? {}
+            : { suggestions: { query: '400', currentJql: 'ORDER BY updated DESC' } })
+        }
+      )
     }
-    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
-    expect(result.current.selectedRepo).toBe(selectedRepo)
-    expect(result.current.jiraProject).toEqual(selectedRepo.defaultJiraProject)
-  })
+  )
 
   it('exposes Linear on a connected saved host while the focused runtime is disconnected', async () => {
     mocks.readStatus.mockResolvedValue({

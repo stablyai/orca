@@ -64,6 +64,39 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     listJiraIssues.mockResolvedValue([])
     searchJiraIssues.mockResolvedValue([])
   })
+
+  it('looks up a bare issue number inside the selected project and sprint', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = '400'
+    model.jiraCurrentSprint = true
+    model.jiraProjectFilter = { id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-a' }
+    renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() => expect(model.setJiraLoading).toHaveBeenLastCalledWith(false))
+    expect(searchJiraIssues).toHaveBeenNthCalledWith(
+      1,
+      'project = "10" AND ((key = "ALP-400") AND sprint in openSprints())',
+      50,
+      { sourceContext: null, siteId: 'site-a', force: false }
+    )
+  })
+
+  it('keeps sprint filtering on both numeric suggestions and the legacy text query', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = '400'
+    model.jiraCurrentSprint = true
+    renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() => expect(model.setJiraLoading).toHaveBeenLastCalledWith(false))
+    expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
+      '(text ~ "400*") AND sprint in openSprints()',
+      50,
+      {
+        sourceContext: null,
+        force: false,
+        suggestions: { query: '400', currentJql: 'sprint in openSprints() ORDER BY updated DESC' }
+      }
+    )
+  })
+
   it('keeps sprint presets on the host list path and composes text queries after classification', async () => {
     const model = createModel()
     model.activeJiraPreset = 'all'

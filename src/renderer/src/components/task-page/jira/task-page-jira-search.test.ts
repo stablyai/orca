@@ -19,6 +19,49 @@ const SYNTAX_ERROR = "Error 400: Error in the JQL Query: Expecting operator but 
 const IPC_SYNTAX_ERROR = `Error invoking remote method 'jira:searchIssues': Error: ${SYNTAX_ERROR}`
 
 describe('searchTaskPageJiraIssues', () => {
+  it('finds a bare number by project key without a text request when the issue exists', async () => {
+    const search = vi.fn().mockResolvedValue([ISSUE])
+    await expect(searchTaskPageJiraIssues('1', search, 'input', 'ABC')).resolves.toEqual({
+      issues: [ISSUE],
+      jqlRejection: null
+    })
+    expect(search.mock.calls).toEqual([['key = "ABC-1"']])
+  })
+
+  it.each(['empty', 'bad-request'])('retries the original number after %s', async (failure) => {
+    const search = vi.fn()
+    if (failure === 'empty') {
+      search.mockResolvedValueOnce([])
+    } else {
+      search.mockRejectedValueOnce(
+        new Error("Error 400: An issue with key 'ABC-400' does not exist.")
+      )
+    }
+    search.mockResolvedValueOnce([ISSUE])
+    await expect(searchTaskPageJiraIssues('400', search, 'input', 'ABC')).resolves.toEqual({
+      issues: [ISSUE],
+      jqlRejection: null
+    })
+    expect(search.mock.calls).toEqual([['key = "ABC-400"'], ['text ~ "400*"']])
+  })
+
+  it.each([401, 403, 429, 503])('surfaces HTTP %i instead of retrying as text', async (status) => {
+    const error = new Error(`Error ${status}: Request failed`)
+    const search = vi.fn().mockRejectedValue(error)
+    await expect(searchTaskPageJiraIssues('400', search, 'input', 'ABC')).rejects.toBe(error)
+    expect(search).toHaveBeenCalledTimes(1)
+  })
+
+  it('requests suggestions for an unscoped number but keeps explicit JQL unchanged', async () => {
+    const search = vi.fn().mockResolvedValue([])
+    await searchTaskPageJiraIssues('400', search)
+    await searchTaskPageJiraIssues('400', search, 'jql', 'ABC')
+    expect(search.mock.calls).toEqual([
+      ['text ~ "400*"', { query: '400', currentJql: 'ORDER BY updated DESC' }],
+      ['400']
+    ])
+  })
+
   it('searches plain text without a JQL round trip', async () => {
     const search = vi.fn().mockResolvedValue([ISSUE])
     await expect(searchTaskPageJiraIssues(' s ', search)).resolves.toEqual({

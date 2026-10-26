@@ -11,6 +11,7 @@ import type {
   JiraConnectArgs,
   JiraCreateIssueArgs,
   JiraIssueFilter,
+  JiraIssueSuggestions,
   JiraIssueListFilters,
   JiraIssueUpdate,
   JiraSiteSelection
@@ -86,9 +87,10 @@ export class RuntimeJiraCommands {
     limit = 30,
     siteId?: JiraSiteSelection,
     signal?: AbortSignal,
-    strict = false
+    strict = false,
+    suggestions?: JiraIssueSuggestions
   ): ReturnType<typeof searchIssues> {
-    return searchIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal, strict)
+    return searchIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal, strict, suggestions)
   }
 
   jiraListIssues(

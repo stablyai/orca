@@ -1,5 +1,6 @@
 import { JiraIssueListFiltersParam } from './jira-quick-filter-params'
 import { z } from 'zod'
+import { isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
 import {
   OptionalFiniteNumber,
   OptionalPlainString,
@@ -28,11 +29,21 @@ export const SelectSite = z.object({
   siteId: requiredString('Site ID is required')
 })
 
+export const IssueSuggestions = z.object({
+  query: z.string().trim().max(8192).regex(/^\d+$/),
+  currentJql: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => isUtf8ByteLengthWithinLimit(value, 8192))
+})
+
 export const SearchIssues = z.object({
   jql: requiredString('Missing JQL'),
   limit: OptionalFiniteNumber,
   siteId: OptionalString,
-  strict: z.boolean().optional()
+  strict: z.boolean().optional(),
+  suggestions: IssueSuggestions.optional()
 })
 
 export const ListIssues = z

@@ -69,7 +69,8 @@ it('binds Jira results to the returned account rather than the active site', asy
     'text ~ "login redirect*"',
     12,
     'all',
-    expect.any(AbortSignal)
+    expect.any(AbortSignal),
+    undefined
   )
 })
 
@@ -131,7 +132,8 @@ it.each(['linear', 'jira'] as const)(
         'text ~ "login redirect*"',
         12,
         'other-site',
-        expect.any(AbortSignal)
+        expect.any(AbortSignal),
+        undefined
       )
       expect(results?.[0]?.sourceContext.hostId).toBe('runtime:palette-owner')
     }
@@ -161,7 +163,8 @@ it('searches desktop-owned Jira for an SSH repository filter and retains the rep
     'text ~ "login redirect*"',
     12,
     'other-site',
-    expect.any(AbortSignal)
+    expect.any(AbortSignal),
+    undefined
   )
 })
 
