@@ -102,6 +102,38 @@ describe('useAddProjectFlow', () => {
     expect(onProjectAdded).not.toHaveBeenCalled()
   })
 
+  it('creates a folder project when Git availability cannot be read', async () => {
+    const { client, sendRequest } = fakeClient({
+      ...HOST_HANDLERS,
+      'repo.gitAvailable': () => Promise.reject(new Error('socket closed')),
+      'repo.create': () =>
+        ok({ repo: { id: 'r3', displayName: 'demo', path: '/home/alice/orca/projects/demo' } })
+    })
+    const { current } = await mountFlow(client)
+
+    await act(async () => current.flow!.setName('demo'))
+    await act(async () => current.flow!.submitCreate())
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'repo.create',
+      expect.objectContaining({ kind: 'folder' })
+    )
+  })
+
+  it('refuses a ~ location before sending when the host home is unknown', async () => {
+    const { client, sendRequest } = fakeClient({
+      ...HOST_HANDLERS,
+      'files.browseServerDir': () => fail('no home')
+    })
+    const { current } = await mountFlow(client)
+
+    await act(async () => current.flow!.setName('demo'))
+    await act(async () => current.flow!.submitCreate())
+
+    expect(sendRequest).not.toHaveBeenCalledWith('repo.create', expect.anything())
+    expect(current.flow!.error).toMatch(/full path/)
+  })
+
   it('keeps the form and a running clone when a reconnect swaps the client', async () => {
     const repo = { id: 'r3', displayName: 'app', path: '/home/alice/orca/projects/app' }
     let finishClone: (reply: RpcResponse) => void = () => undefined

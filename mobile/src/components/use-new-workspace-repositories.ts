@@ -66,7 +66,8 @@ export function useNewWorkspaceRepositories(args: {
       return
     }
     if (initialRepoId) {
-      const initialRepo = repos.find((repo) => repo.id === initialRepoId)
+      // Repo ids are unique per host; the just-added project lives on the focused host.
+      const initialRepo = desktopRepos.find((repo) => repo.id === initialRepoId)
       if (initialRepo) {
         setSelectedRepo(initialRepo)
         return
@@ -89,6 +90,7 @@ export function useNewWorkspaceRepositories(args: {
   }, [
     lastVisitedRepo.loaded,
     lastVisitedRepo.repoId,
+    desktopRepos,
     initialRepoId,
     listedFresh,
     repos,
@@ -116,6 +118,8 @@ export function useNewWorkspaceRepositories(args: {
         if (hostId) {
           setCachedRepos(hostId, listed)
         }
+        // A failed listing keeps a just-added project's pick pending instead of preselecting another repo.
+        setListedFresh(true)
       })
       .catch((err: unknown) => {
         if (!stale) {
@@ -125,7 +129,6 @@ export function useNewWorkspaceRepositories(args: {
       .finally(() => {
         if (!stale) {
           setLoading(false)
-          setListedFresh(true)
         }
       })
     return () => {

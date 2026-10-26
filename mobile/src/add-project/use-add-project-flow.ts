@@ -7,13 +7,15 @@ import {
   projectCreateRun,
   type AddProjectRpcSender
 } from './add-project-operations'
-import { DEFAULT_PROJECT_PARENT, expandHostHomePath } from './add-project-paths'
+import { DEFAULT_PROJECT_PARENT, expandHostHomePath, homeUnknownFor } from './add-project-paths'
 import type { AddedProject } from './add-project-reply-schema'
 
 export type AddProjectStep = 'choose' | 'create' | 'clone' | 'existing' | 'added'
 
 // Match the desktop web client's clone budget; large or SSH-backed clones outlast the generic timeout.
 const PROJECT_CLONE_TIMEOUT_MS = 10 * 60_000
+
+const HOME_UNKNOWN_ERROR = "Couldn't read the host's home folder. Enter a full path instead of ~."
 
 export function useAddProjectFlow(args: {
   client: AddProjectRpcSender | null
@@ -78,7 +80,12 @@ export function useAddProjectFlow(args: {
           setGitAvailable(read.value)
         }
       })
-      .catch(() => undefined)
+      // Unknown Git falls back to a folder project; a failed git init would delete the new folder.
+      .catch(() => {
+        if (!stale) {
+          setGitAvailable(false)
+        }
+      })
     return () => {
       stale = true
     }
@@ -128,6 +135,9 @@ export function useAddProjectFlow(args: {
   const submitCreate = useCallback(
     () =>
       run(async (target) => {
+        if (homeUnknownFor(parent, homeDir)) {
+          return HOME_UNKNOWN_ERROR
+        }
         const created = projectCreateRun.interpret(
           await projectCreateRun.request(target, {
             parentPath: expandHostHomePath(parent, homeDir),
@@ -143,15 +153,18 @@ export function useAddProjectFlow(args: {
 
   const submitClone = useCallback(
     () =>
-      run(async (target) =>
-        projectCloneRun.interpret(
+      run(async (target) => {
+        if (homeUnknownFor(parent, homeDir)) {
+          return HOME_UNKNOWN_ERROR
+        }
+        return projectCloneRun.interpret(
           await projectCloneRun.request(
             target,
             { url: url.trim(), destination: expandHostHomePath(parent, homeDir) },
             { timeoutMs: PROJECT_CLONE_TIMEOUT_MS }
           )
         )
-      ),
+      }),
     [homeDir, parent, run, url]
   )
 
