@@ -37,8 +37,7 @@ import {
 } from './browser-session-profile-retirement'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from '../identity/browser-identity-mode-store'
-import { forgetBrowserSitePermissions } from '../site-settings/browser-site-permission-store'
-import { forgetBrowserSiteDisplay } from '../site-settings/browser-site-display-store'
+import { forgetBrowserProfileOwnedStores } from './browser-profile-owned-stores'
 import { attachBrowserExtensionsToProfileSession } from '../extensions/profile-sessions/browser-extension-session-loader'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
@@ -294,8 +293,7 @@ class BrowserSessionRegistry {
     this.profiles.delete(profileId)
     this.persistProfiles()
     this.onProfilesChanged?.()
-    forgetBrowserSitePermissions(profileId)
-    forgetBrowserSiteDisplay(profileId)
+    forgetBrowserProfileOwnedStores(profileId)
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
