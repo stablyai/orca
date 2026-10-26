@@ -24,7 +24,7 @@ import { isPickedImageMime, mobilePickedFileFallbackName } from './mobile-picked
 
 // The page cannot load a native cache URI; the composer falls back to an inline data URI.
 function pickedImage(base64: string, fileName: string | undefined): PickedMobileImage {
-  return fileName ? { base64, fileName } : { base64 }
+  return { base64, fileName }
 }
 
 // Older shells lack nameMedia; derive a filename from MIME instead.

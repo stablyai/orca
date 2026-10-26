@@ -54,7 +54,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
 
     expect(mkdirMock).toHaveBeenCalledWith(dirname(savedPath), { recursive: true })
     expect(dirname(dirname(savedPath))).toBe(join('/os/temp'))
-    expect(basename(dirname(savedPath))).toMatch(/^orca-paste-\d+-uuid-1$/)
+    expect(basename(dirname(savedPath))).toBe('orca-paste-uuid-1')
     expect(basename(savedPath)).toBe('柴静-看见.txt')
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from('hello'))
   })

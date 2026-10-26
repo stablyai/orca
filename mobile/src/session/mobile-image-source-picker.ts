@@ -125,8 +125,10 @@ async function* pickFromFiles(
     }
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
     if (base64) {
-      const fileName = isPickedImageMime(asset.mimeType) ? '' : asset.name.trim()
-      yield fileName ? { base64, uri: asset.uri, fileName } : { base64, uri: asset.uri }
+      const fileName = isPickedImageMime(asset.mimeType)
+        ? undefined
+        : asset.name.trim() || 'attachment'
+      yield { base64, uri: asset.uri, fileName }
     }
   }
 }

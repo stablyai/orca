@@ -27,6 +27,8 @@ export function useMobileNativeChatTerminalStream(args: {
   hasTabsRecoveryNeed: () => boolean
 } {
   const coveredHandleRef = useRef<string | null>(null)
+  // Set by reconcileStream so list callbacks stay stable across tab switches.
+  const reconciledHandleRef = useRef<string | null>(null)
   const rearmAttemptsRef = useRef<Map<string, number>>(new Map())
   // Only actual list absence followed by return grants a fresh rearm budget.
   const absentSinceExhaustionRef = useRef<Set<string>>(new Set())
@@ -61,7 +63,7 @@ export function useMobileNativeChatTerminalStream(args: {
   const notifyListedHandles = useCallback(
     (liveHandles: ReadonlySet<string>) => {
       // Refill exhausted rearms only after list absence and return; still-listed dead PTYs must not renew their own loop.
-      const handle = coveredHandleRef.current ?? args.activeHandle
+      const handle = reconciledHandleRef.current
       if (handle == null) {
         return
       }
@@ -79,20 +81,21 @@ export function useMobileNativeChatTerminalStream(args: {
       forgetRearmState(handle)
       setRearmBudgetRevision((revision) => revision + 1)
     },
-    [args.activeHandle, forgetRearmState]
+    [forgetRearmState]
   )
   const hasTabsRecoveryNeed = useCallback((): boolean => {
     // Keep polling until a replacement handle arrives; an equal cached snapshot
     // must not consume recovery and strand the composer on the dead handle.
-    const handle = coveredHandleRef.current ?? args.activeHandle
+    const handle = reconciledHandleRef.current
     return (
       handle != null &&
       absentSinceExhaustionRef.current.has(handle) &&
       (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
     )
-  }, [args.activeHandle])
+  }, [])
   const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
+    reconciledHandleRef.current = handle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
       forgetRearmState(coveredHandleRef.current)
       coveredHandleRef.current = null
@@ -154,10 +157,8 @@ export function useMobileNativeChatTerminalStream(args: {
       args.subscribe(handle)
       return
     }
-    if (coveredHandleRef.current === handle || streamIsLeaseOnly) {
-      args.unsubscribe(handle)
-      coveredHandleRef.current = null
-    }
+    args.unsubscribe(handle)
+    coveredHandleRef.current = null
     args.subscribe(handle)
   }, [
     args.activeHandle,
