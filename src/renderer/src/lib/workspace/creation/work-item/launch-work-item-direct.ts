@@ -17,7 +17,10 @@ import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
+import {
+  getLaunchableWorkItemDraftContent,
+  getLinkedWorkItemPromptTemplate
+} from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -123,7 +126,9 @@ export async function launchWorkItemDirect(
       return reportFailure(unavailableAgentErrorMessage())
     }
     const requestId = createNonSecureContextUuid()
-    const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
+    const draftContent = await Promise.resolve(
+      getLaunchableWorkItemDraftContent(item, getLinkedWorkItemPromptTemplate(store, repoId))
+    )
     if (args.signal?.aborted) {
       return 'cancelled'
     }

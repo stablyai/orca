@@ -1,3 +1,4 @@
+import { resolveMobileLinkedWorkItemPromptTemplate } from '../linked-work-item-prompt-template'
 import { hostNewWorktreeSessionRoute } from '../../host-new-worktree-session-route'
 import { workspaceRouteHref } from '../../navigation/workspace-execution-host'
 import { taskRepoServer } from '../repositories/task-repo-host-routing'
@@ -135,6 +136,14 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         const trimmedWorkspaceName = workspaceNameOverride?.trim() ?? ''
         const nameIsAutoManaged =
           !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
+        const linkedWorkItemPromptTemplate =
+          selectedAgent !== 'blank'
+            ? await resolveMobileLinkedWorkItemPromptTemplate(
+                client,
+                targetRepo,
+                latestRuntimeTaskSettings
+              )
+            : undefined
         let params: WorkspaceCreateParams
         let hostedStartPoint = approved?.hostedStartPoint
         if (item.provider === 'github') {
@@ -176,7 +185,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
             hostedStartPoint,
-            nameIsAutoManaged
+            nameIsAutoManaged,
+            linkedWorkItemPromptTemplate
           })
         } else if (item.provider === 'gitlab') {
           const source = item.source
@@ -217,7 +227,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
             hostedStartPoint,
-            nameIsAutoManaged
+            nameIsAutoManaged,
+            linkedWorkItemPromptTemplate
           })
         } else {
           params = buildTaskWorkspaceCreateParams({
@@ -230,7 +241,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             baseBranch: baseBranchOverride,
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
-            nameIsAutoManaged
+            nameIsAutoManaged,
+            linkedWorkItemPromptTemplate
           })
         }
         let approvedSetup = approved?.setup

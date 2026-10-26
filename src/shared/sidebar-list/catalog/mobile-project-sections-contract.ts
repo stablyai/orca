@@ -7,6 +7,7 @@ import type {
 import type { RepoIcon } from '../../repository/appearance/repo-icon'
 import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../linked-work-item-prompt-settings'
 
 // Desktop owns the sidebar grouping inputs the phone must match.
 export const MOBILE_PROJECT_SECTIONS_METHOD = 'mobileRelay.projectSections'
@@ -28,7 +29,7 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
 export type MobileProjectSectionCatalog = {
   /** Every repo the sidebar holds, across hosts, in its header order. */
   repos: MobileProjectSectionRepo[]
-  projects: ProjectSectionProject[]
+  projects: (ProjectSectionProject & { linkedWorkItemPromptTemplate?: string | null })[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
   /** Every host's project groups, which the phone nests projects and folder workspaces under; older desktops omit it. */
@@ -70,7 +71,12 @@ export function buildMobileProjectSectionCatalog(
 ): MobileProjectSectionCatalog {
   return {
     repos: repos.map(sectionRepo),
-    projects: projection.projects.map(({ id, displayName }) => ({ id, displayName })),
+    projects: projection.projects.map(({ id, displayName, linkedWorkItemPromptTemplate }) => ({
+      id,
+      displayName,
+      linkedWorkItemPromptTemplate:
+        normalizeLinkedWorkItemPromptTemplate(linkedWorkItemPromptTemplate) ?? null
+    })),
     setups: projection.setups.map((setup) => ({
       id: setup.id,
       projectId: setup.projectId,
