@@ -97,14 +97,14 @@ function resolveWorktreeInfoFromCandidates(
   if (!best) {
     return {
       status: 'unavailable',
-      label: compactPathLabel(session.cwd),
+      label: aiVaultWorktreeCompactPath(session.cwd),
       path: session.cwd
     }
   }
 
   return {
     status: best.status,
-    label: best.worktree.displayName || compactPathLabel(best.path),
+    label: best.worktree.displayName || aiVaultWorktreeCompactPath(best.path),
     path: best.path,
     worktreeId: best.worktree.id
   }
@@ -273,11 +273,7 @@ function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandi
 function unavailableWorktreeInfo(pathValue: string): AiVaultSessionWorktreeInfo {
   return {
     status: 'unavailable',
-    label: compactPathLabel(pathValue),
+    label: aiVaultWorktreeCompactPath(pathValue),
     path: pathValue
   }
-}
-
-function compactPathLabel(pathValue: string): string {
-  return aiVaultWorktreeCompactPath(pathValue)
 }

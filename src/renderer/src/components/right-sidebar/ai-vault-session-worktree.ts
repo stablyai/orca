@@ -12,7 +12,6 @@ import {
 export {
   aiVaultWorktreeCompactPath,
   canJumpToAiVaultSessionWorktree,
-  extractWorktreePathFromSessionTitle,
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
   withAiVaultCurrentWorktreeStatus,

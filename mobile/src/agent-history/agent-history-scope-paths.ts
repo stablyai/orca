@@ -1,4 +1,3 @@
-import { toAiVaultProjectKey } from '../../../src/shared/ai-vault-project-key'
 import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault-scope-paths'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -8,7 +7,7 @@ import type { Worktree } from '../worktree/workspace-list-types'
 
 type ScopeWorktree = Pick<Worktree, 'worktreeId' | 'path' | 'repoId' | 'priorWorktreeIds'>
 
-/** Desktop's scope paths from worktree.ps rows; the phone has no project metadata, so the project is the repo. */
+/** Desktop's scope paths from worktree.ps rows; with no project metadata on the phone, Project is the active repo. */
 export function deriveMobileAiVaultScopePaths(
   scope: AiVaultScope,
   activeWorktree: ScopeWorktree | null,
@@ -21,7 +20,7 @@ export function deriveMobileAiVaultScopePaths(
     deriveAiVaultScopeSessionPaths(
       toScopePathWorktree(activeWorktree),
       liveWorktrees.map(toScopePathWorktree),
-      { scope, activeProjectKey: toAiVaultProjectKey(null, activeWorktree.repoId) }
+      { scope }
     )
       // Older hosts reject oversized scopePaths; hints only widen discovery, so drop the tail.
       .slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
