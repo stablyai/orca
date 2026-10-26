@@ -51,6 +51,7 @@ import { createEditorSaveSlots, type EditorSaveRequest } from './editor-save-slo
 import { EditorSaveDiscardedError, editorDiscardEpoch } from './editor-discard-epoch'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { releaseNonUtf8PausesWithoutDirtyTab } from './editor-non-utf8-autosave-pause'
+import { insertFinalNewlineBeforeSave } from './editor-final-newline'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -140,11 +141,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     if (!isDirty && request.requestedDirty && trigger !== 'overwrite') {
       return nothingToWrite
     }
-    const contentToSave = store.getState().editorDrafts[fileId] ?? request.fallbackContent
+    const editedContent = store.getState().editorDrafts[fileId] ?? request.fallbackContent
     if (
       trigger === 'autosave' &&
       hasPendingEditorBufferChange(store.getState(), fileId) &&
-      liveFile.lastKnownDiskSignature === getDiskBaselineSignature(contentToSave)
+      liveFile.lastKnownDiskSignature === getDiskBaselineSignature(editedContent)
     ) {
       return 'failed'
     }
@@ -158,6 +159,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       setModelExternalMutation(store.getState(), fileId, 'changed')
       return 'blocked-stale'
     }
+    const contentToSave = insertFinalNewlineBeforeSave(store.getState(), liveFile, editedContent)
     // Stamp before writing so watcher echoes cannot reload the editor’s own save.
     recordSelfWrite(
       liveFile.filePath,

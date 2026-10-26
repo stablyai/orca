@@ -20309,6 +20309,14 @@
         "shellEnvSearchVariables": "environment variables",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy"
+      },
+      "editor": {
+        "insertFinalNewline": {
+          "title": "Insert Final Newline",
+          "description": "Add a line break at the end of a file when saving it from the code editor.",
+          "keywordNewline": "newline",
+          "keywordEndOfFile": "end of file"
+        }
       }
     },
     "agentChildRow": {

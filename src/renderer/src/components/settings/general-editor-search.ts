@@ -56,6 +56,24 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('components.settings.editor.insertFinalNewline.title', 'Insert Final Newline'),
+    description: translate(
+      'components.settings.editor.insertFinalNewline.description',
+      'Add a line break at the end of a file when saving it from the code editor.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'components.settings.editor.insertFinalNewline.keywordNewline',
+        'newline'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.editor.insertFinalNewline.keywordEndOfFile',
+        'end of file'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.general.search.collapseUnchanged',
       'Collapse Unchanged Regions'

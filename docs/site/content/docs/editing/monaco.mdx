@@ -22,6 +22,14 @@ Toggle **Changes view mode** in any editor tab to flip the file into an in-tab H
 
 File editors wrap long lines by default. Toggle **Word Wrap** from the editor tab's **⋯** menu, press `Alt+Z` (same as VS Code; remappable under [Settings → Shortcuts](/docs/settings)), or set the default under [Settings → General → Editor Word Wrap](/docs/settings). This setting is separate from **Diff Word Wrap**, which only affects diff editors.
 
+## Final newline
+
+Turn on **Insert Final Newline** under [Settings → General](/docs/settings) to add a line ending to the end of a file when you save it from the code editor, matching VS Code's `files.insertFinalNewline`. It uses the file's existing line endings (LF or CRLF), leaves empty files empty, and doesn't move your cursor. Rich Markdown, notebook, and CSV views write their own text and are unaffected.
+
+Files with no remaining line breaks use LF, even if the editor previously used CRLF. Adding the final newline and updating the line ending are a single undoable edit.
+
+If the editor already contains newer text than the snapshot being saved, adding a final newline to that snapshot does not replace the newer editor text or draft.
+
 ## Minimap
 
 A minimap is available in the file editor under [Settings → Appearance](/docs/settings). It's off by default; turn it on if you prefer the VS Code-style overview rail.
