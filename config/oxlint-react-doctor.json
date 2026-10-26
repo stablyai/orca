@@ -25,5 +25,40 @@
     "react-doctor/zustand-no-mutating-state": "warn",
     "react-doctor/zustand-no-whole-store-destructure": "warn"
   },
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "cloud/**"]
+  "overrides": [
+    {
+      // These processes have no React; linting them only pays AST transfer to JS.
+      // Paths outside config/ are matched absolute, so globs need a leading **/.
+      "files": [
+        "**/src/main/**",
+        "**/src/shared/**",
+        "**/src/preload/**",
+        "**/src/cli/**",
+        "**/src/wsl-guest/**",
+        "**/cloud/**"
+      ],
+      "rules": {
+        "react-doctor/effect-needs-cleanup": "off",
+        "react-doctor/no-array-index-as-key": "off",
+        "react-doctor/no-adjust-state-on-prop-change": "off",
+        "react-doctor/no-create-store-in-render": "off",
+        "react-doctor/no-derived-state-effect": "off",
+        "react-doctor/no-initialize-state": "off",
+        "react-doctor/no-side-effect-in-state-updater-function": "off",
+        "react-doctor/no-unstable-nested-components": "off",
+        "react-doctor/zustand-no-fresh-selector-result": "off",
+        "react-doctor/zustand-no-get-during-initialization": "off",
+        "react-doctor/zustand-no-mutating-state": "off",
+        "react-doctor/zustand-no-whole-store-destructure": "off"
+      }
+    },
+    {
+      // react-doctor tags this rule react-jsx-only; it visits every identifier, so skip files without JSX.
+      "files": ["**/*.{ts,mts,cts,js,mjs,cjs}"],
+      "rules": {
+        "react-doctor/no-unstable-nested-components": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
 }

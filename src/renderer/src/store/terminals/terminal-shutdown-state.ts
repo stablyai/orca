@@ -6,11 +6,12 @@ import {
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import {
-  removeSleepingRecordsReplacedByManualWorktreeSleep,
-  type AgentStatusWorktreeShutdownReason,
-  type RetainedAgentEntry
-} from '../slices/agent-status'
+import '../slices/agent-status'
+import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
+import type {
+  AgentStatusWorktreeShutdownReason,
+  RetainedAgentEntry
+} from '../slices/agent-status/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { copyOnWriteRecord } from '../copy-on-write-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'

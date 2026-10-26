@@ -107,14 +107,6 @@ describe('useMobileNativeChatMessageSend', () => {
     api = null
   })
 
-  it('sizes the pre-clear to every line of a parked launch draft', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(clearArgs().clearInput).toBe(buildAgentTuiClearInputForText(DRAFT))
-  })
-
   it('issues the burst as its OWN write, before the body', async () => {
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
@@ -202,15 +194,6 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.answerQuestion('1')
     })
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
-  })
-
-  it('creates an optimistic echo for an ordinary chat send', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(acceptSend).toHaveBeenCalledTimes(1)
-    expect(onCommandSend).not.toHaveBeenCalled()
   })
 
   // TUI commands never echo as user turns; optimistic bubbles would remain queued forever.

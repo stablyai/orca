@@ -24,6 +24,7 @@ import {
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
@@ -185,7 +186,7 @@ export async function readLocalRuntimeFilePrefix(
   store: RuntimeStore,
   maxBytes: number
 ): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store)
+  const authorizedPath = windowsFsPath(await resolveRuntimeAuthorizedPath(filePath, store))
   const fileStat = await stat(authorizedPath)
   const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')

@@ -47,4 +47,11 @@ describe('EditorFileLoadErrorView', () => {
     screen.getByText(WORKTREE_HOST_UNRESOLVED_ERROR)
     expect(screen.queryByText('stored fallback text')).toBeNull()
   })
+
+  it("explains a host's file_too_large code instead of showing it", () => {
+    render(<EditorFileLoadErrorView message="file_too_large" onRetry={vi.fn()} />)
+
+    screen.getByText('This file is too large to open from its host.')
+    expect(screen.queryByText('file_too_large')).toBeNull()
+  })
 })

@@ -34,7 +34,6 @@ describe('the context ring after a session option write', () => {
   it('sizes a new session from the model it was launched with', () => {
     const s = ringSession()
     adoptClaudeStructuredSpawnOptions(s.session, {
-      sdkOptions: { model: 'opus[1m]' },
       options: new Map([['model', 'opus[1m]']]),
       fastModeAtStart: false
     })

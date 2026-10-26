@@ -46,6 +46,7 @@ export type CodexTurnHost = {
   threadId: string
   options: Map<string, string>
   appliedTurnOptions?: Readonly<Record<string, string>>
+  appliedSettings?: CodexSession['appliedSettings']
   reportedOptions?: CodexSession['reportedOptions']
   catalogAccess?: CodexSession['catalogAccess']
   dispatchEchoes: CodexDispatchEchoes
@@ -161,6 +162,7 @@ export async function startCodexTurn(
   host.appliedTurnOptions = input.turnOptions ?? Object.fromEntries(host.options)
   const requested = codexTurnRequestOptions(host)
   let answer: unknown
+  const discardSettingsAttempt = host.appliedSettings?.attempt(requested)
   try {
     answer = await host.connection.request(
       'turn/start',
@@ -173,6 +175,9 @@ export async function startCodexTurn(
       { timeoutMs: input.timeoutMs, onReply: input.onReply }
     )
   } catch (error) {
+    if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
+      discardSettingsAttempt?.()
+    }
     if (
       previousOptions &&
       (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error))

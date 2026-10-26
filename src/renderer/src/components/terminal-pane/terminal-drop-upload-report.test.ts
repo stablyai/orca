@@ -8,11 +8,13 @@ vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   i18n.addResourceBundle('ru', 'translation', russian, true, true)
   await i18n.changeLanguage('ru')
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await i18n.changeLanguage('en')
 })
 
@@ -48,7 +50,7 @@ describe('terminal drop reports', () => {
       [],
       Array.from({ length: count }, () => ({ reason: '/secret/project/file.txt' }))
     )
-    expect(toast.error).toHaveBeenLastCalledWith(failures)
+    expect(toast.error).toHaveBeenLastCalledWith(failures, { description: expect.any(String) })
     expect(toast.error).not.toHaveBeenCalledWith(
       expect.stringContaining('/secret/project/file.txt')
     )
@@ -70,6 +72,47 @@ describe('terminal drop reports', () => {
       [{ reason: 'unknown' }, { reason: 'unknown' }]
     )
     expect(toast.message).toHaveBeenCalledWith('Skipped 1 symlink.', { description: undefined })
-    expect(toast.error).toHaveBeenCalledWith('Failed to upload 2 files.')
+    expect(toast.error).toHaveBeenCalledWith('Failed to upload 2 files.', {
+      description: "Couldn't upload these files."
+    })
+  })
+
+  it('names a shared failure category, never the host text', async () => {
+    await i18n.changeLanguage('en')
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: "Error invoking remote method 'fs:x': Error: ENOSPC: no space left on device" }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'EACCES: permission denied, open \'/home/John Doe/Client "Acme"/shot.png\'' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'C:\\Users\\John Doe\\Application Support\\shot.png: unexpected' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: "File changed since it was staged: 'disconnect-notes.txt'" }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'Runtime environment is manually disconnected.' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
+
+    expect(vi.mocked(toast.error).mock.calls.map((call) => call[1])).toEqual([
+      { description: 'The host is out of disk space.' },
+      { description: 'Permission denied.' },
+      { description: "Couldn't upload this file." },
+      {
+        description: 'The file changed while it was uploading. Try again.'
+      },
+      { description: 'The host is disconnected.' },
+      { description: undefined }
+    ])
+    expect(JSON.stringify(vi.mocked(toast.error).mock.calls)).not.toMatch(
+      /John Doe|shot\.png|disconnect-notes/
+    )
   })
 })

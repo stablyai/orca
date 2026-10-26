@@ -113,7 +113,6 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             body: input.body,
             // A person's plain send: every agent takes it the way it takes their own mid-turn message.
             delivery: 'now',
-            keepCurrentOptions: true,
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {

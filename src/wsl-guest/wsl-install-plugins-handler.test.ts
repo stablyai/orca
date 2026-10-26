@@ -29,6 +29,40 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     return dir
   }
 
+  it('scopes opted-in Claude mods to versioned relay storage and remembers shortcut removal', () => {
+    withHome((home) => {
+      const config = join(home, 'claude-profile')
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        CLAUDE_CONFIG_DIR: config,
+        ORCA_WSL_HOOK_INSTANCE: 'claude-test'
+      })
+      expect(install({ claudeAgentViewSource: '' }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(existsSync(config)).toBe(false)
+      const source = 'export function register() {}'
+      const first = install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView
+      if (!first) {
+        throw new Error('Claude mod was not installed')
+      }
+      expect(first.startsWith(join(home, '.orca-relay'))).toBe(true)
+      expect(readFileSync(join(first, 'hooks', 'register.js'), 'utf8')).toBe(source)
+      expect(existsSync(join(config, 'skills'))).toBe(false)
+      const second = install({ claudeAgentViewSource: `${source}\n// new version` }).overlayDirs
+        .claudeAgentView
+      expect(second).not.toBe(first)
+      expect(readFileSync(join(first, 'hooks', 'register.js'), 'utf8')).toBe(source)
+      expect(install({ claudeAgentViewSource: '' }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(JSON.parse(readFileSync(join(config, 'keybindings.json'), 'utf8')).bindings).toEqual(
+        []
+      )
+      expect(install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView).toBe(first)
+      writeFileSync(join(config, 'keybindings.json'), '{"bindings": []}')
+      install({ claudeAgentViewSource: '' })
+      expect(install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(readFileSync(join(config, 'keybindings.json'), 'utf8')).toBe('{"bindings": []}')
+    })
+  })
+
   it('writes orca-opencode-status.js into the overlay and returns that dir', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {

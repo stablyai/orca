@@ -199,30 +199,17 @@ const optionReads = () =>
   mocks.rpc.mock.calls.filter(([, method]) => method === 'agentSession.options').length
 
 describe('Approve for me on a new Claude chat', () => {
-  it('is offered before and after the background listing lands', async () => {
+  it('is offered once the background listing lands after the chat opened', async () => {
     const lands = new Promise<void>((resolve) => (release = resolve))
     await hostCatalog(lands)
     const { result, unmount } = openNewChat()
     // The chat opened before its account was ever listed: the first answers come without a list.
     await waitFor(() => expect(optionReads()).toBe(1))
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('ask'))
-    expect(offered(result.current.optionSnapshot)).toEqual([
-      'ask',
-      'accept-edits',
-      'auto',
-      'full-access'
-    ])
+    expect(offered(result.current.optionSnapshot)).not.toContain('auto')
 
     release()
-    await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
-    await waitFor(() =>
-      expect(offered(result.current.optionSnapshot)).toEqual([
-        'ask',
-        'accept-edits',
-        'auto',
-        'full-access'
-      ])
-    )
+    await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
     unmount()
   })
 

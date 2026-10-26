@@ -27,15 +27,11 @@ export function writeClaudeTerminalFailure(
 ): void {
   const turnItemId = agentJournalItemKey(identity)
   const failureIdentity = claudeTerminalFailureIdentity(turnItemId)
-  const options = {
-    criticalRoot: true as const,
-    turnScope: { kind: 'turn' as const, turnItemId },
-    lifecycle: true
-  }
+  const options = { turnScope: { kind: 'turn' as const, turnItemId }, lifecycle: true }
   const revise = sink.tryReviseResolvedItemAndPublish
   if (!revise) {
     sink.appendItem(failureIdentity, body, options)
-    sink.publish({ criticalRoot: true })
+    sink.publish()
     return
   }
   const reservedBytes = Buffer.byteLength(JSON.stringify({ failureIdentity, body }), 'utf8') + 8192
@@ -121,7 +117,7 @@ export function refineClaudeQuotaTurnEnd(
         reservedBytes
       )
     },
-    { criticalRoot: true, lifecycle: true, turnScope: { kind: 'thread' } }
+    { turnScope: { kind: 'thread' }, lifecycle: true }
   )
   return true
 }

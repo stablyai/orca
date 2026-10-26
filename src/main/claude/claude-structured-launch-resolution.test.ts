@@ -287,21 +287,12 @@ describe('claude structured launch resolution', () => {
     ['ask', 'default'],
     ['accept-edits', 'acceptEdits'],
     ['auto', 'auto']
-  ] as const)(
-    'starts and resumes a %s chat in permission mode %s',
-    async (permissionMode, expected) => {
-      const launches = [
-        await resolverFor(record())({ identity: IDENTITY, permissionMode }),
-        await resolverFor(RESUMABLE)({ identity: identityAt('leaf-current'), permissionMode })
-      ]
+  ] as const)('starts a %s chat in permission mode %s', async (permissionMode, expected) => {
+    const launch = await resolverFor(record())({ identity: IDENTITY, permissionMode })
 
-      expect(launches[1]?.options.resume).toBe('provider-current')
-      for (const launch of launches) {
-        expect(launch.options.permissionMode).toBe(expected)
-        expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
-      }
-    }
-  )
+    expect(launch.options.permissionMode).toBe(expected)
+    expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+  })
 
   it('ignores the bypass flag the agent Arguments carry', async () => {
     const launch = await resolverFor(

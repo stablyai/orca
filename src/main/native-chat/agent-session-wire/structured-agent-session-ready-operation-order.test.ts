@@ -8,6 +8,7 @@ import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import {
   CALLER,
   attach,
@@ -233,15 +234,17 @@ it.each(['append', 'wait'] as const)(
       })
     }
     const next = { ...change, objective: 'Later goal' }
+    const goalEnvelope = envelope('agentSession.threadGoal', { change: next })
     const goal = host.changeThreadGoal(CALLER, {
-      envelope: envelope('agentSession.threadGoal', { change: next }),
+      envelope: goalEnvelope,
       change: next
     })
     const result = goal.catch((error: unknown) => error)
     await (phase === 'append'
       ? vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
       : host.collaboratorsForTests().serialize(SESSION, async () => {}))
-    const stopped = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+    const stopEnvelope = envelope('agentSession.cancel', {})
+    const stopped = host.cancel(CALLER, { envelope: stopEnvelope })
     expect(changeThreadGoal).not.toHaveBeenCalled()
     held.resolve()
     if (phase === 'append') {
@@ -253,7 +256,17 @@ it.each(['append', 'wait'] as const)(
     expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(changeThreadGoal).not.toHaveBeenCalled()
     if (phase === 'append') {
-      expect(append.mock.calls.some(([, body]) => body.kind === 'status')).toBe(false)
+      expect(withdraw).toHaveBeenCalledWith(
+        { provider: 'orca', clientMessageId: `thread-goal:${goalEnvelope.clientOperationId}` },
+        expect.anything()
+      )
+      expect(append.mock.calls.filter(([, body]) => body.kind === 'status')).toEqual([
+        [
+          structuredAgentSessionStopNoteIdentity(stopEnvelope.clientOperationId),
+          { kind: 'status', text: 'Cancellation requested.' },
+          expect.anything()
+        ]
+      ])
     }
   }
 )

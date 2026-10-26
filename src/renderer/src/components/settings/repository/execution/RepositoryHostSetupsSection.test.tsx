@@ -407,7 +407,10 @@ describe('RepositoryHostSetupsSection', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'gpu-setup',
+      hostId: 'runtime:gpu'
+    })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
   })

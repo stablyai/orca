@@ -413,7 +413,7 @@ describe('registerPtyHandlers', () => {
       hostId: 'local'
     })
   })
-  it('releases the Agent Teams leader of a spawn that loses the pane mid-preflight', async () => {
+  it('joins an early pane winner without allocating a second Agent Teams leader', async () => {
     const leafId = '22222222-2222-4222-8222-222222222222'
     const teams = new ClaudeAgentTeamsService()
     let handleSeq = 0
@@ -441,7 +441,6 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    // Without worktreeId, reservation identity arrives only after environment assembly, allowing a concurrent winner.
     const spawnArgs = {
       cols: 80,
       rows: 24,
@@ -472,9 +471,9 @@ describe('registerPtyHandlers', () => {
       clearPaneSpawnReservation(reservationKey, winnerReservation)
     }
 
-    const loserHandle = runtime.prepareClaudeAgentTeamsLeaderForHandle.mock.calls[1]?.[0].handle
-    expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledTimes(2)
-    expect(runtime.releaseClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith(loserHandle)
+    expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledOnce()
+    expect(runtime.releaseClaudeAgentTeamsLeaderForHandle).not.toHaveBeenCalled()
+    // Joining before preparation owns no new allocation to release.
     expect(teams.getActiveTeamCount()).toBe(1)
   })
   it('releases the Agent Teams leader when its provider spawn fails', async () => {

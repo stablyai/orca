@@ -7,31 +7,11 @@ import {
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 import { beginClaudeOptionMutation } from './claude-structured-execution-observations'
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
-
-export function claudeModelTransitionRestart(
-  sessions: ReadonlyMap<string, ClaudeSession>
-): NonNullable<StructuredAgentSessionAdapter['requiresModelTransitionRestart']> {
-  return (input) => {
-    const session = sessions.get(input.sessionId)
-    const model = input.executionOptions?.model
-    const opened = session?.firstRootInit?.permissionMode
-    return Boolean(
-      session?.fence === input.fence &&
-      model !== undefined &&
-      session.launchPermissionMode !== undefined &&
-      opened !== undefined &&
-      opened !== null &&
-      opened !== session.launchPermissionMode &&
-      session.appliedInputOptions.get('model') !== model
-    )
-  }
-}
 
 export function restoredClaudeStructuredSessionOptions(
   options: Readonly<Record<string, string>> | undefined

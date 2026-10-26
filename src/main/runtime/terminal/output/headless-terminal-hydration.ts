@@ -12,6 +12,7 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
+import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -84,6 +85,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
+        if (typeof rendered.seq === 'number') {
+          state.rendererSeedSeq = rendered.seq
+        }
         const ptyDims = this.getTerminalSize(ptyId)
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
@@ -148,6 +153,34 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     })
   }
 
+  /** True when this PTY's queries go unanswered unless its single receiving remote view answers them. */
+  isSoleRemoteTerminalQueryOwner(ptyId: string): boolean {
+    return (
+      this.terminalViewSubscribers.remoteReceivingOutputCount(ptyId) === 1 &&
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId,
+        settings: this.store?.getSettings(),
+        hasRemoteViewSubscriber: false
+      })
+    )
+  }
+
+  /** Answer stateless queries a sole remote view owned at ingestion but will never receive. */
+  answerYieldedTerminalQueries(ptyId: string, statelessQueryData: string): void {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    state.writeChain = state.writeChain
+      .then(async () => {
+        // Why drop, not retry: injecting mid-escape corrupts live parsing, and a deferred reply risks arriving after the query timed out.
+        if (state.emulator.partialEscapeTailAnsi === '') {
+          await state.emulator.write(statelessQueryData, { forwardQueryReplies: true })
+        }
+      })
+      .catch(() => {})
+  }
+
   protected trackHeadlessTerminalData(
     ptyId: string,
     data: string,
@@ -159,6 +192,22 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     const completion = state.writeChain.then(async () => {
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
+      if (state.rendererSeedSeq !== undefined) {
+        if (outputSequence <= state.rendererSeedSeq) {
+          state.rendererSeedEscapeTail = advancePartialEscapeTail(
+            state.rendererSeedEscapeTail ?? '',
+            data
+          )
+          state.outputSequence = outputSequence
+          return
+        }
+        const escapeTail = state.rendererSeedEscapeTail
+        state.rendererSeedSeq = undefined
+        state.rendererSeedEscapeTail = undefined
+        if (escapeTail) {
+          await state.emulator.write(escapeTail)
+        }
+      }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)

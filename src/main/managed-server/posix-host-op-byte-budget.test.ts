@@ -89,14 +89,19 @@ import {
   orcadReadinessWaitCommand,
   readOrcadReadinessNowCommand
 } from './install/orcad-remote-readiness-wait'
-import { orcadPosixStdioBridgeCommand } from './lifecycle/orcad-stdio-bridge-script'
+import {
+  orcadBashStdioBridgeCommand,
+  orcadPosixStdioBridgeCommand
+} from './lifecycle/orcad-stdio-bridge-script'
 
 // Gateways truncate near 10 KB (#30491); bound uncompressed, fenced commands to 6 KB.
 const POSIX_HOST_OP_BYTE_BUDGET = 6 * 1024
 
 const OVER_BUDGET_CEILINGS: Readonly<Record<string, number>> = {
   tryStealInstallLockCommand: 9_022,
-  orcadLaunchCommand: 6_896
+  orcadLaunchCommand: 6_896,
+  // WSL-only: wsl.exe argv, never SSH-framed; carries the Node bridge as its fallback.
+  orcadBashStdioBridgeCommand: 6_300
 }
 
 type HostCase = { host: RemoteHostPlatform; target: NodeRuntimeTarget; nodePath: string }
@@ -226,6 +231,7 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   orcadReadinessWaitCommand: ({ host }) => orcadReadinessWaitCommand(host, slotDir, 120),
   readOrcadReadinessNowCommand: ({ host }) => readOrcadReadinessNowCommand(host, slotDir),
   orcadPosixStdioBridgeCommand: () => orcadPosixStdioBridgeCommand(65535),
+  orcadBashStdioBridgeCommand: () => orcadBashStdioBridgeCommand(65535),
   posixReleaseFenceCommand: () =>
     posixReleaseFenceCommand(
       fence,

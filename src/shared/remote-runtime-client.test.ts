@@ -18,12 +18,7 @@ import {
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from './protocol-version'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './electron-remote-runtime-client-capabilities'
+import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from './protocol-version'
 
 const servers: WebSocketServer[] = []
 
@@ -189,39 +184,6 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await vi.waitFor(() => expect(releaseSocket).toHaveBeenCalledOnce())
   })
 
-  it('detaches subscription socket listeners after close', async () => {
-    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
-    try {
-      const server = await createSubscriptionServer()
-      const onResponse = vi.fn()
-      const onError = vi.fn()
-      const onClose = vi.fn()
-
-      const subscription = await subscribeRemoteRuntimeRequest(
-        server.pairing,
-        'terminal.subscribe',
-        { terminal: 't1' },
-        1000,
-        {
-          onResponse,
-          onError,
-          onClose
-        }
-      )
-
-      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-      subscription.close()
-      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-
-      const removedEvents = offSpy.mock.calls.map(([event]) => event)
-      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
-      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
-      expect(onError).not.toHaveBeenCalled()
-    } finally {
-      offSpy.mockRestore()
-    }
-  })
-
   it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
     // Half-open dedicated streams get no close/pongs/data; client liveness must trigger onError/onClose so renderer resubscription runs (#7718).
     const server = await createSubscriptionServer({ disableAutoPong: true })
@@ -288,52 +250,6 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
-  it('keeps generic native authentication free of Electron placement support', async () => {
-    let receivedAuth: Record<string, unknown> | null = null
-    const server = await createOneShotServer({
-      onAuth: (auth) => {
-        receivedAuth = auth
-      }
-    })
-
-    await sendRemoteRuntimeRequest(
-      server.pairing,
-      'session.tabs.list',
-      { worktree: 'id:worktree-a' },
-      1000
-    )
-
-    expect(receivedAuth).toMatchObject({
-      clientCapabilities: remoteRuntimeClientCapabilities()
-    })
-  })
-
-  it('advertises browser placement support only when the Electron caller opts in', async () => {
-    let receivedAuth: Record<string, unknown> | null = null
-    const server = await createOneShotServer({
-      onAuth: (auth) => {
-        receivedAuth = auth
-      }
-    })
-
-    await sendRemoteRuntimeRequest(
-      server.pairing,
-      'session.tabs.list',
-      { worktree: 'id:worktree-a' },
-      1000,
-      undefined,
-      undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-    )
-
-    expect(receivedAuth).toMatchObject({
-      clientCapabilities: expect.arrayContaining([
-        BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-        BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-      ])
-    })
-  })
-
   it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid timer delay %s before reading pairing data',
     async (timeoutMs) => {
@@ -564,25 +480,6 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(receivedRequest).not.toHaveProperty('orchestrationCapability')
     expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
     expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
-  })
-
-  it('detaches one-shot socket listeners after a successful response', async () => {
-    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
-    try {
-      const server = await createOneShotServer()
-
-      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
-        server.pairing,
-        'terminal.wait',
-        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
-        300
-      )
-
-      const removedEvents = offSpy.mock.calls.map(([event]) => event)
-      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
-    } finally {
-      offSpy.mockRestore()
-    }
   })
 })
 

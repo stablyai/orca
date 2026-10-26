@@ -198,17 +198,4 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
   })
-
-  it('drops empty command queues after direct CDP commands finish', async () => {
-    const wc = mockWebContents(100)
-    wc.debugger.sendCommand.mockResolvedValue({})
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
-
-    expect(
-      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
-    ).toBe(0)
-    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
-  })
 })

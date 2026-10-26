@@ -2082,5 +2082,17 @@
   "auto.components.browser-pane.markup.widthOption": {
     "source": "{{value0}} px",
     "rationale": "CSS pixel unit with interpolated size; preserve px technical unit."
+  },
+  "components.native-chat.composer.optionValueShort.xhigh": {
+    "source": "XHigh",
+    "rationale": "Keep the provider effort name compact in the composer; the full menu label remains localized."
+  },
+  "components.native-chat.composer.optionValueShort.max": {
+    "source": "Max",
+    "rationale": "Keep the provider effort name compact in the composer; the full menu label remains localized."
+  },
+  "components.native-chat.composer.optionValueShort.ultra": {
+    "source": "Ultra",
+    "rationale": "Keep the provider effort name compact in the composer; the full menu label remains localized."
   }
 }

@@ -180,6 +180,36 @@ describe('dispatchTerminalNotification', () => {
     expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['--dangerously-skip-permissions', 'ask_permission', false],
+    ['', 'ask_permission', true],
+    ['--dangerously-skip-permissions', 'ask_question', true],
+    ['-- --dangerously-skip-permissions', 'ask_permission', true]
+  ])(
+    'banners Antigravity waits only when a person must answer (args %j, tool %s)',
+    (agentArgs, toolName, banners) => {
+      mockState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs },
+        identity: { agentType: 'antigravity' }
+      }
+      const waiting = {
+        state: 'waiting' as const,
+        prompt: 'p',
+        agentType: 'antigravity' as const,
+        toolName,
+        stateStartedAt: 1_000
+      }
+      mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, waiting)
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'agy',
+        paneKey,
+        agentStatusSnapshot: waiting
+      })
+      expect(vi.mocked(window.api.notifications.dispatch).mock.calls.length > 0).toBe(banners)
+    }
+  )
+
   it('uses a live pane key when inactive worktree tab membership is not hydrated', () => {
     mockState.tabsByWorktree = {}
 

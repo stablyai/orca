@@ -231,6 +231,7 @@ async function deliverAgentStartupToTerminal(
   if (startup.followupPrompt) {
     const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
+      agent: startup.agent,
       expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt
     })

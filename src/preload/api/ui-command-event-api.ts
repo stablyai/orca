@@ -16,6 +16,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
@@ -214,6 +215,7 @@ export type UiCommandEventApi = {
   onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
   onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onSplitTerminal: (

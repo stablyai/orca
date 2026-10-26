@@ -27,6 +27,10 @@ export type NotificationDispatchMockState = {
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   browserTabsByWorktree: Record<string, unknown[]>
   retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
+  agentLaunchConfigByPaneKey: Record<
+    string,
+    { launchConfig: { agentArgs: string }; identity: { agentType?: string } }
+  >
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   worktreesByRepo: Record<
     string,
@@ -95,6 +99,7 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
     },
     browserTabsByWorktree: {},
     retainedAgentsByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     agentStatusByPaneKey: { [PANE_KEY]: makeAgentStatus(PANE_KEY) },
     worktreesByRepo: {
       repo1: [

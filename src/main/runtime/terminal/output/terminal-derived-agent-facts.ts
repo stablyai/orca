@@ -13,9 +13,15 @@ import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../runtime-work
 import type { RuntimeTerminalAgentStatusEvent } from '../../runtime-terminal-contracts'
 import { programStatusStateOutlivesProgram } from '../../../../shared/program-status/protocol'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { lapsedProgramStatusChildHold } from '../../../../shared/program-status/agent-status-projector'
 
 // Why: programs report only changes, so a long `working` renews its row inside AGENT_STATUS_STALE_AFTER_MS.
 const PROGRAM_STATUS_LEASE_RENEWAL_MS = 10 * 60 * 1000
+// Why: the last renewal tick before the row would decay settles an unrefreshed child hold.
+const PROGRAM_STATUS_CHILD_HOLD_LAPSE_MS =
+  AGENT_STATUS_STALE_AFTER_MS - PROGRAM_STATUS_LEASE_RENEWAL_MS
 
 type TerminalAgentStatusTarget = Pick<
   RuntimeTerminalAgentStatusEvent,
@@ -26,7 +32,10 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
   abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
 
   /** Each live OSC 7501 program's latest row payload; renewed while its PTY keeps a live facet. */
-  private readonly liveProgramStatusPayloadByPtyId = new Map<string, ParsedAgentStatusPayload>()
+  private readonly liveProgramStatusPayloadByPtyId = new Map<
+    string,
+    { payload: ParsedAgentStatusPayload; trackedAt: number }
+  >()
   private programStatusLeaseTimer: ReturnType<typeof setInterval> | null = null
 
   protected createTerminalSideEffectCommandCodeDetector(
@@ -178,7 +187,7 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
       this.liveProgramStatusPayloadByPtyId.delete(ptyId)
       return
     }
-    this.liveProgramStatusPayloadByPtyId.set(ptyId, payload)
+    this.liveProgramStatusPayloadByPtyId.set(ptyId, { payload, trackedAt: Date.now() })
     if (this.programStatusLeaseTimer === null) {
       this.programStatusLeaseTimer = setInterval(
         () => this.renewProgramStatusLeases(),
@@ -189,9 +198,29 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
   }
 
   private renewProgramStatusLeases(): void {
-    for (const [ptyId, payload] of this.liveProgramStatusPayloadByPtyId) {
+    for (const [ptyId, { payload, trackedAt }] of this.liveProgramStatusPayloadByPtyId) {
+      if (!this.ptysById.has(ptyId)) {
+        this.liveProgramStatusPayloadByPtyId.delete(ptyId)
+        continue
+      }
+      // A child-held row outlives its done root's facet until children report or the hold lapses.
+      if (isAgentStatusHeldOpenByChildWork(payload)) {
+        const lapsed = lapsedProgramStatusChildHold(
+          payload,
+          trackedAt,
+          Date.now(),
+          PROGRAM_STATUS_CHILD_HOLD_LAPSE_MS
+        )
+        if (lapsed) {
+          this.emitTerminalAgentStatusEvents(ptyId, {
+            payloads: [lapsed],
+            programStatusPayloads: new Set([lapsed])
+          })
+        }
+        continue
+      }
       // The live facet set is the authority on whether the program still runs.
-      if (!this.liveProgramStatusFacetPtyIds.has(ptyId) || !this.ptysById.has(ptyId)) {
+      if (!this.liveProgramStatusFacetPtyIds.has(ptyId)) {
         this.liveProgramStatusPayloadByPtyId.delete(ptyId)
         continue
       }

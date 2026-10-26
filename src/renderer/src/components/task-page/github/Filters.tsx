@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getGitHubTaskKindPresets } from '@/components/task-page-localized-options'
 import { cn } from '@/lib/utils'
 import PRFilterDropdowns from '@/components/github/PRFilterDropdowns'

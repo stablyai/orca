@@ -27,7 +27,7 @@ export function waitsForCodexTurnOptions(
   next: AgentJournalSubmission,
   child: StructuredAgentSessionProviderChild
 ): boolean {
-  if (record?.provider !== 'codex' || next.options === undefined) {
+  if (record?.provider !== 'codex') {
     return false
   }
   const body = journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))

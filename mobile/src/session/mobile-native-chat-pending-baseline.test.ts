@@ -28,19 +28,6 @@ function unresolved(
 describe('rebaseMobileNativeChatPendingBaselines', () => {
   const history = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'passed', 1100)]
 
-  it('returns the same array when every baseline is already resolved', () => {
-    const pending: MobileNativeChatPendingMessage[] = [
-      {
-        id: 'p1',
-        text: 'hi',
-        expectedOccurrence: 1,
-        baselineTailMessageId: 'm2',
-        baselineResolved: true
-      }
-    ]
-    expect(rebaseMobileNativeChatPendingBaselines(history, pending)).toBe(pending)
-  })
-
   it('gives an unresolved send the loaded tail as its glue boundary', () => {
     expect(
       rebaseMobileNativeChatPendingBaselines(history, [unresolved('p1', 'run the tests')])

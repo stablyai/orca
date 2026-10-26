@@ -4454,6 +4454,7 @@
             "memory": {
               "metric": {
                 "workingSetDescription": "Somme des working sets (WS). Les pages partagées peuvent apparaître dans plusieurs processus.",
+                "footprintDescription": "Somme des empreintes mémoire, la valeur affichée par le Moniteur d’activité : la mémoire propre à chaque processus, mémoire graphique comprise. Les pages partagées entre processus ne sont pas comptées deux fois.",
                 "rssDescription": "Somme des tailles résidentes (RSS). Les pages partagées ou aliasées peuvent apparaître dans plusieurs processus.",
                 "privateBytesDescription": "Octets privés additionnés : mémoire engagée par ces processus, comptée si elle est résidente ou paginée. C'est ce que l'hôte facture par rapport à sa limite de validation, de sorte qu'elle continue d'augmenter tandis que l'ensemble de travail ci-dessus diminue sous la pagination."
               }
@@ -19491,8 +19492,7 @@
         "continue": "Continuer",
         "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
         "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée.",
-        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer.",
-        "usageLimitExplanation": "Demande à l’agent de reprendre là où il s’était arrêté. À utiliser une fois la limite réinitialisée."
+        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer."
       },
       "rewind": {
         "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
@@ -19542,7 +19542,13 @@
       "explicitChatSsh": "Le chat n’est pas disponible via SSH. Ouvrez plutôt l’agent dans un terminal.",
       "explicitChatWsl": "Le chat n'est pas disponible dans WSL. Ouvrez plutôt l'agent dans un terminal.",
       "structuredSessionTerminalNotVisible": "Orca a ouvert {{value0}} dans un terminal, mais n'a pas pu l'afficher ici une fois le lancement terminé. Votre brouillon de chat a été conservé.",
-      "explicitChatUnavailable": "Cet espace de travail ne peut pas exécuter le chat. Vérifiez l'installation de l'agent ou ouvrez-le dans un terminal."
+      "explicitChatUnavailable": "Cet espace de travail ne peut pas exécuter le chat. Vérifiez l'installation de l'agent ou ouvrez-le dans un terminal.",
+      "goalControl": {
+        "settingsRejected": "Codex n’a pas pu appliquer le modèle et l’effort sélectionnés. Ce changement d’objectif n’a pas été envoyé. Vérifiez la sélection et réessayez.",
+        "settingsUnconfirmed": "Codex n’a pas confirmé le modèle et l’effort sélectionnés. Ce changement d’objectif n’a pas été envoyé. Vérifiez le chat et réessayez.",
+        "pauseUnconfirmed": "Codex s’est arrêté, mais la mise en pause de son objectif n’a pas été confirmée. Vérifiez l’objectif avant de continuer.",
+        "stopUnconfirmed": "Codex n’a pas pu confirmer l’arrêt. Vérifiez le chat avant de continuer."
+      }
     },
     "tab": {
       "bar": {

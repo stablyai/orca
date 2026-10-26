@@ -32,6 +32,22 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
+  it('falls back to the macOS app CLI when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+
+    expect(
+      resolveExternalEditorLaunchSpec('code', '/tmp/workspace', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['/tmp/workspace']
+    })
+  })
+
   it('prefers the JetBrains *64.exe colocated with the resolved idea.cmd on Windows', () => {
     const installBin = 'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin'
     resolveCliCommandMock.mockImplementation((command: string) =>
@@ -507,6 +523,22 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
       kind: 'executable',
       spawnCmd: command,
       spawnArgs: ['--remote', 'ssh-remote+builder', '/srv/project']
+    })
+  })
+
+  it('falls back to the macOS app CLI for Remote-SSH when PATH misses code', () => {
+    const macCli = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec('code', '/home/ada/project', 'user@host', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === macCli
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: macCli,
+      spawnArgs: ['--remote', 'ssh-remote+user@host', '/home/ada/project']
     })
   })
 

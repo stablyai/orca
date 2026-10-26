@@ -115,6 +115,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        context: { floor: () => null },
         item: ((itemId) =>
           items.find((item) => item.itemId === itemId) ??
           null) satisfies AgentSessionJournal['item'],
@@ -231,6 +232,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
     const journal = {
       lastActivityAt: () => 1,
+      context: { floor: () => null },
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({ items, submissions: [] }),

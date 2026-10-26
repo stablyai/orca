@@ -187,8 +187,8 @@
 4 src/renderer/src/components/use-task-page-jira-creation-metadata.ts
 4 src/renderer/src/components/use-task-page-jira-issue-creation.ts
 1 src/renderer/src/components/use-task-page-jira-list-effects.ts
-2 src/renderer/src/components/use-task-page-provider-metadata.ts
-2 src/renderer/src/components/use-task-page-store-bindings.ts
+2 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
+2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
 5 src/renderer/src/components/use-terminal-create-actions.ts
 2 src/renderer/src/components/use-worktree-jump-palette-controller.ts
 1 src/renderer/src/components/use-worktree-jump-palette-create-action.ts
@@ -328,7 +328,7 @@
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
 1 src/renderer/src/web/preload-api/web-app-api.ts
 3 src/renderer/src/web/preload-api/web-preference-normalization.ts
-21 src/renderer/src/web/preload-api/web-preferences-store.ts
+20 src/renderer/src/web/preload-api/web-preferences-store.ts
 13 src/renderer/src/web/preload-api/web-settings-api.ts
 9 src/renderer/src/web/preload-api/web-ui-api.ts
 3 src/renderer/src/web/preload-api/web-workspace-session-api.ts

@@ -12,6 +12,17 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 
 type TestMock = Mock
 
+const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({
+    reconcile: reconcileClaudeAgentViewMock,
+    ready: async () => {},
+    readyForLaunch: async () => {},
+    prepareProfile: async () => {},
+    read: () => undefined
+  })
+}))
+
 export const ORIGINAL_PLATFORM = process.platform
 export const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn())
@@ -601,3 +612,5 @@ export {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 }
+
+export { reconcileClaudeAgentViewMock }

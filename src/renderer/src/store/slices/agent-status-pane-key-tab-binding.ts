@@ -6,8 +6,11 @@ import type {
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { tabHasProtectedTitle } from '../../../../shared/agent-generated-tab-title-rules'
-import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
-import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
+import type {
+  DropAgentStatusByWorktreeOptions,
+  RetainedAgentEntry
+} from './agent-status/agent-status-contract'
+import type { AgentStatusTabPrefixDropState } from './agent-status/agent-status-drop-reducer'
 
 export function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
   for (const prefix of tabPrefixes) {

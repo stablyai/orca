@@ -1,5 +1,4 @@
 import { isRestoreSpawnIntent } from '../../../../shared/host-spawn-admission'
-import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import {
@@ -36,7 +35,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
-    isNewSession: ctx.isMintedSessionId,
+    isNewSession: ctx.ownsNewIncarnation,
     codexRuntime: ctx.codexSelectionTarget.runtime,
     expectedWslDistro: ctx.expectedWslDistro,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
@@ -53,16 +52,14 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   ctx.spawnOptions = launch.spawnOptions
   ctx.spawnEnv = launch.env
   ctx.launchCommand = launch.launchCommand
-  const seeded = seedPtySpawnSize({
+  ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.effectiveSessionId,
     sessionAppId: ctx.effectiveSessionAppId,
-    isFreshSessionId: ctx.isMintedSessionId,
+    isFreshSessionId: ctx.ownsNewIncarnation,
     requestIsUnmeasured: args.initiallyHidden === true,
     cols: args.cols,
     rows: args.rows
   })
-  ctx.hadSessionSizeBeforeAttach = seeded.hadSessionSizeBeforeAttach
-  ctx.sessionSizeBeforeAttach = seeded.sessionSizeBeforeAttach
   const resolvedPaneSpawnReservationKey = makePaneSpawnReservationKey(
     args.worktreeId,
     args.connectionId,
@@ -85,19 +82,4 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   if (ctx.preSpawnHiddenMarkId !== null) {
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, true)
   }
-  const runtime = ctx.deps.runtime
-  const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
-  ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
-    ? await acquireWorktreeSpawn.call(
-        runtime,
-        spawnWorktreeTarget(args.worktreeId, args.connectionId),
-        {
-          // A pre-adopted stable pane attaches to its live owner, not a new terminal.
-          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
-          requireAttachOnly: () => {
-            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
-          }
-        }
-      )
-    : undefined
 }

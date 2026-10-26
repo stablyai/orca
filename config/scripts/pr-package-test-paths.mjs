@@ -106,7 +106,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
   'src/main/skills/skill-windows-rename-contention.integration.test.ts',
   'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/plan-selection.test.ts',
+  'src/main/ipc/filesystem/filesystem-read-dir-unc-drive.test.ts',
+  'src/main/ipc/filesystem/filesystem-file-content-unc-drive.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [

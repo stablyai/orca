@@ -2,6 +2,7 @@
 // Forward guest loopback hooks over framed stdio and expose home-scoped installer operations (STA-1515).
 // Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
 
 import { RELAY_SENTINEL } from './protocol'
@@ -59,6 +60,8 @@ async function main(): Promise<void> {
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
     preferredPort: windowsPort,
+    forwardClaudeAgentView: (body) =>
+      dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({

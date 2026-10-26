@@ -1856,6 +1856,15 @@
             }
           }
         },
+        "claudeSubagentNavigation": {
+          "search": {
+            "mod": "mod",
+            "navigation": "navigation",
+            "plugin": "plugin",
+            "shortcut": "shortcut",
+            "subagent": "subagent"
+          }
+        },
         "computerUseSkillRuntime": {
           "thisDevice": "This device"
         },
@@ -3022,6 +3031,16 @@
           }
         }
       },
+      "claudeAgentRowView": {
+        "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required."
+      },
+      "dropFailureReason": {
+        "changed": "The file changed while it was uploading. Try again.",
+        "disconnected": "The host is disconnected.",
+        "hostUnreachable": "The connection to the host changed or dropped. Try again.",
+        "noSpace": "The host is out of disk space.",
+        "tooLarge": "Too large to upload to this host."
+      },
       "dropSkipReason": {
         "missing": "No longer at its original path.",
         "permissionDenied": "Permission denied.",
@@ -3312,6 +3331,12 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goalControl": {
+        "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
+        "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
+        "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
       "notices": {
         "compaction": "Context compacted",

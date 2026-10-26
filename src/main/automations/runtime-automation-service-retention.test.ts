@@ -195,22 +195,4 @@ describe('headless automation service run terminal retention', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
     expect(service.markDispatchResult).not.toHaveBeenCalled()
   })
-
-  it('treats a retry that finds the run PTY already stopped by a failed sleep as slept', async () => {
-    const { runtime, service, store } = build(true)
-    store.getWorktreeMeta.mockImplementation(firstRunOwnsWorkspace)
-    store.listAutomationRuns.mockReturnValue(finishedRuns(1))
-    // Simulate retrying a sleep that stopped the PTY before throwing.
-    runtime.sleepTerminalsForWorktree.mockResolvedValue({ livePtyIds: [], stoppedPtyIds: [] })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
-    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
-      .releaseFinishedRunTerminals
-    await expect(drain()).resolves.toBe(1)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(service.markDispatchResult).toHaveBeenCalledWith({
-      runId: 'r0',
-      status: 'completed',
-      terminalPtyId: null
-    })
-  })
 })

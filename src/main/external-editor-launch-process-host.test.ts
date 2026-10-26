@@ -115,3 +115,40 @@ describe('VS Code Remote-SSH launch through @orca/process-host', () => {
     })
   })
 })
+
+describe('external editor launch environment', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+    spawnMock.mockImplementation(spawnedChild)
+    vi.stubEnv('APPDIR', '/tmp/.mount_orca123')
+    vi.stubEnv('ARGV0', '/data/apps/orca.appimage')
+    vi.stubEnv('ORCA_EDITOR_ENV_PROBE', 'kept')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
+  it.each([
+    [
+      'shell',
+      (): ExternalEditorLaunchSpec => ({
+        kind: 'shell',
+        hideWindowsConsole: true,
+        spawnCmd: '/bin/sh',
+        spawnArgs: ['-c', 'code --new-window /home/ada/project']
+      })
+    ],
+    ['Remote-SSH', () => remoteSpec('/usr/bin/code', '/home/ada/project', 'linux')]
+  ] as const)('strips the AppImage runtime env from a Linux %s launch', async (_kind, spec) => {
+    setPlatform('linux')
+    await launchExternalEditor(spec())
+    const options: { env?: NodeJS.ProcessEnv } | undefined = spawnMock.mock.calls[0]?.[2]
+    expect(options?.env).not.toHaveProperty('ARGV0')
+    expect(options?.env).toMatchObject({ ORCA_EDITOR_ENV_PROBE: 'kept' })
+    expect(process.env.ARGV0).toBe('/data/apps/orca.appimage')
+  })
+})

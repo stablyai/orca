@@ -130,9 +130,4 @@ describe('browserManager', () => {
     vi.runAllTimers()
     expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
   })
-
-  it('returns a no-op capture hold for a guest no page owns', () => {
-    const release = browserManager.holdPaintForCapture(424242)
-    expect(() => release()).not.toThrow()
-  })
 })

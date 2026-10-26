@@ -23,7 +23,6 @@ import { holdRestartedStructuredAgentSessionSends } from './structured-agent-ses
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from './structured-agent-session-message-options'
 import { sameProviderChild } from './structured-agent-session-provider-child'
-import { rejectBlockedStructuredAgentSessionTransition } from './structured-agent-session-outgrown-child'
 
 export type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 
@@ -124,7 +123,12 @@ export class StructuredAgentSessionDeliveryLoop {
         }
         await prepared.before
         const handed = await this.deps.serialize(sessionId, () =>
-          this.handOver(sessionId, prepared.awaited, prepared.clientMessageId)
+          this.handOver(
+            sessionId,
+            prepared.awaited,
+            prepared.clientMessageId,
+            prepared.readiness !== null
+          )
         )
         if (handed === 'stop') {
           return
@@ -195,11 +199,7 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
-    if (
-      (await rejectBlockedStructuredAgentSessionTransition(this.deps, sessionId, oldest)) === true
-    ) {
-      return 'continue'
-    }
+    await this.deps.retireOutgrownChild(sessionId)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
       return {
@@ -218,7 +218,8 @@ export class StructuredAgentSessionDeliveryLoop {
   private async handOver(
     sessionId: string,
     awaited: StructuredAgentSessionProviderChildIdentity,
-    clientMessageId: string
+    clientMessageId: string,
+    waited: boolean
   ): Promise<'continue' | 'stop' | StructuredAgentSessionPendingHandover> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
@@ -255,14 +256,12 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!next) {
       return this.stop(sessionId)
     }
-    // Re-derive for the actual next input after proving the awaited child still exists.
-    const transition = await rejectBlockedStructuredAgentSessionTransition(
-      this.deps,
-      sessionId,
-      next
-    )
-    if (transition === true || session.child !== awaitedChild) {
-      return 'continue'
+    if (waited) {
+      // Verify awaited-child identity before rechecking launch permissions.
+      await this.deps.retireOutgrownChild(sessionId)
+      if (session.child !== awaitedChild) {
+        return 'continue'
+      }
     }
     if (
       waitsForCodexTurnOptions(this.deps.record(sessionId), session.journal, next, awaitedChild)
@@ -289,8 +288,7 @@ export class StructuredAgentSessionDeliveryLoop {
       },
       next,
       // Recheck child identity immediately before the external provider write.
-      () => this.deps.sessions.get(sessionId)?.child === awaitedChild && !awaitedChild.close,
-      typeof transition === 'function' ? transition : undefined
+      () => this.deps.sessions.get(sessionId)?.child === awaitedChild && !awaitedChild.close
     )
     return pending ?? 'continue'
   }

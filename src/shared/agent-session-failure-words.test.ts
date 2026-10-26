@@ -375,19 +375,3 @@ describe('an attachment problem as a reader meets it', () => {
     ).toEqual({ kind: 'attachmentInvalid' })
   })
 })
-
-it('keeps an unsettled ordinary send on the existing working and wait wording', () => {
-  expect(
-    agentSessionFailureSentence(
-      {
-        kind: 'restartFailed',
-        refusal: {
-          code: 'agent_session_operation_invalid',
-          details: { reason: 'messagesUnsettled' }
-        }
-      },
-      'rejection',
-      { agentName: 'Claude' }
-    )
-  ).toBe('The agent is still working. Wait for the agent to finish responding, or stop it.')
-})

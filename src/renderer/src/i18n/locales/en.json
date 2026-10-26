@@ -234,7 +234,8 @@
       "refreshFailed": "Preview update failed. Showing the previous version; open source view for current content."
     },
     "fileLoad": {
-      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip.",
+      "remoteTooLarge": "This file is too large to open from its host."
     }
   },
   "githubChecks": {
@@ -1400,6 +1401,15 @@
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
       },
+      "dropFailureReason": {
+        "tooLarge": "Too large to upload to this host.",
+        "noSpace": "The host is out of disk space.",
+        "changed": "The file changed while it was uploading. Try again.",
+        "hostUnreachable": "The connection to the host changed or dropped. Try again.",
+        "disconnected": "The host is disconnected.",
+        "unknownOne": "Couldn't upload this file.",
+        "unknownMany": "Couldn't upload these files."
+      },
       "dropSkipReason": {
         "missing": "No longer at its original path.",
         "symlink": "Symbolic links cannot be attached.",
@@ -1461,6 +1471,13 @@
             }
           }
         }
+      },
+      "claudeAgentRowView": {
+        "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required.",
+        "permissionPrompt": "Answer Claude’s permission prompt before switching agents.",
+        "agentUnavailable": "Claude cannot open this agent. It may no longer be available.",
+        "closeDialog": "Claude did not switch views. Close any open dialog and try again.",
+        "hostUnavailable": "Subagent navigation is unavailable on this host. Update Orca and restart Claude in this pane."
       }
     },
     "hooks": {
@@ -4642,6 +4659,7 @@
               "metric": {
                 "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
                 "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
+                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             },
@@ -13480,6 +13498,17 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "claudeSubagentNavigation": {
+          "title": "Claude subagent navigation",
+          "description": "Open Claude subagents from the sidebar. Adds a shortcut to Claude’s keybindings.json and loads an Orca mod in new Orca panes. Requires Claude 2.1.300+ and status hooks. Turning off removes Orca’s shortcut; shortcuts you delete stay deleted.",
+          "search": {
+            "subagent": "subagent",
+            "navigation": "navigation",
+            "plugin": "plugin",
+            "mod": "mod",
+            "shortcut": "shortcut"
+          }
         }
       },
       "right": {
@@ -18845,6 +18874,11 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "ClaudeAgentViewIndicator": {
+        "viewing": "Currently viewing",
+        "viewingChild": "Viewing subagent {{name}}",
+        "returnHint": "Click the parent row to return. Esc stops this subagent. Enter sends your draft to this subagent."
       }
     },
     "i18n": {
@@ -19325,7 +19359,9 @@
         "optionValueShort": {
           "minimal": "Min",
           "medium": "Med",
-          "xhigh": "XHigh"
+          "xhigh": "XHigh",
+          "max": "Max",
+          "ultra": "Ultra"
         },
         "imageUnavailable": "Preview unavailable",
         "defaultModel": "Default"
@@ -19750,8 +19786,7 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
-        "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
+        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
@@ -19777,6 +19812,12 @@
       "imagePreview": {
         "fileActions": "File actions",
         "linkActions": "Link actions"
+      },
+      "goalControl": {
+        "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
+        "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
+        "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       }
     },
     "tab": {

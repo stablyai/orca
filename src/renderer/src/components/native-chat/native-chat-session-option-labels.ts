@@ -62,6 +62,10 @@ export function nativeChatSessionChoiceShortLabel(
       return translate('components.native-chat.composer.optionValueShort.medium', 'Med')
     case 'xhigh':
       return translate('components.native-chat.composer.optionValueShort.xhigh', 'XHigh')
+    case 'max':
+      return translate('components.native-chat.composer.optionValueShort.max', 'Max')
+    case 'ultra':
+      return translate('components.native-chat.composer.optionValueShort.ultra', 'Ultra')
     default:
       return nativeChatSessionChoiceLabel(choice, optionId)
   }

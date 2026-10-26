@@ -4306,6 +4306,7 @@
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
                 "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
+                "footprintDescription": "Suma de la huella de memoria, la misma cifra que muestra el Monitor de Actividad: la memoria propia de cada proceso, incluida la memoria gráfica. Las páginas compartidas entre procesos no se cuentan dos veces.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
               }
             },
@@ -19351,8 +19352,7 @@
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo.",
-        "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
+        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo."
       },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
@@ -19402,7 +19402,13 @@
       "explicitChatSsh": "El chat no está disponible en SSH. En su lugar, abra el agente en una terminal.",
       "explicitChatWsl": "El chat no está disponible en WSL. En su lugar, abra el agente en una terminal.",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
-      "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal."
+      "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
+      "goalControl": {
+        "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",
+        "settingsUnconfirmed": "Codex no confirmó el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa el chat e inténtalo de nuevo.",
+        "pauseUnconfirmed": "Codex dejó de ejecutarse, pero no se confirmó la pausa del objetivo. Revisa el objetivo antes de continuar.",
+        "stopUnconfirmed": "Codex no pudo confirmar la detención. Revisa el chat antes de continuar."
+      }
     },
     "tab": {
       "bar": {

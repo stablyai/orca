@@ -1,7 +1,9 @@
 import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
+import { ClaudeAgentViewBridge } from '../../claude/agent-view-bridge'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
+  readonly claudeAgentViews = new ClaudeAgentViewBridge()
   private statusHookInitialization: Promise<void> | null = null
 
   setStatusHooksEnabled(enabled: boolean): void {
@@ -10,6 +12,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHookGeneration += 1
     if (!enabled) {
+      this.claudeAgentViews.clear()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
       for (const timer of this.assistantMessageRetryTimers.values()) {

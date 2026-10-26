@@ -56,7 +56,7 @@ describe('patchPackagedProcessPath', () => {
     }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('seeds agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin, ~/.grok/bin) for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -68,9 +68,10 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // #829: GUI PATH must discover the documented OpenCode/Pi fallback installs.
+    // #829/#17590: GUI PATH must discover the documented OpenCode/Pi/Grok fallback installs.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', '.grok/bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 

@@ -3,6 +3,7 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
 import { parseShellForegroundRows, type ProcessTableRow } from '../../shared/process-table-snapshot'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -17,6 +18,7 @@ async function ps(args: readonly string[]): Promise<string | null> {
     const result = await runProcess({
       program: 'ps',
       args,
+      env: psLocaleEnvironment(),
       timeoutMs: PS_TIMEOUT_MS,
       maxOutputBytes: PS_MAX_OUTPUT_BYTES
     })

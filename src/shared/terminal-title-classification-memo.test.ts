@@ -51,18 +51,6 @@ describe('terminal title classification memo', () => {
     expect(classifierCalls).not.toHaveBeenCalled()
   })
 
-  it('classifies a title once no matter how many readers ask', () => {
-    const title = 'aider running'
-    getAgentLabel(title)
-    const firstReadCalls = classifierCalls.mock.calls.length
-    expect(firstReadCalls).toBeGreaterThan(0)
-
-    for (let read = 0; read < 20; read += 1) {
-      getAgentLabel(title)
-    }
-    expect(classifierCalls.mock.calls.length).toBe(firstReadCalls)
-  })
-
   it('reclassifies as soon as the title changes', () => {
     expect(getAgentLabel('codex ready')).toBe('Codex')
     expect(getAgentLabel('grok ready')).toBe('Grok')

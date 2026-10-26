@@ -263,6 +263,7 @@ export function MobileNativeChatView({
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
+    scope: sendSurfaceId,
     rowKeyOf: rowKeys.keyOf,
     runOwners: rowKeys.runOwners,
     taskListPredecessors,

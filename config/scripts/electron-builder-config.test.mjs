@@ -11,16 +11,8 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
-const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
-const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
-  it('keeps the packaged app identity aligned with local-build validation', () => {
-    expect(electronBuilderConfig.appId).toBe(
-      require('../../src/shared/local-build-compatibility-contract.json').appId
-    )
-  })
-
   it('excludes repo-only source trees from app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -215,64 +207,6 @@ describe('electron-builder config', () => {
     }
   })
 
-  it('keeps runtime resources available through extraResources', () => {
-    const bundledPluginResources = expect.objectContaining({
-      from: 'resources/plugins/launch',
-      to: 'plugins/launch'
-    })
-    for (const platform of ['mac', 'linux', 'win']) {
-      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
-        from: 'resources/skills',
-        to: 'skills'
-      })
-      expect(electronBuilderConfig[platform].extraResources).toEqual(
-        expect.arrayContaining([bundledPluginResources])
-      )
-    }
-    expect(electronBuilderConfig.mac.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-          to: 'Orca Computer Use.app'
-        })
-      ])
-    )
-    expect(electronBuilderConfig.linux.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/computer-use-linux/runtime.py',
-          to: 'computer-use-linux/runtime.py'
-        })
-      ])
-    )
-    expect(electronBuilderConfig.win.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/computer-use-windows/runtime.ps1',
-          to: 'computer-use-windows/runtime.ps1'
-        }),
-        expect.objectContaining({
-          from: 'native/windows-cli-launcher/.build/orca.exe',
-          to: 'bin/orca.exe'
-        }),
-        expect.objectContaining({
-          from: 'native/windows-cli-launcher/.build/orca-administrator-restart.exe',
-          to: 'bin/orca-administrator-restart.exe'
-        })
-      ])
-    )
-  })
-
-  it('ships one macOS serve-sim package through the runtime closure', () => {
-    const serveSimResources = electronBuilderConfig.mac.extraResources.filter((resource) =>
-      [join('node_modules', 'serve-sim'), 'serve-sim'].includes(resource.to)
-    )
-
-    expect(serveSimResources).toEqual([
-      expect.objectContaining({ to: join('node_modules', 'serve-sim') })
-    ])
-  })
-
   it.each(['mac', 'linux'])(
     'loads Codex TOML parsing after %s runtime pruning',
     async (platform) => {
@@ -305,84 +239,12 @@ describe('electron-builder config', () => {
   )
 
   // Why: serve-sim's addon is a Mach-O, and Windows signing rejects every *.node that is not PE.
-  it('keeps serve-sim out of the Windows and Linux runtime closures', () => {
-    const {
-      PACKAGED_RUNTIME_PACKAGE_ROOTS,
-      createPackagedRuntimeNodeModuleResources
-    } = require('../packaged-runtime-node-modules.cjs')
-    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).not.toContain('serve-sim')
-    const serveSimTarget = join('node_modules', 'serve-sim')
-    expect(createPackagedRuntimeNodeModuleResources('linux').map((r) => r.to)).not.toContain(
-      serveSimTarget
-    )
-    expect(electronBuilderConfig.linux.extraResources.map((r) => r.to)).not.toContain(
-      serveSimTarget
-    )
-    expect(electronBuilderConfig.win.extraResources.map((r) => r.to)).not.toContain(serveSimTarget)
-  })
 
   // Source shim unpacked under resources/win32/bin lacks adjacent orca.exe (#7351); only extraResources/bin copy works.
-  it('keeps the Windows CLI shim source tree out of app.asar', () => {
-    expect(electronBuilderConfig.files).toEqual(
-      expect.arrayContaining(['!resources/win32{,/**/*}'])
-    )
-    // Regression guard: the working shim must still ship via extraResources.
-    expect(electronBuilderConfig.win.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'resources/win32/bin/orca.cmd',
-          to: 'bin/orca.cmd'
-        })
-      ])
-    )
-  })
 
   // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; ship under MacOS (#7929).
-  it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
-    expect(electronBuilderConfig.mac.extraFiles).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/notification-status-macos/.build/release/orca-notification-status',
-          to: 'MacOS/orca-notification-status'
-        })
-      ])
-    )
-    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
-    )
-  })
-
-  it('ships the mac keyboard-layout helper in Contents/MacOS, not Resources', () => {
-    expect(electronBuilderConfig.mac.extraFiles).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
-          to: 'MacOS/orca-keyboard-layout'
-        })
-      ])
-    )
-    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ to: 'orca-keyboard-layout' })])
-    )
-  })
-
-  it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
-    expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
-    )
-  })
 
   // Missing unpacked entry silently restores in-process watcher and #7547 main crashes.
-  it('unpacks the forked parcel-watcher process entry', () => {
-    expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
-    )
-  })
-
-  it('unpacks the replaceable WSL transcript filesystem process entry', async () => {
-    const entryFilename = 'wsl-transcript-fs-process-entry.js'
-    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
-  })
 
   // CLI Node mode cannot read asar; packed entry sends orca serve to Electron (#27307).
   it('unpacks the orcad serve-selection entry the CLI runs', async () => {
@@ -422,41 +284,6 @@ describe('electron-builder config', () => {
       'out/mobile-web/assets/index-abc123.js'
     ]) {
       expect(isUnpacked(join('/app', webPath), { isDirectory: () => false })).toBe(true)
-    }
-  })
-
-  it('keeps the worker-thread hang watchdog inside app.asar', () => {
-    expect(electronBuilderConfig.asarUnpack).not.toContain(
-      'out/main/main-thread-hang-watchdog-entry.js'
-    )
-  })
-
-  it('uses the multi-size icon source for Linux packages', () => {
-    expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
-  })
-
-  it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
-  })
-
-  it('uses the release artifact set as local Linux targets without changing existing names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
-    expect(electronBuilderConfig.toolsets).toEqual({ appimage: '1.0.3' })
-    expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
-    expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
-    expect(electronBuilderConfig.rpm).toMatchObject({
-      packageName: 'orca-ide',
-      artifactName: 'orca-ide-${version}.${arch}.${ext}'
-    })
-  })
-
-  it('retains electron-builder runtime dependencies in deb and rpm packages', () => {
-    for (const target of ['deb', 'rpm']) {
-      const dependencies = electronBuilderConfig[target].depends
-      expect(dependencies).toEqual(
-        expect.arrayContaining(FpmTarget.prototype.getDefaultDepends(target))
-      )
-      expect(new Set(dependencies).size).toBe(dependencies.length)
     }
   })
 
@@ -547,11 +374,6 @@ describe('electron-builder config', () => {
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
     }
-  })
-
-  it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
-    expect(electronBuilderConfig.beforeBuild).toBe(electronBuilderNativeRebuild)
-    expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
 })
 

@@ -1,75 +1,23 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { getAppPtyId } from '../provider/registry'
-import { allocatePtyLifecycleSequence } from '../host-env/types'
-import { snapshotCodexPaneHomeRoutes, codexReattachedHomeRouteField } from '../host-env/codex-home'
-import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
-import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { RuntimePtySpawnState } from './spawn-state'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { requireAcceptedSpawn } from '../spawn-outcome'
+import { beginPtySpawn, reportPtyPaneAdoption } from '../spawn-begin'
 
-export function adoptMaterializedRuntimePtySpawn(
-  ctx: RuntimePtySpawnState,
-  startupAlreadyAwaited = false
-): Promise<PtySpawnResult | null> | PtySpawnResult | null {
-  const args = ctx.args
-  // Re-entry after startup must retain the original lifecycle sequence and routing snapshot.
-  if (!startupAlreadyAwaited) {
-    ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
-    ctx.codexHomeLaunchStartedSequence = !args.connectionId
-      ? allocatePtyLifecycleSequence()
-      : undefined
-    ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
-    ctx.reattachedCodexHomeRoutes = !args.connectionId
-      ? new Map(
-          snapshotCodexPaneHomeRoutes([
-            ctx.preAdoptedStablePane?.result.id,
-            args.sessionId ? getAppPtyId(args.connectionId, args.sessionId) : undefined
-          ])
-        )
-      : new Map<string, CodexPaneHomeRoute | null>()
-  }
-  const startupPromise = ctx.deps.getLocalPtyStartupPromise(
-    getConnectionExecutionHostId(args.connectionId)
-  )
-  if (startupPromise && !startupAlreadyAwaited) {
-    return startupPromise.then(() => adoptMaterializedRuntimePtySpawn(ctx, true))
-  }
-  if (!ctx.preAdoptedStablePane?.materialized) {
+/** Host reply projection only; acquisition and process lifetime belong to the pane operation. */
+export async function adoptMaterializedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
+  const adopted = ctx.args.adoptedStablePane
+  if (!adopted?.materialized) {
     return null
   }
-  const handle = ctx.preAdoptedStablePane.owner.handle ?? args.preAllocatedHandle
+  ctx.preAdoptedStablePane = adopted
+  await beginPtySpawn(ctx)
+  requireAcceptedSpawn(adopted.outcome ?? { kind: 'adopted', result: adopted.result })
+  const handle = adopted.owner.handle ?? ctx.args.preAllocatedHandle
   if (!handle) {
     throw new Error('terminal_pane_owner_unknown')
   }
-  ctx.result = {
-    ...ctx.preAdoptedStablePane.result,
-    isReattach: true,
-    id: ctx.preAdoptedStablePane.result.id,
-    ...(ctx.preAdoptedStablePane.result.incarnationId
-      ? { incarnationId: ctx.preAdoptedStablePane.result.incarnationId }
-      : {}),
-    ...(typeof ctx.preAdoptedStablePane.result.wslDistro === 'string'
-      ? { wslDistro: ctx.preAdoptedStablePane.result.wslDistro }
-      : {}),
-    stablePaneOwner: {
-      handle,
-      tabId: ctx.preAdoptedStablePane.owner.tabId,
-      leafId: ctx.preAdoptedStablePane.owner.leafId
-    }
+  reportPtyPaneAdoption(ctx, adopted)
+  return {
+    ...adopted.result,
+    stablePaneOwner: { handle, tabId: adopted.owner.tabId, leafId: adopted.owner.leafId }
   }
-  ensureWslHookRelayForReattach(
-    { isReattach: true, wslDistro: ctx.preAdoptedStablePane.result.wslDistro },
-    args.connectionId
-  )
-  if (!args.connectionId) {
-    ctx.deps.options?.onCodexHomePtySpawned?.({
-      id: ctx.result.id,
-      codexHomePath: null,
-      reattached: true,
-      startedAt: ctx.codexHomeLaunchStartedAt,
-      startedSequence: ctx.codexHomeLaunchStartedSequence,
-      ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, ctx.result.id, true)
-    })
-  }
-  return ctx.result
 }

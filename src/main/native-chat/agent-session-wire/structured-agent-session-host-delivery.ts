@@ -83,21 +83,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
-    retireOutgrownChild: async (sessionId, next) => {
+    retireOutgrownChild: async (sessionId) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
         ? undefined
         : sessions.get(sessionId)
-      return retireOutgrownStructuredAgentSessionChild(sessionId, session, {
-        next,
-        turnScopedSteering: deps.store.getRecord(sessionId)?.provider === 'claude',
-        requiresModelTransitionRestart: (submission) =>
-          session?.child?.phase === 'ready' &&
-          deps.adapter.requiresModelTransitionRestart?.({
-            sessionId,
-            fence: session.child.fence,
-            executionOptions: submission.options
-          }) === true,
+      await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
         work: {
           currentWork: () =>
             hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
@@ -107,12 +98,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             const record = deps.store.getRecord(sessionId)
             return record !== null && deps.hasOpenDispatch?.(record) === true
           },
-          providerHoldsDispatch: () =>
-            deps.adapter.holdsDispatch?.(sessionId) === true ||
-            hostStructuredAgentSessionCurrentWork(
-              { store: deps.store, sessions },
-              sessionId
-            )?.holdsHandedOverSend() === true
+          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
         },
         launchPermission: async () => {
           const record = deps.store.getRecord(sessionId)

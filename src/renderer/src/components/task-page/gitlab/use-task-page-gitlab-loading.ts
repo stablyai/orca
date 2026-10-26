@@ -1,4 +1,4 @@
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'

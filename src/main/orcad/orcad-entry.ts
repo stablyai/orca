@@ -127,6 +127,10 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
+  // Only desktop requests reach a host's scanner, and it holds ~60 MB idle: retire it after a minute.
+  const { setAiVaultServiceIdleTimeoutMs } =
+    await import('../ai-vault/session-scanner-service-spawn')
+  setAiVaultServiceIdleTimeoutMs(60_000)
   // Initialize sealing before Store load unseals protected settings.
   await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =

@@ -89,19 +89,17 @@ describe('BrowserChromeFoldedMenuItems', () => {
     const { container } = render(
       <BrowserChromeFoldedMenuItems
         tools={[
-          { stage: 'draw', label: 'Draw', icon: Share2, onSelect: vi.fn(), active: false },
-          { stage: 'share', label: 'Share', icon: Share2, onSelect: vi.fn() }
+          { stage: 'share', label: 'Share', icon: Share2, onSelect: vi.fn() },
+          { stage: 'draw', label: 'Draw', icon: Share2, onSelect: vi.fn(), active: false }
         ]}
         deferUntilClose={vi.fn()}
       />
     )
 
-    // Rendered order: Draw, divider, Share, closing divider.
-    expect(Array.from(container.querySelectorAll('button, hr')).map((el) => el.tagName)).toEqual([
-      'BUTTON',
-      'HR',
-      'BUTTON',
-      'HR'
-    ])
+    expect(
+      Array.from(container.querySelectorAll('button, hr')).map((el) =>
+        el.tagName === 'HR' ? 'divider' : el.textContent
+      )
+    ).toEqual(['Draw', 'divider', 'Share', 'divider'])
   })
 })

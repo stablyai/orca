@@ -15,7 +15,7 @@ import {
   getTaskSourceAvailabilityNotice,
   getTaskSourceContextSummary
 } from '../task-source-context-summary'
-import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
+import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
   const {
     preflightStatus,

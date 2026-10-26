@@ -272,8 +272,9 @@ function PickerOptionButton({
         }
       }}
       className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
-        selected && 'border-border bg-accent text-accent-foreground'
+        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
+        selected &&
+          'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]'
       )}
     >
       {children}

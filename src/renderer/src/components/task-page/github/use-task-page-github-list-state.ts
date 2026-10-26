@@ -1,4 +1,4 @@
-import type { TaskPageProviderStateModel } from '../../use-task-page-provider-state'
+import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

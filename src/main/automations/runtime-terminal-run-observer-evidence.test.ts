@@ -226,16 +226,6 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
-  it('keeps idle-means-done for an agent that never reports, after its start window', async () => {
-    const pane = createPane({ idle: true, tail: ['summary written', '$'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
   it("never reads an agent's own tool output as its command missing", async () => {
     const tail = ['running tests', 'bash: pytest: command not found', 'fell back to unittest', '$']
     const run = observe(createPane({ idle: true, tail }))

@@ -1,3 +1,4 @@
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -92,9 +93,9 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () => {
-    return readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
-  })
+  ipcMain.handle('settings:get', () =>
+    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+  )
 
   ipcMain.handle(
     'settings:update-pr-bot-author-override',
@@ -225,6 +226,7 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+    await getClaudeAgentViewService().reconcile(result)
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
@@ -304,9 +306,7 @@ export function registerSettingsHandlers(
     }
   )
 
-  ipcMain.handle('settings:listFonts', () => {
-    return listSystemFontFamilies()
-  })
+  ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
   ipcMain.handle('settings:previewGhosttyImport', () => {
     return previewGhosttyImport(store)

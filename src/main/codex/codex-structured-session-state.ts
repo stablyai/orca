@@ -1,3 +1,4 @@
+import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
@@ -162,6 +163,7 @@ export type CodexSession = {
   nativeDefaults?: { personality?: string; serviceTier?: string }
   /** Overrides actually attempted on this child, independently of future saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
+  appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */
   catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes

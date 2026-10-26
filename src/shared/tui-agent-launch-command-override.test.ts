@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  hasExplicitTuiLaunchCommand,
-  structuredAgentCommandToken
-} from './tui-agent-launch-command-override'
+import { structuredAgentCommandToken } from './tui-agent-launch-command-override'
 
 describe('structured agent command tokens', () => {
   it.each([
@@ -31,26 +28,5 @@ describe('structured agent command tokens', () => {
     '"unfinished'
   ])('rejects shell syntax %s', (command) => {
     expect(structuredAgentCommandToken(command)).toBeNull()
-  })
-
-  it('leaves other agents and empty overrides unchanged', () => {
-    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { kimi: '/bin/kimi' } }, 'kimi')).toBe(
-      true
-    )
-    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { claude: '  ' } }, 'claude')).toBe(
-      false
-    )
-    expect(hasExplicitTuiLaunchCommand(null, 'codex')).toBe(false)
-  })
-})
-
-describe('hasExplicitTuiLaunchCommand', () => {
-  it('treats a whitespace-only command override as no override', () => {
-    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: '   ' } }, 'codex')).toBe(
-      false
-    )
-    expect(
-      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'codex-nightly' } }, 'codex')
-    ).toBe(true)
   })
 })

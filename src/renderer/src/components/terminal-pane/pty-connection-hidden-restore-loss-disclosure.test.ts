@@ -524,7 +524,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
   })
 
   describe('R5 local deferred-retry exhaustion', () => {
-    async function connectLocalHiddenPane(): Promise<PaneDrive> {
+    async function connectLocalHiddenPane(): Promise<PaneDrive & { transport: MockTransport }> {
       // Gate local hidden output to mirror the host pause exercised by remote routes.
       const transport = createMockTransport(LOCAL_PTY_ID)
       const captured: {
@@ -546,6 +546,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {
+        transport,
         pane,
         deps,
         disposable,
@@ -578,6 +579,25 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         bannerWrites: 1,
         disclosedOrRecovered: true
       })
+      drive.disposable.dispose()
+    })
+
+    it('[fix] nudges the idle TUI to repaint over the banner', async () => {
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      floodWhileHiddenThenReveal(drive)
+      await flushAsyncTicks(20)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(50)
+        await flushAsyncTicks(20)
+      }
+      expect(observeDisclosure(drive, R5_MARKER).bannerWrites).toBe(1)
+      const { cols, rows } = drive.pane.terminal
+      // Differential TUIs (Codex, Claude Code) never rewrite cells they believe unchanged.
+      expect(drive.transport.resize).toHaveBeenLastCalledWith(cols, rows - 1, { claim: true })
+      await vi.advanceTimersByTimeAsync(250)
+      expect(drive.transport.resize).toHaveBeenLastCalledWith(cols, rows, { claim: true })
       drive.disposable.dispose()
     })
 

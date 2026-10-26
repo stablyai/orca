@@ -1,5 +1,8 @@
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from './node-bounded-json-stringify'
+import { writeSecureFile } from './secure-file'
 import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
@@ -14,7 +17,9 @@ import {
   getEnvironmentStorePath,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   readEnvironmentStoreRecords,
+  backUpBlankEnvironmentStore,
   RuntimeEnvironmentStoreError,
+  type EnvironmentStoreRecordsReadOptions,
   warnUnreadableEnvironmentState
 } from './runtime-environment-store-records'
 import {
@@ -34,7 +39,7 @@ export {
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: EnvironmentStoreRecordsReadOptions = {}
 ): RuntimeEnvironmentStore {
   const { environments, unreadable } = readEnvironmentStoreRecords(userDataPath, options)
   if (unreadable.length > 0) {
@@ -67,7 +72,7 @@ function readWslHostDeploymentsForRegistry(
 
 export function readEnvironmentStore(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: EnvironmentStoreRecordsReadOptions = {}
 ): {
   version: 1
   environments: KnownRuntimeEnvironment[]
@@ -113,7 +118,8 @@ export function readEnvironmentStore(
 export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
   const path = getEnvironmentStorePath(userDataPath)
   const environments = RuntimeEnvironmentStoreSchema.parse(store).environments
-  const onDisk = readEnvironmentStoreRecords(userDataPath)
+  // The new registry replaces a blank file in one atomic write, so no reader sees it emptied early.
+  const onDisk = readEnvironmentStoreRecords(userDataPath, { recoverBlankStore: true })
   const readableIds = new Set(onDisk.environments.map((environment) => environment.id))
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
   // A new readable record must not shadow one a newer build owns under the same id.
@@ -123,15 +129,15 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
       'A server with this id already exists in a format that needs a newer version of Orca.'
     )
   }
+  let serialized: string
   try {
-    writeSecureJsonFileWithinLimit(
-      path,
+    serialized = stringifyJsonWithinByteLimit(
       {
         version: 1,
         environments: [...environments, ...onDisk.unreadable.map((record) => record.raw)]
       },
       MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    )
+    ).serialized
   } catch (error) {
     if (error instanceof JsonStringifyByteLimitError) {
       throw new RuntimeEnvironmentStoreError(
@@ -141,4 +147,10 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
     }
     throw error
   }
+  // Copied only once the write is certain to be attempted, so rejected saves leave no copies.
+  if (onDisk.blankFile) {
+    backUpBlankEnvironmentStore(userDataPath)
+  }
+  // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
+  writeSecureFile(path, serialized, { durable: true })
 }

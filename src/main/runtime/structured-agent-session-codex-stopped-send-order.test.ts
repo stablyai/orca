@@ -17,6 +17,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-it
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../shared/native-chat-stopped-before-start'
 import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../shared/native-chat-turn-grouping'
@@ -163,10 +164,19 @@ const openConnection: typeof openCodexAppServerConnection = async (
   connectionHandlers = {}
 ) => {
   handlers = connectionHandlers
+  let closed = false
   const connection: CodexAppServerConnection = {
     pid: 4321,
-    closed: false,
+    get closed() {
+      return closed
+    },
+    get closeResult(): CodexAppServerConnection['closeResult'] {
+      return closed ? { root: 'exited', tree: 'exited' } : null
+    },
     request: async (method, params) => {
+      if (method === 'thread/goal/get') {
+        return { goal: null }
+      }
       if (method === 'thread/resume') {
         resumes += 1
         return { thread: { id: THREAD, ...(resumeTurns ? { turns: resumeTurns } : {}) } }
@@ -196,7 +206,10 @@ const openConnection: typeof openCodexAppServerConnection = async (
     notify: () => {},
     respond: () => {},
     respondWithError: () => {},
-    close: async () => true
+    close: async () => {
+      closed = true
+      return true
+    }
   }
   return connection
 }
@@ -294,7 +307,8 @@ describe("a send made while Codex held the first send's answer, then a Stop", ()
       'first',
       'streamed after the Stop',
       'second',
-      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
+      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
+      AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed
     ])
   })
 })
@@ -319,6 +333,7 @@ describe('a send a Stop took back, then a send made while it read Stopping', () 
     expect(live.filter((text) => text !== 'Cancellation requested.')).toEqual([
       'look around',
       NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
+      AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed,
       'sent while stopping'
     ])
 
@@ -411,20 +426,31 @@ describe('a send a Stop took back before Codex echoed it', () => {
     }
     expect(verdictOf(await submissions(), sent)).toBe('withdrawn')
 
-    // Every client draws the send where it was sent, then the one row saying it never started.
+    // The unopened send keeps its result; the unanswered interrupt also keeps its warning.
     await host.flushStreamedEvents(SESSION)
     const { items, submissions: settled } = await host.journalSnapshot(SESSION)
     const messages = projectStructuredAgentSessionMessages(items, [], settled)
-    expect(messages.slice(-2).map((message) => [message.role, message.blocks])).toEqual([
+    expect(messages.slice(-3).map((message) => [message.role, message.blocks])).toEqual([
       ['user', [{ type: 'text', text: 'look around' }]],
-      ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]
+      ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]],
+      [
+        'system',
+        [
+          expect.objectContaining({
+            text: AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed,
+            tone: 'warning',
+            failure: { kind: 'cancelUnconfirmed' }
+          })
+        ]
+      ]
     ])
     const rows = await drawn()
-    expect(rows.filter((text) => text === 'Cancellation requested.')).toHaveLength(1)
+    expect(rows.filter((text) => text === 'Cancellation requested.')).toHaveLength(0)
     expect(rows.filter((text) => text !== 'Cancellation requested.')).toEqual([
       'warm up',
       'look around',
-      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
+      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
+      AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed
     ])
   })
 })
