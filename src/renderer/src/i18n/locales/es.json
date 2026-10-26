@@ -19754,7 +19754,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
-        "copySessionIdError": "No se pudo copiar el ID de sesión"
+        "copySessionIdError": "No se pudo copiar el ID de sesión",
+        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar"
       }
     },
     "agentChildRow": {

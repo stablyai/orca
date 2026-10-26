@@ -2,6 +2,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport-types'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { copyTerminalPaneMenuAgentSessionId } from './terminal-pane-menu-copy-actions'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import {
   markTerminalFollowOutput,
@@ -93,6 +94,15 @@ export function dispatchTerminalShortcutAction(
         terminal: pane.terminal,
         writeClipboardText: window.api.ui.writeTerminalClipboardText
       }).catch(() => {})
+    }
+    return
+  }
+  if (action.type === 'copySessionId') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    if (pane && !event.repeat) {
+      void copyTerminalPaneMenuAgentSessionId(pane, tabId)
     }
     return
   }

@@ -19950,7 +19950,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
-        "copySessionIdError": "Impossible de copier l'ID de session"
+        "copySessionIdError": "Impossible de copier l'ID de session",
+        "copySessionIdUnavailable": "Aucun ID de session à copier"
       }
     },
     "settings": {
