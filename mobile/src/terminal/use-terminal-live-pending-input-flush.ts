@@ -10,6 +10,7 @@ import {
 import {
   cancelTerminalLivePendingFlush,
   createTerminalLivePendingFlushState,
+  queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
@@ -42,6 +43,7 @@ type TerminalLivePendingInputFlush = {
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
+  readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
   readonly sentLiveInputTextRef: RefObject<string>
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -183,7 +185,19 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
-  // Queue preedit and click synchronously so the next keystroke follows the cursor move.
+  // Queue at key time; waiting for the drain would let text typed meanwhile go first.
+  const queueLiveInputControl = useCallback(
+    (handle: string, bytes: string): Promise<boolean> =>
+      queueTerminalLiveControlSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        bytes,
+        sendQueuedMirrorPayload
+      ),
+    [sendQueuedMirrorPayload]
+  )
+
+  // Queue held text and the control synchronously so the next keystroke follows them.
   const endLiveInputSessionThenSend = useCallback(
     (handle: string, bytes: string): Promise<boolean> => {
       const pendingHandle = pendingLiveInputHandleRef.current
@@ -202,7 +216,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           void queueTerminalLiveMirrorSend(flushState, handle, payload, sendQueuedMirrorPayload)
         }
       }
-      const sent = queueTerminalLiveMirrorSend(flushState, handle, bytes, sendQueuedMirrorPayload)
+      const sent = queueLiveInputControl(handle, bytes)
       clearHeldCommitTimer()
       heldLiveInputTextRef.current = ''
       liveInputComposingRef.current = undefined
@@ -212,7 +226,13 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       writeTerminalLiveInputText(liveInputRef, '')
       return sent
     },
-    [clearHeldCommitTimer, liveInputRef, sendQueuedMirrorPayload, setLiveInputCapture]
+    [
+      clearHeldCommitTimer,
+      liveInputRef,
+      queueLiveInputControl,
+      sendQueuedMirrorPayload,
+      setLiveInputCapture
+    ]
   )
 
   useEffect(() => {
@@ -237,6 +257,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
+    queueLiveInputControl,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }

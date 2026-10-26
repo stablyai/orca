@@ -202,6 +202,12 @@ function pressControl(): KeyboardEvent {
   return event
 }
 
+function pressEnter(): void {
+  liveField.dispatchEvent(
+    new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertLineBreak' })
+  )
+}
+
 function holdAcknowledgement(): () => void {
   let release = (): void => {}
   const pending = new Promise<void>((resolve) => {
@@ -233,6 +239,28 @@ describe('keyboard controls through the live pending-text queue', () => {
     expect(mocks.sent.map((send) => send.text)).toEqual(['hello', '\x03'])
     act(() => renderer?.unmount())
     expect(pressControl().defaultPrevented).toBe(false)
+  })
+
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', expected: 'hello\x03x' },
+    { key: 'Enter', press: pressEnter, fieldAfter: 'x', expected: 'hello\rx' }
+  ])('keeps text typed right after $key behind it', async ({ press, fieldAfter, expected }) => {
+    mocks.sent.length = 0
+    const release = holdAcknowledgement()
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(LiveHarness, { session: READY }))
+    })
+    await act(async () => {
+      changeLiveText('hello')
+      press()
+      changeLiveText(fieldAfter)
+    })
+    await act(async () => {
+      release()
+    })
+    expect(mocks.sent.map((send) => send.text).join('')).toBe(expected)
+    act(() => renderer?.unmount())
   })
 
   it.each(['terminal switch', 'disconnect and reconnect'] as const)(
