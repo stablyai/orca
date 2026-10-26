@@ -13,6 +13,7 @@ import {
 } from './helpers/client-hosted-browser-fixture'
 
 test('annotates an element of a client-hosted browser page', async ({ testRepoPath }, testInfo) => {
+  // Launches a headless host and a paired Electron client before the annotation flow.
   test.setTimeout(300_000)
   const fixture = await startClientHostedMarkerFixture({
     created: 'Client-hosted annotation',
@@ -32,17 +33,12 @@ test('annotates an element of a client-hosted browser page', async ({ testRepoPa
     const browser = await openClientHostedFixturePage(client, worktreeId, fixture.markerUrl)
     const target = { urlPrefix: fixture.origin, remotePageId: browser.remotePageId }
     await waitForRenderedClientWebview(client.page, target, 'client-hosted fixture never rendered')
-    // Why a loop: first-run tours can stack, and one left open covers the guest.
-    const gotIt = client.page.getByRole('button', { name: 'Got it', exact: true })
-    await expect(gotIt.first()).toBeVisible()
-    for (let attempt = 0; attempt < 5 && (await gotIt.count()) > 0; attempt += 1) {
-      await gotIt
-        .first()
-        .click({ timeout: 5_000 })
-        .catch(() => {})
-      await client.page.waitForTimeout(300)
-    }
-    await expect(gotIt).toHaveCount(0)
+    const browserTour = client.page.getByRole('dialog', {
+      name: 'This page renders on your desktop',
+      exact: true
+    })
+    await browserTour.getByRole('button', { name: 'Got it', exact: true }).click()
+    await expect(browserTour).toBeHidden()
 
     const annotate = client.page.getByRole('button', { name: 'Annotate page element', exact: true })
     await expect(client.page.getByRole('button', { name: 'Grab page element' })).toBeEnabled()
