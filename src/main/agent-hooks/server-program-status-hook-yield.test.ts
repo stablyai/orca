@@ -48,6 +48,14 @@ async function openCodeHook(hookEventName: string): Promise<void> {
   expect(response.status).toBe(204)
 }
 
+async function antigravityHook(
+  hookEventName: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  const body = Object.assign(buildBody(payload), { hook_event_name: hookEventName })
+  expect((await postHookEvent(server, body, '/hook/antigravity')).status).toBe(204)
+}
+
 function paneRow() {
   return server.getStatusSnapshotForPane(PANE)[0]
 }
@@ -113,31 +121,28 @@ describe('OSC 7501 status beside hooks', () => {
   })
 
   // #33973: agy reports its own turn over OSC 7501 but never the in-process subagents it waits on.
-  it('keeps an Antigravity parent working past the silence fallback while its subagents run', async () => {
-    const parent = { conversationId: 'parent', lastUserInput: 'translate' }
-    const antigravityHook = async (
-      hookEventName: string,
-      payload: Record<string, unknown>
-    ): Promise<void> => {
-      const body = Object.assign(buildBody(payload), { hook_event_name: hookEventName })
-      expect((await postHookEvent(server, body, '/hook/antigravity')).status).toBe(204)
+  it.each([true, false])(
+    'keeps live Antigravity children past root done (mainAgent=%s)',
+    async (withMainAgent) => {
+      const parent = { conversationId: 'parent', lastUserInput: 'translate' }
+      await antigravityHook('PreInvocation', parent)
+      await antigravityHook('Stop', { ...parent, fullyIdle: false })
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      programStatus({
+        state: 'done',
+        agentType: 'antigravity',
+        mainAgent: withMainAgent
+          ? { state: 'done', outcome: 'success', stateStartedAt: Date.now() }
+          : undefined
+      })
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+      vi.useRealTimers()
+      await antigravityHook('PreInvocation', parent)
+      await antigravityHook('Stop', { ...parent, fullyIdle: true })
+      expect(paneRow()?.state).toBe('done')
     }
-    await antigravityHook('PreInvocation', parent)
-    await antigravityHook('Stop', { ...parent, fullyIdle: false })
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    programStatus({
-      state: 'done',
-      agentType: 'antigravity',
-      lastAssistantMessage: 'Launched the subagents; waiting for them',
-      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: Date.now() }
-    })
-    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
-    expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
-    vi.useRealTimers()
-    await antigravityHook('PreInvocation', parent)
-    await antigravityHook('Stop', { ...parent, fullyIdle: true })
-    expect(paneRow()?.state).toBe('done')
-  })
+  )
 
   it('keeps a completed Antigravity transcript settled after a delayed busy Stop', async () => {
     const parent = {
@@ -145,14 +150,10 @@ describe('OSC 7501 status beside hooks', () => {
       lastUserInput: 'translate',
       transcriptPath: join(dir, 'parent.jsonl')
     }
-    const hook = async (hookEventName: string, payload: Record<string, unknown> = parent) => {
-      const body = Object.assign(buildBody(payload), { hook_event_name: hookEventName })
-      expect((await postHookEvent(server, body, '/hook/antigravity')).status).toBe(204)
-    }
-    await hook('PreInvocation')
-    await hook('Stop', { ...parent, fullyIdle: true })
+    await antigravityHook('PreInvocation', parent)
+    await antigravityHook('Stop', { ...parent, fullyIdle: true })
     expect(paneRow()?.state).toBe('done')
-    await hook('Stop', { ...parent, fullyIdle: false })
+    await antigravityHook('Stop', { ...parent, fullyIdle: false })
     expect(paneRow()?.state).toBe('done')
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     programStatus({
@@ -163,10 +164,10 @@ describe('OSC 7501 status beside hooks', () => {
     vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
     expect(paneRow()?.state).toBe('done')
     vi.useRealTimers()
-    await hook('PreInvocation')
-    await hook('Stop', { ...parent, fullyIdle: false })
+    await antigravityHook('PreInvocation', parent)
+    await antigravityHook('Stop', { ...parent, fullyIdle: false })
     expect(paneRow()?.state).toBe('working')
-    await hook('PreInvocation')
+    await antigravityHook('PreInvocation', parent)
     expect(paneRow()).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     programStatus({ state: 'done', agentType: 'antigravity' })

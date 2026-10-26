@@ -3,6 +3,9 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
+import { resolveCancelVerdictLatch } from '../../shared/agent-hook-cancel-verdict-latch'
+import { AGENT_TURN_OUTCOMES } from '../../shared/agent-turn-outcome'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -44,6 +47,39 @@ describe('main agent turn verdicts and clocks', () => {
     const response = await postHookEvent(server, buildBody(payload), path)
     expect(response.status).toBe(204)
   }
+
+  it('holds only unknown validated outcomes inside the existing cancellation window', () => {
+    const event = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      connectionId: null,
+      source: 'grok' as const,
+      hookEventName: 'stop',
+      payload: normalizeAgentStatusPayload({
+        state: 'done',
+        prompt: 'go',
+        agentType: 'grok',
+        interrupted: true,
+        mainAgent: { state: 'done', stateStartedAt: 1, outcome: 'cancellation' }
+      })!
+    }
+    const previous = { ...event, receivedAt: Date.now() }
+    const unknown = [undefined, 'newer-outcome', 42]
+    for (const outcome of [...unknown, ...AGENT_TURN_OUTCOMES]) {
+      const payload = normalizeAgentStatusPayload({
+        ...event.payload,
+        interrupted: undefined,
+        mainAgent: { state: 'done', stateStartedAt: 1, outcome }
+      })!
+      const incoming = { ...event, payload }
+      expect(resolveCancelVerdictLatch(previous, incoming, previous.receivedAt).hold).toBe(
+        unknown.includes(outcome)
+      )
+      expect(resolveCancelVerdictLatch(previous, incoming, previous.receivedAt + 15_001).hold).toBe(
+        false
+      )
+    }
+  })
 
   it('starts a new Claude session with its own main agent clock', async () => {
     await post('/hook/claude', { hook_event_name: 'UserPromptSubmit', prompt: 'first' })

@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
+import { agentVerdictDisplayMark } from '../../shared/agent-main-agent-verdict'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -161,6 +163,98 @@ describe('the host-stamped turn end', () => {
     await vi.waitFor(() => expect(row()?.lastAssistantMessage).toBe('Tests pass.'))
     expect(row()).toMatchObject({ turnEndedAt: ended, turnEndDisposition: 'identified' })
   })
+
+  it.each(['desktop', 'relay'])(
+    'recovers final text, supersedes retries and retains inferred cancellation through %s',
+    async (route) => {
+      const relay = new RelayAgentHookServer({
+        endpointDir: join(directory, 'relay'),
+        forward: (event) => server.ingestRemote(event, 'connection')
+      })
+      await relay.start()
+      const transcriptPath = join(directory, 'antigravity-final.jsonl')
+      const parent = { conversationId: 'parent', transcriptPath, lastUserInput: 'Translate it' }
+      const hook = async (hook_event_name: string) => {
+        if (vi.isFakeTimers()) {
+          vi.advanceTimersByTime(1)
+        }
+        const response = await postHookEvent(
+          route === 'desktop' ? server : relay,
+          buildBody({
+            hook_event_name,
+            ...parent,
+            fullyIdle: true,
+            terminationReason: 'NO_TOOL_CALL'
+          }),
+          '/hook/antigravity'
+        )
+        expect(response.status).toBe(204)
+      }
+      const request = `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: parent.lastUserInput })}\n`
+      const flush = (content: string) =>
+        writeFileSync(
+          transcriptPath,
+          `${request}${JSON.stringify({ source: 'MODEL', type: 'PLANNER_RESPONSE', content })}\n`
+        )
+      writeFileSync(transcriptPath, request)
+      try {
+        await hook('PreInvocation')
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+        await hook('Stop')
+        const ended = row()!
+        expect(ended).toMatchObject({ state: 'done', turnEndDisposition: 'identified' })
+        expect(ended.lastAssistantMessage).toBeUndefined()
+        flush('PARENT_FINAL_REPORT')
+        vi.advanceTimersByTime(300)
+        expect(row()).toMatchObject({
+          turnEndedAt: ended.turnEndedAt,
+          stateStartedAt: ended.stateStartedAt,
+          lastAssistantMessage: 'PARENT_FINAL_REPORT'
+        })
+        expect(row()?.mainAgent).toEqual(ended.mainAgent)
+        writeFileSync(transcriptPath, request)
+        await hook('PreInvocation')
+        await hook('Stop')
+        const supersededEnd = row()?.turnEndedAt
+        await hook('PreInvocation')
+        flush('OLD_REPORT')
+        vi.advanceTimersByTime(300)
+        expect(row()).toMatchObject({ state: 'working' })
+        expect(row()?.lastAssistantMessage).toBeUndefined()
+        flush('NEW_REPORT')
+        await hook('Stop')
+        expect(row()).toMatchObject({ state: 'done', lastAssistantMessage: 'NEW_REPORT' })
+        expect(row()?.turnEndedAt).toBeGreaterThan(supersededEnd!)
+        writeFileSync(transcriptPath, request)
+        await hook('PreInvocation')
+        const baseline = row()!
+        vi.advanceTimersByTime(500)
+        expect(
+          server.inferInterrupt({
+            paneKey: PANE,
+            baselineUpdatedAt: baseline.receivedAt,
+            baselineStateStartedAt: baseline.stateStartedAt,
+            baselinePrompt: baseline.prompt,
+            baselineAgentType: 'antigravity',
+            intent: 'ctrl-c'
+          })
+        ).toBe(true)
+        expect(agentVerdictDisplayMark(row()!)).toBe('interrupted')
+        flush('DELAYED_STOP')
+        await hook('Stop')
+        expect(agentVerdictDisplayMark(row()!)).toBe('interrupted')
+        await hook('PreInvocation')
+        expect(row()).toMatchObject({ state: 'working' })
+        flush('NEXT_RESULT')
+        await hook('Stop')
+        expect(row()).toMatchObject({ state: 'done', lastAssistantMessage: 'NEXT_RESULT' })
+        expect(agentVerdictDisplayMark(row()!)).toBeNull()
+      } finally {
+        vi.useRealTimers()
+        relay.stop()
+      }
+    }
+  )
 
   it('reaches the live push and survives a host restart, so a restatement stays the same end', async () => {
     const pushed: (number | undefined)[] = []

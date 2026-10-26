@@ -16,6 +16,14 @@ import { makePaneKey } from './stable-pane-id'
 
 const PANE = makePaneKey('tab-hooks', '11111111-1111-4111-8112-111111111111')
 const MOVED_PANE = makePaneKey('tab-hooks', '22222222-2222-4222-8222-222222222222')
+function agyLead(state: ReturnType<typeof createHookListenerState>, paneKey = PANE) {
+  return normalizeHookPayload(
+    state,
+    'antigravity',
+    { paneKey, hook_event_name: 'PostInvocation', payload: {} },
+    'production'
+  )?.payload.mainAgent
+}
 function normalizeProviderState(
   source: AgentHookSource,
   eventName: string,
@@ -181,6 +189,7 @@ describe('agent hook extraction boundaries', () => {
       set.add(sibling)
     }
 
+    state.antigravityMainAgentStatusByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     movePaneCacheState(state, PANE, MOVED_PANE)
 
     for (const map of paneMaps) {
@@ -206,6 +215,8 @@ describe('agent hook extraction boundaries', () => {
 
     movePaneCacheState(state, MOVED_PANE, MOVED_PANE)
     expect((state.lastPromptByPaneKey as Map<string, unknown>).get(MOVED_PANE)).toBe('exact')
+    expect(agyLead(state, MOVED_PANE)).toEqual({ state: 'working', stateStartedAt: 1 })
+    expect(agyLead(state)?.stateStartedAt).not.toBe(1)
   })
 
   it('preserves bound OpenCode session ownership and launch identity after a pane move', () => {
@@ -275,6 +286,7 @@ describe('agent hook extraction boundaries', () => {
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
+    state.antigravityMainAgentStatusByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     clearPaneCacheState(state, PANE)
 
     for (const map of paneMaps) {
@@ -292,6 +304,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.claudeLeadStateByPaneKey.has(PANE)).toBe(false)
     expect(state.codexLeadStateByPaneKey.has(PANE)).toBe(false)
     expect(state.grokActiveTurnByPaneKey.has(PANE)).toBe(false)
+    expect(agyLead(state)?.stateStartedAt).not.toBe(1)
   })
 
   it('preserves cache mutation from a provider reset that emits no row', () => {
@@ -304,6 +317,7 @@ describe('agent hook extraction boundaries', () => {
       payload: { state: 'working', prompt: 'old status' }
     })
 
+    state.antigravityMainAgentStatusByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     const event = normalizeHookPayload(
       state,
       'droid',
@@ -315,6 +329,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
     expect(state.lastToolByPaneKey.has(PANE)).toBe(false)
     expect(state.lastStatusByPaneKey.has(PANE)).toBe(true)
+    expect(agyLead(state)?.stateStartedAt).not.toBe(1)
   })
 
   it('clears warning, provider, and lifecycle caches together', () => {
@@ -348,6 +363,7 @@ describe('agent hook extraction boundaries', () => {
       toolName: 'stale-tool'
     })
 
+    state.antigravityMainAgentStatusByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     clearAllListenerCaches(state)
 
     expect(state.warnedVersions.size).toBe(0)
@@ -359,5 +375,6 @@ describe('agent hook extraction boundaries', () => {
     const afterReset = normalizeHookPayload(state, 'muse', notification, 'production')
     expect(afterReset?.payload).toMatchObject({ state: 'waiting', agentType: 'muse' })
     expect(afterReset?.payload.toolName).toBeUndefined()
+    expect(agyLead(state)?.stateStartedAt).not.toBe(1)
   })
 })

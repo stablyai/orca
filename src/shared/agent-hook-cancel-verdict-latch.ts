@@ -1,5 +1,6 @@
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import type { AgentMainAgentStatus } from './agent-status-types'
+import { isAgentTurnOutcome } from './agent-turn-outcome'
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
 
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
@@ -105,7 +106,8 @@ export function resolveCancelVerdictLatch(
     !isCancelVerdictLatched(previous) ||
     previous.payload.agentType !== incoming.payload.agentType ||
     restatesAnotherPrompt(previous, incoming) ||
-    incoming.payload.mainAgent?.state === 'done' ||
+    (incoming.payload.mainAgent?.state === 'done' &&
+      isAgentTurnOutcome(incoming.payload.mainAgent.outcome)) ||
     opensNewTurn(incoming)
   ) {
     return apply

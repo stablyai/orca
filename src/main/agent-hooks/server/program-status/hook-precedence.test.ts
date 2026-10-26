@@ -80,11 +80,10 @@ describe('programStatusHookYieldEndsAt', () => {
     expect(programStatusHookYieldEndsAt(hook, heldOpen, NOW + 1)).toBe(Infinity)
   })
 
-  it("never lets a program's own done settle a turn the hooks hold open for children", () => {
+  it('keeps finite session and other-agent fallback when the lead is done', () => {
     const leadDone = { state: 'done' as const, outcome: 'success' as const, stateStartedAt: NOW }
     const hook = row({ state: 'working', agentType: 'antigravity', mainAgent: leadDone })
     const done = report({ state: 'done', agentType: 'antigravity', mainAgent: leadDone })
-    expect(programStatusHookYieldEndsAt(hook, done)).toBe(Infinity)
     // A program that ended, or another app's report, keeps the silence fallback.
     expect(
       programStatusHookYieldEndsAt(hook, { ...done, mainAgent: undefined, sessionBoundary: true })

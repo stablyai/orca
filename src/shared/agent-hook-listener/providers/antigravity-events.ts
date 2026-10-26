@@ -44,17 +44,18 @@ export function normalizeAntigravityEvent(
   ) {
     state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
   }
+  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
     transcriptPath &&
-    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
+    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath &&
+    (eventName !== 'Stop' || stopStillBusy)
   ) {
-    // Completed turns ignore delayed hooks until the next PreInvocation opens a turn.
+    // Completed turns admit idle Stop text enrichment but cannot reopen from delayed hooks.
     return null
   }
 
-  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   const leadState =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'

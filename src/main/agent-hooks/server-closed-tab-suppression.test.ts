@@ -81,6 +81,10 @@ describe('AgentHookServer listener replay', () => {
       state.lastPromptByPaneKey.set(PANE, 'cached prompt')
       state.lastToolByPaneKey.set(`${sameTabPane}\0tool`, {} as never)
       state.antigravityCompletedTranscriptByPaneKey.set(`${sameTabPane}\0done`, 'cached')
+      state.antigravityMainAgentStatusByPaneKey.set(`${sameTabPane}\0lead`, {
+        state: 'working',
+        stateStartedAt: 1
+      })
       state.ampCompletedCacheKeys.add(`${sameTabPane}\0amp`)
       state.lastPromptByPaneKey.set(siblingPrefixPane, 'sibling prompt')
       internals.assistantMessageRetryTimers.set(PANE, setTimeout(sameTabRetry, 1_000))
@@ -100,6 +104,7 @@ describe('AgentHookServer listener replay', () => {
       expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
       expect(state.lastToolByPaneKey.has(`${sameTabPane}\0tool`)).toBe(false)
       expect(state.antigravityCompletedTranscriptByPaneKey.has(`${sameTabPane}\0done`)).toBe(false)
+      expect(state.antigravityMainAgentStatusByPaneKey.has(`${sameTabPane}\0lead`)).toBe(false)
       expect(state.ampCompletedCacheKeys.has(`${sameTabPane}\0amp`)).toBe(false)
       expect(state.lastPromptByPaneKey.get(siblingPrefixPane)).toBe('sibling prompt')
       expect(internals.assistantMessageRetryTimers.has(PANE)).toBe(false)

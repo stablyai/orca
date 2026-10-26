@@ -48,7 +48,7 @@ export function recentTs(offsetMs = 0): number {
 }
 
 export async function postHookEvent(
-  server: AgentHookServer,
+  server: Pick<AgentHookServer, 'buildPtyEnv'>,
   body: Body,
   path: string = '/hook/claude'
 ): Promise<Response> {
