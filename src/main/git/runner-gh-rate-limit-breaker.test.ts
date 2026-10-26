@@ -149,8 +149,8 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     await expect(
       ghExecFileAsync(['pr', 'view', '12', '--repo', 'a/b', '--json', 'number'])
     ).rejects.toThrow('rate limit')
-    expect(getGhRateLimitBlockedUntilMs('graphql', Date.now())).not.toBeNull()
-    expect(getGhRateLimitBlockedUntilMs('core', Date.now())).toBeNull()
+    expect(getGhRateLimitBlockedUntilMs('graphql')).not.toBeNull()
+    expect(getGhRateLimitBlockedUntilMs('core')).toBeNull()
 
     await expect(
       ghExecFileAsync(['issue', 'close', '5', '--repo', 'a/b'], { idempotent: false })
