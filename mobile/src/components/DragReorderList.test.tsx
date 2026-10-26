@@ -349,7 +349,9 @@ it('mounts an appended row in its own slot instead of at the top', async () => {
   await fixture.updateItems(['a', 'b', 'c'])
   const rowTops = fixture.root.root
     .findAllByType('AnimatedView')
-    .flatMap((node) => (Array.isArray(node.props.style) ? [node.props.style[2].top] : []))
+    .flatMap((node) =>
+      Array.isArray(node.props.style) ? [Object.assign({}, ...node.props.style).top] : []
+    )
   expect(rowTops).toEqual([0, 72, 144])
   await act(async () => fixture.root.unmount())
 })
