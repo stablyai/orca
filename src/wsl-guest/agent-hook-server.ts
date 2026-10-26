@@ -19,18 +19,12 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 import {
-  ORCA_HOOK_PROTOCOL_VERSION,
-  ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../shared/agent-hook-types'
-import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState
 } from '../shared/agent-hook-listener/listener-state'
-import {
-  getEndpointFileName,
-  writeEndpointFile
-} from '../shared/agent-hook-listener/endpoint-publication'
+import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
+import { publishRelayHookEndpoint } from './agent-hook-endpoint-publication'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import {
   createHookTransportInterferenceTracker,
@@ -103,6 +97,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       state: this.state,
       env: this.env,
       isListening: () => this.server !== null,
+      getAgentLaunchToken: this.getAgentLaunchToken,
       applyEvent: (event, source, env, version) =>
         this.applyEvent(event, source, env, version, { checkPresence: false })
     })
@@ -142,8 +137,9 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
           providerNormalization: this.providerNormalization,
           checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
           isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+          isCanonicalPane: (paneKey) => this.isCanonicalPane(paneKey),
           getAgentLaunchToken: this.getAgentLaunchToken,
-          applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
+          applyEvent: this.applyEvent.bind(this),
           ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
           retryScheduler: this.retryScheduler,
           transportInterference: this.transportInterference
@@ -168,18 +164,13 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   }
 
   publishEndpointFile(): boolean {
-    if (this.port <= 0 || !this.token) {
-      this.endpointFileWritten = false
-      return false
-    }
-    this.endpointFileWritten = writeEndpointFile(this.endpointDir, this.endpointFilePath, {
-      port: this.port,
-      token: this.token,
-      env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION,
-      openCodeTui: true,
-      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
-    })
+    this.endpointFileWritten = publishRelayHookEndpoint(
+      this.endpointDir,
+      this.endpointFilePath,
+      this.port,
+      this.token,
+      this.env
+    )
     return this.endpointFileWritten
   }
 
@@ -285,9 +276,9 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+    options: { isReplay?: boolean; checkPresence?: boolean; onCommitted?: () => void } = {}
   ): AgentHookEventPayload | undefined {
-    return applyRelayHookEvent(
+    const event = applyRelayHookEvent(
       {
         state: this.state,
         metadata: this.lastEnvelopeMetaByPaneKey,
@@ -305,6 +296,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       version,
       options
     )
+    this.retryScheduler.armJcodeSubagentExpiry(event, env, version)
+    return event
   }
 
   private ingestSpoolRecord(record: SpoolRecord, isCurrent: () => boolean): Promise<void> | void {
@@ -312,7 +305,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       providerNormalization: this.providerNormalization,
       checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
       isCurrent,
-      apply: (...args) => this.applyEvent(...args, { isReplay: true }),
+      apply: this.applyEvent.bind(this),
+      isCanonicalPane: (paneKey) => this.isCanonicalPane(paneKey),
       isPaneSurfaceRetired: this.isPaneSurfaceRetired,
       getAgentLaunchToken: this.getAgentLaunchToken
     })

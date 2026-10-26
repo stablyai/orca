@@ -13,7 +13,7 @@ export function isJcodeUserInputTool(toolName: string | undefined): boolean {
 }
 
 /** jcode's `tool_input` field is the tool's argument JSON as a string. */
-function parseJcodeToolInput(hookPayload: Record<string, unknown>): unknown {
+export function parseJcodeToolInput(hookPayload: Record<string, unknown>): unknown {
   const raw = readString(hookPayload, 'tool_input')
   if (raw === undefined) {
     return undefined

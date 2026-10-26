@@ -2,7 +2,6 @@ import type {
   AgentProcessPresence,
   AgentProcessVerdict
 } from '../../../shared/agent-process-presence'
-import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
 import {
@@ -52,8 +51,9 @@ import type {
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { AgentHookServerTransportState } from './server-transport-state'
 
-export abstract class AgentHookServerState {
+export abstract class AgentHookServerState extends AgentHookServerTransportState {
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,
@@ -95,9 +95,6 @@ export abstract class AgentHookServerState {
     this.canonicalListingOrder.clear()
     this.canonicalSubjectsByPane.clear()
   }
-  protected server: ReturnType<typeof createServer> | null = null
-  protected port = 0
-  protected token = ''
   // Detect cross-talk between dev and packaged hook endpoints.
   protected env = 'production'
   protected onAgentStatus: ServerAgentStatusListener = null
@@ -122,7 +119,6 @@ export abstract class AgentHookServerState {
   // start() supplies paths so the hook server has no Electron dependency.
   protected endpointDir: string | null = null
   protected endpointFilePathCache: string | null = null
-  protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
     isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
@@ -184,6 +180,11 @@ export abstract class AgentHookServerState {
   protected abstract clearTmuxInnerSubjects(paneKey: string): void
   protected abstract clearTmuxTabSubjects(tabId: string): void
   protected abstract ingestSpoolRecord(record: SpoolRecord): Promise<void> | void
+  protected abstract normalizeLocalHookPayload(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay?: boolean
+  ): NormalizedLocalHook
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {
     statuses: AgentHookStatusChangeEntry[]
@@ -234,7 +235,9 @@ export abstract class AgentHookServerState {
     onAccepted?: () => void,
     origin?: AgentStatusObservationOrigin,
     observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    newRun?: boolean,
+    onCommitted?: () => void
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
@@ -267,10 +270,6 @@ export abstract class AgentHookServerState {
   protected abstract revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean
   protected abstract resolvePaneKeyAlias(paneKey: string): string
   protected abstract normalizeHookBodyPaneKeyAlias(body: unknown): unknown
-  protected abstract normalizeLocalHookPayload(
-    source: AgentHookSource,
-    body: unknown
-  ): NormalizedLocalHook
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -316,8 +315,4 @@ export abstract class AgentHookServerState {
   protected abstract scheduleStatusPersist(): void
   protected abstract runStatusPersist(): void
   protected abstract primeStatusPersistBaseline(onDiskJson: string): void
-
-  abstract _getStateForTests(): HookListenerState
-  abstract _resetPromptSentDedupeForTests(): void
-  abstract _resetConnectionTimestampWatermarksForTests(): void
 }

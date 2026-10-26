@@ -9,6 +9,7 @@ export function installPtySpawnIpcHandler(deps: PtySpawnIpcDeps): void {
   const { getLocalPtyStartupPromise } = deps
 
   ipcMain.handle('pty:spawn', async (_event, args: PtySpawnIpcArgs) => {
+    args = { ...args, jcodeRuntimeDirOverride: undefined }
     const startupPromise = getLocalPtyStartupPromise(
       getConnectionExecutionHostId(args.connectionId)
     )

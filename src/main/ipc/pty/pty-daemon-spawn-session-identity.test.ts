@@ -15,6 +15,13 @@ import {
   JCODE_RUNTIME_DIR_ENV_KEY,
   shouldInjectJcodeRuntimeDir
 } from '../../../shared/jcode-runtime-dir'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile, access } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { getJcodeSpawnScriptPath } from '../../jcode/hook-settings'
+import * as windowSpawn from './ipc/spawn-run'
+import { createDaemonPtyEnvironment } from '../../daemon/pty-subprocess/spawn-environment'
 
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -512,6 +519,186 @@ describe('registerPtyHandlers', () => {
             : controller!.spawn({ cols: 80, rows: 24, ...request })
       }
     }
+
+    it.each(['window', 'host'] as const)(
+      '%s daemon spawn delivers managed authority and respects caller hooks',
+      async (lane) => {
+        const home = await mkdtemp(join(tmpdir(), 'orca-jcode-daemon-'))
+        vi.stubEnv('HOME', home)
+        vi.stubEnv('USERPROFILE', home)
+        try {
+          const script = getJcodeSpawnScriptPath()
+          await mkdir(dirname(script), { recursive: true })
+          await writeFile(script, '')
+          const lanes = startLanes()
+          const tabId = 'tab-hook'
+          const leafId = randomUUID()
+          await lanes.spawn(lane, { env: {}, tabId, leafId })
+          const env = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+          expect(env.JCODE_SPAWN_HOOK).toBe(`'${script}'`)
+          const { verifyJcodePaneSecret } = await import('../../jcode/jcode-pane-secrets')
+          expect(
+            verifyJcodePaneSecret(`${tabId}:${leafId}`, env.ORCA_JCODE_PANE_SECRET ?? '')
+          ).toBe(true)
+          const delivered = createDaemonPtyEnvironment({
+            sessionId: 'daemon-delivery',
+            cols: 80,
+            rows: 24,
+            env
+          })
+          expect(delivered.JCODE_SPAWN_HOOK).toBe(`'${script}'`)
+          expect(
+            verifyJcodePaneSecret(`${tabId}:${leafId}`, delivered.ORCA_JCODE_PANE_SECRET ?? '')
+          ).toBe(true)
+          for (const hook of ['', 'user-hook']) {
+            await lanes.spawn(lane, {
+              env: { JCODE_SPAWN_HOOK: hook },
+              tabId,
+              leafId: randomUUID()
+            })
+            const callerEnv = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+            expect(callerEnv.JCODE_SPAWN_HOOK).toBe(hook)
+            expect(callerEnv.ORCA_JCODE_PANE_SECRET === undefined).toBe(true)
+          }
+          await lanes.spawn(lane, { env: { ORCA_JCODE_PANE_SECRET: randomUUID() } })
+          expect(
+            lanes.daemonSpawn.mock.calls.at(-1)![0].env.ORCA_JCODE_PANE_SECRET === undefined
+          ).toBe(true)
+          vi.stubEnv('ORCA_JCODE_PANE_SECRET', randomUUID())
+          expect(
+            createDaemonPtyEnvironment({ sessionId: 'daemon-inherited', cols: 80, rows: 24 })
+              .ORCA_JCODE_PANE_SECRET === undefined
+          ).toBe(true)
+          await rm(script)
+          await lanes.spawn(lane, { env: {}, tabId, leafId: randomUUID() })
+          const absentEnv = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+          expect(absentEnv.JCODE_SPAWN_HOOK).toBeUndefined()
+          expect(absentEnv.ORCA_JCODE_PANE_SECRET === undefined).toBe(true)
+        } finally {
+          vi.unstubAllEnvs()
+          await rm(home, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it.each(['window', 'host'] as const)(
+      '%s lane refuses SSH before exporting local authority',
+      async (lane) => {
+        const lanes = startLanes()
+        await expect(
+          lanes.spawn(lane, {
+            env: {},
+            connectionId: 'ssh:x',
+            tabId: 'tab-ssh',
+            leafId: randomUUID()
+          })
+        ).rejects.toThrow(/No PTY provider/)
+        expect(lanes.daemonSpawn).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['window', 'host'] as const)(
+      '%s WSL lane does not stamp the Windows spawn hook',
+      async (lane) => {
+        const home = await mkdtemp(join(tmpdir(), 'orca-jcode-wsl-'))
+        vi.stubEnv('HOME', home)
+        vi.stubEnv('USERPROFILE', home)
+        const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+        try {
+          const script = getJcodeSpawnScriptPath()
+          await mkdir(dirname(script), { recursive: true })
+          await writeFile(script, '')
+          const lanes = startLanes()
+          await lanes.spawn(lane, {
+            env: {},
+            cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u',
+            shellOverride: 'wsl.exe',
+            tabId: 'tab-wsl',
+            leafId: randomUUID()
+          })
+          const env = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+          expect(env.JCODE_SPAWN_HOOK).toBeUndefined()
+          expect(env.ORCA_JCODE_PANE_SECRET === undefined).toBe(true)
+        } finally {
+          if (platform) {
+            Object.defineProperty(process, 'platform', platform)
+          }
+          vi.unstubAllEnvs()
+          await rm(home, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it.each(['window', 'host'] as const)(
+      '%s main spawn uses the root runtime dir without creating it',
+      async (lane) => {
+        const root = await mkdtemp(join(tmpdir(), 'orca-jcode-root-'))
+        const runtimeDir = join(root, 'already-owned-by-root')
+        const lanes = startLanes()
+        const request = {
+          env: {},
+          tabId: 'tab-child',
+          leafId: randomUUID(),
+          jcodeRuntimeDirOverride: runtimeDir
+        }
+        try {
+          if (lane === 'window') {
+            const run = vi.spyOn(windowSpawn, 'runPtyIpcSpawn')
+            try {
+              await lanes.spawn('window', { env: {} })
+              const deps = run.mock.calls.at(-1)?.[0]
+              if (!deps) {
+                throw new Error('Window spawn dependencies unavailable')
+              }
+              await windowSpawn.runPtyIpcSpawn(deps, { cols: 80, rows: 24, ...request })
+            } finally {
+              run.mockRestore()
+            }
+          } else {
+            await lanes.spawn(lane, request)
+          }
+          expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.JCODE_RUNTIME_DIR).toBe(
+            shouldInjectJcodeRuntimeDir(process.platform) ? runtimeDir : undefined
+          )
+          await expect(access(runtimeDir)).rejects.toThrow()
+        } finally {
+          await rm(root, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it('ignores runtime-dir overrides from renderer callers', async () => {
+      const lanes = startLanes()
+      const leafId = randomUUID()
+      await lanes.spawn('window', {
+        env: {},
+        tabId: 'tab-untrusted',
+        leafId,
+        jcodeRuntimeDirOverride: '/tmp/orca-jcode/rootdir'
+      })
+      expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.JCODE_RUNTIME_DIR).toBe(
+        shouldInjectJcodeRuntimeDir(process.platform)
+          ? buildJcodeRuntimeDir(`tab-untrusted:${leafId}`)
+          : undefined
+      )
+    })
+
+    it.each(['relative', '', `/tmp/${'x'.repeat(4096)}`, '/tmp/root\0dir'])(
+      'refuses an invalid main runtime-dir override %#',
+      async (jcodeRuntimeDirOverride) => {
+        const lanes = startLanes()
+        await expect(
+          lanes.spawn('host', {
+            env: {},
+            tabId: 'tab-invalid',
+            leafId: randomUUID(),
+            jcodeRuntimeDirOverride
+          })
+        ).rejects.toThrow(/runtime dir/i)
+        expect(lanes.daemonSpawn).not.toHaveBeenCalled()
+      }
+    )
 
     // Only the id this request minted is swept; an operation id or caller id may name a live PTY.
     it.each([

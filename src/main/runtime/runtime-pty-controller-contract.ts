@@ -76,6 +76,8 @@ export type RuntimePtyController = {
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
+    /** Main-internal; never accepted from renderer or RPC params. */
+    jcodeRuntimeDirOverride?: string
     resumeProviderSession?: AgentProviderSessionMetadata
     resumeOrigin?: 'saved'
     telemetry?: WorktreeStartupLaunch['telemetry']

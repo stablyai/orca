@@ -21,10 +21,11 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
 import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from './host-env/codex-terminal-clipboard'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { getJcodeSpawnScriptPath } from '../../jcode/hook-settings'
 
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -402,6 +403,104 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
     })
+
+    it.each([
+      { lane: 'window', env: {} },
+      { lane: 'host', env: {} },
+      { lane: 'window', env: undefined },
+      { lane: 'host', env: undefined }
+    ] as const)(
+      '$lane local spawn stamps jcode authority only with caller env=$env',
+      async ({ lane, env: callerEnv }) => {
+        const home = await mkdtemp(join(tmpdir(), 'orca-jcode-local-'))
+        vi.stubEnv('HOME', home)
+        vi.stubEnv('USERPROFILE', home)
+        try {
+          const script = getJcodeSpawnScriptPath()
+          await mkdir(dirname(script), { recursive: true })
+          await writeFile(script, '')
+          const runtime = new OrcaRuntimeService()
+          const installed = vi.spyOn(runtime, 'setPtyController')
+          registerPtyHandlers(mainWindow, runtime)
+          const request = {
+            cols: 80,
+            rows: 24,
+            env: callerEnv,
+            tabId: 'tab-hook',
+            leafId: randomUUID()
+          }
+          const controller = installed.mock.calls.at(-1)?.[0]
+          if (lane === 'host') {
+            if (!controller?.spawn) {
+              throw new Error('Runtime controller was not installed')
+            }
+            await controller.spawn(request)
+          } else {
+            await handlers.get('pty:spawn')!(null, request)
+          }
+          const env = spawnMock.mock.calls.at(-1)?.[2]?.env ?? {}
+          if (callerEnv === undefined) {
+            for (const key of [
+              'ORCA_PANE_KEY',
+              'JCODE_SPAWN_HOOK',
+              'ORCA_JCODE_PANE_SECRET',
+              'JCODE_RUNTIME_DIR'
+            ]) {
+              expect(Object.hasOwn(env, key)).toBe(false)
+            }
+            return
+          }
+          expect(env.JCODE_SPAWN_HOOK).toBe(`'${script}'`)
+          const { verifyJcodePaneSecret } = await import('../../jcode/jcode-pane-secrets')
+          expect(
+            verifyJcodePaneSecret(
+              makePaneKey(request.tabId, request.leafId),
+              env.ORCA_JCODE_PANE_SECRET ?? ''
+            )
+          ).toBe(true)
+        } finally {
+          vi.unstubAllEnvs()
+          await rm(home, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it('strips an inherited pane secret from a local spawn without identity', async () => {
+      const env = await spawnAndGetEnv(undefined, { ORCA_JCODE_PANE_SECRET: randomUUID() })
+      expect(env.ORCA_JCODE_PANE_SECRET === undefined).toBe(true)
+    })
+
+    it.skipIf(!shouldInjectJcodeRuntimeDir(process.platform))(
+      'local provider leaves root directory preparation to the root',
+      async () => {
+        const root = await mkdtemp(join(tmpdir(), 'orca-jcode-child-'))
+        vi.stubEnv('HOME', root)
+        vi.stubEnv('USERPROFILE', root)
+        const runtimeDir = join(root, 'root-owned')
+        try {
+          const runtime = new OrcaRuntimeService()
+          const installed = vi.spyOn(runtime, 'setPtyController')
+          registerPtyHandlers(mainWindow, runtime)
+          const controller = installed.mock.calls.at(-1)?.[0]
+          if (!controller?.spawn) {
+            throw new Error('Runtime controller was not installed')
+          }
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            tabId: 'tab-local-child',
+            leafId: randomUUID(),
+            env: {},
+            jcodeRuntimeDirOverride: runtimeDir
+          })
+          expect(spawnMock.mock.calls.at(-1)?.[2]?.env.JCODE_RUNTIME_DIR).toBe(runtimeDir)
+          await expect(access(runtimeDir)).rejects.toThrow()
+        } finally {
+          vi.unstubAllEnvs()
+          await rm(root, { recursive: true, force: true })
+        }
+      }
+    )
 
     it('stamps a per-pane jcode runtime dir on local spawns', async () => {
       const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'

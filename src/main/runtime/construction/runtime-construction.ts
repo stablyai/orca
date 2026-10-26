@@ -52,6 +52,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly onTerminalProgramStatusFacet: HostServices['onTerminalProgramStatusFacet']
   declare protected readonly onTerminalSideEffects: HostServices['onTerminalSideEffects']
   declare protected readonly onClaudeTerminalEvidence: HostServices['onClaudeTerminalEvidence']
+  declare protected readonly onJcodeTerminalTitle: HostServices['onJcodeTerminalTitle']
   declare readonly getAgentStatusSnapshotFn: HostServices['getAgentStatusSnapshotFn']
   declare protected readonly structuredAgentStatusSinkFn: HostServices['structuredAgentStatusSinkFn']
   declare readonly readObservedAgentStatusPaneIdentityFn: HostServices['readObservedAgentStatusPaneIdentityFn']
@@ -244,6 +245,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.onTerminalProgramStatusFacet = deps?.onTerminalProgramStatusFacet ?? null
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
+    this.onJcodeTerminalTitle = deps?.onJcodeTerminalTitle ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null

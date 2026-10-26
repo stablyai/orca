@@ -44,7 +44,7 @@ export async function spawnLocalPty(
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
   const jcodeRuntimeDir = args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
-  if (jcodeRuntimeDir) {
+  if (jcodeRuntimeDir && jcodeRuntimeDir !== args.jcodeRuntimeDirOverride) {
     try {
       await mkdir(jcodeRuntimeDir, { recursive: true })
     } catch {

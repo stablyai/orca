@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import {
+  forgetJcodePaneSecret,
+  mintJcodePaneSecret,
+  verifyJcodePaneSecret
+} from '../../jcode/jcode-pane-secrets'
+import {
   installRestartHarness,
   leafId,
   paneKey,
@@ -66,11 +71,15 @@ describe('pty:spawn replacing a pane owner', () => {
   it('reattaches a live pane owner when the spawn does not name it as replaced', async () => {
     const { providerSpawn, store, runtime } = installRestartHarness()
     registerWithFakes(mainWindow, runtime, store)
-
-    const spawned = await handlers.get('pty:spawn')!(null, restartSpawnArgs())
-
-    expect(spawned).toMatchObject({ id: 'pty-old', isReattach: true })
-    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    const secret = mintJcodePaneSecret(paneKey)
+    try {
+      const spawned = await handlers.get('pty:spawn')!(null, restartSpawnArgs())
+      expect(spawned).toMatchObject({ id: 'pty-old', isReattach: true })
+      expect(providerSpawn).toHaveBeenCalledTimes(1)
+      expect(verifyJcodePaneSecret(paneKey, secret)).toBe(true)
+    } finally {
+      forgetJcodePaneSecret(paneKey)
+    }
   })
 
   it('stops the replaced owner and launches fresh instead of reattaching it', async () => {

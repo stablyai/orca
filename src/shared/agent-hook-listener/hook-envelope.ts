@@ -110,7 +110,8 @@ export function parseHookEnvelope(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
-  expectedEnv: string
+  expectedEnv: string,
+  options: { warn?: boolean } = {}
 ): ParsedHookEnvelope | null {
   if (typeof body !== 'object' || body === null) {
     return null
@@ -143,11 +144,13 @@ export function parseHookEnvelope(
   ) {
     return null
   }
-  warnOnHookEnvOrVersionMismatch(state, {
-    version: readEnvelopeString(record, 'version'),
-    env: readEnvelopeString(record, 'env'),
-    expectedEnv
-  })
+  if (options.warn !== false) {
+    warnOnHookEnvOrVersionMismatch(state, {
+      version: readEnvelopeString(record, 'version'),
+      env: readEnvelopeString(record, 'env'),
+      expectedEnv
+    })
+  }
   const tabId = readEnvelopeString(record, 'tabId')
   if (tabId && tabId !== parsedPaneKey.tabId) {
     return null

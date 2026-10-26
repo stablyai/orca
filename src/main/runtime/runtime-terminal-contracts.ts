@@ -38,6 +38,8 @@ export type TerminalCreateOptions = {
   initialSize?: { cols: number; rows: number }
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Main-internal: join the root pane's existing Jcode daemon. */
+  jcodeRuntimeDir?: string
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */

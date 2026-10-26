@@ -1,5 +1,9 @@
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import {
+  isExpectedAgentProcess,
+  recognizeAgentProcess
+} from '../../shared/agent-process-recognition'
 import type { TerminalAgent } from '../../shared/terminal-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { withTimeoutResult } from './runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
@@ -158,14 +162,21 @@ export class RuntimePtyForegroundAgent {
   private async load(ptyId: string, afterTitle: number): Promise<boolean> {
     const controller = this.deps.getController()
     const pty = this.deps.getPty(ptyId)
-    if (!controller || !pty?.connected || pty.launchAgent) {
+    if (!controller || !pty?.connected) {
       return false
     }
     const result = await this.read(ptyId, afterTitle)
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
+    let agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
+    if (
+      agent &&
+      pty.launchAgent &&
+      isExpectedAgentProcess(result.process, TUI_AGENT_CONFIG[pty.launchAgent].expectedProcess)
+    ) {
+      agent = pty.launchAgent
+    }
     if (pty.foregroundAgent === agent) {
       return false
     }

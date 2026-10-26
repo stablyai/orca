@@ -2,9 +2,11 @@
 
 import {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
-  normalizeOptionalField
+  normalizeOptionalField,
+  normalizeOptionalMultilineField
 } from './agent-status-field-normalization'
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle' | 'unverifiable'
@@ -17,6 +19,7 @@ export type AgentSubagentSnapshot = {
   /** Provider model used by this child, when exposed by its lifecycle event. */
   model?: string
   description?: string
+  lastAssistantMessage?: string
   state: AgentSubagentState
   /** Timestamp (ms) when this subagent was first observed. */
   startedAt: number
@@ -51,7 +54,11 @@ function normalizeSubagentSnapshot(
       typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
-    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
+    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    lastAssistantMessage: normalizeOptionalMultilineField(
+      obj.lastAssistantMessage,
+      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    )
   }
 }
 
@@ -101,7 +108,8 @@ export function agentSubagentsEqual(
       x.startedAt !== y.startedAt ||
       x.agentType !== y.agentType ||
       x.model !== y.model ||
-      x.description !== y.description
+      x.description !== y.description ||
+      x.lastAssistantMessage !== y.lastAssistantMessage
     ) {
       return false
     }

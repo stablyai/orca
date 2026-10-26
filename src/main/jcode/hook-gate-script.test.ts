@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  watch,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createServer } from 'node:http'
@@ -32,6 +41,85 @@ function installManagedScript(): { scriptPath: string; cleanup: () => void } {
 }
 
 describe.runIf(process.platform !== 'win32')('jcode managed hook as jcode runs it', () => {
+  it.each(
+    JCODE_HOOK_EVENTS.flatMap((event) => [
+      { event, payload: undefined },
+      { event, payload: '' }
+    ])
+  )(
+    'ignores $event with payload $payload after draining gate stdin',
+    async ({ event, payload }) => {
+      const { scriptPath, cleanup } = installManagedScript()
+      const binDir = mkdtempSync(join(tmpdir(), 'orca-jcode-curl-'))
+      const marker = join(binDir, 'post')
+      writeFileSync(join(binDir, 'curl'), '#!/bin/sh\ncat > "$POST_MARKER"\n', { mode: 0o755 })
+      const env = {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        POST_MARKER: marker,
+        ORCA_AGENT_HOOK_ENDPOINT: '',
+        ORCA_AGENT_HOOK_PORT: '1',
+        ORCA_AGENT_HOOK_TOKEN: 'test-token',
+        ORCA_PANE_KEY: 'jcode:leaf',
+        JCODE_HOOK_EVENT: event,
+        JCODE_HOOK_PAYLOAD: payload
+      }
+      try {
+        const child = spawn('/bin/sh', [scriptPath], {
+          env,
+          detached: true,
+          timeout: 60_000
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout.setEncoding('utf8').on('data', (chunk) => {
+          stdout += chunk
+        })
+        child.stderr.setEncoding('utf8').on('data', (chunk) => {
+          stderr += chunk
+        })
+        const status = await new Promise((resolve, reject) => {
+          child.on('error', reject)
+          child.stdin.on('error', reject)
+          child.on('close', (code, signal) => resolve({ code, signal }))
+          if (event === 'pre_tool') {
+            child.stdin.end('y'.repeat(512 * 1024))
+          } else {
+            // Jcode gives observers null stdin; close without an empty write that can race exit.
+            child.stdin.end()
+          }
+        })
+        expect(status).toEqual({ code: 0, signal: null })
+        expect({ stdout, stderr }).toEqual({ stdout: '', stderr: '' })
+        const pid = child.pid
+        if (pid === undefined) {
+          throw new Error('Expected a hook process')
+        }
+        expect(() => process.kill(-pid, 0)).toThrowError(expect.objectContaining({ code: 'ESRCH' }))
+        expect.soft(existsSync(marker)).toBe(false)
+
+        const capturedPayload = JSON.stringify({
+          cwd: '/tmp/jcode-capture/work/edit',
+          event: 'session_end',
+          model: 'claude-opus-5-5',
+          session_id: 'session_skunk_1792604312924_a75443e0fd91bbda',
+          source: 'close'
+        })
+        const control = spawnSync('/bin/sh', [scriptPath], {
+          env: { ...env, JCODE_HOOK_EVENT: 'session_end', JCODE_HOOK_PAYLOAD: capturedPayload },
+          encoding: 'utf8',
+          timeout: 60_000
+        })
+        expect(control.error).toBeUndefined()
+        expect(control).toMatchObject({ status: 0, stdout: '', stderr: '' })
+        expect(readFileSync(marker, 'utf8')).toBe(capturedPayload)
+      } finally {
+        removeTreeSync(binDir)
+        cleanup()
+      }
+    }
+  )
+
   it('drains the gate stdin before exiting on a missing Orca environment', () => {
     const { scriptPath, cleanup } = installManagedScript()
     try {
@@ -137,6 +225,8 @@ describe.runIf(process.platform === 'win32')('Windows jcode hook payload deliver
       token: string | string[] | undefined
       form: URLSearchParams
     }[] = []
+    let payloadWatcher: ReturnType<typeof watch> | undefined
+    const payloadChanges: string[] = []
     const server = createServer((request, response) => {
       let body = ''
       request.setEncoding('utf8')
@@ -158,12 +248,20 @@ describe.runIf(process.platform === 'win32')('Windows jcode hook payload deliver
       if (!address || typeof address === 'string') {
         throw new Error('Expected a TCP listener')
       }
+      const payloadDir = join(dirname(scriptPath), 'payloads')
+      mkdirSync(payloadDir)
+      payloadWatcher = watch(payloadDir, (_event, filename) => {
+        if (filename) {
+          payloadChanges.push(filename)
+        }
+      })
       for (const event of JCODE_HOOK_EVENTS) {
         const payload = JSON.stringify({ event, tool_input: 'quotes " & pipe | bang ! %PATH% < >' })
         const result = await runProcess({
           program: scriptPath,
           env: {
             ...process.env,
+            TEMP: payloadDir,
             ORCA_BACKGROUND_LAUNCH: '1',
             ORCA_AGENT_HOOK_ENDPOINT: '',
             ORCA_AGENT_HOOK_PORT: String(address.port),
@@ -187,8 +285,36 @@ describe.runIf(process.platform === 'win32')('Windows jcode hook payload deliver
         expect(post?.form.get('paneKey')).toBe('jcode:leaf')
         expect(post?.form.get('session_id')).toBe('jcode-session')
         expect(post?.form.get('cwd')).toBe(dirname(scriptPath))
+        expect(readdirSync(payloadDir)).toEqual([])
+      }
+      expect(payloadChanges.length).toBeGreaterThan(0)
+      payloadChanges.length = 0
+      for (const event of JCODE_HOOK_EVENTS) {
+        for (const payload of [undefined, '']) {
+          const result = await runProcess({
+            program: scriptPath,
+            env: {
+              ...process.env,
+              TEMP: payloadDir,
+              ORCA_BACKGROUND_LAUNCH: '1',
+              ORCA_AGENT_HOOK_ENDPOINT: '',
+              ORCA_AGENT_HOOK_PORT: String(address.port),
+              ORCA_AGENT_HOOK_TOKEN: 'jcode-delivery-token',
+              ORCA_PANE_KEY: 'jcode:leaf',
+              JCODE_HOOK_EVENT: event,
+              JCODE_HOOK_PAYLOAD: payload
+            },
+            input: event === 'pre_tool' ? 'y'.repeat(512 * 1024) : '',
+            timeoutMs: 10_000
+          })
+          expect(result).toMatchObject({ code: 0, stdout: '', stderr: '', timedOut: false })
+          expect(posts).toHaveLength(JCODE_HOOK_EVENTS.length)
+          expect(readdirSync(payloadDir)).toEqual([])
+          expect(payloadChanges).toEqual([])
+        }
       }
     } finally {
+      payloadWatcher?.close()
       await new Promise<void>((resolve) => server.close(() => resolve()))
       cleanup()
     }

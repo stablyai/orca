@@ -11,6 +11,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
+  'ORCA_JCODE_PANE_SECRET',
   'JCODE_RUNTIME_DIR',
   // A server's own launch marker; a user's `orcad` in this shell is not client-managed.
   ORCAD_MANAGED_ACTIVATION_ROOT_ENV

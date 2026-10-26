@@ -1,13 +1,74 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
+import { collectAgentTitleEvidence } from './agent-title-evidence'
+import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
+import { detectAgentStatusFromTitle } from './agent-title-status'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
+  getAgentLabel,
   isClaudeAgent,
   isClaudeIdentityFrameTitle,
   isGrokRotatingWorkingTitle,
   resolveExplicitTerminalTitleAgentType,
   resolveTerminalTitleAgentType
 } from './terminal-title-agent-type'
+
+describe('Jcode title identity entry points', () => {
+  it.each([
+    'jcode',
+    'jcode Pawprint',
+    '🐾 jcode Pawprint',
+    '🐾 jcode/desert Pawprint',
+    '🐾 jcode/desert Pawprint · work ~1s',
+    '🌐 jcode/desert Pawprint · last ~3s',
+    '🌐 jcode/meadow Hippo · work ~1m34s',
+    '🦨 jcode/castle Skunk',
+    '🌐 jcode/castle Skunk · +2 -1 · work ~10s',
+    '🌐 jcode/castle Skunk · +2 -1 · last ~10s',
+    '🐽 jcode/castle Piglet',
+    '🌐 jcode/castle Piglet · work ~13s',
+    '🌐 jcode/castle Skunk · +1 -0 · work ~10s',
+    '🌐 jcode/castle Skunk · work ~1d2h',
+    '🌐 jcode/castle Skunk · last ~1.5s'
+  ])('agrees on captured identity %j', (title) => {
+    expect(isJcodeIdentityTerminalTitle(title)).toBe(true)
+    expect(collectAgentTitleEvidence(title).agent).toBe('jcode')
+    expect(getSharedAgentLabel(title)).toBe('Jcode')
+    expect(getAgentLabel(title)).toBe('Jcode')
+    expect(resolveTerminalTitleAgentType(title)).toBe('jcode')
+  })
+
+  it.each([
+    'Fix jcode hooks',
+    '✳ Fix jcode hooks',
+    '✳ jcode hooks',
+    '✋ jcode hooks',
+    '⏲ jcode hooks',
+    '✦ jcode hooks',
+    '🐾 jcode hooks',
+    'jcode-something-else',
+    'jcode/castle Skunk · work ~oops',
+    'jcode/castle Skunk · work ~10s · renamed',
+    '🌐 Fix the caiea bw-scheduler cache permission EPER… · +436 -46 · work ~53m15s',
+    "🌐 Reproduce Glama's TDQS (C 2.9) score locally so … · work ~1m44s"
+  ])('never promotes task or lookalike %j to Jcode', (title) => {
+    expect(isJcodeIdentityTerminalTitle(title)).toBe(false)
+    expect(collectAgentTitleEvidence(title).agent).not.toBe('jcode')
+    expect(getSharedAgentLabel(title)).not.toBe('Jcode')
+    expect(getAgentLabel(title)).not.toBe('Jcode')
+    expect(resolveTerminalTitleAgentType(title)).not.toBe('jcode')
+  })
+
+  it.each([
+    ['✳ jcode hooks', 'idle'],
+    ['✋ jcode hooks', 'permission'],
+    ['⏲ jcode hooks', 'working'],
+    ['✦ jcode hooks', 'working'],
+    ['🐾 jcode hooks', 'idle']
+  ] as const)('preserves native glyph activity in %j', (title, status) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+})
 
 describe('isGrokRotatingWorkingTitle', () => {
   it('matches Grok working frames regardless of the rotating middle text', () => {

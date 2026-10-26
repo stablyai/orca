@@ -36,6 +36,18 @@ export function getJcodeManagedScriptPath(): string {
   return getSharedJcodeScriptPath(getJcodeManagedScriptFileName())
 }
 
+export function getJcodeSpawnScriptFileName(): string {
+  return process.platform === 'win32' ? 'jcode-spawn-hook.cmd' : 'jcode-spawn-hook.sh'
+}
+
+export function getJcodeSpawnScriptPath(): string {
+  return getSharedJcodeScriptPath(getJcodeSpawnScriptFileName())
+}
+
+export function getJcodeSpawnHookEnvValue(scriptPath: string): string {
+  return getJcodeManagedCommand(scriptPath)
+}
+
 export function getSharedJcodeScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }

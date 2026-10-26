@@ -1,7 +1,11 @@
 import { hasOtherAgentProcessOwner } from '../shared/agent-process-presence'
 import { isOwnerProviderGuestHook } from '../shared/agent-hook-owner-presence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import {
+  normalizeHookPayload,
+  prepareJcodeHookPayload,
+  type PreparedJcodeHook
+} from '../shared/agent-hook-listener'
 import {
   clearPaneCacheState,
   createHookListenerState,
@@ -16,6 +20,53 @@ import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
 export class RelayProviderHookNormalization {
   private readonly states = new Map<AgentHookSource, HookListenerState>()
 
+  prepareJcode(
+    canonical: HookListenerState,
+    body: unknown,
+    env: string,
+    options: { isReplay?: boolean; receivedAt?: number } = {}
+  ): PreparedJcodeHook | null {
+    let state = this.states.get('jcode')
+    if (!state) {
+      state = createHookListenerState()
+      this.states.set('jcode', state)
+    }
+    const providerState = state
+    const view: HookListenerState = {
+      ...canonical,
+      lastPromptByPaneKey: state.lastPromptByPaneKey,
+      lastToolByPaneKey: state.lastToolByPaneKey
+    }
+    const prepared = prepareJcodeHookPayload(view, body, env, options)
+    if (!prepared) {
+      return null
+    }
+    return {
+      ...prepared,
+      commit: () => {
+        if (this.states.get('jcode') !== providerState) {
+          return
+        }
+        view.jcodeSessions = canonical.jcodeSessions
+        prepared.commit()
+        canonical.jcodeSessions = view.jcodeSessions
+        const paneKey = prepared.admission.paneKey
+        const prompt = providerState.lastPromptByPaneKey.get(paneKey)
+        const tool = providerState.lastToolByPaneKey.get(paneKey)
+        if (prompt === undefined) {
+          canonical.lastPromptByPaneKey.delete(paneKey)
+        } else {
+          canonical.lastPromptByPaneKey.set(paneKey, prompt)
+        }
+        if (tool === undefined) {
+          canonical.lastToolByPaneKey.delete(paneKey)
+        } else {
+          canonical.lastToolByPaneKey.set(paneKey, tool)
+        }
+      }
+    }
+  }
+
   normalize(
     canonical: HookListenerState,
     source: AgentHookSource,
@@ -23,9 +74,12 @@ export class RelayProviderHookNormalization {
     env: string,
     options: Parameters<typeof normalizeHookPayload>[4] = {}
   ): AgentHookEventPayload | null {
-    // Why: the owner's own provider folds would take the guest's prompt and tools.
+    // The owner's provider folds must not take a guest process's prompt and tools.
     if (isOwnerProviderGuestHook(canonical, source, body, env)) {
       return null
+    }
+    if (source === 'jcode') {
+      return this.prepareJcode(canonical, body, env)?.event ?? null
     }
     let state = this.states.get(source)
     if (!state) {

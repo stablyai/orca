@@ -17,6 +17,7 @@ export type {
   EnrichedAgentHookEventPayload
 } from './server/server-types'
 export type { AgentHookSource }
+export type { JcodeSpawnOutcome } from './server/server-jcode-spawn'
 export {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,

@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
@@ -6,6 +7,11 @@ import {
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
+import {
+  JCODE_PANE_SECRET_ENV_KEY,
+  JCODE_SPAWN_HOOK_ENV_KEY
+} from '../../../shared/jcode-spawn-hook'
+import { forgetJcodePaneSecret, mintJcodePaneSecret } from '../../jcode/jcode-pane-secrets'
 
 export type PtySpawnPane = {
   paneKey: string
@@ -34,6 +40,7 @@ type PtySpawnPaneEnvArgs = {
   /** Null when the spawn's own tab+leaf ids don't name a valid pane. */
   pane: PtySpawnPane | null
   jcodeRuntimeDir: string | undefined
+  jcodeSpawnHook?: string
 }
 
 export function stampPtySpawnPaneEnv(
@@ -44,6 +51,7 @@ export function stampPtySpawnPaneEnv(
     return
   }
   const { pane } = args
+  delete env[JCODE_PANE_SECRET_ENV_KEY]
   if (!pane) {
     // Shell/hook identity must name this spawn's own pane, never an unproved renderer key.
     delete env.ORCA_PANE_KEY
@@ -54,6 +62,11 @@ export function stampPtySpawnPaneEnv(
     return
   }
   env.ORCA_PANE_KEY = pane.paneKey
+  forgetJcodePaneSecret(pane.paneKey)
+  if (args.jcodeSpawnHook !== undefined && !Object.hasOwn(env, JCODE_SPAWN_HOOK_ENV_KEY)) {
+    env[JCODE_SPAWN_HOOK_ENV_KEY] = args.jcodeSpawnHook
+    env[JCODE_PANE_SECRET_ENV_KEY] = mintJcodePaneSecret(pane.paneKey)
+  }
   if (pane.tabId !== undefined) {
     env.ORCA_TAB_ID = pane.tabId
   } else {
@@ -72,14 +85,34 @@ export function stampPtySpawnPaneEnv(
   applyScrubSafeAgentEnvAliases(env)
 }
 
+export function validateJcodeRuntimeDirOverride(
+  runtimeDir: string | undefined
+): string | undefined {
+  if (
+    runtimeDir !== undefined &&
+    (typeof runtimeDir !== 'string' ||
+      runtimeDir.length > 4096 ||
+      runtimeDir.includes('\0') ||
+      !isAbsolute(runtimeDir))
+  ) {
+    throw new Error('Invalid jcode runtime dir override')
+  }
+  return runtimeDir
+}
+
 /** Window local providers validate asynchronously; daemon spawns retain their synchronous preparation. */
 export function selectWindowJcodeRuntimeDir(
   paneKey: string,
-  isDaemonHostSpawn: boolean
+  isDaemonHostSpawn: boolean,
+  override?: string
 ): string | undefined {
+  const validatedOverride = validateJcodeRuntimeDirOverride(override)
   const runtimeDir = buildJcodeRuntimeDirEnv(paneKey)?.[JCODE_RUNTIME_DIR_ENV_KEY]
   if (runtimeDir === undefined) {
     return undefined
+  }
+  if (validatedOverride !== undefined) {
+    return validatedOverride
   }
   if (isDaemonHostSpawn) {
     try {

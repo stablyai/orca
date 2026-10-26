@@ -1,5 +1,9 @@
 import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../ipc/pty/spawn-pane-env'
-import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
+import {
+  buildJcodeRuntimeDirEnv,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../shared/jcode-runtime-dir'
 
 /** Reconstructs identity formulas from fake spawn args; wiring and directory readiness need real-path tests. */
 export function spawnedPtyEnv(call: unknown): Record<string, string> {
@@ -20,9 +24,12 @@ export function spawnedPtyEnv(call: unknown): Record<string, string> {
   })
   stampPtySpawnPaneEnv(env, {
     pane,
-    jcodeRuntimeDir: pane
-      ? buildJcodeRuntimeDirEnv(pane.paneKey)?.[JCODE_RUNTIME_DIR_ENV_KEY]
-      : undefined
+    jcodeRuntimeDir:
+      pane && shouldInjectJcodeRuntimeDir(process.platform)
+        ? typeof values.jcodeRuntimeDirOverride === 'string'
+          ? values.jcodeRuntimeDirOverride
+          : buildJcodeRuntimeDirEnv(pane.paneKey)?.[JCODE_RUNTIME_DIR_ENV_KEY]
+        : undefined
   })
   return env
 }

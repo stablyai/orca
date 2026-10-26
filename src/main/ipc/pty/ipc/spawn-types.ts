@@ -30,6 +30,8 @@ export type PtySpawnIpcArgs = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Production never sets this on the window lane: pty:spawn strips it; only main-internal runtime callers set it. */
+  jcodeRuntimeDirOverride?: string
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig

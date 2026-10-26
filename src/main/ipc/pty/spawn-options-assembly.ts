@@ -81,6 +81,7 @@ export type PtySpawnLaunchOptionsInput = {
     tabId?: unknown
     connectionId?: string | null
     shellOverride?: string
+    jcodeRuntimeDirOverride?: string
     telemetry?: { agent_kind?: unknown }
   }
   env: Record<string, string> | undefined
@@ -160,6 +161,9 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     envToDelete: input.envToDelete
   }
   if (!connectionId && !input.isDaemonHostSpawn) {
+    if (args.jcodeRuntimeDirOverride !== undefined) {
+      spawnOptions.jcodeRuntimeDirOverride = args.jcodeRuntimeDirOverride
+    }
     spawnOptions.codexHomePathOverride = { value: input.selectedCodexHomePath }
   }
   const noDaemonLaunch = planCodexNoDaemonLaunch({

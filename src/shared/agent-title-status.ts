@@ -1,5 +1,6 @@
 import { getDeepSeekBuildTitleStatus } from './dsb-terminal-title'
 import { qoderTitleStatus } from './qoder-terminal-title'
+import { getJcodeTerminalTitleStatus, isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   BRAILLE_SPINNER_RE,
@@ -268,6 +269,9 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
 
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
+  }
+  if (isJcodeIdentityTerminalTitle(title)) {
+    return getJcodeTerminalTitleStatus(title)
   }
   // Read π ! as blocked before generic idle or OMP user waits disappear.
   const piCompatibleSeparatorStatus = getPiCompatibleTitleSeparatorStatus(title)

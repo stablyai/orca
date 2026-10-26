@@ -25,6 +25,27 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
+  it('joins the root jcode runtime through main terminal creation', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-jcode-child' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      jcodeRuntimeDir: '/tmp/orca-jcode/rootdir',
+      surfaceOwner: false
+    })
+    expect(spawn.mock.calls[0]?.[0]?.jcodeRuntimeDirOverride).toBe('/tmp/orca-jcode/rootdir')
+    expect(spawnedPtyEnv(spawn.mock.calls[0]?.[0]).JCODE_RUNTIME_DIR).toBe(
+      shouldInjectJcodeRuntimeDir(process.platform) ? '/tmp/orca-jcode/rootdir' : undefined
+    )
+  })
+
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const createTerminal = vi.fn()
@@ -61,6 +82,7 @@ describe('OrcaRuntimeService', () => {
       title: 'worker'
     })
 
+    expect(Object.hasOwn(spawn.mock.calls[0]?.[0], 'jcodeRuntimeDirOverride')).toBe(false)
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: TEST_WORKTREE_PATH,

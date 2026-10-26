@@ -14,6 +14,29 @@ const reasonFor = (title: string) => collectAgentTitleEvidence(title).reason
 
 describe('collectAgentTitleEvidence', () => {
   it.each([
+    'jcode',
+    'jcode Pawprint',
+    '🐾 jcode/desert Pawprint',
+    '🌐 jcode/castle Skunk · +2 -1 · work ~10s',
+    '🐽 jcode/castle Piglet'
+  ])('anchors native Jcode identity in %j', (title) => {
+    expect(collectAgentTitleEvidence(title)).toMatchObject({
+      agent: 'jcode',
+      reason: 'anchored',
+      anchoredNames: ['jcode']
+    })
+  })
+
+  it.each([
+    'Fix jcode hooks',
+    'jcode-something-else',
+    '🌐 Fix the caiea bw-scheduler cache permission EPER… · +436 -46 · work ~53m15s',
+    "🌐 Reproduce Glama's TDQS (C 2.9) score locally so … · work ~1m44s"
+  ])('keeps task text out of Jcode identity: %j', (title) => {
+    expect(collectAgentTitleEvidence(title).agent).toBeNull()
+  })
+
+  it.each([
     ['✦ Review Codex - DeepSeek Build', 'gemini'],
     ['⏲ Review Codex - DeepSeek Build', 'gemini'],
     ['◇ Review Codex - DeepSeek Build', 'gemini'],

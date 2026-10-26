@@ -125,6 +125,8 @@ export type RuntimePtySpawnArgs = {
   }
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Main-internal; never accepted from renderer or RPC params. */
+  jcodeRuntimeDirOverride?: string
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'

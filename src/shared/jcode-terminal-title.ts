@@ -1,17 +1,62 @@
-// jcode updates emoji/session/diff/duration titles about once a second (terminal_title.rs); generated codenames are identity, not conversation names.
-// Captured provenance: docs/reference/jcode-hook-events.md.
-const JCODE_TITLE_STATUS_RE =
-  /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*|\s+\u00B7\s+(?:\+\d+\s+-\d+|(?:work|last)\s+~\S+)(?=\s+\u00B7\s+|$)/gu
+import {
+  CLAUDE_IDLE,
+  GEMINI_IDLE,
+  GEMINI_PERMISSION,
+  GEMINI_SILENT_WORKING,
+  GEMINI_WORKING
+} from './agent-title-glyphs'
+
+// Jcode uses identity or conversation heads; only the final native duration reports activity.
+const JCODE_TITLE_ACTIVITY_RE = /\s+\u00B7\s+(work|last)\s+~(?:\d+(?:\.\d+)?[dhms])+$/u
+const JCODE_TITLE_EMOJI_RE = /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*/u
+const JCODE_TITLE_DIFF_RE = /\s+\u00B7\s+\+\d+\s+-\d+$/u
 
 /** The jcode title with its per-session emoji and live diff/duration segments removed. */
 export function stripJcodeTitleStatus(title: string): string {
-  return title.replace(JCODE_TITLE_STATUS_RE, '').trim()
+  return title
+    .replace(JCODE_TITLE_EMOJI_RE, '')
+    .replace(JCODE_TITLE_ACTIVITY_RE, '')
+    .replace(JCODE_TITLE_DIFF_RE, '')
+    .trim()
 }
 
-// jcode, jcode Puppy and self-dev jcode/creek Puppy are identity; user work labels contain more.
-const JCODE_IDENTITY_TITLE_RE = /^jcode(?:\/[^\s\u00B7]+)?(?:\s+[^\s\u00B7]+)?$/iu
+// Explicit case matching keeps codenames capitalized; /<server> names the daemon.
+const JCODE_IDENTITY_TITLE_RE =
+  /^[jJ][cC][oO][dD][eE](?:\/[^\s\u00B7]+)?(?:\s+\p{Lu}[^\s\u00B7]*)?$/u
+const FOREIGN_STATUS_GLYPHS = [
+  CLAUDE_IDLE,
+  GEMINI_IDLE,
+  GEMINI_PERMISSION,
+  GEMINI_SILENT_WORKING,
+  GEMINI_WORKING
+]
 
 /** True when a jcode title says only which jcode session this is, not what it is doing. */
 export function isJcodeIdentityTerminalTitle(title: string | null | undefined): boolean {
-  return Boolean(title) && JCODE_IDENTITY_TITLE_RE.test(stripJcodeTitleStatus(title ?? ''))
+  return (
+    Boolean(title) &&
+    !FOREIGN_STATUS_GLYPHS.some((glyph) => title?.trimStart().startsWith(glyph)) &&
+    JCODE_IDENTITY_TITLE_RE.test(stripJcodeTitleStatus(title ?? ''))
+  )
+}
+
+export function getJcodeTitleIdentity(title: string): 'jcode' | null {
+  return isJcodeIdentityTerminalTitle(title) ? 'jcode' : null
+}
+
+export function getJcodeTerminalTitleActivity(title: string): 'work' | 'last' | null {
+  const activity = JCODE_TITLE_ACTIVITY_RE.exec(title)?.[1]
+  return activity === 'work' || activity === 'last' ? activity : null
+}
+
+/** Activity alone does not identify Jcode: conversation heads carry the same native tail. */
+export function getJcodeTerminalTitleStatus(title: string): 'working' | 'idle' | null {
+  const activity = getJcodeTerminalTitleActivity(title)
+  return activity
+    ? activity === 'work'
+      ? 'working'
+      : 'idle'
+    : isJcodeIdentityTerminalTitle(title)
+      ? 'idle'
+      : null
 }

@@ -401,8 +401,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).not.toHaveProperty('launchAgent')
   })
 
-  it('skips the foreground-process probe when the PTY launch agent is already known', async () => {
-    // Known launchAgent ownership makes a foreground relay probe redundant.
+  it('probes launched OMP on status edges without probing repeated spinner frames', async () => {
     const getForegroundProcess = vi.fn(async () => 'omp')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -420,10 +419,120 @@ describe('OrcaRuntimeService', () => {
     })
 
     runtime.onPtyData('pty-omp', '\x1b]0;⠋ OMP\x07working\n', 100)
-    runtime.onPtyData('pty-omp', '\x1b]0;OMP ready\x07idle\n', 200)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
 
-    expect(getForegroundProcess).not.toHaveBeenCalled()
+    runtime.onPtyData('pty-omp', '\x1b]0;⠊ OMP\x07working\n', 200)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+
+    runtime.onPtyData('pty-omp', '\x1b]0;⠋ OMP · work ~2s\x07working\n', 250)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+
+    runtime.onPtyData('pty-omp', '\x1b]0;OMP ready\x07idle\n', 300)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+
+    runtime.onPtyData('pty-omp', '\x1b]0;OMP ready\x07idle\n', 400)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+
+    expect((await runtime.listTerminals()).terminals[0]?.agentIdentity).toBe('omp')
   })
+
+  it('preserves wrapper launch identity across child process and pane reuse', async () => {
+    const getForegroundProcess = vi.fn(async () => 'claude')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-agent-teams' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: 'orca claude-teams',
+      launchAgent: 'claude-agent-teams',
+      title: 'Claude Agent Teams'
+    })
+
+    runtime.onPtyData('pty-agent-teams', '\x1b]0;⠋ Claude Code\x07', 100)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect((await runtime.listTerminals()).terminals[0]?.agentIdentity).toBe('claude-agent-teams')
+
+    getForegroundProcess.mockResolvedValue('jcode-linux-x86_64.bin')
+    runtime.onPtyData('pty-agent-teams', '\x1b]0;OMP ready\x07', 200)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect((await runtime.listTerminals()).terminals[0]?.agentIdentity).toBe('jcode')
+
+    getForegroundProcess.mockResolvedValue('claude')
+    runtime.onPtyData('pty-agent-teams', '\x1b]0;⠋ Claude Code\x07', 300)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect((await runtime.listTerminals()).terminals[0]?.agentIdentity).toBe('claude-agent-teams')
+    expect(getForegroundProcess).toHaveBeenCalledTimes(3)
+  })
+
+  it('publishes foreground Jcode after reusing a Claude-launched pane', async () => {
+    const getForegroundProcess = vi.fn(async () => 'jcode-linux-x86_64.bin')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-reused-jcode' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      title: 'Claude'
+    })
+
+    runtime.onPtyData('pty-reused-jcode', '\x1b]0;⠋ Claude Code\x07', 100)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-reused-jcode')
+    expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
+      agentIdentity: 'jcode'
+    })
+  })
+
+  it.each(['throw', 'reject', 'disconnect'] as const)(
+    'keeps launch identity queryable when the controller encounters %s',
+    async (failure) => {
+      const runtime = new OrcaRuntimeService(store)
+      const getForegroundProcess = vi.fn(() => {
+        if (failure === 'throw') {
+          throw new Error('controller unavailable')
+        }
+        if (failure === 'reject') {
+          return Promise.reject(new Error('controller unavailable'))
+        }
+        runtime.setPtyController(null)
+        return Promise.resolve('jcode-linux-x86_64.bin')
+      })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-unavailable' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+      await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'claude',
+        launchAgent: 'claude',
+        title: 'Claude'
+      })
+
+      runtime.onPtyData('pty-unavailable', '\x1b]0;⠋ OMP\x07', 100)
+      await expect(
+        runtime.refreshPtyForegroundAgentFromController('pty-unavailable')
+      ).resolves.toBe(false)
+
+      expect(getForegroundProcess).toHaveBeenCalledOnce()
+      await expect(runtime.listTerminals()).resolves.toMatchObject({
+        terminals: [expect.objectContaining({ agentIdentity: 'claude' })]
+      })
+    }
+  )
 
   it('probes the foreground process only on a status transition for unknown launch agents', async () => {
     const getForegroundProcess = vi.fn(async () => 'omp')

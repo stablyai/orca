@@ -19,7 +19,8 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
+import { AgentHookServerJcodeTabs } from './server-jcode-tabs'
+import type { JcodeSpawnListener } from './server-jcode-spawn'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { PaneTimers } from './program-status/pane-timers'
@@ -28,7 +29,7 @@ import { ProgramStatusFacetStore } from './program-status/facet-store'
 // Unassigned rows sort after the listing counter, which starts at 1.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
+export abstract class AgentHookServerListeners extends AgentHookServerJcodeTabs {
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
   setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
@@ -46,6 +47,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   ): void {
     this.onStartupPromptClaim = listener
     this.clearStartupPromptClaims = clear
+  }
+
+  setJcodeSpawnListener(listener: JcodeSpawnListener | null): void {
+    this.onJcodeSpawn = listener
   }
 
   protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {

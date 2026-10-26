@@ -17,17 +17,24 @@ import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
+import {
+  ptySpawnPaneFromIds,
+  stampPtySpawnPaneEnv,
+  validateJcodeRuntimeDirOverride
+} from '../spawn-pane-env'
+import { resolveJcodeSpawnHookEnv } from '../../../jcode/spawn-hook-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import {
   ensureJcodeRuntimeDir,
-  JCODE_RUNTIME_DIR_ENV_KEY
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
 } from '../../../../shared/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
+  const runtimeDirOverride = validateJcodeRuntimeDirOverride(args.jcodeRuntimeDirOverride)
   if (!ctx.preAdoptedStablePane) {
     const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
     if (admission) {
@@ -114,14 +121,23 @@ export async function prepareRuntimePtySpawn(
   if (args.preAllocatedHandle) {
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
+  const pane = ptySpawnPaneFromIds(args)
   if (ctx.env) {
     // Clone caller environment before injection; another split may reuse it.
     ctx.env = { ...ctx.env }
-    const pane = ptySpawnPaneFromIds(args)
-    const jcodeEnv = pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
+    const jcodeEnv =
+      pane && runtimeDirOverride === undefined
+        ? await ensureJcodeRuntimeDir(pane.paneKey)
+        : undefined
     stampPtySpawnPaneEnv(ctx.env, {
       pane,
-      jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
+      jcodeRuntimeDir: shouldInjectJcodeRuntimeDir(process.platform)
+        ? (runtimeDirOverride ?? jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY])
+        : undefined,
+      jcodeSpawnHook: await resolveJcodeSpawnHookEnv({
+        connectionId: args.connectionId,
+        wsl: ctx.codexSelectionTarget.runtime === 'wsl'
+      })
     })
   }
   const hostEnv = await resolvePtySpawnHostEnv({

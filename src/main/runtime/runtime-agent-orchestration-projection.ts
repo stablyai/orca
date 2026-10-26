@@ -14,6 +14,7 @@ import {
 } from './orchestration/worker-attention-context'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
 import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
+import type { ExternalAgentParentLink } from './runtime-external-parent-links'
 
 type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
@@ -28,12 +29,48 @@ type RuntimeAgentOrchestrationDependencies = {
   getPaneKey(handle: string): string | null
   getDispatchAuthority(handle: string): OrchestrationCompatibilityTerminalAuthority | null
   getAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[]
+  getExternalParentLinks(): readonly [string, ExternalAgentParentLink][]
 }
 
 export class RuntimeAgentOrchestrationProjection {
   constructor(private readonly deps: RuntimeAgentOrchestrationDependencies) {}
 
   buildByPaneKey(): Record<string, AgentStatusOrchestrationContext> | undefined {
+    const contexts = this.buildDispatchContexts() ?? {}
+    const links = this.deps.getExternalParentLinks()
+    if (links.length > 0) {
+      const livePanes = new Set<string>()
+      for (const leaf of this.deps.getLeaves()) {
+        if (leaf.ptyId && leaf.connected) {
+          livePanes.add(this.deps.makePaneKey(leaf))
+        }
+      }
+      for (const pty of this.deps.getPtys()) {
+        const { paneKey } = this.deps.paneOf(pty)
+        if (pty.connected && paneKey) {
+          livePanes.add(paneKey)
+        }
+      }
+      for (const [paneKey, link] of links) {
+        if (contexts[paneKey] || !livePanes.has(paneKey)) {
+          continue
+        }
+        const parentHandle = livePanes.has(link.parentPaneKey)
+          ? this.deps.getHandleForPaneKey(link.parentPaneKey)
+          : null
+        contexts[paneKey] = {
+          taskId: link.taskId,
+          dispatchId: link.taskId,
+          parentPaneKey: link.parentPaneKey,
+          ...(link.displayName ? { displayName: link.displayName } : {}),
+          ...(parentHandle ? { parentTerminalHandle: parentHandle } : {})
+        }
+      }
+    }
+    return Object.keys(contexts).length > 0 ? contexts : undefined
+  }
+
+  private buildDispatchContexts(): Record<string, AgentStatusOrchestrationContext> | undefined {
     const db = this.deps.getDb()
     if (!db || db.hasAnyDispatchContexts?.() === false) {
       return undefined

@@ -21,7 +21,7 @@ function readHookPaneOwner(
       sender: { agent: AgentHookSource; process?: AgentProcessIdentity }
     }
   | undefined {
-  const envelope = parseHookEnvelope(state, source, body, env)
+  const envelope = parseHookEnvelope(state, source, body, env, { warn: source !== 'jcode' })
   if (!envelope) {
     return undefined
   }

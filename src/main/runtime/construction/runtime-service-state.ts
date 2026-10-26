@@ -6,7 +6,7 @@ import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
-import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
+import { OrcaRuntimeWithExternalParentLinks } from './runtime-external-parent-link-state'
 import { RuntimeTerminalAgentPresence } from '../runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../runtime-client-event-bus'
@@ -45,7 +45,7 @@ import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
 
-export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
+export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithExternalParentLinks {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -124,7 +124,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
     getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
-    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot()
+    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getExternalParentLinks: () => this.externalAgentParentLinks.entries()
   })
 
   protected readonly terminalList = new RuntimeTerminalList({

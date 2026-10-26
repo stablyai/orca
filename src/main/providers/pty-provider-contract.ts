@@ -56,6 +56,8 @@ export type PtySpawnOptions = {
   prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Main-only: an existing root directory, already validated before provider dispatch. */
+  jcodeRuntimeDirOverride?: string
   /** Main-validated home provenance for an automatic Codex session resume. */
   codexHomePathOverride?: { value: string | null }
   command?: string

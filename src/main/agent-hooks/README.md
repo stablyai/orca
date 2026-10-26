@@ -71,6 +71,42 @@ agent in the same pane is classified by its own titles again. Because answering 
 paints, a client answers for a remote Orca host only when that host advertises
 `terminal.program-status.v1`.
 
+## Jcode visible spawn hook
+
+The managed `jcode-spawn-hook.sh` (`.cmd` on Windows) is installed alongside the
+lifecycle observer. `JCODE_SPAWN_HOOK` names its quoted command; it is separate from
+`config.toml`'s `[hooks]` table. Refresh updates an existing script only, and removal
+deletes it. Remote installation continues to install only the lifecycle observer;
+the spawn integration is for local panes, excluding SSH and WSL.
+
+The script posts form fields to `POST /jcode-spawn`, with the hook token and
+`ORCA_JCODE_PANE_SECRET`. It sources the live endpoint file before using the pane's
+environment. Commands and titles are sent as data; the script never executes them.
+
+Contract validated against Jcode 0.99.0 (`774613c90`) source and captured spawn fields:
+exit 0 means Orca accepted the request. Missing required environment, connection
+failure, timeout or any non-2xx HTTP status returns exit 1 on POSIX, allowing Jcode's built-in terminal
+fallback. Curl uses a 0.5-second connection timeout and 1.6-second total timeout,
+inside Jcode's two-second launch window. Failure stderr is one generic line and
+contains no command or secret. POSIX sends the pane secret through stdin, outside curl's argv.
+
+Windows keeps the pane secret in curl.exe's argv as an accepted limitation; other users cannot read it without administrator rights.
+Windows values containing `"` or ending in `\` can split curl.exe arguments, causing rejection or fallback to Jcode's own terminal.
+Windows retains `--fail` status handling: HTTP 3xx can exit 0; only 4xx/5xx and curl failures trigger fallback.
+
+`request.command` is Jcode's POSIX-quoted shell string. Orca passes it unchanged to
+terminal creation on Windows: the selected shell receives it through its startup
+arguments or stdin, without POSIX-to-PowerShell/cmd translation. A leading quoted
+executable needs PowerShell's `&` call operator; native Windows execution remains unverified.
+
+`POST /jcode-spawn` returns 200 only after tab creation and ownership confirmation,
+400 for an invalid body, 403 for failed app-token or pane authority, and 503 when
+no handler is available, creation fails, or its one-second deadline expires.
+Worker nesting uses an in-memory external parent link. Bindings are also in memory
+and lost on Orca restart. Worker tabs close with their root outside app quit;
+quit preserves their saved layout. A closed worker retains a routing tombstone
+for its root's lifetime, dropping late events instead of attributing them to the root.
+
 ## Could an agent drop its hook for OSC 7501?
 
 Not today. OSC 7501 has no field for the prompt, tool input, assistant reply, model, or provider

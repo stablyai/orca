@@ -1,6 +1,7 @@
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { ownerSurfacing } from './orca-runtime-core'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import { validateJcodeRuntimeDirOverride } from '../ipc/pty/spawn-pane-env'
 
 export type { TerminalCreateOptions }
 export type { Worktree } from '../../shared/worktree/types'
@@ -46,8 +47,12 @@ export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
 
 export const spawnShellInputs = ({
   shellOverride,
-  launchRuntime
-}: Pick<TerminalCreateOptions, 'shellOverride' | 'launchRuntime'>) => ({
+  launchRuntime,
+  jcodeRuntimeDir
+}: Pick<TerminalCreateOptions, 'shellOverride' | 'launchRuntime' | 'jcodeRuntimeDir'>) => ({
+  ...(jcodeRuntimeDir !== undefined
+    ? { jcodeRuntimeDirOverride: validateJcodeRuntimeDirOverride(jcodeRuntimeDir) }
+    : {}),
   ...(shellOverride ? { shellOverride } : {}),
   ...(launchRuntime ? { launchRuntime } : {})
 })

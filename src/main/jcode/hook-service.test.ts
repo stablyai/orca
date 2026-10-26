@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -18,9 +26,14 @@ import {
   getJcodeManagedCommand,
   getJcodeManagedScriptFileName,
   getJcodeManagedScriptPath,
+  getJcodeSpawnScriptPath,
+  getJcodeSpawnHookEnvValue,
+  isJcodeManagedCommand,
   JCODE_HOOK_EVENTS
 } from './hook-settings'
-import { tomlQuoteString } from './hook-config'
+import { applyJcodeManagedHooks, tomlQuoteString } from './hook-config'
+import { buildJcodeSpawnHookScript } from './spawn-hook-script'
+import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp.test-fixture'
 
 describe('JcodeHookService', () => {
   let homeDir: string
@@ -45,6 +58,75 @@ describe('JcodeHookService', () => {
       state: 'not_installed',
       configPath: getJcodeConfigPath()
     })
+  })
+
+  it('installs executable spawn hook without adding it to lifecycle config', () => {
+    const initial = '[display]\nemoji = false\n'
+    mkdirSync(dirname(getJcodeConfigPath()), { recursive: true })
+    writeFileSync(getJcodeConfigPath(), initial)
+    const expected = applyJcodeManagedHooks(
+      initial,
+      JCODE_HOOK_EVENTS,
+      getJcodeManagedCommand(getJcodeManagedScriptPath()),
+      getJcodeManagedScriptFileName()
+    ).content
+    new JcodeHookService().install()
+    expect(readFileSync(getJcodeSpawnScriptPath(), 'utf8')).toBe(buildJcodeSpawnHookScript())
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).toBe(expected)
+    if (process.platform !== 'win32') {
+      expect(statSync(getJcodeSpawnScriptPath()).mode & 0o777).toBe(0o755)
+    }
+    expect(isJcodeManagedCommand(getJcodeSpawnScriptPath())).toBe(false)
+    expect(getJcodeSpawnHookEnvValue(getJcodeSpawnScriptPath())).toBe(
+      getJcodeManagedCommand(getJcodeSpawnScriptPath())
+    )
+  })
+
+  it('refreshes stale spawn script without creating a missing one or editing config', async () => {
+    const service = new JcodeHookService()
+    await service.refreshManagedScripts()
+    expect(existsSync(getJcodeSpawnScriptPath())).toBe(false)
+    service.install()
+    const config = readFileSync(getJcodeConfigPath(), 'utf8')
+    writeFileSync(getJcodeSpawnScriptPath(), 'stale')
+    await service.refreshManagedScripts()
+    expect(readFileSync(getJcodeSpawnScriptPath(), 'utf8')).toBe(buildJcodeSpawnHookScript())
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).toBe(config)
+    rmSync(getJcodeSpawnScriptPath())
+    await service.refreshManagedScripts()
+    expect(existsSync(getJcodeSpawnScriptPath())).toBe(false)
+  })
+
+  it('removes spawn script and preserves unrelated files even on repeated removal', () => {
+    const service = new JcodeHookService()
+    service.install()
+    const unrelated = join(dirname(getJcodeSpawnScriptPath()), 'user-hook.sh')
+    writeFileSync(unrelated, 'user hook')
+    service.remove()
+    service.remove()
+    expect(existsSync(getJcodeSpawnScriptPath())).toBe(false)
+    expect(readFileSync(unrelated, 'utf8')).toBe('user hook')
+  })
+
+  it('returns status after config cleanup when spawn script removal fails', () => {
+    const service = new JcodeHookService()
+    service.install()
+    rmSync(getJcodeSpawnScriptPath())
+    mkdirSync(getJcodeSpawnScriptPath())
+    expect(service.remove()).toMatchObject({ state: 'not_installed' })
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).not.toContain(getJcodeManagedScriptPath())
+  })
+
+  it('keeps remote installation limited to lifecycle hooks', async () => {
+    const remote = createAgentHookMemorySftp()
+    expect((await new JcodeHookService().installRemote(remote.sftp, '/home/test')).state).toBe(
+      'installed'
+    )
+    expect([...remote.fs.files.keys()].sort()).toEqual([
+      '/home/test/.jcode/config.toml',
+      '/home/test/.orca/agent-hooks/jcode-hook.sh'
+    ])
+    expect(existsSync(getJcodeSpawnScriptPath())).toBe(false)
   })
 
   it('installs managed hooks into jcode config.toml and posts to /hook/jcode', () => {

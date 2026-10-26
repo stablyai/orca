@@ -14,6 +14,7 @@ import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
+import { resolveJcodeSpawnHookEnv } from '../../../jcode/spawn-hook-env'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -110,8 +111,16 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       : null,
     jcodeRuntimeDir:
       ctx.baseEnv && ctx.stablePaneKey
-        ? selectWindowJcodeRuntimeDir(ctx.stablePaneKey, ctx.isDaemonHostSpawn)
-        : undefined
+        ? selectWindowJcodeRuntimeDir(
+            ctx.stablePaneKey,
+            ctx.isDaemonHostSpawn,
+            args.jcodeRuntimeDirOverride
+          )
+        : undefined,
+    jcodeSpawnHook: await resolveJcodeSpawnHookEnv({
+      connectionId: args.connectionId,
+      wsl: ctx.codexSelectionTarget.runtime === 'wsl'
+    })
   })
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Tab/leaf metadata still identifies the pane when its supplied ORCA_PANE_KEY was unproved.

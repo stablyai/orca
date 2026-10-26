@@ -35,6 +35,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
+  'ORCA_JCODE_PANE_SECRET',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
   'JCODE_RUNTIME_DIR',

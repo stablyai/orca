@@ -10,6 +10,7 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
+import { registerJcodeSpawnOwner } from '../jcode/jcode-spawn-tabs'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
@@ -137,6 +138,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  registerJcodeSpawnOwner(runtime, () => state.isQuitting)
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
