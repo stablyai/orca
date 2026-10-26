@@ -4,11 +4,8 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-import {
-  launchExternalEditor,
-  resolveVsCodeRemoteSshLaunchSpec,
-  type ExternalEditorLaunchSpec
-} from './external-editor-launch'
+import { launchExternalEditor, type ExternalEditorLaunchSpec } from './external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from './remote-ssh-editor-launch'
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 
@@ -35,14 +32,16 @@ function remoteSpec(
   path: string,
   platform: NodeJS.Platform
 ): ExternalEditorLaunchSpec {
-  const spec = resolveVsCodeRemoteSshLaunchSpec(code, path, 'builder', {
-    platform,
-    fileExists: () => true
-  })
-  if (!spec) {
+  const result = resolveRemoteSshEditorLaunchSpec(
+    code,
+    path,
+    { id: 'ssh-1', label: 'Builder', host: 'builder', port: 22, username: '', source: 'manual' },
+    { platform, fileExists: () => true }
+  )
+  if (!result.ok) {
     throw new Error('expected a VS Code launch spec')
   }
-  return spec
+  return result.launchSpec
 }
 
 const HIDDEN_FIELDS = { detached: true, stdio: 'ignore', windowsHide: true, shell: false }

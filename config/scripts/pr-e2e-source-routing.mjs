@@ -145,6 +145,16 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'ssh.orcad-ssh-failure-reason',
+    specs: ['tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:ipc\/ssh\/(?:ssh-connect-flow|ssh-host-server-)|ssh\/(?:ssh-session-start-failure|ssh-host-server-|connection\/ssh-connection-manager))|renderer\/src\/ssh\/(?:ssh-host-server-status-copy|ssh-connect-failure-toast))/.test(
+          file
+        ))
+  },
+  {
     id: 'ssh.orcad-update-anyway',
     specs: ['tests/e2e/ssh-orcad-update-anyway.spec.ts'],
     matches: (file) =>

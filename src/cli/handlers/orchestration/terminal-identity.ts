@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../../runtime-client'
-import { getOptionalStringFlag } from '../../flags'
+import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
@@ -21,7 +21,7 @@ export async function resolveOrchestrationTerminalHandle(
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string | undefined> {
   // CLI entry already fences caller flags using the command spec.
-  const explicit = getOptionalStringFlag(flags, flagName)
+  const explicit = getPresentStringFlag(flags, flagName)
   const sessionId = readInjectedAgentSessionId()
   if (sessionId) {
     return explicit ? sessionAddressForHost(explicit, sessionId) : undefined

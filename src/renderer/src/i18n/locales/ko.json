@@ -6046,17 +6046,17 @@
           "sshTargetNotFoundDetail": "워크스페이스의 새로고침을 실행하거나 호스트를 다시 연결한 후 다시 시도하세요.",
           "sshTargetInvalid": "SSH 호스트 구성이 불완전합니다.",
           "sshTargetInvalidDetail": "SSH 호스트를 편집하거나 다시 연결한 후 다시 시도하세요.",
-          "sshAliasRequired": "VS Code에는 이 호스트에 대한 SSH 구성 별칭이 필요합니다.",
+          "sshAliasRequired": "이 편집기에는 이 호스트에 대한 SSH 구성 별칭이 필요합니다.",
           "sshAliasRequiredDetail": "로컬 SSH 설정에 {{host}}:{{port}}의 Host 별칭을 추가하고 워크스페이스를 다시 연결한 후 다시 시도하세요.",
           "remoteEditorUnsupported": "이 앱은 SSH 워크스페이스를 열 수 없습니다.",
-          "remoteEditorUnsupportedDetail": "VS Code를 선택하거나 로컬에서 앱을 사용하세요.",
+          "remoteEditorUnsupportedDetail": "VS Code, Cursor 또는 Zed를 선택하거나 앱을 로컬에서 사용하세요.",
           "remotePathInvalid": "SSH 호스트에 대한 경로가 유효하지 않습니다.",
           "remotePathInvalidDetail": "워크스페이스의 새로고침을 실행한 후 다시 시도하세요.",
-          "remoteLaunchFailed": "VS Code에서 경로를 열 수 없습니다.",
-          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 VS Code 명령을 확인하세요.",
+          "remoteLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
+          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
           "wsl": "WSL",
           "remoteRuntimeEditorHint": "Orca가 SSH로 이 서버에 연결된 경우에만 이 컴퓨터의 앱에서 서버 파일을 열 수 있습니다.",
-          "remoteEditorHint": "VS Code만 SSH 호스트의 폴더를 열 수 있습니다."
+          "remoteEditorHint": "VS Code, Cursor, Zed만 SSH 호스트의 폴더를 열 수 있습니다."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "읽지 않음:",

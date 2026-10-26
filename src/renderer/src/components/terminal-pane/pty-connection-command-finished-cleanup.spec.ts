@@ -225,14 +225,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          createDeps({ isVisibleRef: { current: false } })
-        )
-      )
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -253,6 +248,8 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
       // Process-confirmed exit must reconcile caches; agentStatus:drop retains live-pane latches that would restore working status (STA-4612).
       expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+      // Shell-confirmed exit must leave ChatView even when the agent's OSC title survives.
+      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
     })
 
     it.each([
@@ -274,14 +271,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          createDeps({ isVisibleRef: { current: false } })
-        )
-      )
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -308,9 +300,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
           agent: 'codex'
         })
+        expect(deps.onAgentExitedRef.current).not.toHaveBeenCalled()
       } else {
         expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
         expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
       }
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
         agent: null,

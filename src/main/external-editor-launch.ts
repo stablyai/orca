@@ -4,7 +4,7 @@ import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
-import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
+import { isVsCodeLauncherExecutable } from '../shared/remote-ssh-editor-launcher'
 import { resolveCliCommand } from './codex-cli/command'
 import { envWithoutAppImageRuntime } from './pty/appimage-terminal-env'
 import {
@@ -217,35 +217,20 @@ export function resolveExternalEditorLaunchSpec(
   )
 }
 
-export function resolveVsCodeRemoteSshLaunchSpec(
+/** The executable a remote launch would spawn; null for compound shell commands, which carry no single launcher. */
+export function resolveExternalEditorExecutable(
   command: string | undefined,
-  pathValue: string,
-  authority: string,
   options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
-): ExternalEditorLaunchSpec | null {
+): string | null {
   const platform = options.platform ?? process.platform
   const fileExists = options.fileExists ?? existsSync
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
-
-  let editorCommand: string
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    editorCommand = stripMatchingQuotes(trimmed)
-  } else {
-    if (isCompoundShellCommand(trimmed)) {
-      return null
-    }
-    editorCommand = resolveEditorCliCommand(trimmed, platform, fileExists)
+    return stripMatchingQuotes(trimmed)
   }
-
-  if (!isVsCodeLauncherExecutable(editorCommand)) {
-    return null
-  }
-  return {
-    kind: 'executable',
-    hideWindowsConsole: true,
-    spawnCmd: editorCommand,
-    spawnArgs: ['--remote', `ssh-remote+${authority}`, pathValue]
-  }
+  return isCompoundShellCommand(trimmed)
+    ? null
+    : resolveEditorCliCommand(trimmed, platform, fileExists)
 }
 
 function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
