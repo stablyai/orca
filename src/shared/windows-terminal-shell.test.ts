@@ -48,6 +48,8 @@ describe('isSupportedWindowsShellOverride', () => {
       'cmd',
       'cmd.exe',
       'git-bash',
+      'niu',
+      'niu.exe',
       'powershell',
       'powershell.exe',
       'pwsh',

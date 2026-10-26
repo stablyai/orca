@@ -128,6 +128,27 @@ describe('createSetupRunnerScript', () => {
     }
   })
 
+  it('preserves native paths in Niubash setup runner environment', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.sh\n')
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = createSetupRunnerScript(
+        makeRepo(),
+        'D:\\项目 space',
+        '#!/usr/bin/env bash\npwd',
+        undefined,
+        { family: 'posix', executable: 'niu.exe' }
+      )
+      expect(result.envVars.ORCA_WORKTREE_PATH).toBe('D:/项目 space')
+      expect(result.shell).toEqual({ family: 'posix', executable: 'niu.exe' })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
   it('keeps batch setup scripts on cmd.exe when the terminal is Git Bash', async () => {
     // Batch scripts must retain cmd semantics even when the pane uses Git Bash (#6967).
     gitExecFileSyncMock.mockReset()

@@ -1,6 +1,6 @@
 // Share bare-shell detection across runtime/renderer to avoid injecting agent preambles into an ordinary shell.
 const SHELL_NAMES = new Set(
-  '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu|ksh|mksh|dash|ash|tcsh|csh|elvish|xonsh'.split(
+  '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu|niu|ksh|mksh|dash|ash|tcsh|csh|elvish|xonsh'.split(
     '|'
   )
 )

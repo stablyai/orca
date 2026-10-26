@@ -2,8 +2,15 @@ import { defineMethod } from '../core'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
+import { resolveNiubashPath } from '../../../niubash'
 
 export const HOST_CAPABILITY_METHODS = [
+  defineMethod({
+    name: 'host.niubash.isAvailable',
+    permission: 'workspace',
+    params: null,
+    handler: async () => resolveNiubashPath() !== null
+  }),
   defineMethod({
     name: 'host.platform',
     permission: 'workspace',

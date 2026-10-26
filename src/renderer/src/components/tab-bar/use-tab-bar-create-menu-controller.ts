@@ -158,6 +158,7 @@ export function useTabBarCreateMenuController({
       projectRuntimeShellMenuMode,
       defaultWindowsShell,
       gitBashAvailable: windowsTerminalCapabilities.gitBashAvailable,
+      niubashAvailable: windowsTerminalCapabilities.niubashAvailable,
       wslAvailable: windowsTerminalCapabilities.wslAvailable
     })
   }, [
@@ -166,6 +167,7 @@ export function useTabBarCreateMenuController({
     projectRuntimeShellMenuMode,
     showWindowsShellMenu,
     windowsTerminalCapabilities.gitBashAvailable,
+    windowsTerminalCapabilities.niubashAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
   const createMenuOptions = useMemo(
