@@ -91,7 +91,7 @@ describe('local edge credential mutation ownership', () => {
     })
     expect(dependencies.write).not.toHaveBeenCalled()
   })
-  it('does not reset transports if protected persistence fails', async () => {
+  it('retires old transports even when protected persistence fails', async () => {
     dependencies.write.mockImplementation(() => {
       throw new Error('Could not save edge authentication')
     })
@@ -102,6 +102,46 @@ describe('local edge credential mutation ownership', () => {
         headers: [{ name: 'X', value: 'secret' }]
       })
     ).rejects.toThrow('Could not save edge authentication')
-    expect(dependencies.invalidate).not.toHaveBeenCalled()
+    expect(dependencies.invalidate).toHaveBeenCalledExactlyOnceWith('env-1')
+  })
+
+  it.each(['throw', 'reject'] as const)(
+    'preserves the storage error if transport retirement also fails with %s',
+    async (kind) => {
+      const storageError = new Error('Could not save edge authentication')
+      dependencies.write.mockImplementation(() => {
+        throw storageError
+      })
+      dependencies.invalidate.mockImplementation(() => {
+        const retirementError = new Error('Could not retire transport')
+        if (kind === 'throw') {
+          throw retirementError
+        }
+        return Promise.reject(retirementError)
+      })
+      await expect(
+        invoke('saveEdgeAuth', {
+          environmentId: 'env-1',
+          expectedPairingRevision: 1,
+          headers: [{ name: 'X', value: 'secret' }]
+        })
+      ).rejects.toBe(storageError)
+      expect(dependencies.invalidate).toHaveBeenCalledExactlyOnceWith('env-1')
+      expect(dependencies.status).not.toHaveBeenCalled()
+    }
+  )
+
+  it('reports transport retirement failure after a successful credential write', async () => {
+    const retirementError = new Error('Could not retire transport')
+    dependencies.invalidate.mockRejectedValue(retirementError)
+    await expect(
+      invoke('saveEdgeAuth', {
+        environmentId: 'env-1',
+        expectedPairingRevision: 1,
+        headers: [{ name: 'X', value: 'secret' }]
+      })
+    ).rejects.toBe(retirementError)
+    expect(dependencies.write).toHaveBeenCalledOnce()
+    expect(dependencies.status).not.toHaveBeenCalled()
   })
 })

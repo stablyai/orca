@@ -55,7 +55,16 @@ export function registerRuntimeEnvironmentEdgeAuthHandlers({
     ) {
       throw new Error('Edge authentication requires a direct secure server address')
     }
-    writeRuntimeEdgeAuth(getUserDataPath(), environment, normalized.headers)
+    try {
+      writeRuntimeEdgeAuth(getUserDataPath(), environment, normalized.headers)
+    } catch (error) {
+      try {
+        await invalidateTransport(environment.id)
+      } catch {
+        // Preserve the storage error after attempting to retire possibly replaced credentials.
+      }
+      throw error
+    }
     await invalidateTransport(environment.id)
     return getRuntimeEdgeAuthStatus(getUserDataPath(), environment)
   })
