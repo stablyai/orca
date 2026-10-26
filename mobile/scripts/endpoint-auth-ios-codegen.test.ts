@@ -65,3 +65,26 @@ it('ships iOS native interfaces generated from the patched socket schema', () =>
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+it('implements the generated iOS socket constants return types', () => {
+  const header = readFileSync(
+    join(nativeRoot, 'React', 'FBReactNativeSpec', 'FBReactNativeSpec', 'FBReactNativeSpec.h'),
+    'utf8'
+  )
+  const start = header.indexOf('@protocol NativeWebSocketModuleSpec')
+  expect(start).toBeGreaterThanOrEqual(0)
+  const protocol = header.slice(start, header.indexOf('@end', start))
+  const implementation = readFileSync(
+    join(nativeRoot, 'React', 'CoreModules', 'RCTWebSocketModule.mm'),
+    'utf8'
+  )
+  for (const method of ['constantsToExport', 'getConstants']) {
+    const signature = new RegExp(String.raw`- \(([^)]+)\)${method}`)
+    const requiredType = protocol.match(signature)?.[1]
+    expect(requiredType).toBeTruthy()
+    expect(implementation.match(signature)?.[1]).toBe(requiredType)
+  }
+  const constantsType = protocol.match(/ModuleConstants<(.+)>/)?.[1]
+  expect(constantsType).toBeTruthy()
+  expect(implementation).toContain(`typedConstants<${constantsType}>`)
+})

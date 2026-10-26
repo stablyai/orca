@@ -166,14 +166,14 @@ index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..9d6bb6148633770c1aae618d3d3eedf1
  
  RCT_EXPORT_MODULE()
  
-+- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)constantsToExport
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants::Builder>)constantsToExport
 +{
-+  return (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)[self getConstants];
++  return (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants::Builder>)[self getConstants];
 +}
 +
-+- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)getConstants
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants::Builder>)getConstants
 +{
-+  return facebook::react::typedConstants<JS::NativeWebSocketModule::Constants>({
++  return facebook::react::typedConstants<JS::NativeWebSocketModule::Constants::Builder>({
 +      .supportsNoRedirects = true,
 +  });
 +}
