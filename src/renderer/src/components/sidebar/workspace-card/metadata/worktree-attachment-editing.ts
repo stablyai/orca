@@ -2,9 +2,13 @@ import type { HostedReviewProvider } from '../../../../../../shared/source-contr
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { normalizeGitRemoteUrl } from '../../../../../../shared/git/remotes/git-remote-identity'
+import {
+  matchGitRemoteKeyParts,
+  normalizeGitRemoteUrl,
+  splitGitRemoteKey
+} from '../../../../../../shared/git/remotes/git-remote-identity'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types
 import {
   getWorkspaceAttachments,
   workspaceAttachmentReferenceLabel
@@ -252,9 +256,17 @@ export function isWorkspaceRepositoryAttachment(
   if (!remoteKey) {
     return false
   }
-  try {
-    return normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item)) === remoteKey
-  } catch {
+  const scopeKey = normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item))
+  if (!scopeKey) {
     return false
   }
+  const identityParts = splitGitRemoteKey(remoteKey, (host) => host)
+  const scopeParts = splitGitRemoteKey(scopeKey, (host) => host)
+  if (!identityParts || !scopeParts) {
+    return scopeKey === remoteKey
+  }
+  // Why tri-state: a remote whose host is an unexpanded SSH alias must not reject this
+  // repository's own web-URL attachments; 'unknown' stays permissive, matching the
+  // jump-palette URL matchers (#31953).
+  return matchGitRemoteKeyParts(identityParts, scopeParts) !== false
 }
