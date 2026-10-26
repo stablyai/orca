@@ -21,7 +21,9 @@ const buttonVariants = cva(
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
+        // The Desktop App agent pill's action, on its fixed light surface in both themes.
+        'agent-control-pill': 'font-semibold hover:bg-agent-control-surface-foreground/5'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

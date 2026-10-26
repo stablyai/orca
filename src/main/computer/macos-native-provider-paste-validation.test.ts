@@ -76,7 +76,7 @@ function macOSProviderCapabilities() {
     platform: 'darwin',
     provider: 'orca-computer-use-macos',
     providerVersion: '1.0.0',
-    protocolVersion: 1,
+    protocolVersion: 2,
     supports: {
       actions: {
         pasteText: true

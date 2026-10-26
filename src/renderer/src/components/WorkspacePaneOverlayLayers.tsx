@@ -2,10 +2,11 @@ import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
+import DesktopAppPaneOverlayLayer from './desktop-app-pane/DesktopAppPaneOverlayLayer'
 import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 
-/** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */
+/** Share retained pane hosts (terminal, browser, emulator, desktop app, structured chat) across group-tree hosts so retention, parking and guest paint have one lifecycle owner. */
 export function WorkspacePaneOverlayLayers({
   worktreeId,
   worktreePath,
@@ -54,7 +55,10 @@ export function WorkspacePaneOverlayLayers({
         mountEligible={mountRetainedBrowserOverlay}
       />
       {mountEmulatorOverlay ? (
-        <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+        <>
+          <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+          <DesktopAppPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+        </>
       ) : null}
       <StructuredAgentSessionPaneOverlayLayer
         worktreeId={worktreeId}

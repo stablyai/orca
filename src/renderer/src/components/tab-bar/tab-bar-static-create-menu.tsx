@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { AppWindow, FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -56,6 +56,7 @@ export function TabBarStaticCreateMenu({
     onNewTerminalWithShell,
     onNewBrowserTab,
     onNewSimulatorTab,
+    onNewDesktopAppTab,
     onNewFileTab,
     onOpenFileTab
   } = props
@@ -144,6 +145,19 @@ export function TabBarStaticCreateMenu({
         </DropdownMenuItem>
       )
     ) : null
+  const newDesktopAppMenuItem =
+    !terminalOnly && onNewDesktopAppTab ? (
+      <DropdownMenuItem
+        onSelect={onNewDesktopAppTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <AppWindow className="size-4 text-muted-foreground" />
+        {translate(
+          'auto.components.tab.bar.tab.bar.static.create.menu.b7f15e1cd8',
+          'New Desktop App'
+        )}
+      </DropdownMenuItem>
+    ) : null
   const newMarkdownMenuItem =
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
@@ -185,6 +199,7 @@ export function TabBarStaticCreateMenu({
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
       {newSimulatorMenuItem}
+      {newDesktopAppMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
   ) : (
@@ -194,6 +209,7 @@ export function TabBarStaticCreateMenu({
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}
+      {newDesktopAppMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
   )

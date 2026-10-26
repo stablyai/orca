@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LIVE_SURFACE_CONTENT_TYPES } from './tab-types'
 
 export const tabContentTypeSchema = z.enum([
   'terminal',
@@ -8,7 +9,7 @@ export const tabContentTypeSchema = z.enum([
   'check-details',
   'agent-session',
   'browser',
-  'simulator'
+  ...LIVE_SURFACE_CONTENT_TYPES
 ])
 
 export const workspaceVisibleTabTypeSchema = z.enum([
@@ -16,5 +17,5 @@ export const workspaceVisibleTabTypeSchema = z.enum([
   'editor',
   'agent-session',
   'browser',
-  'simulator'
+  ...LIVE_SURFACE_CONTENT_TYPES
 ])

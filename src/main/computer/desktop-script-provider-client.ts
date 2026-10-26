@@ -19,6 +19,7 @@ import {
   verifyDesktopAction
 } from './desktop-script-action'
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
+import { callDesktopScriptDesktopApp } from './desktop-script-desktop-app'
 import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
 import {
   optionalNumberParam,
@@ -39,6 +40,7 @@ import { DesktopScriptRuntimeHost, isRuntimeHostUnavailable } from './desktop-sc
 import { DesktopScriptSnapshotStore } from './desktop-script-snapshot-store'
 import { normalizeBridgeApp, renderSnapshot } from './desktop-script-snapshot-rendering'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import type { NativeDesktopAppMethod } from './macos-native-provider-contract'
 import { RuntimeClientError } from './runtime-client-error'
 
 export function shouldUseDesktopScriptProvider(): boolean {
@@ -195,6 +197,16 @@ export class DesktopScriptProviderClient {
       ),
       action
     })
+  }
+
+  async desktopApp(method: NativeDesktopAppMethod, params: unknown): Promise<unknown> {
+    return await callDesktopScriptDesktopApp(
+      (request) => this.callBridge(request),
+      method,
+      params,
+      process.ppid,
+      this.platform
+    )
   }
 
   private async ensureActionSupported(method: NativeActionMethod): Promise<void> {
