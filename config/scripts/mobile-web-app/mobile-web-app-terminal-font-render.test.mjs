@@ -111,7 +111,7 @@ describeRender('terminal font startup and late painting', () => {
 
   it('swaps to an imported font and back, refitting the grid to its cell width', async () => {
     const geist = readFileSync(
-      new URL('../../docs/site/src/assets/fonts/Geist-Regular.ttf', import.meta.url)
+      new URL('../../../docs/site/src/assets/fonts/Geist-Regular.ttf', import.meta.url)
     )
     const source = `data:font/ttf;base64,${geist.toString('base64')}`
     const { page } = await openTerminal()
