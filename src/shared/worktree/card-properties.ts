@@ -53,8 +53,18 @@ export const WORKTREE_CARD_PROPERTIES = [
   'comment',
   'ports',
   'inline-agents',
-  'host'
+  'host',
+  'hide-project-name'
 ] as const satisfies readonly WorktreeCardProperty[]
+
+export function isWorktreeCardPropertyVisible(
+  properties: readonly string[],
+  property: WorktreeCardProperty
+): boolean {
+  return property === 'hide-project-name'
+    ? !properties.includes(property)
+    : properties.includes(property)
+}
 
 export function normalizeWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
@@ -119,6 +129,7 @@ function matchesWorktreeCardProperties(
 export type WorktreeCardDetails = {
   /** The Compact layout as it applies: the new card style overrides it. */
   compactCards: boolean
+  projectName: boolean
   /** Repo identity sits in the title row, not the meta row (compact cards and the new card style).
    *  Read by the phone row and the desktop card's repo badge. */
   repoInTitle: boolean
@@ -148,6 +159,7 @@ export function getWorktreeCardDetails(
   const shows = (property: WorktreeCardProperty) => cardProps.includes(property)
   return {
     compactCards,
+    projectName: isWorktreeCardPropertyVisible(cardProps, 'hide-project-name'),
     repoInTitle: settings.newCardStyle || compactCards,
     metaRow,
     issue: shows('issue'),

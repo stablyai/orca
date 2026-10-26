@@ -17,9 +17,11 @@ import type { WorktreeCardController } from './use-worktree-card-controller'
 
 function RepoIdentityChip({
   repo,
+  showName,
   children
 }: {
   repo: Repo
+  showName: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -37,10 +39,11 @@ function RepoIdentityChip({
           <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
             {children}
           </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
+          {showName && (
+            <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
+              {repo.displayName}
+            </span>
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
@@ -60,6 +63,7 @@ export function WorktreeCardHeader({
   const {
     worktree,
     repo,
+    cardDetails,
     affiliateListMode,
     renameRowKey,
     compactCards,
@@ -99,7 +103,7 @@ export function WorktreeCardHeader({
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && (
-          <RepoIdentityChip repo={repo!}>
+          <RepoIdentityChip repo={repo!} showName={cardDetails.projectName}>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
@@ -160,7 +164,7 @@ export function WorktreeCardHeader({
         )}
 
         {showInlineRepoBadge && (
-          <RepoIdentityChip repo={repo!}>
+          <RepoIdentityChip repo={repo!} showName={cardDetails.projectName}>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
