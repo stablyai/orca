@@ -2,13 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 import {
   parseAntigravityNativeCredential,
-  readAntigravityAccessToken,
   type AntigravityNativeCredential
 } from './native-credential-codec'
-import type {
-  AntigravityIdentityResolver,
-  ResolvedGoogleIdentity
-} from './google-userinfo-identity'
+import { fetchGoogleIdentity } from './google-userinfo-identity'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -42,7 +38,7 @@ export class AntigravityAccountService {
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
-    private readonly resolveGoogleIdentity: AntigravityIdentityResolver | null = null
+    private readonly lookupIdentity = fetchGoogleIdentity
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -58,22 +54,11 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => matches(entry, current))) {
         return this.state({ vault, current })
       }
-      const identity = current.identity ?? (await this.resolveCurrentIdentity(current))
-      // Re-read after the lookup: agy may have rewritten the credential while Google answered.
-      const readback = await this.backend.read()
-      if (readback?.contents !== current.contents) {
-        throw new Error('The Antigravity credential changed while saving; nothing was saved.')
-      }
+      const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
+      const identified = { ...current, identity }
       const latest = this.store.read()
-      const existing = latest.accounts.find(
-        (entry) => entry.subject === identity.subject && entry.authMethod === current.authMethod
-      )
-      const timestamp = this.now()
-      if (existing) {
-        existing.credentials = current.contents
-        existing.email = identity.email ?? existing.email
-        existing.updatedAt = timestamp
-      } else {
+      if (!latest.accounts.some((entry) => matches(entry, identified))) {
+        const timestamp = this.now()
         latest.accounts.push({
           id: randomUUID(),
           email: identity.email,
@@ -84,8 +69,9 @@ export class AntigravityAccountService {
           updatedAt: timestamp
         })
       }
+      this.updateSnapshot(latest, identified)
       this.store.write(latest)
-      return this.state({ vault: latest, current })
+      return this.state({ vault: latest, current: identified })
     })
   }
 
@@ -160,17 +146,6 @@ export class AntigravityAccountService {
     })
   }
 
-  private async resolveCurrentIdentity(
-    current: AntigravityNativeCredential
-  ): Promise<ResolvedGoogleIdentity> {
-    if (!this.resolveGoogleIdentity) {
-      throw new Error(
-        'The current Antigravity credential has no stable Google identity; it cannot be saved for switching.'
-      )
-    }
-    return this.resolveGoogleIdentity(readAntigravityAccessToken(current.contents))
-  }
-
   private async reconcile() {
     const current = await this.backend.read()
     // Re-read after native I/O so a delayed read never restores an older vault.
@@ -213,8 +188,7 @@ export class AntigravityAccountService {
             email: current.identity ? current.identity.email : (active?.email ?? null),
             subject,
             authMethod: current.authMethod,
-            identityKnown: subject !== null,
-            ...(this.resolveGoogleIdentity ? { identityResolvable: subject === null } : {})
+            identityKnown: subject !== null
           }
         : null
     }

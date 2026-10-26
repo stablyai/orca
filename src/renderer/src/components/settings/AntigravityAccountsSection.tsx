@@ -211,10 +211,7 @@ export function AntigravityAccountsSection({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={
-                busy ||
-                !(state.currentAccount?.identityKnown || state.currentAccount?.identityResolvable)
-              }
+              disabled={busy || !state.currentAccount}
               onClick={() => void run('AddCurrent')}
             >
               {translate('accounts.antigravity.save', 'Save current account')}

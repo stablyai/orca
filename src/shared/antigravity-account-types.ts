@@ -15,8 +15,6 @@ export type AntigravityAccountState = {
     subject: string | null
     authMethod: string
     identityKnown: boolean
-    /** The credential names no account, but Save current account can ask Google who it belongs to. */
-    identityResolvable?: boolean
   } | null
   selectedAccountId: string | null
 }
