@@ -17,7 +17,7 @@ import {
   type PickedMobileFile,
   type PickedMobileImage
 } from './media-picker-contract'
-import { mobilePickedFileFallbackName } from './mobile-picked-file-name'
+import { isPickedImageMime, mobilePickedFileFallbackName } from './mobile-picked-file-name'
 
 // Read staged handles in chunks because images exceed reply caps; release every handle, including unused extras, before the eight-item registry fills.
 // Refusals reject; only user cancellation returns an empty selection.
@@ -50,7 +50,10 @@ async function* readPicked(
     while (unread.length > 0) {
       const item = unread[0]!
       index += 1
-      const fileName = source === 'files' ? await pickedFileName(verbs, item, index) : undefined
+      const fileName =
+        source === 'files' && !isPickedImageMime(item.mime)
+          ? await pickedFileName(verbs, item, index)
+          : undefined
       const base64 = await readStagedMediaItem(verbs, item)
       // Release before yielding because callers may stop after one image and strand scarce handles.
       unread.shift()

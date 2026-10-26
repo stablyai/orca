@@ -317,17 +317,22 @@ describe('picking files from inside the shell', () => {
     expect(shell.released).toEqual(['media-1'])
   })
 
-  it("keeps the shell's name on a single files pick, which the terminal uploads under it", async () => {
+  it("names a non-image files pick for the terminal upload and leaves an image's to the host", async () => {
     const shell = createMediaTestShell({
-      staged: { files: [{ bytes: stagedTestBytes(3), mime: 'text/plain', name: 'notes.txt' }] }
+      staged: {
+        files: [
+          { bytes: stagedTestBytes(3), mime: 'image/png', name: 'diagram.png' },
+          { bytes: stagedTestBytes(3), mime: 'text/plain', name: 'notes.txt' }
+        ]
+      }
     })
     const pair = pairFor(shell)
     const picker = await mount(pair)
 
-    expect(await settle(pair, picker.pickImage('files'))).toEqual({
-      base64: encodeTestBase64(stagedTestBytes(3)),
-      fileName: 'notes.txt'
-    })
+    expect(await collect(pair, picker.pickImages('files'))).toEqual([
+      { base64: encodeTestBase64(stagedTestBytes(3)) },
+      { base64: encodeTestBase64(stagedTestBytes(3)), fileName: 'notes.txt' }
+    ])
   })
 
   it('names the file from its type on a shell too old to name it', async () => {

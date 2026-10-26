@@ -60,7 +60,7 @@ export function useMobileNativeChatTerminalStream(args: {
   const notifyListedHandles = useCallback(
     (liveHandles: ReadonlySet<string>) => {
       // Refill exhausted rearms only after list absence and return; still-listed dead PTYs must not renew their own loop.
-      const handle = coveredHandleRef.current
+      const handle = coveredHandleRef.current ?? args.activeHandle
       if (handle == null) {
         return
       }
@@ -78,18 +78,18 @@ export function useMobileNativeChatTerminalStream(args: {
       forgetRearmState(handle)
       setRearmBudgetRevision((revision) => revision + 1)
     },
-    [forgetRearmState]
+    [args.activeHandle, forgetRearmState]
   )
   const hasTabsRecoveryNeed = useCallback((): boolean => {
     // Keep polling until a replacement handle arrives; an equal cached snapshot
     // must not consume recovery and strand the composer on the dead handle.
-    const handle = coveredHandleRef.current
+    const handle = coveredHandleRef.current ?? args.activeHandle
     return (
       handle != null &&
       absentSinceExhaustionRef.current.has(handle) &&
       (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
     )
-  }, [])
+  }, [args.activeHandle])
   const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {

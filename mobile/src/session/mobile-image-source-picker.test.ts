@@ -157,7 +157,14 @@ describe('pickMobileImage', () => {
     const file = fileFactory(bytes)
     const launchFiles = vi.fn().mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///book.txt', name: '柴静-看见.txt', size: bytes.length }]
+      assets: [
+        {
+          uri: 'file:///book.txt',
+          name: '柴静-看见.txt',
+          mimeType: 'text/plain',
+          size: bytes.length
+        }
+      ]
     })
 
     const result = await pickMobileImage('files', {

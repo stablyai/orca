@@ -9,7 +9,7 @@ export type PickedMobileImage = {
   readonly base64: string
   // Preview only; upload uses base64, and some sources cannot provide a local URI.
   readonly uri?: string
-  // Files-app picks keep their name so the host saves the file under it.
+  // Non-image Files-app picks keep their name so the host saves the file under it.
   readonly fileName?: string
 }
 
