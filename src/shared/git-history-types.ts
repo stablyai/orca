@@ -22,6 +22,9 @@ export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
 
 export const GIT_HISTORY_DEFAULT_LIMIT = 50
 export const GIT_HISTORY_MAX_LIMIT = 200
+export const GIT_HISTORY_MAX_REVISIONS = 10_000
+
+export type GitHistoryScope = 'all' | 'current'
 
 export type GitHistoryRefCategory = 'branches' | 'remote branches' | 'tags' | 'commits'
 
@@ -57,6 +60,15 @@ export type GitHistoryItem = {
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  includeRelatedRefs?: boolean
+  scope?: GitHistoryScope
+  cursor?: GitHistoryCursor
+}
+
+export type GitHistoryCursor = {
+  revisions: string[]
+  offset: number
+  order?: 'date'
 }
 
 export type GitHistoryResult = {
@@ -69,9 +81,12 @@ export type GitHistoryResult = {
   hasOutgoingChanges: boolean
   hasMore: boolean
   limit: number
+  nextCursor?: GitHistoryCursor
+  scope?: GitHistoryScope
 }
 
 export type GitHistoryExecutor = (
   args: string[],
-  cwd: string
+  cwd: string,
+  stdin?: string
 ) => Promise<{ stdout: string; stderr?: string }>

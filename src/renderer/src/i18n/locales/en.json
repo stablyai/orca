@@ -1,4 +1,18 @@
 {
+  "source-control": {
+    "history": {
+      "label": "Commit history",
+      "all-branches": "All branches",
+      "current-branch": "Current branch",
+      "scope": "History branches",
+      "unsupported-scope": "Restart Orca or update the execution host to display all branches.",
+      "loading-more": "Loading more commits…",
+      "retry": "Retry loading commits",
+      "load-more": "Load more commits",
+      "update-host": "Restart Orca or update the execution host to load older commits.",
+      "all-loaded": "All commits loaded"
+    }
+  },
   "csv": {
     "detectingDelimiter": "Detecting delimiter…",
     "indexProgress": "Indexing CSV… {{percent}}%",
