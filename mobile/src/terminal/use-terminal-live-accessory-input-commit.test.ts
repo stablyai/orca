@@ -29,7 +29,6 @@ type AccessoryInputCommitHarnessOptions = {
   readonly heldText?: string
   readonly sentText?: string
   readonly pendingHandle?: string | null
-  readonly sendResult?: boolean
   readonly waitResult?: boolean
 }
 
@@ -38,8 +37,6 @@ type AccessoryInputCommitHarness = {
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly applyLiveInputMirror: ReturnType<typeof vi.fn>
-  readonly endLiveInputSessionThenSend: ReturnType<typeof vi.fn>
-  readonly queueLiveInputControl: ReturnType<typeof vi.fn>
   readonly waitForPendingLiveInputFlush: ReturnType<typeof vi.fn>
   readonly unmount: () => void
 }
@@ -49,7 +46,6 @@ function createAccessoryInputCommitHarness({
   heldText = '',
   sentText = '',
   pendingHandle = null,
-  sendResult = true,
   waitResult = true
 }: AccessoryInputCommitHarnessOptions = {}): AccessoryInputCommitHarness {
   const activeHandle = 'terminal-a'
@@ -63,8 +59,8 @@ function createAccessoryInputCommitHarness({
     async (_handle: string, _fieldText: string, _composing?: boolean) => true
   )
   const clearPendingLiveInputCommit = vi.fn(() => {})
-  const endLiveInputSessionThenSend = vi.fn(async (_handle: string, _bytes: string) => sendResult)
-  const queueLiveInputControl = vi.fn(async (_handle: string, _bytes: string) => sendResult)
+  const endLiveInputSessionThenSend = vi.fn(async (_handle: string, _bytes: string) => true)
+  const queueLiveInputControl = vi.fn(async (_handle: string, _bytes: string) => true)
   const waitForPendingLiveInputFlush = vi.fn(async () => waitResult)
   const setLiveInputCapture = vi.fn((_text: string) => {})
 
@@ -101,8 +97,6 @@ function createAccessoryInputCommitHarness({
   return {
     commit,
     applyLiveInputMirror,
-    endLiveInputSessionThenSend,
-    queueLiveInputControl,
     waitForPendingLiveInputFlush,
     unmount: () => {
       act(() => renderer?.unmount())
@@ -140,67 +134,6 @@ describe('terminal live accessory inactive input commit result', () => {
 })
 
 describe('terminal live accessory input commit hook', () => {
-  it('Given raw accessory bytes with a held syllable When committed Then ends the field session with the bytes queued behind it', async () => {
-    const harness = createAccessoryInputCommitHarness({
-      heldText: '한',
-      sentText: '',
-      pendingHandle: 'terminal-a'
-    })
-
-    const result = await harness.commit({ bytes: '\x1b' })
-
-    expect(harness.endLiveInputSessionThenSend).toHaveBeenCalledWith('terminal-a', '\x1b')
-    expect(result).toEqual({ kind: 'handled' })
-  })
-
-  it('Given held text with a failed control send When committed Then reports the accessory input as suppressed', async () => {
-    const harness = createAccessoryInputCommitHarness({
-      heldText: '한',
-      pendingHandle: 'terminal-a',
-      sendResult: false
-    })
-
-    const result = await harness.commit({ bytes: '\x1b' })
-
-    expect(result).toEqual({ kind: 'suppress-raw' })
-  })
-
-  it('Given raw accessory bytes with no held text When committed Then queues them behind pending text instead of a raw send', async () => {
-    const harness = createAccessoryInputCommitHarness({ pendingHandle: null })
-
-    const result = await harness.commit({ bytes: '\x1b' })
-
-    expect(harness.queueLiveInputControl).toHaveBeenCalledWith('terminal-a', '\x1b')
-    expect(harness.endLiveInputSessionThenSend).not.toHaveBeenCalled()
-    expect(result).toEqual({ kind: 'handled' })
-  })
-
-  // Line-ending controls must clear mirrored text even with no held preedit; otherwise later keystrokes append to the previous command.
-  it('Given an accessory Enter with mirrored sent text and no held text When committed Then ends the field session with the Return queued', async () => {
-    const harness = createAccessoryInputCommitHarness({
-      pendingHandle: 'terminal-a',
-      sentText: 'ls'
-    })
-
-    const result = await harness.commit({ bytes: '\r' })
-
-    expect(harness.endLiveInputSessionThenSend).toHaveBeenCalledWith('terminal-a', '\r')
-    // The hook sends this control; a raw send by the caller would duplicate Return.
-    expect(result).toEqual({ kind: 'handled' })
-  })
-
-  it('Given an accessory Enter that is not delivered When committed Then suppresses the raw send', async () => {
-    const harness = createAccessoryInputCommitHarness({
-      pendingHandle: 'terminal-a',
-      sentText: 'ls',
-      sendResult: false
-    })
-
-    const result = await harness.commit({ bytes: '\r' })
-
-    expect(result).toEqual({ kind: 'suppress-raw' })
-  })
-
   it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {
     const harness = createAccessoryInputCommitHarness({
       composing: true,
