@@ -519,9 +519,9 @@ describe('buildRecentSessionCardFromTab', () => {
       }
     }
 
-    expect(
-      resolveMobileSessionTabDotState(completedBgTab, 200, { isActiveOnScreen: false })
-    ).toBe('unread')
+    expect(resolveMobileSessionTabDotState(completedBgTab, 200, { isActiveOnScreen: false })).toBe(
+      'unread'
+    )
 
     expect(
       getVisibleRecentSessionCards({
@@ -533,9 +533,9 @@ describe('buildRecentSessionCardFromTab', () => {
     ).toEqual([expect.objectContaining({ tabId: 'tab-bg', agentState: 'unread' })])
 
     // Once the user views tab-bg on screen, it acknowledges the completion and turns to done.
-    expect(
-      resolveMobileSessionTabDotState(completedBgTab, 210, { isActiveOnScreen: true })
-    ).toBe('done')
+    expect(resolveMobileSessionTabDotState(completedBgTab, 210, { isActiveOnScreen: true })).toBe(
+      'done'
+    )
 
     reconcileRecentSessionCardsForWorktree({
       hostId: 'host-1',
@@ -545,15 +545,36 @@ describe('buildRecentSessionCardFromTab', () => {
     })
 
     // Switching back to tab-fg leaves tab-bg as done (green dot) since that turn was acknowledged.
-    expect(
-      resolveMobileSessionTabDotState(completedBgTab, 220, { isActiveOnScreen: false })
-    ).toBe('done')
+    expect(resolveMobileSessionTabDotState(completedBgTab, 220, { isActiveOnScreen: false })).toBe(
+      'done'
+    )
     expect(
       getVisibleRecentSessionCards({
         hostId: 'host-1',
         currentWorktreeId: 'wt-1',
         currentTabId: 'tab-fg',
         currentWorktreeTabs: [completedBgTab]
+      })
+    ).toEqual([expect.objectContaining({ tabId: 'tab-bg', agentState: 'done' })])
+
+    // A stationary done tab whose timestamp advances later (e.g. hook freshness expiry or PTY title repaint) stays done and never flips to unread.
+    const refreshedDoneBgTab = {
+      ...completedBgTab,
+      agentStatus: {
+        ...completedBgTab.agentStatus,
+        updatedAt: 500,
+        stateStartedAt: 480
+      }
+    }
+    expect(
+      resolveMobileSessionTabDotState(refreshedDoneBgTab, 500, { isActiveOnScreen: false })
+    ).toBe('done')
+    expect(
+      getVisibleRecentSessionCards({
+        hostId: 'host-1',
+        currentWorktreeId: 'wt-1',
+        currentTabId: 'tab-fg',
+        currentWorktreeTabs: [refreshedDoneBgTab]
       })
     ).toEqual([expect.objectContaining({ tabId: 'tab-bg', agentState: 'done' })])
   })

@@ -5,8 +5,42 @@ import {
   sessionTerminalRename
 } from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
-import { removeRecentSessionCard } from './recent-session-cards'
+import { readAllRecentSessionCardsSync, removeRecentSessionCard } from './recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
+
+function pickReplacementSessionTab(args: {
+  hostId: string | undefined
+  worktreeId: string | undefined
+  remainingTabs: readonly MobileSessionTab[]
+  closedIndex: number
+}): MobileSessionTab {
+  const { hostId, worktreeId, remainingTabs, closedIndex } = args
+  if (hostId && worktreeId) {
+    const recentInWorktree = readAllRecentSessionCardsSync()
+      .filter((card) => card.hostId === hostId && card.worktreeId === worktreeId)
+      .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
+    for (const card of recentInWorktree) {
+      const matched = remainingTabs.find(
+        (candidate) =>
+          candidate.id === card.tabId ||
+          (card.terminalHandle !== undefined &&
+            candidate.type === 'terminal' &&
+            candidate.terminal === card.terminalHandle)
+      )
+      if (matched) {
+        return matched
+      }
+    }
+  }
+  const activeTab = remainingTabs.find((candidate) => candidate.isActive)
+  if (activeTab) {
+    return activeTab
+  }
+  if (closedIndex >= 0) {
+    return remainingTabs[closedIndex] ?? remainingTabs[closedIndex - 1] ?? remainingTabs[0]
+  }
+  return remainingTabs[0]
+}
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
@@ -151,8 +185,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
             return next
           })
         }
-        const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
+        const previousTabs = sessionTabsRef.current
+        const closedIndex = previousTabs.findIndex((candidate) => candidate.id === tab.id)
+        let remainingTabs = previousTabs.filter((candidate) => candidate.id !== tab.id)
+        reconcileBufferedDraftsRef.current(previousTabs, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -162,20 +198,62 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           terminalRefs.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
         }
-        sessionTabsRef.current = remainingTabs
-        setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
-        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        if (remainingTabs.length === 0) {
+          sessionTabsRef.current = remainingTabs
+          setSessionTabs(remainingTabs)
           activeSessionTabTypeRef.current = null
           selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
           setActiveHandle(null)
+        } else if (activeSessionTabIdRef.current === tab.id) {
+          const replacement = pickReplacementSessionTab({
+            hostId,
+            worktreeId,
+            remainingTabs,
+            closedIndex
+          })
+          remainingTabs = remainingTabs.map((candidate) =>
+            candidate.isActive === (candidate.id === replacement.id)
+              ? candidate
+              : { ...candidate, isActive: candidate.id === replacement.id }
+          )
+          sessionTabsRef.current = remainingTabs
+          setSessionTabs(remainingTabs)
+          activeSessionTabTypeRef.current = replacement.type
+          selectedSessionTabIdRef.current = replacement.id
+          activeSessionTabIdRef.current = replacement.id
+          setActiveSessionTabId(replacement.id)
+          if (replacement.type === 'terminal' && typeof replacement.terminal === 'string') {
+            activeHandleRef.current = replacement.terminal
+            if (pendingSelectionRef) {
+              pendingSelectionRef.current = {
+                kind: 'terminal',
+                handle: replacement.terminal,
+                tabId: replacement.id
+              }
+            }
+            setActiveHandle(replacement.terminal)
+            subscribeToTerminal(replacement.terminal)
+          } else {
+            if (pendingSelectionRef) {
+              pendingSelectionRef.current = {
+                kind: 'tab',
+                tabId: replacement.id
+              }
+            }
+            activeHandleRef.current = null
+            setActiveHandle(null)
+          }
+        } else {
+          sessionTabsRef.current = remainingTabs
+          setSessionTabs(remainingTabs)
         }
       }
     } catch {
