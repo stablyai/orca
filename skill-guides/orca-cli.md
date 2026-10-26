@@ -30,26 +30,28 @@ A handoff is done when the new worktree id and agent handle have been reported a
 
 Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
 
+Pick the agent: when the user named one (such as "use omp"), pass that id. Otherwise pass `--agent default`, which the execution host resolves to the user's configured default agent. Never pick a specific agent from an example when the user did not name one. Omitting `--agent` is not the same thing: `worktree create` without it creates a worktree with no agent, and `agent launch` refuses it.
+
 Independent new-worktree handoff:
 
 ```text
-ORCA worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
+ORCA worktree create --name <task-name> --no-parent --agent default --prompt "<task brief>" --json
 ```
 
 Use `--no-parent` and omit `--base-branch` for independent top-level handoffs unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt.
 
-For a requested model or effort, such as `gpt-6-astra high`, add `--model` and `--effort` to the same command:
+For a requested agent, model or effort, such as `codex gpt-6-astra high`, name the agent and add `--model` and `--effort` to the same command:
 
 ```text
 ORCA worktree create --name <task-name> --no-parent --agent codex --model gpt-6-astra --effort high --prompt "<task brief>" --json
 ```
 
-Read what started from `result.launch`: `outcome.kind` is `structured` (a chat) or `terminal`, `outcome.handle` is the agent handle, `receipt.detail` says why, and `prompt.outcome` says whether the brief arrived. An Orca host older than this returns the terminal handle in `result.agentTerminalHandle` and refuses `--model`/`--effort`.
+Read what started from `result.launch`: `receipt.agent` is the agent that started and `receipt.agentSelection` how it was chosen (`explicit`, `configured-default`, or `automatic-default`), `outcome.kind` is `structured` (a chat) or `terminal`, `outcome.handle` is the agent handle, `receipt.detail` says why, and `prompt.outcome` says whether the brief arrived. An Orca host older than this returns the terminal handle in `result.agentTerminalHandle` and refuses `--model`/`--effort`; a host older than `--agent default` refuses it before creating anything, so name an agent instead.
 
-For a fresh agent in a worktree that already exists, use `agent launch`, which takes the same `--prompt`, `--model` and `--effort`:
+For a fresh agent in a worktree that already exists, use `agent launch`, which takes the same `--agent default`, `--prompt`, `--model` and `--effort`:
 
 ```text
-ORCA agent launch --agent codex --worktree id:<repoId>::<worktreePath> --prompt "<task brief>" --json
+ORCA agent launch --agent default --worktree id:<repoId>::<worktreePath> --prompt "<task brief>" --json
 ```
 
 Existing-terminal handoff:
@@ -63,6 +65,8 @@ ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
 `worktree create --agent` (new checkout) and `agent launch` (existing worktree) are how to start an agent. They go through Orca's agent launch, the same one the app's new-agent tab uses: the user's Chat UI setting decides whether the agent opens as a chat or a terminal, and the result reports which (`outcome.kind`) and why (`receipt.detail`). When a chat is not possible, such as for an agent without chat support, the launch starts a terminal and the receipt says so. `--surface chat|terminal` picks one for that launch instead of the setting; pass it only when the user asked for a chat or a terminal. `--surface chat` is refused when Orca can establish before starting anything that the agent cannot open as a chat. If support cannot be checked, the launch can fall back to a terminal. If chat becomes unavailable only after a new workspace is created, Orca keeps that workspace, its setup and default tabs, then opens a terminal; the receipt explains the fallback. `terminal create` makes a terminal for shells and commands.
 
 If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
+
+A lost `--agent default` launch is the exception: run the error's `recoveryCommand`, which replaces `default` with the agent that launch started. When the error has no `recoveryCommand` (a `--pairing-code` keeps it out), re-issue the same command with `--agent <launchRequest.agent>` and `--retry-launch <operationId>`. `--retry-launch` refuses `--agent default`, because the default may now resolve to a different agent.
 
 ## Worktrees
 
@@ -86,7 +90,7 @@ ORCA worktree show --worktree <selector> --json
 ORCA worktree create --repo id:<repoId> --name related-task --json
 ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree active --json
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
-ORCA worktree create --name child-task --agent codex --prompt "hi" --json
+ORCA worktree create --name child-task --agent default --prompt "hi" --json
 ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
@@ -127,20 +131,21 @@ Lineage rules:
 Agent/setup flags:
 
 ```text
-ORCA worktree create --name task --agent codex --prompt "hi" --json
+ORCA worktree create --name task --agent default --prompt "hi" --json
 ORCA worktree create --name task --agent claude --setup run --json
 ORCA worktree create --name task --setup skip --json
 ORCA worktree create --name task --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat UI setting (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
+- `--agent default` starts the user's configured default agent, resolved on the execution host. If that agent is disabled or not installed there, Orca picks another enabled installed agent the way the app does, and the receipt says so. A plain-terminal default, no available agent, or a repo on an SSH target (whose agents Orca cannot check) is refused before the worktree is created; ask the user which agent to use rather than dropping the prompt.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
-- `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
+- `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent default --json`.
 
 ## Review and issue references
 

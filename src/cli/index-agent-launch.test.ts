@@ -135,6 +135,59 @@ describe('orca cli agent launch', () => {
     })
   })
 
+  it('launches the automatic pick for --agent default and says the configured one was unavailable', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(),
+      agentLaunchHostFixture(),
+      okFixture('req_default', {
+        agent: 'claude',
+        selection: 'automatic',
+        unavailableConfiguredAgent: 'omp'
+      }),
+      agentLaunchFixture(WORKTREE_ID)
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['agent', 'launch', '--agent', 'default', '--worktree', `id:${WORKTREE_ID}`],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('agent.resolveDefault', {
+      target: { kind: 'existing', worktree: `id:${WORKTREE_ID}` }
+    })
+    expect(launchCalls()).toEqual([
+      ['agent.launchReplay', expect.objectContaining({ agent: 'claude' })]
+    ])
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'agentId: claude (automatic; configured default omp is not available on the execution host)'
+    )
+  })
+
+  it('refuses --agent default with a plain-terminal default before launching', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(),
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: null, reason: 'shell_only' })
+    )
+
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'default',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--prompt',
+      'hi'
+    ])
+
+    expect(output).toContain('set to a plain terminal')
+    expect(launchCalls()).toEqual([])
+  })
+
   it('honors the paired execution host for agent launch', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'server-1')
     queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture('folder:server-folder'))
@@ -195,6 +248,90 @@ describe('orca cli agent launch', () => {
     expect(launchCalls()).toEqual([
       ['agent.launchReplay', expect.objectContaining({ operationId: error.data.operationId })]
     ])
+  })
+
+  it('replays a lost --agent default launch with the agent it admitted, even after the default changes', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(),
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: 'omp', selection: 'configured' })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'The Orca runtime closed the connection.')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const previousExitCode = process.exitCode
+    const args = ['agent', 'launch', '--agent', 'default', '--worktree', `id:${WORKTREE_ID}`]
+    await main([...args, '--prompt', 'Fix it', '--json'], '/tmp/repo')
+    process.exitCode = previousExitCode
+    const error = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error
+    const operationId = error.data.operationId
+    const [, ...recoveryArgs] = error.data.recoveryCommand
+    expect(recoveryArgs).toEqual([
+      'agent',
+      'launch',
+      '--agent',
+      'omp',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--prompt',
+      'Fix it',
+      '--json',
+      '--retry-launch',
+      operationId
+    ])
+
+    // Even if the default changed since, repeating `--agent default` must not replay as another agent.
+    callMock.mockClear()
+    const refused = await runRefused([...args, '--retry-launch', operationId, '--json'])
+    expect(refused).toContain('--retry-launch cannot use --agent default')
+    expect(callMock).not.toHaveBeenCalled()
+
+    callMock.mockClear()
+    queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture(WORKTREE_ID))
+    logSpy.mockClear()
+    await main(recoveryArgs, '/tmp/repo')
+    expect(launchCalls()).toEqual([
+      ['agent.launchReplay', expect.objectContaining({ agent: 'omp', operationId })]
+    ])
+    expect(callMock).not.toHaveBeenCalledWith('agent.resolveDefault', expect.anything())
+  })
+
+  it('names the resolved agent when a credential suppresses the --agent default recovery command', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(),
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: 'omp', selection: 'configured' })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'The Orca runtime closed the connection.')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const previousExitCode = process.exitCode
+    await main(
+      [
+        'agent',
+        'launch',
+        '--agent',
+        'default',
+        '--worktree',
+        `id:${WORKTREE_ID}`,
+        '--pairing-code',
+        'secret-pairing',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    process.exitCode = previousExitCode
+    const error = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error
+    expect(error.data.recoveryCommand).toBeUndefined()
+    expect(error.data.launchRequest.agent).toBe('omp')
+    expect(error.data.nextSteps[0]).toContain('replace --agent default with --agent omp')
+    expect(error.data.nextSteps[0]).toContain('same pairing or environment flags')
+    expect(error.data.nextSteps[0]).toContain(`--retry-launch ${error.data.operationId}`)
+    expect(JSON.stringify(error)).not.toContain('secret-pairing')
   })
 
   it.each([['--retry-launch'], ['--retry-launch', ' ']])(
