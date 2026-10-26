@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { parseDocument } from 'yaml'
+import { loadYaml } from '../yaml-loader'
 import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
@@ -145,7 +145,7 @@ export function parseWarpThemeYaml(
   const parseStartedAt = Date.now()
   const parseTimedOut = (): boolean => Date.now() - parseStartedAt > MAX_PARSE_MS
   try {
-    const document = parseDocument(content, {
+    const document = loadYaml().parseDocument(content, {
       keepSourceTokens: false,
       logLevel: 'silent',
       prettyErrors: false,

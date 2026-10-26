@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
 import { lstat, open, realpath, type FileHandle } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { parse, stringify } from 'yaml'
+import { loadYaml } from '../yaml-loader'
 import {
   LOCAL_BUILD_COMPATIBILITY_FILENAME,
   ORCA_APP_ID,
@@ -230,6 +230,7 @@ export async function loadLocalBuildCandidate(
   } finally {
     await manifestFile.close()
   }
+  const { parse, stringify } = loadYaml()
   const manifest = parseManifest(parse(manifestText, { maxAliasCount: 0 }))
   const rootPath = dirname(manifestPath)
   const compatibilityReader = options.readCompatibility ?? readCompatibility

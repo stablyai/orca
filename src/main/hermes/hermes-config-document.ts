@@ -1,10 +1,11 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } from 'yaml'
+import { loadYaml } from '../yaml-loader'
 import type { Document, YAMLMap, YAMLSeq } from 'yaml'
 import type { HermesConfig } from './hermes-config-yaml'
 import { HERMES_EDITED_LISTS, applyHermesPluginSourceEdits } from './hermes-config-source-edits'
 
 function preserveRemovedComments(sequence: YAMLSeq, removed: unknown[], first: unknown): void {
+  const { isNode } = loadYaml()
   const comments = removed.flatMap((node) =>
     isNode(node)
       ? [node === first && !sequence.flow ? null : node.commentBefore, node.comment].filter(
@@ -23,6 +24,7 @@ function updateStringSequence(
   key: string,
   values: unknown
 ): void {
+  const { isSeq, isScalar } = loadYaml()
   if (values === undefined) {
     return
   }
@@ -64,6 +66,7 @@ export function updateHermesPluginDocument(
   next: HermesConfig
 ): { content: string | null; detail?: string } {
   try {
+    const { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } = loadYaml()
     const document: Document = parseDocument(content)
     if (document.errors.length > 0 || document.warnings.length > 0) {
       throw new Error(

@@ -1,6 +1,6 @@
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
-import { parse as parseYaml } from 'yaml'
+import { loadYaml } from '../../yaml-loader'
 
 // Permissions/hooks/MCP config does not invalidate defaults unless it can change models or efforts.
 
@@ -121,7 +121,7 @@ export function openCodeAgentFileMayPickModel(text: string): boolean {
     return false
   }
   try {
-    const frontmatter = record(parseYaml(match[1] ?? ''))
+    const frontmatter = record(loadYaml().parse(match[1] ?? ''))
     return frontmatter !== null && setsAny(frontmatter, OPENCODE_AGENT_MODEL_KEYS)
   } catch {
     return true
@@ -151,7 +151,11 @@ export function ompSettingsMayPickModel(text: string, format: 'json' | 'yaml' | 
   let settings: Record<string, unknown> | null
   try {
     const parsed: unknown =
-      format === 'json' ? JSON.parse(text) : format === 'yaml' ? parseYaml(text) : parseToml(text)
+      format === 'json'
+        ? JSON.parse(text)
+        : format === 'yaml'
+          ? loadYaml().parse(text)
+          : parseToml(text)
     settings = parsed === null && format === 'yaml' ? {} : record(parsed)
   } catch {
     return true

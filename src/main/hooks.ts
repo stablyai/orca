@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseOrcaYaml } from '../shared/orca-yaml'
+import { parseOrcaYaml } from './orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'

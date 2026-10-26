@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { parse } from 'yaml'
+import { loadYaml } from '../yaml-loader'
 
 import { HERMES_CLIENT_ENV_PASSTHROUGH, HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
 import { updateHermesPluginDocument } from './hermes-config-document'
@@ -27,7 +27,7 @@ export function parseHermesConfig(content: string | null): ConfigParseResult {
     return { ok: true, config: {} }
   }
   try {
-    const parsed = parse(content) as unknown
+    const parsed: unknown = loadYaml().parse(content)
     if (parsed === null || parsed === undefined) {
       return { ok: true, config: {} }
     }

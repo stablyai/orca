@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
-import { Document, isMap, isNode, isSeq, parseDocument } from 'yaml'
-import type { Node, YAMLMap, YAMLSeq } from 'yaml'
+import { loadYaml } from '../yaml-loader'
+import type { Document, Node, YAMLMap, YAMLSeq } from 'yaml'
 
 type SourceEdit = { start: number; end: number; text: string }
 
@@ -21,6 +21,7 @@ function indentFragment(fragment: string, difference: number): string {
 }
 
 function requireRange(node: unknown): [number, number, number] {
+  const { isNode } = loadYaml()
   if (!isNode(node) || !node.range) {
     throw new Error('Missing Hermes YAML source range')
   }
@@ -35,6 +36,7 @@ function insertPair(
   key: string,
   enclosing: YAMLMap = parent
 ): SourceEdit {
+  const { isNode } = loadYaml()
   const pair = updated.items.find((item) => isNode(item.key) && item.key.toJSON() === key)
   if (!pair) {
     throw new Error(`Missing Hermes YAML key: ${key}`)
@@ -83,6 +85,7 @@ function insertPair(
 }
 
 export function applyHermesPluginSourceEdits(source: string, document: Document): string {
+  const { isMap, parseDocument } = loadYaml()
   const printed = document.toString({ lineWidth: 0 })
   const updated = parseDocument(printed)
   if (!isMap(parseDocument(source).contents)) {
@@ -107,6 +110,7 @@ function applySectionEdits(
   sectionKey: string,
   keys: readonly string[]
 ): string {
+  const { isMap, isNode, isSeq, parseDocument } = loadYaml()
   const original = parseDocument(source, { keepSourceTokens: true })
   if (!isMap(original.contents)) {
     throw new Error('Unexpected Hermes root mapping')
@@ -151,6 +155,7 @@ function applySectionEdits(
 }
 
 function replaceNode(source: string, parent: YAMLMap, previous: Node, next: YAMLSeq): SourceEdit {
+  const { Document, isSeq } = loadYaml()
   const before = requireRange(previous)
   // YAML ranges can include the next key's indentation after a trailing comment.
   const trailingIndent =

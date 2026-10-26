@@ -1,5 +1,5 @@
 import { net } from 'electron'
-import { parse } from 'yaml'
+import { loadYaml } from './yaml-loader'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
@@ -84,6 +84,7 @@ type ManifestAssetEntry = {
 }
 
 function getManifestAssetNames(manifestText: string): string[] {
+  const { parse } = loadYaml()
   const parsed = parse(manifestText) as {
     files?: ManifestAssetEntry[]
     path?: unknown

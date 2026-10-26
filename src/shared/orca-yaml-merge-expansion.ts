@@ -1,11 +1,14 @@
-import { isAlias, isMap, isPair, isScalar, isSeq, visit } from 'yaml'
 import type { Alias, Document, Node } from 'yaml'
+import type * as yaml from 'yaml'
 import { MAX_ORCA_YAML_CODE_UNITS } from './orca-yaml-file-limit'
 
 type ConversionSize = { entries: number; mappingEntries: number }
 
 /** Merge aliases re-convert maps; yaml's alias counter does not bound that work. */
-export function isOrcaYamlConversionWithinLimit(document: Document): boolean {
+export function isOrcaYamlConversionWithinLimit(
+  document: Document,
+  { isAlias, isMap, isPair, isScalar, isSeq, visit }: typeof yaml
+): boolean {
   const anchors = new Map<string, Node>()
   const targets = new Map<Alias, Node | undefined>()
   visit(document, {
