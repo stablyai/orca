@@ -158,6 +158,21 @@ describe('MediaViewer', () => {
     await act(async () => other.root.unmount())
   })
 
+  it('saves a volume change still queued at teardown without overwriting a newer choice', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const idle = await renderPlaybackViewer('idle.mp4:left')
+    const active = await renderPlaybackViewer('active.mp4:right')
+    active.video.volume = 0.5
+    await act(async () => active.video.dispatchEvent(new Event('volumechange')))
+    await act(async () => idle.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: false })
+
+    active.video.muted = true
+    await act(async () => active.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: true })
+  })
+
   it('restores each clip at its own speed, even after it finished', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})

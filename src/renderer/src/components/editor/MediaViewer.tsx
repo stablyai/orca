@@ -41,12 +41,13 @@ export default function MediaViewer({
         media.playbackRate = savedRate
       }
     }
+    let known = { ...mediaVolumePreference }
     const rememberVolume = (): void => {
-      mediaVolumePreference.volume = media.volume
-      mediaVolumePreference.muted = media.muted
+      known = { volume: media.volume, muted: media.muted }
+      Object.assign(mediaVolumePreference, known)
     }
-    media.volume = mediaVolumePreference.volume
-    media.muted = mediaVolumePreference.muted
+    media.volume = known.volume
+    media.muted = known.muted
     media.addEventListener('loadedmetadata', restorePlayback, { once: true })
     media.addEventListener('volumechange', rememberVolume)
     // Strict Mode replays cleanup while retaining the DOM element.
@@ -54,6 +55,10 @@ export default function MediaViewer({
     return () => {
       media.removeEventListener('loadedmetadata', restorePlayback)
       media.removeEventListener('volumechange', rememberVolume)
+      // volumechange is queued, so a change made right before leaving may not have been saved yet.
+      if (media.volume !== known.volume || media.muted !== known.muted) {
+        rememberVolume()
+      }
       // Unloaded metadata leaves currentTime and playbackRate reset, which must not replace saved values.
       if (playbackCacheKey && Number.isFinite(media.duration)) {
         setWithLRU(mediaPlaybackRateCache, playbackCacheKey, media.playbackRate)
