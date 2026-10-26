@@ -52,6 +52,7 @@ async function confirmQuitAndStopAllSessionsFromMenu(app: ElectronApplication): 
 test('Quit and Stop All Sessions closes the terminal tab and ends its shell and the daemon', async (// oxlint-disable-next-line no-empty-pattern -- this test owns both Electron launches.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX shell pid probe')
+  // Two Electron launches (quit, then relaunch) plus waits for the shell and daemon to exit.
   test.setTimeout(300_000)
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
