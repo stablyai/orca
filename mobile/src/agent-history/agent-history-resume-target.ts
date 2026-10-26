@@ -1,26 +1,23 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import { canResumeAiVaultSessionOnSshHost } from '../../../src/shared/ai-vault-ssh-resume-target'
-import type { Worktree } from '../worktree/workspace-list-types'
 import {
-  getMobileAiVaultResumeWorktreeExecutionHostId,
-  getMobileAiVaultResumeWorktreeTargetStatus,
-  type MobileAiVaultResumeFolderWorkspace,
-  type MobileAiVaultResumeProjectGroup,
-  type MobileAiVaultResumeRepo,
-  type MobileAiVaultResumeTargetStatus
-} from './agent-history-resume-workspace-host'
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus,
+  type AiVaultResumeTargetStatus
+} from '../../../src/shared/ai-vault-resume-target'
+import type {
+  FolderHostCatalog,
+  FolderHostRepo
+} from '../../../src/shared/folder-workspace-execution-host'
+import { parseWslUncPath } from '../../../src/shared/wsl-paths'
+import type { Worktree } from '../worktree/workspace-list-types'
 import {
   canResumeInMobileSessionWorktree,
   resolveMobileAgentHistorySessionWorktree
 } from './agent-history-session-worktree'
 
-export type {
-  MobileAiVaultResumeFolderWorkspace,
-  MobileAiVaultResumeProjectGroup,
-  MobileAiVaultResumeRepo,
-  MobileAiVaultResumeTargetStatus
-}
+/** The host catalog a resume target is resolved against: the same lists desktop reads from its store. */
+export type MobileAiVaultResumeCatalog = FolderHostCatalog<FolderHostRepo & { id: string }>
 
 export type MobileAiVaultSessionResumeTarget =
   | {
@@ -32,42 +29,37 @@ export type MobileAiVaultSessionResumeTarget =
     }
   | { status: 'blocked'; message: string }
 
-function canResumeMobileAiVaultSessionOnTarget(args: {
-  session: AiVaultSession
-  targetStatus: MobileAiVaultResumeTargetStatus
-  targetExecutionHostId: ExecutionHostId | null
-}): args is typeof args & { targetStatus: 'local' | 'ssh' } {
-  if (args.targetStatus === 'local') {
-    return true
-  }
-  // Why: same host rule as desktop: an SSH workspace resumes only transcripts that host can read.
-  return (
-    args.targetStatus === 'ssh' &&
-    canResumeAiVaultSessionOnSshHost({
-      sessionFilePath: args.session.filePath,
-      sessionExecutionHostId: args.session.executionHostId,
-      targetExecutionHostId: args.targetExecutionHostId
-    })
-  )
-}
-
-function mobileAiVaultResumeTargetBlockMessage(status: MobileAiVaultResumeTargetStatus): string {
+function mobileAiVaultResumeTargetBlockMessage(status: AiVaultResumeTargetStatus): string {
   if (status === 'runtime') {
     return 'Resume from history is not available in runtime-hosted workspaces.'
   }
-  if (status === 'ssh') {
+  if (status === 'ssh' || status === 'local') {
     return 'This session belongs to a different host. Open a workspace on the same host to resume it.'
   }
-  return 'Open a local workspace before resuming a session.'
+  return 'Open a workspace before resuming a session.'
+}
+
+/** The phone sees no project runtime settings: a WSL terminal on a Windows host proves WSL, not which distro. */
+function mobileResumeTargetWslDistro(
+  worktree: Worktree | undefined,
+  hostPlatform: NodeJS.Platform | null
+): string | null | undefined {
+  if (!worktree) {
+    return undefined
+  }
+  const uncDistro = parseWslUncPath(worktree.path)?.distro
+  if (uncDistro) {
+    return uncDistro
+  }
+  return hostPlatform === 'win32' && worktree.terminalPlatform === 'linux' ? undefined : null
 }
 
 export function resolveMobileAiVaultSessionResumeTarget(args: {
   session: AiVaultSession
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
-  repos: readonly MobileAiVaultResumeRepo[]
-  folderWorkspaces?: readonly MobileAiVaultResumeFolderWorkspace[]
-  projectGroups?: readonly MobileAiVaultResumeProjectGroup[]
+  catalog: MobileAiVaultResumeCatalog
+  hostPlatform: NodeJS.Platform | null
 }): MobileAiVaultSessionResumeTarget {
   const sessionWorktree = resolveMobileAgentHistorySessionWorktree({
     session: args.session,
@@ -83,51 +75,48 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
       ? args.activeWorktreeId
       : null
   ].filter((candidate): candidate is string => Boolean(candidate))
+  const catalog = {
+    ...args.catalog,
+    findWorktree: (worktreeId: string) =>
+      args.worktrees.find((worktree) => worktree.worktreeId === worktreeId)
+  }
 
+  let blockedStatus: AiVaultResumeTargetStatus | null = null
   for (const candidateWorktreeId of candidateWorktreeIds) {
-    const targetStatus = getMobileAiVaultResumeWorktreeTargetStatus({
-      worktreeId: candidateWorktreeId,
-      worktrees: args.worktrees,
-      repos: args.repos,
-      folderWorkspaces: args.folderWorkspaces,
-      projectGroups: args.projectGroups
-    })
-    const candidate = {
-      session: args.session,
-      targetStatus,
-      targetExecutionHostId:
-        targetStatus === 'ssh'
-          ? getMobileAiVaultResumeWorktreeExecutionHostId({
-              worktreeId: candidateWorktreeId,
-              worktrees: args.worktrees,
-              repos: args.repos,
-              folderWorkspaces: args.folderWorkspaces ?? [],
-              projectGroups: args.projectGroups ?? []
-            })
-          : null
+    const targetStatus = getAiVaultResumeWorkspaceTargetStatus(catalog, candidateWorktreeId)
+    blockedStatus ??= targetStatus
+    // Why: the host refuses phone terminals in a workspace another runtime owns.
+    if (targetStatus !== 'local' && targetStatus !== 'ssh') {
+      continue
     }
-    if (!canResumeMobileAiVaultSessionOnTarget(candidate)) {
+    const worktree = catalog.findWorktree(candidateWorktreeId)
+    if (
+      !canResumeAiVaultSessionOnTarget({
+        sessionFilePath: args.session.filePath,
+        sessionExecutionHostId: args.session.executionHostId,
+        targetStatus,
+        targetExecutionHostId: getAiVaultResumeWorkspaceExecutionHostId(
+          catalog,
+          candidateWorktreeId
+        ),
+        targetWslDistro: mobileResumeTargetWslDistro(worktree, args.hostPlatform)
+      })
+    ) {
       continue
     }
     return {
       status: 'ready',
       worktreeId: candidateWorktreeId,
-      targetStatus: candidate.targetStatus,
-      workspacePath:
-        args.worktrees.find((worktree) => worktree.worktreeId === candidateWorktreeId)?.path ??
-        null,
-      terminalPlatform:
-        args.worktrees.find((worktree) => worktree.worktreeId === candidateWorktreeId)
-          ?.terminalPlatform ?? null
+      targetStatus,
+      workspacePath: worktree?.path ?? null,
+      terminalPlatform: worktree?.terminalPlatform ?? null
     }
   }
 
-  const blockedStatus = getMobileAiVaultResumeWorktreeTargetStatus({
-    worktreeId: candidateWorktreeIds[0] ?? args.activeWorktreeId,
-    worktrees: args.worktrees,
-    repos: args.repos,
-    folderWorkspaces: args.folderWorkspaces,
-    projectGroups: args.projectGroups
-  })
-  return { status: 'blocked', message: mobileAiVaultResumeTargetBlockMessage(blockedStatus) }
+  return {
+    status: 'blocked',
+    message: mobileAiVaultResumeTargetBlockMessage(
+      blockedStatus ?? getAiVaultResumeWorkspaceTargetStatus(catalog, args.activeWorktreeId)
+    )
+  }
 }

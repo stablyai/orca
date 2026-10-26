@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
+import {
+  resolveMobileAiVaultSessionResumeTarget,
+  type MobileAiVaultResumeCatalog
+} from './agent-history-resume-target'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 
@@ -44,6 +47,26 @@ function worktree(overrides: Partial<Worktree> & { worktreeId: string; path: str
   }
 }
 
+function resolve(
+  args: Omit<
+    Parameters<typeof resolveMobileAiVaultSessionResumeTarget>[0],
+    'catalog' | 'hostPlatform'
+  > &
+    Partial<MobileAiVaultResumeCatalog> & { hostPlatform?: NodeJS.Platform }
+) {
+  return resolveMobileAiVaultSessionResumeTarget({
+    session: args.session,
+    activeWorktreeId: args.activeWorktreeId,
+    worktrees: args.worktrees,
+    catalog: {
+      repos: args.repos ?? [],
+      folderWorkspaces: args.folderWorkspaces ?? [],
+      projectGroups: args.projectGroups ?? []
+    },
+    hostPlatform: args.hostPlatform ?? 'darwin'
+  })
+}
+
 describe('mobile AI Vault resume target guards', () => {
   const repos = [
     { id: 'local-repo', path: '/Users/ada/repo', connectionId: null },
@@ -66,8 +89,8 @@ describe('mobile AI Vault resume target guards', () => {
     { id: 'folder-runtime', projectGroupId: 'group-runtime', folderPath: '/workspace/folder' }
   ]
   const projectGroups = [
-    { id: 'group-local', connectionId: null },
-    { id: 'group-runtime', executionHostId: 'runtime:devbox' as const }
+    { id: 'group-local', parentGroupId: null, connectionId: null },
+    { id: 'group-runtime', parentGroupId: null, executionHostId: 'runtime:devbox' as const }
   ]
 
   const WSL_TRANSCRIPT = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\app\\s.jsonl'
@@ -78,7 +101,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('resumes a WSL-stored session in an SSH workspace into that distro (#26818)', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/home/ada/ssh-repo/feature/src', filePath: WSL_TRANSCRIPT }),
       activeWorktreeId: 'ssh-session-wt',
       worktrees: [sshSessionWorktree],
@@ -94,7 +117,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('resumes a session scanned on the same SSH host in that host workspace', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({
         executionHostId: 'ssh:builder',
         cwd: '/home/ada/ssh-repo/feature/src',
@@ -108,7 +131,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks a session scanned on another SSH host', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({
         executionHostId: 'ssh:other',
         cwd: '/home/ada/ssh-repo/feature/src',
@@ -122,7 +145,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks a WSL Antigravity IDE transcript in an SSH workspace', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({
         agent: 'antigravity',
         cwd: '/home/ada/ssh-repo/feature/src',
@@ -137,7 +160,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('resumes a WSL-stored session in an SSH folder workspace', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/home/ada/folder/src', filePath: WSL_TRANSCRIPT }),
       activeWorktreeId: 'folder:folder-ssh',
       worktrees: [
@@ -156,7 +179,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('resolves project-scope rows to the matched session worktree before the route worktree', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/Users/ada/repo/feature/src' }),
       activeWorktreeId: 'route-wt',
       worktrees: [
@@ -175,7 +198,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('falls back to the active route worktree when the session worktree is archived', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/Users/ada/repo/archive/src' }),
       activeWorktreeId: 'route-wt',
       worktrees: [
@@ -198,7 +221,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks runtime targets when no supported fallback is available', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/Users/ada/runtime/app' }),
       activeWorktreeId: 'runtime-wt',
       worktrees: [
@@ -211,7 +234,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks SSH folder workspace targets for a host-local transcript', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/home/ada/folder/src' }),
       activeWorktreeId: 'folder:folder-ssh',
       worktrees: [
@@ -231,7 +254,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('skips an SSH session-worktree candidate in favor of a local active-worktree fallback', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/home/ada/ssh-repo/feature/src' }),
       activeWorktreeId: 'route-wt',
       worktrees: [
@@ -254,7 +277,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks SSH session worktrees with the SSH message when no local fallback exists', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/home/ada/ssh-repo/feature/src' }),
       activeWorktreeId: 'ssh-session-wt',
       worktrees: [
@@ -271,7 +294,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks folder workspaces whose candidate repos include a runtime owner', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/workspace/folder/src' }),
       activeWorktreeId: 'folder:folder-runtime-candidate',
       worktrees: [
@@ -305,7 +328,7 @@ describe('mobile AI Vault resume target guards', () => {
   })
 
   it('blocks folder workspaces when folder metadata is unavailable', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/Users/ada/folder/src' }),
       activeWorktreeId: 'folder:missing-folder',
       worktrees: [
@@ -322,12 +345,12 @@ describe('mobile AI Vault resume target guards', () => {
     })
     expect(target).toEqual({
       status: 'blocked',
-      message: 'Open a local workspace before resuming a session.'
+      message: 'Open a workspace before resuming a session.'
     })
   })
 
   it('blocks folder workspaces with mixed candidate repo hosts as unknown', () => {
-    const target = resolveMobileAiVaultSessionResumeTarget({
+    const target = resolve({
       session: session({ cwd: '/Users/ada/mixed/src' }),
       activeWorktreeId: 'folder:folder-mixed',
       worktrees: [
@@ -361,7 +384,58 @@ describe('mobile AI Vault resume target guards', () => {
     })
     expect(target).toEqual({
       status: 'blocked',
-      message: 'Open a local workspace before resuming a session.'
+      message: 'Open a workspace before resuming a session.'
     })
+  })
+
+  it('refuses a session from an SSH host in a local workspace like desktop', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:builder', cwd: '/Users/ada/repo/main/src' }),
+      activeWorktreeId: 'route-wt',
+      worktrees: [worktree({ worktreeId: 'route-wt', path: '/Users/ada/repo/main' })],
+      repos
+    })
+    expect(target).toEqual({
+      status: 'blocked',
+      message:
+        'This session belongs to a different host. Open a workspace on the same host to resume it.'
+    })
+  })
+
+  it('refuses a WSL transcript in a native Windows workspace (#24408)', () => {
+    const target = resolve({
+      session: session({ cwd: 'C:\\repo\\src', filePath: WSL_TRANSCRIPT }),
+      activeWorktreeId: 'route-wt',
+      worktrees: [worktree({ worktreeId: 'route-wt', path: 'C:\\repo' })],
+      repos,
+      hostPlatform: 'win32'
+    })
+    expect(target.status).toBe('blocked')
+  })
+
+  it('resolves a folder workspace pinned to an SSH host by its own executionHostId', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:pinned', cwd: '/home/ada/pinned/src' }),
+      activeWorktreeId: 'folder:folder-pinned',
+      worktrees: [
+        worktree({
+          worktreeId: 'folder:folder-pinned',
+          repoId: 'folder-workspace:group-local',
+          workspaceKind: 'folder-workspace',
+          path: '/home/ada/pinned'
+        })
+      ],
+      repos,
+      folderWorkspaces: [
+        {
+          id: 'folder-pinned',
+          projectGroupId: 'group-local',
+          folderPath: '/home/ada/pinned',
+          executionHostId: 'ssh:pinned'
+        }
+      ],
+      projectGroups
+    })
+    expect(target.status === 'ready' ? target.targetStatus : target.message).toBe('ssh')
   })
 })
