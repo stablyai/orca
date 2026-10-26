@@ -287,6 +287,18 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    // A Claude chat a managed host's CLI refuses to start names why (#33768).
+    id: 'ssh.orcad-claude-chat-start-failure',
+    specs: ['tests/e2e/ssh-orcad-claude-chat-start-failure.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
+          file
+        ))
+  },
+  {
     // A reconnect the host cannot image must still bring an idle full-screen program up to date (#26887).
     id: 'ssh.orcad-reconnect-idle-frame',
     specs: ['tests/e2e/ssh-orcad-terminal-reconnect-idle-frame.spec.ts'],

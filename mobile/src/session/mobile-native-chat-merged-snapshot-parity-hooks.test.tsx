@@ -19,7 +19,7 @@ import {
   STOP_JOURNAL_SESSION,
   stopJournal
 } from './mobile-native-chat-stop-journal.test-fixture'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -64,7 +64,9 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
+vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
+  MobileNativeChatComposer: 'Composer'
+}))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
 vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))

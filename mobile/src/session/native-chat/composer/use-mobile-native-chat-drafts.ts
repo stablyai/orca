@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
   mergeSentImagePreviews,
   migrateImagePreviewMessageIds
 } from './mobile-native-chat-draft-reconcile'
-import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../src/shared/native-chat-image-transcript-markers'
-import { useMobileNativeChatUnconfirmedSends } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
-import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
-import { retireLandedMobileNativeChatPending } from './native-chat/mobile-native-chat-pending-retirement'
+import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../../../src/shared/native-chat-image-transcript-markers'
+import { useMobileNativeChatUnconfirmedSends } from '../use-mobile-native-chat-unconfirmed-sends'
+import { rebaseMobileNativeChatPendingBaselines } from '../../mobile-native-chat-pending-baseline'
+import { retireLandedMobileNativeChatPending } from '../mobile-native-chat-pending-retirement'
 import {
   appendMobileNativeChatPending,
   combineMobileNativeChatPending,
@@ -18,8 +18,8 @@ import {
   removeWaitingSessionPending,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
-} from './native-chat/mobile-native-chat-pending-echo'
-import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
+} from '../mobile-native-chat-pending-echo'
+import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
@@ -29,8 +29,6 @@ import {
   setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
-
-export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}

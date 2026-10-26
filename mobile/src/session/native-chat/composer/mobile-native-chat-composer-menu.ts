@@ -1,13 +1,13 @@
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { getNativeChatAgentProfile } from '../../../src/shared/native-chat-agent-profiles'
+import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session-wire'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem
-} from '../../../src/shared/native-chat-picker-items'
-import { sessionReportedSkills } from '../../../src/shared/native-chat-slash-commands'
-import { structuredSessionSlashCommands } from '../../../src/shared/structured-agent-session-composer'
-import { getMobileNativeChatCommands } from './native-chat/mobile-native-chat-send-classification'
+} from '../../../../../src/shared/native-chat-picker-items'
+import { sessionReportedSkills } from '../../../../../src/shared/native-chat-slash-commands'
+import { structuredSessionSlashCommands } from '../../../../../src/shared/structured-agent-session-composer'
+import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.

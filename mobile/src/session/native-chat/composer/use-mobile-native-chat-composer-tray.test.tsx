@@ -3,12 +3,12 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChildWorkView } from '../../../src/shared/agent-status-child-work-view'
-import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
-import { agentChildRowContextForSessionStream } from '../../../src/shared/agent-child-row-stream-context'
-import { structuredSessionBackgroundTasksView } from '../../../src/shared/structured-session-background-tasks-view'
+import type { AgentChildWorkView } from '../../../../../src/shared/agent-status-child-work-view'
+import type { AgentSessionBackgroundTaskState } from '../../../../../src/shared/agent-session-wire'
+import { agentChildRowContextForSessionStream } from '../../../../../src/shared/agent-child-row-stream-context'
+import { structuredSessionBackgroundTasksView } from '../../../../../src/shared/structured-session-background-tasks-view'
 import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
-import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
@@ -38,12 +38,12 @@ vi.mock('lucide-react-native', () => ({
   Trash2: 'Trash2'
 }))
 
-vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../components/AgentStateDot', () => ({
+vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('../../../components/AgentStateDot', () => ({
   AGENT_WORKING_COLOR: '#eab308',
   AgentStateDot: 'AgentStateDot'
 }))
-vi.mock('../hooks/use-now', () => ({ useNow: () => 100_000 }))
+vi.mock('../../../hooks/use-now', () => ({ useNow: () => 100_000 }))
 
 const CARD = {
   messageId: 'waiting-1',

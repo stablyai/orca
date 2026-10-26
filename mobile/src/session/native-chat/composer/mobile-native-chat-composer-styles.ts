@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../../../theme/mobile-theme'
 
 /** Round controls on the action row: the attach button, the mic and Send/Stop. */
 const COMPOSER_CONTROL_SIZE = 38

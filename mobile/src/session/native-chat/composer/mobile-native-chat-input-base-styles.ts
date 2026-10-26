@@ -1,4 +1,4 @@
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../../../theme/mobile-theme'
 
 // Keep platform-neutral styles separate because a web sibling cannot import the file it shadows.
 const chatInputSurface = {

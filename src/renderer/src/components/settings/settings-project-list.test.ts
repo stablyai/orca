@@ -269,7 +269,8 @@ describe('deep-link resolution', () => {
     const map = buildRepoIdToHostSelection(projects)
     expect(map.get('remote-9')).toEqual({
       selectionKey: projects[0].selectionKey,
-      hostId: 'runtime:home-mac'
+      hostId: 'runtime:home-mac',
+      setupId: 'remote-9'
     })
   })
 
@@ -323,6 +324,20 @@ describe('deep-link resolution', () => {
     expect(getSettingsProjectHostRepo(projects[0], repos, hostSelection?.hostId)?.id).toBe(
       'remote-9'
     )
+  })
+
+  it('opens the linked setup when one entry holds two setups on that host (#11689)', () => {
+    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\app'
+    const sameHostRepos = [
+      makeRepo({ id: 'windows-clone', gitRemoteIdentity: gitRemote, path: 'C:\\repos\\app' }),
+      makeRepo({ id: 'wsl-clone', gitRemoteIdentity: gitRemote, path: wslPath })
+    ]
+    const [entry] = buildSettingsProjectList(sameHostRepos)
+    const selection = buildRepoIdToHostSelection([entry]).get('wsl-clone')
+
+    expect(
+      getSettingsProjectHostRepo(entry, sameHostRepos, selection?.hostId, selection?.setupId)?.path
+    ).toBe(wslPath)
   })
 
   it('defaults to the local host repo row when no host is selected', () => {

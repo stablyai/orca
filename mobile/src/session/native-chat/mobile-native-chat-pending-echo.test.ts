@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
-import { countUserTextOccurrences } from '../mobile-native-chat-draft-reconcile'
+import { countUserTextOccurrences } from './composer/mobile-native-chat-draft-reconcile'
 import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../../src/shared/native-chat-image-transcript-markers'
 import {
   appendMobileNativeChatPending,

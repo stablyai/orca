@@ -18,7 +18,7 @@ import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-ch
 import type { MobileNativeChatCommandRefusalCauses } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
-import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'

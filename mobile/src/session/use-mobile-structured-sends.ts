@@ -11,7 +11,7 @@ import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
 } from '../../../src/shared/structured-agent-session-send-settlement'
-import { mergeSentImagePreviews } from './mobile-native-chat-draft-reconcile'
+import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
 import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 import {

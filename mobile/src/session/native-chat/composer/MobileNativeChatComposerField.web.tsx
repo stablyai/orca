@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors } from '../../../theme/mobile-theme'
 import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
 import {
   mobileNativeChatComposerSkillStyles as skillStyles,

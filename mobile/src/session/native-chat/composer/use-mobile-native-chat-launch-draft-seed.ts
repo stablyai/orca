@@ -1,5 +1,5 @@
 import { useCallback, useEffect, type SetStateAction } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
 

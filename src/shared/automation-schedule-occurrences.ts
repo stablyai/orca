@@ -7,7 +7,6 @@ import {
   startOfLocalDay
 } from './automation-cron-occurrence'
 
-const HOUR_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
 const CRON_SCAN_DAYS = 9 * 366
@@ -40,6 +39,44 @@ function scanDayCandidates(rule: ParsedRrule, anchor: number, direction: 1 | -1)
       }
     }
     day = addLocalDays(day, direction)
+  }
+  return null
+}
+
+function hourlyMatches(rule: ParsedRrule, timestamp: number): boolean {
+  return new Date(timestamp).getMinutes() === rule.byMinute
+}
+
+// Why: walk absolute minutes; recomposing local fields can't address the second pass of a fall-back hour.
+function nextMatchingMinute(
+  dtstart: number,
+  after: number,
+  matches: (timestamp: number) => boolean
+): number {
+  let candidate = floorToMinute(Math.max(dtstart, after))
+  if (candidate <= after || candidate < dtstart) {
+    candidate += MINUTE_MS
+  }
+  for (let i = 0; i < CRON_SCAN_MINUTES; i += 1) {
+    if (matches(candidate)) {
+      return candidate
+    }
+    candidate += MINUTE_MS
+  }
+  throw new Error('Unable to compute next automation run.')
+}
+
+function latestMatchingMinute(
+  dtstart: number,
+  now: number,
+  matches: (timestamp: number) => boolean
+): number | null {
+  let candidate = floorToMinute(now)
+  for (let i = 0; i < CRON_SCAN_MINUTES && candidate >= dtstart; i += 1) {
+    if (matches(candidate)) {
+      return candidate
+    }
+    candidate -= MINUTE_MS
   }
   return null
 }
@@ -93,33 +130,10 @@ export function nextAutomationOccurrenceAfter(
 ): number {
   const rule = parseSchedule(rrule)
   if (rule.kind === 'cron') {
-    let candidate = floorToMinute(Math.max(dtstart, after))
-    if (candidate <= after) {
-      candidate += MINUTE_MS
-    }
-    if (candidate < dtstart) {
-      candidate = floorToMinute(dtstart)
-      if (candidate < dtstart) {
-        candidate += MINUTE_MS
-      }
-    }
-    for (let i = 0; i < CRON_SCAN_MINUTES; i += 1) {
-      if (cronMatches(rule, candidate)) {
-        return candidate
-      }
-      candidate += MINUTE_MS
-    }
-    throw new Error('Unable to compute next automation run.')
+    return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate))
   }
   if (rule.freq === 'HOURLY') {
-    const start = Math.max(dtstart, after)
-    const base = new Date(start)
-    base.setMinutes(rule.byMinute, 0, 0)
-    let candidate = base.getTime()
-    if (candidate <= after || candidate < dtstart) {
-      candidate += HOUR_MS
-    }
-    return candidate
+    return nextMatchingMinute(dtstart, after, (candidate) => hourlyMatches(rule, candidate))
   }
   const candidate = scanDayCandidates(rule, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {
@@ -138,23 +152,10 @@ export function latestAutomationOccurrenceAtOrBefore(
   }
   const rule = parseSchedule(rrule)
   if (rule.kind === 'cron') {
-    let candidate = floorToMinute(now)
-    for (let i = 0; i < CRON_SCAN_MINUTES && candidate >= dtstart; i += 1) {
-      if (cronMatches(rule, candidate)) {
-        return candidate
-      }
-      candidate -= MINUTE_MS
-    }
-    return null
+    return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate))
   }
   if (rule.freq === 'HOURLY') {
-    const base = new Date(now)
-    base.setMinutes(rule.byMinute, 0, 0)
-    let candidate = base.getTime()
-    if (candidate > now) {
-      candidate -= HOUR_MS
-    }
-    return candidate >= dtstart ? candidate : null
+    return latestMatchingMinute(dtstart, now, (candidate) => hourlyMatches(rule, candidate))
   }
   const candidate = scanDayCandidates(rule, now, -1)
   return candidate !== null && candidate >= dtstart ? candidate : null
