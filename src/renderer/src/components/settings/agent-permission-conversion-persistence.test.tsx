@@ -579,7 +579,7 @@ it.each([false, true])(
     await pickGlobalPermission('Ask for approval')
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        '4 agents still use their own setting',
+        '4 agents still use their own permission setting:',
         expect.anything()
       )
     )

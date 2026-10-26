@@ -99,7 +99,7 @@ export function useAgentPermissionOverrideNotice() {
       retained.length
         ? translate(
             'settings.agents.permissionOverridesKept',
-            '{{count}} agents still use their own setting',
+            '{{count}} agents still use their own permission setting:',
             { count: retained.length }
           )
         : translate(

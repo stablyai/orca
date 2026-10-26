@@ -3464,9 +3464,9 @@
     "agents": {
       "loadingHost": "Loading agent settings…",
       "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
-      "permissionOverridesKept": "{{count}} agents still use their own setting",
-      "permissionOverridesKept_one": "{{count}} agent still uses their own setting",
-      "permissionOverridesKept_other": "{{count}} agents still use their own setting",
+      "permissionOverridesKept": "{{count}} agents still use their own permission setting:",
+      "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
+      "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:",
       "permissionOverridesFollow": "{{count}} agents now follow {{mode}}",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
       "permissionOverridesFollow_other": "{{count}} agents now follow {{mode}}",

@@ -546,7 +546,9 @@ it('shows vanished and retained overrides together and only makes the retained a
   await userEvent.click(screen.getByRole('button', { name: 'Permissions' }))
   await userEvent.click(await screen.findByRole('menuitemradio', { name: /Ask for approval/ }))
   await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
-  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe('1 agent still uses their own setting')
+  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe(
+    '1 agent still uses their own permission setting:'
+  )
   const { details, follow } = permissionNotice()
   expect(details.textContent).toContain('Claude · Full access')
   expect(details.textContent).toContain('Codex now follows Ask for approval')
