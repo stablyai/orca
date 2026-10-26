@@ -9,7 +9,6 @@ import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
 
 const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
-let compilerOutput = ''
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
 // Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
@@ -148,7 +147,6 @@ export function collectTypecheckPass(root = process.cwd()) {
     maxOutputBytes: 64 * 1024 * 1024
   })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  compilerOutput = output
   return {
     failing: parseFailingFiles(output),
     programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
@@ -274,7 +272,6 @@ export function main(root = process.cwd()) {
   const { added, stale } = diffBaseline(current, baseline)
 
   if (added.length > 0) {
-    console.error(compilerOutput)
     printAddedFailure(added)
     if (stale.length > 0) {
       printStaleFailure(stale)

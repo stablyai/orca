@@ -506,7 +506,7 @@ it.each([false, true])(
     expect(shown()).toBe(short)
     expect(recovery()).toBeNull()
     expect([...rendered.keys()]).toEqual(grouped ? [head, target] : [head])
-    act(() => vi.advanceTimersByTime(400))
+    act(() => void vi.advanceTimersByTime(400))
     expect(shown()).toBe(`${short} FULL TAIL`)
 
     const replaced = items.map((item) => (item.itemId === target ? { ...item, revision: 3 } : item))
@@ -558,7 +558,7 @@ it.each([false, true])(
       source = null
       show(items)
       expect(recovery()).toBeNull()
-      act(() => vi.advanceTimersByTime(400))
+      act(() => void vi.advanceTimersByTime(400))
       source = next
       show(items)
     }
@@ -602,7 +602,7 @@ it.each([false, true])(
       )
     }
     replace()
-    const button = () => renderer!.root.findByType('Pressable')
+    const button = () => renderer!.root.find((node) => Object.is(node.type, 'Pressable'))
     act(() => button().props.onPress())
     expect(button().props.disabled).toBe(true)
     replace()
